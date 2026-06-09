@@ -731,6 +731,8 @@
 
 ### 4.20 V2.20 Read-only AI skill analysis assist
 
+**状态（2026-06-10）**：completed offline/read-only preview slice。`llm.prepareAction` 已返回 deterministic `review_preview`，用于展示 skill purpose、risk、finding explanations 和 cross-agent fit；不创建 provider client、不联网、不保存 credentials、不写 skill/config/snapshot/prompt artifacts、不提供 Apply/Write/Execute。
+
 **目标**：在 V2.7 disabled-by-default LLM gate 基础上，增加只读 AI 辅助分析能力，帮助用户理解 skill 作用、风险和修复方向。
 
 **范围**
@@ -742,10 +744,10 @@
 - LLM output 始终 untrusted，只能作为 review aid。
 
 **退出条件**
-- [ ] Service protocol 明确 prepare/estimate/review result 边界。
-- [ ] UI 明确显示 disabled/offline/unavailable reason、token/cost estimate 和隐私提示。
-- [ ] AI review 对单 skill、当前 filtered catalog、finding group 均可生成只读分析。
-- [ ] 无 Apply/Write/Execute 路径，隐私检查和 fixture 测试覆盖。
+- [x] Service protocol 明确 prepare/estimate/review result 边界。
+- [x] UI 明确显示 disabled/offline/unavailable reason、token/cost estimate 和隐私提示。
+- [x] AI review 对单 skill 生成只读 offline preview；catalog/finding group 级别可在后续扩展。
+- [x] 无 Apply/Write/Execute 路径，隐私检查和 fixture 测试覆盖。
 
 ### Removed from active planning: desktop shell expansion and local sharing
 

@@ -25,7 +25,7 @@
 | V2.17 | Hermes read-only scanner | Completed | Active/profile Hermes home `skills/**/SKILL.md` appears in catalog read-only; no generic project scan, cron mapping, writes, installs, CLI calls, or `.env`/`auth.json`/`logs`/`cron` mapping |
 | V2.18 | Cross-agent skill analysis | Completed | Duplicate names, shadowing, precedence conflicts, malformed skills, disabled states, and source overlap are grouped across agents |
 | V2.19 | Skill health dashboard and triage UX | Completed | `app.stateSnapshot.health` and native sidebar dashboard summarize health, findings, conflicts, risky scripts/permissions, and provide read-only triage filters |
-| V2.20 | Read-only AI skill analysis assist | Planned | Disabled-by-default AI review can summarize skill purpose/risk/findings without writing files, configs, prompts, credentials, or executing scripts |
+| V2.20 | Read-only AI skill analysis assist | Completed | Disabled-by-default offline review preview summarizes skill purpose/risk/findings without provider calls, network, credentials, writes, configs, prompts, or script execution |
 
 ## Near-Term Priority: Comprehensive Agent Adapter Support
 
@@ -37,7 +37,7 @@
 2. V2.17 Hermes read-only scanner: completed active Hermes home `skills/**/SKILL.md` only, no generic project scan, no cron-to-skill mapping, no `.env`/`auth.json`/`logs`/`cron` mapping, no CLI calls, writable/install blocked.
 3. V2.18 Cross-agent skill analysis: completed duplicate/conflict/precedence/source-overlap analysis across supported agents.
 4. V2.19 Skill health dashboard and triage UX: completed aggregate health, findings, conflicts, risk, and read-only triage filters.
-5. V2.20 Read-only AI skill analysis assist: disabled-by-default, read-only model-assisted summaries and finding explanations.
+5. V2.20 Read-only AI skill analysis assist: completed disabled-by-default, offline read-only summaries and finding explanations.
 6. Pi writable evidence harness: keep planned, but schedule after read-only management and analysis improvements unless user explicitly prioritizes Pi writes.
 
 **Tasks**
@@ -76,7 +76,7 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 | P0 | Skill health dashboard | Implemented read-only | Keep dashboard summary cards and actionable filters for findings, conflicts, disabled skills, malformed metadata, risky scripts, and permission issues aligned with service health payload | Users can prioritize cleanup from a single management view |
 | P1 | Finding triage persistence | Planned | Add reviewed/ignored state and grouping by rule, severity, agent, and source without writing agent config or hiding unresolved high-risk findings | Users can separate known issues from new actionable findings |
 | P1 | Agent-config timeline | Planned | Show agent-config snapshots and activity history per agent without adding skill-content snapshots | Users can understand config changes and rollback points |
-| P1 | Read-only AI skill analysis assist | Planned | Reuse V2.7 disabled-by-default gate for opt-in skill purpose/risk/finding summaries; no provider/client/storage until explicitly implemented | Users get human-readable analysis without any write, execution, or credential risk |
+| P1 | Read-only AI skill analysis assist | Implemented offline preview | Keep V2.7 disabled-by-default gate and V2.20 offline purpose/risk/finding summaries free of provider/client/storage/write/execution paths | Users get human-readable analysis without any write, execution, or credential risk |
 
 ## Version Selection Rule
 

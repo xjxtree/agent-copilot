@@ -330,8 +330,8 @@ private struct LLMAssistPanel: View {
                     } label: {
                         Label(action.title, systemImage: action.systemImage)
                     }
-                    .disabled(!status.enabled || isPreparing(action))
-                    .help(status.enabled ? action.title : (status.disabledReason ?? UIStrings.llmDisabledFallback))
+                    .disabled(isPreparing(action))
+                    .help(status.enabled ? action.title : UIStrings.llmReviewNoActions)
                 }
             }
 
@@ -364,45 +364,115 @@ private struct LLMPrepareResultView: View {
             if let disabledReason = result.disabledReason, !disabledReason.isEmpty {
                 Text(disabledReason)
                     .foregroundStyle(.secondary)
-            } else {
-                Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
-                    if let provider = result.provider, !provider.isEmpty {
-                        MetadataRow(label: UIStrings.llmProvider, value: provider)
-                    }
-                    if let model = result.model, !model.isEmpty {
-                        MetadataRow(label: UIStrings.llmModel, value: model)
-                    }
-                    if let estimate = result.estimate {
-                        MetadataRow(
-                            label: UIStrings.llmTokens,
-                            value: UIStrings.llmTokenSummary(
-                                input: estimate.inputTokens,
-                                output: estimate.outputTokens,
-                                total: estimate.totalTokens
-                            )
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                if let provider = result.provider, !provider.isEmpty {
+                    MetadataRow(label: UIStrings.llmProvider, value: provider)
+                }
+                if let model = result.model, !model.isEmpty {
+                    MetadataRow(label: UIStrings.llmModel, value: model)
+                }
+                if let estimate = result.estimate {
+                    MetadataRow(
+                        label: UIStrings.llmTokens,
+                        value: UIStrings.llmTokenSummary(
+                            input: estimate.inputTokens,
+                            output: estimate.outputTokens,
+                            total: estimate.totalTokens
                         )
-                        if let cost = estimate.estimatedCostUSD {
-                            MetadataRow(label: UIStrings.llmCost, value: UIStrings.llmEstimatedCost(cost))
-                        }
+                    )
+                    if let cost = estimate.estimatedCostUSD {
+                        MetadataRow(label: UIStrings.llmCost, value: UIStrings.llmEstimatedCost(cost))
                     }
                 }
+            }
 
-                if result.confirmationRequired {
-                    Label(UIStrings.llmConfirmationRequired, systemImage: "checkmark.shield")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
+            if let reviewPreview = result.reviewPreview {
+                LLMReviewPreviewView(preview: reviewPreview)
+            }
 
-                if result.action == .draftFrontmatter {
-                    Label(UIStrings.llmDraftCopyRequired, systemImage: "doc.on.doc")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
+            if result.confirmationRequired {
+                Label(UIStrings.llmConfirmationRequired, systemImage: "checkmark.shield")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            if result.action == .draftFrontmatter {
+                Label(UIStrings.llmDraftCopyRequired, systemImage: "doc.on.doc")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
+    }
+}
+
+private struct LLMReviewPreviewView: View {
+    let preview: LLMReviewPreview
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(UIStrings.llmReviewPreview, systemImage: "eye")
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+
+            MetadataRow(label: UIStrings.llmReviewPurpose, value: preview.purpose)
+            MetadataRow(label: UIStrings.llmReviewRisk, value: "\(preview.risk.level): \(preview.risk.summary)")
+            MetadataRow(label: UIStrings.llmReviewCrossAgentFit, value: preview.crossAgentFit.summary)
+            MetadataRow(label: UIStrings.llmReviewRedaction, value: redactionSummary)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(UIStrings.llmReviewSignals)
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                if preview.risk.signals.isEmpty {
+                    Text(UIStrings.llmReviewNoSignals)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(preview.risk.signals, id: \.self) { signal in
+                        Label(signal, systemImage: "exclamationmark.triangle")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(UIStrings.llmReviewFindings)
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                if preview.findingExplanations.isEmpty {
+                    Text(UIStrings.llmReviewNoFindings)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(preview.findingExplanations) { finding in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("\(finding.severity) · \(finding.ruleID)")
+                                .font(.callout.bold())
+                            Text(finding.explanation)
+                                .foregroundStyle(.secondary)
+                            if let nextStep = finding.suggestedNextStep, !nextStep.isEmpty {
+                                Text(nextStep)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Label(UIStrings.llmReviewNoActions, systemImage: "nosign")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .padding(10)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var redactionSummary: String {
+        "body=\(preview.redaction.skillBodyReturned ? "returned" : "hidden"), paths=\(preview.redaction.pathsReturned ? "returned" : "hidden"), credentials=\(preview.redaction.credentialsReturned ? "returned" : "hidden")"
     }
 }
 

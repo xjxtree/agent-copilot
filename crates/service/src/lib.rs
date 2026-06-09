@@ -252,6 +252,7 @@ pub struct LlmPrepareActionResult {
     pub prompt_scope: Vec<String>,
     pub privacy_notes: Vec<String>,
     pub confirmation: LlmConfirmationRequirement,
+    pub review_preview: LlmReviewPreview,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -259,6 +260,83 @@ pub struct LlmConfirmationRequirement {
     pub required: bool,
     pub message: String,
     pub display_fields: Vec<&'static str>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LlmReviewPreview {
+    pub status: &'static str,
+    pub generated_by: &'static str,
+    pub provider_request_sent: bool,
+    pub write_actions_available: bool,
+    pub execution_actions_available: bool,
+    pub purpose: String,
+    pub risk: LlmReviewRisk,
+    pub finding_explanations: Vec<LlmReviewFindingExplanation>,
+    pub cross_agent_fit: LlmReviewCrossAgentFit,
+    pub redaction: LlmReviewRedaction,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LlmReviewRisk {
+    pub level: &'static str,
+    pub summary: String,
+    pub signals: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LlmReviewFindingExplanation {
+    pub rule_id: String,
+    pub severity: String,
+    pub explanation: String,
+    pub suggested_next_step: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LlmReviewCrossAgentFit {
+    pub agent: String,
+    pub scope: String,
+    pub comparable_instance_count: usize,
+    pub summary: String,
+    pub notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LlmReviewRedaction {
+    pub skill_body_returned: bool,
+    pub paths_returned: bool,
+    pub credentials_returned: bool,
+    pub included_fields: Vec<&'static str>,
+    pub excluded_fields: Vec<&'static str>,
+}
+
+impl LlmReviewPreview {
+    fn unavailable() -> Self {
+        Self {
+            status: "unavailable",
+            generated_by: "deterministic-service",
+            provider_request_sent: false,
+            write_actions_available: false,
+            execution_actions_available: false,
+            purpose: "No catalog record was available for offline AI review preparation."
+                .to_string(),
+            risk: LlmReviewRisk {
+                level: "unknown",
+                summary:
+                    "Risk was not assessed because the selected catalog record was unavailable."
+                        .to_string(),
+                signals: Vec::new(),
+            },
+            finding_explanations: Vec::new(),
+            cross_agent_fit: LlmReviewCrossAgentFit {
+                agent: "unknown".to_string(),
+                scope: "unknown".to_string(),
+                comparable_instance_count: 0,
+                summary: "Cross-agent fit was not assessed.".to_string(),
+                notes: Vec::new(),
+            },
+            redaction: llm_review_redaction(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -781,7 +859,7 @@ impl ServiceHost {
         let status = self.llm_status();
         let action = params.kind;
         let mut prompt_scope = vec!["operation metadata".to_string()];
-        let estimated_input_tokens = match action {
+        let (estimated_input_tokens, review_preview) = match action {
             LlmActionKind::Analyze | LlmActionKind::DraftFrontmatter => {
                 let instance_id = params.skill_instance_id.as_deref().ok_or_else(|| {
                     ServiceError::InvalidRequest(format!(
@@ -796,24 +874,31 @@ impl ServiceHost {
                     "selected skill frontmatter".to_string(),
                     "selected skill body".to_string(),
                 ]);
-                estimate_tokens(&[
-                    action.as_str(),
-                    &skill.name,
-                    &skill.description,
-                    &skill.frontmatter_raw,
-                    &skill.body,
-                    params.user_intent.as_deref().unwrap_or_default(),
-                ])
+                let review_preview = self.llm_skill_review_preview(&skill)?;
+                (
+                    estimate_tokens(&[
+                        action.as_str(),
+                        &skill.name,
+                        &skill.description,
+                        &skill.frontmatter_raw,
+                        &skill.body,
+                        params.user_intent.as_deref().unwrap_or_default(),
+                    ]),
+                    review_preview,
+                )
             }
             LlmActionKind::Recommend => {
                 prompt_scope.extend([
                     "user intent".to_string(),
                     "catalog recommendation constraints".to_string(),
                 ]);
-                estimate_tokens(&[
-                    action.as_str(),
-                    params.user_intent.as_deref().unwrap_or_default(),
-                ])
+                (
+                    estimate_tokens(&[
+                        action.as_str(),
+                        params.user_intent.as_deref().unwrap_or_default(),
+                    ]),
+                    self.llm_recommendation_review_preview(params.user_intent.as_deref()),
+                )
             }
             LlmActionKind::ExplainConflict => {
                 prompt_scope.extend([
@@ -821,11 +906,14 @@ impl ServiceHost {
                     "current rule finding summaries".to_string(),
                 ]);
                 let summary = self.llm_conflict_summary()?;
-                estimate_tokens(&[
-                    action.as_str(),
-                    &summary,
-                    params.user_intent.as_deref().unwrap_or_default(),
-                ])
+                (
+                    estimate_tokens(&[
+                        action.as_str(),
+                        &summary,
+                        params.user_intent.as_deref().unwrap_or_default(),
+                    ]),
+                    self.llm_conflict_review_preview(&summary),
+                )
             }
         };
         let estimated_output_tokens = match action {
@@ -875,7 +963,163 @@ impl ServiceHost {
                     "prompt_scope",
                 ],
             },
+            review_preview,
         })
+    }
+
+    fn llm_skill_review_preview(
+        &self,
+        skill: &SkillDetailRecord,
+    ) -> Result<LlmReviewPreview, ServiceError> {
+        let Some(catalog) = self.open_existing_catalog_read_only()? else {
+            return Ok(LlmReviewPreview::unavailable());
+        };
+        let findings = catalog.list_rule_findings()?;
+        let related_findings: Vec<RuleFindingRecord> = findings
+            .into_iter()
+            .filter(|finding| {
+                finding.instance_id.as_deref() == Some(skill.id.as_str())
+                    || finding.definition_id.as_deref() == Some(skill.definition_id.as_str())
+            })
+            .collect();
+        let records = catalog.list_skill_records()?;
+        let comparable_instance_count = records
+            .iter()
+            .filter(|record| record.definition_id == skill.definition_id && record.id != skill.id)
+            .count();
+        let finding_explanations = related_findings
+            .iter()
+            .take(8)
+            .map(|finding| LlmReviewFindingExplanation {
+                rule_id: finding.rule_id.clone(),
+                severity: finding.severity.clone(),
+                explanation: redact_for_llm_preview(&finding.message),
+                suggested_next_step: finding.suggestion.as_deref().map(redact_for_llm_preview),
+            })
+            .collect::<Vec<_>>();
+        let risk = llm_review_risk(&related_findings, &skill.frontmatter_raw, &skill.body);
+        let description = redact_for_llm_preview(&skill.description);
+        let purpose = if description.is_empty() {
+            format!(
+                "Offline review preview for `{}`. No body text is returned; purpose is inferred from catalog name and metadata only.",
+                redact_for_llm_preview(&skill.name)
+            )
+        } else {
+            format!(
+                "{} Offline review only; no provider request was sent and skill body content is not returned.",
+                description
+            )
+        };
+        let cross_summary = if comparable_instance_count == 0 {
+            "No other cataloged agent instance shares this definition id in the current catalog."
+                .to_string()
+        } else {
+            format!(
+                "{comparable_instance_count} other cataloged instance(s) share this definition id; review adapter-specific permissions and enablement before copying behavior across agents."
+            )
+        };
+        Ok(LlmReviewPreview {
+            status: "offline-preview",
+            generated_by: "deterministic-service",
+            provider_request_sent: false,
+            write_actions_available: false,
+            execution_actions_available: false,
+            purpose,
+            risk,
+            finding_explanations,
+            cross_agent_fit: LlmReviewCrossAgentFit {
+                agent: skill.agent.clone(),
+                scope: skill.scope.clone(),
+                comparable_instance_count,
+                summary: cross_summary,
+                notes: vec![
+                    "Cross-agent fit is advisory and read-only; this response cannot install, import, toggle, or edit skills.".to_string(),
+                    "Adapter compatibility is based only on current catalog metadata, not provider-generated recommendations.".to_string(),
+                ],
+            },
+            redaction: llm_review_redaction(),
+        })
+    }
+
+    fn llm_recommendation_review_preview(&self, user_intent: Option<&str>) -> LlmReviewPreview {
+        let intent = redact_for_llm_preview(user_intent.unwrap_or_default());
+        let purpose = if intent.is_empty() {
+            "Prepared an offline recommendation preflight without reading skill bodies or calling a provider.".to_string()
+        } else {
+            format!(
+                "Prepared an offline recommendation preflight for the supplied intent: {intent}"
+            )
+        };
+        LlmReviewPreview {
+            status: "prepared-unavailable",
+            generated_by: "deterministic-service",
+            provider_request_sent: false,
+            write_actions_available: false,
+            execution_actions_available: false,
+            purpose,
+            risk: LlmReviewRisk {
+                level: "unknown",
+                summary: "No selected skill was reviewed, so risk is not assessed.".to_string(),
+                signals: vec![
+                    "Recommendation prepare does not read arbitrary skill files or return catalog paths."
+                        .to_string(),
+                ],
+            },
+            finding_explanations: Vec::new(),
+            cross_agent_fit: LlmReviewCrossAgentFit {
+                agent: "catalog".to_string(),
+                scope: "read-only-preflight".to_string(),
+                comparable_instance_count: 0,
+                summary:
+                    "Cross-agent fit requires a selected catalog skill or current analysis groups."
+                        .to_string(),
+                notes: vec![
+                    "No provider request was sent and no recommendation output was generated."
+                        .to_string(),
+                ],
+            },
+            redaction: llm_review_redaction(),
+        }
+    }
+
+    fn llm_conflict_review_preview(&self, summary: &str) -> LlmReviewPreview {
+        LlmReviewPreview {
+            status: "offline-preview",
+            generated_by: "deterministic-service",
+            provider_request_sent: false,
+            write_actions_available: false,
+            execution_actions_available: false,
+            purpose: "Prepared an offline conflict/finding explanation from catalog summaries only."
+                .to_string(),
+            risk: LlmReviewRisk {
+                level: if summary.contains("severity=error") || summary.contains("severity=critical")
+                {
+                    "high"
+                } else if summary.contains("finding rule=") {
+                    "medium"
+                } else {
+                    "low"
+                },
+                summary: redact_for_llm_preview(summary),
+                signals: vec![
+                    "Conflict explain prepare uses rule ids, severity labels, definition ids, and counts; it does not return skill body text."
+                        .to_string(),
+                ],
+            },
+            finding_explanations: Vec::new(),
+            cross_agent_fit: LlmReviewCrossAgentFit {
+                agent: "catalog".to_string(),
+                scope: "conflict-summary".to_string(),
+                comparable_instance_count: 0,
+                summary: "Cross-agent fit is represented by current conflict groups and definition ids only."
+                    .to_string(),
+                notes: vec![
+                    "Resolve conflicts through existing explicit user actions; no Apply/Write path exists in this preview."
+                        .to_string(),
+                ],
+            },
+            redaction: llm_review_redaction(),
+        }
     }
 
     fn get_llm_skill_detail(&self, instance_id: &str) -> Result<SkillDetailRecord, ServiceError> {
@@ -1239,6 +1483,121 @@ fn estimate_tokens(parts: &[&str]) -> u32 {
     u32::try_from(estimated).unwrap_or(u32::MAX)
 }
 
+fn llm_review_risk(
+    findings: &[RuleFindingRecord],
+    frontmatter_raw: &str,
+    body: &str,
+) -> LlmReviewRisk {
+    let highest = findings
+        .iter()
+        .map(|finding| finding.severity.as_str())
+        .max_by_key(|severity| severity_rank(severity))
+        .unwrap_or("none");
+    let level = match highest {
+        "critical" | "error" => "high",
+        "warning" | "warn" => "medium",
+        _ if findings.is_empty() => "low",
+        _ => "medium",
+    };
+    let mut signals = findings
+        .iter()
+        .take(8)
+        .map(|finding| {
+            format!(
+                "{} finding from rule {}",
+                redact_for_llm_preview(&finding.severity),
+                redact_for_llm_preview(&finding.rule_id)
+            )
+        })
+        .collect::<Vec<_>>();
+    let combined = format!("{frontmatter_raw}\n{body}").to_lowercase();
+    if combined.contains("exec") || combined.contains("command") || combined.contains("#!") {
+        signals.push(
+            "Skill text contains execution-related terms; scripts remain non-executable by this service."
+                .to_string(),
+        );
+    }
+    if combined.contains("network") || combined.contains("http") || combined.contains("api") {
+        signals.push(
+            "Skill text contains network/API-related terms; this preview performs no network I/O."
+                .to_string(),
+        );
+    }
+    if signals.is_empty() {
+        signals.push("No current rule findings are associated with this skill.".to_string());
+    }
+    LlmReviewRisk {
+        level,
+        summary: format!(
+            "Offline risk preview is {level}; based on {} related finding(s) and redacted local metadata only.",
+            findings.len()
+        ),
+        signals,
+    }
+}
+
+fn severity_rank(severity: &str) -> u8 {
+    match severity {
+        "critical" => 5,
+        "error" => 4,
+        "warning" | "warn" => 3,
+        "info" => 2,
+        _ => 1,
+    }
+}
+
+fn llm_review_redaction() -> LlmReviewRedaction {
+    LlmReviewRedaction {
+        skill_body_returned: false,
+        paths_returned: false,
+        credentials_returned: false,
+        included_fields: vec![
+            "skill name",
+            "skill description",
+            "agent",
+            "scope",
+            "definition id match counts",
+            "rule finding ids",
+            "rule finding severities",
+            "redacted rule messages",
+        ],
+        excluded_fields: vec![
+            "skill body",
+            "raw frontmatter",
+            "source paths",
+            "credential values",
+            "provider prompts",
+            "provider responses",
+        ],
+    }
+}
+
+fn redact_for_llm_preview(value: &str) -> String {
+    let mut redacted = value
+        .split_whitespace()
+        .map(|token| {
+            let lower = token.to_lowercase();
+            if lower.contains("key")
+                || lower.contains("token")
+                || lower.contains("secret")
+                || lower.contains("credential")
+                || lower.contains("password")
+            {
+                "<redacted>"
+            } else {
+                token
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    const MAX_PREVIEW_CHARS: usize = 220;
+    if redacted.chars().count() > MAX_PREVIEW_CHARS {
+        redacted = redacted.chars().take(MAX_PREVIEW_CHARS).collect::<String>();
+        redacted.push_str("...");
+    }
+    redacted
+}
+
 fn supported_methods() -> Vec<&'static str> {
     SUPPORTED_METHODS.to_vec()
 }
@@ -1269,6 +1628,7 @@ fn parse_scope_param(scope: &str) -> Result<Scope, ServiceError> {
 mod tests {
     use super::*;
     use serde::de::DeserializeOwned;
+    use skills_copilot_catalog::RuleFindingDraft;
     use skills_copilot_core::{AgentId, PermissionRequest, SkillInstance, SkillState};
 
     #[test]
@@ -1664,9 +2024,58 @@ mod tests {
             .and_then(Value::as_array)
             .expect("prompt scope")
             .contains(&Value::String("selected skill body".to_string())));
+        let review = result
+            .get("review_preview")
+            .and_then(Value::as_object)
+            .expect("review preview");
+        assert_eq!(
+            review.get("provider_request_sent").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            review
+                .get("write_actions_available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            review
+                .get("execution_actions_available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/review_preview/redaction/skill_body_returned")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/review_preview/redaction/paths_returned")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/review_preview/redaction/credentials_returned")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/review_preview/risk/level")
+                .and_then(Value::as_str),
+            Some("high")
+        );
+        assert!(review
+            .get("finding_explanations")
+            .and_then(Value::as_array)
+            .is_some_and(|findings| !findings.is_empty()));
 
         let serialized = serde_json::to_string(&result).expect("serialize result");
         assert!(!serialized.contains("OPENAI_API_KEY=<redacted>"));
+        assert!(!serialized.contains("Analyze local skill posture"));
         assert!(!serialized.contains(&skill_path.to_string_lossy().to_string()));
 
         let _ = fs::remove_dir_all(app_data_dir);
@@ -1758,6 +2167,9 @@ mod tests {
         assert!(!user_home.join(".codex/config.toml").exists());
         assert!(!app_data_dir.join("llm-credentials.json").exists());
         assert!(!app_data_dir.join("llm-config.json").exists());
+        let serialized = serde_json::to_string(&response.result).expect("serialize response");
+        assert!(!serialized.contains("OPENAI_API_KEY=<redacted>"));
+        assert!(!serialized.contains("Analyze local skill posture"));
 
         let _ = fs::remove_dir_all(app_data_dir);
         let _ = fs::remove_dir_all(user_home);
@@ -3155,6 +3567,7 @@ mod tests {
         prompt_scope: Vec<String>,
         privacy_notes: Vec<String>,
         confirmation: WireLlmConfirmationRequirement,
+        review_preview: WireLlmReviewPreview,
     }
 
     #[allow(dead_code)]
@@ -3164,6 +3577,63 @@ mod tests {
         required: bool,
         message: String,
         display_fields: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireLlmReviewPreview {
+        status: String,
+        generated_by: String,
+        provider_request_sent: bool,
+        write_actions_available: bool,
+        execution_actions_available: bool,
+        purpose: String,
+        risk: WireLlmReviewRisk,
+        finding_explanations: Vec<WireLlmReviewFindingExplanation>,
+        cross_agent_fit: WireLlmReviewCrossAgentFit,
+        redaction: WireLlmReviewRedaction,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireLlmReviewRisk {
+        level: String,
+        summary: String,
+        signals: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireLlmReviewFindingExplanation {
+        rule_id: String,
+        severity: String,
+        explanation: String,
+        suggested_next_step: Option<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireLlmReviewCrossAgentFit {
+        agent: String,
+        scope: String,
+        comparable_instance_count: usize,
+        summary: String,
+        notes: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireLlmReviewRedaction {
+        skill_body_returned: bool,
+        paths_returned: bool,
+        credentials_returned: bool,
+        included_fields: Vec<String>,
+        excluded_fields: Vec<String>,
     }
 
     #[allow(dead_code)]
@@ -3564,6 +4034,20 @@ mod tests {
         catalog
             .upsert_skill_instance(&instance)
             .expect("upsert llm fixture skill");
+        catalog
+            .refresh_rule_findings(&[RuleFindingDraft {
+                id: "llm-finding-id".to_string(),
+                instance_id: Some("llm-skill-id".to_string()),
+                definition_id: Some("llm-definition-id".to_string()),
+                rule_id: "permissions.exec-needs-human".to_string(),
+                severity: "error".to_string(),
+                message: "Execution-like behavior needs human review; sample-key=fixture-redacted-value must not leak.".to_string(),
+                suggestion: Some(
+                    "Keep execution disabled and require explicit human confirmation.".to_string(),
+                ),
+                created_at: 1,
+            }])
+            .expect("upsert llm fixture finding");
     }
 
     fn unique_suffix() -> u128 {

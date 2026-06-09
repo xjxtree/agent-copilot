@@ -113,9 +113,19 @@ const checks = [
     pattern: /ForEach\(LLMAction\.allCases\)/,
   },
   {
-    label: "LLM assist buttons are gated by status and prepare state",
+    label: "LLM assist buttons are gated by prepare state only",
     text: files.detail,
-    pattern: /\.disabled\(!status\.enabled \|\| isPreparing\(action\)\)/,
+    pattern: /\.disabled\(isPreparing\(action\)\)/,
+  },
+  {
+    label: "LLM assist renders read-only review previews",
+    text: files.detail,
+    pattern: /LLMReviewPreviewView\(preview:\s*reviewPreview\)/,
+  },
+  {
+    label: "LLM review preview exposes no-action boundary",
+    text: files.detail,
+    pattern: /Label\(UIStrings\.llmReviewNoActions,\s*systemImage:\s*"nosign"\)/,
   },
   {
     label: "LLM draft frontmatter warns about confirmation and copy",
@@ -141,6 +151,11 @@ const checks = [
     label: "localized LLM action labels are present",
     text: files.localizable,
     pattern: /"llm\.action\.analyze".*"llm\.action\.recommend".*"llm\.action\.explainConflict".*"llm\.action\.draftFrontmatter"/s,
+  },
+  {
+    label: "localized LLM review preview labels are present",
+    text: files.localizable,
+    pattern: /"llm\.reviewPreview".*"llm\.reviewPurpose".*"llm\.reviewRisk".*"llm\.reviewCrossAgentFit".*"llm\.reviewNoActions"/s,
   },
   {
     label: "localized tool-global preview labels are present",

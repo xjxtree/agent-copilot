@@ -142,6 +142,86 @@ struct LLMTokenCostEstimate: Codable, Hashable {
     }
 }
 
+struct LLMReviewPreview: Codable, Hashable {
+    let status: String
+    let generatedBy: String
+    let providerRequestSent: Bool
+    let writeActionsAvailable: Bool
+    let executionActionsAvailable: Bool
+    let purpose: String
+    let risk: LLMReviewRisk
+    let findingExplanations: [LLMReviewFindingExplanation]
+    let crossAgentFit: LLMReviewCrossAgentFit
+    let redaction: LLMReviewRedaction
+
+    enum CodingKeys: String, CodingKey {
+        case status
+        case generatedBy = "generated_by"
+        case providerRequestSent = "provider_request_sent"
+        case writeActionsAvailable = "write_actions_available"
+        case executionActionsAvailable = "execution_actions_available"
+        case purpose
+        case risk
+        case findingExplanations = "finding_explanations"
+        case crossAgentFit = "cross_agent_fit"
+        case redaction
+    }
+}
+
+struct LLMReviewRisk: Codable, Hashable {
+    let level: String
+    let summary: String
+    let signals: [String]
+}
+
+struct LLMReviewFindingExplanation: Codable, Hashable, Identifiable {
+    let ruleID: String
+    let severity: String
+    let explanation: String
+    let suggestedNextStep: String?
+
+    var id: String { "\(ruleID)-\(severity)-\(explanation)" }
+
+    enum CodingKeys: String, CodingKey {
+        case ruleID = "rule_id"
+        case severity
+        case explanation
+        case suggestedNextStep = "suggested_next_step"
+    }
+}
+
+struct LLMReviewCrossAgentFit: Codable, Hashable {
+    let agent: String
+    let scope: String
+    let comparableInstanceCount: Int
+    let summary: String
+    let notes: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case agent
+        case scope
+        case comparableInstanceCount = "comparable_instance_count"
+        case summary
+        case notes
+    }
+}
+
+struct LLMReviewRedaction: Codable, Hashable {
+    let skillBodyReturned: Bool
+    let pathsReturned: Bool
+    let credentialsReturned: Bool
+    let includedFields: [String]
+    let excludedFields: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case skillBodyReturned = "skill_body_returned"
+        case pathsReturned = "paths_returned"
+        case credentialsReturned = "credentials_returned"
+        case includedFields = "included_fields"
+        case excludedFields = "excluded_fields"
+    }
+}
+
 struct LLMPrepareResult: Codable, Identifiable, Hashable {
     let action: LLMAction
     let enabled: Bool
@@ -150,6 +230,7 @@ struct LLMPrepareResult: Codable, Identifiable, Hashable {
     let model: String?
     let estimate: LLMTokenCostEstimate?
     let confirmationRequired: Bool
+    let reviewPreview: LLMReviewPreview?
 
     var id: LLMAction { action }
 
@@ -167,6 +248,7 @@ struct LLMPrepareResult: Codable, Identifiable, Hashable {
         case estimatedCostUSD = "estimated_cost_usd"
         case confirmationRequired = "confirmation_required"
         case requiresConfirmation = "requires_confirmation"
+        case reviewPreview = "review_preview"
     }
 
     init(
@@ -176,7 +258,8 @@ struct LLMPrepareResult: Codable, Identifiable, Hashable {
         provider: String?,
         model: String?,
         estimate: LLMTokenCostEstimate?,
-        confirmationRequired: Bool
+        confirmationRequired: Bool,
+        reviewPreview: LLMReviewPreview? = nil
     ) {
         self.action = action
         self.enabled = enabled
@@ -185,6 +268,7 @@ struct LLMPrepareResult: Codable, Identifiable, Hashable {
         self.model = model
         self.estimate = estimate
         self.confirmationRequired = confirmationRequired
+        self.reviewPreview = reviewPreview
     }
 
     init(from decoder: Decoder) throws {
@@ -217,6 +301,7 @@ struct LLMPrepareResult: Codable, Identifiable, Hashable {
         confirmationRequired = try container.decodeIfPresent(Bool.self, forKey: .confirmationRequired)
             ?? container.decodeIfPresent(Bool.self, forKey: .requiresConfirmation)
             ?? true
+        reviewPreview = try container.decodeIfPresent(LLMReviewPreview.self, forKey: .reviewPreview)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -228,6 +313,7 @@ struct LLMPrepareResult: Codable, Identifiable, Hashable {
         try container.encodeIfPresent(model, forKey: .model)
         try container.encodeIfPresent(estimate, forKey: .estimate)
         try container.encode(confirmationRequired, forKey: .confirmationRequired)
+        try container.encodeIfPresent(reviewPreview, forKey: .reviewPreview)
     }
 
     static func disabledFallback(action: LLMAction, reason: String = UIStrings.llmDisabledFallback) -> LLMPrepareResult {
