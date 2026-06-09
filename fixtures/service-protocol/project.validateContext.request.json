@@ -1,0 +1,9 @@
+{
+  "id": "fixture-project-validate-context",
+  "method": "project.validateContext",
+  "params": {
+    "root_path": "/tmp/skills-copilot-project",
+    "current_cwd": null,
+    "name": "Fixture Project"
+  }
+}

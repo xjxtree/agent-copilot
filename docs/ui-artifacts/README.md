@@ -1,0 +1,31 @@
+# UI Artifacts
+
+This directory stores UI prototypes, completed screenshots, and verification notes.
+
+Use one folder per major version or major feature:
+
+```text
+docs/ui-artifacts/
+└── <feature-or-version>/
+    ├── brief.md
+    ├── prototype.png
+    ├── prototype-notes.md
+    ├── completed.png
+    └── verification.md
+```
+
+Rules:
+
+- Create or update prototype artifacts before implementation starts.
+- Update completed screenshots after development and validation.
+- Completed screenshots must be complete app-window-only captures. Use `script/capture_app_window.sh` for macOS artifacts. Do not use full-desktop screenshots.
+- Record macOS Computer Use verification for every code change that affects runtime behavior.
+- Future Windows/Linux shells should keep their own completed screenshots while sharing the same service fixtures and UX contracts.
+
+Current artifacts:
+
+- `service-protocol/brief.md`: first typed JSON service boundary brief.
+- `native-macos-shell/brief.md`: first native macOS shell brief.
+- `native-macos-shell/prototype-notes.md`: first split-view prototype notes.
+- `native-macos-shell/completed.png`: completed screenshot after launch and interaction validation.
+- `native-macos-shell/verification.md`: macOS Computer Use verification record.

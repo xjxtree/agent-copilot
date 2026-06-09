@@ -1,0 +1,186 @@
+# AI 层：规则引擎 + 可选 LLM
+
+> 原则：**默认离线，所有"扫描/分析/校验"类能力走规则引擎**。LLM 是可选增强，仅在用户显式开启时调用，并且只读**用户授权范围内的内容**。
+>
+> V2.7 当前实现边界：本阶段只落地 disabled-by-default 的 service/UI gate 和 request prepare/estimate 能力。它可以在用户主动触发 Analyze / Recommend / conflict explanation / draft frontmatter 前展示 provider、model、token/cost 估算和不可用原因；**不实现真实 provider、网络调用或凭据保存**。
+
+## 1. 双层分工
+
+| 能力 | 由谁负责 | 何时触发 |
+| --- | --- | --- |
+| 路径/格式/frontmatter 校验 | 规则 | 每次 scan / save |
+| 权限声明合规（缺字段、越权） | 规则 | scan 后台 + 用户 toggle 前 |
+| 冲突检测 / 优先级计算 | 规则 | 实时 |
+| 备份 / 回滚 | 规则 | 任何写操作前 |
+| skill 描述语义分析（"这个 skill 到底是干嘛的"） | LLM | 用户主动点"Analyze" |
+| 给"我的工作流"推荐 skill | LLM | 用户主动点"Recommend" |
+| 解释冲突 / 给出处理建议（"为什么 shadowed"） | LLM | 用户主动问 |
+| 改写 frontmatter / 生成草稿 | LLM | 用户主动进入编辑模式 |
+
+> **关键约束**：LLM **永远不直接执行** toggle、edit、delete 等写操作。所有"看起来 LLM 在做"的动作，最终都是"LLM 给提案 → 用户在 UI shell 确认 → Rust service / 规则引擎执行"。
+>
+> V2.7 的 draft frontmatter 更严格：当前只允许作为草稿展示或复制，不提供 Apply / Write。真实写入仍必须由用户进入已有的正常编辑/保存路径，并经 Rust service 的校验、snapshot 和原子写流程。
+
+## 2. 规则引擎
+
+### 2.1 Rule trait
+
+```rust
+pub trait Rule: Send + Sync {
+    fn id(&self) -> &'static str;            // "no-empty-tools" 等稳定 id
+    fn applies_to(&self, inst: &SkillInstance) -> bool;
+    fn check(&self, inst: &SkillInstance, ctx: &RuleContext) -> Vec<Finding>;
+}
+
+pub struct Finding {
+    pub rule_id: String,
+    pub severity: Severity,                   // Info / Warn / Error
+    pub message: String,                      // 用户可见，可本地化
+    pub suggestion: Option<String>,           // 修复建议（同样可本地化）
+}
+
+pub enum Severity { Info, Warn, Error }
+```
+
+### 2.2 内置规则清单（MVP）
+
+| rule id | 含义 |
+| --- | --- |
+| `frontmatter.required-fields` | 必填 `name` / `description` 缺失 → Error |
+| `path.outside-workspace` | 路径在项目外但 scope 标为 project → Error |
+| `name.collision` | 跨 agent/scope 同名 → Info，自动归入冲突分组 |
+| `fingerprint.changed` | 重扫发现 fingerprint 变化 → Info |
+
+当前实现中 `frontmatter.required-fields`、`path.outside-workspace`、`fingerprint.changed` 是 `Rule` trait 实现；`name.collision` 由 `append_name_collision_results()` 在同一次 MVP 规则入口中聚合同名实例、刷新 definition / conflict，并产出 info finding。每条 MVP 规则都有单元测试或命令层集成测试。规则结果写入 `rule_finding`，同名实例同步刷新 `skill_definition` / `conflict_group`。
+
+后续候选规则（V1/V2）：`frontmatter.tools-not-empty`、`permissions.network-declared`、`permissions.exec-needs-human`、`name.canonical-case`、`script.no-shebang`、`body.too-long`、`body.too-short`、`dependency.unknown`。
+
+### 2.3 RuleContext
+
+规则运行所需的最小上下文：
+
+```rust
+pub struct RuleContext {
+    pub previous_fingerprints: HashMap<String, String>,
+}
+```
+
+规则 **不允许** 通过 ctx 触发任何写操作。任何"自动修"都通过 `Finding::suggestion` 字段，UI 拿到后转成按钮，用户点才执行。更丰富的上下文字段（用户偏好、definition 快照等）留到 V1。
+
+### 2.4 MVP 入口：`evaluate_mvp_rules()`
+
+MVP 不用动态 rule registry。`crates/ai-core` 导出一个入口函数：
+
+```rust
+pub fn evaluate_mvp_rules(
+    instances: &[SkillInstance],
+    ctx: &RuleContext,
+) -> RuleReport
+```
+
+`RuleReport` 包含本次运行产出的所有 `Finding` 和 `ConflictGroup`，由 commands 层写入 catalog 的 `rule_finding` / `skill_definition` / `conflict_group` 表。
+
+4 条 MVP 规则各自有单元测试：`required_fields_reports_missing_description`、`name_collision_creates_conflict_and_findings`、`path_outside_workspace_flags_project_skill`、`fingerprint_changed_compares_previous_scan`。
+
+## 3. LLM 层
+
+### 3.0 V2.7 当前边界
+
+V2.7 不把 LLM provider 接入产品运行时。当前阶段的 LLM 本地辅助分析只包含：
+
+- 默认关闭的 Settings / service 状态门禁。
+- 用户主动触发 Analyze / Recommend / conflict explanation / draft frontmatter 前的 prepare/estimate。
+- UI 明示 provider、model、预估 input/output token、预估 cost、budget 状态和 disabled/unconfigured 原因。
+- 失败时只显示本地错误状态；不会静默重试、不会切换 provider、不会联网。
+
+当前阶段明确不做：
+
+- 不创建 Anthropic / OpenAI / DashScope / Ollama client。
+- 不发起任何 LLM provider 网络请求。
+- 不读取、保存或迁移 API key。
+- 不把 LLM request/response、prompt、token 或凭据写入 SQLite、项目目录或 logs。
+- 不提供草稿 Apply / Write 按钮。
+
+下面的 provider trait、凭据和 prompt 章节是目标架构与安全约束；只有在后续实现 provider/network/credential storage 时才可标记为完成能力。
+
+### 3.1 Provider trait
+
+```rust
+#[async_trait]
+pub trait LlmProvider: Send + Sync {
+    fn id(&self) -> &'static str;            // 'anthropic' | 'openai' | 'dashscope' | 'ollama' | …
+    fn display_name(&self) -> &'static str;
+    async fn complete(&self, req: LlmRequest) -> Result<LlmResponse, LlmError>;
+}
+
+pub struct LlmRequest {
+    pub system: String,                       // 来自 skills-copilot 的固定 system prompt
+    pub user: String,                         // 经过"内容过滤"的输入
+    pub model: Option<String>,                // 用户可指定
+    pub max_tokens: u32,
+    pub temperature: f32,
+    pub attachments: Vec<Attachment>,         // 允许附带：frontmatter / body / 单个 script
+}
+```
+
+### 3.2 provider 目标实现（未来）
+
+- `anthropic` —— 目标默认 `claude-sonnet-4`；用户可改其它 Claude 模型
+- `openai` —— 目标默认 `gpt-5`
+- `dashscope`（阿里云百炼）—— 目标默认 `qwen-plus`
+- `ollama` —— 目标默认 `llama3.1`；用户可改本地模型（完全离线）
+
+新增 provider 是加一个文件 + 注册，不需要改 trait。
+
+V2.7 当前代码不应声称上述 provider 已接入；只允许把它们作为用户选择偏好和估算展示的候选值，且在未实现 provider client 时保持 disabled/unconfigured。
+
+### 3.3 凭据
+
+V2.7 当前阶段**不保存 credentials**，也不读取真实 API key。后续实现凭据存储时必须满足：
+
+- 凭据**只**存在本机。
+- macOS 优先使用 Keychain；Linux / Windows 后续分别使用 libsecret / Windows Credential Manager。
+- 退路配置文件只允许 `~/.config/skills-copilot/llm.yaml`，创建和每次读取前都必须检查权限为 `0600`；权限不符时拒绝使用并提示用户修复。
+- **不得**上传、不得缓存到 SQLite、不得写入项目目录、不得写入 logs。
+- 设置页可清除全部凭据；清除操作必须只触达 OS keyring 或上述 fallback 文件。
+
+### 3.4 Prompt 边界
+
+LLM 看到的输入有严格过滤：
+
+| 输入 | 是否进 prompt |
+| --- | --- |
+| 用户当前选中的 skill 的 `name` / `description` / `body` | ✅ |
+| 该 skill 的 `frontmatter`（标准化后） | ✅ |
+| 单个 `script` 文件（用户主动 attach） | ✅（带长度上限，默认 8KB） |
+| 其它 skills 的内容 | ❌（除非用户显式 attach） |
+| 用户文件系统任意路径 | ❌（LLM 没有 FS 访问） |
+| 任何凭据 / token | ❌（强制脱敏） |
+
+LLM 输出端：
+- 限定为 JSON（`{ summary, recommendations, draft_frontmatter? }`）
+- 解析失败时降级为"显示原文 + 标红提示"
+- 不允许 LLM 输出"执行命令"类指令；如果它写了，只在 UI 里展示，不进 IPC
+- `draft_frontmatter` 只是草稿展示/复制内容，不存在 Apply / Write；真实写入必须走用户主动编辑和 Rust service 保存路径
+
+### 3.5 Token 预算
+
+UI 默认不主动调用 LLM（避免无意识烧钱）。V2.7 当前只做本地 token/cost prepare/estimate；后续真实 LLM 调用也必须走"用户主动触发 + 显示 provider/model/token/cost 预估 + 确认"流程。设置页里可设：
+- 单次上限（默认 4K output）
+- 月度上限（默认 $5，纯客户端累计估算）
+- 关闭 LLM（默认就是关闭）
+
+## 4. 离线优先行为
+
+- 启动时**不**尝试连接任何 LLM
+- "扫描 / 校验 / 启停"全在本地 Rust 内核完成
+- "Analyze" 按钮在 LLM 关闭时变灰并显示原因；native macOS UI 应从同一 service state 获取 provider 状态
+- LLM 调用失败时降级为"显示错误"——**不**静默重试、不切换到默认 provider
+- V2.7 prepare/estimate 不得尝试探测 provider 可达性或验证 API key
+
+## 5. 可观测性
+
+- 规则运行结果直接展示在 skill 行的"诊断"折叠区
+- 未来真实 LLM 调用：仅记录非敏感元数据 (provider, model, token_in, token_out, duration, success)，可导出 JSON
+- V2.7 当前 prepare/estimate 不记录 prompt、response、API key 或 credential path；不得把 token/cost 估算写入 SQLite、项目目录或 logs
+- 数据收集 / 隐私约束集中定义在 [security-model.md §5](./security-model.md#5-隐私--数据收集)

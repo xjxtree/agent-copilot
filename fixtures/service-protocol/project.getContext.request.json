@@ -1,0 +1,5 @@
+{
+  "id": "fixture-project-get-context",
+  "method": "project.getContext",
+  "params": {}
+}

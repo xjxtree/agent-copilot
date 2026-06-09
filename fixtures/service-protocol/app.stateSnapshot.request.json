@@ -1,0 +1,5 @@
+{
+  "id": "fixture-app-state-snapshot",
+  "method": "app.stateSnapshot",
+  "params": {}
+}

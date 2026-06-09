@@ -1,0 +1,7 @@
+{
+  "id": "fixture-config-save-claude-settings",
+  "method": "config.saveClaudeSettings",
+  "params": {
+    "content": "{\n  \"skillOverrides\": {}\n}\n"
+  }
+}

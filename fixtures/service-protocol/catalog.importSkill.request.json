@@ -1,0 +1,7 @@
+{
+  "id": "fixture-import-skill",
+  "method": "catalog.importSkill",
+  "params": {
+    "source_path": "/tmp/skills-copilot-import-source/local-skill"
+  }
+}

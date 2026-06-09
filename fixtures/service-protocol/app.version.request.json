@@ -1,0 +1,5 @@
+{
+  "id": "fixture-app-version",
+  "method": "app.version",
+  "params": {}
+}

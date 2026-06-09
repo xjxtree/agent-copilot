@@ -1,0 +1,17 @@
+{
+  "id": "fixture-catalog-list-skills",
+  "ok": true,
+  "result": [
+    {
+      "id": "skill-instance-id",
+      "agent": "claude-code",
+      "scope": "agent-global",
+      "path": "/tmp/skills-copilot-home/.claude/skills/demo/SKILL.md",
+      "display_path": "/tmp/skills-copilot-home/.claude/skills/demo/SKILL.md",
+      "definition_id": "definition-id",
+      "name": "demo",
+      "state": "loaded",
+      "enabled": true
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "id": "fixture-service-status",
+  "ok": true,
+  "result": {
+    "protocol_version": 1,
+    "version": "0.1.0",
+    "app_data_dir": "/tmp/skills-copilot-app-data",
+    "catalog_path": "/tmp/skills-copilot-app-data/catalog.sqlite",
+    "user_home": "/tmp/skills-copilot-home",
+    "supported_methods": [
+      "app.version",
+      "app.stateSnapshot",
+      "service.status",
+      "llm.status",
+      "llm.prepareAction",
+      "script.previewExecution",
+      "script.execute",
+      "project.getContext",
+      "project.setContext",
+      "project.clearContext",
+      "project.validateContext",
+      "catalog.listSkills",
+      "catalog.getSkill",
+      "catalog.listFindings",
+      "catalog.listConflicts",
+      "catalog.importSkill",
+      "catalog.scanClaude",
+      "catalog.scanAll",
+      "skill.exportBundle",
+      "skill.install",
+      "config.toggleSkill",
+      "config.readClaudeSettings",
+      "config.saveClaudeSettings",
+      "snapshot.list",
+      "snapshot.previewRollback",
+      "snapshot.rollback"
+    ],
+    "refresh": {
+      "scan_progress": "summary-only",
+      "watcher_state": "manual-refresh",
+      "watcher_detail": "The current stdio sidecar reports completed refresh summaries; native automatic watcher events are not running in this process.",
+      "recovery_actions": [
+        "Retry the last refresh",
+        "Run Scan to rebuild the agent catalog"
+      ]
+    },
+    "project_context": {
+      "source": "stored",
+      "active": {
+        "id": "project-fixture-id",
+        "name": "Fixture Project",
+        "root_path": "/tmp/skills-copilot-project",
+        "current_cwd": "/tmp/skills-copilot-project",
+        "last_used_at": 1780590000000,
+        "is_active": true,
+        "validation_error": null
+      },
+      "recent_count": 1,
+      "validation_error": null
+    },
+    "llm": {
+      "enabled": false,
+      "configured": false,
+      "provider": null,
+      "model": null,
+      "reason": "LLM actions are disabled by default; no local provider is configured.",
+      "single_request_token_limit": 8000,
+      "monthly_budget_usd": 0.0,
+      "credentials_storage": "none",
+      "credential_persistence_allowed": false
+    },
+    "script_execution": {
+      "enabled": false,
+      "default_enabled": false,
+      "reason": "Script execution is disabled by default; the service will not spawn a process.",
+      "audit_scope": "app-data/session-local",
+      "audit_path": "/tmp/skills-copilot-app-data/audit/script-execution.jsonl",
+      "llm_initiation_allowed": false
+    }
+  }
+}

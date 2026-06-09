@@ -1,0 +1,36 @@
+{
+  "id": "fixture-catalog-list-findings",
+  "ok": true,
+  "result": [
+    {
+      "id": "rule:skill-instance-id:0",
+      "instance_id": "skill-instance-id",
+      "definition_id": "definition-id",
+      "rule_id": "frontmatter.required-fields",
+      "severity": "error",
+      "message": "Missing required frontmatter fields: description",
+      "suggestion": "Add name and description to the SKILL.md YAML frontmatter.",
+      "created_at": 1780590000000
+    },
+    {
+      "id": "rule:skill-instance-id:1",
+      "instance_id": "skill-instance-id",
+      "definition_id": "definition-id",
+      "rule_id": "path.outside-workspace",
+      "severity": "error",
+      "message": "Project-scoped skill path is outside its project root.",
+      "suggestion": "Move the skill under <project>/.claude/skills or rescan it as a global skill.",
+      "created_at": 1780590000000
+    },
+    {
+      "id": "rule:skill-instance-id:2",
+      "instance_id": "skill-instance-id",
+      "definition_id": "definition-id",
+      "rule_id": "fingerprint.changed",
+      "severity": "info",
+      "message": "Skill content fingerprint changed since the previous scan.",
+      "suggestion": "Review the skill details before relying on this version.",
+      "created_at": 1780590000000
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "name": "skills-copilot-workspace",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.5.1",
+  "scripts": {
+    "dev": "./script/build_and_run.sh",
+    "build": "./script/build_and_run.sh --verify",
+    "dev:macos": "./script/build_and_run.sh",
+    "build:macos": "./script/build_and_run.sh --verify",
+    "audit": "pnpm audit:rust && pnpm audit:node",
+    "audit:rust": "cargo audit",
+    "audit:node": "pnpm audit --audit-level high",
+    "check:privacy": "./script/check_privacy.sh",
+    "capture:macos-window": "./script/capture_app_window.sh SkillsCopilot docs/ui-artifacts/native-macos-shell/completed.png",
+    "check:macos": "cargo fmt --all -- --check && cargo test --workspace && cargo clippy --workspace --all-targets --all-features -- -D warnings && pnpm test:macos-list-model && pnpm verify:macos-ui-layout && swift test --package-path apps/macos && swift build --package-path apps/macos && ./script/build_and_run.sh --verify && pnpm smoke:macos-app -- --fixture-data --capture-window",
+    "smoke:macos-app": "node scripts/smoke-macos-app.mjs",
+    "benchmark:10k": "node scripts/benchmark-10k.mjs",
+    "test:macos-list-model": "node scripts/test-native-list-model.mjs",
+    "benchmark:macos-list-model": "node scripts/benchmark-native-list-model.mjs",
+    "verify:macos-ui-layout": "node scripts/verify-native-ui-layout.mjs"
+  }
+}

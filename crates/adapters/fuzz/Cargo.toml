@@ -1,0 +1,24 @@
+[package]
+name = "skills-copilot-adapters-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+skills-copilot-adapters = { path = ".." }
+skills-copilot-core = { path = "../../core" }
+tempfile = "3"
+
+[[bin]]
+name = "frontmatter_parser"
+path = "fuzz_targets/frontmatter_parser.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+members = ["."]

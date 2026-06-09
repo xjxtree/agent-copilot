@@ -1,0 +1,7 @@
+{
+  "id": "fixture-snapshot-rollback",
+  "method": "snapshot.rollback",
+  "params": {
+    "snapshot_id": "snapshot-id"
+  }
+}

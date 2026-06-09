@@ -1,0 +1,7 @@
+{
+  "id": "fixture-catalog-get-skill",
+  "method": "catalog.getSkill",
+  "params": {
+    "instance_id": "skill-instance-id"
+  }
+}

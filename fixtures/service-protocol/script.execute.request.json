@@ -1,0 +1,18 @@
+{
+  "id": "fixture-script-execute",
+  "method": "script.execute",
+  "params": {
+    "command": [
+      "python3",
+      "scripts/demo.py"
+    ],
+    "cwd": "/tmp/skills-copilot-project",
+    "network": "none",
+    "files": [
+      "/tmp/skills-copilot-project/scripts/demo.py"
+    ],
+    "skill_instance_id": "skill-instance-id",
+    "initiated_by": "user",
+    "confirmed": true
+  }
+}

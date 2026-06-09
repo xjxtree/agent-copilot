@@ -1,0 +1,28 @@
+@AGENTS.md
+
+# CLAUDE.md
+
+This file provides Claude Code-specific guidance for this repository. Shared project rules live in `AGENTS.md`.
+
+## Claude Code Specific Rules
+
+- Treat `AGENTS.md` as the canonical shared instruction entrypoint.
+- Read the relevant `docs/` file before architecture, UI, validation, or adapter changes.
+- Use macOS Computer Use for real app validation when the macOS session is unlocked and the app window can be resolved.
+- If Computer Use cannot resolve the app window, state that real local app validation is blocked and record the blocker when updating verification docs.
+- Do not treat Smoke App Run screenshots as real local effect validation.
+- Do not capture full desktop screenshots. Completed UI images must be full app-window-only captures.
+- The deprecated Tauri/React UI has been removed. Do not recreate `ui/`, `src-tauri/`, or Tauri IPC for product work.
+
+## Claude Code Validation Defaults
+
+For major, user-visible, UI, service protocol, or milestone work:
+
+```sh
+pnpm check:macos
+pnpm dev:macos
+```
+
+Then operate the real local `dist/SkillsCopilot.app` with Computer Use when available.
+
+For docs-only planning changes, do not run app validation unless the docs assert current implementation state, validation results, or completed UI screenshots.

@@ -1,0 +1,18 @@
+{
+  "id": "fixture-snapshot-preview-rollback",
+  "ok": true,
+  "result": {
+    "snapshot": {
+      "id": "snapshot-id",
+      "agent": "claude-code",
+      "scope": "agent-global",
+      "target": "/tmp/skills-copilot-home/.claude/settings.json",
+      "content": "{}\n",
+      "reason": "pre-toggle",
+      "created_at": 1780590000000
+    },
+    "current_content": "{\n  \"skillOverrides\": {\n    \"demo\": \"off\"\n  }\n}\n",
+    "current_read_error": null,
+    "changed": true
+  }
+}

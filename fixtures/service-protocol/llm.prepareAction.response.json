@@ -1,0 +1,44 @@
+{
+  "id": "fixture-llm-prepare-action",
+  "ok": true,
+  "result": {
+    "action": "recommend",
+    "allowed": false,
+    "reason": "LLM actions are disabled by default; no local provider is configured.",
+    "disabled_reason": "LLM actions are disabled by default; no local provider is configured.",
+    "requires_confirmation": true,
+    "write_back_allowed": false,
+    "draft_requires_user_copy": true,
+    "provider": null,
+    "model": null,
+    "estimated_input_tokens": 136,
+    "estimated_output_tokens": 500,
+    "estimated_total_tokens": 636,
+    "estimated_cost_usd": 0.0,
+    "single_request_token_limit": 8000,
+    "monthly_budget_usd": 0.0,
+    "credentials_storage": "none",
+    "credential_persistence_allowed": false,
+    "prompt_scope": [
+      "operation metadata",
+      "user intent",
+      "catalog recommendation constraints"
+    ],
+    "privacy_notes": [
+      "No credentials are read, logged, stored in SQLite, or written to the project directory.",
+      "This method does not execute a provider request and performs no network I/O.",
+      "Any future LLM output must remain a draft; writes require explicit user copy or a separate non-LLM write action."
+    ],
+    "confirmation": {
+      "required": true,
+      "message": "User confirmation is required before any future LLM provider request.",
+      "display_fields": [
+        "provider",
+        "model",
+        "estimated_total_tokens",
+        "estimated_cost_usd",
+        "prompt_scope"
+      ]
+    }
+  }
+}

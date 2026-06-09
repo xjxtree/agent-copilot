@@ -1,0 +1,8 @@
+{
+  "id": "fixture-import-skill-github",
+  "ok": false,
+  "error": {
+    "code": "command_error",
+    "message": "command error: unsupported import source: GitHub repo import is explicitly deferred; provide a local source_path after cloning or unpacking the repo yourself. Requested URL: https://github.com/example/skill.git"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "id": "fixture-skill-install",
+  "ok": true,
+  "result": {
+    "source_instance_id": "tool-global-fixture",
+    "source_path": "/tmp/skills-copilot-app/tool-global/imported-review/SKILL.md",
+    "target_agent": "codex",
+    "target_scope": "agent-global",
+    "target_path": "/tmp/skills-copilot-home/.agents/skills/imported-review/SKILL.md",
+    "files": [
+      {
+        "source": "/tmp/skills-copilot-app/tool-global/imported-review/SKILL.md",
+        "target": "/tmp/skills-copilot-home/.agents/skills/imported-review/SKILL.md",
+        "kind": "skill",
+        "will_write": true,
+        "target_exists": false
+      }
+    ],
+    "risks": [
+      "Will write into the codex agent-global skill root through the verified install path.",
+      "Only the tool-global SKILL.md source will be copied.",
+      "Codex may need to be restarted before it reads newly installed user/project skills."
+    ],
+    "confirmation": {
+      "required": true,
+      "confirmed": false,
+      "fields": [
+        "source_instance_id",
+        "source_path",
+        "target_agent",
+        "target_scope",
+        "target_path",
+        "files",
+        "risks"
+      ],
+      "message": "Confirm install to copy this tool-global skill into the selected agent root."
+    },
+    "wrote": false,
+    "snapshot_id": null
+  }
+}

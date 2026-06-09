@@ -1,0 +1,8 @@
+target/
+apps/macos/.build/
+node_modules/
+.pnpm-store/
+dist/
+.DS_Store
+*.log
+*.tmp

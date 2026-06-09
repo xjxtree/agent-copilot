@@ -1,0 +1,10 @@
+{
+  "id": "fixture-skill-install",
+  "method": "skill.install",
+  "params": {
+    "instance_id": "tool-global-fixture",
+    "target_agent": "codex",
+    "target_scope": "agent-global",
+    "confirmed": false
+  }
+}

@@ -1,0 +1,169 @@
+import Foundation
+
+enum ToolInstallTarget: String, Codable, CaseIterable, Identifiable, Hashable {
+    case claudeCode = "claude-code"
+    case codex
+
+    var id: String { rawValue }
+
+    var title: String {
+        DisplayText.agent(rawValue)
+    }
+}
+
+struct ToolGlobalInstallPreview: Codable, Identifiable, Hashable {
+    let skillID: String
+    let skillName: String
+    let sourcePath: String
+    let target: ToolInstallTarget
+    let targetPath: String?
+    let confirmationRequired: Bool
+    let writeBackEnabled: Bool
+    let wrote: Bool
+    let summary: String
+    let confirmationMessage: String
+    let risks: [String]
+    let snapshotID: String?
+
+    var id: String { "\(skillID):\(target.rawValue)" }
+
+    enum CodingKeys: String, CodingKey {
+        case skillID = "skill_id"
+        case sourceInstanceID = "source_instance_id"
+        case skillName = "skill_name"
+        case sourcePath = "source_path"
+        case target
+        case targetAgent = "target_agent"
+        case targetPath = "target_path"
+        case confirmationRequired = "confirmation_required"
+        case writeBackEnabled = "write_back_enabled"
+        case confirmation
+        case wrote
+        case summary
+        case confirmationMessage = "confirmation_message"
+        case risks
+        case snapshotID = "snapshot_id"
+    }
+
+    enum ConfirmationKeys: String, CodingKey {
+        case required
+        case confirmed
+        case message
+    }
+
+    init(
+        skillID: String,
+        skillName: String,
+        sourcePath: String,
+        target: ToolInstallTarget,
+        targetPath: String?,
+        confirmationRequired: Bool,
+        writeBackEnabled: Bool,
+        wrote: Bool,
+        summary: String,
+        confirmationMessage: String,
+        risks: [String],
+        snapshotID: String?
+    ) {
+        self.skillID = skillID
+        self.skillName = skillName
+        self.sourcePath = sourcePath
+        self.target = target
+        self.targetPath = targetPath
+        self.confirmationRequired = confirmationRequired
+        self.writeBackEnabled = writeBackEnabled
+        self.wrote = wrote
+        self.summary = summary
+        self.confirmationMessage = confirmationMessage
+        self.risks = risks
+        self.snapshotID = snapshotID
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let skillID = try container.decodeIfPresent(String.self, forKey: .skillID)
+            ?? container.decode(String.self, forKey: .sourceInstanceID)
+        let target = try container.decodeIfPresent(ToolInstallTarget.self, forKey: .target)
+            ?? container.decode(ToolInstallTarget.self, forKey: .targetAgent)
+        let sourcePath = try container.decode(String.self, forKey: .sourcePath)
+        let skillName = try container.decodeIfPresent(String.self, forKey: .skillName)
+            ?? URL(fileURLWithPath: sourcePath).deletingLastPathComponent().lastPathComponent
+            .nonEmptyFallback(skillID)
+        let targetPath = try container.decodeIfPresent(String.self, forKey: .targetPath)
+        let wrote = try container.decodeIfPresent(Bool.self, forKey: .wrote) ?? false
+        let risks = try container.decodeIfPresent([String].self, forKey: .risks) ?? []
+        let snapshotID = try container.decodeIfPresent(String.self, forKey: .snapshotID)
+
+        let confirmation = try container.decodeIfPresent(ConfirmationPayload.self, forKey: .confirmation)
+        let confirmationRequired = try container.decodeIfPresent(Bool.self, forKey: .confirmationRequired)
+            ?? confirmation?.required
+            ?? true
+        let legacyWriteBack = try container.decodeIfPresent(Bool.self, forKey: .writeBackEnabled)
+        let writeBackEnabled = legacyWriteBack ?? (confirmationRequired && !wrote && confirmation != nil)
+        let summary = try container.decodeIfPresent(String.self, forKey: .summary)
+            ?? UIStrings.toolGlobalInstallPreviewSummary(skillName, target.title)
+        let confirmationMessage = try container.decodeIfPresent(String.self, forKey: .confirmationMessage)
+            ?? confirmation?.message
+            ?? UIStrings.toolGlobalInstallConfirmation(skillName, target.title)
+
+        self.init(
+            skillID: skillID,
+            skillName: skillName,
+            sourcePath: sourcePath,
+            target: target,
+            targetPath: targetPath,
+            confirmationRequired: confirmationRequired,
+            writeBackEnabled: writeBackEnabled,
+            wrote: wrote,
+            summary: summary,
+            confirmationMessage: confirmationMessage,
+            risks: risks,
+            snapshotID: snapshotID
+        )
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(skillID, forKey: .skillID)
+        try container.encode(skillName, forKey: .skillName)
+        try container.encode(sourcePath, forKey: .sourcePath)
+        try container.encode(target, forKey: .target)
+        try container.encodeIfPresent(targetPath, forKey: .targetPath)
+        try container.encode(confirmationRequired, forKey: .confirmationRequired)
+        try container.encode(writeBackEnabled, forKey: .writeBackEnabled)
+        try container.encode(wrote, forKey: .wrote)
+        try container.encode(summary, forKey: .summary)
+        try container.encode(confirmationMessage, forKey: .confirmationMessage)
+        try container.encode(risks, forKey: .risks)
+        try container.encodeIfPresent(snapshotID, forKey: .snapshotID)
+    }
+
+    static func localPreview(skill: SkillRecord, target: ToolInstallTarget) -> ToolGlobalInstallPreview {
+        ToolGlobalInstallPreview(
+            skillID: skill.id,
+            skillName: skill.name,
+            sourcePath: skill.displayPath,
+            target: target,
+            targetPath: nil,
+            confirmationRequired: true,
+            writeBackEnabled: false,
+            wrote: false,
+            summary: UIStrings.toolGlobalInstallPreviewSummary(skill.name, target.title),
+            confirmationMessage: UIStrings.toolGlobalInstallConfirmation(skill.name, target.title),
+            risks: [],
+            snapshotID: nil
+        )
+    }
+}
+
+private struct ConfirmationPayload: Codable, Hashable {
+    let required: Bool
+    let confirmed: Bool
+    let message: String
+}
+
+private extension String {
+    func nonEmptyFallback(_ fallback: String) -> String {
+        isEmpty ? fallback : self
+    }
+}

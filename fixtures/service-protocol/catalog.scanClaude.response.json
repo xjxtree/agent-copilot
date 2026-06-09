@@ -1,0 +1,48 @@
+{
+  "id": "fixture-catalog-scan-claude",
+  "ok": true,
+  "result": {
+    "scanned_count": 1,
+    "skills": [
+      {
+        "id": "skill-instance-id",
+        "agent": "claude-code",
+        "scope": "agent-global",
+        "path": "/tmp/skills-copilot-home/.claude/skills/demo/SKILL.md",
+        "display_path": "/tmp/skills-copilot-home/.claude/skills/demo/SKILL.md",
+        "definition_id": "definition-id",
+        "name": "demo",
+        "state": "loaded",
+        "enabled": true
+      }
+    ],
+    "activity": {
+      "operation": "catalog.scanClaude",
+      "status": "completed",
+      "started_at": 1780590000000,
+      "finished_at": 1780590000100,
+      "scanned_count": 1,
+      "skill_count": 1,
+      "finding_count": 0,
+      "conflict_count": 0,
+      "snapshot_count": 1,
+      "roots": [
+        "/tmp/skills-copilot-home/.claude/skills"
+      ],
+      "log_entries": [
+        {
+          "level": "info",
+          "message": "Queued Claude Code scan across 1 root(s)."
+        },
+        {
+          "level": "info",
+          "message": "Catalog refresh completed with 1 skill(s), 0 finding(s), and 0 conflict group(s)."
+        }
+      ],
+      "recovery_actions": [
+        "Retry Scan if the catalog looks stale.",
+        "Use Reload to re-read the current catalog without touching Claude files."
+      ]
+    }
+  }
+}

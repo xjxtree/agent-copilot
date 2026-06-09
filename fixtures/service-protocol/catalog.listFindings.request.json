@@ -1,0 +1,5 @@
+{
+  "id": "fixture-catalog-list-findings",
+  "method": "catalog.listFindings",
+  "params": {}
+}

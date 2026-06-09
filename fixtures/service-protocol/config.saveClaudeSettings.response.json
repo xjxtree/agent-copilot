@@ -1,0 +1,12 @@
+{
+  "id": "fixture-config-save-claude-settings",
+  "ok": true,
+  "result": {
+    "agent": "claude-code",
+    "scope": "agent-global",
+    "target": "/tmp/skills-copilot-home/.claude/settings.json",
+    "format": "json",
+    "content": "{\n  \"skillOverrides\": {}\n}\n",
+    "exists": true
+  }
+}

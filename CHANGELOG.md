@@ -1,0 +1,416 @@
+# Changelog
+
+This file tracks release-readiness notes for adapter behavior, risk, validation, and deferred blockers. It is a manual tracking document, not a public release artifact log.
+
+Current release-readiness guardrails:
+
+- Real local Computer Use validation passed on 2026-06-09 for the current mainline app. Future user-visible, UI, or service-protocol candidates must rerun the real local pass; fixture smoke screenshots still do not replace real local validation for new changes.
+- V2.9 Tool-global import/export/install is integrated. Local directory import writes only app-controlled staging/catalog, export creates reproducible local bundles, and confirmed install routes Claude/Codex copies through verified write paths.
+- V2.8 rules and permissions governance is complete and automated validation passed on 2026-06-09; the seven new local rules are documented below.
+- Opencode is read-only and native-root-only: `~/.config/opencode/skills` and the active project `.opencode/skills`.
+- Opencode `.agents/skills` and `.claude/skills` compatibility roots are intentionally not scanned.
+- Non-Claude/Codex/opencode adapters remain blocked or planning-only until evidence gates are satisfied. Pi is read-only planning; Hermes and OpenClaw remain blocked.
+- No cloud sync, accounts, telemetry, anonymous crash reports, or uncontrolled outbound network calls.
+- Signing, notarization, DMG/ZIP packaging, updater work, and release artifact automation are deferred until public release work resumes.
+
+## Future Entry Template
+
+### Vx.y - YYYY-MM-DD
+
+Status:
+
+- Complete / in progress / blocked / deferred.
+
+Adapter behavior changes:
+
+- Added, removed, or changed scan roots.
+- Changed parser behavior, malformed-skill handling, catalog attribution, UI state, or toggle semantics.
+- Changed writable/read-only support, config paths, snapshots, atomic writes, or rollback behavior.
+
+Risk/security notes:
+
+- Path/root boundary changes.
+- Config write, snapshot, lock, read-back, rollback, or permission-model changes.
+- Compatibility-root, duplicate-root, stale-selection, project-context, or adapter-isolation risks.
+- Privacy/network posture changes.
+
+Validation run:
+
+- Commands run and exact result summary.
+- Fixture smoke coverage.
+- Real local Computer Use result, screenshot path, or explicit blocker.
+
+Deferred blockers:
+
+- Remaining real local validation, evidence gaps, unsupported roots, unsupported writes, release packaging/signing, or other follow-up work.
+
+## V2 Adapter Impact Log
+
+### V2.10 - 2026-06-09
+
+Status:
+
+- Complete / real local validation passed for the current mainline app.
+- V2.10 remains a skill execution safety-boundary release, not a completed script runner release.
+
+Adapter behavior changes:
+
+- No adapter scan root, writable-toggle, or config-path behavior changed during the real local validation closeout.
+- Native macOS validation exercised the current integrated Claude Code, Codex, read-only opencode, findings, conflicts, snapshots, project context, LLM disabled state, and script safety preview surfaces against the developer's real local environment.
+
+Risk/security notes:
+
+- `script.previewExecution` and `script.execute` remain default-deny / intent-boundary methods; no real sandbox runner, stdout/stderr capture, successful execution output log, or public execution API is claimed.
+- Real catalog data contained no structured script command records during the pass, so the script preview UI reached a safe missing-command preview-only state and did not execute anything. Service tests remain the evidence for command/cwd/env/network/files preview contracts.
+- `mcp__computer_use.get_app_state` resolved the app window, but `mcp__computer_use.click` returned an activation error. UI operation used macOS AX/System Events clicks with Computer Use state read-back after each step.
+
+Validation run:
+
+- `pnpm check:macos` passed on 2026-06-09.
+- Launched `<repo>/dist/SkillsCopilot.app` against the real local `HOME`, app data, Claude config, Codex roots, and opencode roots.
+- Operated scan-all, findings severity filter, conflicts, snapshot preview, Codex/opencode agent filters, project context set/clear, opencode read-only disabled toggle, LLM disabled controls, and V2.10 script safety preview.
+- App-window-only evidence captured at `docs/ui-artifacts/native-macos-shell/real-local-computer-use-2026-06-09.png`.
+
+Deferred blockers:
+
+- Future candidate changes must rerun real local Computer Use validation.
+- Real sandbox runner, interpreter allowlist, stdout/stderr policy, resource limits, signed public distribution, GitHub clone import, opencode writable install, and script-file install remain deferred.
+
+### V2.9 - 2026-06-09
+
+Status:
+
+- Complete / automated validation passed.
+- Native macOS UI/model supports tool-global read-only preview and confirm-before-install expression.
+- Rust service supports `catalog.importSkill`, `skill.exportBundle`, and `skill.install`.
+
+Adapter behavior changes:
+
+- Tool-global rows enter catalog as `agent = tool-global`, `scope = tool-global` and remain separate from adapter scan/missing sweeps.
+- Local directory import copies skill content into app-controlled `tool-global/skills` staging, then refreshes rule findings/conflicts.
+- Export produces directory-form bundles with reproducible `manifest.json` metadata and path-relative `skill/SKILL.md`.
+- Reimport validation recomputes fingerprint and preserves manifest metadata.
+- Tool-global rows are displayed as read-only previews in the native sidebar and detail header.
+- Enable/Disable toggle is disabled for `scope = tool-global` with copy/install-specific disabled reason text.
+- Detail overview shows an install preview affordance with target agent selection, target path/risk display, and confirmed install action.
+- Swift service client uses `skill.install` with `confirmed=false/true` and falls back to local preview only for older services without install support.
+- Confirmed install supports Claude/Codex verified skill roots; opencode remains read-only and unsupported for install.
+
+Risk/security notes:
+
+- Import writes only app-controlled staging and catalog records; it does not write agent config.
+- GitHub repo import is explicitly deferred and returns a stable unsupported error without clone/network writes.
+- Confirmed install requires target agent/scope/path confirmation, creates pre-install audit snapshots, uses lock/atomic write/read-back verification, and rescans the target adapter.
+- Tool-global staging remains app-controlled and is not confused with scanned agent-global or project-local roots.
+
+Validation run:
+
+- `cargo test -p skills-copilot-commands -p skills-copilot-service` passed during integration.
+- `swift test --package-path apps/macos` passed.
+- `pnpm check:macos` passed.
+
+Deferred blockers:
+
+- GitHub clone/import remains deferred; users must provide a local source path after any explicit clone/unpack.
+- Signed/zipped/public distribution of exported bundles remains out of scope.
+- Script file install is limited by current scanner/model support; V2.9 copies `SKILL.md`.
+- Future real local Computer Use reruns for later user-visible changes.
+
+### V2.8 - 2026-06-08
+
+Status:
+
+- Complete / automated validation passed.
+- Completed the five governance remediation targets and seven new local rules: `frontmatter.tools-not-empty`, `permissions.network-declared`, `permissions.exec-needs-human`, `name.canonical-case`, `script.no-shebang`, `body.too-long`, and `dependency.unknown`.
+- Real local Computer Use was pending for the V2.8 closeout; the current mainline app later passed the real local validation pass on 2026-06-09.
+
+Adapter behavior changes:
+
+- Added local rule coverage for non-empty declared tools, declared network permissions, human confirmation for exec permissions, canonical skill-name casing, script shebang avoidance, oversized body detection, and unknown dependency detection.
+- Kept LLM status protocol compatibility so older and newer status payload readers remain tolerant during the V2.8 transition.
+- Kept permissions roundtrip coverage for V2.8 rules so normalized permission fields do not silently drop raw or unknown-safe data.
+- Kept explicit severity ordering so rule output, grouping, and display use one stable order.
+- Kept findings filtering/grouping UI for severity, rule, and agent dimensions.
+- Kept `app.stateSnapshot`-based refresh optimization so unchanged app state does not force unnecessary UI refresh work.
+
+Risk/security notes:
+
+- Permissions remain unknown-safe: unverified fields must display as unknown/raw and must not be inferred as safe or unsafe.
+- Findings filtering must not hide high-severity results by default or make grouped counts disagree with the underlying rule output.
+- Refresh optimization must not reuse stale findings, stale permission state, or stale selected details after scan, filter, project-context, or adapter-state changes.
+
+Validation run:
+
+- Worker focused checks passed for catalog, Swift UI/model, layout, docs, and `git diff --check`.
+- Coordinator integration ran `swift test --package-path apps/macos`, `cargo test -p skills-copilot-catalog`, `pnpm verify:macos-ui-layout`, `git diff --check`, stale-claim searches, and full `pnpm check:macos`; all passed. Final mainline closeout validation passed again on 2026-06-09.
+- Fixture Smoke App Run refreshed the app-window screenshot during validation; the generated screenshot diff was restored and not committed as release evidence.
+- Docs closeout gate kept stale wording checks for provider/client/network/key storage completion claims, Computer Use completion claims, and old open-milestone claims, with `git diff --check` clean before the V2.8 milestone was marked integrated.
+
+Deferred blockers:
+
+- V2.8 itself closed before the later 2026-06-09 real local validation pass; future changes still require a fresh real local pass.
+- Next implementation direction is V2.10: Skill execution and script safety, plus release-gate follow-through and remaining adapter evidence work.
+
+### V2.7 - 2026-06-08
+
+Status:
+
+- Complete; disabled-by-default service/UI gate and prepare/estimate path integrated.
+- Real local Computer Use validation was pending at V2.7 closeout; the current mainline app later passed on 2026-06-09.
+
+Adapter behavior changes:
+
+- No adapter scan root, parser, catalog attribution, or toggle behavior changed.
+- V2.7 LLM local assist scope is disabled-by-default service/UI gate plus request prepare/estimate for Analyze, Recommend, conflict explanation, and draft frontmatter.
+- Real provider clients, provider network calls, and credential storage are not claimed in this stage.
+
+Risk/security notes:
+
+- Current stage must not save credentials. Future macOS storage must prefer Keychain; fallback `~/.config/skills-copilot/llm.yaml` must be permission-checked as `0600`.
+- Credentials, prompts, responses, token/cost estimates, and API keys must not be written to SQLite, project directories, logs, crash reports, or smoke fixtures.
+- Draft frontmatter is display/copy-only. There is no Apply/Write path from LLM output; real writes must use the normal user edit/save flow and Rust service validation.
+- LLM features remain default-off and user-triggered; prepare/estimate must show provider, model, token/cost estimate, budget status, and disabled/unconfigured reason before any future provider call.
+
+Validation run:
+
+- `cargo test -p skills-copilot-service` passed.
+- `swift test --package-path apps/macos` passed after service/UI payload integration.
+- `pnpm verify:macos-ui-layout` passed.
+- `git diff --check` passed; stale-claim searches for provider/client/network/credential completion wording stayed clean at closeout.
+- Coordinator closeout ran full `pnpm check:macos`; it passed and covered Rust fmt/test/clippy, native list model, native layout guard, SwiftPM tests/build, local app launch verify, and fixture smoke app run.
+
+Deferred blockers:
+
+- V2.7 closed before the later 2026-06-09 current-mainline real local pass.
+- Actual provider client, network call, Keychain/fallback credential storage, and response rendering remain future work.
+- Next development milestone is V2.8 Rules and Permissions Governance.
+
+### V2.6 - 2026-06-08
+
+Status:
+
+- Complete; docs-only release readiness completed.
+- Real local Computer Use validation was pending at V2.6 closeout; the current mainline app later passed on 2026-06-09.
+
+Adapter behavior changes:
+
+- No runtime adapter behavior changed in this milestone.
+- Added manual release-readiness checklist coverage for current local candidate validation, fixture smoke isolation, real local Computer Use follow-up, and current artifact boundary.
+- Added changelog tracking fields for future adapter behavior changes, risk/security notes, validation runs, and deferred blockers.
+
+Risk/security notes:
+
+- Reaffirmed that the only current local candidate artifact boundary is `dist/SkillsCopilot.app`.
+- Signing, notarization, stapling, DMG/ZIP packaging, updater work, checksums, public download, and release artifact automation remain deferred.
+- Release-readiness evidence must not claim fixture smoke screenshots as real local validation, and must not touch real user Claude, Codex, or opencode config during fixture smoke.
+
+Validation run:
+
+- Worker closeout ran `git diff --check` on docs-only branches and searched for incorrect claims that formal distribution automation already exists.
+- Coordinator integration must rerun docs whitespace/stale-claim checks after merge.
+- Full `pnpm check:macos` was not required for worker docs-only changes; run it for milestone closeout if the coordinator treats the docs milestone as requiring the full local gate.
+
+Deferred blockers:
+
+- Real local app Computer Use validation for V2.2-V2.6 behavior.
+- Public release work: signing, notarization, DMG/ZIP packaging, updater work, checksums, public download, and artifact automation.
+
+### V2.5 - 2026-06-08
+
+Status:
+
+- Complete; automated validation passed.
+- Real local Computer Use validation was pending at V2.5 closeout; the current mainline app later passed on 2026-06-09.
+
+Adapter behavior changes:
+
+- Hardened scanner override isolation for fixture roots, extra roots, project-context overrides, and adapter native roots.
+- Kept Claude Code, Codex, and read-only opencode behavior within the existing supported boundaries.
+- Tightened UI/service behavior for stale selection, busy writes, read-only rows, broken rows, missing rows, shadowed rows, and opencode rows so unsupported toggles do not call write APIs.
+- Strengthened service fixture typing around supported adapter summaries, opencode read-only rejection, project context payloads, snapshot preview errors, and stable error codes.
+
+Risk/security notes:
+
+- Reconfirmed that writable adapter behavior must use snapshot, file lock, atomic write, read-back verification, rollback handling, and root/permission checks.
+- Reinforced that read/preview flows must surface path/root errors and remain read-only.
+- Opencode remained read-only; no opencode config creation or modification was introduced.
+- Documentation status drift is treated as a release-readiness risk.
+
+Validation run:
+
+- `pnpm check:macos` passed after implementation changes.
+- Focused tests covered the audit-hardening items or recorded explicit deferred rationale.
+- Docs closeout included stale-status checks and `git diff --check`.
+- Real local Computer Use was blocked at V2.5 closeout because macOS/AX could not resolve the visible app window; the current mainline app later passed on 2026-06-09.
+
+Deferred blockers:
+
+- Real local app Computer Use validation for V2.2/V2.3/V2.4/V2.5 behavior.
+- Public release work: signing, notarization, DMG/ZIP packaging, updater work, and artifact automation.
+
+### V2.4 - 2026-06-08
+
+Status:
+
+- Complete; automated validation passed.
+- Real local Computer Use validation was pending at V2.4 closeout; the current mainline app later passed on 2026-06-09.
+
+Adapter behavior changes:
+
+- Added opencode as the third adapter in read-only mode.
+- Scans only opencode native roots: user `~/.config/opencode/skills` and active project `.opencode/skills`.
+- Does not scan opencode `.agents/skills` or `.claude/skills` compatibility roots.
+- Parses opencode `SKILL.md` frontmatter with required `name` and `description`; directory/name mismatch or missing required metadata becomes broken/malformed catalog data rather than aborting the scan.
+- Integrated opencode with `catalog.scanAll`, project context, agent filter/status, and read-only toggle rejection.
+
+Risk/security notes:
+
+- Writable opencode behavior remains blocked until exact `permission.skill` patch, re-enable, wildcard precedence, managed config, and override semantics are verified.
+- Read-only support must not create or modify real user opencode config.
+- Compatibility roots remain deferred to avoid duplicate catalog pollution and adapter-boundary confusion.
+
+Validation run:
+
+- Smoke fixture uses temporary HOME/project native opencode roots and asserts global/project visibility plus read-only toggle rejection.
+- Automated validation passed.
+- Fixture smoke screenshots do not replace real local Computer Use validation.
+
+Deferred blockers:
+
+- Disposable local round-trip for writable opencode semantics.
+- Decision on whether opencode compatibility roots or custom `skills.paths` / `skills.urls` should ever be exposed.
+- Future real local app Computer Use reruns for later candidates.
+
+### V2.3 - 2026-06-08
+
+Status:
+
+- Complete; automated validation passed.
+- Real local Computer Use validation was pending at V2.3 closeout; the current mainline app later passed on 2026-06-09.
+
+Adapter behavior changes:
+
+- Hardened Codex user `config.toml` patching for disable/re-enable behavior.
+- Disable normalizes only the target absolute `SKILL.md` path entries and writes one `enabled = false` entry.
+- Re-enable removes all target path entries and does not write `enabled = true`.
+- Preserves comments, unknown keys, non-target tables, non-target skill overrides, and final newline.
+- Improved adapter state expression for disabled, broken, missing, shadowed/unknown, skipped-root, and root-error cases.
+
+Risk/security notes:
+
+- Codex writes remain limited to verified user config at `~/.codex/config.toml` / `$CODEX_HOME/config.toml`.
+- Project-local `.codex/config.toml`, `/etc/codex/skills`, `$CODEX_HOME/skills`, plugin/admin/system roots, and other unverified roots remain unsupported.
+- Added regression coverage for unsafe `CODEX_HOME`, config path canonicalization, project-boundary write checks, and stale catalog selection.
+
+Validation run:
+
+- Focused Codex adapter/config tests passed.
+- Focused service/commands tests passed.
+- Security regression tests passed.
+- `cargo test --workspace` and `pnpm check:macos` passed on 2026-06-08.
+- Documentation-only sync validation included stale-status `rg` scans and `git diff --check`.
+- Real local Computer Use validation remains blocked by the visible-window issue.
+
+Deferred blockers:
+
+- Real local app validation of project context, scan-all, agent filter, Codex toggle, and Codex restart note.
+- Any expansion of Codex roots or project-local writes requires a new evidence pass.
+
+### V2.2 - 2026-06-08
+
+Status:
+
+- Complete; implementation and automated validation passed.
+- Real local UI operation remains blocked.
+
+Adapter behavior changes:
+
+- Formalized project context with persisted local app state and environment override support.
+- `catalog.scanAll` uses the current effective project context to scope project-local Claude Code and Codex roots.
+- No-project mode scans user/global roots only and does not scan project-local Claude/Codex roots or attach results to a stale project.
+- Multi-project switching keeps catalog records tied to `project_root`; toggles must match the current safe project context.
+
+Risk/security notes:
+
+- `ProjectContext.current_cwd` and `root_path` must canonicalize, and `current_cwd` must stay inside `root_path`.
+- Env overrides are for development/test launch and are not persisted.
+- Project context is local app state only; there is no cloud sync, account, telemetry, crash reporting, or remote project memory.
+- Codex toggle still writes only user config; project-local Codex config writes remain blocked.
+
+Validation run:
+
+- `cargo test --workspace`, `cargo clippy --workspace --all-targets --all-features`, `swift test --package-path apps/macos`, and `pnpm check:macos` passed on 2026-06-08.
+- Fixture project-context smoke scenario covered no-project, set project cwd, scan-all, switch/clear project, catalog ownership, and toggle target isolation.
+- `pnpm dev:macos` / `open -n dist/SkillsCopilot.app` launched the real bundle process, but no visible window was available to Computer Use/AX.
+
+Deferred blockers:
+
+- Real local app operation for setting, switching, and clearing project context; scan-all; Codex cwd-to-repo-root behavior; and app-window-only evidence capture.
+
+### V2.1 - 2026-06-08
+
+Status:
+
+- Complete; automated validation passed.
+- Real local app validation attempted but blocked.
+
+Adapter behavior changes:
+
+- Stabilized the dual Claude Code/Codex adapter experience.
+- `catalog.scanAll` provides per-agent refresh summaries.
+- Native macOS UI added agent filter/grouping for All, Claude Code, and Codex.
+- List/detail/refresh log expose skill source, scan root, scan counts, failed roots, and adapter-visible state.
+- Codex toggle success includes a Codex runtime restart note and does not imply live reload.
+- Claude Code scan/list/detail/toggle/settings/snapshot behavior remained in scope for regression protection.
+
+Risk/security notes:
+
+- Filtering changes visible UI state only; it must not mutate catalog data or trigger writes.
+- Codex restart note must refer to Codex runtime config reload, not restarting SkillsCopilot.
+- No third adapter was added in this slice.
+- Codex root scope and write scope did not expand.
+
+Validation run:
+
+- `pnpm check:macos` passed and fixture smoke window evidence was updated.
+- `pnpm dev:macos` launched the real local app process, but System Events reported zero SkillsCopilot windows and Computer Use returned `cgWindowNotFound`.
+
+Deferred blockers:
+
+- Real local app validation for scan-all, agent filters, Codex visibility or missing-root state, Claude Code regression, Codex toggle restart note, and app-window-only screenshot.
+
+### V2.0 - 2026-06-08
+
+Status:
+
+- Complete; first Codex adapter implementation slice integrated.
+- Real local app Computer Use validation was waived for the slice and remains required for later code changes.
+
+Adapter behavior changes:
+
+- Added Codex as the second real adapter.
+- Codex scanning is limited to verified roots: user `$HOME/.agents/skills` and project `.agents/skills` discovered from adapter `project_cwd` upward to `project_root`.
+- Codex parser supports `SKILL.md` frontmatter with required `name` and `description`, preserving raw frontmatter and body.
+- Malformed Codex skills become broken catalog records rather than aborting the scan.
+- Codex user-config writable toggle patches only `~/.codex/config.toml` / `$CODEX_HOME/config.toml` using absolute `SKILL.md` paths in `[[skills.config]]`.
+- Re-enable removes matching entries from user config.
+- Catalog/service/native UI can distinguish `claude-code` and `codex` records.
+
+Risk/security notes:
+
+- Does not write `<repo>/.codex/config.toml`.
+- Does not scan `/etc/codex/skills`, plugin-distributed skills, system/admin roots, or `$CODEX_HOME/skills`.
+- Does not infer permissions, dependencies, or enablement state from `agents/openai.yaml`, unknown frontmatter fields, or plugin metadata.
+- Pi, opencode, Hermes, and OpenClaw were not implemented in this slice.
+- Signing, notarization, DMG/ZIP packaging, and release artifact automation were not implemented.
+
+Validation run:
+
+- `cargo test --workspace`, focused adapter/commands tests, service fixtures, and `pnpm check:macos` passed.
+- Real macOS Computer Use operation was waived for the V2.0 slice.
+
+Deferred blockers:
+
+- Restore real local Computer Use validation for app-window operation.
+- Resolve Codex project-local toggle behavior before any project config write support.
+- Decide whether unsupported Codex roots should ever be scanned.

@@ -1,0 +1,5 @@
+{
+  "id": "fixture-catalog-list-skills",
+  "method": "catalog.listSkills",
+  "params": {}
+}

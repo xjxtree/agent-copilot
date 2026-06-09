@@ -1,0 +1,9 @@
+{
+  "id": "fixture-project-set-context",
+  "method": "project.setContext",
+  "params": {
+    "root_path": "/tmp/skills-copilot-project",
+    "current_cwd": "/tmp/skills-copilot-project",
+    "name": "Fixture Project"
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "id": "fixture-snapshot-list",
+  "method": "snapshot.list",
+  "params": {}
+}

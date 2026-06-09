@@ -1,0 +1,5 @@
+{
+  "id": "fixture-catalog-scan-claude",
+  "method": "catalog.scanClaude",
+  "params": {}
+}

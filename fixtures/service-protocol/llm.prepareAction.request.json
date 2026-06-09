@@ -1,0 +1,8 @@
+{
+  "id": "fixture-llm-prepare-action",
+  "method": "llm.prepareAction",
+  "params": {
+    "kind": "recommend",
+    "user_intent": "Find an existing local skill for reviewing frontmatter quality."
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "id": "fixture-service-status",
+  "method": "service.status",
+  "params": {}
+}

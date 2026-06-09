@@ -1,0 +1,15 @@
+[package]
+name = "skills-copilot-scanner"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde_json.workspace = true
+sha2.workspace = true
+skills-copilot-core.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+skills-copilot-adapters.workspace = true

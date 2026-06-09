@@ -1,0 +1,5 @@
+{
+  "id": "fixture-catalog-list-conflicts",
+  "method": "catalog.listConflicts",
+  "params": {}
+}

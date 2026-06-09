@@ -1,0 +1,36 @@
+[workspace]
+members = [
+    "crates/core",
+    "crates/adapters",
+    "crates/scanner",
+    "crates/catalog",
+    "crates/ai-core",
+    "crates/commands",
+    "crates/service",
+]
+exclude = ["crates/adapters/fuzz"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/xjx/skills-copilot"
+
+[workspace.dependencies]
+anyhow = "1"
+fs4 = "0.8"
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+sha2 = "0.10"
+thiserror = "2"
+time = { version = "0.3", features = ["formatting", "macros"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+skills-copilot-core = { path = "crates/core" }
+skills-copilot-adapters = { path = "crates/adapters" }
+skills-copilot-scanner = { path = "crates/scanner" }
+skills-copilot-catalog = { path = "crates/catalog" }
+skills-copilot-ai-core = { path = "crates/ai-core" }
+skills-copilot-commands = { path = "crates/commands" }
+skills-copilot-service = { path = "crates/service" }

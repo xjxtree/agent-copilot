@@ -1,0 +1,8 @@
+{
+  "id": "fixture-config-toggle-skill",
+  "method": "config.toggleSkill",
+  "params": {
+    "instance_id": "skill-instance-id",
+    "on": false
+  }
+}

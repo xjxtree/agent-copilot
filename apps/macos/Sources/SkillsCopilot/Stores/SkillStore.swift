@@ -1,0 +1,560 @@
+import Foundation
+
+@MainActor
+final class SkillStore: ObservableObject {
+    @Published private(set) var skills: [SkillRecord] = []
+    @Published private(set) var findings: [RuleFindingRecord] = []
+    @Published private(set) var conflicts: [ConflictGroupRecord] = []
+    @Published private(set) var snapshots: [ConfigSnapshotRecord] = []
+    @Published private(set) var detailsByID: [SkillRecord.ID: SkillDetailRecord] = [:]
+    @Published private(set) var status: ServiceStatus?
+    @Published private(set) var llmStatus = LLMStatus.disabledFallback()
+    @Published private(set) var llmPrepareResults: [LLMAction: LLMPrepareResult] = [:]
+    @Published private(set) var preparingLLMActions: Set<LLMAction> = []
+    @Published private(set) var scriptExecutionPreviews: [SkillRecord.ID: ScriptExecutionPreview] = [:]
+    @Published private(set) var previewingScriptExecutionSkillIDs: Set<SkillRecord.ID> = []
+    @Published private(set) var projectContextState: ProjectContextState?
+    @Published private(set) var isLoading = false
+    @Published private(set) var isLoadingDetail = false
+    @Published private(set) var isScanning = false
+    @Published private(set) var isWriting = false
+    @Published private(set) var isProjectUpdating = false
+    @Published private(set) var isLoadingSettings = false
+    @Published private(set) var isSavingSettings = false
+    @Published private(set) var lastMutationMessage: String?
+    @Published private(set) var refreshStatusMessage = UIStrings.refreshIdle
+    @Published private(set) var watcherStatusMessage = UIStrings.refreshWatcherManual
+    @Published private(set) var refreshLogEntries: [RefreshLogEntry] = []
+    @Published private(set) var canRetryLastRefresh = false
+    @Published private(set) var claudeSettings: ConfigDocumentRecord?
+    @Published private(set) var settingsMessage: String?
+    @Published private(set) var settingsErrorMessage: String?
+    @Published var selectedSkillID: SkillRecord.ID?
+    @Published var selectedDetailSection: DetailSection = .overview
+    @Published var searchText = "" {
+        didSet { handleListCriteriaChanged() }
+    }
+    @Published var agentFilter: SkillAgentFilter = .all {
+        didSet { handleListCriteriaChanged() }
+    }
+    @Published var stateFilter: SkillStateFilter = .all {
+        didSet { handleListCriteriaChanged() }
+    }
+    @Published var sortOrder: SkillSortOrder = .name
+    @Published var errorMessage: String?
+
+    private let service: ServiceClient
+    private var lastRefreshAction: RefreshAction = .reload
+    private var llmPreparedSkillID: SkillRecord.ID?
+
+    init(service: ServiceClient) {
+        self.service = service
+    }
+
+    var isRefreshBusy: Bool {
+        isLoading || isScanning || isWriting || isProjectUpdating || isSavingSettings
+    }
+
+    var selectedSkill: SkillRecord? {
+        let visibleSkills = filteredSkills
+        if let selectedSkillID {
+            return visibleSkills.first { $0.id == selectedSkillID } ?? visibleSkills.first
+        }
+        return visibleSkills.first
+    }
+
+    var selectedSkillDetail: SkillDetailRecord? {
+        guard let id = selectedSkill?.id else { return nil }
+        return detailsByID[id]
+    }
+
+    var enabledCount: Int {
+        skills.filter { DisplayText.statusKind($0.state, enabled: $0.enabled) == .enabled }.count
+    }
+
+    var activeProjectContext: ProjectContext? {
+        projectContextState?.active
+    }
+
+    var recentProjectContexts: [ProjectContext] {
+        projectContextState?.recent ?? []
+    }
+
+    var projectValidationMessage: String? {
+        guard let message = activeProjectContext?.validationError, !message.isEmpty else {
+            return nil
+        }
+        return message
+    }
+
+    var filteredSkills: [SkillRecord] {
+        SkillListModel.filteredAndSorted(
+            skills: skills,
+            findings: findings,
+            conflicts: conflicts,
+            searchText: searchText,
+            agentFilter: agentFilter,
+            stateFilter: stateFilter,
+            sortOrder: sortOrder
+        )
+    }
+
+    var filteredSkillGroups: [SkillAgentGroup] {
+        SkillListModel.groupedByAgent(filteredSkills)
+    }
+
+    var selectedFindings: [RuleFindingRecord] {
+        guard let skill = selectedSkill else { return [] }
+        return findings.filter { finding in
+            finding.instanceId == skill.id || finding.definitionId == skill.definitionId
+        }
+    }
+
+    var selectedConflicts: [ConflictGroupRecord] {
+        guard let skill = selectedSkill else { return [] }
+        return conflicts.filter { conflict in
+            conflict.definitionId == skill.definitionId || conflict.instanceIds.contains(skill.id)
+        }
+    }
+
+    func llmPrepareResult(for action: LLMAction) -> LLMPrepareResult? {
+        guard llmPreparedSkillID == selectedSkillID else { return nil }
+        return llmPrepareResults[action]
+    }
+
+    func isPreparingLLMAction(_ action: LLMAction) -> Bool {
+        preparingLLMActions.contains(action)
+    }
+
+    func scriptExecutionPreview(for skill: SkillRecord) -> ScriptExecutionPreview? {
+        scriptExecutionPreviews[skill.id]
+    }
+
+    func isPreviewingScriptExecution(for skill: SkillRecord) -> Bool {
+        previewingScriptExecutionSkillIDs.contains(skill.id)
+    }
+
+    func reload() async {
+        guard !isRefreshBusy else { return }
+        isLoading = true
+        errorMessage = nil
+        beginRefresh(.reload, message: UIStrings.refreshReloading)
+        defer { isLoading = false }
+
+        do {
+            try await refreshCollections()
+            refreshStatusMessage = UIStrings.refreshReloaded(skills.count, findings.count, conflicts.count)
+            appendRefreshLog(level: "info", message: refreshStatusMessage)
+            canRetryLastRefresh = false
+            await loadSelectedDetail()
+        } catch {
+            handleRefreshFailure(error, action: .reload)
+        }
+    }
+
+    func scanAll() async {
+        await scanAll(allowDuringProjectUpdate: false)
+    }
+
+    private func scanAll(allowDuringProjectUpdate: Bool) async {
+        guard canStartScan(allowDuringProjectUpdate: allowDuringProjectUpdate) else { return }
+        isScanning = true
+        errorMessage = nil
+        lastMutationMessage = nil
+        beginRefresh(.scan, message: UIStrings.refreshScanning)
+        defer { isScanning = false }
+
+        do {
+            let result = try await service.scanAll()
+            detailsByID.removeAll()
+            try await refreshCollections()
+            lastMutationMessage = UIStrings.scannedSkills(result.scannedCount)
+            applyRefreshActivity(result.activity)
+            await loadSelectedDetail()
+        } catch {
+            handleRefreshFailure(error, action: .scan)
+        }
+    }
+
+    func setProject(rootPath: String, currentCWD: String? = nil, name: String? = nil) async {
+        guard !isRefreshBusy else { return }
+        isProjectUpdating = true
+        errorMessage = nil
+        lastMutationMessage = nil
+        defer { isProjectUpdating = false }
+
+        do {
+            let resolvedName = name ?? URL(fileURLWithPath: rootPath).lastPathComponent
+            let state = try await service.setProjectContext(
+                rootPath: rootPath,
+                currentCWD: currentCWD ?? rootPath,
+                name: resolvedName.isEmpty ? nil : resolvedName
+            )
+            projectContextState = state
+            detailsByID.removeAll()
+
+            if let validationMessage = projectValidationMessage {
+                errorMessage = UIStrings.projectValidationFailed(validationMessage)
+                refreshStatusMessage = UIStrings.projectScanSkippedValidation
+                appendRefreshLog(level: "error", message: refreshStatusMessage)
+                return
+            }
+
+            await scanAll(allowDuringProjectUpdate: true)
+            if errorMessage == nil {
+                lastMutationMessage = UIStrings.projectSelectedAndScanned(activeProjectContext?.name ?? resolvedName)
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func clearProject() async {
+        guard !isRefreshBusy else { return }
+        isProjectUpdating = true
+        errorMessage = nil
+        lastMutationMessage = nil
+        defer { isProjectUpdating = false }
+
+        do {
+            projectContextState = try await service.clearProjectContext()
+            detailsByID.removeAll()
+            await scanAll(allowDuringProjectUpdate: true)
+            if errorMessage == nil {
+                lastMutationMessage = UIStrings.projectClearedAndScanned
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func retryLastRefresh() async {
+        switch lastRefreshAction {
+        case .reload:
+            await reload()
+        case .scan:
+            await scanAll()
+        }
+    }
+
+    func toggleSelectedSkill(on: Bool) async {
+        guard !isLoading, !isScanning, !isProjectUpdating, !isSavingSettings else {
+            errorMessage = UIStrings.operationUnavailableBusy
+            lastMutationMessage = nil
+            return
+        }
+        guard let skill = selectedSkill else { return }
+        if let disabledReason = DisplayText.toggleDisabledReason(for: skill, isWriting: isWriting) {
+            errorMessage = disabledReason
+            lastMutationMessage = nil
+            return
+        }
+
+        isWriting = true
+        errorMessage = nil
+        lastMutationMessage = nil
+        defer { isWriting = false }
+
+        do {
+            _ = try await service.toggleSkill(instanceID: skill.id, on: on)
+            detailsByID.removeValue(forKey: skill.id)
+            try await refreshCollections()
+            lastMutationMessage = UIStrings.toggledSkill(on: on, name: skill.name, agent: skill.agent)
+            recordLocalRefresh(message: UIStrings.refreshAfterWrite)
+            await loadSelectedDetail()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func previewToolInstall(skill: SkillRecord, target: ToolInstallTarget) async -> ToolGlobalInstallPreview? {
+        guard !isRefreshBusy else {
+            errorMessage = UIStrings.operationUnavailableBusy
+            return nil
+        }
+        errorMessage = nil
+        do {
+            return try await service.previewToolInstall(skill: skill, target: target)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func confirmToolInstall(skill: SkillRecord, target: ToolInstallTarget) async -> ToolGlobalInstallPreview? {
+        guard !isRefreshBusy else {
+            errorMessage = UIStrings.operationUnavailableBusy
+            return nil
+        }
+        isWriting = true
+        errorMessage = nil
+        lastMutationMessage = nil
+        defer { isWriting = false }
+
+        do {
+            let result = try await service.confirmToolInstall(skill: skill, target: target)
+            detailsByID.removeAll()
+            try await refreshCollections()
+            lastMutationMessage = UIStrings.toolGlobalInstalled(skill.name, target.title)
+            recordLocalRefresh(message: UIStrings.refreshAfterWrite)
+            await loadSelectedDetail()
+            return result
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func prepareAnalyzeLLM() async {
+        await prepareLLMAction(.analyze)
+    }
+
+    func prepareRecommendLLM() async {
+        await prepareLLMAction(.recommend)
+    }
+
+    func prepareExplainConflictLLM() async {
+        await prepareLLMAction(.explainConflict)
+    }
+
+    func prepareDraftFrontmatterLLM() async {
+        await prepareLLMAction(.draftFrontmatter)
+    }
+
+    func previewScriptExecutionSafety(for skill: SkillRecord) async {
+        guard !isRefreshBusy else {
+            scriptExecutionPreviews[skill.id] = .unavailable(skill: skill, reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        previewingScriptExecutionSkillIDs.insert(skill.id)
+        defer { previewingScriptExecutionSkillIDs.remove(skill.id) }
+
+        do {
+            scriptExecutionPreviews[skill.id] = try await service.previewScriptExecution(skill: skill)
+        } catch {
+            scriptExecutionPreviews[skill.id] = .unavailable(skill: skill, reason: error.localizedDescription)
+        }
+    }
+
+    func previewRollback(snapshotID: String) async throws -> SnapshotRollbackPreviewRecord {
+        errorMessage = nil
+        do {
+            return try await service.previewSnapshotRollback(snapshotID: snapshotID)
+        } catch {
+            errorMessage = error.localizedDescription
+            throw error
+        }
+    }
+
+    func rollbackSnapshot(snapshotID: String) async {
+        guard !isRefreshBusy else { return }
+        isWriting = true
+        errorMessage = nil
+        lastMutationMessage = nil
+        defer { isWriting = false }
+
+        do {
+            let scannedCount = try await service.rollbackSnapshot(snapshotID: snapshotID)
+            detailsByID.removeAll()
+            try await refreshCollections()
+            lastMutationMessage = UIStrings.rollbackRescanned(scannedCount)
+            recordLocalRefresh(message: UIStrings.refreshAfterRollback(scannedCount))
+            await loadSelectedDetail()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func loadClaudeSettings() async {
+        isLoadingSettings = true
+        settingsErrorMessage = nil
+        defer { isLoadingSettings = false }
+
+        do {
+            claudeSettings = try await service.readClaudeSettings()
+        } catch {
+            settingsErrorMessage = error.localizedDescription
+        }
+    }
+
+    @discardableResult
+    func saveClaudeSettings(content: String) async -> Bool {
+        guard !isRefreshBusy else {
+            settingsErrorMessage = UIStrings.operationUnavailableBusy
+            return false
+        }
+        isSavingSettings = true
+        settingsErrorMessage = nil
+        settingsMessage = nil
+        defer { isSavingSettings = false }
+
+        do {
+            claudeSettings = try await service.saveClaudeSettings(content: content)
+            detailsByID.removeAll()
+            try await refreshCollections()
+            settingsMessage = UIStrings.savedSettings
+            lastMutationMessage = settingsMessage
+            recordLocalRefresh(message: UIStrings.refreshAfterSettingsSave)
+            await loadSelectedDetail()
+            return true
+        } catch {
+            settingsErrorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func loadSelectedDetail() async {
+        normalizeSelectionToVisibleSkills()
+        guard let id = selectedSkill?.id else { return }
+        if detailsByID[id] != nil {
+            return
+        }
+
+        isLoadingDetail = true
+        errorMessage = nil
+        defer { isLoadingDetail = false }
+
+        do {
+            detailsByID[id] = try await service.getSkill(instanceID: id)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func refreshCollections() async throws {
+        async let appStateSnapshot = service.appStateSnapshot()
+        async let llmStatus = service.llmStatus()
+        async let projectContextState = service.getProjectContext()
+        let snapshot = try await appStateSnapshot
+        self.status = snapshot.status
+        self.llmStatus = try await llmStatus
+        self.projectContextState = try await projectContextState
+        self.skills = snapshot.skills
+        self.findings = snapshot.findings
+        self.conflicts = snapshot.conflicts
+        self.snapshots = snapshot.snapshots
+        let currentSkillIDs = Set(snapshot.skills.map(\.id))
+        scriptExecutionPreviews = scriptExecutionPreviews.filter { currentSkillIDs.contains($0.key) }
+        refreshWatcherMessage(from: self.status)
+        normalizeSelectionToVisibleSkills()
+    }
+
+    private func prepareLLMAction(_ action: LLMAction) async {
+        guard !isRefreshBusy else {
+            llmPreparedSkillID = selectedSkillID
+            llmPrepareResults[action] = .disabledFallback(action: action, reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+        guard let skill = selectedSkill else { return }
+        if llmPreparedSkillID != skill.id {
+            llmPrepareResults.removeAll()
+            llmPreparedSkillID = skill.id
+        }
+
+        preparingLLMActions.insert(action)
+        defer { preparingLLMActions.remove(action) }
+
+        do {
+            llmPrepareResults[action] = try await service.prepareLLMAction(action: action, skill: skill)
+        } catch {
+            llmPrepareResults[action] = .disabledFallback(action: action, reason: error.localizedDescription)
+        }
+    }
+
+    private func handleListCriteriaChanged() {
+        let previousID = selectedSkillID
+        normalizeSelectionToVisibleSkills()
+        guard previousID != selectedSkillID else { return }
+        Task { @MainActor [weak self] in
+            await self?.loadSelectedDetail()
+        }
+    }
+
+    private func normalizeSelectionToVisibleSkills() {
+        let visibleSkills = filteredSkills
+        if let selectedSkillID, visibleSkills.contains(where: { $0.id == selectedSkillID }) {
+            return
+        }
+        selectedSkillID = visibleSkills.first?.id
+    }
+
+    private func canStartScan(allowDuringProjectUpdate: Bool) -> Bool {
+        if isLoading || isScanning || isWriting || isSavingSettings {
+            return false
+        }
+        if isProjectUpdating, !allowDuringProjectUpdate {
+            return false
+        }
+        return true
+    }
+
+    private func beginRefresh(_ action: RefreshAction, message: String) {
+        lastRefreshAction = action
+        canRetryLastRefresh = false
+        refreshStatusMessage = message
+        appendRefreshLog(level: "info", message: message)
+    }
+
+    private func applyRefreshActivity(_ activity: RefreshActivity?) {
+        if let activity {
+            refreshStatusMessage = UIStrings.refreshScanComplete(
+                activity.scannedCount,
+                activity.skillCount,
+                activity.findingCount,
+                activity.conflictCount
+            )
+            refreshLogEntries = activity.logEntries + refreshLogEntries
+            trimRefreshLog()
+        } else {
+            refreshStatusMessage = UIStrings.refreshScanComplete(
+                skills.count,
+                skills.count,
+                findings.count,
+                conflicts.count
+            )
+            appendRefreshLog(level: "info", message: refreshStatusMessage)
+        }
+        canRetryLastRefresh = false
+    }
+
+    private func recordLocalRefresh(message: String) {
+        refreshStatusMessage = message
+        appendRefreshLog(level: "info", message: message)
+        canRetryLastRefresh = false
+    }
+
+    private func handleRefreshFailure(_ error: Error, action: RefreshAction) {
+        let message = UIStrings.refreshFailed(error.localizedDescription)
+        errorMessage = message
+        refreshStatusMessage = message
+        appendRefreshLog(level: "error", message: message)
+        lastRefreshAction = action
+        canRetryLastRefresh = true
+    }
+
+    private func refreshWatcherMessage(from status: ServiceStatus?) {
+        guard let refresh = status?.refresh else {
+            watcherStatusMessage = UIStrings.refreshWatcherManual
+            return
+        }
+        watcherStatusMessage = refresh.watcherDetail
+    }
+
+    private func appendRefreshLog(level: String, message: String) {
+        refreshLogEntries.insert(RefreshLogEntry(level: level, message: message), at: 0)
+        trimRefreshLog()
+    }
+
+    private func trimRefreshLog() {
+        if refreshLogEntries.count > 6 {
+            refreshLogEntries = Array(refreshLogEntries.prefix(6))
+        }
+    }
+
+}
+
+private enum RefreshAction {
+    case reload
+    case scan
+}

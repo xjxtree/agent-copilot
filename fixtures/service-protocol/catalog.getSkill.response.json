@@ -1,0 +1,44 @@
+{
+  "id": "fixture-catalog-get-skill",
+  "ok": true,
+  "result": {
+    "id": "skill-instance-id",
+    "agent": "claude-code",
+    "scope": "agent-global",
+    "path": "/tmp/skills-copilot-home/.claude/skills/demo/SKILL.md",
+    "display_path": "/tmp/skills-copilot-home/.claude/skills/demo/SKILL.md",
+    "definition_id": "definition-id",
+    "name": "demo",
+    "description": "Fixture skill",
+    "state": "loaded",
+    "enabled": true,
+    "frontmatter_raw": "name: demo\ndescription: Fixture skill\n",
+    "body": "Fixture body.",
+    "permissions": {
+      "raw": {
+        "allowed-tools": "Read, Bash",
+        "network": "unexpected-network-mode"
+      },
+      "normalized": {
+        "tools": [
+          "Read",
+          "Bash"
+        ],
+        "files": [
+          "/tmp/skills-copilot-project"
+        ],
+        "network": "unknown",
+        "exec": false,
+        "requires_human": true
+      },
+      "unknown_safe": {
+        "tools": [],
+        "files": [],
+        "network": "none",
+        "exec": false,
+        "requires_human": true
+      }
+    },
+    "fingerprint": "fixture-fingerprint"
+  }
+}

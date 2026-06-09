@@ -1,0 +1,3 @@
+[[skills.config]]
+path = "/tmp/skills-copilot-codex-fixture/project/.agents/skills/repo-beta/SKILL.md"
+enabled = false

@@ -1,0 +1,5 @@
+{
+  "id": "fixture-config-read-claude-settings",
+  "method": "config.readClaudeSettings",
+  "params": {}
+}

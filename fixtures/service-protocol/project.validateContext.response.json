@@ -1,0 +1,13 @@
+{
+  "id": "fixture-project-validate-context",
+  "ok": true,
+  "result": {
+    "id": "project-fixture-id",
+    "name": "Fixture Project",
+    "root_path": "/tmp/skills-copilot-project",
+    "current_cwd": "/tmp/skills-copilot-project",
+    "last_used_at": 1780590000000,
+    "is_active": false,
+    "validation_error": null
+  }
+}

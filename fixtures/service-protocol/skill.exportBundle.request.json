@@ -1,0 +1,8 @@
+{
+  "id": "fixture-skill-export-bundle",
+  "method": "skill.exportBundle",
+  "params": {
+    "source_path": "/tmp/skills-copilot-staging/demo/SKILL.md",
+    "output_dir": "/tmp/skills-copilot-exports"
+  }
+}

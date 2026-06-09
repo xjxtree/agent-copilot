@@ -1,0 +1,16 @@
+{
+  "id": "fixture-catalog-list-conflicts",
+  "ok": true,
+  "result": [
+    {
+      "id": "conflict-definition-id",
+      "definition_id": "definition-id",
+      "reason": "multiple active instances",
+      "winner_id": "skill-instance-id",
+      "instance_ids": [
+        "skill-instance-id",
+        "other-skill-instance-id"
+      ]
+    }
+  ]
+}
