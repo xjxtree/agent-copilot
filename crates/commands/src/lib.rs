@@ -425,10 +425,10 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
         AdapterCapabilityRecord {
             agent: AgentId::Hermes.as_str(),
             display_name: "Hermes",
-            status: "blocked",
+            status: "planned",
             scan: AdapterFeatureCapability::blocked(
-                "blocked",
-                "V2.14 confirmed Hermes remains blocked: no maintainer-confirmed skill/package layout or discovery roots.",
+                "read-only-candidate",
+                "P0 evidence confirmed Hermes Agent skills under ~/.hermes/skills/**/SKILL.md; read-only scanner is planned but not implemented.",
             ),
             project_scan: AdapterFeatureCapability::blocked(
                 "blocked",
@@ -448,21 +448,21 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
             ),
             writable: AdapterFeatureCapability::blocked(
                 "blocked",
-                "V2.14 closed without Hermes implementation because maintainer-confirmed write semantics are still missing.",
+                "Hermes writable toggle/install remains blocked until individual skill disable schema and rollback-safe writes are verified.",
             ),
             blockers: vec![
-                "V2.14 closeout: obtain maintainer-confirmed roots and config schema before any scanner/parser.",
-                "Confirm whether Hermes exposes skills, service tasks, commands, or cron jobs as SkillInstance units.",
-                "Confirm toggle and rollback semantics before implementation.",
+                "Implement a scoped read-only scanner for active Hermes home skills before enabling UI support.",
+                "Confirm individual skill disable/re-enable schema and rollback semantics before writable support.",
+                "Do not map Hermes cron jobs to SkillInstance in the first adapter slice.",
             ],
         },
         AdapterCapabilityRecord {
             agent: AgentId::Openclaw.as_str(),
             display_name: "OpenClaw",
-            status: "blocked",
+            status: "planned",
             scan: AdapterFeatureCapability::blocked(
-                "blocked",
-                "V2.15 confirmed OpenClaw remains blocked: candidate roots exist, but roots and skill schema are not maintainer-confirmed.",
+                "read-only-candidate",
+                "P0 evidence confirmed OpenClaw SKILL.md roots and schema; read-only filesystem scanner is planned but not implemented.",
             ),
             project_scan: AdapterFeatureCapability::blocked(
                 "blocked",
@@ -482,12 +482,12 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
             ),
             writable: AdapterFeatureCapability::blocked(
                 "blocked",
-                "V2.15 closed without OpenClaw implementation because maintainer-confirmed write semantics are still missing.",
+                "OpenClaw writable toggle/install remains blocked until disposable config mutation and credential-safe rollback are verified.",
             ),
             blockers: vec![
-                "V2.15 closeout: confirm OpenClaw roots and skills list output before any scanner/parser.",
-                "Confirm SKILL.md schema and malformed/conflict behavior.",
-                "Confirm toggle, permission, and rollback-safe config semantics.",
+                "Implement a scoped read-only filesystem scanner before enabling UI support.",
+                "Confirm malformed/conflict behavior with fixtures before production scan.",
+                "Verify config mutation, credential preservation, and rollback before writable/install support.",
             ],
         },
     ]

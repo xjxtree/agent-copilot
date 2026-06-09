@@ -4,7 +4,7 @@ This file is the shared project instruction entrypoint for coding agents such as
 
 ## Project State
 
-- Current phase: V2.11-V2.15 multi-agent adapter line is complete. OpenClaw and Hermes remain blocked pending maintainer-confirmed specs; Pi writable support remains blocked pending settings mutation evidence.
+- Current phase: V2.11-V2.15 multi-agent adapter line is complete. P0 evidence promoted OpenClaw and Hermes to read-only scanner candidates; Pi writable support is an evidence-harness candidate. Writable/install support remains blocked until rollback-safe evidence passes.
 - Near-term priority: comprehensive agent adapter support for Pi, opencode writable support, Hermes, and OpenClaw in the macOS app.
 - V2.11 scope: service/UI adapter capability matrix for Claude Code, Codex, opencode, Pi, Hermes, and OpenClaw, exposing scan/toggle/install status and blockers before new write affordances are enabled.
 - Versioned adapter plan: V2.12 opencode writable evidence and guarded implementation complete; V2.13 Pi read-only scanner/parser complete with writable still blocked; V2.14 Hermes and V2.15 OpenClaw evidence gates closed without implementation because maintainer-confirmed specs are missing.
@@ -16,7 +16,7 @@ This file is the shared project instruction entrypoint for coding agents such as
 - V2.8 completed local rules: `frontmatter.tools-not-empty`, `permissions.network-declared`, `permissions.exec-needs-human`, `name.canonical-case`, `script.no-shebang`, `body.too-long`, and `dependency.unknown`.
 - V2.9 covers tool-global catalog/staging records, local directory import with rule audit, reproducible local export bundle/manifest, manifest reimport stability, native read-only preview UI, and confirmed install to Claude/Codex verified skill roots. GitHub clone import and script-file install remain out of scope. V2.12 added guarded opencode install to native roots after evidence verified writable semantics.
 - V2.10 covers the documented skill execution safety boundary only: no real execution by default, per-request human confirmation before any future execution path, cwd/env/network/files preview, local audit records for blocked/cancelled/failure attempts, and hard separation from LLM actions. Do not claim a completed script runner, sandbox runtime, public execution API, or successful execution output log exists.
-- Near-term work prioritizes adapter evidence backlog. Track OpenClaw maintainer-confirmed spec, Hermes maintainer-confirmed spec follow-up, and Pi writable disposable local round-trip as the top adapter priorities in `docs/development-tasks.md`; do not reopen V2.1-V2.15 for those closed items.
+- Near-term work prioritizes scoped adapter implementation from evidence: OpenClaw read-only scanner, Hermes read-only scanner, then Pi writable evidence harness. Do not reopen V2.1-V2.15 for those closed items.
 - V2.3 Codex adapter hardening covers config patch robustness, adapter state expression, security regressions, smoke coverage, and documentation/status synchronization.
 - V2.4 opencode introduced native-root-only scanning for `~/.config/opencode/skills` and active project `.opencode/skills`. V2.12 enables guarded writable toggle/install only for those native roots; do not scan opencode `.agents` / `.claude` compatibility roots.
 - The maintained product UI is the native macOS app in `apps/macos`, built with SwiftUI and AppKit interop.

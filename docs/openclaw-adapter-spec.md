@@ -1,6 +1,6 @@
 # OpenClaw Adapter Spec Worklist
 
-> Status: V2.15 evidence-gate closeout on 2026-06-09. Do not implement an OpenClaw adapter yet: read-only discovery has useful clues, but maintainer-confirmed roots, schema, and enable/disable semantics are still missing.
+> Status: P0 evidence update on 2026-06-10. OpenClaw is now a read-only scanner candidate. Writable toggle/install remain blocked.
 
 ## 1. Evidence Summary
 
@@ -12,7 +12,7 @@ Sources checked:
 - Local skill doc: `$HOME/.agents/skills/alibabacloud-sas-openclaw-security/SKILL.md`.
 - Local machine checks: `command -v openclaw`, `ls -ld "$HOME/.openclaw"`, and redacted structure-only inspection of `$HOME/.openclaw/openclaw.json`.
 
-No adapter code was added, no `openclaw` command was available locally, and no OpenClaw security scan/audit command was run. V2.15 intentionally kept OpenClaw out of `catalog.scanAll`.
+No adapter code has been added yet. P0 evidence used official docs plus read-only `ssh macmini` checks. No OpenClaw list/check/install/restart/security scan command was run.
 
 | Area | Status | Evidence |
 | --- | --- | --- |
@@ -22,8 +22,8 @@ No adapter code was added, no `openclaw` command was available locally, and no O
 | Skill package format | Partial script-input evidence | The security-scan skill expects each skill path to be a directory containing `SKILL.md`; it reads the YAML `name:` field and falls back to the directory basename. This is evidence for one script workflow, not a complete OpenClaw adapter spec. |
 | Config path/schema | Partial plugin evidence | The Tablestore Mem0 skill detects config with `openclaw config file` and patches `openclaw.json`. It writes plugin fields under `.plugins.slots`, `.plugins.entries`, `.plugins.entries["openclaw-mem0"].enabled`, and `.plugins.allow`. |
 | Enable/disable semantics | Blocked | Plugin `enabled: true` evidence does not prove OpenClaw skill enable/disable behavior. It is unknown whether skills can be disabled without deleting files, whether `.plugins.allow` is an allow-list, and whether a CLI command is required. |
-| Read-only catalog feasibility | Blocked after V2.15 closeout | There is enough evidence to design questions and fixtures, but not enough to ship a scanner against guessed roots. |
-| Writable adapter feasibility | Blocked after V2.15 closeout | No verified skill toggle schema or rollback-safe write path. |
+| Read-only catalog feasibility | Candidate after P0 evidence | Official docs confirm roots, `SKILL.md` schema, loading order, precedence, and JSON list commands. |
+| Writable adapter feasibility | Blocked | Config mutation, credential preservation, and rollback-safe writes are not verified. |
 
 ## 2. Fixture Scope
 
@@ -61,4 +61,29 @@ No mapping is approved yet.
 
 Ordinary skills-copilot scans must not run OpenClaw cloud intelligence, cloud deep analysis, security audit, plugin install, gateway restart, or Alibaba Cloud CLI workflows.
 
-Until maintainer-confirmed evidence exists, OpenClaw remains documented as blocked/evidence-only. The macOS app may show OpenClaw in the capability matrix, but scan, project scan, config snapshot, install, toggle, and writable actions must stay disabled.
+Until writable evidence exists, OpenClaw should be implemented only as a scoped read-only filesystem scanner. Install, toggle, and writable actions must stay disabled.
+
+## 5. 2026-06-10 P0 Evidence Update
+
+Confirmed sources:
+
+- Official GitHub: https://github.com/openclaw/openclaw
+- Skills docs: https://docs.openclaw.ai/tools/skills
+- Skills config docs: https://docs.openclaw.ai/tools/skills-config
+- CLI skills docs: https://docs.openclaw.ai/cli/skills
+
+Read-only macmini checks confirmed:
+
+- OpenClaw CLI exists at `/usr/local/bin/openclaw`.
+- Version observed: `OpenClaw 2026.5.26 (10ad3aa)`.
+- `openclaw skills list --help` advertises `--eligible`, `--json`, and `--verbose`.
+- `openclaw config file` points to `~/.openclaw/openclaw.json`.
+- Observed roots include workspace skills, managed `~/.openclaw/skills`, personal `~/.agents/skills`, and bundled package skills.
+- The config surface contains credential-sensitive fields such as `apiKey`, `token`, and `secret`.
+
+Implementation policy:
+
+- First scanner slice must be filesystem-only and must not call OpenClaw CLI during ordinary scans.
+- Parse documented `SKILL.md` directories and frontmatter.
+- Add fixtures for documented roots, missing-name fallback, missing description, duplicate name precedence, and bundled-vs-workspace override.
+- Keep writable/install blocked until disposable config mutation proves credential-safe rollback.

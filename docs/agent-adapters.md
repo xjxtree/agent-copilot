@@ -2,7 +2,7 @@
 
 > skills-copilot 支持的 6 个 agent 的适配要点。
 >
-> 当前版本线：V2.11 Adapter Capability Matrix、V2.12 opencode writable、V2.13 Pi read-only scanner/parser、V2.14 Hermes evidence-gate closeout、V2.15 OpenClaw evidence-gate closeout 已完成；当前进入 adapter evidence backlog。
+> 当前版本线：V2.11 Adapter Capability Matrix、V2.12 opencode writable、V2.13 Pi read-only scanner/parser、V2.14 Hermes evidence-gate closeout、V2.15 OpenClaw evidence-gate closeout 已完成；P0 evidence 已将 Hermes/OpenClaw 推进为 read-only scanner candidates。
 >
 > 扫描适配器实现 `AgentAdapter`。
 >
@@ -86,9 +86,9 @@ pub struct AdapterFeatureCapability {
 | Claude Code | `verified` | 支持 | 支持，走 settings snapshot/lock/atomic write/read-back/rescan |
 | Codex | `verified` | 支持 | 支持用户 `config.toml` override；项目 `.codex/config.toml` 仍 blocked |
 | opencode | `verified` | 支持 native roots | 支持 guarded writable：exact `permission.skill` deny/re-enable、snapshot/rollback、tool-global install |
-| Pi | `read-only` | 支持 Pi-native roots | writable blocked，等待 settings mutation/rollback evidence |
-| Hermes | `blocked` | 未实现 | V2.14 已关闭证据门；没有 maintainer-confirmed spec 前继续 blocked |
-| OpenClaw | `blocked` | 未实现 | V2.15 已关闭证据门；没有 maintainer-confirmed spec 前继续 blocked |
+| Pi | `read-only` | 支持 Pi-native roots | writable harness candidate；production writes blocked |
+| Hermes | `planned` | read-only scanner candidate | project scan、toggle、install、writable blocked |
+| OpenClaw | `planned` | read-only scanner candidate | toggle、install、writable blocked |
 
 > **实现要求**：所有适配器**无状态**。
 >
@@ -155,7 +155,7 @@ Codex 当前实现边界：
 | 项 | 值 |
 | --- | --- |
 | AgentId | `pi` |
-| 状态 | **Partial evidence, writable adapter blocked** —— 官方 skills/roots/settings 证据足够规划 read-only scanner；可写启停仍需 disposable local round-trip |
+| 状态 | **Read-only implemented; writable harness candidate** —— P0 evidence 已确认 Pi-native 和 package filter mutation 语义，但 production writes 仍需 harness 验证 |
 | Spec 工作单 | [`docs/pi-adapter-spec.md`](./pi-adapter-spec.md) |
 | 统一工作单 | [`docs/agent-adapter-spec-worklists.md`](./agent-adapter-spec-worklists.md#pi-coding-agent) |
 | 本地观测 | 2026-06-08 本机 `pi --version` 为 `0.78.1`；`~/.pi/agent/skills/` 和 `~/.pi/agent/settings.json` 存在；未读取或修改真实 settings 内容 |
@@ -173,34 +173,34 @@ Codex 当前实现边界：
 | 项 | 值 |
 | --- | --- |
 | AgentId | `hermes` |
-| 状态 | **Blocked after V2.14 evidence-gate closeout / service evidence only** |
+| 状态 | **Read-only scanner candidate after P0 evidence / writable blocked** |
 | Spec 工作单 | [`docs/hermes-adapter-spec.md`](./hermes-adapter-spec.md) |
 | 统一工作单 | [`docs/agent-adapter-spec-worklists.md`](./agent-adapter-spec-worklists.md#hermes) |
 | Evidence fixture | `fixtures/hermes/` 只保存 service evidence 样例，不是 parser contract |
-| 只读范围 | 暂不实现 read-only scanner；除非维护者确认 Hermes 的 skill/task/command/cron 哪一种可映射到 `SkillInstance` |
-| 写入范围 | 禁止写 Hermes 配置；cron `enabled: false` 只是服务任务线索，不能当作 skill toggle 语义 |
-| 行动项 | ① 维护者提供 Hermes config/schema/docs；② 确认是否存在 skills、service tasks、commands 或 cron jobs 映射；③ 确认 discovery roots、启停语义与 rollback-safe 写入路径 |
+| 只读范围 | 只扫描 active Hermes home 的 `skills/**/SKILL.md`；不把 cron jobs 映射为 `SkillInstance` |
+| 写入范围 | 禁止写 Hermes 配置；individual skill disable schema 和 rollback-safe writes 未验证 |
+| 行动项 | ① 实现 scoped read-only scanner；② disposable 验证 malformed、archive、platform gating；③ 确认 individual skill disable/re-enable schema |
 
-Hermes 当前证据只说明它被描述为 macmini 上的服务运维对象，含 CLI、home、repo、日志和 cron 配置线索。
+Hermes P0 evidence 已确认它是 Nous Research Hermes Agent，且有 first-class skills 和 active Hermes home `skills/**/SKILL.md`。
 
-V2.14 的结论是：这些证据还不能证明 Hermes 有可扫描的本地 skill 目录或 `SkillInstance` 映射单元，因此不实现 scanner/parser，也不开放写入。
+第一版只做 read-only scanner candidate；project discovery、toggle、install 和 writable 继续 blocked。
 
 ### 2.5 openclaw
 
 | 项 | 值 |
 | --- | --- |
 | AgentId | `openclaw` |
-| 状态 | **Blocked after V2.15 evidence-gate closeout / partial read-only evidence** |
+| 状态 | **Read-only scanner candidate after P0 evidence / writable blocked** |
 | Spec 工作单 | [`docs/openclaw-adapter-spec.md`](./openclaw-adapter-spec.md) |
 | 统一工作单 | [`docs/agent-adapter-spec-worklists.md`](./agent-adapter-spec-worklists.md#openclaw) |
-| Candidate roots | `$HOME/.openclaw/skills`、`$HOME/.openclaw/workspace`、`$HOME/.openclaw/extensions`、`$HOME/openclaw/workspace`、node global OpenClaw skill roots；先作为 evidence，不作为实现清单 |
+| Candidate roots | `<workspace>/skills`、`<workspace>/.agents/skills`、`~/.agents/skills`、`~/.openclaw/skills`、bundled skills、`skills.load.extraDirs`；第一版只做 filesystem scan |
 | Config evidence | plugin docs 使用 `openclaw config file` 定位 `openclaw.json`，并 patch `.plugins.entries[*].enabled` / `.plugins.allow`；这只证明 plugin 配置线索，不证明 skill toggle |
 | Evidence fixture | `fixtures/openclaw/` 保存 read-only evidence 样例和 redacted plugin config 样例，不是 writable toggle contract |
 | 行动项 | ① 维护者确认 roots / `openclaw skills list --eligible` 输出；② 提供 `SKILL.md` schema 与 malformed/conflict 行为；③ 确认技能启停语义、权限模型和 rollback-safe 配置写入路径 |
 
-OpenClaw 当前证据包括候选 skill roots、`SKILL.md` 目录输入、`openclaw skills list --eligible`、`openclaw config file` 和 `openclaw.json` plugin 字段线索。
+OpenClaw P0 evidence 已确认官方 `SKILL.md` roots、frontmatter schema、loading order、precedence、`skills list --json` 和 config override 语义。
 
-V2.15 的结论是：这些仍不是维护者确认的 adapter spec，因此不实现 scanner/parser，也不开放写入。
+第一版只做 read-only filesystem scanner；toggle/install/writable 继续 blocked，直到 disposable config mutation 证明 credential-safe rollback。
 
 ### 2.6 opencode
 

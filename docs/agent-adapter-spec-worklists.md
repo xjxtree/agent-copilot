@@ -8,7 +8,7 @@
 
 Claude Code remains the mature baseline adapter. Codex has verified user/project roots, cwd-to-repo-root discovery, project-context-scoped scanning, and user-config writable toggles. V2.3 hardening added config patch robustness, explicit adapter states, root/config security regressions, and smoke/docs coverage. V2.4 added opencode as a read-only adapter for first-class native roots only.
 
-Pi writable support, Hermes, and OpenClaw remain blocked until their evidence gates are satisfied. Opencode writable is enabled for native roots after V2.12 validation; Pi read-only scan is enabled for native roots after V2.13 validation. V2.14 confirms Hermes still lacks enough evidence for scanner/parser implementation. V2.15 confirms OpenClaw still lacks maintainer-confirmed evidence for scanner/parser implementation.
+Pi production writable support remains blocked until the evidence harness is implemented. Opencode writable is enabled for native roots after V2.12 validation; Pi read-only scan is enabled for native roots after V2.13 validation. P0 evidence on 2026-06-10 promoted Hermes and OpenClaw from fully blocked to read-only scanner candidates, while keeping writable/install blocked.
 
 The macOS app now uses the service/UI adapter capability matrix as the front-door status surface for all six agents. The matrix must make read-only, planned, and blocked states explicit before any future write affordance is exposed.
 
@@ -100,7 +100,7 @@ Required next evidence:
 | Config path/schema | Service evidence only: local docs mention `<hermes-home>/cron/jobs.json`, `<hermes-home>/logs/`, a Hermes repository under `<hermes-home>/`, and `hermes config validate`; no schema or user-local config path is verified for this product. |
 | Enable/disable semantics | Service cron evidence only: docs say cron jobs may be disabled with `enabled: false` rather than deleted. This is not verified as Hermes skill enable/disable behavior. |
 | Fixture requirement | Minimal evidence fixtures added under `fixtures/hermes/`, marked as service evidence samples and not parser contract. |
-| Implementation decision | V2.14 closeout keeps Hermes blocked for both writable adapter and read-only `SkillInstance` scanner until maintainer docs define a Hermes skill-like unit and discovery roots. |
+| Implementation decision | P0 evidence confirms a read-only scanner candidate for active Hermes home `skills/**/SKILL.md`. Writable toggle/install remains blocked until individual skill disable schema and rollback-safe writes are verified. |
 
 Required next evidence:
 
@@ -120,7 +120,7 @@ Required next evidence:
 | Config path/schema | Partial evidence only: local plugin docs use `openclaw config file` to locate `openclaw.json`; a user-local `~/.openclaw/openclaw.json` exists on this machine but is JSONC/non-strict JSON and was not copied because it may contain credentials. |
 | Enable/disable semantics | Plugin evidence only: local Tablestore Mem0 docs patch `.plugins.entries["openclaw-mem0"].enabled = true`, `.plugins.slots.memory`, and `.plugins.allow`. This does not verify skill enable/disable semantics. |
 | Fixture requirement | Minimal evidence fixtures added under `fixtures/openclaw/`, marked as read-only evidence samples and not writable toggle contract. |
-| Implementation decision | V2.15 closeout keeps the read-only scanner blocked pending maintainer confirmation. Writable adapter is blocked until config schema, toggle semantics, and rollback behavior are verified. |
+| Implementation decision | P0 evidence confirms a read-only filesystem scanner candidate over documented roots. Writable adapter and install remain blocked until config mutation, credential preservation, and rollback behavior are verified. |
 
 Required next evidence:
 

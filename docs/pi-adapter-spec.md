@@ -1,10 +1,10 @@
 # Pi Adapter Evidence Spec
 
-> Evidence date: 2026-06-08. V2.13 implements the evidence-backed read-only scanner/parser slice only; Pi writable support remains blocked until settings mutation and rollback checks are complete.
+> Evidence date: 2026-06-10. V2.13 implements the evidence-backed read-only scanner/parser slice only; Pi writable support should proceed through a disposable evidence harness before production writes are enabled.
 
 ## Status
 
-Read-only scanner/parser support is implemented for Pi-native `~/.pi/agent/skills` and project `.pi/skills` roots. Writable toggle support is still blocked because Pi has multiple resource sources, package filters, and an interactive `pi config` resource manager that need disposable local round-trip verification before this app writes settings.
+Read-only scanner/parser support is implemented for Pi-native `~/.pi/agent/skills` and project `.pi/skills` roots. Writable toggle support is still blocked in production because Pi has multiple resource sources, package filters, project trust behavior, and compatibility roots. P0 evidence on 2026-06-10 confirmed enough mutation semantics to build a disposable harness first.
 
 Local validation on 2026-06-08:
 
@@ -14,6 +14,15 @@ Local validation on 2026-06-08:
 - `$HOME/.pi/agent/settings.json` exists locally.
 - `pi config --help` opened the interactive Resource Configuration UI instead of printing static help; no changes were made.
 - No local Pi settings content was inspected or modified.
+
+P0 validation on 2026-06-10:
+
+- `pi --version` returned `0.79.0`.
+- Disposable `HOME` and `PI_CODING_AGENT_DIR` were used for mutation checks.
+- Real Pi settings and real skills were not modified.
+- Pi-native global and project toggles write `-skills/<name>/SKILL.md` to disable and `+skills/<name>/SKILL.md` to re-enable.
+- Package skill filters use the same `-skills/...` and `+skills/...` entries after converting package entries to object form.
+- `.agents/skills` compatibility writable remains excluded from the first production slice due to documented and observed scope/symlink risks.
 
 ## Official Evidence
 
@@ -89,7 +98,7 @@ Package evidence:
 
 Read-only state: **implemented in V2.13**. The scanner models Pi-native skills under `.pi/skills` and `~/.pi/agent/skills`. `.agents/skills` compatibility roots remain out of scope until conflict policy is decided.
 
-Writable state: **blocked**. A future writable adapter must first verify:
+Writable state: **harness candidate, production blocked**. A future writable adapter must first implement disposable tests for:
 
 - Exact JSON mutation produced by `pi config` when disabling a direct local skill path.
 - Exact JSON mutation produced by `pi config` when disabling a package-provided skill.
@@ -99,6 +108,9 @@ Writable state: **blocked**. A future writable adapter must first verify:
 - Project trust behavior before loading `.pi/settings.json` and project-local `.pi` resources.
 - Merge behavior when global settings include a skill path and project settings exclude the same path.
 - Whether `.agents/skills` compatibility roots should be exposed under Pi or left to the Codex/agent-compatible adapter decision to avoid duplicate catalog entries.
+- Invalid JSON rollback and Skills Copilot snapshot/atomic/write-back behavior.
+- Re-enable strategy: follow Pi's observed `+path` behavior unless a harness proves deleting managed `-path` entries is safer.
+- Package install/remove is a separate decision from direct skill copy/install; do not mix them in the first writable patch.
 
 ## Fixtures
 

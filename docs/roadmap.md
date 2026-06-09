@@ -6,7 +6,7 @@
 >
 > 当前阶段：**V2.11-V2.15 多 agent adapter 版本线已完成，进入 adapter evidence backlog**。
 >
-> 近期主线：在 macOS app 中补齐多 agent 支持，V2.11-V2.15 已完成 adapter capability matrix、opencode writable、Pi read-only、Hermes evidence-gate closeout 和 OpenClaw evidence-gate closeout。后续继续跟踪 OpenClaw/Hermes maintainer-confirmed specs 与 Pi writable evidence。
+> 近期主线：在 macOS app 中补齐多 agent 支持，V2.11-V2.15 已完成 adapter capability matrix、opencode writable、Pi read-only、Hermes evidence-gate closeout 和 OpenClaw evidence-gate closeout。P0 evidence 已将 OpenClaw/Hermes 推进为 read-only scanner candidates，并将 Pi writable 推进为 evidence harness candidate。
 >
 > 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.10 各阶段能力、V2.9 Tool-global skill pool。V2.11 Adapter capability matrix 的首个 service/UI 切片已进入开发，后续候选变更仍需重新验证。
 >
@@ -240,7 +240,7 @@
 - 非 Claude adapter 证据收集：Codex / Pi / Hermes / OpenClaw / opencode 的目录布局、配置 schema、启停语义和最小 fixture。
   - 2026-06-08 Codex evidence 切片：官方 docs + 本地 `codex-cli 0.137.0` disposable HOME/CODEX_HOME 验证已确认 user/project `.agents/skills` read-only roots、`SKILL.md` 格式、用户级 `$CODEX_HOME/config.toml` / `~/.codex/config.toml` 写入禁用/恢复语义。第一版 Codex adapter 决策为 user-config writable；项目级 `.codex/config.toml` toggle、plugin/admin roots、`$CODEX_HOME/skills` compatibility root 仍不进入首版能力。
   - 2026-06-08 Pi / opencode evidence 切片：官方资料足够规划 read-only scanner/parser，但 writable adapter 仍 blocked，需 disposable local round-trip 和重复 root 策略。
-  - 2026-06-08 Hermes / OpenClaw evidence 切片：已记录本地线索和 fixtures，但 Hermes 仍 service evidence only；OpenClaw 仍 partial read-only evidence，二者 adapter 实现继续 blocked。
+  - 2026-06-08 Hermes / OpenClaw evidence 切片：已记录本地线索和 fixtures；2026-06-10 P0 evidence 进一步确认二者可进入 read-only scanner candidate，writable/install 继续 blocked。
 - Native test hardening：把适合长期维护的 Swift list/model 行为沉淀为 SwiftPM test target。
   - 2026-06-08 Native test hardening 切片：SwiftPM `SkillsCopilotTests` 已补 `SkillStore` model 行为，覆盖 reload 后选中稳定性、缺失选中回退、空 catalog 友好模型、service error/loading 复位，以及 toggle 写操作 in-flight / success refresh 状态；`swift test --package-path apps/macos` 本地通过。
 
@@ -632,24 +632,26 @@
 
 **目标**：先拿到 maintainer-confirmed spec，再决定 Hermes 是否映射为 SkillInstance 以及可写范围。
 
-**状态（2026-06-09）**：completed evidence-gate closeout / still blocked。V2.14 复核后仍没有 maintainer-confirmed skill/package layout、discovery roots、config schema、SkillInstance 映射模型或 toggle/rollback 语义，因此不实现 Hermes scanner/parser，也不开放 writable/install。
+**状态（2026-06-10）**：read-only scanner candidate / writable still blocked。P0 evidence 确认 Hermes Agent 有 first-class skills 和 active Hermes home `skills/**/SKILL.md`；第一版只实现 scoped read-only scanner，不做 project scan、toggle、install 或 writable。
 
 **退出条件**
-- [x] Maintainer-confirmed roots、schema、skill/task model 和 toggle semantics 未满足时，blocker 明确保留。
-- [x] `adapter.listCapabilities` / `service.status.adapter_capabilities` 继续展示 Hermes blocked。
-- [x] 不新增 Hermes scanner/parser、install 或 writable affordance。
+- [x] P0 evidence 确认 Hermes skill-like unit 和 active Hermes home skill root。
+- [x] `adapter.listCapabilities` / `service.status.adapter_capabilities` 展示 Hermes read-only candidate，scan 仍 disabled until implementation.
+- [ ] Hermes scoped read-only scanner 实现并通过 fixture/real local validation。
+- [x] Hermes install/toggle/writable 保持 blocked。
 - [x] `pnpm check:macos` 通过；真实交互 Computer Use 因当前会话锁屏按本轮要求跳过。
 
 ### 4.15 V2.15 OpenClaw adapter support
 
 **目标**：先拿到 maintainer-confirmed spec，再决定 OpenClaw scan/toggle/install 范围。
 
-**状态（2026-06-09）**：completed evidence-gate closeout / still blocked。V2.15 复核后仍没有 maintainer-confirmed roots、SKILL.md schema、skills list output、config safety rules、SkillInstance 映射模型或 toggle/install/rollback 语义，因此不实现 OpenClaw scanner/parser，也不开放 writable/install。
+**状态（2026-06-10）**：read-only scanner candidate / writable still blocked。P0 evidence 确认 OpenClaw `SKILL.md` roots、schema、loading order、precedence 和 JSON list capability；第一版只实现 scoped filesystem read-only scanner，不调用 OpenClaw CLI，不做 toggle/install/writable。
 
 **退出条件**
-- [x] Maintainer-confirmed roots、schema、skills list output、config safety rules、install/toggle semantics 和 credential handling guidance 未满足时，blocker 明确保留。
-- [x] `adapter.listCapabilities` / `service.status.adapter_capabilities` 继续展示 OpenClaw blocked。
-- [x] 不新增 OpenClaw scanner/parser、install 或 writable affordance。
+- [x] P0 evidence 确认 OpenClaw read-only scanner 所需基础 roots/schema/precedence。
+- [x] `adapter.listCapabilities` / `service.status.adapter_capabilities` 展示 OpenClaw read-only candidate，scan 仍 disabled until implementation.
+- [ ] OpenClaw scoped read-only scanner 实现并通过 fixture/real local validation。
+- [x] OpenClaw install/toggle/writable 保持 blocked。
 - [x] `pnpm check:macos` 通过；真实交互 Computer Use 因当前会话锁屏按本轮要求跳过。
 
 ### 4.16 未来桌面壳与本地共享
@@ -672,7 +674,7 @@
 | 项 | 风险 | 缓解 |
 | --- | --- | --- |
 | Codex skills spec 仍在演化 | adapter 频繁 breaking | doc 里维护 spec 版本号；spec 一变先升 catalog schema |
-| Pi / opencode / Hermes / OpenClaw 的真实写入语义未知 | 适配器猜错 | V2.4 仅允许 opencode read-only native-root adapter；adapter capability matrix 必须展示 blocker；opencode writable、Pi、Hermes、OpenClaw 未完成 disposable round-trip 或 maintainer spec 前继续 blocked |
+| Pi / Hermes / OpenClaw 的真实写入语义未知 | 适配器猜错 | adapter capability matrix 必须展示 blocker；opencode writable 已在 V2.12 限定 native roots；Pi production writable、Hermes writable/install、OpenClaw writable/install 未完成 disposable rollback evidence 前继续 blocked |
 | Codex evidence 被误读成完整运行时支持 | 用户或 agent 误以为所有 Codex roots / project config / plugin skills 均已支持 | roadmap / AGENTS / adapter docs 明确：当前只实现 verified user/project roots + user-config writable；project config、plugin/admin/system roots 仍待后续决策 |
 | 贡献者门槛（Rust） | 社区贡献慢 | doc 写明"轻量贡献（rule / UI）只需 TS / Rust 单语言"；提供 good first issue |
 | LLM 成本失控 | 用户被烧钱 | 月度上限 + 单次上限 + 默认 LLM 关闭 |

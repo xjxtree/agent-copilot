@@ -1,6 +1,6 @@
 # Hermes Adapter Spec Worklist
 
-> Status: V2.14 evidence-gate closeout on 2026-06-09. Do not implement a Hermes adapter yet: no maintainer-provided skill/package layout, discovery roots, config schema, or skill toggle semantics are verified.
+> Status: P0 evidence update on 2026-06-10. Hermes Agent has confirmed first-class skills and is now a read-only scanner candidate. Writable toggle/install remain blocked.
 
 ## 1. Evidence Summary
 
@@ -9,17 +9,17 @@ Sources checked:
 - Local skill doc: `$HOME/.agents/skills/hermes-ops/SKILL.md`.
 - Local machine checks: `command -v hermes`, `ls -ld "$HOME/.hermes"`.
 
-No adapter code was added, no remote `ssh macmini` commands were run, and V2.14 intentionally kept Hermes out of `catalog.scanAll`.
+No adapter code has been added yet. P0 evidence used public Hermes Agent docs plus read-only `ssh macmini` checks to confirm the product identity and local skill layout.
 
 | Area | Status | Evidence |
 | --- | --- | --- |
-| Product identity | Service evidence only | `hermes-ops` describes Hermes as a hosted service with a user-local CLI, home directory, repository, and logs under a Hermes home path. |
+| Product identity | Confirmed | Official docs identify this as Nous Research Hermes Agent, not the Meta/Facebook Hermes JavaScript engine. |
 | Local availability | Not installed locally | `command -v hermes` returned no local executable in this worktree session. `$HOME/.hermes` was not present in the inspected environment. |
-| Skill-like unit | Not verified | The observed doc is itself a Codex/agent skill for operating Hermes. It does not prove Hermes has a local skill concept, a `SKILL.md` package format, or roots that should be scanned by skills-copilot. |
+| Skill-like unit | Confirmed | Official docs and macmini checks confirm first-class skills as directories containing `SKILL.md`. |
 | Config path/schema | Partial service evidence | The doc mentions `<hermes-home>/cron/jobs.json` and generic `hermes config validate`, but no full schema, version, or user-local config path is provided. |
 | Enable/disable semantics | Cron-only evidence | The doc says cron job entries should be disabled with `enabled: false` rather than deleted. Treat this only as cron task management evidence, not skill enable/disable semantics. |
-| Read-only catalog feasibility | Blocked after V2.14 closeout | There is no verified local Hermes skill directory or task schema that maps safely to `SkillInstance`. |
-| Writable adapter feasibility | Blocked after V2.14 closeout | There is no verified rollback-safe config path or toggle semantic for Hermes skills. |
+| Read-only catalog feasibility | Candidate after P0 evidence | Official docs and macmini checks confirm first-class skills under active Hermes home `skills/**/SKILL.md`. |
+| Writable adapter feasibility | Blocked | There is no verified rollback-safe individual skill toggle schema for Hermes skills. |
 
 ## 2. Fixture Scope
 
@@ -54,4 +54,29 @@ No mapping is approved yet.
 - Enable/disable semantics, including whether disabling requires config patching, CLI calls, cron changes, or is unsupported.
 - Safe rollback procedure for any write path.
 
-Until those items exist, Hermes remains documented as blocked/evidence-only. The macOS app may show Hermes in the capability matrix, but scan, project scan, config snapshot, install, toggle, and writable actions must stay disabled.
+Until writable evidence exists, Hermes should be implemented only as a scoped read-only scanner. Project scan, install, toggle, and writable actions must stay disabled.
+
+## 5. 2026-06-10 P0 Evidence Update
+
+Confirmed sources:
+
+- Official docs: https://hermes-agent.nousresearch.com/docs/
+- Skills system: https://hermes-agent.nousresearch.com/docs/user-guide/features/skills
+- Working with skills: https://hermes-agent.nousresearch.com/docs/guides/work-with-skills
+- Creating skills: https://hermes-agent.nousresearch.com/docs/developer-guide/creating-skills
+- CLI commands: https://hermes-agent.nousresearch.com/docs/reference/cli-commands
+- GitHub repository: https://github.com/NousResearch/hermes-agent
+
+Read-only macmini checks confirmed:
+
+- Hermes CLI exists at `~/.local/bin/hermes`.
+- Version observed: `Hermes Agent v0.16.0 (2026.6.5)`.
+- Active Hermes home contains `config.yaml`, `.env`, `auth.json`, `cron/jobs.json`, `logs/`, and `skills/`.
+- Active Hermes home contains many nested `skills/**/SKILL.md` files.
+
+Implementation policy:
+
+- First scanner slice may parse `name`, `description`, optional Hermes metadata, raw frontmatter, path, and source.
+- Skip secrets, `.env`, `auth.json`, logs, and cron job content.
+- Do not map cron jobs to `SkillInstance`.
+- Do not enable writable support until individual skill disable/re-enable schema and rollback-safe writes are verified.

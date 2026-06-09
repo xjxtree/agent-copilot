@@ -2,7 +2,7 @@
 
 These fixtures document local OpenClaw evidence only. They are not adapter implementation inputs.
 
-V2.15 evidence-gate closeout kept OpenClaw blocked. The samples below are useful for maintainer discussion, but they are not scanner/parser, install, toggle, or rollback contracts.
+P0 evidence on 2026-06-10 promoted OpenClaw to a read-only scanner candidate. The samples below are useful for maintainer discussion, but they are not scanner/parser, install, toggle, or rollback contracts until the scanner fixture set is explicitly added.
 
 Evidence status:
 
