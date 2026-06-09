@@ -16,7 +16,7 @@ use skills_copilot_ai_core::{evaluate_mvp_rules, Finding, RuleContext, RuleRepor
 use skills_copilot_catalog::{
     Catalog, CatalogError, ConfigSnapshotDraft, ConfigSnapshotRecord, ConflictGroupDraft,
     ConflictGroupRecord, RuleFindingDraft, RuleFindingRecord, SkillDefinitionDraft,
-    SkillDetailRecord, SkillInstanceMeta, SkillRecord,
+    SkillDetailRecord, SkillEventDraft, SkillEventRecord, SkillInstanceMeta, SkillRecord,
 };
 use skills_copilot_core::{
     AdapterContext, AgentAdapter, AgentConfigAdapter, AgentConfigDocument, AgentId, ConfigFormat,
@@ -588,6 +588,22 @@ pub fn list_conflicts(catalog: &Catalog) -> Result<Vec<ConflictGroupRecord>, Com
 
 pub fn list_snapshots(catalog: &Catalog) -> Result<Vec<ConfigSnapshotRecord>, CommandError> {
     Ok(catalog.list_all_config_snapshots()?)
+}
+
+pub fn list_agent_config_snapshots(
+    catalog: &Catalog,
+    agent: &str,
+    scope: Option<&str>,
+) -> Result<Vec<ConfigSnapshotRecord>, CommandError> {
+    Ok(catalog.list_agent_config_snapshots(agent, scope)?)
+}
+
+pub fn list_skill_events(
+    catalog: &Catalog,
+    instance_id: &str,
+    limit: Option<usize>,
+) -> Result<Vec<SkillEventRecord>, CommandError> {
+    Ok(catalog.list_skill_events(instance_id, limit)?)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -1451,17 +1467,6 @@ pub fn install_skill_from_tool_global(
         };
         let new_text = fs::read_to_string(&source)?;
 
-        let snapshot_id = generate_snapshot_id();
-        catalog.create_config_snapshot(ConfigSnapshotDraft {
-            id: &snapshot_id,
-            agent: target_agent.as_str(),
-            scope: target_scope.as_str(),
-            target: &target.to_string_lossy(),
-            content: &original_text,
-            reason: "pre-install",
-            created_at_ms: current_time_ms(),
-        })?;
-
         write_skill_file_atomic(
             ctx,
             target_agent,
@@ -1482,17 +1487,17 @@ pub fn install_skill_from_tool_global(
             );
             return Err(CommandError::VerificationFailed);
         }
-        Ok(snapshot_id)
+        Ok(())
     })();
     lock_file.unlock()?;
-    let snapshot_id = write_result?;
+    write_result?;
 
     let scan_ctx = install_scan_context(ctx, target_scope, project_path)?;
     scan_agent_id_to_catalog(target_agent, &scan_ctx, catalog)?;
 
     Ok(SkillInstallPreviewRecord {
         wrote: true,
-        snapshot_id: Some(snapshot_id),
+        snapshot_id: None,
         confirmation: SkillInstallConfirmation {
             confirmed: true,
             ..preview.confirmation
@@ -2375,6 +2380,24 @@ pub fn toggle_skill(
     // 6. Update the catalog to reflect the new effective state.
     let new_state = if on { "loaded" } else { "disabled" };
     catalog.set_skill_toggle(instance_id, on, new_state)?;
+
+    let target = config_target.path.to_string_lossy().to_string();
+    let event_payload = serde_json::json!({
+        "enabled": on,
+        "agent": meta.agent.as_str(),
+        "scope": meta.scope.as_str(),
+        "target": target,
+        "skill_name": meta.name.clone(),
+        "config_scope": config_target.scope.as_str(),
+        "previous_enabled": meta.enabled,
+    });
+    let event_payload = serde_json::to_string(&event_payload)?;
+    catalog.create_skill_event(SkillEventDraft {
+        instance_id,
+        kind: "toggle",
+        payload: &event_payload,
+        occurred_at_ms: now_ms,
+    })?;
 
     // 7. Return the updated record for the UI.
     catalog
@@ -5318,7 +5341,7 @@ mod tests {
     }
 
     #[test]
-    fn confirmed_install_writes_target_verified_path_and_snapshots() {
+    fn confirmed_install_writes_target_verified_path_without_config_snapshot() {
         let temp_root = std::env::temp_dir().join(format!(
             "skills-copilot-install-confirmed-{}",
             std::process::id()
@@ -5364,9 +5387,10 @@ mod tests {
         let snapshots = catalog
             .list_config_snapshots("claude-code", &target.to_string_lossy())
             .expect("snapshots");
-        assert_eq!(snapshots.len(), 1);
-        assert_eq!(snapshots[0].reason, "pre-install");
-        assert_eq!(snapshots[0].content, "");
+        assert!(
+            snapshots.is_empty(),
+            "direct skill-file installs must not create agent config snapshots"
+        );
         assert!(catalog
             .list_skill_records()
             .expect("records")

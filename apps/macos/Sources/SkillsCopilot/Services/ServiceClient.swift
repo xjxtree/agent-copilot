@@ -21,6 +21,23 @@ struct AppStateSnapshot: Codable, Hashable {
     let findings: [RuleFindingRecord]
     let conflicts: [ConflictGroupRecord]
     let snapshots: [ConfigSnapshotRecord]
+
+    enum CodingKeys: String, CodingKey {
+        case status
+        case skills
+        case findings
+        case conflicts
+        case snapshots
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        status = try container.decode(ServiceStatus.self, forKey: .status)
+        skills = try container.decode([SkillRecord].self, forKey: .skills)
+        findings = try container.decode([RuleFindingRecord].self, forKey: .findings)
+        conflicts = try container.decode([ConflictGroupRecord].self, forKey: .conflicts)
+        snapshots = try container.decodeIfPresent([ConfigSnapshotRecord].self, forKey: .snapshots) ?? []
+    }
 }
 
 private struct ServiceRequest<Params: Encodable>: Encodable {
@@ -94,6 +111,21 @@ private struct SnapshotParams: Encodable {
 
     enum CodingKeys: String, CodingKey {
         case snapshotId = "snapshot_id"
+    }
+}
+
+private struct ListAgentConfigSnapshotsParams: Encodable {
+    let agent: String
+    let scope: String?
+}
+
+private struct ListSkillEventsParams: Encodable {
+    let instanceId: String
+    let limit: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case instanceId = "instance_id"
+        case limit
     }
 }
 
@@ -262,6 +294,20 @@ final class ServiceClient {
 
     func listSnapshots() async throws -> [ConfigSnapshotRecord] {
         try await call(method: "snapshot.list", params: EmptyParams())
+    }
+
+    func listAgentConfigSnapshots(agent: String, scope: String? = nil) async throws -> [ConfigSnapshotRecord] {
+        try await call(
+            method: "snapshot.listAgentConfig",
+            params: ListAgentConfigSnapshotsParams(agent: agent, scope: scope)
+        )
+    }
+
+    func listSkillEvents(instanceID: String, limit: Int? = nil) async throws -> [SkillEventRecord] {
+        try await call(
+            method: "skill.listEvents",
+            params: ListSkillEventsParams(instanceId: instanceID, limit: limit)
+        )
     }
 
     func toggleSkill(instanceID: String, on: Bool) async throws -> SkillRecord {

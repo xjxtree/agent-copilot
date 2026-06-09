@@ -8,14 +8,14 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use skills_copilot_catalog::{
     Catalog, ConfigSnapshotRecord, ConflictGroupRecord, RuleFindingRecord, SkillDetailRecord,
-    SkillRecord,
+    SkillEventRecord, SkillRecord,
 };
 use skills_copilot_commands::{
     export_skill_bundle, export_staging_skill_bundle, get_skill,
     import_github_skill_to_tool_global_deferred, import_local_skill_to_tool_global,
-    install_skill_from_tool_global, list_conflicts, list_findings, list_snapshots,
-    preview_script_execution, preview_snapshot_rollback, read_claude_settings,
-    record_blocked_script_execution, rollback_snapshot, save_claude_settings,
+    install_skill_from_tool_global, list_agent_config_snapshots, list_conflicts, list_findings,
+    list_skill_events, list_snapshots, preview_script_execution, preview_snapshot_rollback,
+    read_claude_settings, record_blocked_script_execution, rollback_snapshot, save_claude_settings,
     scan_all_catalog_report, scan_claude_to_catalog, toggle_skill, AgentCatalogScanReport,
     ConfigDocumentRecord, ExportedSkillBundle, ScriptExecutionAttemptRecord,
     ScriptExecutionPreviewRecord, ScriptExecutionRequest, SkillInstallPreviewRecord,
@@ -55,10 +55,12 @@ const SUPPORTED_METHODS: &[&str] = &[
     "catalog.scanAll",
     "skill.exportBundle",
     "skill.install",
+    "skill.listEvents",
     "config.toggleSkill",
     "config.readClaudeSettings",
     "config.saveClaudeSettings",
     "snapshot.list",
+    "snapshot.listAgentConfig",
     "snapshot.previewRollback",
     "snapshot.rollback",
 ];
@@ -267,6 +269,13 @@ pub struct GetSkillParams {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct ListSkillEventsParams {
+    pub instance_id: String,
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct ToggleSkillParams {
     pub instance_id: String,
     pub on: bool,
@@ -286,6 +295,13 @@ pub struct InstallSkillParams {
 #[derive(Debug, Clone, Deserialize)]
 pub struct SnapshotParams {
     pub snapshot_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ListAgentConfigSnapshotsParams {
+    pub agent: String,
+    #[serde(default)]
+    pub scope: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -460,6 +476,13 @@ impl ServiceHost {
                 let detail: SkillDetailRecord = get_skill(&catalog, &params.instance_id)?;
                 serde_json::to_value(detail).map_err(Into::into)
             }
+            "skill.listEvents" => {
+                let params: ListSkillEventsParams = serde_json::from_value(request.params)?;
+                let catalog = self.open_catalog()?;
+                let events: Vec<SkillEventRecord> =
+                    list_skill_events(&catalog, &params.instance_id, params.limit)?;
+                serde_json::to_value(events).map_err(Into::into)
+            }
             "catalog.listFindings" => {
                 let catalog = self.open_catalog()?;
                 let findings: Vec<RuleFindingRecord> = list_findings(&catalog)?;
@@ -624,6 +647,15 @@ impl ServiceHost {
             "snapshot.list" => {
                 let catalog = self.open_catalog()?;
                 let snapshots: Vec<ConfigSnapshotRecord> = list_snapshots(&catalog)?;
+                serde_json::to_value(snapshots).map_err(Into::into)
+            }
+            "snapshot.listAgentConfig" => {
+                let params: ListAgentConfigSnapshotsParams =
+                    serde_json::from_value(request.params)?;
+                let catalog = self.open_catalog()?;
+                let scope = params.scope.as_deref().filter(|scope| !scope.is_empty());
+                let snapshots: Vec<ConfigSnapshotRecord> =
+                    list_agent_config_snapshots(&catalog, &params.agent, scope)?;
                 serde_json::to_value(snapshots).map_err(Into::into)
             }
             "snapshot.previewRollback" => {
@@ -2641,10 +2673,13 @@ mod tests {
                 assert!(install.confirmation.required);
                 assert!(!install.files.is_empty());
             }
+            "skill.listEvents" => {
+                let _: Vec<WireSkillEventRecord> = decode_fixture_result(method, result, path);
+            }
             "config.readClaudeSettings" | "config.saveClaudeSettings" => {
                 let _: WireConfigDocumentRecord = decode_fixture_result(method, result, path);
             }
-            "snapshot.list" => {
+            "snapshot.list" | "snapshot.listAgentConfig" => {
                 let _: Vec<WireConfigSnapshotRecord> = decode_fixture_result(method, result, path);
             }
             "snapshot.previewRollback" => {
@@ -3308,6 +3343,17 @@ mod tests {
         content: String,
         reason: String,
         created_at: i64,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireSkillEventRecord {
+        id: i64,
+        instance_id: String,
+        kind: String,
+        payload: Value,
+        occurred_at: i64,
     }
 
     #[allow(dead_code)]

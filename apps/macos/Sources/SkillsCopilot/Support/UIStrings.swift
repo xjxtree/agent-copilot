@@ -36,7 +36,6 @@ enum UIStrings {
     static let overview = text("detail.overview", "Overview")
     static let findings = text("detail.findings", "Findings")
     static let conflicts = text("detail.conflicts", "Conflicts")
-    static let snapshots = text("detail.snapshots", "Snapshots")
     static let noSkillsInCatalog = text("empty.noSkillsInCatalog", "No skills in catalog")
     static let noSkillsMatchSearch = text("empty.noSkillsMatchSearch", "No skills match this search")
     static let noProjectSelected = text("project.none", "No Project")
@@ -71,12 +70,18 @@ enum UIStrings {
     static let noMatchingFindingsMessage = text("empty.noMatchingFindings.message", "Adjust the severity or rule filter to show findings.")
     static let noConflicts = text("empty.noConflicts", "No Conflicts")
     static let noConflictsMessage = text("empty.noConflicts.message", "No conflict group currently references this skill.")
-    static let noSnapshots = text("empty.noSnapshots", "No Snapshots")
-    static let noSnapshotsMessage = text("empty.noSnapshots.message", "No config snapshots have been recorded yet.")
-    static let snapshotPreview = text("snapshot.preview", "Snapshot Preview")
-    static let rollbackSnapshotQuestion = text("snapshot.rollback.question", "Rollback Snapshot?")
-    static let current = text("snapshot.current", "Current")
-    static let snapshot = text("snapshot.snapshot", "Snapshot")
+    static let noSnapshots = text("empty.noSnapshots", "No Agent Config History")
+    static let noSnapshotsMessage = text("empty.noSnapshots.message", "No agent config snapshots have been recorded for this agent yet.")
+    static let snapshotPreview = text("snapshot.preview", "Agent Config Preview")
+    static let rollbackSnapshotQuestion = text("snapshot.rollback.question", "Rollback Agent Config?")
+    static let current = text("snapshot.current", "Current Agent Config")
+    static let snapshot = text("snapshot.snapshot", "Snapshot Agent Config")
+    static let agentConfigHistory = text("sidebar.agentConfigHistory", "Agent Config History")
+    static let agentConfigHistorySummary = text("sidebar.agentConfigHistory.summary", "Preview or roll back saved configuration snapshots for the selected agent.")
+    static let recentActivity = text("detail.recentActivity", "Recent Activity")
+    static let noRecentActivity = text("detail.recentActivity.empty", "No enable or disable activity has been recorded for this skill yet.")
+    static let loadingRecentActivity = text("detail.recentActivity.loading", "Loading activity...")
+    static let activityPayload = text("detail.activity.payload", "Payload")
     static let emptyPlaceholder = text("value.empty", "<empty>")
     static let definition = text("metadata.definition", "Definition")
     static let catalogID = text("metadata.catalogId", "Catalog ID")
@@ -134,8 +139,8 @@ enum UIStrings {
     static let existingFile = text("settings.existingFile", "Existing file")
     static let willCreateFile = text("settings.willCreateFile", "Will create file")
     static let settingsInvalidUTF8 = text("settings.invalidUtf8", "Settings content is not valid UTF-8.")
-    static let jsonValidSettingsWrite = text("settings.jsonValid", "JSON is valid. Save will snapshot, write atomically, verify, and rescan.")
-    static let connectedProtocolNote = text("detail.protocolNote", "This native macOS shell is connected through the Rust service protocol. Scan, toggle, and snapshot rollback actions use verified write paths with snapshots.")
+    static let jsonValidSettingsWrite = text("settings.jsonValid", "JSON is valid. Save will create an agent config snapshot, write atomically, verify, and rescan.")
+    static let connectedProtocolNote = text("detail.protocolNote", "This native macOS shell is connected through the Rust service protocol. Scan, toggle, and agent config rollback actions use verified write paths with snapshots.")
     static let loadingSkillDetail = text("detail.loading", "Loading skill detail...")
     static let readOnlyPreview = text("detail.readOnlyPreview", "Read-only preview")
     static let toolGlobalPreviewTitle = text("detail.toolGlobal.previewTitle", "Tool-global Preview")
@@ -182,15 +187,14 @@ enum UIStrings {
     static let toggleUnavailableToolGlobal = text("detail.toggleUnavailable.toolGlobal", "Tool-global skills are read-only previews. Install or copy to an agent requires a separate confirmed action.")
     static let operationUnavailableBusy = text("detail.operationUnavailable.busy", "Another catalog operation is already in progress.")
     static let readOnly = text("detail.readOnly", "Read-only")
-    static let currentMatchesSnapshot = text("snapshot.matches", "Current settings already match this snapshot.")
-    static let currentDiffersFromSnapshot = text("snapshot.differs", "Current settings differ from this snapshot.")
+    static let currentMatchesSnapshot = text("snapshot.matches", "Current agent config already matches this snapshot.")
+    static let currentDiffersFromSnapshot = text("snapshot.differs", "Current agent config differs from this snapshot.")
     static let menuScanSkills = text("menu.scanSkills", "Scan Skills")
     static let menuReloadSkills = text("menu.reloadSkills", "Reload Skills")
     static let menuSkills = text("menu.skills", "Skills")
     static let menuShowOverview = text("menu.showOverview", "Show Overview")
     static let menuShowFindings = text("menu.showFindings", "Show Findings")
     static let menuShowConflicts = text("menu.showConflicts", "Show Conflicts")
-    static let menuShowSnapshots = text("menu.showSnapshots", "Show Snapshots")
     static let menuClearSearch = text("menu.clearSearch", "Clear Search")
 
     static func enabledSummary(enabled: Int, total: Int) -> String {
@@ -284,13 +288,13 @@ enum UIStrings {
     static let codexRestartRequired = text("message.codexRestartRequired", "Codex runtime may need restart to read config.toml changes.")
 
     static func rollbackRescanned(_ count: Int) -> String {
-        format("message.rollbackRescanned", "Rolled back snapshot and rescanned %d skills.", count)
+        format("message.rollbackRescanned", "Rolled back agent config snapshot and rescanned %d skills.", count)
     }
 
     static let refreshAfterWrite = text("refresh.afterWrite", "Catalog refreshed after the settings write.")
 
     static func refreshAfterRollback(_ count: Int) -> String {
-        format("refresh.afterRollback", "Catalog refreshed after rollback with %d scanned skills.", count)
+        format("refresh.afterRollback", "Catalog refreshed after agent config rollback with %d scanned skills.", count)
     }
 
     static let refreshAfterSettingsSave = text("refresh.afterSettingsSave", "Catalog refreshed after saving settings.")
@@ -305,6 +309,10 @@ enum UIStrings {
 
     static func llmEstimatedCost(_ cost: Double) -> String {
         format("llm.estimatedCost", "$%.4f estimated", cost)
+    }
+
+    static func activityToggleState(enabled: Bool) -> String {
+        format("detail.activity.toggleState", "Set to %@", enabled ? stateEnabled : stateDisabled)
     }
 
     static func scriptExecutionAuditStatusTitle(_ status: ScriptExecutionAuditStatus) -> String {

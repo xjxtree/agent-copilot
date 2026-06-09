@@ -29,10 +29,10 @@ Start the maintained product UI as a native macOS SwiftUI/AppKit shell while kee
 - Launches in foreground and can reload skills through `catalog.listSkills`.
 - Scans supported adapters through `catalog.scanAll`; `catalog.scanClaude` remains a Claude-only compatibility method.
 - Loads selected skill detail through `catalog.getSkill`.
-- Renders read-only Findings, Conflicts, and Snapshots segments from service protocol data.
+- Renders read-only Findings and Conflicts segments from service protocol data.
 - Toggles selected skill through `config.toggleSkill`.
 - Loads and saves Claude settings through `config.readClaudeSettings` and `config.saveClaudeSettings`.
-- Previews and rolls back snapshots through `snapshot.previewRollback` and `snapshot.rollback`.
+- Previews and rolls back agent config history through `snapshot.listAgentConfig`, `snapshot.previewRollback`, and `snapshot.rollback`.
 - Provides native menu commands for scan, reload, detail sections, search clearing, and Settings.
 - Provides sidebar search, state filtering, and sort controls for catalog navigation.
 - Completed screenshot and verification notes are recorded after launch.

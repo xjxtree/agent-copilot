@@ -28,10 +28,12 @@
       "catalog.scanAll",
       "skill.exportBundle",
       "skill.install",
+      "skill.listEvents",
       "config.toggleSkill",
       "config.readClaudeSettings",
       "config.saveClaudeSettings",
       "snapshot.list",
+      "snapshot.listAgentConfig",
       "snapshot.previewRollback",
       "snapshot.rollback"
     ],

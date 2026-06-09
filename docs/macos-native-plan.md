@@ -78,10 +78,12 @@ Initial implemented methods:
 - `catalog.listConflicts`
 - `catalog.scanAll`
 - `catalog.scanClaude`
+- `skill.listEvents`
 - `config.toggleSkill`
 - `config.readClaudeSettings`
 - `config.saveClaudeSettings`
 - `snapshot.list`
+- `snapshot.listAgentConfig`
 - `snapshot.previewRollback`
 - `snapshot.rollback`
 
@@ -90,12 +92,12 @@ Initial implemented methods:
 Use native structures as the default:
 
 - `NavigationSplitView`: source list, skill list, detail/inspector.
-- `Toolbar`: scan, refresh, enable/disable, snapshot, analyze, search.
+- `Toolbar`: scan, refresh, enable/disable, analyze, search.
 - Sidebar catalog controls: search, state filter, visible count, and sort order.
 - `Table` or list-backed views for dense skill rows.
 - Native `Settings` scene for language, provider preferences, privacy, and future keychain-backed credentials.
 - `Inspector`-style right panel for metadata, findings, conflicts, config, and Analyze.
-- macOS menu commands for scan, refresh, snapshots, search focus, and help.
+- macOS menu commands for scan, refresh, search focus, and help.
 - Keyboard-first interactions: arrow selection, Return open, Command-F search, Command-R rescan, Escape close transient panels.
 
 ## 6. Liquid Glass Rules
@@ -128,7 +130,7 @@ Use system-provided materials first; custom Liquid Glass is a sparing accent, no
 - [x] Scaffold `apps/macos` with SwiftUI.
 - [x] Build the main split-view shell and Settings scene.
 - [x] Connect read-only catalog methods first (`catalog.listSkills`, `catalog.getSkill`, `catalog.listFindings`, `catalog.listConflicts`, `snapshot.list`).
-- [x] Add scan, toggle, snapshot preview, and rollback UI flows.
+- [x] Add scan, toggle, agent-config history preview, and rollback UI flows.
 - [x] Add native Claude settings config edit.
 - [x] Add sidebar catalog filtering and sorting controls.
 - [x] Add native list model test, native 10k list benchmark, and native layout static check.

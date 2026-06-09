@@ -1,13 +1,17 @@
 # skills-copilot Service Protocol
 
-> Status: V2.10 skill execution safety boundary and release/docs consistency are documented; V2.9 Tool-global import/export/install implementation is integrated; real local Computer Use validation passed on 2026-06-09 for the current mainline app. This protocol is the only supported product boundary for the macOS native shell and later Windows/Linux shells. Historical Tauri commands remain only in MVP documentation and git history.
+> Status: V2.10 skill execution safety boundary and release/docs consistency are documented.
+>
+> Integrated: V2.9 Tool-global import/export/install and 2026-06-09 real local Computer Use validation for the current mainline app.
+>
+> Product boundary: this protocol is the only supported boundary for the macOS native shell. Historical Tauri commands remain only in MVP documentation and git history.
 >
 > Project Context implementation and automated validation are complete. Future user-visible, UI, or service protocol changes must still rerun the real local Computer Use pass and keep any new blocker separate from implementation completion.
 
 ## Goals
 
 - Keep product UI shells independent from Rust internals.
-- Let native macOS, future Windows, and future Linux clients call the same method names, payloads, errors, and fixture cases.
+- Let the native macOS app call stable method names, payloads, errors, and fixture cases.
 - Avoid committing the app to Tauri IPC, Swift-only bindings, or a long-running daemon too early.
 
 ## Runtime Shape
@@ -37,7 +41,7 @@ This stdio shape can later move behind a local socket without changing method pa
 | Method | Mutates local state | Current client use | Result |
 | --- | --- | --- | --- |
 | `app.version` | No | Native macOS About / compatibility checks | app version and protocol version |
-| `app.stateSnapshot` | No | Native macOS launch/read flow | status plus current skills, findings, conflicts, and snapshots |
+| `app.stateSnapshot` | No | Native macOS launch/read flow | status plus current skills, findings, conflicts, and compatibility snapshot payload |
 | `service.status` | No | Diagnostics and smoke tests | protocol version, app version, app data dir, catalog path, user home, supported methods, refresh capability state, and LLM gate status |
 | `llm.status` | No | Native macOS LLM affordance gating | disabled-by-default LLM status: enabled/configured/provider/model/reason/token limit/budget/credential persistence policy |
 | `llm.prepareAction` | No | Native macOS user-triggered LLM preflight | provider/model/token/cost estimate, confirmation requirement, prompt scope, privacy notes, and write-back guard for a requested LLM action |
@@ -55,17 +59,40 @@ This stdio shape can later move behind a local socket without changing method pa
 | `catalog.scanAll` | Yes, refreshes catalog | Native macOS toolbar Scan action | scanned count, refreshed `SkillRecord[]`, and refresh activity summary for supported adapters |
 | `catalog.scanClaude` | Yes, refreshes catalog | Compatibility / Claude-only diagnostics | scanned count, refreshed `SkillRecord[]`, and refresh activity summary |
 | `skill.exportBundle` | Yes, writes app-controlled export files | V2.9 local tool-global/staging export | manifest path, bundle path, fingerprint, and reproducible metadata |
-| `skill.install` | Yes, after confirmation | V2.9 install/copy from tool-global to target agent | preview or completed install record with target path, files, risks, confirmation, and optional snapshot id |
+| `skill.install` | Yes, after confirmation | V2.9 install/copy from tool-global to target agent | preview or completed install record with target path, files, risks, confirmation, and optional snapshot id for future config-backed installs |
+| `skill.listEvents` | No | Native macOS skill detail Recent Activity | recent local `skill_event` records for `{ "instance_id": "...", "limit"?: 12 }` |
 | `config.toggleSkill` | Yes, writes agent config | Native macOS Enable / Disable action | updated `SkillRecord` |
 | `config.readClaudeSettings` | No | Native macOS Settings editor load action | `ConfigDocumentRecord` |
 | `config.saveClaudeSettings` | Yes, writes Claude settings and rescans | Native macOS Settings editor Save action | saved `ConfigDocumentRecord` |
-| `snapshot.list` | No | Native macOS Snapshots segment | `ConfigSnapshotRecord[]` |
-| `snapshot.previewRollback` | No | Native macOS Snapshot Preview action | snapshot, current content, read error, and changed flag |
-| `snapshot.rollback` | Yes, writes snapshot content and rescans | Native macOS Snapshot Rollback action | rescanned skill count |
+| `snapshot.list` | No | Compatibility / diagnostics | global `ConfigSnapshotRecord[]` |
+| `snapshot.listAgentConfig` | No | Native macOS Agent Config History | agent-config `ConfigSnapshotRecord[]` filtered by `{ "agent": "...", "scope"?: "agent-global" }` |
+| `snapshot.previewRollback` | No | Native macOS Agent Config History preview action | snapshot, current content, read error, and changed flag |
+| `snapshot.rollback` | Yes, writes agent config snapshot content and rescans | Native macOS Agent Config History rollback action | rescanned skill count |
 
-`catalog.scanAll` is the native UI scan path and currently scans Claude Code, Codex, and read-only opencode. It resolves the effective `ProjectContext` before adapter scanning. `catalog.scanClaude`, `config.readClaudeSettings`, and `config.saveClaudeSettings` remain intentionally Claude-specific compatibility/config-editor APIs.
+`catalog.scanAll` is the native UI scan path.
 
-Protocol v1 keeps execution methods in a default-deny mode. `script.previewExecution` and `script.execute` are supported for safe preflight and explicit confirmation-gated intent, with no real process execution while the local sandbox runner is deferred. Unknown execution-like method names must return the normal `unknown_method` error and must not spawn a process, open a network connection, read undeclared files, or write an execution log.
+It currently scans:
+
+- Claude Code
+- Codex
+- read-only opencode
+
+It resolves the effective `ProjectContext` before adapter scanning.
+
+The following APIs remain intentionally Claude-specific compatibility/config-editor APIs:
+
+- `catalog.scanClaude`
+- `config.readClaudeSettings`
+- `config.saveClaudeSettings`
+
+Protocol v1 keeps execution methods in default-deny mode.
+
+Execution boundary:
+
+- `script.previewExecution` and `script.execute` are preflight / intent methods only.
+- No real process execution occurs while the local sandbox runner is deferred.
+- Unknown execution-like method names must return the normal `unknown_method` error.
+- Unknown execution-like methods must not spawn a process, open a network connection, read undeclared files, or write an execution log.
 
 ## V2.9 Tool-global Import Payload
 
@@ -160,7 +187,7 @@ The result returns local paths plus stable metadata:
 }
 ```
 
-Confirmed install requires the same target fields with `confirmed = true`. The result includes source/target paths, copied files, risk notes, confirmation metadata, `wrote`, and a `snapshot_id` when a write occurred.
+Confirmed install requires the same target fields with `confirmed = true`. The result includes source/target paths, copied files, risk notes, confirmation metadata, `wrote`, and a `snapshot_id` field for protocol compatibility. Current direct skill-file installs do not create config snapshots.
 
 ```json
 {
@@ -182,7 +209,7 @@ Rules:
 - Tool-global records are read-only previews in list/detail surfaces; `config.toggleSkill` must not be used for them.
 - `confirmed=false` is non-mutating and must not copy skill content, write agent config, or modify catalog state.
 - `confirmed=true` must require target agent/scope/path confirmation and routes through the target adapter's verified write path.
-- Claude/Codex writable installs create an audit snapshot, use locked/atomic writes, verify read-back content, and rescan the target adapter.
+- Claude/Codex writable installs use verified target paths, locked/atomic writes, read-back verification, and target-adapter rescan. They do not create skill-content snapshots.
 - Opencode remains read-only; install attempts return a stable unsupported/read-only error.
 - `tool.previewInstall` is not part of the current service-supported method list; native clients may keep it only as a compatibility fallback after `skill.install` returns `unknown_method`.
 
@@ -328,9 +355,10 @@ No-project behavior:
 - Project context validation canonicalizes `root_path` and `current_cwd`, defaults `current_cwd` to `root_path`, requires both paths to be readable directories, and rejects `current_cwd` outside `root_path` after canonicalization, including symlink escapes.
 - `project.setContext` writes schema version 1 app state atomically to `project-context.json`. `project.clearContext` removes the active context and retains the recent list.
 - Adapter context priority is env override first (`SKILLS_COPILOT_PROJECT_CWD` / `SKILLS_COPILOT_PROJECT_ROOT`), then stored active project context, then no project context.
-- `config.toggleSkill` snapshots the target config, takes a file lock, writes atomically, verifies read-back content, rolls back on verification failure, and refreshes catalog state. Claude Code writes `.claude/settings*.json`; Codex writes only the user `config.toml` `[[skills.config]]` override and never project `.codex/config.toml`. Opencode is read-only in V2.4: UI should disable toggle for opencode rows with a read-only adapter reason, and direct service attempts return a stable unsupported/read-only error without creating or modifying opencode config.
+- `config.toggleSkill` snapshots the target agent config, takes a file lock, writes atomically, verifies read-back content, rolls back on verification failure, records a local `skill_event`, and refreshes catalog state. Claude Code writes `.claude/settings*.json`; Codex writes only the user `config.toml` `[[skills.config]]` override and never project `.codex/config.toml`. Opencode is read-only in V2.4: UI should disable toggle for opencode rows with a read-only adapter reason, and direct service attempts return a stable unsupported/read-only error without creating or modifying opencode config.
 - `config.saveClaudeSettings` validates JSON, snapshots the target config, takes a file lock, writes atomically, verifies read-back content, rolls back on verification failure, and rescans before returning.
-- `snapshot.rollback` writes the stored snapshot content through the locked write path and rescans before returning the refreshed count.
+- `snapshot.listAgentConfig` is the product UI path for rollback history. It returns config snapshots by agent/scope and must not be treated as skill content history.
+- `snapshot.rollback` writes the stored agent config snapshot content through the locked write path and rescans before returning the refreshed count.
 - Future write methods must document snapshot, lock, verification, rollback, and rescan behavior before being exposed in native UI.
 
 ## Contract Fixtures

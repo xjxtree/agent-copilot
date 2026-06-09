@@ -301,6 +301,29 @@ struct ConfigSnapshotRecord: Codable, Identifiable, Hashable {
     }
 }
 
+struct SkillEventRecord: Codable, Identifiable, Hashable {
+    let id: Int64
+    let instanceId: String
+    let kind: String
+    let payload: JSONValue
+    let occurredAt: Int64
+
+    var isToggleActivity: Bool {
+        let normalized = kind.lowercased()
+        return normalized.contains("toggle")
+            || normalized.contains("enable")
+            || normalized.contains("disable")
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case instanceId = "instance_id"
+        case kind
+        case payload
+        case occurredAt = "occurred_at"
+    }
+}
+
 struct ScanResult: Codable, Hashable {
     let scannedCount: Int
     let skills: [SkillRecord]

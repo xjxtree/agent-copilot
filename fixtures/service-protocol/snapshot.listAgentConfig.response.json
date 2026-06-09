@@ -1,0 +1,15 @@
+{
+  "id": "fixture-snapshot-list-agent-config",
+  "ok": true,
+  "result": [
+    {
+      "id": "snapshot-id",
+      "agent": "claude-code",
+      "scope": "agent-global",
+      "target": "/tmp/skills-copilot-home/.claude/settings.json",
+      "content": "{}\n",
+      "reason": "pre-toggle",
+      "created_at": 1780590000000
+    }
+  ]
+}

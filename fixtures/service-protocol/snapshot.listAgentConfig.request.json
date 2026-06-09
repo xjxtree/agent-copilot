@@ -1,0 +1,7 @@
+{
+  "id": "fixture-snapshot-list-agent-config",
+  "method": "snapshot.listAgentConfig",
+  "params": {
+    "agent": "claude-code"
+  }
+}

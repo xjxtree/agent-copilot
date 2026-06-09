@@ -5,8 +5,11 @@ final class SkillStore: ObservableObject {
     @Published private(set) var skills: [SkillRecord] = []
     @Published private(set) var findings: [RuleFindingRecord] = []
     @Published private(set) var conflicts: [ConflictGroupRecord] = []
-    @Published private(set) var snapshots: [ConfigSnapshotRecord] = []
+    @Published private(set) var agentConfigSnapshots: [ConfigSnapshotRecord] = []
+    @Published private(set) var isLoadingAgentConfigSnapshots = false
     @Published private(set) var detailsByID: [SkillRecord.ID: SkillDetailRecord] = [:]
+    @Published private(set) var skillEventsByID: [SkillRecord.ID: [SkillEventRecord]] = [:]
+    @Published private(set) var loadingSkillEventIDs: Set<SkillRecord.ID> = []
     @Published private(set) var status: ServiceStatus?
     @Published private(set) var llmStatus = LLMStatus.disabledFallback()
     @Published private(set) var llmPrepareResults: [LLMAction: LLMPrepareResult] = [:]
@@ -34,8 +37,11 @@ final class SkillStore: ObservableObject {
     @Published var searchText = "" {
         didSet { handleListCriteriaChanged() }
     }
-    @Published var agentFilter: SkillAgentFilter = .all {
-        didSet { handleListCriteriaChanged() }
+    @Published var agentFilter: SkillAgentFilter = .claudeCode {
+        didSet {
+            handleListCriteriaChanged()
+            Task { await loadAgentConfigSnapshots() }
+        }
     }
     @Published var stateFilter: SkillStateFilter = .all {
         didSet { handleListCriteriaChanged() }
@@ -46,6 +52,7 @@ final class SkillStore: ObservableObject {
     private let service: ServiceClient
     private var lastRefreshAction: RefreshAction = .reload
     private var llmPreparedSkillID: SkillRecord.ID?
+    private var agentConfigSnapshotLoadGeneration = 0
 
     init(service: ServiceClient) {
         self.service = service
@@ -115,6 +122,16 @@ final class SkillStore: ObservableObject {
         return conflicts.filter { conflict in
             conflict.definitionId == skill.definitionId || conflict.instanceIds.contains(skill.id)
         }
+    }
+
+    var selectedSkillEvents: [SkillEventRecord] {
+        guard let id = selectedSkill?.id else { return [] }
+        return (skillEventsByID[id] ?? []).filter(\.isToggleActivity)
+    }
+
+    var isLoadingSelectedSkillEvents: Bool {
+        guard let id = selectedSkill?.id else { return false }
+        return loadingSkillEventIDs.contains(id)
     }
 
     func llmPrepareResult(for action: LLMAction) -> LLMPrepareResult? {
@@ -258,6 +275,7 @@ final class SkillStore: ObservableObject {
         do {
             _ = try await service.toggleSkill(instanceID: skill.id, on: on)
             detailsByID.removeValue(forKey: skill.id)
+            skillEventsByID.removeValue(forKey: skill.id)
             try await refreshCollections()
             lastMutationMessage = UIStrings.toggledSkill(on: on, name: skill.name, agent: skill.agent)
             recordLocalRefresh(message: UIStrings.refreshAfterWrite)
@@ -408,6 +426,7 @@ final class SkillStore: ObservableObject {
         normalizeSelectionToVisibleSkills()
         guard let id = selectedSkill?.id else { return }
         if detailsByID[id] != nil {
+            await loadSkillEventsIfNeeded(instanceID: id)
             return
         }
 
@@ -417,8 +436,28 @@ final class SkillStore: ObservableObject {
 
         do {
             detailsByID[id] = try await service.getSkill(instanceID: id)
+            await loadSkillEventsIfNeeded(instanceID: id)
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    func loadAgentConfigSnapshots() async {
+        agentConfigSnapshotLoadGeneration += 1
+        let generation = agentConfigSnapshotLoadGeneration
+        isLoadingAgentConfigSnapshots = true
+
+        do {
+            let records = try await fetchAgentConfigSnapshots()
+            guard generation == agentConfigSnapshotLoadGeneration else { return }
+            agentConfigSnapshots = records
+        } catch {
+            guard generation == agentConfigSnapshotLoadGeneration else { return }
+            errorMessage = error.localizedDescription
+        }
+
+        if generation == agentConfigSnapshotLoadGeneration {
+            isLoadingAgentConfigSnapshots = false
         }
     }
 
@@ -426,6 +465,7 @@ final class SkillStore: ObservableObject {
         async let appStateSnapshot = service.appStateSnapshot()
         async let llmStatus = service.llmStatus()
         async let projectContextState = service.getProjectContext()
+        async let agentConfigSnapshots = fetchAgentConfigSnapshots()
         let snapshot = try await appStateSnapshot
         self.status = snapshot.status
         self.llmStatus = try await llmStatus
@@ -433,11 +473,56 @@ final class SkillStore: ObservableObject {
         self.skills = snapshot.skills
         self.findings = snapshot.findings
         self.conflicts = snapshot.conflicts
-        self.snapshots = snapshot.snapshots
+        self.agentConfigSnapshots = try await agentConfigSnapshots
         let currentSkillIDs = Set(snapshot.skills.map(\.id))
         scriptExecutionPreviews = scriptExecutionPreviews.filter { currentSkillIDs.contains($0.key) }
+        skillEventsByID = skillEventsByID.filter { currentSkillIDs.contains($0.key) }
         refreshWatcherMessage(from: self.status)
         normalizeSelectionToVisibleSkills()
+    }
+
+    private func fetchAgentConfigSnapshots() async throws -> [ConfigSnapshotRecord] {
+        var records: [ConfigSnapshotRecord] = []
+        for query in agentConfigSnapshotQueries {
+            let agentRecords = try await service.listAgentConfigSnapshots(agent: query.agent, scope: query.scope)
+            records.append(contentsOf: agentRecords)
+        }
+        return records.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    private var agentConfigSnapshotQueries: [(agent: String, scope: String?)] {
+        switch agentFilter {
+        case .claudeCode:
+            return [(agent: "claude-code", scope: nil)]
+        case .codex:
+            return [(agent: "codex", scope: nil)]
+        case .opencode:
+            return [(agent: "opencode", scope: nil)]
+        case .all:
+            return [
+                (agent: "claude-code", scope: nil),
+                (agent: "codex", scope: nil),
+                (agent: "opencode", scope: nil)
+            ]
+        }
+    }
+
+    private func loadSkillEventsIfNeeded(instanceID: SkillRecord.ID, force: Bool = false) async {
+        if !force, skillEventsByID[instanceID] != nil {
+            return
+        }
+        guard !loadingSkillEventIDs.contains(instanceID) else { return }
+        loadingSkillEventIDs.insert(instanceID)
+        defer { loadingSkillEventIDs.remove(instanceID) }
+
+        do {
+            skillEventsByID[instanceID] = try await service.listSkillEvents(instanceID: instanceID, limit: 12)
+        } catch {
+            skillEventsByID[instanceID] = []
+            if errorMessage == nil {
+                errorMessage = error.localizedDescription
+            }
+        }
     }
 
     private func prepareLLMAction(_ action: LLMAction) async {

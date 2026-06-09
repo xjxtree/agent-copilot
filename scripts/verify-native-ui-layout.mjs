@@ -30,17 +30,17 @@ const checks = [
   {
     label: "sidebar column has bounded native width",
     text: files.content,
-    pattern: /\.navigationSplitViewColumnWidth\(min:\s*260,\s*ideal:\s*300,\s*max:\s*360\)/,
+    pattern: /\.navigationSplitViewColumnWidth\(min:\s*300,\s*ideal:\s*340,\s*max:\s*430\)/,
   },
   {
-    label: "toolbar exposes scan action",
-    text: files.content,
-    pattern: /Label\(UIStrings\.scan,\s*systemImage:\s*"arrow\.triangle\.2\.circlepath"\)/,
+    label: "sidebar exposes scan action",
+    text: files.sidebar,
+    pattern: /Label\(UIStrings\.text\("action\.scanSkills",\s*"Scan Skills"\),\s*systemImage:\s*"folder\.badge\.gearshape"\)/,
   },
   {
-    label: "toolbar exposes reload action",
-    text: files.content,
-    pattern: /Label\(UIStrings\.reload,\s*systemImage:\s*"arrow\.clockwise"\)/,
+    label: "sidebar exposes reload action",
+    text: files.sidebar,
+    pattern: /Label\(UIStrings\.text\("action\.reloadCatalog",\s*"Reload Catalog"\),\s*systemImage:\s*"arrow\.clockwise"\)/,
   },
   {
     label: "sidebar exposes state filter",

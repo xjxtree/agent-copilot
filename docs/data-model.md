@@ -352,10 +352,12 @@ CREATE TABLE config_snapshot (
     scope       TEXT NOT NULL,
     target      TEXT NOT NULL,                -- 配置文件绝对路径
     content     TEXT NOT NULL,
-    reason      TEXT NOT NULL,                -- 'pre-toggle' | 'pre-edit' | 'manual'
+    reason      TEXT NOT NULL,                -- 'pre-toggle' | 'pre-config-edit'
     created_at  INTEGER NOT NULL
 );
 ```
+
+`config_snapshot` 只表示 agent 配置文件历史，不表示单个 `SKILL.md` 内容历史。Enable/Disable 会先保存目标 agent config 的 snapshot，再在 `skill_event` 写一条 `toggle` activity，供 skill 信息页展示最近操作记录。
 
 **当前迁移**
 - `0001_initial.sql`：基础 catalog、conflict、event、finding、snapshot 表
@@ -367,7 +369,7 @@ CREATE TABLE config_snapshot (
 **保留策略**
 - `skill_instance` 里 `state='missing'` 的记录保留 30 天再删
 - `skill_event` 保留 90 天
-- `config_snapshot` 可列出和回滚；最近 50 份 LRU 淘汰策略不阻塞 MVP，留到后续配置编辑/存储维护阶段
+- `config_snapshot` 可按 agent config history 列出和回滚；最近 50 份 LRU 淘汰策略不阻塞 MVP，留到后续配置编辑/存储维护阶段
 
 ## 4. 标识稳定性
 

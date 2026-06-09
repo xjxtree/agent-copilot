@@ -45,6 +45,8 @@ enum SkillAgentFilter: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    static let managementCases: [SkillAgentFilter] = [.claudeCode, .codex, .opencode]
+
     var title: String {
         switch self {
         case .all:

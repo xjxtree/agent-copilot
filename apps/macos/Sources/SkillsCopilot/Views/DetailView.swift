@@ -4,9 +4,12 @@ enum DetailSection: String, CaseIterable, Identifiable {
     case overview
     case findings
     case conflicts
-    case snapshots
 
     var id: String { rawValue }
+
+    static var visibleCases: [DetailSection] {
+        Self.allCases
+    }
 
     var title: String {
         switch self {
@@ -16,8 +19,6 @@ enum DetailSection: String, CaseIterable, Identifiable {
             return UIStrings.findings
         case .conflicts:
             return UIStrings.conflicts
-        case .snapshots:
-            return UIStrings.snapshots
         }
     }
 }
@@ -43,26 +44,48 @@ struct DetailView: View {
                         skill: skill,
                         findingCount: store.selectedFindings.count,
                         conflictCount: store.selectedConflicts.count,
-                        snapshotCount: store.snapshots.count,
                         isWriting: store.isWriting,
+                        onSelectSection: { section in
+                            store.selectedDetailSection = section
+                        },
                         onToggle: { on in
                             Task { await store.toggleSelectedSkill(on: on) }
                         }
                     )
 
-                    Picker(UIStrings.detailSection, selection: $store.selectedDetailSection) {
-                        ForEach(DetailSection.allCases) { item in
-                            Text(item.title).tag(item)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 520)
+                    DetailSectionSwitcher(selection: $store.selectedDetailSection)
 
                     switch store.selectedDetailSection {
                     case .overview:
                         VStack(alignment: .leading, spacing: 16) {
-                            LLMAssistPanel(
-                                status: store.llmStatus,
+                            SkillSummaryCard(
+                                skill: skill,
+                                detail: store.selectedSkillDetail,
+                                isLoading: store.isLoadingDetail
+                            )
+
+                            RecentActivityCard(
+                                events: store.selectedSkillEvents,
+                                isLoading: store.isLoadingSelectedSkillEvents
+                            )
+
+                            DisclosureGroup {
+                                SkillDetailCard(
+                                    skill: skill,
+                                    detail: store.selectedSkillDetail,
+                                    isLoading: store.isLoadingDetail
+                                )
+                                .padding(.top, 12)
+                            } label: {
+                                Label(UIStrings.text("detail.rawDetails", "Raw Catalog Details"), systemImage: "doc.text.magnifyingglass")
+                                    .font(.headline)
+                            }
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .adaptiveMaterialSurface()
+
+                            OverviewSecondaryTools(
+                                llmStatus: store.llmStatus,
                                 isPreparing: { action in store.isPreparingLLMAction(action) },
                                 result: { action in store.llmPrepareResult(for: action) },
                                 onPrepare: { action in
@@ -78,14 +101,11 @@ struct DetailView: View {
                                             await store.prepareDraftFrontmatterLLM()
                                         }
                                     }
-                                }
-                            )
-
-                            ScriptExecutionSafetyCard(
+                                },
                                 skill: skill,
-                                preview: store.scriptExecutionPreview(for: skill),
-                                isPreviewing: store.isPreviewingScriptExecution(for: skill),
-                                onPreview: {
+                                scriptPreview: store.scriptExecutionPreview(for: skill),
+                                isPreviewingScript: store.isPreviewingScriptExecution(for: skill),
+                                onPreviewScript: {
                                     Task {
                                         await store.previewScriptExecutionSafety(for: skill)
                                     }
@@ -95,28 +115,11 @@ struct DetailView: View {
                             if DisplayText.isToolGlobal(skill) {
                                 ToolGlobalPreviewCard(skill: skill)
                             }
-
-                            SkillDetailCard(
-                                skill: skill,
-                                detail: store.selectedSkillDetail,
-                                isLoading: store.isLoadingDetail
-                            )
                         }
                     case .findings:
                         FindingsSection(skill: skill, findings: store.selectedFindings)
                     case .conflicts:
                         ConflictsSection(conflicts: store.selectedConflicts, selectedSkillID: skill.id)
-                    case .snapshots:
-                        SnapshotsSection(
-                            snapshots: store.snapshots,
-                            isWriting: store.isWriting,
-                            onPreview: { snapshotID in
-                                try await store.previewRollback(snapshotID: snapshotID)
-                            },
-                            onRollback: { snapshotID in
-                                await store.rollbackSnapshot(snapshotID: snapshotID)
-                            }
-                        )
                     }
                 } else {
                     EmptyDetailView()
@@ -131,6 +134,161 @@ struct DetailView: View {
                 transaction.animation = nil
             }
         }
+    }
+}
+
+private struct SkillSummaryCard: View {
+    let skill: SkillRecord
+    let detail: SkillDetailRecord?
+    let isLoading: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.text("detail.summary", "Summary"), systemImage: "text.alignleft")
+                    .font(.headline)
+                Spacer()
+                if isLoading {
+                    Label(UIStrings.loadingSkillDetail, systemImage: "hourglass")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Text(summaryText)
+                .font(.callout)
+                .foregroundStyle(summaryText == UIStrings.noDescription ? .secondary : .primary)
+                .lineLimit(nil)
+                .textSelection(.enabled)
+
+            HStack(spacing: 8) {
+                SummaryChip(title: UIStrings.agent, value: DisplayText.agent(skill.agent), systemImage: "person.crop.circle")
+                SummaryChip(title: UIStrings.scope, value: DisplayText.scope(skill.scope), systemImage: "folder")
+                SummaryChip(title: UIStrings.state, value: DisplayText.state(skill.state, enabled: skill.enabled), systemImage: DisplayText.stateSystemImage(skill.state, enabled: skill.enabled))
+            }
+
+            Label(skill.displayPath, systemImage: "doc")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .textSelection(.enabled)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+
+    private var summaryText: String {
+        guard let description = detail?.description.trimmingCharacters(in: .whitespacesAndNewlines), !description.isEmpty else {
+            return UIStrings.noDescription
+        }
+        return description
+    }
+}
+
+private struct DetailSectionSwitcher: View {
+    @Binding var selection: DetailSection
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(UIStrings.detailSection)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+
+            Picker(UIStrings.detailSection, selection: $selection) {
+                ForEach(DetailSection.visibleCases) { item in
+                    Text(item.title).tag(item)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(maxWidth: 560, alignment: .leading)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct SummaryChip: View {
+    let title: String
+    let value: String
+    let systemImage: String
+
+    var body: some View {
+        Label {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(value)
+                    .font(.caption.bold())
+                    .lineLimit(1)
+            }
+        } icon: {
+            Image(systemName: systemImage)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct OverviewSecondaryTools: View {
+    let llmStatus: LLMStatus
+    let isPreparing: (LLMAction) -> Bool
+    let result: (LLMAction) -> LLMPrepareResult?
+    let onPrepare: (LLMAction) -> Void
+    let skill: SkillRecord
+    let scriptPreview: ScriptExecutionPreview?
+    let isPreviewingScript: Bool
+    let onPreviewScript: () -> Void
+
+    @State private var isExpanded = false
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $isExpanded) {
+            VStack(alignment: .leading, spacing: 16) {
+                LLMAssistPanel(
+                    status: llmStatus,
+                    isPreparing: isPreparing,
+                    result: result,
+                    onPrepare: onPrepare
+                )
+
+                ScriptExecutionSafetyCard(
+                    skill: skill,
+                    preview: scriptPreview,
+                    isPreviewing: isPreviewingScript,
+                    onPreview: onPreviewScript
+                )
+            }
+            .padding(.top, 12)
+        } label: {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: "sparkles.rectangle.stack")
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(UIStrings.text("detail.assistAndSafety", "Assist & Safety"))
+                        .font(.headline)
+                    Text(summary)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+
+    private var summary: String {
+        let llm = llmStatus.enabled ? UIStrings.llmEnabled : UIStrings.llmDisabled
+        let script = scriptPreview == nil ? UIStrings.scriptExecutionPreviewOnly : UIStrings.executionBlocked
+        return UIStrings.text("detail.assistAndSafety.summary", "\(llm) LLM assist · \(script) scripts")
     }
 }
 
@@ -188,7 +346,7 @@ private struct LLMAssistPanel: View {
             }
         }
         .padding()
-        .frame(maxWidth: 900, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .adaptiveMaterialSurface()
     }
 }
@@ -327,7 +485,7 @@ private struct ScriptExecutionSafetyCard: View {
             }
         }
         .padding()
-        .frame(maxWidth: 900, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .adaptiveMaterialSurface()
     }
 }
@@ -433,12 +591,43 @@ private extension String {
     }
 }
 
+private extension JSONValue {
+    func boolValue(forAnyKey keys: [String]) -> Bool? {
+        guard case .object(let object) = self else { return nil }
+        for key in keys {
+            if let payloadValue = object[key], case .bool(let value) = payloadValue {
+                return value
+            }
+        }
+        return nil
+    }
+
+    var compactDisplayString: String {
+        switch self {
+        case .string(let value):
+            return value
+        case .number(let value):
+            return String(value)
+        case .bool(let value):
+            return value ? "true" : "false"
+        case .object(let object):
+            return object.keys.sorted().map { key in
+                "\(key)=\(object[key]?.compactDisplayString ?? "")"
+            }.joined(separator: ", ")
+        case .array(let values):
+            return values.map(\.compactDisplayString).joined(separator: ", ")
+        case .null:
+            return ""
+        }
+    }
+}
+
 private struct HeaderView: View {
     let skill: SkillRecord
     let findingCount: Int
     let conflictCount: Int
-    let snapshotCount: Int
     let isWriting: Bool
+    let onSelectSection: (DetailSection) -> Void
     let onToggle: (Bool) -> Void
 
     var body: some View {
@@ -492,29 +681,127 @@ private struct HeaderView: View {
             }
 
             HStack(spacing: 10) {
-                CountBadge(label: UIStrings.findings, value: findingCount)
-                CountBadge(label: UIStrings.conflicts, value: conflictCount)
-                CountBadge(label: UIStrings.snapshots, value: snapshotCount)
+                CountBadge(
+                    label: UIStrings.findings,
+                    value: findingCount,
+                    systemImage: "exclamationmark.triangle",
+                    tint: .orange,
+                    action: { onSelectSection(.findings) }
+                )
+                CountBadge(
+                    label: UIStrings.conflicts,
+                    value: conflictCount,
+                    systemImage: "rectangle.2.swap",
+                    tint: .red,
+                    action: { onSelectSection(.conflicts) }
+                )
             }
         }
-        .frame(maxWidth: 900, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct RecentActivityCard: View {
+    let events: [SkillEventRecord]
+    let isLoading: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.recentActivity, systemImage: "clock.badge")
+                    .font(.headline)
+                Spacer()
+                if isLoading {
+                    Label(UIStrings.loadingRecentActivity, systemImage: "hourglass")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if events.isEmpty {
+                Text(isLoading ? UIStrings.loadingRecentActivity : UIStrings.noRecentActivity)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(events) { event in
+                        SkillActivityRow(event: event)
+                    }
+                }
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct SkillActivityRow: View {
+    let event: SkillEventRecord
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "switch.2")
+                .foregroundStyle(.secondary)
+                .frame(width: 18)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(activityTitle)
+                    .font(.subheadline.bold())
+                Text(DisplayText.timestamp(event.occurredAt))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if let payloadSummary {
+                    Text(payloadSummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .textSelection(.enabled)
+                }
+            }
+            Spacer()
+        }
+        .padding(10)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var activityTitle: String {
+        if let enabled = event.payload.boolValue(forAnyKey: ["on", "enabled"]) {
+            return UIStrings.activityToggleState(enabled: enabled)
+        }
+        return event.kind
+    }
+
+    private var payloadSummary: String? {
+        let summary = event.payload.compactDisplayString
+        return summary.isEmpty ? nil : "\(UIStrings.activityPayload): \(summary)"
     }
 }
 
 private struct CountBadge: View {
     let label: String
     let value: Int
+    let systemImage: String
+    let tint: Color
+    let action: () -> Void
 
     var body: some View {
-        HStack(spacing: 6) {
-            Text("\(value)")
-                .font(.headline)
-            Text(label)
-                .foregroundStyle(.secondary)
+        Button(action: action) {
+            HStack(spacing: 7) {
+                Image(systemName: systemImage)
+                    .foregroundStyle(value > 0 ? tint : .secondary)
+                Text("\(value)")
+                    .font(.headline)
+                    .foregroundStyle(value > 0 ? .primary : .secondary)
+                Text(label)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .adaptiveMaterialSurface()
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .adaptiveMaterialSurface()
+        .buttonStyle(.plain)
+        .help(UIStrings.text("detail.countBadge.help", "Show \(label)"))
     }
 }
 
@@ -578,7 +865,7 @@ private struct SkillDetailCard: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .adaptiveMaterialSurface()
         }
-        .frame(maxWidth: 900, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -628,7 +915,7 @@ private struct ToolGlobalPreviewCard: View {
             }
         }
         .padding()
-        .frame(maxWidth: 900, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .adaptiveMaterialSurface()
         .sheet(item: $preview) { preview in
             ToolGlobalInstallPreviewSheet(
@@ -1017,7 +1304,7 @@ private struct FindingsSection: View {
                                 FindingCard(finding: finding, severityTitle: group.title)
                             }
                         }
-                        .frame(maxWidth: 900, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             }
@@ -1061,7 +1348,7 @@ private struct FindingsSection: View {
                     .lineLimit(1)
             }
         }
-        .frame(maxWidth: 900, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func clampFilters() {
@@ -1103,7 +1390,7 @@ private struct FindingCard: View {
             .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
         }
         .padding()
-        .frame(maxWidth: 900, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .adaptiveMaterialSurface()
     }
 }
@@ -1181,7 +1468,7 @@ private struct PermissionSummaryCard: View {
             }
         }
         .padding()
-        .frame(maxWidth: 900, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .adaptiveMaterialSurface()
     }
 }
@@ -1214,7 +1501,7 @@ private struct ConflictsSection: View {
                         }
                     }
                     .padding()
-                    .frame(maxWidth: 900, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .adaptiveMaterialSurface()
                 }
             }
@@ -1222,7 +1509,7 @@ private struct ConflictsSection: View {
     }
 }
 
-private struct SnapshotsSection: View {
+struct AgentConfigHistorySection: View {
     let snapshots: [ConfigSnapshotRecord]
     let isWriting: Bool
     let onPreview: (String) async throws -> SnapshotRollbackPreviewRecord
@@ -1276,7 +1563,7 @@ private struct SnapshotsSection: View {
                         }
                     }
                     .padding()
-                    .frame(maxWidth: 900, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .adaptiveMaterialSurface()
                 }
             }

@@ -4,7 +4,15 @@
 >
 > 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.10 Skill execution safety boundary documented；next numbered V2 is V2.11 future desktop shell / local sharing planning；real local Computer Use validation passed on 2026-06-09；V2.9 Tool-global import/export/install integrated**。macOS native baseline、事件/刷新 summary 体验、发布前安全门禁、Native SwiftPM test hardening、非 Claude adapter 证据门、分发 runbook、首个 Codex adapter 实现切片、V2.1 Claude/Codex adapter experience、V2.2 project context、V2.3 adapter hardening、V2.4 opencode read-only adapter、V2.5 audit hardening、V2.6 release readiness docs、V2.7 disabled-by-default LLM service/UI gate、V2.8 rules/permissions governance、V2.9 Tool-global skill pool 和 V2.10 docs/release consistency 均已集成。V2.10 锁定 skill execution 安全边界：默认不真实执行；任何未来执行请求必须逐次人工确认并展示 cwd/env/network/files preview；blocked/cancelled/failure attempts 必须审计；LLM 不能触发执行。真实 sandbox runner、successful execution output log、GitHub clone import、签名化公开分发、opencode writable install 和 script file install 仍不做。真实本机 app 的 Computer Use 操作验证已在 2026-06-09 对当前 mainline app 通过；后续用户可见、UI 或 service protocol 变更仍需重跑，且不能用 smoke 截图替代。签名、公证、DMG/ZIP、release artifact 自动化等公开发布事务仍延后。
+> 当前阶段：**V2.10 Skill execution safety boundary documented**。
+>
+> 近期主线：在 macOS app 中补齐多 agent 支持，优先推进 Pi、opencode writable、Hermes 和 OpenClaw 的证据与适配。
+>
+> 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.10 各阶段能力、V2.9 Tool-global skill pool。
+>
+> V2.10 安全边界：默认不真实执行 skill 脚本；任何未来执行请求必须逐次人工确认，并先展示 cwd/env/network/files preview；blocked/cancelled/failure attempts 必须审计；LLM 不能触发执行。
+>
+> 真实本机 app 的 Computer Use 操作验证已在 2026-06-09 对当前 mainline app 通过。后续用户可见、UI 或 service protocol 变更仍需重跑，且不能用 smoke 截图替代。
 
 ## 0. 设计阶段（已完成）
 
@@ -229,7 +237,6 @@
   - 2026-06-08 安全门切片：Claude config write/toggle/rollback 已补写路径校验，要求 snapshot rollback 目标等于当前 context 的 Claude config path，并拒绝 symlink config dir/file/lock file。
   - 2026-06-08 安全门切片：scanner 非配置路径读取面已收紧为内置 root 真实路径必须仍在对应 home / project base 内；UserHome root 允许跟随仍在当前 user home 内的 symlink，Project root 只允许项目 root 内 target，Extra root 只允许当前 canonical scan root 内 target，并对已访问目录去重，降低 symlink 循环 DoS 风险。本切片复核 `crates/commands` / `crates/scanner` / `crates/adapters/fuzz` 后，未发现除 Claude config 外的产品任意 FS 写入面。
   - 2026-06-08 安全门切片：已为 adapter frontmatter parser 建立最小 `cargo-fuzz` scaffold，`cargo fuzz list` 能发现 `frontmatter_parser`；修复半安装 nightly 后，用显式 CLT libc++ include 完成 `cargo fuzz run frontmatter_parser -- -runs=256`，结果 `Done 256 runs in 0 second(s)`。可复现命令见 [`security-model.md`](./security-model.md#6-安全-checklist未来发布前)。
-- 分发准备：当前只维护版本号/签名/公证/DMG/ZIP/updater 的未来 runbook（见 [`distribution-runbook.md`](./distribution-runbook.md)）；签名、公证、DMG/ZIP、release artifact 自动化等实际发布事务等产品更成熟后再处理。
 - 非 Claude adapter 证据收集：Codex / Pi / Hermes / OpenClaw / opencode 的目录布局、配置 schema、启停语义和最小 fixture。
   - 2026-06-08 Codex evidence 切片：官方 docs + 本地 `codex-cli 0.137.0` disposable HOME/CODEX_HOME 验证已确认 user/project `.agents/skills` read-only roots、`SKILL.md` 格式、用户级 `$CODEX_HOME/config.toml` / `~/.codex/config.toml` 写入禁用/恢复语义。第一版 Codex adapter 决策为 user-config writable；项目级 `.codex/config.toml` toggle、plugin/admin roots、`$CODEX_HOME/skills` compatibility root 仍不进入首版能力。
   - 2026-06-08 Pi / opencode evidence 切片：官方资料足够规划 read-only scanner/parser，但 writable adapter 仍 blocked，需 disposable local round-trip 和重复 root 策略。
@@ -239,17 +246,16 @@
 
 **退出条件**
 - [x] scan / watcher / refresh 关键路径有用户可见 summary 状态、错误和恢复验证；实时 watcher/event stream 明确 defer 到 V2 后续设计。
-- [x] 发布前安全 checklist 中 high/critical audit、canonicalize 和 fuzz 有明确结果或决策；签名/公证/打包策略已 deferred 到产品成熟后的公开发布阶段。
+- [x] 发布前安全 checklist 中 high/critical audit、canonicalize 和 fuzz 有明确结果或决策。
 - [x] 至少一个非 Claude adapter 完成 spec 证据清单；当前 Codex 已完成 writable adapter 切片，opencode 已完成 read-only native-root adapter 切片，当前 mainline 真实本机 UI 操作验证已在 2026-06-09 补跑通过。Pi / Hermes / OpenClaw 仍不得按猜测实现。
 - [x] SwiftPM test target 覆盖核心 native view model/list model 行为，Node 脚本保留为集成/布局辅助。
-- [x] 分发前 runbook 明确版本号、签名、公证、DMG/ZIP 和本地验证步骤（当前尚未 public release）。
 
 ## 4. V2 — "全 agent + 生态"
 
-**当前 V2 状态（2026-06-09）**：Codex adapter 首个实现切片、V2.1 Claude/Codex adapter experience、V2.2 project context、V2.3 adapter hardening、V2.4 opencode read-only adapter、V2.5 audit hardening、V2.6 release readiness docs、V2.7 LLM local assist gate、V2.8 rules/permissions governance implementation、V2.9 Tool-global skill pool 和 V2.10 skill execution safety docs/release consistency 已通过多工作树并行推进并完成 closeout，且当前 mainline app 的真实本机 Computer Use 操作验证已在 2026-06-09 通过。V2 编号内剩余的明确小版本只有 **V2.11 future desktop shell and local sharing planning**；未来 Computer Use 重跑、真实 sandbox runner、release gate/public distribution、Pi disposable local round-trip、opencode writable evidence、Hermes/OpenClaw maintainer spec 属于跨版本 backlog，不再误判为 V2.1-V2.10 未完成。可执行任务清单见 [`development-tasks.md`](./development-tasks.md)。V2.10 已完成安全边界文档同步：default-deny，不真实执行；逐次人工确认；cwd/env/network/files preview；blocked/cancelled/failure attempt audit；LLM 不可触发执行。真实 sandbox runner、successful execution output log 和 public distribution automation 仍 deferred。V2.8 已完成 LLM status protocol compatibility、permissions roundtrip for V2.8 rules、explicit severity ordering、findings filtering/grouping UI、`app.stateSnapshot` refresh optimization，以及七条新本地规则：`frontmatter.tools-not-empty`、`permissions.network-declared`、`permissions.exec-needs-human`、`name.canonical-case`、`script.no-shebang`、`body.too-long`、`dependency.unknown`。Codex adapter core、commands/service、cwd→repo-root project discovery、macOS UI scan-all、agent filter、restart note、project context、config patch hardening、状态表达、安全回归、opencode native-root read-only 扫描、scanner/config/snapshot/service/UI/docs audit hardening、手工 release checklist、adapter changelog tracking、默认关闭的 LLM service/UI gate 和 request prepare/estimate 均已落地。opencode 范围限制为 `~/.config/opencode/skills` 和项目 `.opencode/skills`；不扫描 `.agents` / `.claude` compatibility roots，不做 writable toggle。
+**当前 V2 状态（2026-06-09）**：Codex adapter 首个实现切片、V2.1 Claude/Codex adapter experience、V2.2 project context、V2.3 adapter hardening、V2.4 opencode read-only adapter、V2.5 audit hardening、V2.6 manual readiness docs、V2.7 LLM local assist gate、V2.8 rules/permissions governance implementation、V2.9 Tool-global skill pool 和 V2.10 skill execution safety docs/release consistency 已通过多工作树并行推进并完成 closeout，且当前 mainline app 的真实本机 Computer Use 操作验证已在 2026-06-09 通过。当前近期主线调整为 **Comprehensive Agent Adapter Support**：优先补齐 Pi disposable local round-trip、opencode writable evidence/implementation、Hermes maintainer-confirmed spec、OpenClaw maintainer-confirmed spec，并在证据充分时推进 macOS app 内的支持。未来 Computer Use 重跑、真实 sandbox runner、GitHub clone import、script-file install 仍按跨版本 backlog 管理，不再误判为 V2.1-V2.10 未完成。可执行任务清单见 [`development-tasks.md`](./development-tasks.md)。V2.10 已完成安全边界文档同步：default-deny，不真实执行；逐次人工确认；cwd/env/network/files preview；blocked/cancelled/failure attempt audit；LLM 不可触发执行。真实 sandbox runner 和 successful execution output log 仍 deferred。V2.8 已完成 LLM status protocol compatibility、permissions roundtrip for V2.8 rules、explicit severity ordering、findings filtering/grouping UI、`app.stateSnapshot` refresh optimization，以及七条新本地规则：`frontmatter.tools-not-empty`、`permissions.network-declared`、`permissions.exec-needs-human`、`name.canonical-case`、`script.no-shebang`、`body.too-long`、`dependency.unknown`。Codex adapter core、commands/service、cwd→repo-root project discovery、macOS UI scan-all、agent filter、restart note、project context、config patch hardening、状态表达、安全回归、opencode native-root read-only 扫描、scanner/config/snapshot/service/UI/docs audit hardening、adapter changelog tracking、默认关闭的 LLM service/UI gate 和 request prepare/estimate 均已落地。opencode 范围限制为 `~/.config/opencode/skills` 和项目 `.opencode/skills`；不扫描 `.agents` / `.claude` compatibility roots；writable toggle/install 现已提升为近期证据与实现优先项，但在证据闭环前仍保持只读。
 
 **V2 剩余开发判定**
-- 编号小版本：仅剩 V2.11。
+- 近期主线：Comprehensive Agent Adapter Support，优先补齐 Pi、opencode writable、Hermes、OpenClaw。
 - 跨版本 backlog：不改变 V2.1-V2.10 closeout 状态，按 [`development-tasks.md`](./development-tasks.md) 的优先级单独推进。
 - 验证口径：代码/UI/协议变更继续跑 `pnpm check:macos`；用户可见、UI 或 service protocol 变更继续重跑真实本机 Computer Use。若未来 macOS/AX 无法解析窗口，必须重新记录 blocker，不能用 smoke 截图替代。
 
@@ -280,7 +286,6 @@
 - 不扫描 `/etc/codex/skills`、plugin-distributed skills 或 `$CODEX_HOME/skills`，除非另有产品决策。
 - 不从 `agents/openai.yaml`、未知 frontmatter 字段或 Codex plugin metadata 推导权限、依赖或启停状态。
 - 本切片不实现 Pi / opencode / Hermes / OpenClaw adapter。
-- 不实现签名、公证、DMG/ZIP、release artifact 自动化。
 
 **退出条件**
 - [x] Codex global/project skills 能进入 catalog，并与 Claude Code skills 共存。
@@ -457,14 +462,13 @@
 
 ### 4.6 Release readiness（非公开发布自动化）
 
-**目标**：继续准备发布纪律，但不提前处理签名、公证、DMG/ZIP、release artifact 自动化。
+**目标**：继续准备本地交付纪律，不引入正式发布打包流程。
 
-**状态**：complete / docs-only release readiness。2026-06-08 已新增手工 release checklist 和 V2 adapter changelog tracking；签名、公证、DMG/ZIP、updater 和 release artifact 自动化仍延后。
+**状态**：complete / docs-only readiness。2026-06-08 已新增手工 readiness checklist 和 V2 adapter changelog tracking。
 
 **范围**
 - 版本号策略、changelog 模板、手工 release checklist。
 - `pnpm check:macos` 继续作为本地质量门禁。
-- 分发 runbook 保持 future-ready，但实际签名/公证/DMG/ZIP 等到产品更成熟后处理。
 
 **退出条件**
 - [x] 手工 release checklist 可执行，且不声称已有正式分发自动化（见 [`release-checklist.md`](./release-checklist.md)）。
@@ -541,11 +545,11 @@
 
 **目标**：把 `Scope::ToolGlobal` 从数据模型保留位推进为产品能力，用于本地导入、共享池和跨 agent 复用，但不绕过各 agent 的真实配置语义。
 
-**状态（2026-06-09）**：complete / automated validation passed。已完成 tool-global catalog/staging 基座、本地目录 import + audit、可复现 export bundle/manifest、manifest reimport 稳定性、Claude/Codex verified install flow、native macOS read-only preview/confirmation UI 和 service protocol fixtures；主线 `pnpm check:macos` 已通过。GitHub clone import、签名化公开分发、opencode writable install 和 script file install 仍不进入 V2.9。
+**状态（2026-06-09）**：complete / automated validation passed。已完成 tool-global catalog/staging 基座、本地目录 import + audit、可复现 export bundle/manifest、manifest reimport 稳定性、Claude/Codex verified install flow、native macOS read-only preview/confirmation UI 和 service protocol fixtures；主线 `pnpm check:macos` 已通过。GitHub clone import、opencode writable install 和 script file install 仍不进入 V2.9。
 
 **范围**
 - Skill 导入：从本地目录或 GitHub repo 导入到 tool-global staging area，并运行规则审计。
-- Skill 导出：生成可复现 bundle/manifest，暂不做签名化公开分发。
+- Skill 导出：生成可复现 bundle/manifest。
 - 定义 tool-global 与 agent-global / agent-project 的优先级、冲突展示和复制/安装到具体 agent 的流程。
 - 所有导入内容默认 read-only preview；安装到 agent 前需要用户确认目标和写入路径。
 

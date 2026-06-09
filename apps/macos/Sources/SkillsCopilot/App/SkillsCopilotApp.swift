@@ -50,11 +50,6 @@ struct SkillsCopilotApp: App {
                 }
                 .keyboardShortcut("3", modifiers: [.command])
 
-                Button(UIStrings.menuShowSnapshots) {
-                    store.selectedDetailSection = .snapshots
-                }
-                .keyboardShortcut("4", modifiers: [.command])
-
                 Divider()
 
                 Button(UIStrings.menuClearSearch) {

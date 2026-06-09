@@ -1,8 +1,14 @@
 # AI 层：规则引擎 + 可选 LLM
 
-> 原则：**默认离线，所有"扫描/分析/校验"类能力走规则引擎**。LLM 是可选增强，仅在用户显式开启时调用，并且只读**用户授权范围内的内容**。
+> 原则：**默认离线，所有“扫描 / 分析 / 校验”类能力走规则引擎**。
 >
-> V2.7 当前实现边界：本阶段只落地 disabled-by-default 的 service/UI gate 和 request prepare/estimate 能力。它可以在用户主动触发 Analyze / Recommend / conflict explanation / draft frontmatter 前展示 provider、model、token/cost 估算和不可用原因；**不实现真实 provider、网络调用或凭据保存**。
+> LLM 是可选增强，仅在用户显式开启时调用，并且只读**用户授权范围内的内容**。
+>
+> V2.7 当前实现边界：
+>
+> - 只落地 disabled-by-default 的 service/UI gate 和 request prepare/estimate 能力。
+> - 用户主动触发 Analyze / Recommend / conflict explanation / draft frontmatter 前，可以展示 provider、model、token/cost 估算和不可用原因。
+> - **不实现真实 provider、网络调用或凭据保存**。
 
 ## 1. 双层分工
 
@@ -51,7 +57,12 @@ pub enum Severity { Info, Warn, Error }
 | `name.collision` | 跨 agent/scope 同名 → Info，自动归入冲突分组 |
 | `fingerprint.changed` | 重扫发现 fingerprint 变化 → Info |
 
-当前实现中 `frontmatter.required-fields`、`path.outside-workspace`、`fingerprint.changed` 是 `Rule` trait 实现；`name.collision` 由 `append_name_collision_results()` 在同一次 MVP 规则入口中聚合同名实例、刷新 definition / conflict，并产出 info finding。每条 MVP 规则都有单元测试或命令层集成测试。规则结果写入 `rule_finding`，同名实例同步刷新 `skill_definition` / `conflict_group`。
+当前实现：
+
+- `frontmatter.required-fields`、`path.outside-workspace`、`fingerprint.changed` 是 `Rule` trait 实现。
+- `name.collision` 由 `append_name_collision_results()` 在同一次 MVP 规则入口中聚合同名实例、刷新 definition / conflict，并产出 info finding。
+- 每条 MVP 规则都有单元测试或命令层集成测试。
+- 规则结果写入 `rule_finding`，同名实例同步刷新 `skill_definition` / `conflict_group`。
 
 后续候选规则（V1/V2）：`frontmatter.tools-not-empty`、`permissions.network-declared`、`permissions.exec-needs-human`、`name.canonical-case`、`script.no-shebang`、`body.too-long`、`body.too-short`、`dependency.unknown`。
 

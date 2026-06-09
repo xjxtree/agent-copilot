@@ -6,6 +6,7 @@ struct SettingsView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var draft = ""
     @State private var hasEditedDraft = false
+    @State private var showsServiceDiagnostics = false
 
     private var validationMessage: String? {
         guard let data = draft.data(using: .utf8) else {
@@ -25,9 +26,9 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            serviceSection
-            Divider()
             editorSection
+            Divider()
+            serviceSection
         }
         .padding(24)
         .frame(minWidth: 760, idealWidth: 860, minHeight: 620, idealHeight: 680)
@@ -51,9 +52,7 @@ struct SettingsView: View {
     }
 
     private var serviceSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(UIStrings.service)
-                .font(.headline)
+        DisclosureGroup(isExpanded: $showsServiceDiagnostics) {
             Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
                 SettingsMetadataRow(label: UIStrings.version, value: store.status?.version ?? UIStrings.unknown)
                 SettingsMetadataRow(label: UIStrings.protocolLabel, value: "\(store.status?.protocolVersion ?? 0)")
@@ -61,6 +60,10 @@ struct SettingsView: View {
                 SettingsMetadataRow(label: UIStrings.userHome, value: store.status?.userHome ?? UIStrings.unknown)
                 SettingsMetadataRow(label: UIStrings.methods, value: "\(store.status?.supportedMethods.count ?? 0)")
             }
+            .padding(.top, 8)
+        } label: {
+            Label(UIStrings.text("settings.serviceDiagnostics", "Service Diagnostics"), systemImage: "wrench.and.screwdriver")
+                .font(.headline)
         }
     }
 

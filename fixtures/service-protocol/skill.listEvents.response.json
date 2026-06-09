@@ -1,0 +1,21 @@
+{
+  "id": "fixture-skill-list-events",
+  "ok": true,
+  "result": [
+    {
+      "id": 1,
+      "instance_id": "skill-instance-id",
+      "kind": "toggle",
+      "payload": {
+        "enabled": false,
+        "agent": "claude-code",
+        "scope": "agent-global",
+        "target": "/tmp/skills-copilot-home/.claude/settings.json",
+        "skill_name": "fixture-skill",
+        "config_scope": "agent-global",
+        "previous_enabled": true
+      },
+      "occurred_at": 1780590000000
+    }
+  ]
+}

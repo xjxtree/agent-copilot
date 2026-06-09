@@ -105,7 +105,8 @@ struct SkillStoreTests {
         try expectEqual(countOccurrences("catalog.listSkills", in: calls), 0, "Reload collection refresh should not launch a separate skills list sidecar.")
         try expectEqual(countOccurrences("catalog.listFindings", in: calls), 0, "Reload collection refresh should not launch a separate findings list sidecar.")
         try expectEqual(countOccurrences("catalog.listConflicts", in: calls), 0, "Reload collection refresh should not launch a separate conflicts list sidecar.")
-        try expectEqual(countOccurrences("snapshot.list", in: calls), 0, "Reload collection refresh should not launch a separate snapshots list sidecar.")
+        try expectEqual(countMethodCalls("snapshot.list", in: calls), 0, "Reload collection refresh should not launch a global snapshots list sidecar.")
+        try expectEqual(countMethodCalls("snapshot.listAgentConfig", in: calls), 1, "Reload should refresh the selected agent config history.")
         try expectContains(calls, "llm.status", "Reload should preserve the separate LLM status behavior.")
         try expectContains(calls, "project.getContext", "Reload should preserve the separate project context behavior.")
     }
@@ -179,7 +180,8 @@ struct SkillStoreTests {
         try expectEqual(countOccurrences("catalog.listSkills", in: fake.calls()), 0, "Scan refresh should not launch a separate skills list sidecar.")
         try expectEqual(countOccurrences("catalog.listFindings", in: fake.calls()), 0, "Scan refresh should not launch a separate findings list sidecar.")
         try expectEqual(countOccurrences("catalog.listConflicts", in: fake.calls()), 0, "Scan refresh should not launch a separate conflicts list sidecar.")
-        try expectEqual(countOccurrences("snapshot.list", in: fake.calls()), 0, "Scan refresh should not launch a separate snapshots list sidecar.")
+        try expectEqual(countMethodCalls("snapshot.list", in: fake.calls()), 0, "Scan refresh should not launch a global snapshots list sidecar.")
+        try expectEqual(countMethodCalls("snapshot.listAgentConfig", in: fake.calls()), 1, "Scan refresh should refresh the selected agent config history.")
     }
 
     private func searchAndFilterChangesNormalizeSelectionAndDetail() async throws {
@@ -305,6 +307,7 @@ struct SkillStoreTests {
         fake.activate(scenario: "normal")
 
         let store = SkillStore(service: ServiceClient())
+        store.agentFilter = .codex
         store.selectedSkillID = "gamma"
         await store.reload()
 
@@ -330,6 +333,7 @@ struct SkillStoreTests {
         fake.activate(scenario: "opencode")
 
         let store = SkillStore(service: ServiceClient())
+        store.agentFilter = .opencode
         store.selectedSkillID = "omega"
         await store.reload()
 
@@ -357,6 +361,7 @@ struct SkillStoreTests {
         fake.activate(scenario: "tool-global")
 
         let store = SkillStore(service: ServiceClient())
+        store.agentFilter = .all
         store.selectedSkillID = "tool-alpha"
         await store.reload()
 
@@ -523,6 +528,10 @@ struct SkillStoreTests {
         haystack.components(separatedBy: needle).count - 1
     }
 
+    private func countMethodCalls(_ method: String, in calls: String) -> Int {
+        countOccurrences("\"method\":\"\(method)\"", in: calls)
+    }
+
     private func permissionMarker(_ detail: SkillDetailRecord?) -> String? {
         guard
             case .object(let permissions)? = detail?.permissions,
@@ -594,7 +603,7 @@ private final class FakeServiceScript {
         }
 
         status_response() {
-          respond '{"id":"test","ok":true,"result":{"protocol_version":1,"version":"test","app_data_dir":"/tmp/skills-copilot","catalog_path":"/tmp/skills-copilot/catalog.sqlite","user_home":"/tmp/home","supported_methods":["app.stateSnapshot","service.status","catalog.listSkills","catalog.scanAll","catalog.getSkill","catalog.listFindings","catalog.listConflicts","snapshot.list","config.toggleSkill","project.getContext","project.setContext","project.clearContext","project.validateContext"]}}'
+          respond '{"id":"test","ok":true,"result":{"protocol_version":1,"version":"test","app_data_dir":"/tmp/skills-copilot","catalog_path":"/tmp/skills-copilot/catalog.sqlite","user_home":"/tmp/home","supported_methods":["app.stateSnapshot","service.status","catalog.listSkills","catalog.scanAll","catalog.getSkill","catalog.listFindings","catalog.listConflicts","skill.listEvents","snapshot.list","snapshot.listAgentConfig","config.toggleSkill","project.getContext","project.setContext","project.clearContext","project.validateContext"]}}'
         }
 
         project_active='{"id":"project-1","name":"Fixture Project","root_path":"/tmp/project","current_cwd":"/tmp/project","last_used_at":"2026-06-08T00:00:00Z","is_active":true,"validation_error":null}'
@@ -644,7 +653,7 @@ private final class FakeServiceScript {
             state_skills=$skills_normal
             state_findings='[]'
           fi
-          respond '{"id":"test","ok":true,"result":{"status":{"protocol_version":1,"version":"test","app_data_dir":"/tmp/skills-copilot","catalog_path":"/tmp/skills-copilot/catalog.sqlite","user_home":"/tmp/home","supported_methods":["app.stateSnapshot","service.status","catalog.listSkills","catalog.scanAll","catalog.getSkill","catalog.listFindings","catalog.listConflicts","snapshot.list","config.toggleSkill","project.getContext","project.setContext","project.clearContext","project.validateContext"]},"skills":'"$state_skills"',"findings":'"$state_findings"',"conflicts":[],"snapshots":[]}}'
+          respond '{"id":"test","ok":true,"result":{"status":{"protocol_version":1,"version":"test","app_data_dir":"/tmp/skills-copilot","catalog_path":"/tmp/skills-copilot/catalog.sqlite","user_home":"/tmp/home","supported_methods":["app.stateSnapshot","service.status","catalog.listSkills","catalog.scanAll","catalog.getSkill","catalog.listFindings","catalog.listConflicts","skill.listEvents","snapshot.list","snapshot.listAgentConfig","config.toggleSkill","project.getContext","project.setContext","project.clearContext","project.validateContext"]},"skills":'"$state_skills"',"findings":'"$state_findings"',"conflicts":[],"snapshots":[]}}'
         }
 
         detail_alpha='{"id":"alpha","agent":"claude-code","scope":"agent-global","path":"/tmp/global/alpha/SKILL.md","display_path":"/tmp/global/alpha/SKILL.md","definition_id":"def.alpha","name":"Alpha","description":"Alpha skill","state":"loaded","enabled":true,"frontmatter_raw":"name: Alpha","body":"Alpha body","permissions":{"marker":"alpha"},"fingerprint":"fp-alpha"}'
@@ -793,6 +802,12 @@ private final class FakeServiceScript {
             respond '{"id":"test","ok":true,"result":[]}'
             ;;
           *\\"catalog.listConflicts\\"*)
+            respond '{"id":"test","ok":true,"result":[]}'
+            ;;
+          *\\"skill.listEvents\\"*)
+            respond '{"id":"test","ok":true,"result":[]}'
+            ;;
+          *\\"snapshot.listAgentConfig\\"*)
             respond '{"id":"test","ok":true,"result":[]}'
             ;;
           *\\"snapshot.list\\"*)

@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    convert::TryFrom,
     path::{Path, PathBuf},
 };
 
@@ -60,6 +61,15 @@ pub struct RuleFindingRecord {
     pub message: String,
     pub suggestion: Option<String>,
     pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+pub struct SkillEventRecord {
+    pub id: i64,
+    pub instance_id: String,
+    pub kind: String,
+    pub payload: serde_json::Value,
+    pub occurred_at: i64,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize)]
@@ -553,6 +563,56 @@ impl Catalog {
         Ok(())
     }
 
+    pub fn create_skill_event(&self, draft: SkillEventDraft<'_>) -> Result<(), CatalogError> {
+        self.conn.execute(
+            "INSERT INTO skill_event (instance_id, kind, payload, occurred_at)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![
+                draft.instance_id,
+                draft.kind,
+                draft.payload,
+                draft.occurred_at_ms,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn list_skill_events(
+        &self,
+        instance_id: &str,
+        limit: Option<usize>,
+    ) -> Result<Vec<SkillEventRecord>, CatalogError> {
+        if let Some(limit) = limit {
+            let limit_i64 = i64::try_from(limit).unwrap_or(i64::MAX);
+            let mut stmt = self.conn.prepare(
+                "SELECT id, instance_id, kind, payload, occurred_at
+                 FROM skill_event
+                 WHERE instance_id = ?1
+                 ORDER BY occurred_at DESC, id DESC
+                 LIMIT ?2",
+            )?;
+            let rows = stmt.query_map(params![instance_id, limit_i64], skill_event_from_row)?;
+            let mut events = Vec::new();
+            for row in rows {
+                events.push(row?);
+            }
+            Ok(events)
+        } else {
+            let mut stmt = self.conn.prepare(
+                "SELECT id, instance_id, kind, payload, occurred_at
+                 FROM skill_event
+                 WHERE instance_id = ?1
+                 ORDER BY occurred_at DESC, id DESC",
+            )?;
+            let rows = stmt.query_map(params![instance_id], skill_event_from_row)?;
+            let mut events = Vec::new();
+            for row in rows {
+                events.push(row?);
+            }
+            Ok(events)
+        }
+    }
+
     pub fn refresh_rule_findings(&self, findings: &[RuleFindingDraft]) -> Result<(), CatalogError> {
         self.conn.execute("DELETE FROM rule_finding", [])?;
         for finding in findings {
@@ -732,7 +792,8 @@ impl Catalog {
             "SELECT id, agent, scope, target, content, reason, created_at
              FROM config_snapshot
              WHERE agent = ?1 AND target = ?2
-             ORDER BY created_at DESC",
+               AND reason IN ('pre-toggle', 'pre-config-edit')
+             ORDER BY created_at DESC, id DESC",
         )?;
         let rows = stmt.query_map(params![agent, target], |row| {
             Ok(ConfigSnapshotRecord {
@@ -752,11 +813,68 @@ impl Catalog {
         Ok(snapshots)
     }
 
+    pub fn list_agent_config_snapshots(
+        &self,
+        agent: &str,
+        scope: Option<&str>,
+    ) -> Result<Vec<ConfigSnapshotRecord>, CatalogError> {
+        if let Some(scope) = scope {
+            let mut stmt = self.conn.prepare(
+                "SELECT id, agent, scope, target, content, reason, created_at
+                 FROM config_snapshot
+                 WHERE agent = ?1 AND scope = ?2
+                   AND reason IN ('pre-toggle', 'pre-config-edit')
+                 ORDER BY created_at DESC, id DESC",
+            )?;
+            let rows = stmt.query_map(params![agent, scope], |row| {
+                Ok(ConfigSnapshotRecord {
+                    id: row.get(0)?,
+                    agent: row.get(1)?,
+                    scope: row.get(2)?,
+                    target: row.get(3)?,
+                    content: row.get(4)?,
+                    reason: row.get(5)?,
+                    created_at: row.get(6)?,
+                })
+            })?;
+            let mut snapshots = Vec::new();
+            for row in rows {
+                snapshots.push(row?);
+            }
+            Ok(snapshots)
+        } else {
+            let mut stmt = self.conn.prepare(
+                "SELECT id, agent, scope, target, content, reason, created_at
+                 FROM config_snapshot
+                 WHERE agent = ?1
+                   AND reason IN ('pre-toggle', 'pre-config-edit')
+                 ORDER BY created_at DESC, id DESC",
+            )?;
+            let rows = stmt.query_map(params![agent], |row| {
+                Ok(ConfigSnapshotRecord {
+                    id: row.get(0)?,
+                    agent: row.get(1)?,
+                    scope: row.get(2)?,
+                    target: row.get(3)?,
+                    content: row.get(4)?,
+                    reason: row.get(5)?,
+                    created_at: row.get(6)?,
+                })
+            })?;
+            let mut snapshots = Vec::new();
+            for row in rows {
+                snapshots.push(row?);
+            }
+            Ok(snapshots)
+        }
+    }
+
     pub fn list_all_config_snapshots(&self) -> Result<Vec<ConfigSnapshotRecord>, CatalogError> {
         let mut stmt = self.conn.prepare(
             "SELECT id, agent, scope, target, content, reason, created_at
              FROM config_snapshot
-             ORDER BY created_at DESC",
+             WHERE reason IN ('pre-toggle', 'pre-config-edit')
+             ORDER BY created_at DESC, id DESC",
         )?;
         let rows = stmt.query_map([], |row| {
             Ok(ConfigSnapshotRecord {
@@ -861,6 +979,14 @@ pub struct ConfigSnapshotDraft<'a> {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+pub struct SkillEventDraft<'a> {
+    pub instance_id: &'a str,
+    pub kind: &'a str,
+    pub payload: &'a str,
+    pub occurred_at_ms: i64,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct RuleFindingDraft {
     pub id: String,
     pub instance_id: Option<String>,
@@ -958,6 +1084,22 @@ fn skill_instance_from_row(row: &Row<'_>) -> rusqlite::Result<SkillInstance> {
         mtime: row.get(16)?,
         first_seen: row.get(17)?,
         last_seen: row.get(18)?,
+    })
+}
+
+fn skill_event_from_row(row: &Row<'_>) -> rusqlite::Result<SkillEventRecord> {
+    let payload_raw: String = row.get(3)?;
+    Ok(SkillEventRecord {
+        id: row.get(0)?,
+        instance_id: row.get(1)?,
+        kind: row.get(2)?,
+        payload: serde_json::from_str(&payload_raw).unwrap_or_else(|_| {
+            serde_json::json!({
+                "raw": payload_raw,
+                "parse_error": true
+            })
+        }),
+        occurred_at: row.get(4)?,
     })
 }
 
