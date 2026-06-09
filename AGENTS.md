@@ -4,8 +4,10 @@ This file is the shared project instruction entrypoint for coding agents such as
 
 ## Project State
 
-- Current phase: V2.10 skill execution safety boundary and release/docs consistency are documented.
+- Current phase: V2.11 Adapter Capability Matrix is complete; V2.12 opencode writable support is next. is in progress.
 - Near-term priority: comprehensive agent adapter support for Pi, opencode writable support, Hermes, and OpenClaw in the macOS app.
+- V2.11 scope: service/UI adapter capability matrix for Claude Code, Codex, opencode, Pi, Hermes, and OpenClaw, exposing scan/toggle/install status and blockers before new write affordances are enabled.
+- Versioned adapter plan: V2.12 opencode writable evidence and guarded implementation; V2.13 Pi disposable round-trip and adapter implementation; V2.14 Hermes maintainer-confirmed spec and implementation scope; V2.15 OpenClaw maintainer-confirmed spec and implementation scope.
 - Current mainline real local app Computer Use validation passed on 2026-06-09.
 - V2.8 rules/permissions governance, V2.9 Tool-global skill pool, and V2.10 docs/release consistency are integrated.
 - Earlier integrated phases: MVP, Product UI/UX Hardening, V1 native macOS baseline, macOS Native Productization, V2 Prep security gates, refresh-summary UX, native test hardening, adapter evidence gates, first Codex adapter slice, and V2.1 through V2.7.

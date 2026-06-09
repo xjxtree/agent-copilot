@@ -90,6 +90,54 @@ pub struct AgentCatalogScanReport {
     pub skipped_roots: Vec<PathBuf>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct AdapterCapabilityRecord {
+    pub agent: &'static str,
+    pub display_name: &'static str,
+    pub status: &'static str,
+    pub scan: AdapterFeatureCapability,
+    pub project_scan: AdapterFeatureCapability,
+    pub config_toggle: AdapterFeatureCapability,
+    pub config_snapshot: AdapterFeatureCapability,
+    pub install: AdapterFeatureCapability,
+    pub writable: AdapterFeatureCapability,
+    pub blockers: Vec<&'static str>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AdapterFeatureCapability {
+    pub supported: bool,
+    pub status: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<&'static str>,
+}
+
+impl AdapterFeatureCapability {
+    fn supported(status: &'static str) -> Self {
+        Self {
+            supported: true,
+            status,
+            reason: None,
+        }
+    }
+
+    fn supported_with_reason(status: &'static str, reason: &'static str) -> Self {
+        Self {
+            supported: true,
+            status,
+            reason: Some(reason),
+        }
+    }
+
+    fn blocked(status: &'static str, reason: &'static str) -> Self {
+        Self {
+            supported: false,
+            status,
+            reason: Some(reason),
+        }
+    }
+}
+
 pub fn scan_all_to_catalog(ctx: &AdapterContext, catalog: &Catalog) -> Result<usize, CommandError> {
     Ok(scan_all_catalog_report(ctx, catalog)?.scanned_count)
 }
@@ -281,6 +329,171 @@ fn supported_scan_adapters() -> Vec<Box<dyn AgentAdapter>> {
         Box::new(ClaudeCodeAdapter),
         Box::new(CodexAdapter),
         Box::new(OpencodeAdapter),
+    ]
+}
+
+pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapabilityRecord> {
+    vec![
+        AdapterCapabilityRecord {
+            agent: AgentId::ClaudeCode.as_str(),
+            display_name: "Claude Code",
+            status: "verified",
+            scan: AdapterFeatureCapability::supported("verified"),
+            project_scan: AdapterFeatureCapability::supported("verified"),
+            config_toggle: AdapterFeatureCapability::supported("verified"),
+            config_snapshot: AdapterFeatureCapability::supported("verified"),
+            install: AdapterFeatureCapability::supported("verified"),
+            writable: AdapterFeatureCapability::supported("verified"),
+            blockers: Vec::new(),
+        },
+        AdapterCapabilityRecord {
+            agent: AgentId::Codex.as_str(),
+            display_name: "Codex",
+            status: "verified",
+            scan: AdapterFeatureCapability::supported("verified"),
+            project_scan: AdapterFeatureCapability::supported("verified"),
+            config_toggle: AdapterFeatureCapability::supported_with_reason(
+                "verified-user-config",
+                "Project skill toggles write only the user config.toml override; project-local .codex/config.toml remains blocked.",
+            ),
+            config_snapshot: AdapterFeatureCapability::supported("verified"),
+            install: AdapterFeatureCapability::supported("verified"),
+            writable: AdapterFeatureCapability::supported_with_reason(
+                "verified-user-config",
+                "Codex writes are limited to verified user config and skill roots.",
+            ),
+            blockers: vec!["Project-local .codex/config.toml toggle semantics remain unverified."],
+        },
+        AdapterCapabilityRecord {
+            agent: AgentId::Opencode.as_str(),
+            display_name: "opencode",
+            status: "read-only",
+            scan: AdapterFeatureCapability::supported("verified"),
+            project_scan: AdapterFeatureCapability::supported("verified"),
+            config_toggle: AdapterFeatureCapability::blocked(
+                "blocked",
+                "opencode permission.skill patching, re-enable behavior, wildcard precedence, config ownership, and rollback path are not verified.",
+            ),
+            config_snapshot: AdapterFeatureCapability::blocked(
+                "blocked",
+                "No rollback-safe opencode config write path is verified yet.",
+            ),
+            install: AdapterFeatureCapability::blocked(
+                "blocked",
+                "opencode install remains blocked until writable semantics are verified.",
+            ),
+            writable: AdapterFeatureCapability::blocked(
+                "blocked",
+                "opencode is native-root read-only until disposable local evidence proves safe writes.",
+            ),
+            blockers: vec![
+                "Verify permission.skill exact patch and re-enable behavior.",
+                "Verify wildcard precedence and managed config ownership.",
+                "Verify rollback-safe config writes before enabling toggle/install.",
+            ],
+        },
+        AdapterCapabilityRecord {
+            agent: AgentId::Pi.as_str(),
+            display_name: "Pi",
+            status: "planned",
+            scan: AdapterFeatureCapability::blocked(
+                "planned",
+                "Pi scanner is not implemented; disposable local root/config round-trip is required first.",
+            ),
+            project_scan: AdapterFeatureCapability::blocked(
+                "planned",
+                "Pi project root precedence and .agents/skills de-duplication need disposable evidence.",
+            ),
+            config_toggle: AdapterFeatureCapability::blocked(
+                "blocked",
+                "Pi enable/disable JSON mutation and rollback semantics are not verified.",
+            ),
+            config_snapshot: AdapterFeatureCapability::blocked(
+                "blocked",
+                "No verified Pi config write target is available yet.",
+            ),
+            install: AdapterFeatureCapability::blocked(
+                "blocked",
+                "Pi install target roots are not enabled until adapter evidence is complete.",
+            ),
+            writable: AdapterFeatureCapability::blocked(
+                "blocked",
+                "Pi writes are blocked until the disposable local round-trip is complete.",
+            ),
+            blockers: vec![
+                "Verify Pi scan roots and malformed skill behavior.",
+                "Verify Pi settings schema and enable/disable semantics.",
+                "Verify rollback-safe global/project config writes.",
+            ],
+        },
+        AdapterCapabilityRecord {
+            agent: AgentId::Hermes.as_str(),
+            display_name: "Hermes",
+            status: "blocked",
+            scan: AdapterFeatureCapability::blocked(
+                "blocked",
+                "Hermes has no maintainer-confirmed skill/package layout or discovery roots.",
+            ),
+            project_scan: AdapterFeatureCapability::blocked(
+                "blocked",
+                "Hermes project discovery semantics are not confirmed.",
+            ),
+            config_toggle: AdapterFeatureCapability::blocked(
+                "blocked",
+                "Hermes toggle semantics and config schema are not confirmed.",
+            ),
+            config_snapshot: AdapterFeatureCapability::blocked(
+                "blocked",
+                "No verified Hermes rollback-safe config target exists.",
+            ),
+            install: AdapterFeatureCapability::blocked(
+                "blocked",
+                "Hermes install semantics are not confirmed.",
+            ),
+            writable: AdapterFeatureCapability::blocked(
+                "blocked",
+                "Hermes remains blocked pending maintainer-confirmed spec.",
+            ),
+            blockers: vec![
+                "Obtain maintainer-confirmed roots and config schema.",
+                "Confirm whether Hermes exposes skills, service tasks, commands, or cron jobs as SkillInstance units.",
+                "Confirm toggle and rollback semantics before implementation.",
+            ],
+        },
+        AdapterCapabilityRecord {
+            agent: AgentId::Openclaw.as_str(),
+            display_name: "OpenClaw",
+            status: "blocked",
+            scan: AdapterFeatureCapability::blocked(
+                "blocked",
+                "OpenClaw candidate roots exist, but the skill schema is not maintainer-confirmed.",
+            ),
+            project_scan: AdapterFeatureCapability::blocked(
+                "blocked",
+                "OpenClaw project discovery semantics are not confirmed.",
+            ),
+            config_toggle: AdapterFeatureCapability::blocked(
+                "blocked",
+                "OpenClaw plugin config evidence is not a verified skill toggle contract.",
+            ),
+            config_snapshot: AdapterFeatureCapability::blocked(
+                "blocked",
+                "No verified OpenClaw rollback-safe skill config target exists.",
+            ),
+            install: AdapterFeatureCapability::blocked(
+                "blocked",
+                "OpenClaw install semantics are not confirmed.",
+            ),
+            writable: AdapterFeatureCapability::blocked(
+                "blocked",
+                "OpenClaw remains blocked pending maintainer-confirmed spec.",
+            ),
+            blockers: vec![
+                "Confirm OpenClaw roots and skills list output.",
+                "Confirm SKILL.md schema and malformed/conflict behavior.",
+                "Confirm toggle, permission, and rollback-safe config semantics.",
+            ],
+        },
     ]
 }
 

@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-**当前阶段**：V2.10 skill execution safety boundary documented。
+**当前阶段**：V2.11 Adapter Capability Matrix 进行中。
 
-**近期主线**：在 macOS app 中补齐多 agent 支持，优先推进 Pi、opencode writable、Hermes 和 OpenClaw 的证据与适配。
+**近期主线**：在 macOS app 中补齐多 agent 支持，按 V2.11-V2.15 版本线推进 adapter capability matrix、opencode writable、Pi、Hermes 和 OpenClaw 的证据与适配。
 
 **已集成能力**：
 
@@ -17,6 +17,7 @@
 - V2.8 rules/permissions governance。
 - V2.9 Tool-global local import/export/install flow。
 - V2.10 skill execution safety docs/release consistency。
+- V2.11 Adapter capability matrix 首个 service/UI 切片，用于展示六个 agent 的 scan/toggle/install 状态和 blocker。
 - 2026-06-09 真实本机 app Computer Use validation 已通过。
 
 **当前产品 UI**：SwiftUI/AppKit macOS 原生壳 + Rust service protocol。
@@ -30,9 +31,20 @@
 | Claude Code | 已支持 | 支持 scan、catalog、toggle、settings editor、snapshot rollback。 |
 | Codex | 已支持已验证范围 | 支持 verified user/project roots、cwd→repo-root discovery、`catalog.scanAll`、agent filter、project context 归属和用户级 `config.toml` toggle。 |
 | opencode | read-only 已支持 | 只扫描 native roots：`~/.config/opencode/skills` 和当前项目 `.opencode/skills`；writable toggle 仍需证据闭环。 |
-| Pi | 近期优先 | 需要 disposable local round-trip 验证 roots、schema、toggle 和 rollback 语义。 |
-| Hermes | 近期优先 | 需要 maintainer-confirmed roots、config schema、package/task model 和 toggle 语义。 |
-| OpenClaw | 近期优先 | 需要 maintainer-confirmed skill schema、config safety rules、install/toggle 语义和 credential handling guidance。 |
+| Pi | planned | 已进入 UI/service capability matrix；需要 disposable local round-trip 验证 roots、schema、toggle 和 rollback 语义。 |
+| Hermes | blocked | 已进入 UI/service capability matrix；需要 maintainer-confirmed roots、config schema、package/task model 和 toggle 语义。 |
+| OpenClaw | blocked | 已进入 UI/service capability matrix；需要 maintainer-confirmed skill schema、config safety rules、install/toggle 语义和 credential handling guidance。 |
+
+## 近期版本规划
+
+| 版本 | 目标 | 状态 |
+| --- | --- | --- |
+| V2.10 | Skill execution safety boundary / docs consistency | 已关闭 |
+| V2.11 | Adapter Capability Matrix：服务协议和 macOS UI 展示六个 agent 的能力状态与 blocker | 进行中 |
+| V2.12 | opencode writable evidence + guarded toggle/install | 下一优先级 |
+| V2.13 | Pi disposable local round-trip + adapter implementation | 计划中 |
+| V2.14 | Hermes maintainer-confirmed spec + adapter implementation scope | 计划中 |
+| V2.15 | OpenClaw maintainer-confirmed spec + adapter implementation scope | 计划中 |
 
 ## 它做什么
 

@@ -4,11 +4,11 @@
 >
 > 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.10 Skill execution safety boundary documented**。
+> 当前阶段：**V2.11 Adapter Capability Matrix 进行中**。
 >
-> 近期主线：在 macOS app 中补齐多 agent 支持，优先推进 Pi、opencode writable、Hermes 和 OpenClaw 的证据与适配。
+> 近期主线：在 macOS app 中补齐多 agent 支持，按 V2.11-V2.15 版本线推进 adapter capability matrix、opencode writable、Pi、Hermes 和 OpenClaw 的证据与适配。
 >
-> 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.10 各阶段能力、V2.9 Tool-global skill pool。
+> 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.10 各阶段能力、V2.9 Tool-global skill pool。V2.11 Adapter capability matrix 的首个 service/UI 切片已进入开发，后续候选变更仍需重新验证。
 >
 > V2.10 安全边界：默认不真实执行 skill 脚本；任何未来执行请求必须逐次人工确认，并先展示 cwd/env/network/files preview；blocked/cancelled/failure attempts 必须审计；LLM 不能触发执行。
 >
@@ -578,7 +578,74 @@
 - [x] blocked/cancelled/failure attempts 有审计记录 contract；真实 runner 未实现前不得产生 `completed` execution record。
 - [ ] 真实 sandbox runner、interpreter allowlist、stdout/stderr policy 和 OS-level resource limits 完成实现与验证。
 
-### 4.11 未来桌面壳与本地共享
+### 4.11 V2.11 Adapter Capability Matrix
+
+**目标**：把六个 agent 的当前能力状态变成服务协议和 macOS UI 的一等信息，避免 UI 或后续 agent 仅凭名称猜测 scan/toggle/install 支持。
+
+**状态（2026-06-09）**：completed。V2.11 service/UI 切片已集成并通过 `pnpm check:macos`：`adapter.listCapabilities` 和 `service.status.adapter_capabilities` 暴露 Claude Code、Codex、opencode、Pi、Hermes、OpenClaw 的 scan、project scan、config toggle、config snapshot、install、writable 状态与 blocker；macOS 侧边栏显示所选 agent 的能力和阻塞原因。
+
+**范围**
+- 服务协议暴露 adapter capability matrix。
+- macOS agent selector 覆盖 Claude Code、Codex、opencode、Pi、Hermes、OpenClaw，但不恢复 `All` 选项。
+- UI 以能力矩阵显示 scan/toggle/install 状态和 blocker。
+- opencode 继续 read-only；Pi planned；Hermes/OpenClaw blocked。
+- 不实现 opencode/Pi/Hermes/OpenClaw 的新写入语义。
+
+**退出条件**
+- [x] `adapter.listCapabilities` 和 `service.status.adapter_capabilities` 有 contract fixtures。
+- [x] macOS UI 能展示六个 agent 的能力状态、只读/blocked 原因和当前 agent skill 列表。
+- [x] opencode toggle/install 仍被服务端稳定拒绝，且 UI 显示 read-only blocker。
+- [x] `pnpm check:macos` 通过。
+- [x] 当前会话锁屏，按本轮执行要求跳过真实交互 Computer Use validation；fixture smoke 与窗口级 capture 已通过。
+
+### 4.12 V2.12 opencode writable support
+
+**目标**：在 disposable local evidence 证明安全前提后，才允许 opencode 从 read-only 进入 guarded writable。
+
+**状态**：planned next。
+
+**范围**
+- 用临时 HOME / `XDG_CONFIG_HOME` / `OPENCODE_CONFIG_DIR` / fixture project 验证 `permission.skill` 写入语义。
+- 确认 exact patch、re-enable、wildcard precedence、managed config ownership、rollback-safe write path。
+- 证据充分后实现 guarded toggle/install；证据不足则保持 blocker。
+
+**退出条件**
+- [ ] Disposable evidence 不读取或修改真实 opencode config。
+- [ ] Toggle 前 agent-config snapshot，toggle 后 skill activity。
+- [ ] UI 和 service 都只在 writable verified 时开放 opencode 写入。
+
+### 4.13 V2.13 Pi adapter support
+
+**目标**：用 disposable local round-trip 验证 Pi roots/schema/toggle/rollback，并按证据实现 Pi adapter。
+
+**状态**：planned。
+
+**退出条件**
+- [ ] Pi scan roots、project precedence、malformed behavior 有 fixture。
+- [ ] Pi settings schema 和 enable/disable 语义完成 disposable 验证。
+- [ ] macOS UI 支持 Pi filter、status、findings、activity 和 snapshot history。
+
+### 4.14 V2.14 Hermes adapter support
+
+**目标**：先拿到 maintainer-confirmed spec，再决定 Hermes 是否映射为 SkillInstance 以及可写范围。
+
+**状态**：blocked / planned。
+
+**退出条件**
+- [ ] Maintainer-confirmed roots、schema、skill/task model 和 toggle semantics 完成。
+- [ ] 若证据支持，Hermes scanner/parser 进入 implementation；否则 blocker 明确保留。
+
+### 4.15 V2.15 OpenClaw adapter support
+
+**目标**：先拿到 maintainer-confirmed spec，再决定 OpenClaw scan/toggle/install 范围。
+
+**状态**：blocked / planned。
+
+**退出条件**
+- [ ] Maintainer-confirmed skill schema、config safety rules、install/toggle semantics 和 credential handling guidance 完成。
+- [ ] 若证据支持，OpenClaw scanner/parser 进入 implementation；否则 blocker 明确保留。
+
+### 4.16 未来桌面壳与本地共享
 
 **目标**：在 macOS 原生壳稳定后，评估 Windows/Linux shell 和本地团队共享 catalog，但继续坚持无云账号、无 telemetry、无默认联网。
 
@@ -598,7 +665,7 @@
 | 项 | 风险 | 缓解 |
 | --- | --- | --- |
 | Codex skills spec 仍在演化 | adapter 频繁 breaking | doc 里维护 spec 版本号；spec 一变先升 catalog schema |
-| Pi / opencode / Hermes / OpenClaw 的真实写入语义未知 | 适配器猜错 | V2.4 仅允许 opencode read-only native-root adapter；opencode writable、Pi、Hermes、OpenClaw 未完成 disposable round-trip 或 maintainer spec 前继续 blocked |
+| Pi / opencode / Hermes / OpenClaw 的真实写入语义未知 | 适配器猜错 | V2.4 仅允许 opencode read-only native-root adapter；adapter capability matrix 必须展示 blocker；opencode writable、Pi、Hermes、OpenClaw 未完成 disposable round-trip 或 maintainer spec 前继续 blocked |
 | Codex evidence 被误读成完整运行时支持 | 用户或 agent 误以为所有 Codex roots / project config / plugin skills 均已支持 | roadmap / AGENTS / adapter docs 明确：当前只实现 verified user/project roots + user-config writable；project config、plugin/admin/system roots 仍待后续决策 |
 | 贡献者门槛（Rust） | 社区贡献慢 | doc 写明"轻量贡献（rule / UI）只需 TS / Rust 单语言"；提供 good first issue |
 | LLM 成本失控 | 用户被烧钱 | 月度上限 + 单次上限 + 默认 LLM 关闭 |

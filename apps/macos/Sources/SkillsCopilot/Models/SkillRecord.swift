@@ -324,6 +324,40 @@ struct SkillEventRecord: Codable, Identifiable, Hashable {
     }
 }
 
+struct AdapterCapabilityRecord: Codable, Identifiable, Hashable {
+    let agent: String
+    let displayName: String
+    let status: String
+    let scan: AdapterFeatureCapability
+    let projectScan: AdapterFeatureCapability
+    let configToggle: AdapterFeatureCapability
+    let configSnapshot: AdapterFeatureCapability
+    let install: AdapterFeatureCapability
+    let writable: AdapterFeatureCapability
+    let blockers: [String]
+
+    var id: String { agent }
+
+    enum CodingKeys: String, CodingKey {
+        case agent
+        case displayName = "display_name"
+        case status
+        case scan
+        case projectScan = "project_scan"
+        case configToggle = "config_toggle"
+        case configSnapshot = "config_snapshot"
+        case install
+        case writable
+        case blockers
+    }
+}
+
+struct AdapterFeatureCapability: Codable, Hashable {
+    let supported: Bool
+    let status: String
+    let reason: String?
+}
+
 struct ScanResult: Codable, Hashable {
     let scannedCount: Int
     let skills: [SkillRecord]
@@ -406,6 +440,7 @@ struct ServiceStatus: Codable, Hashable {
     let userHome: String
     let supportedMethods: [String]
     let refresh: RefreshStatus?
+    let adapterCapabilities: [AdapterCapabilityRecord]?
 
     enum CodingKeys: String, CodingKey {
         case protocolVersion = "protocol_version"
@@ -415,6 +450,7 @@ struct ServiceStatus: Codable, Hashable {
         case userHome = "user_home"
         case supportedMethods = "supported_methods"
         case refresh
+        case adapterCapabilities = "adapter_capabilities"
     }
 }
 

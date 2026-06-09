@@ -177,6 +177,10 @@ final class ServiceClient {
         try await call(method: "service.status", params: EmptyParams())
     }
 
+    func listAdapterCapabilities() async throws -> [AdapterCapabilityRecord] {
+        try await call(method: "adapter.listCapabilities", params: EmptyParams())
+    }
+
     func appVersion() async throws -> AppVersion {
         try await call(method: "app.version", params: EmptyParams())
     }

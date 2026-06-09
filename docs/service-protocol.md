@@ -1,8 +1,8 @@
 # skills-copilot Service Protocol
 
-> Status: V2.10 skill execution safety boundary and release/docs consistency are documented.
+> Status: V2.11 Adapter Capability Matrix is in progress.
 >
-> Integrated: V2.9 Tool-global import/export/install and 2026-06-09 real local Computer Use validation for the current mainline app.
+> Integrated: V2.9 Tool-global import/export/install, V2.10 skill execution safety boundary, and 2026-06-09 real local Computer Use validation for the current mainline app. V2.11 adds adapter capability status to the service protocol and macOS UI.
 >
 > Product boundary: this protocol is the only supported boundary for the macOS native shell. Historical Tauri commands remain only in MVP documentation and git history.
 >
@@ -42,7 +42,8 @@ This stdio shape can later move behind a local socket without changing method pa
 | --- | --- | --- | --- |
 | `app.version` | No | Native macOS About / compatibility checks | app version and protocol version |
 | `app.stateSnapshot` | No | Native macOS launch/read flow | status plus current skills, findings, conflicts, and compatibility snapshot payload |
-| `service.status` | No | Diagnostics and smoke tests | protocol version, app version, app data dir, catalog path, user home, supported methods, refresh capability state, and LLM gate status |
+| `service.status` | No | Diagnostics, adapter gating, and smoke tests | protocol version, app version, app data dir, catalog path, user home, supported methods, adapter capabilities, refresh capability state, and LLM gate status |
+| `adapter.listCapabilities` | No | Native macOS agent selector/status gating | adapter capability matrix for scan, project scan, config toggle, config snapshot, install, writable state, and current blockers |
 | `llm.status` | No | Native macOS LLM affordance gating | disabled-by-default LLM status: enabled/configured/provider/model/reason/token limit/budget/credential persistence policy |
 | `llm.prepareAction` | No | Native macOS user-triggered LLM preflight | provider/model/token/cost estimate, confirmation requirement, prompt scope, privacy notes, and write-back guard for a requested LLM action |
 | `script.previewExecution` | No | Native macOS script safety preview | command/cwd/env/network/files previews, risks, and confirmation requirement |
@@ -78,6 +79,58 @@ It currently scans:
 - read-only opencode
 
 It resolves the effective `ProjectContext` before adapter scanning.
+
+## Adapter Capability Payload
+
+`adapter.listCapabilities` and `service.status.adapter_capabilities` expose the same additive protocol v1 matrix:
+
+```json
+{
+  "agent": "opencode",
+  "display_name": "opencode",
+  "status": "read-only",
+  "scan": { "supported": true, "status": "verified" },
+  "project_scan": { "supported": true, "status": "verified" },
+  "config_toggle": {
+    "supported": false,
+    "status": "blocked",
+    "reason": "opencode permission.skill patching, re-enable behavior, wildcard precedence, config ownership, and rollback path are not verified."
+  },
+  "config_snapshot": {
+    "supported": false,
+    "status": "blocked",
+    "reason": "No rollback-safe opencode config write path is verified yet."
+  },
+  "install": {
+    "supported": false,
+    "status": "blocked",
+    "reason": "opencode install remains blocked until writable semantics are verified."
+  },
+  "writable": {
+    "supported": false,
+    "status": "blocked",
+    "reason": "opencode is native-root read-only until disposable local evidence proves safe writes."
+  },
+  "blockers": [
+    "Verify permission.skill exact patch and re-enable behavior.",
+    "Verify wildcard precedence and managed config ownership.",
+    "Verify rollback-safe config writes before enabling toggle/install."
+  ]
+}
+```
+
+Current matrix:
+
+| Agent | Top-level status | Scan | Writable/toggle |
+| --- | --- | --- | --- |
+| Claude Code | `verified` | Supported | Supported through verified settings writes |
+| Codex | `verified` | Supported | Supported through user `config.toml`; project-local `.codex/config.toml` remains blocked |
+| opencode | `read-only` | Supported for native roots | Blocked until `permission.skill` writes are verified |
+| Pi | `planned` | Not implemented | Blocked pending disposable local round-trip |
+| Hermes | `blocked` | Not implemented | Blocked pending maintainer-confirmed spec |
+| OpenClaw | `blocked` | Not implemented | Blocked pending maintainer-confirmed spec |
+
+Native UI must use this matrix for affordance gating and explanations. It must not infer write support only from an agent name.
 
 The following APIs remain intentionally Claude-specific compatibility/config-editor APIs:
 
@@ -343,6 +396,7 @@ No-project behavior:
 - Error `code` values are stable and localizable by UI shells.
 - `service.status.refresh` describes current refresh capabilities. In the stdio sidecar, scan progress is summary-only and native watcher events are reported as manual refresh state rather than a live event stream.
 - `service.status.project_context` is an additive summary of the effective project context source (`env`, `stored`, or `none`), active context, recent count, and validation error if present.
+- `service.status.adapter_capabilities` is an additive matrix for native UI gating. Missing fields should be treated as no additional capability evidence, not as permission to write.
 - `service.status.llm` mirrors `llm.status` so UI shells can disable LLM affordances on launch without opening provider config or credential files.
 - `llm.prepareAction` is read-only preflight. It must never execute a provider, perform network I/O, write model output, write credentials/config, create a catalog when none exists, or return selected skill paths/body text in the response.
 - Skill/script execution is default-denied in protocol v1. No supported method may execute a skill script indirectly, and no future execution method may be exposed without the V2.10 confirmation, preview, audit, and LLM-separation rules above.

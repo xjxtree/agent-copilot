@@ -2,6 +2,8 @@
 
 > skills-copilot 支持的 6 个 agent 的适配要点。
 >
+> 当前版本线：V2.11 Adapter Capability Matrix 进行中；V2.12 opencode writable、V2.13 Pi、V2.14 Hermes、V2.15 OpenClaw 按证据门推进。
+>
 > 扫描适配器实现 `AgentAdapter`。
 >
 > 配置变更适配器实现 `AgentConfigAdapter`。
@@ -51,6 +53,42 @@ pub struct AdapterRoot {
     pub source: RootSource,                           // ~/.xxx  /  <project>/.xxx / 额外
 }
 ```
+
+服务层还暴露统一能力矩阵：
+
+```rust
+pub struct AdapterCapabilityRecord {
+    pub agent: &'static str,
+    pub display_name: &'static str,
+    pub status: &'static str,                         // verified / read-only / planned / blocked
+    pub scan: AdapterFeatureCapability,
+    pub project_scan: AdapterFeatureCapability,
+    pub config_toggle: AdapterFeatureCapability,
+    pub config_snapshot: AdapterFeatureCapability,
+    pub install: AdapterFeatureCapability,
+    pub writable: AdapterFeatureCapability,
+    pub blockers: Vec<&'static str>,
+}
+
+pub struct AdapterFeatureCapability {
+    pub supported: bool,
+    pub status: &'static str,
+    pub reason: Option<&'static str>,
+}
+```
+
+该矩阵通过 `service.status.adapter_capabilities` 和 `adapter.listCapabilities` 暴露给 macOS UI。UI 必须根据该矩阵显示 scan/toggle/install 能力和 blocker，不应仅根据 agent 名称推断可写能力。
+
+当前能力状态：
+
+| Agent | 状态 | Scan | Toggle / writable |
+| --- | --- | --- | --- |
+| Claude Code | `verified` | 支持 | 支持，走 settings snapshot/lock/atomic write/read-back/rescan |
+| Codex | `verified` | 支持 | 支持用户 `config.toml` override；项目 `.codex/config.toml` 仍 blocked |
+| opencode | `read-only` | 支持 native roots | blocked，直到 `permission.skill` 写入证据完成 |
+| Pi | `planned` | 未实现 | blocked，等待 disposable local round-trip |
+| Hermes | `blocked` | 未实现 | blocked，等待 maintainer-confirmed spec |
+| OpenClaw | `blocked` | 未实现 | blocked，等待 maintainer-confirmed spec |
 
 > **实现要求**：所有适配器**无状态**。
 >

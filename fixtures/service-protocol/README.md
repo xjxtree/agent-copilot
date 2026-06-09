@@ -13,7 +13,7 @@ Rules:
 V2.5 opencode note:
 
 - `catalog.scanAll.response.json` includes the three-agent response shape for Claude Code, Codex, and read-only opencode native roots.
-- `service.status.supported_methods` remains unchanged; `catalog.scanAll` is still the single multi-agent scan method.
+- V2.5 did not add a separate opencode scan method; `catalog.scanAll` remained the single multi-agent scan method at that stage.
 - Fixture and smoke coverage must keep opencode visible for global no-project scans, visible for project scans after project context is active, and rejected for write toggles.
 
 V2.9 local export note:
@@ -26,3 +26,9 @@ V2.9 tool-global import note:
 - `catalog.importSkill` imports a local directory containing `SKILL.md` into the app-controlled tool-global staging area and returns the imported `SkillRecord`, `instance_id`, `staging_path`, import findings, and audit summary.
 - Imported tool-global content is read-only preview content; installing or writing to an agent config remains a separate confirmed adapter write flow.
 - GitHub repo import is explicitly deferred in the service contract. The `catalog.importSkill.github.error.*` fixtures document the unsupported path; callers must provide a local `source_path` after any user-controlled clone or unpack step.
+
+V2.11 adapter capability matrix note:
+
+- `adapter.listCapabilities.response.json` is the direct capability matrix fixture for Claude Code, Codex, read-only opencode, Pi, Hermes, and OpenClaw.
+- `service.status.response.json` and `app.stateSnapshot.response.json` include `adapter_capabilities` so native UI shells can render adapter status without guessing from agent names.
+- The matrix is descriptive for unsupported agents: opencode remains read-only, Pi remains planned, and Hermes/OpenClaw remain blocked until their spec evidence gates are satisfied.

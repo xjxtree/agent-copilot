@@ -43,6 +43,11 @@ const checks = [
     pattern: /Label\(UIStrings\.text\("action\.reloadCatalog",\s*"Reload Catalog"\),\s*systemImage:\s*"arrow\.clockwise"\)/,
   },
   {
+    label: "sidebar exposes adapter capability status",
+    text: files.sidebar,
+    pattern: /AdapterCapabilityCard\(capability:\s*capability\)/,
+  },
+  {
     label: "sidebar exposes state filter",
     text: files.sidebar,
     pattern: /Picker\(UIStrings\.state,\s*selection:\s*\$store\.stateFilter\)/,
@@ -146,6 +151,11 @@ const checks = [
     label: "localized finding filter labels are present",
     text: files.localizable,
     pattern: /"findings\.filter\.severity".*"findings\.filter\.rule".*"findings\.visibleSummary"/s,
+  },
+  {
+    label: "localized adapter capability labels are present",
+    text: files.localizable,
+    pattern: /"sidebar\.adapterCapabilities".*"adapter\.capability\.scan".*"adapter\.capability\.toggle".*"adapter\.capability\.install"/s,
   },
   {
     label: "localized remediation and permissions labels are present",

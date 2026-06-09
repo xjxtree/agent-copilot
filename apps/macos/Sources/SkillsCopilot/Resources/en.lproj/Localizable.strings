@@ -242,3 +242,11 @@
 "message.projectClearedAndScanned" = "Cleared project context and refreshed catalog.";
 "refresh.projectValidationSkipped" = "Project context needs attention before scanning.";
 "project.validationFailed" = "Project validation failed: %@.";
+"agent.pi" = "Pi";
+"agent.hermes" = "Hermes";
+"agent.openclaw" = "OpenClaw";
+"sidebar.adapterCapabilities" = "Adapter Capabilities";
+"adapter.capability.scan" = "Scan";
+"adapter.capability.toggle" = "Toggle";
+"adapter.capability.install" = "Install";
+"empty.adapterNotImplemented.message" = "%@ adapter is not implemented yet. Check the capability status above for the current blocker.";

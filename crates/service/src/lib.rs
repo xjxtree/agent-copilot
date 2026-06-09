@@ -13,13 +13,14 @@ use skills_copilot_catalog::{
 use skills_copilot_commands::{
     export_skill_bundle, export_staging_skill_bundle, get_skill,
     import_github_skill_to_tool_global_deferred, import_local_skill_to_tool_global,
-    install_skill_from_tool_global, list_agent_config_snapshots, list_conflicts, list_findings,
-    list_skill_events, list_snapshots, preview_script_execution, preview_snapshot_rollback,
-    read_claude_settings, record_blocked_script_execution, rollback_snapshot, save_claude_settings,
-    scan_all_catalog_report, scan_claude_to_catalog, toggle_skill, AgentCatalogScanReport,
-    ConfigDocumentRecord, ExportedSkillBundle, ScriptExecutionAttemptRecord,
-    ScriptExecutionPreviewRecord, ScriptExecutionRequest, SkillInstallPreviewRecord,
-    SnapshotRollbackPreviewRecord, ToolGlobalImportResult, SCRIPT_EXECUTION_DISABLED_REASON,
+    install_skill_from_tool_global, list_adapter_capabilities, list_agent_config_snapshots,
+    list_conflicts, list_findings, list_skill_events, list_snapshots, preview_script_execution,
+    preview_snapshot_rollback, read_claude_settings, record_blocked_script_execution,
+    rollback_snapshot, save_claude_settings, scan_all_catalog_report, scan_claude_to_catalog,
+    toggle_skill, AdapterCapabilityRecord, AgentCatalogScanReport, ConfigDocumentRecord,
+    ExportedSkillBundle, ScriptExecutionAttemptRecord, ScriptExecutionPreviewRecord,
+    ScriptExecutionRequest, SkillInstallPreviewRecord, SnapshotRollbackPreviewRecord,
+    ToolGlobalImportResult, SCRIPT_EXECUTION_DISABLED_REASON,
 };
 use skills_copilot_core::{AdapterContext, AdapterRoot, AgentId, RootSource, Scope};
 use thiserror::Error;
@@ -38,6 +39,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "app.version",
     "app.stateSnapshot",
     "service.status",
+    "adapter.listCapabilities",
     "llm.status",
     "llm.prepareAction",
     "script.previewExecution",
@@ -99,6 +101,7 @@ pub struct ServiceStatus {
     pub supported_methods: Vec<&'static str>,
     pub refresh: RefreshStatus,
     pub project_context: ProjectContextSummary,
+    pub adapter_capabilities: Vec<AdapterCapabilityRecord>,
     pub llm: LlmStatus,
     pub script_execution: ScriptExecutionStatus,
 }
@@ -421,6 +424,10 @@ impl ServiceHost {
                 serde_json::to_value(self.app_state_snapshot()?).map_err(Into::into)
             }
             "service.status" => serde_json::to_value(self.status()).map_err(Into::into),
+            "adapter.listCapabilities" => {
+                let adapter_ctx = self.effective_adapter_ctx()?;
+                serde_json::to_value(list_adapter_capabilities(&adapter_ctx)).map_err(Into::into)
+            }
             "llm.status" => serde_json::to_value(self.llm_status()).map_err(Into::into),
             "llm.prepareAction" => {
                 let params: LlmPrepareActionParams = serde_json::from_value(request.params)?;
@@ -718,6 +725,7 @@ impl ServiceHost {
                 recovery_actions: vec!["Retry the last refresh", "Run Scan to rebuild the agent catalog"],
             },
             project_context: project_context_summary(&self.app_data_dir, self.env_project_context()),
+            adapter_capabilities: list_adapter_capabilities(&self.adapter_ctx),
             llm: self.llm_status(),
             script_execution: self.script_execution_status(),
         }
@@ -2566,6 +2574,10 @@ mod tests {
                 assert!(!status.script_execution.enabled);
                 assert!(!status.script_execution.llm_initiation_allowed);
             }
+            "adapter.listCapabilities" => {
+                let _: Vec<WireAdapterCapabilityRecord> =
+                    decode_fixture_result(method, result, path);
+            }
             "llm.status" => {
                 let status: WireLlmStatus = decode_fixture_result(method, result, path);
                 assert!(!status.enabled);
@@ -2919,6 +2931,7 @@ mod tests {
         project_context: WireProjectContextSummary,
         llm: WireLlmStatus,
         script_execution: WireScriptExecutionStatus,
+        adapter_capabilities: Vec<WireAdapterCapabilityRecord>,
     }
 
     #[allow(dead_code)]
@@ -2930,6 +2943,31 @@ mod tests {
         findings: Vec<WireRuleFindingRecord>,
         conflicts: Vec<WireConflictGroupRecord>,
         snapshots: Vec<WireConfigSnapshotRecord>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAdapterCapabilityRecord {
+        agent: String,
+        display_name: String,
+        status: String,
+        scan: WireAdapterFeatureCapability,
+        project_scan: WireAdapterFeatureCapability,
+        config_toggle: WireAdapterFeatureCapability,
+        config_snapshot: WireAdapterFeatureCapability,
+        install: WireAdapterFeatureCapability,
+        writable: WireAdapterFeatureCapability,
+        blockers: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAdapterFeatureCapability {
+        supported: bool,
+        status: String,
+        reason: Option<String>,
     }
 
     #[allow(dead_code)]

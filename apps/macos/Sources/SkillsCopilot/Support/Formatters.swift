@@ -39,6 +39,12 @@ enum DisplayText {
             return UIStrings.codex
         case "opencode":
             return UIStrings.opencode
+        case "pi":
+            return UIStrings.pi
+        case "hermes":
+            return UIStrings.hermes
+        case "openclaw":
+            return UIStrings.openclaw
         default:
             return value
         }
@@ -150,7 +156,7 @@ enum DisplayText {
     }
 
     static func isReadOnlyAdapter(_ agent: String) -> Bool {
-        agent != "claude-code" && agent != "codex"
+        !["claude-code", "codex"].contains(agent)
     }
 
     static func isToolGlobal(_ skill: SkillRecord) -> Bool {

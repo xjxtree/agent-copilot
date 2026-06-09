@@ -1,0 +1,5 @@
+{
+  "id": "fixture-adapter-list-capabilities",
+  "method": "adapter.listCapabilities",
+  "params": {}
+}

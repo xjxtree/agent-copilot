@@ -9,6 +9,15 @@ enum ToolInstallTarget: String, Codable, CaseIterable, Identifiable, Hashable {
     var title: String {
         DisplayText.agent(rawValue)
     }
+
+    static func supportedTargets(from capabilities: [AdapterCapabilityRecord]) -> [ToolInstallTarget] {
+        guard !capabilities.isEmpty else {
+            return allCases
+        }
+        return capabilities
+            .filter { $0.install.supported }
+            .compactMap { ToolInstallTarget(rawValue: $0.agent) }
+    }
 }
 
 struct ToolGlobalInstallPreview: Codable, Identifiable, Hashable {

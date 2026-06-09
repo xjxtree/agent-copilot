@@ -87,6 +87,14 @@ final class SkillStore: ObservableObject {
         projectContextState?.recent ?? []
     }
 
+    var adapterCapabilities: [AdapterCapabilityRecord] {
+        status?.adapterCapabilities ?? []
+    }
+
+    var selectedAdapterCapability: AdapterCapabilityRecord? {
+        adapterCapabilities.first { $0.agent == agentFilter.rawValue }
+    }
+
     var projectValidationMessage: String? {
         guard let message = activeProjectContext?.validationError, !message.isEmpty else {
             return nil
@@ -498,11 +506,20 @@ final class SkillStore: ObservableObject {
             return [(agent: "codex", scope: nil)]
         case .opencode:
             return [(agent: "opencode", scope: nil)]
+        case .pi:
+            return [(agent: "pi", scope: nil)]
+        case .hermes:
+            return [(agent: "hermes", scope: nil)]
+        case .openclaw:
+            return [(agent: "openclaw", scope: nil)]
         case .all:
             return [
                 (agent: "claude-code", scope: nil),
                 (agent: "codex", scope: nil),
-                (agent: "opencode", scope: nil)
+                (agent: "opencode", scope: nil),
+                (agent: "pi", scope: nil),
+                (agent: "hermes", scope: nil),
+                (agent: "openclaw", scope: nil)
             ]
         }
     }

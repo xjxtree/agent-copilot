@@ -70,6 +70,9 @@ struct SidebarView: View {
     }
 
     private var emptyFilteredMessage: String {
+        if let capability = store.selectedAdapterCapability, !capability.scan.supported {
+            return capability.scan.reason ?? UIStrings.adapterNotImplementedMessage(DisplayText.agent(capability.agent))
+        }
         if store.agentFilter == .codex, store.activeProjectContext == nil {
             return UIStrings.noCodexProjectMessage
         }
@@ -107,8 +110,12 @@ private struct AgentWorkspaceHeader: View {
                     Text(shortTitle(for: filter)).tag(filter)
                 }
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            .pickerStyle(.menu)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if let capability = store.selectedAdapterCapability {
+                AdapterCapabilityCard(capability: capability)
+            }
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 8) {
                 AgentStatTile(
@@ -133,11 +140,12 @@ private struct AgentWorkspaceHeader: View {
                 )
             }
 
-            HStack(spacing: 8) {
+            VStack(spacing: 8) {
                 Button {
                     Task { await store.scanAll() }
                 } label: {
                     Label(UIStrings.text("action.scanSkills", "Scan Skills"), systemImage: "folder.badge.gearshape")
+                        .frame(maxWidth: .infinity)
                 }
                 .controlSize(.small)
                 .disabled(store.isRefreshBusy)
@@ -147,6 +155,7 @@ private struct AgentWorkspaceHeader: View {
                     Task { await store.reload() }
                 } label: {
                     Label(UIStrings.text("action.reloadCatalog", "Reload Catalog"), systemImage: "arrow.clockwise")
+                        .frame(maxWidth: .infinity)
                 }
                 .controlSize(.small)
                 .disabled(store.isRefreshBusy)
@@ -212,6 +221,12 @@ private struct AgentWorkspaceHeader: View {
             return "chevron.left.forwardslash.chevron.right"
         case .opencode:
             return "curlybraces"
+        case .pi:
+            return "p.circle"
+        case .hermes:
+            return "h.circle"
+        case .openclaw:
+            return "pawprint"
         case .all:
             return "square.grid.2x2"
         }
@@ -225,9 +240,98 @@ private struct AgentWorkspaceHeader: View {
             return UIStrings.codex
         case .opencode:
             return UIStrings.opencode
+        case .pi:
+            return UIStrings.pi
+        case .hermes:
+            return UIStrings.hermes
+        case .openclaw:
+            return UIStrings.openclaw
         case .all:
             return UIStrings.text("filter.all", "All")
         }
+    }
+}
+
+private struct AdapterCapabilityCard: View {
+    let capability: AdapterCapabilityRecord
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 7) {
+                Label(UIStrings.adapterCapabilities, systemImage: statusIcon)
+                    .font(.caption.bold())
+                    .foregroundStyle(statusColor)
+                Spacer()
+                Text(statusTitle)
+                    .font(.caption2.bold())
+                    .foregroundStyle(statusColor)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(statusColor.opacity(0.12), in: Capsule())
+            }
+
+            HStack(spacing: 6) {
+                CapabilityPill(title: UIStrings.adapterScan, feature: capability.scan)
+                CapabilityPill(title: UIStrings.adapterToggle, feature: capability.configToggle)
+                CapabilityPill(title: UIStrings.adapterInstall, feature: capability.install)
+            }
+
+            if let primaryBlocker = capability.blockers.first {
+                Text(primaryBlocker)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+        }
+        .padding(10)
+        .background(statusColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private var statusTitle: String {
+        capability.status.replacingOccurrences(of: "-", with: " ").capitalized
+    }
+
+    private var statusIcon: String {
+        switch capability.status {
+        case "verified":
+            return "checkmark.seal.fill"
+        case "read-only":
+            return "lock.fill"
+        case "planned":
+            return "calendar.badge.clock"
+        default:
+            return "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var statusColor: Color {
+        switch capability.status {
+        case "verified":
+            return .green
+        case "read-only", "planned":
+            return .orange
+        default:
+            return .red
+        }
+    }
+}
+
+private struct CapabilityPill: View {
+    let title: String
+    let feature: AdapterFeatureCapability
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: feature.supported ? "checkmark.circle.fill" : "lock.fill")
+            Text(title)
+                .lineLimit(1)
+        }
+        .font(.caption2.bold())
+        .foregroundStyle(feature.supported ? .green : .secondary)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
+        .background(.quaternary.opacity(0.32), in: Capsule())
+        .help(feature.reason ?? feature.status)
     }
 }
 

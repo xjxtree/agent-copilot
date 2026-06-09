@@ -42,10 +42,20 @@ enum SkillAgentFilter: String, CaseIterable, Identifiable {
     case claudeCode = "claude-code"
     case codex
     case opencode
+    case pi
+    case hermes
+    case openclaw
 
     var id: String { rawValue }
 
-    static let managementCases: [SkillAgentFilter] = [.claudeCode, .codex, .opencode]
+    static let managementCases: [SkillAgentFilter] = [
+        .claudeCode,
+        .codex,
+        .opencode,
+        .pi,
+        .hermes,
+        .openclaw
+    ]
 
     var title: String {
         switch self {
@@ -57,6 +67,12 @@ enum SkillAgentFilter: String, CaseIterable, Identifiable {
             return UIStrings.codex
         case .opencode:
             return UIStrings.opencode
+        case .pi:
+            return UIStrings.pi
+        case .hermes:
+            return UIStrings.hermes
+        case .openclaw:
+            return UIStrings.openclaw
         }
     }
 
@@ -64,7 +80,7 @@ enum SkillAgentFilter: String, CaseIterable, Identifiable {
         switch self {
         case .all:
             return true
-        case .claudeCode, .codex, .opencode:
+        case .claudeCode, .codex, .opencode, .pi, .hermes, .openclaw:
             return skill.agent == rawValue
         }
     }
@@ -201,8 +217,14 @@ enum SkillListModel {
             return 1
         case SkillAgentFilter.opencode.rawValue:
             return 2
-        default:
+        case SkillAgentFilter.pi.rawValue:
             return 3
+        case SkillAgentFilter.hermes.rawValue:
+            return 4
+        case SkillAgentFilter.openclaw.rawValue:
+            return 5
+        default:
+            return 6
         }
     }
 
@@ -213,6 +235,10 @@ enum SkillListModel {
             aliases.append("claude")
         case SkillAgentFilter.opencode.rawValue:
             aliases.append("open code")
+        case SkillAgentFilter.pi.rawValue:
+            aliases.append("pi coding agent")
+        case SkillAgentFilter.openclaw.rawValue:
+            aliases.append("open claw")
         default:
             break
         }

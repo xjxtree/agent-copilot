@@ -11,6 +11,7 @@
       "app.version",
       "app.stateSnapshot",
       "service.status",
+      "adapter.listCapabilities",
       "llm.status",
       "llm.prepareAction",
       "script.previewExecution",
@@ -60,6 +61,194 @@
       "recent_count": 1,
       "validation_error": null
     },
+    "adapter_capabilities": [
+      {
+        "agent": "claude-code",
+        "display_name": "Claude Code",
+        "status": "verified",
+        "scan": { "supported": true, "status": "verified" },
+        "project_scan": { "supported": true, "status": "verified" },
+        "config_toggle": { "supported": true, "status": "verified" },
+        "config_snapshot": { "supported": true, "status": "verified" },
+        "install": { "supported": true, "status": "verified" },
+        "writable": { "supported": true, "status": "verified" },
+        "blockers": []
+      },
+      {
+        "agent": "codex",
+        "display_name": "Codex",
+        "status": "verified",
+        "scan": { "supported": true, "status": "verified" },
+        "project_scan": { "supported": true, "status": "verified" },
+        "config_toggle": {
+          "supported": true,
+          "status": "verified-user-config",
+          "reason": "Project skill toggles write only the user config.toml override; project-local .codex/config.toml remains blocked."
+        },
+        "config_snapshot": { "supported": true, "status": "verified" },
+        "install": { "supported": true, "status": "verified" },
+        "writable": {
+          "supported": true,
+          "status": "verified-user-config",
+          "reason": "Codex writes are limited to verified user config and skill roots."
+        },
+        "blockers": [
+          "Project-local .codex/config.toml toggle semantics remain unverified."
+        ]
+      },
+      {
+        "agent": "opencode",
+        "display_name": "opencode",
+        "status": "read-only",
+        "scan": { "supported": true, "status": "verified" },
+        "project_scan": { "supported": true, "status": "verified" },
+        "config_toggle": {
+          "supported": false,
+          "status": "blocked",
+          "reason": "opencode permission.skill patching, re-enable behavior, wildcard precedence, config ownership, and rollback path are not verified."
+        },
+        "config_snapshot": {
+          "supported": false,
+          "status": "blocked",
+          "reason": "No rollback-safe opencode config write path is verified yet."
+        },
+        "install": {
+          "supported": false,
+          "status": "blocked",
+          "reason": "opencode install remains blocked until writable semantics are verified."
+        },
+        "writable": {
+          "supported": false,
+          "status": "blocked",
+          "reason": "opencode is native-root read-only until disposable local evidence proves safe writes."
+        },
+        "blockers": [
+          "Verify permission.skill exact patch and re-enable behavior.",
+          "Verify wildcard precedence and managed config ownership.",
+          "Verify rollback-safe config writes before enabling toggle/install."
+        ]
+      },
+      {
+        "agent": "pi",
+        "display_name": "Pi",
+        "status": "planned",
+        "scan": {
+          "supported": false,
+          "status": "planned",
+          "reason": "Pi scanner is not implemented; disposable local root/config round-trip is required first."
+        },
+        "project_scan": {
+          "supported": false,
+          "status": "planned",
+          "reason": "Pi project root precedence and .agents/skills de-duplication need disposable evidence."
+        },
+        "config_toggle": {
+          "supported": false,
+          "status": "blocked",
+          "reason": "Pi enable/disable JSON mutation and rollback semantics are not verified."
+        },
+        "config_snapshot": {
+          "supported": false,
+          "status": "blocked",
+          "reason": "No verified Pi config write target is available yet."
+        },
+        "install": {
+          "supported": false,
+          "status": "blocked",
+          "reason": "Pi install target roots are not enabled until adapter evidence is complete."
+        },
+        "writable": {
+          "supported": false,
+          "status": "blocked",
+          "reason": "Pi writes are blocked until the disposable local round-trip is complete."
+        },
+        "blockers": [
+          "Verify Pi scan roots and malformed skill behavior.",
+          "Verify Pi settings schema and enable/disable semantics.",
+          "Verify rollback-safe global/project config writes."
+        ]
+      },
+      {
+        "agent": "hermes",
+        "display_name": "Hermes",
+        "status": "blocked",
+        "scan": {
+          "supported": false,
+          "status": "blocked",
+          "reason": "Hermes has no maintainer-confirmed skill/package layout or discovery roots."
+        },
+        "project_scan": {
+          "supported": false,
+          "status": "blocked",
+          "reason": "Hermes project discovery semantics are not confirmed."
+        },
+        "config_toggle": {
+          "supported": false,
+          "status": "blocked",
+          "reason": "Hermes toggle semantics and config schema are not confirmed."
+        },
+        "config_snapshot": {
+          "supported": false,
+          "status": "blocked",
+          "reason": "No verified Hermes rollback-safe config target exists."
+        },
+        "install": {
+          "supported": false,
+          "status": "blocked",
+          "reason": "Hermes install semantics are not confirmed."
+        },
+        "writable": {
+          "supported": false,
+          "status": "blocked",
+          "reason": "Hermes remains blocked pending maintainer-confirmed spec."
+        },
+        "blockers": [
+          "Obtain maintainer-confirmed roots and config schema.",
+          "Confirm whether Hermes exposes skills, service tasks, commands, or cron jobs as SkillInstance units.",
+          "Confirm toggle and rollback semantics before implementation."
+        ]
+      },
+      {
+        "agent": "openclaw",
+        "display_name": "OpenClaw",
+        "status": "blocked",
+        "scan": {
+          "supported": false,
+          "status": "blocked",
+          "reason": "OpenClaw candidate roots exist, but the skill schema is not maintainer-confirmed."
+        },
+        "project_scan": {
+          "supported": false,
+          "status": "blocked",
+          "reason": "OpenClaw project discovery semantics are not confirmed."
+        },
+        "config_toggle": {
+          "supported": false,
+          "status": "blocked",
+          "reason": "OpenClaw plugin config evidence is not a verified skill toggle contract."
+        },
+        "config_snapshot": {
+          "supported": false,
+          "status": "blocked",
+          "reason": "No verified OpenClaw rollback-safe skill config target exists."
+        },
+        "install": {
+          "supported": false,
+          "status": "blocked",
+          "reason": "OpenClaw install semantics are not confirmed."
+        },
+        "writable": {
+          "supported": false,
+          "status": "blocked",
+          "reason": "OpenClaw remains blocked pending maintainer-confirmed spec."
+        },
+        "blockers": [
+          "Confirm OpenClaw roots and skills list output.",
+          "Confirm SKILL.md schema and malformed/conflict behavior.",
+          "Confirm toggle, permission, and rollback-safe config semantics."
+        ]
+      }
+    ],
     "llm": {
       "enabled": false,
       "configured": false,

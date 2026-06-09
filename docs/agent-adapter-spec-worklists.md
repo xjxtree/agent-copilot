@@ -1,7 +1,7 @@
 # Agent Adapter Spec Worklists
 
-> Status: Codex first implementation, V2.1 dual adapter experience, V2.2 project context implementation, V2.3 Codex adapter hardening, V2.4 opencode read-only adapter, V2.5 audit hardening, V2.6 adapter changelog tracking, and V2.7 LLM gate safety notes are integrated.
-> Real local UI validation remains pending because Computer Use/AX could not resolve a visible SkillsCopilot window. Pi, Hermes, and OpenClaw remain read-only planning or blocked.
+> Status: Codex first implementation, V2.1 dual adapter experience, V2.2 project context implementation, V2.3 Codex adapter hardening, V2.4 opencode read-only adapter, V2.5 audit hardening, V2.6 adapter changelog tracking, V2.7 LLM gate safety notes, V2.8-V2.10 safety/docs closeout, and V2.11 Adapter Capability Matrix are integrated or in active development.
+> Real local UI validation passed for the current mainline app on 2026-06-09. Future user-visible, UI, or service-protocol candidates still require a fresh real local pass. Pi, Hermes, and OpenClaw remain read-only planning or blocked.
 > This document records what is verified enough to use for project instructions, and what is still missing before an adapter can be built.
 
 ## Current Rule
@@ -9,6 +9,8 @@
 Claude Code remains the mature baseline adapter. Codex has verified user/project roots, cwd-to-repo-root discovery, project-context-scoped scanning, and user-config writable toggles. V2.3 hardening added config patch robustness, explicit adapter states, root/config security regressions, and smoke/docs coverage. V2.4 added opencode as a read-only adapter for first-class native roots only.
 
 Pi, Hermes, and OpenClaw remain blocked or read-only planning until their evidence gates are satisfied.
+
+The macOS app now uses the service/UI adapter capability matrix as the front-door status surface for all six agents. The matrix must make read-only, planned, and blocked states explicit before any future write affordance is exposed.
 
 Codex, Pi, Hermes, OpenClaw, and opencode must not be implemented from guessed paths or inferred config semantics. A new adapter needs verified evidence for:
 

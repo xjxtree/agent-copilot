@@ -45,6 +45,7 @@ struct DetailView: View {
                         findingCount: store.selectedFindings.count,
                         conflictCount: store.selectedConflicts.count,
                         isWriting: store.isWriting,
+                        adapterCapability: store.adapterCapabilities.first { $0.agent == skill.agent },
                         onSelectSection: { section in
                             store.selectedDetailSection = section
                         },
@@ -627,11 +628,12 @@ private struct HeaderView: View {
     let findingCount: Int
     let conflictCount: Int
     let isWriting: Bool
+    let adapterCapability: AdapterCapabilityRecord?
     let onSelectSection: (DetailSection) -> Void
     let onToggle: (Bool) -> Void
 
     var body: some View {
-        let toggleDisabledReason = DisplayText.toggleDisabledReason(for: skill, isWriting: isWriting)
+        let disabledReason = toggleDisabledReason
         let isEffectivelyEnabled = DisplayText.statusKind(skill.state, enabled: skill.enabled) == .enabled
 
         VStack(alignment: .leading, spacing: 16) {
@@ -650,7 +652,7 @@ private struct HeaderView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)
                         .adaptiveMaterialSurface()
-                        .help(DisplayText.toggleDisabledReason(for: skill, isWriting: false) ?? UIStrings.readOnly)
+                        .help(disabledReason ?? UIStrings.readOnly)
                 }
 
                 Label(
@@ -669,13 +671,13 @@ private struct HeaderView: View {
                     )
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(toggleDisabledReason != nil)
-                .help(toggleDisabledReason ?? "")
-                .accessibilityHint(toggleDisabledReason ?? "")
+                .disabled(disabledReason != nil)
+                .help(disabledReason ?? "")
+                .accessibilityHint(disabledReason ?? "")
             }
 
-            if let toggleDisabledReason {
-                Label(toggleDisabledReason, systemImage: "lock.fill")
+            if let disabledReason {
+                Label(disabledReason, systemImage: "lock.fill")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -698,6 +700,14 @@ private struct HeaderView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var toggleDisabledReason: String? {
+        let catalogReason = DisplayText.toggleDisabledReason(for: skill, isWriting: isWriting)
+        guard !isWriting, let adapterCapability, !adapterCapability.configToggle.supported else {
+            return catalogReason
+        }
+        return adapterCapability.configToggle.reason ?? catalogReason ?? UIStrings.readOnlyAdapterStatus(adapterCapability.displayName)
     }
 }
 
@@ -878,6 +888,9 @@ private struct ToolGlobalPreviewCard: View {
     @State private var isConfirming = false
 
     var body: some View {
+        let targets = ToolInstallTarget.supportedTargets(from: store.adapterCapabilities)
+        let selectedTarget = targets.contains(target) ? target : (targets.first ?? target)
+
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
                 Label(UIStrings.toolGlobalPreviewTitle, systemImage: "shippingbox")
@@ -894,7 +907,7 @@ private struct ToolGlobalPreviewCard: View {
 
             HStack(spacing: 10) {
                 Picker(UIStrings.toolGlobalTargetAgent, selection: $target) {
-                    ForEach(ToolInstallTarget.allCases) { target in
+                    ForEach(targets) { target in
                         Text(target.title).tag(target)
                     }
                 }
@@ -905,13 +918,18 @@ private struct ToolGlobalPreviewCard: View {
                     Task {
                         isPreviewing = true
                         defer { isPreviewing = false }
-                        preview = await store.previewToolInstall(skill: skill, target: target)
+                        preview = await store.previewToolInstall(skill: skill, target: selectedTarget)
                     }
                 } label: {
                     Label(UIStrings.installToAgent, systemImage: "square.and.arrow.down")
                 }
-                .disabled(store.isRefreshBusy || isPreviewing)
-                .help(UIStrings.toolGlobalInstallConfirmation(skill.name, target.title))
+                .disabled(store.isRefreshBusy || isPreviewing || targets.isEmpty)
+                .help(UIStrings.toolGlobalInstallConfirmation(skill.name, selectedTarget.title))
+            }
+        }
+        .onAppear {
+            if let first = targets.first, !targets.contains(target) {
+                target = first
             }
         }
         .padding()

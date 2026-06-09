@@ -32,6 +32,9 @@ enum UIStrings {
     static let claudeCode = text("agent.claudeCode", "Claude Code")
     static let codex = text("agent.codex", "Codex")
     static let opencode = text("agent.opencode", "opencode")
+    static let pi = text("agent.pi", "Pi")
+    static let hermes = text("agent.hermes", "Hermes")
+    static let openclaw = text("agent.openclaw", "OpenClaw")
     static let detailSection = text("detail.section", "Detail Section")
     static let overview = text("detail.overview", "Overview")
     static let findings = text("detail.findings", "Findings")
@@ -48,6 +51,10 @@ enum UIStrings {
     static let noProjectSkillsMessage = text("empty.noProjectSkills.message", "No skills were found in global roots. Choose a project to include project-scoped skills, then scan.")
     static let noCodexProjectMessage = text("empty.noCodexProject.message", "No Codex skills match the current global roots. Choose a project to include project-scoped Codex skills.")
     static let noCodexSkillsMessage = text("empty.noCodexSkills.message", "No Codex skills match the current search or filters.")
+    static let adapterCapabilities = text("sidebar.adapterCapabilities", "Adapter Capabilities")
+    static let adapterScan = text("adapter.capability.scan", "Scan")
+    static let adapterToggle = text("adapter.capability.toggle", "Toggle")
+    static let adapterInstall = text("adapter.capability.install", "Install")
     static let loading = text("state.loading", "Loading...")
     static let stateEnabled = text("state.enabled", "Enabled")
     static let stateDisabled = text("state.disabled", "Disabled")
@@ -251,6 +258,10 @@ enum UIStrings {
 
     static func toggleUnavailableReadOnlyAdapter(_ agent: String) -> String {
         format("detail.toggleUnavailable.readOnlyAdapter", "%@ skills are read-only in this build.", agent)
+    }
+
+    static func adapterNotImplementedMessage(_ agent: String) -> String {
+        format("empty.adapterNotImplemented.message", "%@ adapter is not implemented yet. Check the capability status above for the current blocker.", agent)
     }
 
     static func readOnlyAdapterStatus(_ agent: String) -> String {
