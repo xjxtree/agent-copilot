@@ -281,6 +281,155 @@ struct ConflictGroupRecord: Codable, Identifiable, Hashable {
     }
 }
 
+struct SkillHealthSummary: Codable, Hashable {
+    let totalCount: Int
+    let enabledCount: Int
+    let disabledCount: Int
+    let brokenCount: Int
+    let missingCount: Int
+    let malformedCount: Int
+    let findingCount: Int
+    let conflictCount: Int
+    let riskyScriptCount: Int
+    let riskyPermissionCount: Int
+    let findingsBySeverity: HealthSeverityCounts
+    let analysisGroups: HealthAnalysisGroupCounts
+    let agentSummaries: [AgentSkillHealthSummary]
+
+    enum CodingKeys: String, CodingKey {
+        case totalCount = "total_count"
+        case enabledCount = "enabled_count"
+        case disabledCount = "disabled_count"
+        case brokenCount = "broken_count"
+        case missingCount = "missing_count"
+        case malformedCount = "malformed_count"
+        case findingCount = "finding_count"
+        case conflictCount = "conflict_count"
+        case riskyScriptCount = "risky_script_count"
+        case riskyPermissionCount = "risky_permission_count"
+        case findingsBySeverity = "findings_by_severity"
+        case analysisGroups = "analysis_groups"
+        case agentSummaries = "agent_summaries"
+    }
+
+    var riskCount: Int {
+        riskyScriptCount + riskyPermissionCount
+    }
+
+    var needsTriageCount: Int {
+        findingsBySeverity.errorCount
+            + findingsBySeverity.warningCount
+            + conflictCount
+            + malformedCount
+            + riskCount
+    }
+
+    static let empty = SkillHealthSummary(
+        totalCount: 0,
+        enabledCount: 0,
+        disabledCount: 0,
+        brokenCount: 0,
+        missingCount: 0,
+        malformedCount: 0,
+        findingCount: 0,
+        conflictCount: 0,
+        riskyScriptCount: 0,
+        riskyPermissionCount: 0,
+        findingsBySeverity: .empty,
+        analysisGroups: .empty,
+        agentSummaries: []
+    )
+}
+
+struct HealthSeverityCounts: Codable, Hashable {
+    let errorCount: Int
+    let warningCount: Int
+    let infoCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case errorCount = "error_count"
+        case warningCount = "warning_count"
+        case infoCount = "info_count"
+    }
+
+    static let empty = HealthSeverityCounts(errorCount: 0, warningCount: 0, infoCount: 0)
+}
+
+struct HealthAnalysisGroupCounts: Codable, Hashable {
+    let totalCount: Int
+    let errorCount: Int
+    let warningCount: Int
+    let infoCount: Int
+    let duplicateNameCount: Int
+    let canonicalNameCount: Int
+    let pathOverlapCount: Int
+    let enabledMismatchCount: Int
+    let malformedCount: Int
+    let precedenceCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case totalCount = "total_count"
+        case errorCount = "error_count"
+        case warningCount = "warning_count"
+        case infoCount = "info_count"
+        case duplicateNameCount = "duplicate_name_count"
+        case canonicalNameCount = "canonical_name_count"
+        case pathOverlapCount = "path_overlap_count"
+        case enabledMismatchCount = "enabled_mismatch_count"
+        case malformedCount = "malformed_count"
+        case precedenceCount = "precedence_count"
+    }
+
+    static let empty = HealthAnalysisGroupCounts(
+        totalCount: 0,
+        errorCount: 0,
+        warningCount: 0,
+        infoCount: 0,
+        duplicateNameCount: 0,
+        canonicalNameCount: 0,
+        pathOverlapCount: 0,
+        enabledMismatchCount: 0,
+        malformedCount: 0,
+        precedenceCount: 0
+    )
+}
+
+struct AgentSkillHealthSummary: Codable, Identifiable, Hashable {
+    let agent: String
+    let totalCount: Int
+    let enabledCount: Int
+    let disabledCount: Int
+    let brokenCount: Int
+    let missingCount: Int
+    let malformedCount: Int
+    let findingCount: Int
+    let conflictCount: Int
+    let riskyScriptCount: Int
+    let riskyPermissionCount: Int
+    let analysisGroupCount: Int
+
+    var id: String { agent }
+
+    enum CodingKeys: String, CodingKey {
+        case agent
+        case totalCount = "total_count"
+        case enabledCount = "enabled_count"
+        case disabledCount = "disabled_count"
+        case brokenCount = "broken_count"
+        case missingCount = "missing_count"
+        case malformedCount = "malformed_count"
+        case findingCount = "finding_count"
+        case conflictCount = "conflict_count"
+        case riskyScriptCount = "risky_script_count"
+        case riskyPermissionCount = "risky_permission_count"
+        case analysisGroupCount = "analysis_group_count"
+    }
+
+    var riskCount: Int {
+        riskyScriptCount + riskyPermissionCount
+    }
+}
+
 struct ConfigSnapshotRecord: Codable, Identifiable, Hashable {
     let id: String
     let agent: String

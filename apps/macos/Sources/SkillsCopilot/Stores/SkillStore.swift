@@ -5,6 +5,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var skills: [SkillRecord] = []
     @Published private(set) var findings: [RuleFindingRecord] = []
     @Published private(set) var conflicts: [ConflictGroupRecord] = []
+    @Published private(set) var healthSummary = SkillHealthSummary.empty
     @Published private(set) var agentConfigSnapshots: [ConfigSnapshotRecord] = []
     @Published private(set) var isLoadingAgentConfigSnapshots = false
     @Published private(set) var detailsByID: [SkillRecord.ID: SkillDetailRecord] = [:]
@@ -104,6 +105,10 @@ final class SkillStore: ObservableObject {
 
     var selectedAdapterCapability: AdapterCapabilityRecord? {
         adapterCapabilities.first { $0.agent == agentFilter.rawValue }
+    }
+
+    var selectedAgentHealthSummary: AgentSkillHealthSummary? {
+        healthSummary.agentSummaries.first { $0.agent == agentFilter.rawValue }
     }
 
     var projectValidationMessage: String? {
@@ -492,6 +497,7 @@ final class SkillStore: ObservableObject {
         self.skills = snapshot.skills
         self.findings = snapshot.findings
         self.conflicts = snapshot.conflicts
+        self.healthSummary = snapshot.health
         self.agentConfigSnapshots = try await agentConfigSnapshots
         let currentSkillIDs = Set(snapshot.skills.map(\.id))
         scriptExecutionPreviews = scriptExecutionPreviews.filter { currentSkillIDs.contains($0.key) }

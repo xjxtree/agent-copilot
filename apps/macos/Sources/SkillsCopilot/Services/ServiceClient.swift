@@ -20,6 +20,7 @@ struct AppStateSnapshot: Codable, Hashable {
     let skills: [SkillRecord]
     let findings: [RuleFindingRecord]
     let conflicts: [ConflictGroupRecord]
+    let health: SkillHealthSummary
     let snapshots: [ConfigSnapshotRecord]
 
     enum CodingKeys: String, CodingKey {
@@ -27,6 +28,7 @@ struct AppStateSnapshot: Codable, Hashable {
         case skills
         case findings
         case conflicts
+        case health
         case snapshots
     }
 
@@ -36,6 +38,7 @@ struct AppStateSnapshot: Codable, Hashable {
         skills = try container.decode([SkillRecord].self, forKey: .skills)
         findings = try container.decode([RuleFindingRecord].self, forKey: .findings)
         conflicts = try container.decode([ConflictGroupRecord].self, forKey: .conflicts)
+        health = try container.decodeIfPresent(SkillHealthSummary.self, forKey: .health) ?? .empty
         snapshots = try container.decodeIfPresent([ConfigSnapshotRecord].self, forKey: .snapshots) ?? []
     }
 }

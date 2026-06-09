@@ -140,6 +140,14 @@ private struct AgentWorkspaceHeader: View {
                 )
             }
 
+            SkillHealthDashboardCard(
+                summary: store.healthSummary,
+                agentSummary: store.selectedAgentHealthSummary,
+                onFilter: { filter in
+                    store.stateFilter = filter
+                }
+            )
+
             VStack(spacing: 8) {
                 Button {
                     Task { await store.scanAll() }
@@ -249,6 +257,149 @@ private struct AgentWorkspaceHeader: View {
         case .all:
             return UIStrings.text("filter.all", "All")
         }
+    }
+}
+
+private struct SkillHealthDashboardCard: View {
+    let summary: SkillHealthSummary
+    let agentSummary: AgentSkillHealthSummary?
+    let onFilter: (SkillStateFilter) -> Void
+
+    private var title: String {
+        agentSummary.map { DisplayText.agent($0.agent) } ?? UIStrings.text("health.allAgents", "All Agents")
+    }
+
+    private var totalCount: Int {
+        agentSummary?.totalCount ?? summary.totalCount
+    }
+
+    private var enabledCount: Int {
+        agentSummary?.enabledCount ?? summary.enabledCount
+    }
+
+    private var disabledCount: Int {
+        agentSummary?.disabledCount ?? summary.disabledCount
+    }
+
+    private var malformedCount: Int {
+        agentSummary?.malformedCount ?? summary.malformedCount
+    }
+
+    private var findingCount: Int {
+        agentSummary?.findingCount ?? summary.findingCount
+    }
+
+    private var conflictCount: Int {
+        agentSummary?.conflictCount ?? summary.conflictCount
+    }
+
+    private var riskCount: Int {
+        agentSummary?.riskCount ?? summary.riskCount
+    }
+
+    private var analysisCount: Int {
+        agentSummary?.analysisGroupCount ?? summary.analysisGroups.totalCount
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 7) {
+                Label(UIStrings.text("health.title", "Health"), systemImage: "stethoscope")
+                    .font(.caption.bold())
+                    .foregroundStyle(healthColor)
+                Spacer()
+                Text(title)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 7) {
+                HealthMetricPill(value: totalCount, label: UIStrings.text("health.total", "Total"), systemImage: "square.stack")
+                HealthMetricPill(value: enabledCount, label: UIStrings.text("health.enabled", "Enabled"), systemImage: "checkmark.circle")
+                HealthMetricPill(value: disabledCount, label: UIStrings.text("health.disabled", "Disabled"), systemImage: "pause.circle")
+                HealthMetricPill(value: malformedCount, label: UIStrings.text("health.malformed", "Broken/Missing"), systemImage: "wrench.and.screwdriver")
+                HealthMetricPill(value: findingCount, label: UIStrings.findings, systemImage: "exclamationmark.triangle")
+                HealthMetricPill(value: conflictCount, label: UIStrings.conflicts, systemImage: "rectangle.2.swap")
+                HealthMetricPill(value: riskCount, label: UIStrings.text("health.risk", "Risk"), systemImage: "lock.trianglebadge.exclamationmark")
+                HealthMetricPill(value: analysisCount, label: UIStrings.text("health.analysis", "Analysis"), systemImage: "point.3.connected.trianglepath.dotted")
+            }
+
+            HStack(spacing: 6) {
+                HealthFilterButton(title: UIStrings.text("health.filter.triage", "Triage"), systemImage: "line.3.horizontal.decrease.circle", onTap: { onFilter(.needsTriage) })
+                HealthFilterButton(title: UIStrings.text("health.filter.risk", "Risk"), systemImage: "lock.trianglebadge.exclamationmark", onTap: { onFilter(.risky) })
+                HealthFilterButton(title: UIStrings.findings, systemImage: "exclamationmark.triangle", onTap: { onFilter(.withFindings) })
+                HealthFilterButton(title: UIStrings.conflicts, systemImage: "rectangle.2.swap", onTap: { onFilter(.withConflicts) })
+            }
+
+            Text(summaryText)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+        }
+        .padding(10)
+        .background(healthColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private var summaryText: String {
+        if summary.totalCount == 0 {
+            return UIStrings.text("health.empty", "Run Scan to build a skill health summary.")
+        }
+        return UIStrings.text(
+            "health.summary",
+            "\(summary.findingsBySeverity.errorCount) errors, \(summary.findingsBySeverity.warningCount) warnings, \(summary.conflictCount) conflicts, and \(summary.analysisGroups.totalCount) analysis groups across the visible catalog."
+        )
+    }
+
+    private var healthColor: Color {
+        if summary.findingsBySeverity.errorCount > 0 || summary.malformedCount > 0 {
+            return .red
+        }
+        if summary.findingsBySeverity.warningCount > 0 || summary.conflictCount > 0 || summary.riskCount > 0 {
+            return .orange
+        }
+        return .green
+    }
+}
+
+private struct HealthMetricPill: View {
+    let value: Int
+    let label: String
+    let systemImage: String
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: systemImage)
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("\(value)")
+                    .font(.subheadline.bold())
+                Text(label)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct HealthFilterButton: View {
+    let title: String
+    let systemImage: String
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            Label(title, systemImage: systemImage)
+                .labelStyle(.iconOnly)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .help(title)
     }
 }
 

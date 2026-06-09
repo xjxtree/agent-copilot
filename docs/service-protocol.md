@@ -1,6 +1,6 @@
 # skills-copilot Service Protocol
 
-> Status: V2.18 cross-agent analysis integrated. Hermes and OpenClaw read-only scanners are implemented; writable/install support remains blocked.
+> Status: V2.19 skill health dashboard integrated. Hermes and OpenClaw read-only scanners plus V2.18 cross-agent analysis are implemented; writable/install support remains blocked.
 >
 > Integrated: V2.9 Tool-global import/export/install, V2.10 skill execution safety boundary, and 2026-06-09 real local Computer Use validation for the current mainline app. V2.11 added adapter capability status to the service protocol and macOS UI. V2.12 marks opencode writable for native roots after exact permission.skill deny/re-enable, snapshot/rollback, install, and fixture smoke validation pass.
 >
@@ -41,7 +41,7 @@ This stdio shape can later move behind a local socket without changing method pa
 | Method | Mutates local state | Current client use | Result |
 | --- | --- | --- | --- |
 | `app.version` | No | Native macOS About / compatibility checks | app version and protocol version |
-| `app.stateSnapshot` | No | Native macOS launch/read flow | status plus current skills, findings, conflicts, cross-agent analysis, and compatibility snapshot payload |
+| `app.stateSnapshot` | No | Native macOS launch/read flow | status plus current skills, findings, conflicts, cross-agent analysis, skill health summary, and compatibility snapshot payload |
 | `service.status` | No | Diagnostics, adapter gating, and smoke tests | protocol version, app version, app data dir, catalog path, user home, supported methods, adapter capabilities, refresh capability state, and LLM gate status |
 | `adapter.listCapabilities` | No | Native macOS agent selector/status gating | adapter capability matrix for scan, project scan, config toggle, config snapshot, install, writable state, and current blockers |
 | `llm.status` | No | Native macOS LLM affordance gating | disabled-by-default LLM status: enabled/configured/provider/model/reason/token limit/budget/credential persistence policy |
@@ -129,6 +129,34 @@ Analysis group kinds:
 - `precedence_shadowing`: same-agent same-canonical-name rows where project/global precedence or existing `shadowed` state can be explained from adapter evidence.
 
 Precedence notes are intentionally conservative. The service may choose a `winner_id` only inside one agent's visible rows, preferring loaded/enabled project-scoped rows over agent-global rows. Cross-agent duplicate names never imply shared runtime precedence because each agent loads its own roots independently.
+
+## V2.19 Skill Health Summary Payload
+
+`app.stateSnapshot.health` returns an additive, read-only summary derived from the same visible catalog rows, findings, conflicts, and cross-agent analysis groups. It does not write agent configs, import skills, execute scripts, call provider APIs, or infer unsupported roots.
+
+The summary includes total/enabled/disabled counts, broken/missing/malformed counts, finding counts by severity, conflict counts, risky script and permission counts, cross-agent analysis group counts, and per-agent summaries for native dashboard and read-only triage filters. V2.19 does not persist reviewed/ignored finding state.
+
+Example shape:
+
+```json
+{
+  "total_count": 12,
+  "enabled_count": 8,
+  "disabled_count": 4,
+  "broken_count": 1,
+  "missing_count": 1,
+  "malformed_count": 2,
+  "finding_count": 5,
+  "conflict_count": 2,
+  "risky_script_count": 1,
+  "risky_permission_count": 2,
+  "findings_by_severity": { "error_count": 1, "warning_count": 3, "info_count": 1 },
+  "analysis_groups": { "total_count": 3, "duplicate_name_count": 1, "precedence_count": 1 },
+  "agent_summaries": [
+    { "agent": "codex", "total_count": 3, "finding_count": 1, "conflict_count": 1 }
+  ]
+}
+```
 
 ## Adapter Capability Payload
 

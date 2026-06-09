@@ -2,6 +2,8 @@ import Foundation
 
 enum SkillStateFilter: String, CaseIterable, Identifiable {
     case all
+    case needsTriage
+    case risky
     case enabled
     case disabled
     case broken
@@ -17,6 +19,10 @@ enum SkillStateFilter: String, CaseIterable, Identifiable {
         switch self {
         case .all:
             return UIStrings.text("filter.all", "All")
+        case .needsTriage:
+            return UIStrings.text("filter.needsTriage", "Needs Triage")
+        case .risky:
+            return UIStrings.text("filter.risky", "Risky")
         case .enabled:
             return UIStrings.text("filter.enabled", "Enabled")
         case .disabled:
@@ -129,6 +135,8 @@ enum SkillListModel {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         let findingInstanceIDs = Set(findings.compactMap(\.instanceId))
         let findingDefinitionIDs = Set(findings.compactMap(\.definitionId))
+        let riskyFindingInstanceIDs = Set(findings.filter(Self.isRiskFinding).compactMap(\.instanceId))
+        let riskyFindingDefinitionIDs = Set(findings.filter(Self.isRiskFinding).compactMap(\.definitionId))
         let conflictDefinitionIDs = Set(conflicts.map(\.definitionId))
         let conflictInstanceIDs = Set(conflicts.flatMap(\.instanceIds))
         let searched = query.isEmpty
@@ -146,6 +154,17 @@ enum SkillListModel {
             switch stateFilter {
             case .all:
                 return true
+            case .needsTriage:
+                let status = DisplayText.statusKind(skill.state, enabled: skill.enabled)
+                return findingInstanceIDs.contains(skill.id)
+                    || findingDefinitionIDs.contains(skill.definitionId)
+                    || conflictDefinitionIDs.contains(skill.definitionId)
+                    || conflictInstanceIDs.contains(skill.id)
+                    || status == .broken
+                    || status == .missing
+                    || status == .unknown
+            case .risky:
+                return riskyFindingInstanceIDs.contains(skill.id) || riskyFindingDefinitionIDs.contains(skill.definitionId)
             case .enabled:
                 return DisplayText.statusKind(skill.state, enabled: skill.enabled) == .enabled
             case .disabled:
@@ -243,5 +262,18 @@ enum SkillListModel {
             break
         }
         return aliases.joined(separator: " ")
+    }
+
+    private static func isRiskFinding(_ finding: RuleFindingRecord) -> Bool {
+        switch finding.ruleId {
+        case "frontmatter.tools-not-empty",
+             "permissions.network-declared",
+             "permissions.exec-needs-human",
+             "script.no-shebang",
+             "dependency.unknown":
+            return true
+        default:
+            return finding.ruleId.hasPrefix("script.")
+        }
     }
 }

@@ -40,6 +40,8 @@ struct SkillListModelTests {
         try expectEqual(filtered(stateFilter: .unknown).map(\.id), ["theta"], "Unknown filter")
         try expectEqual(filtered(stateFilter: .withFindings).map(\.id), ["alpha", "gamma"], "Findings filter")
         try expectEqual(filtered(stateFilter: .withConflicts).map(\.id), ["beta", "gamma"], "Conflicts filter")
+        try expectEqual(filtered(stateFilter: .needsTriage).map(\.id), ["alpha", "beta", "delta", "epsilon", "gamma", "theta"], "Needs triage filter")
+        try expectEqual(filtered(stateFilter: .risky).map(\.id), ["gamma"], "Risky filter")
     }
 
     private func agentFiltersLimitResultsAndGroupsUseStableAdapterOrder() throws {
@@ -160,9 +162,9 @@ struct SkillListModelTests {
             id: "finding-instance",
             instanceId: "gamma",
             definitionId: nil,
-            ruleId: "frontmatter.required-fields",
+            ruleId: "frontmatter.tools-not-empty",
             severity: "warning",
-            message: "Missing description",
+            message: "Tool permissions need review",
             suggestion: nil,
             createdAt: 0
         ),

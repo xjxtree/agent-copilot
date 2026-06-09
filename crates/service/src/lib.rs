@@ -17,10 +17,11 @@ use skills_copilot_commands::{
     list_conflicts, list_findings, list_skill_events, list_snapshots, preview_script_execution,
     preview_snapshot_rollback, read_claude_settings, record_blocked_script_execution,
     rollback_snapshot, save_claude_settings, scan_all_catalog_report, scan_claude_to_catalog,
-    toggle_skill, AdapterCapabilityRecord, AgentCatalogScanReport, ConfigDocumentRecord,
-    CrossAgentAnalysisRecord, ExportedSkillBundle, ScriptExecutionAttemptRecord,
-    ScriptExecutionPreviewRecord, ScriptExecutionRequest, SkillInstallPreviewRecord,
-    SnapshotRollbackPreviewRecord, ToolGlobalImportResult, SCRIPT_EXECUTION_DISABLED_REASON,
+    skill_health_summary, toggle_skill, AdapterCapabilityRecord, AgentCatalogScanReport,
+    ConfigDocumentRecord, CrossAgentAnalysisRecord, ExportedSkillBundle,
+    ScriptExecutionAttemptRecord, ScriptExecutionPreviewRecord, ScriptExecutionRequest,
+    SkillHealthSummary, SkillInstallPreviewRecord, SnapshotRollbackPreviewRecord,
+    ToolGlobalImportResult, SCRIPT_EXECUTION_DISABLED_REASON,
 };
 use skills_copilot_core::{AdapterContext, AdapterRoot, AgentId, RootSource, Scope};
 use thiserror::Error;
@@ -120,6 +121,7 @@ pub struct AppStateSnapshot {
     pub findings: Vec<RuleFindingRecord>,
     pub conflicts: Vec<ConflictGroupRecord>,
     pub analysis: CrossAgentAnalysisRecord,
+    pub health: SkillHealthSummary,
     pub snapshots: Vec<ConfigSnapshotRecord>,
 }
 
@@ -700,13 +702,19 @@ impl ServiceHost {
 
     pub fn app_state_snapshot(&self) -> Result<AppStateSnapshot, ServiceError> {
         let catalog = self.open_catalog()?;
+        let adapter_ctx = self.effective_adapter_ctx()?;
         let skills = self.list_visible_skill_records(&catalog)?;
+        let findings = list_findings(&catalog)?;
+        let conflicts = list_conflicts(&catalog)?;
+        let analysis = analyze_catalog(&catalog, &adapter_ctx)?;
+        let health = skill_health_summary(&catalog, &adapter_ctx)?;
         Ok(AppStateSnapshot {
             status: self.status(),
             skills,
-            findings: list_findings(&catalog)?,
-            conflicts: list_conflicts(&catalog)?,
-            analysis: analyze_catalog(&catalog, &self.effective_adapter_ctx()?)?,
+            findings,
+            conflicts,
+            analysis,
+            health,
             snapshots: list_snapshots(&catalog)?,
         })
     }

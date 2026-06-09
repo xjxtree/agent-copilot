@@ -714,19 +714,20 @@
 
 ### 4.19 V2.19 Skill health dashboard and triage UX
 
+**状态（2026-06-10）**：completed read-only dashboard slice。`app.stateSnapshot.health` 已提供 health summary；macOS sidebar 已增加 health dashboard card、Risk / Triage 快捷过滤。Reviewed/ignored 持久化 triage state 不在本切片内，仍作为后续 finding triage persistence 处理。
+
 **目标**：把 app 的入口从长列表升级为“需要关注什么”的管理面板。
 
 **范围**
 - Agent/project health cards：total、enabled、disabled、findings、conflicts、malformed、risky scripts/permissions。
-- Findings grouping：rule、severity、agent、source、review state。
-- Triage state：reviewed、ignored、needs action，保存在本地 app data，不写 agent config。
-- Saved views：例如 high risk、disabled only、malformed only、current project only。
+- Read-only triage filters：Risk、Needs Triage。
+- Findings grouping / reviewed / ignored persistence 仍为后续 finding triage persistence，不写 agent config、不隐藏 unresolved high-risk findings。
 
 **退出条件**
-- [ ] Sidebar/main dashboard 能直接进入高价值过滤视图。
-- [ ] Finding triage 状态不影响 adapter config、不隐藏未审计风险。
-- [ ] Dashboard 在侧边栏收缩/窗口放大时自适应。
-- [ ] `pnpm check:macos` 和真实本机 app validation 通过。
+- [x] Sidebar dashboard 能直接进入 Risk / Triage 高价值过滤视图。
+- [x] Health summary 不影响 adapter config、不隐藏未审计风险。
+- [x] Dashboard 在侧边栏中随布局自适应；更深主面板视图留到后续 UX 切片。
+- [x] `pnpm check:macos` 通过；真实本机 Computer Use 因当前会话锁屏按本轮要求可忽略。
 
 ### 4.20 V2.20 Read-only AI skill analysis assist
 

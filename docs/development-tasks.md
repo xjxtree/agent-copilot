@@ -24,7 +24,7 @@
 | V2.16 | OpenClaw read-only scanner | Completed | OpenClaw documented roots appear in catalog read-only; scan is filesystem-only; project scan is workspace-scoped only (`<workspace>/skills`, `<workspace>/.agents/skills`); no arbitrary repo roots, CLI calls, writes, or installs |
 | V2.17 | Hermes read-only scanner | Completed | Active/profile Hermes home `skills/**/SKILL.md` appears in catalog read-only; no generic project scan, cron mapping, writes, installs, CLI calls, or `.env`/`auth.json`/`logs`/`cron` mapping |
 | V2.18 | Cross-agent skill analysis | Completed | Duplicate names, shadowing, precedence conflicts, malformed skills, disabled states, and source overlap are grouped across agents |
-| V2.19 | Skill health dashboard and triage UX | Planned | Agent/project dashboards summarize health, findings, conflicts, risky scripts/permissions, and review status with actionable filters |
+| V2.19 | Skill health dashboard and triage UX | Completed | `app.stateSnapshot.health` and native sidebar dashboard summarize health, findings, conflicts, risky scripts/permissions, and provide read-only triage filters |
 | V2.20 | Read-only AI skill analysis assist | Planned | Disabled-by-default AI review can summarize skill purpose/risk/findings without writing files, configs, prompts, credentials, or executing scripts |
 
 ## Near-Term Priority: Comprehensive Agent Adapter Support
@@ -36,7 +36,7 @@
 1. V2.16 OpenClaw read-only scanner: completed filesystem scan only, project scope limited to confirmed OpenClaw workspace roots `<workspace>/skills` and `<workspace>/.agents/skills`, no CLI calls during ordinary scan, no arbitrary repo roots, writable/install blocked.
 2. V2.17 Hermes read-only scanner: completed active Hermes home `skills/**/SKILL.md` only, no generic project scan, no cron-to-skill mapping, no `.env`/`auth.json`/`logs`/`cron` mapping, no CLI calls, writable/install blocked.
 3. V2.18 Cross-agent skill analysis: completed duplicate/conflict/precedence/source-overlap analysis across supported agents.
-4. V2.19 Skill health dashboard and triage UX: aggregate health, findings, conflicts, risk, and review workflow.
+4. V2.19 Skill health dashboard and triage UX: completed aggregate health, findings, conflicts, risk, and read-only triage filters.
 5. V2.20 Read-only AI skill analysis assist: disabled-by-default, read-only model-assisted summaries and finding explanations.
 6. Pi writable evidence harness: keep planned, but schedule after read-only management and analysis improvements unless user explicitly prioritizes Pi writes.
 
@@ -73,8 +73,8 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 | P0 | Hermes adapter support | Read-only scanner implemented; writable/install blocked | Keep scoped read-only scan of active Hermes home `skills/**/SKILL.md`; skip generic project roots, `.env`/`auth.json`/`logs`/cron content, and read-only scan CLI calls | Hermes skills appear in catalog read-only; generic project scan and writes remain blocked |
 | P0 | OpenClaw adapter support | Read-only scanner implemented; writable/install blocked | Keep scoped read-only filesystem scan over documented roots; project scan only for confirmed OpenClaw workspace roots; no OpenClaw CLI calls during ordinary scan | OpenClaw skills appear in catalog read-only; arbitrary repo roots and writes/install remain blocked |
 | P0 | Cross-agent skill analysis | Implemented read-only | Keep catalog summaries for duplicate/conflict/precedence/source-overlap groups aligned with fixtures and UI needs | Users can identify conflicting or duplicated skills across agents without manually comparing lists |
-| P0 | Skill health dashboard | Planned | Add dashboard summary cards and actionable filters for findings, conflicts, disabled skills, malformed metadata, risky scripts, and permission issues | Users can prioritize cleanup from a single management view |
-| P1 | Finding triage UX | Planned | Add reviewed/ignored state and grouping by rule, severity, agent, and source | Users can separate known issues from new actionable findings |
+| P0 | Skill health dashboard | Implemented read-only | Keep dashboard summary cards and actionable filters for findings, conflicts, disabled skills, malformed metadata, risky scripts, and permission issues aligned with service health payload | Users can prioritize cleanup from a single management view |
+| P1 | Finding triage persistence | Planned | Add reviewed/ignored state and grouping by rule, severity, agent, and source without writing agent config or hiding unresolved high-risk findings | Users can separate known issues from new actionable findings |
 | P1 | Agent-config timeline | Planned | Show agent-config snapshots and activity history per agent without adding skill-content snapshots | Users can understand config changes and rollback points |
 | P1 | Read-only AI skill analysis assist | Planned | Reuse V2.7 disabled-by-default gate for opt-in skill purpose/risk/finding summaries; no provider/client/storage until explicitly implemented | Users get human-readable analysis without any write, execution, or credential risk |
 

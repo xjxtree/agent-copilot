@@ -26,6 +26,9 @@ use skills_copilot_core::{
 use skills_copilot_scanner::{scan_agent, ScannerError};
 use thiserror::Error;
 
+#[cfg(test)]
+use skills_copilot_core::SkillScript;
+
 pub fn app_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
@@ -806,6 +809,20 @@ pub fn analyze_catalog(
     Ok(analyze_skill_instances(&instances))
 }
 
+pub fn skill_health_summary(
+    catalog: &Catalog,
+    ctx: &AdapterContext,
+) -> Result<SkillHealthSummary, CommandError> {
+    let instances =
+        catalog.list_skill_instances_for_project_context(ctx.project_root.as_deref())?;
+    let findings = catalog.list_rule_findings()?;
+    let conflicts = catalog.list_conflict_groups()?;
+    let analysis = analyze_skill_instances(&instances);
+    Ok(build_skill_health_summary(
+        &instances, &findings, &conflicts, &analysis,
+    ))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CrossAgentAnalysisRecord {
     pub summary: CrossAgentAnalysisSummary,
@@ -839,6 +856,177 @@ pub struct CrossAgentAnalysisGroup {
     pub agents: Vec<String>,
     pub scopes: Vec<String>,
     pub paths: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SkillHealthSummary {
+    pub total_count: usize,
+    pub enabled_count: usize,
+    pub disabled_count: usize,
+    pub broken_count: usize,
+    pub missing_count: usize,
+    pub malformed_count: usize,
+    pub finding_count: usize,
+    pub conflict_count: usize,
+    pub risky_script_count: usize,
+    pub risky_permission_count: usize,
+    pub findings_by_severity: HealthSeverityCounts,
+    pub analysis_groups: HealthAnalysisGroupCounts,
+    pub agent_summaries: Vec<AgentSkillHealthSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct HealthSeverityCounts {
+    pub error_count: usize,
+    pub warning_count: usize,
+    pub info_count: usize,
+}
+
+impl HealthSeverityCounts {
+    fn total(&self) -> usize {
+        self.error_count + self.warning_count + self.info_count
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HealthAnalysisGroupCounts {
+    pub total_count: usize,
+    pub error_count: usize,
+    pub warning_count: usize,
+    pub info_count: usize,
+    pub duplicate_name_count: usize,
+    pub canonical_name_count: usize,
+    pub path_overlap_count: usize,
+    pub enabled_mismatch_count: usize,
+    pub malformed_count: usize,
+    pub precedence_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AgentSkillHealthSummary {
+    pub agent: String,
+    pub total_count: usize,
+    pub enabled_count: usize,
+    pub disabled_count: usize,
+    pub broken_count: usize,
+    pub missing_count: usize,
+    pub malformed_count: usize,
+    pub finding_count: usize,
+    pub conflict_count: usize,
+    pub risky_script_count: usize,
+    pub risky_permission_count: usize,
+    pub analysis_group_count: usize,
+}
+
+pub fn build_skill_health_summary(
+    instances: &[SkillInstance],
+    findings: &[RuleFindingRecord],
+    conflicts: &[ConflictGroupRecord],
+    analysis: &CrossAgentAnalysisRecord,
+) -> SkillHealthSummary {
+    let malformed_instance_ids = malformed_instance_ids(instances, findings);
+    let risky_script_instance_ids = risky_script_instance_ids(instances, findings);
+    let risky_permission_instance_ids = risky_permission_instance_ids(instances, findings);
+    let findings_by_severity =
+        severity_counts(findings.iter().map(|finding| finding.severity.as_str()));
+    let analysis_groups = health_analysis_group_counts(analysis);
+
+    let mut agent_summaries = Vec::new();
+    for agent in instances
+        .iter()
+        .map(|inst| inst.agent.as_str().to_string())
+        .collect::<BTreeSet<_>>()
+    {
+        let members = instances
+            .iter()
+            .filter(|inst| inst.agent.as_str() == agent)
+            .collect::<Vec<_>>();
+        let member_ids = members
+            .iter()
+            .map(|inst| inst.id.as_str())
+            .collect::<BTreeSet<_>>();
+        let member_definition_ids = members
+            .iter()
+            .map(|inst| inst.definition_id.as_str())
+            .collect::<BTreeSet<_>>();
+        let finding_count = findings
+            .iter()
+            .filter(|finding| finding_applies_to(&member_ids, &member_definition_ids, finding))
+            .count();
+        let conflict_count = conflicts
+            .iter()
+            .filter(|conflict| conflict_applies_to(&member_ids, &member_definition_ids, conflict))
+            .count();
+        let analysis_group_count = analysis
+            .groups
+            .iter()
+            .filter(|group| group.agents.iter().any(|group_agent| group_agent == &agent))
+            .count();
+
+        agent_summaries.push(AgentSkillHealthSummary {
+            agent: agent.clone(),
+            total_count: members.len(),
+            enabled_count: members
+                .iter()
+                .filter(|inst| is_health_enabled(inst))
+                .count(),
+            disabled_count: members
+                .iter()
+                .filter(|inst| is_health_disabled(inst))
+                .count(),
+            broken_count: members
+                .iter()
+                .filter(|inst| matches!(inst.state, SkillState::Broken))
+                .count(),
+            missing_count: members
+                .iter()
+                .filter(|inst| matches!(inst.state, SkillState::Missing))
+                .count(),
+            malformed_count: member_ids
+                .iter()
+                .filter(|id| malformed_instance_ids.contains(**id))
+                .count(),
+            finding_count,
+            conflict_count,
+            risky_script_count: member_ids
+                .iter()
+                .filter(|id| risky_script_instance_ids.contains(**id))
+                .count(),
+            risky_permission_count: member_ids
+                .iter()
+                .filter(|id| risky_permission_instance_ids.contains(**id))
+                .count(),
+            analysis_group_count,
+        });
+    }
+
+    SkillHealthSummary {
+        total_count: instances.len(),
+        enabled_count: instances
+            .iter()
+            .filter(|inst| is_health_enabled(inst))
+            .count(),
+        disabled_count: instances
+            .iter()
+            .filter(|inst| is_health_disabled(inst))
+            .count(),
+        broken_count: instances
+            .iter()
+            .filter(|inst| matches!(inst.state, SkillState::Broken))
+            .count(),
+        missing_count: instances
+            .iter()
+            .filter(|inst| matches!(inst.state, SkillState::Missing))
+            .count(),
+        malformed_count: malformed_instance_ids.len(),
+        finding_count: findings_by_severity.total(),
+        conflict_count: conflicts.len(),
+        risky_script_count: risky_script_instance_ids.len(),
+        risky_permission_count: risky_permission_instance_ids.len(),
+        findings_by_severity,
+        analysis_groups,
+        agent_summaries,
+    }
 }
 
 pub fn analyze_skill_instances(instances: &[SkillInstance]) -> CrossAgentAnalysisRecord {
@@ -877,6 +1065,157 @@ pub fn analyze_skill_instances(instances: &[SkillInstance]) -> CrossAgentAnalysi
         },
         groups,
     }
+}
+
+fn is_health_enabled(inst: &SkillInstance) -> bool {
+    inst.enabled && matches!(inst.state, SkillState::Loaded)
+}
+
+fn is_health_disabled(inst: &SkillInstance) -> bool {
+    !inst.enabled || matches!(inst.state, SkillState::Disabled)
+}
+
+fn malformed_instance_ids(
+    instances: &[SkillInstance],
+    findings: &[RuleFindingRecord],
+) -> BTreeSet<String> {
+    let mut ids = instances
+        .iter()
+        .filter(|inst| matches!(inst.state, SkillState::Broken | SkillState::Missing))
+        .map(|inst| inst.id.clone())
+        .collect::<BTreeSet<_>>();
+    add_finding_affected_instances(
+        findings
+            .iter()
+            .filter(|finding| finding.rule_id == "frontmatter.required-fields"),
+        instances,
+        &mut ids,
+    );
+    ids
+}
+
+fn risky_script_instance_ids(
+    instances: &[SkillInstance],
+    findings: &[RuleFindingRecord],
+) -> BTreeSet<String> {
+    let mut ids = instances
+        .iter()
+        .filter(|inst| !inst.scripts.is_empty())
+        .map(|inst| inst.id.clone())
+        .collect::<BTreeSet<_>>();
+    add_finding_affected_instances(
+        findings
+            .iter()
+            .filter(|finding| finding.rule_id.starts_with("script.")),
+        instances,
+        &mut ids,
+    );
+    ids
+}
+
+fn risky_permission_instance_ids(
+    instances: &[SkillInstance],
+    findings: &[RuleFindingRecord],
+) -> BTreeSet<String> {
+    let mut ids = instances
+        .iter()
+        .filter(|inst| {
+            inst.permissions.exec
+                || !matches!(inst.permissions.network, NetworkAccess::None)
+                || !inst.permissions.tools.is_empty()
+        })
+        .map(|inst| inst.id.clone())
+        .collect::<BTreeSet<_>>();
+    add_finding_affected_instances(
+        findings.iter().filter(|finding| {
+            matches!(
+                finding.rule_id.as_str(),
+                "frontmatter.tools-not-empty"
+                    | "permissions.network-declared"
+                    | "permissions.exec-needs-human"
+                    | "dependency.unknown"
+            )
+        }),
+        instances,
+        &mut ids,
+    );
+    ids
+}
+
+fn add_finding_affected_instances<'a>(
+    findings: impl Iterator<Item = &'a RuleFindingRecord>,
+    instances: &[SkillInstance],
+    ids: &mut BTreeSet<String>,
+) {
+    for finding in findings {
+        if let Some(instance_id) = &finding.instance_id {
+            ids.insert(instance_id.clone());
+        }
+        if let Some(definition_id) = &finding.definition_id {
+            ids.extend(
+                instances
+                    .iter()
+                    .filter(|inst| &inst.definition_id == definition_id)
+                    .map(|inst| inst.id.clone()),
+            );
+        }
+    }
+}
+
+fn severity_counts<'a>(severities: impl Iterator<Item = &'a str>) -> HealthSeverityCounts {
+    let mut counts = HealthSeverityCounts::default();
+    for severity in severities {
+        match severity {
+            "error" => counts.error_count += 1,
+            "warn" | "warning" => counts.warning_count += 1,
+            "info" => counts.info_count += 1,
+            _ => counts.info_count += 1,
+        }
+    }
+    counts
+}
+
+fn health_analysis_group_counts(analysis: &CrossAgentAnalysisRecord) -> HealthAnalysisGroupCounts {
+    let severity = severity_counts(analysis.groups.iter().map(|group| group.severity.as_str()));
+    HealthAnalysisGroupCounts {
+        total_count: analysis.summary.total_groups,
+        error_count: severity.error_count,
+        warning_count: severity.warning_count,
+        info_count: severity.info_count,
+        duplicate_name_count: analysis.summary.duplicate_name_groups,
+        canonical_name_count: analysis.summary.canonical_name_groups,
+        path_overlap_count: analysis.summary.path_overlap_groups,
+        enabled_mismatch_count: analysis.summary.enabled_mismatch_groups,
+        malformed_count: analysis.summary.malformed_groups,
+        precedence_count: analysis.summary.precedence_groups,
+    }
+}
+
+fn finding_applies_to(
+    instance_ids: &BTreeSet<&str>,
+    definition_ids: &BTreeSet<&str>,
+    finding: &RuleFindingRecord,
+) -> bool {
+    finding
+        .instance_id
+        .as_deref()
+        .is_some_and(|instance_id| instance_ids.contains(instance_id))
+        || finding
+            .definition_id
+            .as_deref()
+            .is_some_and(|definition_id| definition_ids.contains(definition_id))
+}
+
+fn conflict_applies_to(
+    instance_ids: &BTreeSet<&str>,
+    definition_ids: &BTreeSet<&str>,
+    conflict: &ConflictGroupRecord,
+) -> bool {
+    definition_ids.contains(conflict.definition_id.as_str())
+        || conflict
+            .instance_ids
+            .iter()
+            .any(|instance_id| instance_ids.contains(instance_id.as_str()))
 }
 
 fn append_duplicate_name_groups(
@@ -6735,6 +7074,176 @@ mod tests {
                 .all(|finding| finding.rule_id != rule_id),
             "did not expect {rule_id} finding"
         );
+    }
+}
+#[cfg(test)]
+mod v219_skill_health_tests {
+    use super::*;
+
+    #[test]
+    fn health_summary_counts_triage_risk_and_analysis_groups() {
+        let mut scripted = health_skill(
+            "scripted",
+            AgentId::ClaudeCode,
+            Scope::AgentGlobal,
+            "review-diff",
+            true,
+            SkillState::Loaded,
+        );
+        scripted.scripts.push(SkillScript {
+            name: "setup".to_string(),
+            path: PathBuf::from("/tmp/claude/review/scripts/setup.sh"),
+            interpreter: Some("bash".to_string()),
+            description: None,
+            fingerprint: "script-fp".to_string(),
+        });
+
+        let mut permissioned = health_skill(
+            "permissioned",
+            AgentId::Codex,
+            Scope::AgentGlobal,
+            "review-diff",
+            false,
+            SkillState::Disabled,
+        );
+        permissioned.permissions.network = NetworkAccess::Full;
+        permissioned.permissions.exec = true;
+
+        let broken = health_skill(
+            "broken",
+            AgentId::Hermes,
+            Scope::AgentGlobal,
+            "broken-skill",
+            false,
+            SkillState::Broken,
+        );
+        let missing = health_skill(
+            "missing",
+            AgentId::Openclaw,
+            Scope::AgentProject,
+            "missing-skill",
+            false,
+            SkillState::Missing,
+        );
+
+        let instances = vec![scripted, permissioned, broken, missing];
+        let findings = vec![
+            health_finding(
+                "finding-script",
+                Some("scripted"),
+                None,
+                "script.no-shebang",
+                "info",
+            ),
+            health_finding(
+                "finding-permission",
+                Some("permissioned"),
+                None,
+                "permissions.exec-needs-human",
+                "warning",
+            ),
+            health_finding(
+                "finding-malformed",
+                Some("broken"),
+                None,
+                "frontmatter.required-fields",
+                "error",
+            ),
+        ];
+        let conflicts = vec![ConflictGroupRecord {
+            id: "conflict-review-diff".to_string(),
+            definition_id: "def.review-diff".to_string(),
+            reason: "content-drift".to_string(),
+            winner_id: Some("scripted".to_string()),
+            instance_ids: vec!["scripted".to_string(), "permissioned".to_string()],
+        }];
+        let analysis = analyze_skill_instances(&instances);
+
+        let health = build_skill_health_summary(&instances, &findings, &conflicts, &analysis);
+
+        assert_eq!(health.total_count, 4);
+        assert_eq!(health.enabled_count, 1);
+        assert_eq!(health.disabled_count, 3);
+        assert_eq!(health.broken_count, 1);
+        assert_eq!(health.missing_count, 1);
+        assert_eq!(health.malformed_count, 2);
+        assert_eq!(health.findings_by_severity.error_count, 1);
+        assert_eq!(health.findings_by_severity.warning_count, 1);
+        assert_eq!(health.findings_by_severity.info_count, 1);
+        assert_eq!(health.conflict_count, 1);
+        assert_eq!(health.risky_script_count, 1);
+        assert_eq!(health.risky_permission_count, 1);
+        assert!(health.analysis_groups.total_count >= 2);
+        assert_eq!(health.analysis_groups.duplicate_name_count, 1);
+        assert_eq!(health.analysis_groups.malformed_count, 1);
+
+        let codex = health
+            .agent_summaries
+            .iter()
+            .find(|summary| summary.agent == "codex")
+            .expect("codex health summary");
+        assert_eq!(codex.total_count, 1);
+        assert_eq!(codex.disabled_count, 1);
+        assert_eq!(codex.finding_count, 1);
+        assert_eq!(codex.conflict_count, 1);
+        assert_eq!(codex.risky_permission_count, 1);
+        assert!(codex.analysis_group_count >= 1);
+    }
+
+    fn health_skill(
+        id: &str,
+        agent: AgentId,
+        scope: Scope,
+        name: &str,
+        enabled: bool,
+        state: SkillState,
+    ) -> SkillInstance {
+        SkillInstance {
+            id: id.to_string(),
+            agent,
+            scope,
+            project_root: if scope == Scope::AgentProject {
+                Some(PathBuf::from("/tmp/project"))
+            } else {
+                None
+            },
+            path: PathBuf::from(format!("/tmp/{}/{}/SKILL.md", agent.as_str(), id)),
+            display_path: PathBuf::from(format!("/tmp/{}/{}/SKILL.md", agent.as_str(), id)),
+            definition_id: format!("def.{}", canonical_skill_name_suggestion(name)),
+            name: name.to_string(),
+            display_name: name.to_string(),
+            description: "fixture skill".to_string(),
+            version: None,
+            state,
+            enabled,
+            frontmatter_raw: format!("name: {name}\ndescription: fixture"),
+            body: "fixture body".to_string(),
+            scripts: Vec::new(),
+            permissions: PermissionRequest::default(),
+            fingerprint: format!("{id}-fingerprint"),
+            mtime: 0,
+            first_seen: 0,
+            last_seen: 0,
+        }
+    }
+
+    fn health_finding(
+        id: &str,
+        instance_id: Option<&str>,
+        definition_id: Option<&str>,
+        rule_id: &str,
+        severity: &str,
+    ) -> RuleFindingRecord {
+        RuleFindingRecord {
+            id: id.to_string(),
+            instance_id: instance_id.map(str::to_string),
+            definition_id: definition_id.map(str::to_string),
+            rule_id: rule_id.to_string(),
+            severity: severity.to_string(),
+            message: format!("{rule_id} fixture"),
+            suggestion: None,
+            created_at: 0,
+        }
     }
 }
 
