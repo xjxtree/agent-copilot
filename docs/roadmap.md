@@ -240,7 +240,7 @@
 **退出条件**
 - [x] scan / watcher / refresh 关键路径有用户可见 summary 状态、错误和恢复验证；实时 watcher/event stream 明确 defer 到 V2 后续设计。
 - [x] 发布前安全 checklist 中 high/critical audit、canonicalize 和 fuzz 有明确结果或决策；签名/公证/打包策略已 deferred 到产品成熟后的公开发布阶段。
-- [x] 至少一个非 Claude adapter 完成 spec 证据清单；当前 Codex 已完成 writable adapter 切片，opencode 已完成 read-only native-root adapter 切片，真实本机 UI 操作验证待非锁屏状态补跑。Pi / Hermes / OpenClaw 仍不得按猜测实现。
+- [x] 至少一个非 Claude adapter 完成 spec 证据清单；当前 Codex 已完成 writable adapter 切片，opencode 已完成 read-only native-root adapter 切片，当前 mainline 真实本机 UI 操作验证已在 2026-06-09 补跑通过。Pi / Hermes / OpenClaw 仍不得按猜测实现。
 - [x] SwiftPM test target 覆盖核心 native view model/list model 行为，Node 脚本保留为集成/布局辅助。
 - [x] 分发前 runbook 明确版本号、签名、公证、DMG/ZIP 和本地验证步骤（当前尚未 public release）。
 
@@ -265,7 +265,7 @@
 | Adapter core | 已集成：`crates/adapters/src/codex/` + `CodexAdapter` 注册 |
 | Commands / service scan-all and toggle integration | 已集成：`catalog.scanAll` 扫描 Claude Code、Codex 和 read-only opencode；Codex toggle 写用户 `config.toml`；opencode toggle read-only rejected |
 | macOS UI agent visibility / scan-all flow | 已集成：toolbar/menu/store 使用 scan-all，fixture tests 覆盖 `codex` agent record |
-| Docs | 已更新；Computer Use 真实操作验证本轮用户豁免 |
+| Docs | 已更新；首轮 Computer Use 真实操作验证当时豁免，当前 mainline 已在 2026-06-09 后补通过 |
 
 **范围**
 - 新增 `crates/adapters/src/codex/`，实现 read-only scanning for verified roots：user `$HOME/.agents/skills`，以及从 adapter context `project_cwd` 向上到 `project_root` 的 `.agents/skills`。
@@ -273,7 +273,7 @@
 - 增加 Codex fixtures/parser/commands tests：global、project、malformed、conflict、disabled/re-enabled、duplicate config entries。
 - 实现 user-config writable toggle：只 patch `$CODEX_HOME/config.toml` / `~/.codex/config.toml` 的 `[[skills.config]]`，disable 写绝对 `SKILL.md` path + `enabled = false`，enable 删除该 path 的所有 entries。
 - 接入 catalog/service contract：list/get/findings/conflicts/snapshot 对多 agent 数据仍稳定；UI 显示 agent 为 `codex`，但不把 plugin/admin/system skills 暴露为首版范围。
-- 验证：`cargo test --workspace`、focused adapter/commands tests、service fixtures、`pnpm check:macos` 已通过；真实 macOS Computer Use 操作验证本轮用户豁免。
+- 验证：`cargo test --workspace`、focused adapter/commands tests、service fixtures、`pnpm check:macos` 已通过；当前 mainline 已在 2026-06-09 后补真实 macOS Computer Use 操作验证。
 
 **不做**
 - 不写 `<repo>/.codex/config.toml`。
@@ -289,13 +289,13 @@
 - [x] Malformed Codex skills 被标记为 broken，不导致 scan 失败。
 - [x] macOS UI 能清楚区分 `claude-code` 与 `codex` agent，并保留 refresh/log/error 状态。
 - [x] `pnpm check:macos` 通过。
-- [x] Real local app Computer Use validation 本轮用户豁免；后续代码改动恢复执行。
+- [x] Real local app Computer Use validation 首轮切片未执行；当前 mainline 已于 2026-06-09 后补通过，后续代码改动仍需重跑。
 
 ### 4.1 V2.1 Claude/Codex Adapter Experience
 
 **目标**：先把 Claude/Codex 两个 writable-capable adapter 体验打稳，再继续扩大 adapter 数量。
 
-**状态（2026-06-08）**：实现已集成，自动验证已通过。`catalog.scanAll` 已提供 per-agent refresh summary，native macOS UI 已补 agent filter / grouped list / Codex restart note，SwiftPM 和 native list model tests 已覆盖核心行为。`pnpm check:macos` 已通过并更新 smoke fixture 窗口截图；当时真实本机 app validation 已尝试 `pnpm dev:macos`，但 macOS 会话中 SkillsCopilot 进程启动后 System Events 报告 0 个窗口，Computer Use 返回 `cgWindowNotFound`，因此 scan-all / filter / toggle 的真实窗口操作在该里程碑阻塞，不能用 smoke 截图替代。当前 mainline app 后续已在 2026-06-09 通过真实本机 Computer Use 验证。
+**状态（2026-06-09）**：实现已集成，自动验证已通过，并已完成当前 mainline 真实本机 Computer Use 补验。`catalog.scanAll` 已提供 per-agent refresh summary，native macOS UI 已补 agent filter / grouped list / Codex restart note，SwiftPM 和 native list model tests 已覆盖核心行为。`pnpm check:macos` 通过；真实 app 从 `<repo>/dist/SkillsCopilot.app` 启动，Computer Use 操作验证覆盖 scan-all、All/Claude Code/Codex/opencode agent filter、Codex/Claude/opencode 可见性、opencode read-only 状态、project context set/clear、findings/conflicts/snapshot preview 和 script safety preview-only。真实 Codex/Claude toggle 写入未在本轮触发，避免改动开发者真实配置；写路径仍由 fixture smoke 和服务测试覆盖。
 
 **范围**
 - UI 应补齐 agent 维度过滤/分组：`All` / `Claude Code` / `Codex`。过滤只影响可见列表、计数和空态，不应改变 catalog 数据或触发写入。
@@ -309,21 +309,21 @@
 **Coordinator validation checklist**
 - [x] Run `pnpm check:macos` from a clean-enough working tree and record the exact command result.
 - [x] Run `pnpm dev:macos` to launch the real local app against the developer's real local `HOME`, default app data, real Claude config, and current Codex config.
-- [ ] In the real app, run Scan / scan-all and confirm the UI calls the dual-adapter path rather than Claude-only scan; record visible summary text.
-- [ ] Exercise the agent filter for `All`, `Claude Code`, and `Codex`; confirm counts and empty states are understandable and the selected detail updates or clears correctly.
-- [ ] Confirm at least one Codex skill is visible when local Codex fixture or real Codex roots exist; if no Codex root exists, record the missing-root state instead of treating it as success.
-- [ ] Confirm a Claude Code skill is still visible and that Claude Code toggle behavior still works or remains intentionally unavailable for read-only/broken rows.
-- [ ] Toggle a writable Codex skill and confirm the post-write UI includes a restart note for Codex runtime config reload; the note should mention Codex, not Skills Copilot, and should not promise live reload.
+- [x] In the real app, run Scan / scan-all and confirm the UI calls the multi-adapter path rather than Claude-only scan; 2026-06-09 visible summary: `341 scanned, 341 in catalog, 866 findings, 170 conflicts`.
+- [x] Exercise the agent filter for `All`, `Claude Code`, `Codex`, and `opencode`; 2026-06-09 real local counts were 341 / 154 / 171 / 16 visible rows and selected detail updated correctly.
+- [x] Confirm at least one Codex skill is visible when local Codex fixture or real Codex roots exist; 2026-06-09 real local Codex filter showed 171 visible rows.
+- [x] Confirm a Claude Code skill is still visible; 2026-06-09 real local Claude Code filter showed 154 visible rows. Real config toggle write was not re-exercised in this pass to avoid mutating live user config.
+- [ ] Toggle a writable Codex skill and confirm the post-write UI includes a restart note for Codex runtime config reload; keep this open until a disposable real Codex config or explicit user-approved live-config write pass is used.
 - [ ] After the Codex toggle, restart or reopen the relevant Codex runtime only if needed for local confirmation; record whether restart was required or skipped.
-- [ ] Capture the completed UI evidence with `pnpm capture:macos-window` or `script/capture_app_window.sh SkillsCopilot docs/ui-artifacts/native-macos-shell/completed.png`; verify the screenshot contains only the app window.
-- [ ] Update `docs/ui-artifacts/native-macos-shell/completed.png` and verification notes only after the real app validation is complete.
+- [x] Capture the completed UI evidence with the app-window-only capture script; 2026-06-09 evidence: `docs/ui-artifacts/native-macos-shell/completed.png` and `docs/ui-artifacts/native-macos-shell/real-local-computer-use-2026-06-09.png`.
+- [x] Update `docs/ui-artifacts/native-macos-shell/completed.png` and verification notes after the real app validation completed.
 
 **退出条件**
 - [x] 用户能在 UI 中按 agent 过滤并确认每条 skill 来源。
 - [x] `catalog.scanAll` 的用户可见 summary 能区分 Claude Code / Codex 结果。
 - [x] Codex toggle 的 restart 提示明确且不误导为 live reload。
 - [x] Claude Code scan/list/detail/toggle/settings/snapshot flows 没有因 Codex UI 收敛回归。
-- [ ] `pnpm check:macos` + `pnpm dev:macos` real local app Computer Use validation 通过，并记录窗口级截图路径。
+- [x] `pnpm check:macos` + real local app Computer Use validation passed on 2026-06-09; window-level evidence recorded at `docs/ui-artifacts/native-macos-shell/real-local-computer-use-2026-06-09.png`.
 
 ### 4.2 Project context 正式化
 
@@ -365,7 +365,7 @@
 - [x] Codex cwd→repo-root scanning 在 fixture/stored project context 下可复现；当前 mainline app 于 2026-06-09 完成真实本机 project context 操作验证。
 - [x] 多 project 切换不会污染 catalog 状态或 toggle 目标。
 - [x] V2.2 文档、service fixtures、实现和 UI 文案没有互相矛盾的 complete/passed claims。
-- [ ] 真实本机 UI 操作验证通过并记录窗口级证据。
+- [x] 真实本机 UI 操作验证已在 2026-06-09 通过并记录窗口级证据：`docs/ui-artifacts/native-macos-shell/real-local-computer-use-2026-06-09.png`。
 
 **Coordinator validation checklist**
 - [x] Run `cargo test --workspace` and record the exact result: passed on 2026-06-08.
@@ -374,12 +374,12 @@
 - [x] Run `pnpm check:macos` and record the exact result: passed on 2026-06-08, including fixture app-window screenshot capture.
 - [x] Run a smoke project context scenario using fixture data: start no-project, set a project cwd, scan-all, switch/clear project, and confirm catalog ownership and toggle targets do not leak across contexts.
 - [x] Run the real local app with `pnpm dev:macos` or `./script/build_and_run.sh run` against the developer's real local `HOME`, default app data, real Claude config, and current Codex config: `pnpm dev:macos` / `open -n dist/SkillsCopilot.app` launched the real bundle process on 2026-06-08.
-- [ ] When the macOS session is unlocked and Computer Use/AX can see a SkillsCopilot window, operate the real app to set/switch/clear project context, run scan-all, verify Codex cwd→repo-root behavior, and capture only app-window evidence.
+- [x] When the macOS session is unlocked and Computer Use/AX can see a SkillsCopilot window, operate the real app to set/switch/clear project context, run scan-all, verify Codex cwd→repo-root behavior, and capture only app-window evidence. Completed on 2026-06-09 against `<repo>/dist/SkillsCopilot.app`.
 - [x] At V2.2 closeout, if Computer Use/AX could not see the real app window, the blocker was recorded explicitly: process launched, but `script/capture_app_window.sh dist/real-local-v2.2-window.png` reported no visible window, System Events reported 0 SkillsCopilot windows, and Computer Use `get_app_state` returned `remoteConnection`. Current mainline real local validation was completed later on 2026-06-09.
 
 ### 4.3 Adapter hardening
 
-**状态**：implementation integrated; current mainline real local validation passed later。2026-06-08 已集成 Codex config patch hardening、root/security regressions、状态表达、smoke 覆盖和文档同步，并通过自动化验证；该里程碑 closeout 时真实本机 app Computer Use 操作验证仍待 macOS/AX 可见窗口后补验。当前 mainline app 后续已在 2026-06-09 通过真实本机验证。
+**状态**：implementation integrated; current mainline real local validation passed later。2026-06-08 已集成 Codex config patch hardening、root/security regressions、状态表达、smoke 覆盖和文档同步，并通过自动化验证；该里程碑 closeout 时真实本机 app Computer Use 操作验证因 macOS/AX 窗口不可见而阻塞。当前 mainline app 后续已在 2026-06-09 通过真实本机验证。
 
 **目标**：把 Codex 首版实现从“可用”推进到“耐用”。
 
@@ -403,7 +403,7 @@
 - [x] UI/store and smoke coverage prove status labels and refresh summaries remain distinguishable for disabled/broken/missing/root-error cases.
 - [x] Run `cargo test --workspace` and focused adapter/commands tests after implementation changes: passed on 2026-06-08.
 - [x] Run `pnpm check:macos` after implementation/UI changes: passed on 2026-06-08, including fixture app-window screenshot and Codex config hardening smoke.
-- [ ] Real local app validation remains required for code/UI changes: when macOS/AX can see the SkillsCopilot window, operate project context, scan-all, agent filter, Codex toggle/restart note, and capture only the app window. Until then, keep the V2.2 blocker explicit.
+- [x] Real local app validation remains required for code/UI changes: on 2026-06-09 Computer Use operated project context, scan-all, agent filters, read-only states, snapshot preview, and captured only the app window. Real Codex live-config toggle/restart note remains separately open until a disposable or explicitly approved live-config write pass.
 - [x] Documentation-only sync pass validation: run stale-status `rg` scan and `git diff --check`.
 
 **退出条件**
@@ -411,13 +411,13 @@
 - [x] broken/disabled/missing/root-error 状态在 UI 中可区分。
 - [x] security regressions 覆盖 Codex user config path、project context、root allowlist 和 project-local/plugin/admin/system write rejection。
 - [x] README / AGENTS / roadmap / adapter specs / security model 状态一致，不再残留 V2.1 active-phase 文案；V2.2/V2.3 real Computer Use blocker 仍清楚可见。
-- [ ] 真实本机 UI 操作验证通过并记录窗口级证据。
+- [x] 真实本机 UI 操作验证已在 2026-06-09 通过并记录窗口级证据：`docs/ui-artifacts/native-macos-shell/real-local-computer-use-2026-06-09.png`。
 
 ### 4.4 V2.4 opencode read-only implementation
 
 **目标**：把 opencode 作为第三个 adapter 接入 catalog，但没有 writable 证据前只做 read-only。
 
-**状态**：complete / automated validation passed。真实本机 Computer Use 操作验证待 macOS 会话解锁后补跑；fixture smoke 截图不能替代该验证。
+**状态**：complete / automated validation passed；current mainline real local Computer Use validation passed on 2026-06-09。fixture smoke 截图仍不能替代后续候选变更的真实本机验证。
 
 **范围**
 - 只扫描 opencode native roots：用户 `~/.config/opencode/skills` 和当前项目 `.opencode/skills`。
@@ -438,7 +438,7 @@
 
 **目标**：把本轮文档审查暴露的 stale/status drift 和 audit blind spots 收敛成实现前 checklist，优先强化边界隔离、fixture typing、UI 防误操作和文档同步。
 
-**状态**：complete / automated validation passed。2026-06-08 已集成 scanner/parser、commands/security、service/smoke、macOS UI 和 docs/status hardening；真实本机 Computer Use 操作验证待 macOS 会话可交互后补跑。
+**状态**：complete / automated validation passed；current mainline real local Computer Use validation passed on 2026-06-09。2026-06-08 已集成 scanner/parser、commands/security、service/smoke、macOS UI 和 docs/status hardening；后续候选变更仍需重跑真实本机验证。
 
 **Task checklist**
 - [x] Scanner override isolation：复核 `SKILLS_COPILOT_*_EXTRA_ROOTS`、fixture roots、project context env override 和 adapter native roots 的隔离，确保测试/截图 override 不会进入真实用户 config 或跨 adapter 扫描边界。
@@ -503,7 +503,7 @@
 
 **目标**：把规则引擎从 MVP 4 条规则扩展成可维护的本地治理层，优先覆盖权限、依赖、脚本和内容质量。
 
-**状态**：complete / automated validation passed。五项 remediation 已完成集成并通过 focused validation、docs stale-claim 检查和主线 `pnpm check:macos`；七条新规则已完成：`frontmatter.tools-not-empty`、`permissions.network-declared`、`permissions.exec-needs-human`、`name.canonical-case`、`script.no-shebang`、`body.too-long`、`dependency.unknown`。真实本机 Computer Use 仍等待 macOS/AX 可操作窗口。
+**状态**：complete / automated validation passed；current mainline real local Computer Use validation passed on 2026-06-09。五项 remediation 已完成集成并通过 focused validation、docs stale-claim 检查和主线 `pnpm check:macos`；七条新规则已完成：`frontmatter.tools-not-empty`、`permissions.network-declared`、`permissions.exec-needs-human`、`name.canonical-case`、`script.no-shebang`、`body.too-long`、`dependency.unknown`。
 
 **范围**
 - 已完成新规则：`frontmatter.tools-not-empty`、`permissions.network-declared`、`permissions.exec-needs-human`、`name.canonical-case`、`script.no-shebang`、`body.too-long`、`dependency.unknown`。
