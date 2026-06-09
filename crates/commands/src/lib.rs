@@ -462,7 +462,7 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
             status: "blocked",
             scan: AdapterFeatureCapability::blocked(
                 "blocked",
-                "OpenClaw candidate roots exist, but the skill schema is not maintainer-confirmed.",
+                "V2.15 confirmed OpenClaw remains blocked: candidate roots exist, but roots and skill schema are not maintainer-confirmed.",
             ),
             project_scan: AdapterFeatureCapability::blocked(
                 "blocked",
@@ -482,10 +482,10 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
             ),
             writable: AdapterFeatureCapability::blocked(
                 "blocked",
-                "OpenClaw remains blocked pending maintainer-confirmed spec.",
+                "V2.15 closed without OpenClaw implementation because maintainer-confirmed write semantics are still missing.",
             ),
             blockers: vec![
-                "Confirm OpenClaw roots and skills list output.",
+                "V2.15 closeout: confirm OpenClaw roots and skills list output before any scanner/parser.",
                 "Confirm SKILL.md schema and malformed/conflict behavior.",
                 "Confirm toggle, permission, and rollback-safe config semantics.",
             ],

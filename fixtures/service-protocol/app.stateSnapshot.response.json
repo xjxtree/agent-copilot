@@ -247,7 +247,7 @@
           "scan": {
             "supported": false,
             "status": "blocked",
-            "reason": "OpenClaw candidate roots exist, but the skill schema is not maintainer-confirmed."
+            "reason": "V2.15 confirmed OpenClaw remains blocked: candidate roots exist, but roots and skill schema are not maintainer-confirmed."
           },
           "project_scan": {
             "supported": false,
@@ -272,10 +272,10 @@
           "writable": {
             "supported": false,
             "status": "blocked",
-            "reason": "OpenClaw remains blocked pending maintainer-confirmed spec."
+            "reason": "V2.15 closed without OpenClaw implementation because maintainer-confirmed write semantics are still missing."
           },
           "blockers": [
-            "Confirm OpenClaw roots and skills list output.",
+            "V2.15 closeout: confirm OpenClaw roots and skills list output before any scanner/parser.",
             "Confirm SKILL.md schema and malformed/conflict behavior.",
             "Confirm toggle, permission, and rollback-safe config semantics."
           ]

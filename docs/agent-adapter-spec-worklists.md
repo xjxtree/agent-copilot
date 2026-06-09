@@ -1,6 +1,6 @@
 # Agent Adapter Spec Worklists
 
-> Status: Codex first implementation, V2.1 dual adapter experience, V2.2 project context implementation, V2.3 Codex adapter hardening, V2.4 opencode read-only adapter, V2.5 audit hardening, V2.6 adapter changelog tracking, V2.7 LLM gate safety notes, V2.8-V2.10 safety/docs closeout, V2.11 Adapter Capability Matrix, V2.12 opencode writable, V2.13 Pi read-only scanner/parser, and V2.14 Hermes evidence-gate closeout are integrated.
+> Status: Codex first implementation, V2.1 dual adapter experience, V2.2 project context implementation, V2.3 Codex adapter hardening, V2.4 opencode read-only adapter, V2.5 audit hardening, V2.6 adapter changelog tracking, V2.7 LLM gate safety notes, V2.8-V2.10 safety/docs closeout, V2.11 Adapter Capability Matrix, V2.12 opencode writable, V2.13 Pi read-only scanner/parser, V2.14 Hermes evidence-gate closeout, and V2.15 OpenClaw evidence-gate closeout are integrated.
 > Real local UI validation passed for the current mainline app on 2026-06-09. Future user-visible, UI, or service-protocol candidates still require a fresh real local pass. opencode writable and Pi read-only scan are implemented; Pi writable support, Hermes, and OpenClaw remain blocked.
 > This document records what is verified enough to use for project instructions, and what is still missing before an adapter can be built.
 
@@ -8,7 +8,7 @@
 
 Claude Code remains the mature baseline adapter. Codex has verified user/project roots, cwd-to-repo-root discovery, project-context-scoped scanning, and user-config writable toggles. V2.3 hardening added config patch robustness, explicit adapter states, root/config security regressions, and smoke/docs coverage. V2.4 added opencode as a read-only adapter for first-class native roots only.
 
-Pi writable support, Hermes, and OpenClaw remain blocked until their evidence gates are satisfied. Opencode writable is enabled for native roots after V2.12 validation; Pi read-only scan is enabled for native roots after V2.13 validation. V2.14 confirms Hermes still lacks enough evidence for scanner/parser implementation.
+Pi writable support, Hermes, and OpenClaw remain blocked until their evidence gates are satisfied. Opencode writable is enabled for native roots after V2.12 validation; Pi read-only scan is enabled for native roots after V2.13 validation. V2.14 confirms Hermes still lacks enough evidence for scanner/parser implementation. V2.15 confirms OpenClaw still lacks maintainer-confirmed evidence for scanner/parser implementation.
 
 The macOS app now uses the service/UI adapter capability matrix as the front-door status surface for all six agents. The matrix must make read-only, planned, and blocked states explicit before any future write affordance is exposed.
 
@@ -120,7 +120,7 @@ Required next evidence:
 | Config path/schema | Partial evidence only: local plugin docs use `openclaw config file` to locate `openclaw.json`; a user-local `~/.openclaw/openclaw.json` exists on this machine but is JSONC/non-strict JSON and was not copied because it may contain credentials. |
 | Enable/disable semantics | Plugin evidence only: local Tablestore Mem0 docs patch `.plugins.entries["openclaw-mem0"].enabled = true`, `.plugins.slots.memory`, and `.plugins.allow`. This does not verify skill enable/disable semantics. |
 | Fixture requirement | Minimal evidence fixtures added under `fixtures/openclaw/`, marked as read-only evidence samples and not writable toggle contract. |
-| Implementation decision | Read-only scanner remains blocked pending maintainer confirmation. Writable adapter is blocked until config schema, toggle semantics, and rollback behavior are verified. |
+| Implementation decision | V2.15 closeout keeps the read-only scanner blocked pending maintainer confirmation. Writable adapter is blocked until config schema, toggle semantics, and rollback behavior are verified. |
 
 Required next evidence:
 

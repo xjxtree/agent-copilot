@@ -1,6 +1,8 @@
 # OpenClaw Evidence Fixtures
 
-These fixtures document local OpenClaw evidence only. They are not adapter implementation inputs yet.
+These fixtures document local OpenClaw evidence only. They are not adapter implementation inputs.
+
+V2.15 evidence-gate closeout kept OpenClaw blocked. The samples below are useful for maintainer discussion, but they are not scanner/parser, install, toggle, or rollback contracts.
 
 Evidence status:
 

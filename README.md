@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-**当前阶段**：V2.14 Hermes adapter support 已完成证据门 closeout；Hermes 仍 blocked，V2.15 OpenClaw adapter support 为下一阶段。
+**当前阶段**：V2.11-V2.15 多 agent adapter 版本线已完成。OpenClaw 和 Hermes 仍 blocked，后续进入 adapter evidence backlog。
 
-**近期主线**：在 macOS app 中补齐多 agent 支持，按 V2.11-V2.15 版本线推进 adapter capability matrix、opencode writable、Pi、Hermes 和 OpenClaw 的证据与适配。
+**近期主线**：继续补齐多 agent evidence backlog：OpenClaw maintainer-confirmed spec、Hermes maintainer-confirmed spec、Pi writable settings mutation/rollback。
 
 **已集成能力**：
 
@@ -21,6 +21,7 @@
 - V2.12 opencode guarded writable：native roots 支持 exact `permission.skill` deny/re-enable、snapshot/rollback 和 tool-global install。
 - V2.13 Pi read-only scanner/parser：支持 Pi-native global/project roots，Pi writes 继续 blocked。
 - V2.14 Hermes evidence-gate closeout：没有 maintainer-confirmed spec，不实现 scanner/parser 或 writable adapter。
+- V2.15 OpenClaw evidence-gate closeout：候选 roots/config 线索不足以作为 maintainer-confirmed spec，不实现 scanner/parser 或 writable adapter。
 - 2026-06-09 真实本机 app Computer Use validation 已通过。
 
 **当前产品 UI**：SwiftUI/AppKit macOS 原生壳 + Rust service protocol。
@@ -36,7 +37,7 @@
 | opencode | 已支持已验证范围 | 支持 native roots：`~/.config/opencode/skills` 和当前项目 `.opencode/skills`；支持 guarded writable toggle/install，写入 exact `permission.skill.<name> = "deny"` 并保留 snapshot/rollback。 |
 | Pi | read-only | V2.13 已实现 Pi-native global/project scanner/parser；writable toggle/install 仍 blocked，等待 settings mutation/rollback 证据。 |
 | Hermes | blocked | V2.14 已完成 evidence-gate closeout：当前只有 service/cron 线索，没有 maintainer-confirmed roots、config schema、package/task model 或 toggle 语义。 |
-| OpenClaw | blocked | 已进入 UI/service capability matrix；需要 maintainer-confirmed skill schema、config safety rules、install/toggle 语义和 credential handling guidance。 |
+| OpenClaw | blocked | V2.15 已完成 evidence-gate closeout：候选 roots、`SKILL.md` 和 plugin config 线索不是 maintainer-confirmed adapter contract；需要 skill schema、config safety rules、install/toggle 语义和 credential handling guidance。 |
 
 ## 近期版本规划
 
@@ -47,7 +48,7 @@
 | V2.12 | opencode writable evidence + guarded toggle/install | 已完成 |
 | V2.13 | Pi read-only scanner/parser + writable blocker | 已完成 |
 | V2.14 | Hermes maintainer-confirmed spec + adapter implementation scope | 已完成证据门 closeout；仍 blocked |
-| V2.15 | OpenClaw maintainer-confirmed spec + adapter implementation scope | 下一阶段 |
+| V2.15 | OpenClaw maintainer-confirmed spec + adapter implementation scope | 已完成证据门 closeout；仍 blocked |
 
 ## 它做什么
 
@@ -155,8 +156,8 @@ Fixture smoke 不触碰真实 Claude、Codex 或 opencode 配置。
 
 当前贡献重点：
 
-1. 推进 V2.15 OpenClaw maintainer-confirmed spec 与 adapter scope。
-2. 继续跟踪 Hermes maintainer-confirmed spec；没有新证据前保持 blocked。
+1. 获取 OpenClaw maintainer-confirmed roots、schema、skills list output、toggle/install/rollback 语义。
+2. 获取 Hermes maintainer-confirmed roots、schema、SkillInstance 映射和 toggle/install/rollback 语义。
 3. 继续跟踪 Pi writable settings mutation/rollback 证据。
 4. 改进 native macOS app 的测试、文档和 service protocol。
 5. 后续 UI 或 service protocol 变更继续重跑真实本机 app Computer Use 验证。

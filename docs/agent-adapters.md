@@ -2,7 +2,7 @@
 
 > skills-copilot 支持的 6 个 agent 的适配要点。
 >
-> 当前版本线：V2.11 Adapter Capability Matrix、V2.12 opencode writable、V2.13 Pi read-only scanner/parser、V2.14 Hermes evidence-gate closeout 已完成；当前阶段为 V2.15 OpenClaw。
+> 当前版本线：V2.11 Adapter Capability Matrix、V2.12 opencode writable、V2.13 Pi read-only scanner/parser、V2.14 Hermes evidence-gate closeout、V2.15 OpenClaw evidence-gate closeout 已完成；当前进入 adapter evidence backlog。
 >
 > 扫描适配器实现 `AgentAdapter`。
 >
@@ -88,7 +88,7 @@ pub struct AdapterFeatureCapability {
 | opencode | `verified` | 支持 native roots | 支持 guarded writable：exact `permission.skill` deny/re-enable、snapshot/rollback、tool-global install |
 | Pi | `read-only` | 支持 Pi-native roots | writable blocked，等待 settings mutation/rollback evidence |
 | Hermes | `blocked` | 未实现 | V2.14 已关闭证据门；没有 maintainer-confirmed spec 前继续 blocked |
-| OpenClaw | `blocked` | 未实现 | blocked，等待 maintainer-confirmed spec |
+| OpenClaw | `blocked` | 未实现 | V2.15 已关闭证据门；没有 maintainer-confirmed spec 前继续 blocked |
 
 > **实现要求**：所有适配器**无状态**。
 >
@@ -190,7 +190,7 @@ V2.14 的结论是：这些证据还不能证明 Hermes 有可扫描的本地 sk
 | 项 | 值 |
 | --- | --- |
 | AgentId | `openclaw` |
-| 状态 | **Blocked / partial read-only evidence** |
+| 状态 | **Blocked after V2.15 evidence-gate closeout / partial read-only evidence** |
 | Spec 工作单 | [`docs/openclaw-adapter-spec.md`](./openclaw-adapter-spec.md) |
 | 统一工作单 | [`docs/agent-adapter-spec-worklists.md`](./agent-adapter-spec-worklists.md#openclaw) |
 | Candidate roots | `$HOME/.openclaw/skills`、`$HOME/.openclaw/workspace`、`$HOME/.openclaw/extensions`、`$HOME/openclaw/workspace`、node global OpenClaw skill roots；先作为 evidence，不作为实现清单 |
@@ -200,7 +200,7 @@ V2.14 的结论是：这些证据还不能证明 Hermes 有可扫描的本地 sk
 
 OpenClaw 当前证据包括候选 skill roots、`SKILL.md` 目录输入、`openclaw skills list --eligible`、`openclaw config file` 和 `openclaw.json` plugin 字段线索。
 
-这些仍不是维护者确认的 adapter spec。
+V2.15 的结论是：这些仍不是维护者确认的 adapter spec，因此不实现 scanner/parser，也不开放写入。
 
 ### 2.6 opencode
 

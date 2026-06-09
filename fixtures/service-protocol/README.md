@@ -31,7 +31,7 @@ V2.11 adapter capability matrix note:
 
 - `adapter.listCapabilities.response.json` is the direct capability matrix fixture for Claude Code, Codex, opencode, Pi, Hermes, and OpenClaw.
 - `service.status.response.json` and `app.stateSnapshot.response.json` include `adapter_capabilities` so native UI shells can render adapter status without guessing from agent names.
-- The matrix is descriptive for unsupported agents: opencode is writable for native roots after V2.12 validation, Pi is read-only after V2.13 validation, Hermes remains blocked after V2.14 evidence-gate closeout, and OpenClaw remains blocked until its V2.15 evidence gate is satisfied.
+- The matrix is descriptive for unsupported agents: opencode is writable for native roots after V2.12 validation, Pi is read-only after V2.13 validation, Hermes remains blocked after V2.14 evidence-gate closeout, and OpenClaw remains blocked after V2.15 evidence-gate closeout.
 
 V2.13 Pi blocker note:
 
@@ -44,6 +44,12 @@ V2.14 Hermes blocker note:
 - Hermes remains blocked in `adapter.listCapabilities`, `service.status`, and `app.stateSnapshot`.
 - The Hermes fixture directory contains evidence samples only; it is not a parser contract.
 - No `catalog.scanAll` fixture should include Hermes until maintainers confirm roots, schema, model, and toggle semantics.
+
+V2.15 OpenClaw blocker note:
+
+- OpenClaw remains blocked in `adapter.listCapabilities`, `service.status`, and `app.stateSnapshot`.
+- The OpenClaw fixture directory contains evidence samples only; it is not a parser contract.
+- No `catalog.scanAll` fixture should include OpenClaw until maintainers confirm roots, schema, skills list output, and toggle/install semantics.
 
 V2.12 opencode writable note:
 

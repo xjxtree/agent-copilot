@@ -4,9 +4,9 @@
 >
 > 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.15 OpenClaw adapter support 进行中**。
+> 当前阶段：**V2.11-V2.15 多 agent adapter 版本线已完成，进入 adapter evidence backlog**。
 >
-> 近期主线：在 macOS app 中补齐多 agent 支持，按 V2.11-V2.15 版本线推进 opencode writable、Pi、Hermes 和 OpenClaw 的证据与适配。V2.11、V2.12、V2.13 已完成，V2.14 Hermes 已完成证据门 closeout 且仍 blocked，V2.15 为当前阶段。
+> 近期主线：在 macOS app 中补齐多 agent 支持，V2.11-V2.15 已完成 adapter capability matrix、opencode writable、Pi read-only、Hermes evidence-gate closeout 和 OpenClaw evidence-gate closeout。后续继续跟踪 OpenClaw/Hermes maintainer-confirmed specs 与 Pi writable evidence。
 >
 > 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.10 各阶段能力、V2.9 Tool-global skill pool。V2.11 Adapter capability matrix 的首个 service/UI 切片已进入开发，后续候选变更仍需重新验证。
 >
@@ -644,11 +644,13 @@
 
 **目标**：先拿到 maintainer-confirmed spec，再决定 OpenClaw scan/toggle/install 范围。
 
-**状态**：blocked / planned。
+**状态（2026-06-09）**：completed evidence-gate closeout / still blocked。V2.15 复核后仍没有 maintainer-confirmed roots、SKILL.md schema、skills list output、config safety rules、SkillInstance 映射模型或 toggle/install/rollback 语义，因此不实现 OpenClaw scanner/parser，也不开放 writable/install。
 
 **退出条件**
-- [ ] Maintainer-confirmed skill schema、config safety rules、install/toggle semantics 和 credential handling guidance 完成。
-- [ ] 若证据支持，OpenClaw scanner/parser 进入 implementation；否则 blocker 明确保留。
+- [x] Maintainer-confirmed roots、schema、skills list output、config safety rules、install/toggle semantics 和 credential handling guidance 未满足时，blocker 明确保留。
+- [x] `adapter.listCapabilities` / `service.status.adapter_capabilities` 继续展示 OpenClaw blocked。
+- [x] 不新增 OpenClaw scanner/parser、install 或 writable affordance。
+- [x] `pnpm check:macos` 通过；真实交互 Computer Use 因当前会话锁屏按本轮要求跳过。
 
 ### 4.16 未来桌面壳与本地共享
 
