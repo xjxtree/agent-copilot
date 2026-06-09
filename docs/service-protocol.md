@@ -1,6 +1,6 @@
 # skills-copilot Service Protocol
 
-> Status: P0 evidence update complete. Hermes and OpenClaw are read-only scanner candidates; writable/install support remains blocked.
+> Status: V2.18 cross-agent analysis integrated. Hermes and OpenClaw read-only scanners are implemented; writable/install support remains blocked.
 >
 > Integrated: V2.9 Tool-global import/export/install, V2.10 skill execution safety boundary, and 2026-06-09 real local Computer Use validation for the current mainline app. V2.11 added adapter capability status to the service protocol and macOS UI. V2.12 marks opencode writable for native roots after exact permission.skill deny/re-enable, snapshot/rollback, install, and fixture smoke validation pass.
 >
@@ -41,7 +41,7 @@ This stdio shape can later move behind a local socket without changing method pa
 | Method | Mutates local state | Current client use | Result |
 | --- | --- | --- | --- |
 | `app.version` | No | Native macOS About / compatibility checks | app version and protocol version |
-| `app.stateSnapshot` | No | Native macOS launch/read flow | status plus current skills, findings, conflicts, and compatibility snapshot payload |
+| `app.stateSnapshot` | No | Native macOS launch/read flow | status plus current skills, findings, conflicts, cross-agent analysis, and compatibility snapshot payload |
 | `service.status` | No | Diagnostics, adapter gating, and smoke tests | protocol version, app version, app data dir, catalog path, user home, supported methods, adapter capabilities, refresh capability state, and LLM gate status |
 | `adapter.listCapabilities` | No | Native macOS agent selector/status gating | adapter capability matrix for scan, project scan, config toggle, config snapshot, install, writable state, and current blockers |
 | `llm.status` | No | Native macOS LLM affordance gating | disabled-by-default LLM status: enabled/configured/provider/model/reason/token limit/budget/credential persistence policy |
@@ -54,6 +54,7 @@ This stdio shape can later move behind a local socket without changing method pa
 | `project.validateContext` | No | Native macOS project selector preflight | validates `{ root_path, current_cwd?, name? }` and returns a `ProjectContext` with `validation_error` set on failure |
 | `catalog.listSkills` | No | Native macOS launch/read flow | `SkillRecord[]` |
 | `catalog.getSkill` | No | Native macOS Overview detail | `SkillDetailRecord` for `{ "instance_id": "..." }` |
+| `catalog.analysis` | No | Native macOS analysis/read flow | `CrossAgentAnalysisRecord` grouping duplicate names, canonical-name overlap, shared source paths, enabled-state mismatches, broken/missing rows, and supported precedence/shadowing explanations |
 | `catalog.listFindings` | No | Native macOS Findings segment | `RuleFindingRecord[]` |
 | `catalog.listConflicts` | No | Native macOS Conflicts segment | `ConflictGroupRecord[]` |
 | `catalog.importSkill` | Yes, writes app-controlled staging/catalog only | V2.9 tool-global import | imported read-only `SkillRecord`, staging path, filtered findings, and audit summary |
@@ -78,8 +79,56 @@ It currently scans:
 - Codex
 - opencode (verified writable for native roots)
 - Pi (read-only native roots)
+- OpenClaw (read-only filesystem roots)
+- Hermes (read-only active/profile home skills)
 
 It resolves the effective `ProjectContext` before adapter scanning.
+
+## V2.18 Cross-Agent Analysis Payload
+
+`catalog.analysis` and `app.stateSnapshot.analysis` return the same read-only, computed-on-demand payload. The service derives it from visible catalog rows after applying the effective project context; it does not read agent config, write files, execute scripts, call agent CLIs, or infer unsupported adapter roots.
+
+This API is read-only by contract: `mutated` behavior is always false even though the payload does not carry a `mutated` flag. It must not trigger writes, config changes, installs, CLI actions, script execution, or unsupported-root inference.
+
+```json
+{
+  "summary": {
+    "total_groups": 3,
+    "duplicate_name_groups": 1,
+    "canonical_name_groups": 1,
+    "path_overlap_groups": 0,
+    "enabled_mismatch_groups": 1,
+    "malformed_groups": 0,
+    "precedence_groups": 1,
+    "affected_skill_count": 4
+  },
+  "groups": [
+    {
+      "id": "analysis:duplicate_name:abc123",
+      "kind": "duplicate_name",
+      "severity": "warning",
+      "title": "Duplicate skill name 'review-diff' appears in 2 records.",
+      "canonical_name": "review-diff",
+      "explanation": "Multiple visible skills use the same name. Agents load independently, so this is not automatically a runtime conflict across agents, but users may see ambiguous skills in the catalog.",
+      "instance_ids": ["claude-id", "codex-id"],
+      "agents": ["claude-code", "codex"],
+      "scopes": ["agent-global"],
+      "paths": ["/path/to/SKILL.md"]
+    }
+  ]
+}
+```
+
+Analysis group kinds:
+
+- `duplicate_name`: same visible skill name after case-insensitive comparison.
+- `canonical_name_overlap`: different visible names normalize to the same canonical slug.
+- `source_path_overlap`: the same physical `SKILL.md` path is represented by multiple catalog rows.
+- `enabled_state_mismatch`: related skills have mixed `enabled` values or loaded/disabled/shadowed/broken/missing states.
+- `malformed_or_broken`: visible rows are `broken` or `missing`.
+- `precedence_shadowing`: same-agent same-canonical-name rows where project/global precedence or existing `shadowed` state can be explained from adapter evidence.
+
+Precedence notes are intentionally conservative. The service may choose a `winner_id` only inside one agent's visible rows, preferring loaded/enabled project-scoped rows over agent-global rows. Cross-agent duplicate names never imply shared runtime precedence because each agent loads its own roots independently.
 
 ## Adapter Capability Payload
 

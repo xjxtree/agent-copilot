@@ -22,6 +22,7 @@
       "project.validateContext",
       "catalog.listSkills",
       "catalog.getSkill",
+      "catalog.analysis",
       "catalog.listFindings",
       "catalog.listConflicts",
       "catalog.importSkill",

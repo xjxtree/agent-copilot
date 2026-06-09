@@ -1,0 +1,5 @@
+{
+  "id": "fixture-catalog-analysis",
+  "method": "catalog.analysis",
+  "params": {}
+}

@@ -23,6 +23,7 @@
         "project.validateContext",
         "catalog.listSkills",
         "catalog.getSkill",
+        "catalog.analysis",
         "catalog.listFindings",
         "catalog.listConflicts",
         "catalog.importSkill",
@@ -337,6 +338,19 @@
         "reason": "pre-toggle",
         "created_at": 1780590000000
       }
-    ]
+    ],
+    "analysis": {
+      "summary": {
+        "total_groups": 0,
+        "duplicate_name_groups": 0,
+        "canonical_name_groups": 0,
+        "path_overlap_groups": 0,
+        "enabled_mismatch_groups": 0,
+        "malformed_groups": 0,
+        "precedence_groups": 0,
+        "affected_skill_count": 0
+      },
+      "groups": []
+    }
   }
 }

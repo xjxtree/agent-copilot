@@ -11,16 +11,16 @@ use skills_copilot_catalog::{
     SkillEventRecord, SkillRecord,
 };
 use skills_copilot_commands::{
-    export_skill_bundle, export_staging_skill_bundle, get_skill,
+    analyze_catalog, export_skill_bundle, export_staging_skill_bundle, get_skill,
     import_github_skill_to_tool_global_deferred, import_local_skill_to_tool_global,
     install_skill_from_tool_global, list_adapter_capabilities, list_agent_config_snapshots,
     list_conflicts, list_findings, list_skill_events, list_snapshots, preview_script_execution,
     preview_snapshot_rollback, read_claude_settings, record_blocked_script_execution,
     rollback_snapshot, save_claude_settings, scan_all_catalog_report, scan_claude_to_catalog,
     toggle_skill, AdapterCapabilityRecord, AgentCatalogScanReport, ConfigDocumentRecord,
-    ExportedSkillBundle, ScriptExecutionAttemptRecord, ScriptExecutionPreviewRecord,
-    ScriptExecutionRequest, SkillInstallPreviewRecord, SnapshotRollbackPreviewRecord,
-    ToolGlobalImportResult, SCRIPT_EXECUTION_DISABLED_REASON,
+    CrossAgentAnalysisRecord, ExportedSkillBundle, ScriptExecutionAttemptRecord,
+    ScriptExecutionPreviewRecord, ScriptExecutionRequest, SkillInstallPreviewRecord,
+    SnapshotRollbackPreviewRecord, ToolGlobalImportResult, SCRIPT_EXECUTION_DISABLED_REASON,
 };
 use skills_copilot_core::{AdapterContext, AdapterRoot, AgentId, RootSource, Scope};
 use thiserror::Error;
@@ -50,6 +50,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "project.validateContext",
     "catalog.listSkills",
     "catalog.getSkill",
+    "catalog.analysis",
     "catalog.listFindings",
     "catalog.listConflicts",
     "catalog.importSkill",
@@ -118,6 +119,7 @@ pub struct AppStateSnapshot {
     pub skills: Vec<SkillRecord>,
     pub findings: Vec<RuleFindingRecord>,
     pub conflicts: Vec<ConflictGroupRecord>,
+    pub analysis: CrossAgentAnalysisRecord,
     pub snapshots: Vec<ConfigSnapshotRecord>,
 }
 
@@ -483,6 +485,12 @@ impl ServiceHost {
                 let detail: SkillDetailRecord = get_skill(&catalog, &params.instance_id)?;
                 serde_json::to_value(detail).map_err(Into::into)
             }
+            "catalog.analysis" => {
+                let catalog = self.open_catalog()?;
+                let adapter_ctx = self.effective_adapter_ctx()?;
+                let analysis: CrossAgentAnalysisRecord = analyze_catalog(&catalog, &adapter_ctx)?;
+                serde_json::to_value(analysis).map_err(Into::into)
+            }
             "skill.listEvents" => {
                 let params: ListSkillEventsParams = serde_json::from_value(request.params)?;
                 let catalog = self.open_catalog()?;
@@ -698,6 +706,7 @@ impl ServiceHost {
             skills,
             findings: list_findings(&catalog)?,
             conflicts: list_conflicts(&catalog)?,
+            analysis: analyze_catalog(&catalog, &self.effective_adapter_ctx()?)?,
             snapshots: list_snapshots(&catalog)?,
         })
     }
@@ -1293,6 +1302,7 @@ mod tests {
         assert!(methods.contains(&Value::String("project.validateContext".to_string())));
         assert!(methods.contains(&Value::String("catalog.listSkills".to_string())));
         assert!(methods.contains(&Value::String("catalog.getSkill".to_string())));
+        assert!(methods.contains(&Value::String("catalog.analysis".to_string())));
         assert!(methods.contains(&Value::String("catalog.scanAll".to_string())));
         assert!(methods.contains(&Value::String("skill.exportBundle".to_string())));
         assert!(methods.contains(&Value::String("skill.install".to_string())));
@@ -1331,6 +1341,43 @@ mod tests {
                 .and_then(Value::as_bool),
             Some(false)
         );
+    }
+
+    #[test]
+    fn catalog_analysis_returns_empty_read_only_summary() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-analysis-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("analysis".to_string()),
+            method: "catalog.analysis".to_string(),
+            params: Value::Null,
+        });
+
+        assert!(response.ok);
+        let result = response.result.expect("analysis result");
+        assert_eq!(
+            result
+                .pointer("/summary/total_groups")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/affected_skill_count")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            result.get("groups").and_then(Value::as_array).map(Vec::len),
+            Some(0)
+        );
+
+        let _ = fs::remove_dir_all(app_data_dir);
     }
 
     #[test]
@@ -2572,6 +2619,10 @@ mod tests {
             "app.stateSnapshot" => {
                 let snapshot: WireAppStateSnapshot = decode_fixture_result(method, result, path);
                 assert_supported_methods(method, &snapshot.status.supported_methods);
+                assert_eq!(
+                    snapshot.analysis.summary.total_groups,
+                    snapshot.analysis.groups.len()
+                );
                 assert_findings_cover_v28_contract(
                     &snapshot.findings,
                     &["frontmatter.required-fields"],
@@ -2657,6 +2708,11 @@ mod tests {
             "catalog.getSkill" => {
                 let skill: WireSkillDetailRecord = decode_fixture_result(method, result, path);
                 assert_v28_permissions_payload(&skill.permissions, method);
+            }
+            "catalog.analysis" => {
+                let analysis: WireCrossAgentAnalysisRecord =
+                    decode_fixture_result(method, result, path);
+                assert_eq!(analysis.summary.total_groups, analysis.groups.len());
             }
             "catalog.listFindings" => {
                 let findings: Vec<WireRuleFindingRecord> =
@@ -2953,7 +3009,47 @@ mod tests {
         skills: Vec<WireSkillRecord>,
         findings: Vec<WireRuleFindingRecord>,
         conflicts: Vec<WireConflictGroupRecord>,
+        analysis: WireCrossAgentAnalysisRecord,
         snapshots: Vec<WireConfigSnapshotRecord>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireCrossAgentAnalysisRecord {
+        summary: WireCrossAgentAnalysisSummary,
+        groups: Vec<WireCrossAgentAnalysisGroup>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireCrossAgentAnalysisSummary {
+        total_groups: usize,
+        duplicate_name_groups: usize,
+        canonical_name_groups: usize,
+        path_overlap_groups: usize,
+        enabled_mismatch_groups: usize,
+        malformed_groups: usize,
+        precedence_groups: usize,
+        affected_skill_count: usize,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireCrossAgentAnalysisGroup {
+        id: String,
+        kind: String,
+        severity: String,
+        title: String,
+        canonical_name: Option<String>,
+        explanation: String,
+        instance_ids: Vec<String>,
+        winner_id: Option<String>,
+        agents: Vec<String>,
+        scopes: Vec<String>,
+        paths: Vec<String>,
     }
 
     #[allow(dead_code)]

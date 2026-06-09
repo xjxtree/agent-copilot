@@ -693,6 +693,8 @@
 
 ### 4.18 V2.18 Cross-agent skill analysis
 
+**状态（2026-06-10）**：completed service/protocol slice。`catalog.analysis` 和 `app.stateSnapshot.analysis` 已输出只读 cross-agent analysis payload；深度 UI 视图和 dashboard 入口留到 V2.19。
+
 **目标**：让用户看清多个 agent 之间的重复、冲突、shadowing、precedence 和 source overlap。
 
 **范围**
@@ -704,10 +706,11 @@
 - 不根据未验证 adapter 规则推导 unsupported roots。
 
 **退出条件**
-- [ ] Service protocol 输出 cross-agent analysis summary 和 per-group detail。
-- [ ] UI 提供 duplicate/conflict/overlap views 和可操作过滤。
-- [ ] Detail page 展示该 skill 是否与其他 agent/source 发生重复或冲突。
-- [ ] Fixtures 覆盖 Claude/Codex/opencode/Pi/OpenClaw/Hermes 的混合重复与 malformed cases。
+- [x] Service protocol 输出 cross-agent analysis summary 和 per-group detail。
+- [x] `app.stateSnapshot` 包含 cross-agent analysis payload。
+- [x] Tests 覆盖 duplicate、canonical overlap、source overlap、enabled mismatch、malformed 和 same-agent precedence/shadowing。
+- [ ] UI 提供 duplicate/conflict/overlap views 和可操作过滤，移入 V2.19 dashboard/triage。
+- [ ] Detail page 展示该 skill 是否与其他 agent/source 发生重复或冲突，移入 V2.19 dashboard/triage。
 
 ### 4.19 V2.19 Skill health dashboard and triage UX
 

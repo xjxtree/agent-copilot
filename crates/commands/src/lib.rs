@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     env, fs, io,
     io::Write,
     path::{Path, PathBuf},
@@ -795,6 +795,365 @@ pub fn list_findings(catalog: &Catalog) -> Result<Vec<RuleFindingRecord>, Comman
 
 pub fn list_conflicts(catalog: &Catalog) -> Result<Vec<ConflictGroupRecord>, CommandError> {
     Ok(catalog.list_conflict_groups()?)
+}
+
+pub fn analyze_catalog(
+    catalog: &Catalog,
+    ctx: &AdapterContext,
+) -> Result<CrossAgentAnalysisRecord, CommandError> {
+    let instances =
+        catalog.list_skill_instances_for_project_context(ctx.project_root.as_deref())?;
+    Ok(analyze_skill_instances(&instances))
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CrossAgentAnalysisRecord {
+    pub summary: CrossAgentAnalysisSummary,
+    pub groups: Vec<CrossAgentAnalysisGroup>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CrossAgentAnalysisSummary {
+    pub total_groups: usize,
+    pub duplicate_name_groups: usize,
+    pub canonical_name_groups: usize,
+    pub path_overlap_groups: usize,
+    pub enabled_mismatch_groups: usize,
+    pub malformed_groups: usize,
+    pub precedence_groups: usize,
+    pub affected_skill_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CrossAgentAnalysisGroup {
+    pub id: String,
+    pub kind: String,
+    pub severity: String,
+    pub title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub canonical_name: Option<String>,
+    pub explanation: String,
+    pub instance_ids: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub winner_id: Option<String>,
+    pub agents: Vec<String>,
+    pub scopes: Vec<String>,
+    pub paths: Vec<String>,
+}
+
+pub fn analyze_skill_instances(instances: &[SkillInstance]) -> CrossAgentAnalysisRecord {
+    let mut groups = Vec::new();
+
+    append_duplicate_name_groups(instances, &mut groups);
+    append_canonical_name_groups(instances, &mut groups);
+    append_path_overlap_groups(instances, &mut groups);
+    append_enabled_mismatch_groups(instances, &mut groups);
+    append_malformed_groups(instances, &mut groups);
+    append_precedence_groups(instances, &mut groups);
+
+    groups.sort_by(|left, right| {
+        severity_rank(&left.severity)
+            .cmp(&severity_rank(&right.severity))
+            .then_with(|| left.kind.cmp(&right.kind))
+            .then_with(|| left.title.cmp(&right.title))
+    });
+
+    let affected_skill_count = groups
+        .iter()
+        .flat_map(|group| group.instance_ids.iter().cloned())
+        .collect::<BTreeSet<_>>()
+        .len();
+
+    CrossAgentAnalysisRecord {
+        summary: CrossAgentAnalysisSummary {
+            total_groups: groups.len(),
+            duplicate_name_groups: count_kind(&groups, "duplicate_name"),
+            canonical_name_groups: count_kind(&groups, "canonical_name_overlap"),
+            path_overlap_groups: count_kind(&groups, "source_path_overlap"),
+            enabled_mismatch_groups: count_kind(&groups, "enabled_state_mismatch"),
+            malformed_groups: count_kind(&groups, "malformed_or_broken"),
+            precedence_groups: count_kind(&groups, "precedence_shadowing"),
+            affected_skill_count,
+        },
+        groups,
+    }
+}
+
+fn append_duplicate_name_groups(
+    instances: &[SkillInstance],
+    groups: &mut Vec<CrossAgentAnalysisGroup>,
+) {
+    let mut by_name: BTreeMap<String, Vec<&SkillInstance>> = BTreeMap::new();
+    for inst in instances {
+        by_name
+            .entry(inst.name.trim().to_ascii_lowercase())
+            .or_default()
+            .push(inst);
+    }
+    for (name, members) in by_name {
+        if members.len() < 2 {
+            continue;
+        }
+        groups.push(analysis_group(
+            "duplicate_name",
+            "warning",
+            format!("Duplicate skill name '{name}' appears in {} records.", members.len()),
+            Some(name.clone()),
+            "Multiple visible skills use the same name. Agents load independently, so this is not automatically a runtime conflict across agents, but users may see ambiguous skills in the catalog.".to_string(),
+            members,
+            None,
+        ));
+    }
+}
+
+fn append_canonical_name_groups(
+    instances: &[SkillInstance],
+    groups: &mut Vec<CrossAgentAnalysisGroup>,
+) {
+    let mut by_canonical: BTreeMap<String, Vec<&SkillInstance>> = BTreeMap::new();
+    for inst in instances {
+        by_canonical
+            .entry(canonical_skill_name_suggestion(&inst.name))
+            .or_default()
+            .push(inst);
+    }
+    for (canonical_name, members) in by_canonical {
+        if members.len() < 2 {
+            continue;
+        }
+        let distinct_names = members
+            .iter()
+            .map(|inst| inst.name.trim().to_ascii_lowercase())
+            .collect::<BTreeSet<_>>();
+        if distinct_names.len() < 2 {
+            continue;
+        }
+        groups.push(analysis_group(
+            "canonical_name_overlap",
+            "info",
+            format!(
+                "Canonical name '{canonical_name}' maps to {} visible spelling variants.",
+                distinct_names.len()
+            ),
+            Some(canonical_name),
+            "These skills are not exact duplicates, but their names normalize to the same canonical slug. Review them together before renaming, exporting, or installing shared copies.".to_string(),
+            members,
+            None,
+        ));
+    }
+}
+
+fn append_path_overlap_groups(
+    instances: &[SkillInstance],
+    groups: &mut Vec<CrossAgentAnalysisGroup>,
+) {
+    let mut by_path: BTreeMap<String, Vec<&SkillInstance>> = BTreeMap::new();
+    for inst in instances {
+        by_path
+            .entry(inst.path.to_string_lossy().to_string())
+            .or_default()
+            .push(inst);
+    }
+    for (path, members) in by_path {
+        if members.len() < 2 {
+            continue;
+        }
+        groups.push(analysis_group(
+            "source_path_overlap",
+            "warning",
+            format!("Same SKILL.md source is cataloged by {} records.", members.len()),
+            None,
+            format!(
+                "The same physical skill path is visible through multiple catalog rows: {path}. Treat edits to this file as shared-source changes even though this analysis does not write files."
+            ),
+            members,
+            None,
+        ));
+    }
+}
+
+fn append_enabled_mismatch_groups(
+    instances: &[SkillInstance],
+    groups: &mut Vec<CrossAgentAnalysisGroup>,
+) {
+    let mut by_canonical: BTreeMap<String, Vec<&SkillInstance>> = BTreeMap::new();
+    for inst in instances {
+        by_canonical
+            .entry(canonical_skill_name_suggestion(&inst.name))
+            .or_default()
+            .push(inst);
+    }
+    for (canonical_name, members) in by_canonical {
+        if members.len() < 2 {
+            continue;
+        }
+        let enabled_values = members
+            .iter()
+            .map(|inst| inst.enabled)
+            .collect::<BTreeSet<_>>();
+        let state_values = members
+            .iter()
+            .map(|inst| inst.state.as_str())
+            .collect::<BTreeSet<_>>();
+        if enabled_values.len() < 2 && state_values.len() < 2 {
+            continue;
+        }
+        groups.push(analysis_group(
+            "enabled_state_mismatch",
+            "warning",
+            format!("Canonical name '{canonical_name}' has mixed enabled or load states."),
+            Some(canonical_name),
+            "Some visible records are enabled/loaded while related records are disabled, shadowed, missing, or broken. This is read-only catalog evidence; use adapter capability blockers before attempting any config action.".to_string(),
+            members,
+            None,
+        ));
+    }
+}
+
+fn append_malformed_groups(instances: &[SkillInstance], groups: &mut Vec<CrossAgentAnalysisGroup>) {
+    let members: Vec<&SkillInstance> = instances
+        .iter()
+        .filter(|inst| matches!(inst.state, SkillState::Broken | SkillState::Missing))
+        .collect();
+    if members.is_empty() {
+        return;
+    }
+    groups.push(analysis_group(
+        "malformed_or_broken",
+        "error",
+        format!(
+            "{} visible skill record(s) are broken, malformed, or missing.",
+            members.len()
+        ),
+        None,
+        "Broken rows usually come from parser/frontmatter failures; missing rows are retained catalog records from previously scanned roots. Rescan or inspect the source before relying on these skills.".to_string(),
+        members,
+        None,
+    ));
+}
+
+fn append_precedence_groups(
+    instances: &[SkillInstance],
+    groups: &mut Vec<CrossAgentAnalysisGroup>,
+) {
+    let mut by_agent_and_name: BTreeMap<(String, String), Vec<&SkillInstance>> = BTreeMap::new();
+    for inst in instances {
+        if inst.agent == AgentId::ToolGlobal {
+            continue;
+        }
+        by_agent_and_name
+            .entry((
+                inst.agent.as_str().to_string(),
+                canonical_skill_name_suggestion(&inst.name),
+            ))
+            .or_default()
+            .push(inst);
+    }
+    for ((agent, canonical_name), members) in by_agent_and_name {
+        if members.len() < 2
+            && !members
+                .iter()
+                .any(|inst| matches!(inst.state, SkillState::Shadowed))
+        {
+            continue;
+        }
+        let winner_id = precedence_winner_id(&members);
+        groups.push(analysis_group(
+            "precedence_shadowing",
+            "info",
+            format!(
+                "{} has {} visible records for canonical name '{canonical_name}'.",
+                agent,
+                members.len()
+            ),
+            Some(canonical_name),
+            "Within a single agent, project-scoped skills are treated as higher precedence than agent-global rows when both are visible. Cross-agent duplicates do not share runtime precedence because each agent loads its own roots independently.".to_string(),
+            members,
+            winner_id,
+        ));
+    }
+}
+
+fn analysis_group(
+    kind: &str,
+    severity: &str,
+    title: String,
+    canonical_name: Option<String>,
+    explanation: String,
+    members: Vec<&SkillInstance>,
+    winner_id: Option<String>,
+) -> CrossAgentAnalysisGroup {
+    let instance_ids = members
+        .iter()
+        .map(|inst| inst.id.clone())
+        .collect::<Vec<_>>();
+    let agents = members
+        .iter()
+        .map(|inst| inst.agent.as_str().to_string())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let scopes = members
+        .iter()
+        .map(|inst| inst.scope.as_str().to_string())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let paths = members
+        .iter()
+        .map(|inst| inst.display_path.to_string_lossy().to_string())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let seed = format!(
+        "{kind}|{}|{}",
+        canonical_name.as_deref().unwrap_or(""),
+        instance_ids.join("|")
+    );
+
+    CrossAgentAnalysisGroup {
+        id: format!("analysis:{kind}:{}", short_hash(&seed)),
+        kind: kind.to_string(),
+        severity: severity.to_string(),
+        title,
+        canonical_name,
+        explanation,
+        instance_ids,
+        winner_id,
+        agents,
+        scopes,
+        paths,
+    }
+}
+
+fn precedence_winner_id(members: &[&SkillInstance]) -> Option<String> {
+    members
+        .iter()
+        .filter(|inst| inst.enabled && matches!(inst.state, SkillState::Loaded))
+        .min_by_key(|inst| (scope_precedence_rank(inst.scope), inst.name.clone()))
+        .map(|inst| inst.id.clone())
+}
+
+fn scope_precedence_rank(scope: Scope) -> u8 {
+    match scope {
+        Scope::AgentProject => 0,
+        Scope::AgentGlobal => 1,
+        Scope::ToolGlobal => 2,
+        _ => 3,
+    }
+}
+
+fn severity_rank(severity: &str) -> u8 {
+    match severity {
+        "error" => 0,
+        "warn" | "warning" => 1,
+        "info" => 2,
+        _ => 3,
+    }
+}
+
+fn count_kind(groups: &[CrossAgentAnalysisGroup], kind: &str) -> usize {
+    groups.iter().filter(|group| group.kind == kind).count()
 }
 
 pub fn list_snapshots(catalog: &Catalog) -> Result<Vec<ConfigSnapshotRecord>, CommandError> {
@@ -6376,5 +6735,152 @@ mod tests {
                 .all(|finding| finding.rule_id != rule_id),
             "did not expect {rule_id} finding"
         );
+    }
+}
+
+#[cfg(test)]
+mod v218_cross_agent_analysis_tests {
+    use super::*;
+
+    #[test]
+    fn cross_agent_analysis_groups_duplicates_overlap_mismatch_and_broken_rows() {
+        let shared_path = PathBuf::from("/tmp/shared/SKILL.md");
+        let claude = analysis_skill(
+            "claude-alpha",
+            AgentId::ClaudeCode,
+            Scope::AgentGlobal,
+            "review-diff",
+            true,
+            SkillState::Loaded,
+            shared_path.clone(),
+        );
+        let mut codex = analysis_skill(
+            "codex-alpha",
+            AgentId::Codex,
+            Scope::AgentGlobal,
+            "review-diff",
+            false,
+            SkillState::Disabled,
+            shared_path.clone(),
+        );
+        codex.display_path = PathBuf::from("/tmp/codex/shared/SKILL.md");
+        let canonical_variant = analysis_skill(
+            "pi-alpha",
+            AgentId::Pi,
+            Scope::AgentGlobal,
+            "Review Diff",
+            true,
+            SkillState::Loaded,
+            PathBuf::from("/tmp/pi/review/SKILL.md"),
+        );
+        let broken = analysis_skill(
+            "broken-alpha",
+            AgentId::Hermes,
+            Scope::AgentGlobal,
+            "broken-skill",
+            false,
+            SkillState::Broken,
+            PathBuf::from("/tmp/hermes/broken/SKILL.md"),
+        );
+
+        let analysis = analyze_skill_instances(&[claude, codex, canonical_variant, broken]);
+
+        assert_eq!(analysis.summary.duplicate_name_groups, 1);
+        assert_eq!(analysis.summary.canonical_name_groups, 1);
+        assert_eq!(analysis.summary.path_overlap_groups, 1);
+        assert_eq!(analysis.summary.enabled_mismatch_groups, 1);
+        assert_eq!(analysis.summary.malformed_groups, 1);
+        assert!(analysis.summary.affected_skill_count >= 4);
+        assert!(analysis.groups.iter().any(|group| {
+            group.kind == "source_path_overlap"
+                && group.instance_ids == vec!["claude-alpha".to_string(), "codex-alpha".to_string()]
+        }));
+        assert!(analysis
+            .groups
+            .iter()
+            .any(|group| { group.kind == "malformed_or_broken" && group.severity == "error" }));
+    }
+
+    #[test]
+    fn precedence_analysis_only_selects_same_agent_loaded_project_winner() {
+        let global = analysis_skill(
+            "codex-global",
+            AgentId::Codex,
+            Scope::AgentGlobal,
+            "ship-helper",
+            true,
+            SkillState::Loaded,
+            PathBuf::from("/tmp/home/.agents/skills/ship-helper/SKILL.md"),
+        );
+        let project = analysis_skill(
+            "codex-project",
+            AgentId::Codex,
+            Scope::AgentProject,
+            "ship-helper",
+            true,
+            SkillState::Loaded,
+            PathBuf::from("/tmp/project/.agents/skills/ship-helper/SKILL.md"),
+        );
+        let other_agent = analysis_skill(
+            "claude-project",
+            AgentId::ClaudeCode,
+            Scope::AgentProject,
+            "ship-helper",
+            true,
+            SkillState::Loaded,
+            PathBuf::from("/tmp/project/.claude/skills/ship-helper/SKILL.md"),
+        );
+
+        let analysis = analyze_skill_instances(&[global, project, other_agent]);
+        let precedence = analysis
+            .groups
+            .iter()
+            .find(|group| group.kind == "precedence_shadowing")
+            .expect("same-agent precedence group");
+
+        assert_eq!(analysis.summary.precedence_groups, 1);
+        assert_eq!(precedence.winner_id.as_deref(), Some("codex-project"));
+        assert_eq!(precedence.agents, vec!["codex".to_string()]);
+        assert!(precedence
+            .explanation
+            .contains("Cross-agent duplicates do not share runtime precedence"));
+    }
+
+    fn analysis_skill(
+        id: &str,
+        agent: AgentId,
+        scope: Scope,
+        name: &str,
+        enabled: bool,
+        state: SkillState,
+        path: PathBuf,
+    ) -> SkillInstance {
+        SkillInstance {
+            id: id.to_string(),
+            agent,
+            scope,
+            project_root: if scope == Scope::AgentProject {
+                Some(PathBuf::from("/tmp/project"))
+            } else {
+                None
+            },
+            path: path.clone(),
+            display_path: path,
+            definition_id: hash_string(&canonical_skill_name_suggestion(name)),
+            name: name.to_string(),
+            display_name: name.to_string(),
+            description: "fixture skill".to_string(),
+            version: None,
+            state,
+            enabled,
+            frontmatter_raw: format!("name: {name}\ndescription: fixture"),
+            body: "fixture body".to_string(),
+            scripts: Vec::new(),
+            permissions: PermissionRequest::default(),
+            fingerprint: format!("{id}-fingerprint"),
+            mtime: 0,
+            first_seen: 0,
+            last_seen: 0,
+        }
     }
 }

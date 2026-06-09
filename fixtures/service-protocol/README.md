@@ -46,12 +46,18 @@ V2.17 Hermes read-only note:
 - The Hermes fixture directory contains active-home scanner contract fixtures plus evidence-only cron samples.
 - `catalog.scanAll` includes Hermes after the read-only scanner implementation lands.
 
-P0 OpenClaw candidate note:
+OpenClaw read-only scanner note:
 
-- OpenClaw is `planned` / `read-only-candidate` in `adapter.listCapabilities`, `service.status`, and `app.stateSnapshot`.
+- OpenClaw is `read-only` / supported scan in `adapter.listCapabilities`, `service.status`, and `app.stateSnapshot`.
 - OpenClaw project scan is workspace-scoped only for confirmed OpenClaw workspace roots; arbitrary repo roots must not be inferred as OpenClaw projects.
-- The OpenClaw fixture directory contains evidence samples only; it is not a parser contract.
-- No `catalog.scanAll` fixture should include OpenClaw until the read-only scanner implementation lands.
+- The OpenClaw fixture directory contains read-only scanner contract fixtures plus evidence samples.
+- `catalog.scanAll` includes OpenClaw after V2.16.
+
+V2.18 cross-agent analysis note:
+
+- `catalog.analysis` is a read-only service method and is also embedded in `app.stateSnapshot.analysis`.
+- Analysis groups duplicate names, canonical-name overlap, source-path overlap, enabled-state mismatch, malformed/broken rows, and same-agent precedence/shadowing where adapter evidence supports it.
+- The analysis fixture must not imply writes, config changes, CLI calls, execution, or unsupported-root inference.
 
 V2.12 opencode writable note:
 
