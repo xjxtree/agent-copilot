@@ -156,7 +156,7 @@ fn visit_root(
                 stack.push((path.clone(), display_path));
                 continue;
             }
-            if entry.file_name() == "SKILL.md" {
+            if entry.file_name() == "SKILL.md" || is_pi_root_markdown_skill(adapter.id(), &path) {
                 let Ok(canonical_path) = path.canonicalize() else {
                     continue;
                 };
@@ -194,6 +194,12 @@ fn allowed_target_base(ctx: &AdapterContext, root: &AdapterRoot, canonical_root:
 
 fn is_allowed_scan_target(path: &Path, canonical_root: &Path, allowed_target_base: &Path) -> bool {
     path.starts_with(canonical_root) || path.starts_with(allowed_target_base)
+}
+
+fn is_pi_root_markdown_skill(agent: AgentId, path: &Path) -> bool {
+    agent == AgentId::Pi
+        && path.extension().and_then(|extension| extension.to_str()) == Some("md")
+        && path.file_name().and_then(|name| name.to_str()) != Some("SKILL.md")
 }
 
 fn normalize_instance(
@@ -471,7 +477,7 @@ fn hash_string(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use skills_copilot_adapters::{ClaudeCodeAdapter, CodexAdapter, OpencodeAdapter};
+    use skills_copilot_adapters::{ClaudeCodeAdapter, CodexAdapter, OpencodeAdapter, PiAdapter};
     use skills_copilot_core::{AdapterContext, AdapterRoot, RootSource};
 
     use super::*;
@@ -756,6 +762,46 @@ mod tests {
         assert_eq!(report.instances[0].name, "global-review");
         assert!(!report.instances[0].enabled);
         assert_eq!(report.instances[0].state, SkillState::Disabled);
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn pi_scans_native_directory_and_root_markdown_skills() {
+        let temp_root =
+            std::env::temp_dir().join(format!("skills-copilot-pi-scan-{}", std::process::id()));
+        let home = temp_root.join("home");
+        let root = home.join(".pi/agent/skills");
+        let dir_skill = root.join("global-pdf");
+        std::fs::create_dir_all(&dir_skill).expect("create pi dir skill");
+        std::fs::write(
+            dir_skill.join("SKILL.md"),
+            "---\nname: global-pdf\ndescription: Pi directory fixture\n---\nBody.",
+        )
+        .expect("write pi dir skill");
+        std::fs::write(
+            root.join("root-note.md"),
+            "---\nname: root-note\ndescription: Pi root markdown fixture\n---\nBody.",
+        )
+        .expect("write pi root markdown skill");
+
+        let ctx = AdapterContext {
+            user_home: home,
+            project_root: None,
+            project_cwd: None,
+            extra_roots: vec![],
+        };
+
+        let report = scan_agent(&PiAdapter, &ctx).expect("scan succeeds");
+        let names: HashSet<_> = report
+            .instances
+            .iter()
+            .map(|skill| skill.name.as_str())
+            .collect();
+
+        assert_eq!(report.instances.len(), 2);
+        assert!(names.contains("global-pdf"));
+        assert!(names.contains("root-note"));
 
         let _ = std::fs::remove_dir_all(&temp_root);
     }

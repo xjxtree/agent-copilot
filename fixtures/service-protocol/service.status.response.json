@@ -163,16 +163,16 @@
       {
         "agent": "pi",
         "display_name": "Pi",
-        "status": "planned",
+        "status": "read-only",
         "scan": {
-          "supported": false,
-          "status": "planned",
-          "reason": "Pi scanner is not implemented; disposable local root/config round-trip is required first."
+          "supported": true,
+          "status": "verified-read-only",
+          "reason": "V2.13 scans Pi-native global ~/.pi/agent/skills and project .pi/skills roots without reading or writing Pi settings."
         },
         "project_scan": {
-          "supported": false,
-          "status": "planned",
-          "reason": "Pi project root precedence and .agents/skills de-duplication need disposable evidence."
+          "supported": true,
+          "status": "verified-read-only",
+          "reason": "Project scan walks .pi/skills from cwd up to the selected project root; .agents compatibility roots remain out of scope to avoid duplicate records."
         },
         "config_toggle": {
           "supported": false,
@@ -187,7 +187,7 @@
         "install": {
           "supported": false,
           "status": "blocked",
-          "reason": "Pi install target roots are not enabled until adapter evidence is complete."
+          "reason": "Pi install target roots are not enabled until writable evidence is complete."
         },
         "writable": {
           "supported": false,
@@ -195,7 +195,6 @@
           "reason": "Pi writes are blocked until the disposable local round-trip is complete."
         },
         "blockers": [
-          "Verify Pi scan roots and malformed skill behavior.",
           "Verify Pi settings schema and enable/disable semantics.",
           "Verify rollback-safe global/project config writes."
         ]

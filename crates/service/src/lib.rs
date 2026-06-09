@@ -2259,14 +2259,14 @@ mod tests {
             .and_then(Value::as_str)
             .expect("first log message");
         assert!(
-            first_message.contains("Claude Code, Codex, and opencode"),
+            first_message.contains("Claude Code, Codex, opencode, and Pi"),
             "scanAll activity should name all supported adapters"
         );
         let summaries = activity
             .get("agent_summaries")
             .and_then(Value::as_array)
             .expect("agent summaries");
-        assert_eq!(summaries.len(), 3);
+        assert_eq!(summaries.len(), 4);
         let log_messages: Vec<&str> = activity
             .get("log_entries")
             .and_then(Value::as_array)
@@ -2308,7 +2308,7 @@ mod tests {
     }
 
     #[test]
-    fn scan_all_label_formats_three_agent_reports() {
+    fn scan_all_label_formats_four_agent_reports() {
         let reports = vec![
             AgentCatalogScanReport {
                 agent: AgentId::ClaudeCode,
@@ -2334,9 +2334,20 @@ mod tests {
                 scanned_roots: vec![PathBuf::from("/tmp/home/.config/opencode/skills")],
                 skipped_roots: Vec::new(),
             },
+            AgentCatalogScanReport {
+                agent: AgentId::Pi,
+                display_name: "Pi",
+                scanned_count: 1,
+                roots_considered: vec![PathBuf::from("/tmp/home/.pi/agent/skills")],
+                scanned_roots: vec![PathBuf::from("/tmp/home/.pi/agent/skills")],
+                skipped_roots: Vec::new(),
+            },
         ];
 
-        assert_eq!(scan_all_label(&reports), "Claude Code, Codex, and opencode");
+        assert_eq!(
+            scan_all_label(&reports),
+            "Claude Code, Codex, opencode, and Pi"
+        );
     }
 
     #[test]

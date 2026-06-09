@@ -2,7 +2,7 @@
 
 > skills-copilot 支持的 6 个 agent 的适配要点。
 >
-> 当前版本线：V2.11 Adapter Capability Matrix 和 V2.12 opencode writable 已完成；当前阶段为 V2.13 Pi，随后推进 V2.14 Hermes 和 V2.15 OpenClaw。
+> 当前版本线：V2.11 Adapter Capability Matrix、V2.12 opencode writable、V2.13 Pi read-only scanner/parser 已完成；当前阶段为 V2.14 Hermes，随后推进 V2.15 OpenClaw。
 >
 > 扫描适配器实现 `AgentAdapter`。
 >
@@ -86,7 +86,7 @@ pub struct AdapterFeatureCapability {
 | Claude Code | `verified` | 支持 | 支持，走 settings snapshot/lock/atomic write/read-back/rescan |
 | Codex | `verified` | 支持 | 支持用户 `config.toml` override；项目 `.codex/config.toml` 仍 blocked |
 | opencode | `read-only` | 支持 native roots | blocked，直到 `permission.skill` 写入证据完成 |
-| Pi | `planned` | 未实现 | blocked，等待 disposable local round-trip |
+| Pi | `read-only` | 支持 Pi-native roots | writable blocked，等待 settings mutation/rollback evidence |
 | Hermes | `blocked` | 未实现 | blocked，等待 maintainer-confirmed spec |
 | OpenClaw | `blocked` | 未实现 | blocked，等待 maintainer-confirmed spec |
 

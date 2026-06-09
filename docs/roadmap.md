@@ -4,9 +4,9 @@
 >
 > 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.13 Pi adapter support 进行中**。
+> 当前阶段：**V2.14 Hermes adapter support 进行中**。
 >
-> 近期主线：在 macOS app 中补齐多 agent 支持，按 V2.11-V2.15 版本线推进 opencode writable、Pi、Hermes 和 OpenClaw 的证据与适配。V2.11 与 V2.12 已完成，V2.13 为当前阶段。
+> 近期主线：在 macOS app 中补齐多 agent 支持，按 V2.11-V2.15 版本线推进 opencode writable、Pi、Hermes 和 OpenClaw 的证据与适配。V2.11、V2.12、V2.13 已完成，V2.14 为当前阶段。
 >
 > 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.10 各阶段能力、V2.9 Tool-global skill pool。V2.11 Adapter capability matrix 的首个 service/UI 切片已进入开发，后续候选变更仍需重新验证。
 >
@@ -588,8 +588,8 @@
 - 服务协议暴露 adapter capability matrix。
 - macOS agent selector 覆盖 Claude Code、Codex、opencode、Pi、Hermes、OpenClaw，但不恢复 `All` 选项。
 - UI 以能力矩阵显示 scan/toggle/install 状态和 blocker。
-- opencode 继续 read-only；Pi planned；Hermes/OpenClaw blocked。
-- 不实现 opencode/Pi/Hermes/OpenClaw 的新写入语义。
+- V2.11 本身只展示能力矩阵，不实现 opencode/Pi/Hermes/OpenClaw 的新写入语义。
+- 后续 V2.12 已完成 opencode writable；V2.13 已完成 Pi read-only scanner/parser。
 
 **退出条件**
 - [x] `adapter.listCapabilities` 和 `service.status.adapter_capabilities` 有 contract fixtures。
@@ -618,14 +618,15 @@
 
 ### 4.13 V2.13 Pi adapter support
 
-**目标**：用 disposable local round-trip 验证 Pi roots/schema/toggle/rollback，并按证据实现 Pi adapter。
+**目标**：先实现证据充分的 Pi-native read-only scanner/parser，并保留 Pi writable blocker，直到 settings mutation / rollback 语义完成 disposable round-trip。
 
-**状态**：planned。
+**状态（2026-06-09）**：completed。V2.13 已实现 Pi-native `~/.pi/agent/skills` 与项目 `.pi/skills` scanner/parser，支持目录 `SKILL.md` 与 Pi-native root `.md` skills；`pnpm check:macos` 通过。Pi toggle/install/snapshot writes 仍 blocked。
 
 **退出条件**
-- [ ] Pi scan roots、project precedence、malformed behavior 有 fixture。
-- [ ] Pi settings schema 和 enable/disable 语义完成 disposable 验证。
-- [ ] macOS UI 支持 Pi filter、status、findings、activity 和 snapshot history。
+- [x] Pi scan roots、project precedence、malformed behavior 有 fixture。
+- [x] macOS UI 支持 Pi filter、status、findings、activity 和 read-only capability blocker。
+- [x] `pnpm check:macos` 通过；真实交互 Computer Use 因当前会话锁屏按本轮要求跳过。
+- [ ] Pi settings schema 和 enable/disable 语义完成 disposable 验证；该项保留为后续 writable follow-up，不阻塞 V2.13 read-only closeout。
 
 ### 4.14 V2.14 Hermes adapter support
 

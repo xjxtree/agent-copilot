@@ -1,6 +1,6 @@
 # skills-copilot Service Protocol
 
-> Status: V2.12 opencode writable evidence and guarded implementation is complete; V2.13 Pi adapter support is next.
+> Status: V2.13 Pi read-only scanner/parser is complete; V2.14 Hermes adapter support is next.
 >
 > Integrated: V2.9 Tool-global import/export/install, V2.10 skill execution safety boundary, and 2026-06-09 real local Computer Use validation for the current mainline app. V2.11 added adapter capability status to the service protocol and macOS UI. V2.12 marks opencode writable for native roots after exact permission.skill deny/re-enable, snapshot/rollback, install, and fixture smoke validation pass.
 >
@@ -76,7 +76,7 @@ It currently scans:
 
 - Claude Code
 - Codex
-- read-only opencode
+- opencode (verified writable for native roots)
 
 It resolves the effective `ProjectContext` before adapter scanning.
 
@@ -125,8 +125,8 @@ Current matrix:
 | --- | --- | --- | --- |
 | Claude Code | `verified` | Supported | Supported through verified settings writes |
 | Codex | `verified` | Supported | Supported through user `config.toml`; project-local `.codex/config.toml` remains blocked |
-| opencode | `read-only` | Supported for native roots | Blocked until `permission.skill` writes are verified |
-| Pi | `planned` | Not implemented | Blocked pending disposable local round-trip |
+| opencode | `verified` | Supported for native roots | Supported through exact `permission.skill` deny/re-enable and strict JSON writes |
+| Pi | `read-only` | Pi-native roots scan | Writable toggle/install blocked pending settings mutation/rollback evidence |
 | Hermes | `blocked` | Not implemented | Blocked pending maintainer-confirmed spec |
 | OpenClaw | `blocked` | Not implemented | Blocked pending maintainer-confirmed spec |
 

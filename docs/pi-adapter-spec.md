@@ -1,10 +1,10 @@
 # Pi Adapter Evidence Spec
 
-> Evidence date: 2026-06-08. This is a V2 prep evidence record only; do not implement a Pi adapter from this file until the remaining local round-trip checks are complete.
+> Evidence date: 2026-06-08. V2.13 implements the evidence-backed read-only scanner/parser slice only; Pi writable support remains blocked until settings mutation and rollback checks are complete.
 
 ## Status
 
-Read-only scanner/parser planning has enough official evidence for Pi skills. Writable toggle support is still blocked because Pi has multiple resource sources, package filters, and an interactive `pi config` resource manager that need disposable local round-trip verification before this app writes settings.
+Read-only scanner/parser support is implemented for Pi-native `~/.pi/agent/skills` and project `.pi/skills` roots. Writable toggle support is still blocked because Pi has multiple resource sources, package filters, and an interactive `pi config` resource manager that need disposable local round-trip verification before this app writes settings.
 
 Local validation on 2026-06-08:
 
@@ -87,7 +87,7 @@ Package evidence:
 
 ## Adapter Decision
 
-Read-only state: **ready to plan**. The scanner can model Pi-native skills under `.pi/skills` and `~/.pi/agent/skills`, and can consider `.agents/skills` compatibility roots after conflict policy is decided.
+Read-only state: **implemented in V2.13**. The scanner models Pi-native skills under `.pi/skills` and `~/.pi/agent/skills`. `.agents/skills` compatibility roots remain out of scope until conflict policy is decided.
 
 Writable state: **blocked**. A future writable adapter must first verify:
 

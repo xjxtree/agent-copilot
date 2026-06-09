@@ -10,7 +10,7 @@ use fs4::FileExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use skills_copilot_adapters::{
-    parse_codex_skill_config_entries, ClaudeCodeAdapter, CodexAdapter, OpencodeAdapter,
+    parse_codex_skill_config_entries, ClaudeCodeAdapter, CodexAdapter, OpencodeAdapter, PiAdapter,
 };
 use skills_copilot_ai_core::{evaluate_mvp_rules, Finding, RuleContext, RuleReport, Severity};
 use skills_copilot_catalog::{
@@ -329,6 +329,7 @@ fn supported_scan_adapters() -> Vec<Box<dyn AgentAdapter>> {
         Box::new(ClaudeCodeAdapter),
         Box::new(CodexAdapter),
         Box::new(OpencodeAdapter),
+        Box::new(PiAdapter),
     ]
 }
 
@@ -391,14 +392,14 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
         AdapterCapabilityRecord {
             agent: AgentId::Pi.as_str(),
             display_name: "Pi",
-            status: "planned",
-            scan: AdapterFeatureCapability::blocked(
-                "planned",
-                "Pi scanner is not implemented; disposable local root/config round-trip is required first.",
+            status: "read-only",
+            scan: AdapterFeatureCapability::supported_with_reason(
+                "verified-read-only",
+                "V2.13 scans Pi-native global ~/.pi/agent/skills and project .pi/skills roots without reading or writing Pi settings.",
             ),
-            project_scan: AdapterFeatureCapability::blocked(
-                "planned",
-                "Pi project root precedence and .agents/skills de-duplication need disposable evidence.",
+            project_scan: AdapterFeatureCapability::supported_with_reason(
+                "verified-read-only",
+                "Project scan walks .pi/skills from cwd up to the selected project root; .agents compatibility roots remain out of scope to avoid duplicate records.",
             ),
             config_toggle: AdapterFeatureCapability::blocked(
                 "blocked",
@@ -410,14 +411,13 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
             ),
             install: AdapterFeatureCapability::blocked(
                 "blocked",
-                "Pi install target roots are not enabled until adapter evidence is complete.",
+                "Pi install target roots are not enabled until writable evidence is complete.",
             ),
             writable: AdapterFeatureCapability::blocked(
                 "blocked",
                 "Pi writes are blocked until the disposable local round-trip is complete.",
             ),
             blockers: vec![
-                "Verify Pi scan roots and malformed skill behavior.",
                 "Verify Pi settings schema and enable/disable semantics.",
                 "Verify rollback-safe global/project config writes.",
             ],
@@ -2905,6 +2905,7 @@ fn scan_agent_id_to_catalog(
         AgentId::ClaudeCode => scan_single_agent_to_catalog(&ClaudeCodeAdapter, ctx, catalog),
         AgentId::Codex => scan_single_agent_to_catalog(&CodexAdapter, ctx, catalog),
         AgentId::Opencode => scan_single_agent_to_catalog(&OpencodeAdapter, ctx, catalog),
+        AgentId::Pi => scan_single_agent_to_catalog(&PiAdapter, ctx, catalog),
         agent => Err(CommandError::UnsafeConfigPath(format!(
             "{} skills are not supported by scan commands",
             agent.as_str()
@@ -4175,15 +4176,14 @@ mod tests {
     }
 
     #[test]
-    fn scan_all_includes_opencode_after_claude_and_codex() {
-        let temp_root = std::env::temp_dir().join(format!(
-            "skills-copilot-opencode-scan-all-{}",
-            std::process::id()
-        ));
+    fn scan_all_includes_pi_after_opencode() {
+        let temp_root =
+            std::env::temp_dir().join(format!("skills-copilot-pi-scan-all-{}", std::process::id()));
         let home = temp_root.join("home");
         let claude_path = write_claude_skill(&home, "claude-alpha");
         let codex_path = write_codex_skill(&home, "codex-alpha");
         let opencode_path = write_opencode_global_skill(&home, "opencode-alpha");
+        let pi_path = write_pi_global_skill(&home, "pi-alpha");
 
         let catalog = Catalog::in_memory().expect("catalog opens");
         catalog.init().expect("catalog initializes");
@@ -4197,15 +4197,20 @@ mod tests {
         let report = scan_all_catalog_report(&ctx, &catalog).expect("scan all succeeds");
         let records = catalog.list_skill_records().expect("records list");
 
-        assert_eq!(report.scanned_count, 3);
+        assert_eq!(report.scanned_count, 4);
         assert_eq!(
             report
                 .agents
                 .iter()
                 .map(|agent| agent.agent)
                 .collect::<Vec<_>>(),
-            vec![AgentId::ClaudeCode, AgentId::Codex, AgentId::Opencode],
-            "scanAll reports opencode after Claude Code and Codex"
+            vec![
+                AgentId::ClaudeCode,
+                AgentId::Codex,
+                AgentId::Opencode,
+                AgentId::Pi
+            ],
+            "scanAll reports Pi after opencode"
         );
         assert!(records.iter().any(|record| {
             record.agent == "claude-code"
@@ -4219,6 +4224,9 @@ mod tests {
             record.agent == "opencode"
                 && record.name == "opencode-alpha"
                 && record.path == opencode_path
+        }));
+        assert!(records.iter().any(|record| {
+            record.agent == "pi" && record.name == "pi-alpha" && record.path == pi_path
         }));
 
         let _ = std::fs::remove_dir_all(&temp_root);
@@ -6167,6 +6175,18 @@ mod tests {
             format!("---\nname: {name}\ndescription: {name} fixture\n---\nbody"),
         )
         .expect("write opencode skill");
+        skill_path.canonicalize().expect("canonicalize skill path")
+    }
+
+    fn write_pi_global_skill(root: &Path, name: &str) -> PathBuf {
+        let skill_dir = root.join(".pi/agent/skills").join(name);
+        std::fs::create_dir_all(&skill_dir).expect("create pi skill dir");
+        let skill_path = skill_dir.join("SKILL.md");
+        std::fs::write(
+            &skill_path,
+            format!("---\nname: {name}\ndescription: {name} fixture\n---\nbody"),
+        )
+        .expect("write pi skill");
         skill_path.canonicalize().expect("canonicalize skill path")
     }
 

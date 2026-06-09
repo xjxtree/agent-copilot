@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-**当前阶段**：V2.12 opencode writable support 已完成；V2.13 Pi adapter support 为下一阶段。
+**当前阶段**：V2.13 Pi read-only adapter support 已完成；V2.14 Hermes adapter support 为下一阶段。
 
 **近期主线**：在 macOS app 中补齐多 agent 支持，按 V2.11-V2.15 版本线推进 adapter capability matrix、opencode writable、Pi、Hermes 和 OpenClaw 的证据与适配。
 
@@ -31,7 +31,7 @@
 | Claude Code | 已支持 | 支持 scan、catalog、toggle、settings editor、snapshot rollback。 |
 | Codex | 已支持已验证范围 | 支持 verified user/project roots、cwd→repo-root discovery、`catalog.scanAll`、agent filter、project context 归属和用户级 `config.toml` toggle。 |
 | opencode | read-only 已支持 | 只扫描 native roots：`~/.config/opencode/skills` 和当前项目 `.opencode/skills`；writable toggle 仍需证据闭环。 |
-| Pi | planned | 已进入 UI/service capability matrix；需要 disposable local round-trip 验证 roots、schema、toggle 和 rollback 语义。 |
+| Pi | read-only | V2.13 已实现 Pi-native global/project scanner/parser；writable toggle/install 仍 blocked，等待 settings mutation/rollback 证据。 |
 | Hermes | blocked | 已进入 UI/service capability matrix；需要 maintainer-confirmed roots、config schema、package/task model 和 toggle 语义。 |
 | OpenClaw | blocked | 已进入 UI/service capability matrix；需要 maintainer-confirmed skill schema、config safety rules、install/toggle 语义和 credential handling guidance。 |
 
@@ -42,8 +42,8 @@
 | V2.10 | Skill execution safety boundary / docs consistency | 已关闭 |
 | V2.11 | Adapter Capability Matrix：服务协议和 macOS UI 展示六个 agent 的能力状态与 blocker | 已完成 |
 | V2.12 | opencode writable evidence + guarded toggle/install | 已完成 |
-| V2.13 | Pi disposable local round-trip + adapter implementation | 下一阶段 |
-| V2.14 | Hermes maintainer-confirmed spec + adapter implementation scope | 计划中 |
+| V2.13 | Pi read-only scanner/parser + writable blocker | 已完成 |
+| V2.14 | Hermes maintainer-confirmed spec + adapter implementation scope | 下一阶段 |
 | V2.15 | OpenClaw maintainer-confirmed spec + adapter implementation scope | 计划中 |
 
 ## 它做什么
@@ -152,8 +152,8 @@ Fixture smoke 不触碰真实 Claude、Codex 或 opencode 配置。
 
 当前贡献重点：
 
-1. 推进 V2.13 Pi disposable local round-trip 与 adapter implementation。
-2. 推进 Pi disposable local round-trip。
+1. 推进 V2.14 Hermes maintainer-confirmed spec 与 adapter scope。
+2. 继续跟踪 Pi writable settings mutation/rollback 证据。
 3. 推进 Hermes maintainer-confirmed spec。
 4. 推进 OpenClaw maintainer-confirmed spec。
 5. 改进 native macOS app 的测试、文档和 service protocol。

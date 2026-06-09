@@ -1,13 +1,13 @@
 # Development Tasks
 
-> Status: current planning and execution queue as of 2026-06-09. V2.1 through V2.10 are closed on the main line. Current phase is V2.13 Pi adapter support; V2.12 opencode writable support is complete. Near-term priority is comprehensive agent adapter support for opencode writable support, Pi, Hermes, and OpenClaw evidence/implementation in the macOS app.
+> Status: current planning and execution queue as of 2026-06-09. V2.1 through V2.10 are closed on the main line. Current phase is V2.14 Hermes adapter support; V2.13 Pi read-only adapter support is complete. Near-term priority is comprehensive agent adapter support for opencode writable support, Pi, Hermes, and OpenClaw evidence/implementation in the macOS app.
 
 ## Current Baseline
 
 - Current branch baseline: `main` after V2.10 execution safety boundary docs/release consistency and 2026-06-09 real local Computer Use validation.
 - Product boundary: native macOS SwiftUI/AppKit shell plus Rust service protocol.
 - Completed V2 milestones: first Codex slice, V2.1 through V2.10.
-- Current priority: build V2.13 Pi disposable local round-trip and adapter implementation, then close Hermes/OpenClaw adapter gates in order.
+- Current priority: obtain V2.14 Hermes maintainer-confirmed spec and implementation scope, then close OpenClaw adapter gate.
 - Real local Computer Use baseline: passed on 2026-06-09 for the current mainline app against real local HOME/app data/Claude/Codex/opencode roots; future user-visible, UI, or service protocol changes must rerun it.
 - Quality gate for code/UI/protocol work: `pnpm check:macos`; add focused Rust/Swift tests when touching shared behavior.
 
@@ -18,8 +18,8 @@
 | V2.10 | Skill execution safety boundary and docs consistency | Closed | Safety boundary documented and release/docs consistency synchronized |
 | V2.11 | Adapter Capability Matrix | Completed | Service protocol and macOS UI expose scan/toggle/install status and blockers for Claude Code, Codex, opencode, Pi, Hermes, and OpenClaw |
 | V2.12 | opencode writable support | Complete | Disposable local evidence verifies `permission.skill` writes, then guarded toggle/install is implemented and validated, or blocker remains explicit |
-| V2.13 | Pi adapter support | In progress | Disposable local round-trip verifies roots/schema/toggle/rollback, then read/write scope is implemented as evidence permits |
-| V2.14 | Hermes adapter support | Planned | Maintainer-confirmed spec moves Hermes from blocked to implementable, then adapter scope is implemented as evidence permits |
+| V2.13 | Pi adapter support | Complete | Pi-native global/project scanner/parser is implemented read-only; writable toggle/install remains blocked pending settings mutation/rollback evidence |
+| V2.14 | Hermes adapter support | In progress | Maintainer-confirmed spec moves Hermes from blocked to implementable, then adapter scope is implemented as evidence permits |
 | V2.15 | OpenClaw adapter support | Planned | Maintainer-confirmed spec moves OpenClaw from blocked to implementable, then adapter scope is implemented as evidence permits |
 
 ## Near-Term Priority: Comprehensive Agent Adapter Support
@@ -28,10 +28,9 @@
 
 **Priority order**
 
-1. V2.13 Pi disposable local round-trip and adapter implementation plan.
-2. V2.14 Hermes maintainer-confirmed spec and implementation scope.
-3. V2.14 Hermes maintainer-confirmed spec and adapter plan.
-4. V2.15 OpenClaw maintainer-confirmed spec and adapter plan.
+1. V2.14 Hermes maintainer-confirmed spec and implementation scope.
+2. V2.15 OpenClaw maintainer-confirmed spec and implementation scope.
+3. Pi writable settings mutation/rollback evidence follow-up.
 
 **Tasks**
 
@@ -61,7 +60,7 @@ These items are real work, but they are not unfinished V2.1-V2.10 tasks.
 | --- | --- | --- | --- | --- |
 | P0 | Real local Computer Use rerun gate | Completed for the current mainline app on 2026-06-09; recurring for future user-visible changes | Rerun the real app against local HOME after UI/service/protocol changes, covering project context, scan-all, agent filter, findings filtering/grouping, opencode read-only toggle, and script safety preview | App-window-only evidence and runbook notes updated for the new candidate |
 | P0 | V2.11 Adapter Capability Matrix | Completed and in use | Run focused protocol/UI checks when needed, then use the matrix as the gate for future Pi/opencode/Hermes/OpenClaw work | macOS UI shows precise scan/toggle/install status and blockers for all six agents |
-| P0 | Pi comprehensive adapter support | Evidence incomplete; promoted to near-term priority | Use disposable local Pi config/skill roots to verify scan and toggle semantics before implementation | Pi adapter has verified roots, schema, toggle behavior, fixtures, non-destructive tests, and UI/service status |
+| P0 | Pi comprehensive adapter support | Read-only scanner complete; writable evidence incomplete | Continue disposable local Pi config verification for toggle/rollback semantics | Pi writable path remains blocked until settings mutation evidence passes |
 | P0 | opencode writable support | Read-only native-root support exists; writable semantics remain unverified; promoted to near-term priority | Verify `permission.skill` exact patch, re-enable behavior, wildcard precedence, config ownership, and rollback path | opencode writable toggle/install design is accepted and implemented behind snapshots/tests, or blocker remains explicit |
 | P0 | Hermes adapter support | Blocked by missing maintainer-confirmed semantics; promoted to near-term priority | Obtain maintainer-confirmed roots, config schema, package/task model, and toggle semantics | Hermes adapter spec moves from blocked to implementable, then read/write scope is implemented as evidence permits |
 | P0 | OpenClaw adapter support | Blocked/partial evidence; promoted to near-term priority | Obtain maintainer-confirmed skill schema, config safety rules, install/toggle semantics, and credential handling guidance | OpenClaw adapter spec moves from blocked to implementable, then read/write scope is implemented as evidence permits |

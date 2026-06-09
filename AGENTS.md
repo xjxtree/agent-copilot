@@ -4,10 +4,10 @@ This file is the shared project instruction entrypoint for coding agents such as
 
 ## Project State
 
-- Current phase: V2.12 opencode writable support is complete; V2.13 Pi adapter support is next.
+- Current phase: V2.13 Pi read-only adapter support is complete; V2.14 Hermes adapter support is next.
 - Near-term priority: comprehensive agent adapter support for Pi, opencode writable support, Hermes, and OpenClaw in the macOS app.
 - V2.11 scope: service/UI adapter capability matrix for Claude Code, Codex, opencode, Pi, Hermes, and OpenClaw, exposing scan/toggle/install status and blockers before new write affordances are enabled.
-- Versioned adapter plan: V2.12 opencode writable evidence and guarded implementation; V2.13 Pi disposable round-trip and adapter implementation; V2.14 Hermes maintainer-confirmed spec and implementation scope; V2.15 OpenClaw maintainer-confirmed spec and implementation scope.
+- Versioned adapter plan: V2.12 opencode writable evidence and guarded implementation complete; V2.13 Pi read-only scanner/parser complete with writable still blocked; V2.14 Hermes maintainer-confirmed spec and implementation scope; V2.15 OpenClaw maintainer-confirmed spec and implementation scope.
 - Current mainline real local app Computer Use validation passed on 2026-06-09.
 - V2.8 rules/permissions governance, V2.9 Tool-global skill pool, and V2.10 docs/release consistency are integrated.
 - Earlier integrated phases: MVP, Product UI/UX Hardening, V1 native macOS baseline, macOS Native Productization, V2 Prep security gates, refresh-summary UX, native test hardening, adapter evidence gates, first Codex adapter slice, and V2.1 through V2.7.
@@ -32,7 +32,7 @@ This file is the shared project instruction entrypoint for coding agents such as
 - New UI work must call the typed Rust service protocol.
 - Current implemented adapter scope is Claude Code, Codex, and read-only opencode.
 - Codex support is limited to verified user/project roots, cwd-to-repo-root project discovery, `catalog.scanAll`, project-context-scoped scanning, agent filtering/status display, and user-config writable toggles through `~/.codex/config.toml` / `$CODEX_HOME/config.toml`.
-- Project-local Codex config writes, plugin/admin/system roots, Pi, Hermes, and OpenClaw remain blocked or read-only planning only per their evidence docs.
+- Project-local Codex config writes, plugin/admin/system roots, Pi writable paths, Hermes, and OpenClaw remain blocked or read-only planning only per their evidence docs.
 - Opencode must remain read-only and native-root-only until a later evidence pass verifies writable semantics.
 - No cloud sync, accounts, telemetry, anonymous crash reports, or uncontrolled outbound network calls.
 - Optional LLM features must be explicitly enabled by the user. V2.7 currently must not save credentials; future macOS credential storage must prefer Keychain, and fallback `~/.config/skills-copilot/llm.yaml` must be permission-checked as `0600`. Credentials must never be written to SQLite, project directories, logs, prompts, or response artifacts.
