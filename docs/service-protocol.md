@@ -1,6 +1,6 @@
 # skills-copilot Service Protocol
 
-> Status: V2.13 Pi read-only scanner/parser is complete; V2.14 Hermes adapter support is next.
+> Status: V2.14 Hermes evidence-gate closeout is complete; Hermes remains blocked and V2.15 OpenClaw adapter support is next.
 >
 > Integrated: V2.9 Tool-global import/export/install, V2.10 skill execution safety boundary, and 2026-06-09 real local Computer Use validation for the current mainline app. V2.11 added adapter capability status to the service protocol and macOS UI. V2.12 marks opencode writable for native roots after exact permission.skill deny/re-enable, snapshot/rollback, install, and fixture smoke validation pass.
 >
@@ -77,6 +77,7 @@ It currently scans:
 - Claude Code
 - Codex
 - opencode (verified writable for native roots)
+- Pi (read-only native roots)
 
 It resolves the effective `ProjectContext` before adapter scanning.
 
@@ -88,33 +89,31 @@ It resolves the effective `ProjectContext` before adapter scanning.
 {
   "agent": "opencode",
   "display_name": "opencode",
-  "status": "read-only",
+  "status": "verified",
   "scan": { "supported": true, "status": "verified" },
   "project_scan": { "supported": true, "status": "verified" },
   "config_toggle": {
-    "supported": false,
-    "status": "blocked",
-    "reason": "opencode permission.skill patching, re-enable behavior, wildcard precedence, config ownership, and rollback path are not verified."
+    "supported": true,
+    "status": "verified-exact-skill-deny",
+    "reason": "V2.12 writes exact permission.skill.<name> = deny and re-enables by removing that exact deny without changing wildcard rules."
   },
   "config_snapshot": {
-    "supported": false,
-    "status": "blocked",
-    "reason": "No rollback-safe opencode config write path is verified yet."
+    "supported": true,
+    "status": "verified",
+    "reason": "opencode global/project opencode.json writes use snapshot, atomic write, verify, and rollback."
   },
   "install": {
-    "supported": false,
-    "status": "blocked",
-    "reason": "opencode install remains blocked until writable semantics are verified."
+    "supported": true,
+    "status": "verified",
+    "reason": "Tool-global skills can be installed to native opencode user/project skill roots after confirmation."
   },
   "writable": {
-    "supported": false,
-    "status": "blocked",
-    "reason": "opencode is native-root read-only until disposable local evidence proves safe writes."
+    "supported": true,
+    "status": "verified",
+    "reason": "Writable support is limited to native opencode roots and managed exact skill permission overrides."
   },
   "blockers": [
-    "Verify permission.skill exact patch and re-enable behavior.",
-    "Verify wildcard precedence and managed config ownership.",
-    "Verify rollback-safe config writes before enabling toggle/install."
+    "Do not scan opencode .agents or .claude compatibility roots."
   ]
 }
 ```
@@ -127,7 +126,7 @@ Current matrix:
 | Codex | `verified` | Supported | Supported through user `config.toml`; project-local `.codex/config.toml` remains blocked |
 | opencode | `verified` | Supported for native roots | Supported through exact `permission.skill` deny/re-enable and strict JSON writes |
 | Pi | `read-only` | Pi-native roots scan | Writable toggle/install blocked pending settings mutation/rollback evidence |
-| Hermes | `blocked` | Not implemented | Blocked pending maintainer-confirmed spec |
+| Hermes | `blocked` | Not implemented | V2.14 closed without implementation because maintainer-confirmed spec is missing |
 | OpenClaw | `blocked` | Not implemented | Blocked pending maintainer-confirmed spec |
 
 Native UI must use this matrix for affordance gating and explanations. It must not infer write support only from an agent name.

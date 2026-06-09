@@ -428,7 +428,7 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
             status: "blocked",
             scan: AdapterFeatureCapability::blocked(
                 "blocked",
-                "Hermes has no maintainer-confirmed skill/package layout or discovery roots.",
+                "V2.14 confirmed Hermes remains blocked: no maintainer-confirmed skill/package layout or discovery roots.",
             ),
             project_scan: AdapterFeatureCapability::blocked(
                 "blocked",
@@ -448,10 +448,10 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
             ),
             writable: AdapterFeatureCapability::blocked(
                 "blocked",
-                "Hermes remains blocked pending maintainer-confirmed spec.",
+                "V2.14 closed without Hermes implementation because maintainer-confirmed write semantics are still missing.",
             ),
             blockers: vec![
-                "Obtain maintainer-confirmed roots and config schema.",
+                "V2.14 closeout: obtain maintainer-confirmed roots and config schema before any scanner/parser.",
                 "Confirm whether Hermes exposes skills, service tasks, commands, or cron jobs as SkillInstance units.",
                 "Confirm toggle and rollback semantics before implementation.",
             ],

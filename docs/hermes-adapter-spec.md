@@ -1,6 +1,6 @@
 # Hermes Adapter Spec Worklist
 
-> Status: local evidence collected on 2026-06-08. Do not implement a Hermes adapter yet: no maintainer-provided skill/package layout, discovery roots, config schema, or skill toggle semantics are verified.
+> Status: V2.14 evidence-gate closeout on 2026-06-09. Do not implement a Hermes adapter yet: no maintainer-provided skill/package layout, discovery roots, config schema, or skill toggle semantics are verified.
 
 ## 1. Evidence Summary
 
@@ -9,7 +9,7 @@ Sources checked:
 - Local skill doc: `$HOME/.agents/skills/hermes-ops/SKILL.md`.
 - Local machine checks: `command -v hermes`, `ls -ld "$HOME/.hermes"`.
 
-No adapter code was added and no remote `ssh macmini` commands were run.
+No adapter code was added, no remote `ssh macmini` commands were run, and V2.14 intentionally kept Hermes out of `catalog.scanAll`.
 
 | Area | Status | Evidence |
 | --- | --- | --- |
@@ -18,8 +18,8 @@ No adapter code was added and no remote `ssh macmini` commands were run.
 | Skill-like unit | Not verified | The observed doc is itself a Codex/agent skill for operating Hermes. It does not prove Hermes has a local skill concept, a `SKILL.md` package format, or roots that should be scanned by skills-copilot. |
 | Config path/schema | Partial service evidence | The doc mentions `<hermes-home>/cron/jobs.json` and generic `hermes config validate`, but no full schema, version, or user-local config path is provided. |
 | Enable/disable semantics | Cron-only evidence | The doc says cron job entries should be disabled with `enabled: false` rather than deleted. Treat this only as cron task management evidence, not skill enable/disable semantics. |
-| Read-only catalog feasibility | Blocked | There is no verified local Hermes skill directory or task schema that maps safely to `SkillInstance`. |
-| Writable adapter feasibility | Blocked | There is no verified rollback-safe config path or toggle semantic for Hermes skills. |
+| Read-only catalog feasibility | Blocked after V2.14 closeout | There is no verified local Hermes skill directory or task schema that maps safely to `SkillInstance`. |
+| Writable adapter feasibility | Blocked after V2.14 closeout | There is no verified rollback-safe config path or toggle semantic for Hermes skills. |
 
 ## 2. Fixture Scope
 
@@ -54,4 +54,4 @@ No mapping is approved yet.
 - Enable/disable semantics, including whether disabling requires config patching, CLI calls, cron changes, or is unsupported.
 - Safe rollback procedure for any write path.
 
-Until those items exist, Hermes should remain documented as blocked/read-only evidence only.
+Until those items exist, Hermes remains documented as blocked/evidence-only. The macOS app may show Hermes in the capability matrix, but scan, project scan, config snapshot, install, toggle, and writable actions must stay disabled.

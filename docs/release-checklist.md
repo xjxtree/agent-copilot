@@ -98,7 +98,7 @@ Then operate the real app with macOS Computer Use and record:
 
 - [ ] The app window is visible and can be targeted by Computer Use/AX.
 - [ ] Scan-all works from the toolbar/menu path.
-- [ ] Agent filter shows Claude Code, Codex, and read-only opencode rows when local roots exist; missing roots are recorded as missing, not as pass/fail ambiguity.
+- [ ] Agent filter shows Claude Code, Codex, guarded writable opencode, and read-only Pi rows when local roots exist; missing roots are recorded as missing, not as pass/fail ambiguity.
 - [ ] Project context can be set, switched, and cleared.
 - [ ] Codex cwd-to-repo-root behavior is visible or the missing-root state is recorded.
 - [ ] Claude Code toggle/settings behavior still targets the real expected Claude config only after intentional user action.

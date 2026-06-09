@@ -2,7 +2,7 @@
 
 > skills-copilot 支持的 6 个 agent 的适配要点。
 >
-> 当前版本线：V2.11 Adapter Capability Matrix、V2.12 opencode writable、V2.13 Pi read-only scanner/parser 已完成；当前阶段为 V2.14 Hermes，随后推进 V2.15 OpenClaw。
+> 当前版本线：V2.11 Adapter Capability Matrix、V2.12 opencode writable、V2.13 Pi read-only scanner/parser、V2.14 Hermes evidence-gate closeout 已完成；当前阶段为 V2.15 OpenClaw。
 >
 > 扫描适配器实现 `AgentAdapter`。
 >
@@ -85,9 +85,9 @@ pub struct AdapterFeatureCapability {
 | --- | --- | --- | --- |
 | Claude Code | `verified` | 支持 | 支持，走 settings snapshot/lock/atomic write/read-back/rescan |
 | Codex | `verified` | 支持 | 支持用户 `config.toml` override；项目 `.codex/config.toml` 仍 blocked |
-| opencode | `read-only` | 支持 native roots | blocked，直到 `permission.skill` 写入证据完成 |
+| opencode | `verified` | 支持 native roots | 支持 guarded writable：exact `permission.skill` deny/re-enable、snapshot/rollback、tool-global install |
 | Pi | `read-only` | 支持 Pi-native roots | writable blocked，等待 settings mutation/rollback evidence |
-| Hermes | `blocked` | 未实现 | blocked，等待 maintainer-confirmed spec |
+| Hermes | `blocked` | 未实现 | V2.14 已关闭证据门；没有 maintainer-confirmed spec 前继续 blocked |
 | OpenClaw | `blocked` | 未实现 | blocked，等待 maintainer-confirmed spec |
 
 > **实现要求**：所有适配器**无状态**。
@@ -173,7 +173,7 @@ Codex 当前实现边界：
 | 项 | 值 |
 | --- | --- |
 | AgentId | `hermes` |
-| 状态 | **Blocked / service evidence only** |
+| 状态 | **Blocked after V2.14 evidence-gate closeout / service evidence only** |
 | Spec 工作单 | [`docs/hermes-adapter-spec.md`](./hermes-adapter-spec.md) |
 | 统一工作单 | [`docs/agent-adapter-spec-worklists.md`](./agent-adapter-spec-worklists.md#hermes) |
 | Evidence fixture | `fixtures/hermes/` 只保存 service evidence 样例，不是 parser contract |
@@ -183,7 +183,7 @@ Codex 当前实现边界：
 
 Hermes 当前证据只说明它被描述为 macmini 上的服务运维对象，含 CLI、home、repo、日志和 cron 配置线索。
 
-这些证据还不能证明 Hermes 有可扫描的本地 skill 目录或 `SkillInstance` 映射单元。
+V2.14 的结论是：这些证据还不能证明 Hermes 有可扫描的本地 skill 目录或 `SkillInstance` 映射单元，因此不实现 scanner/parser，也不开放写入。
 
 ### 2.5 openclaw
 
@@ -207,16 +207,16 @@ OpenClaw 当前证据包括候选 skill roots、`SKILL.md` 目录输入、`openc
 | 项 | 值 |
 | --- | --- |
 | AgentId | `opencode` |
-| 状态 | **Read-only adapter integrated, writable adapter blocked** —— V2.4 已实现 native-root-only scanner/parser；permission-based 启停写入仍需 disposable local round-trip |
+| 状态 | **Verified guarded writable for native roots** —— V2.4 已实现 native-root-only scanner/parser；V2.12 已实现 exact `permission.skill` deny/re-enable、snapshot/rollback 和 native-root install |
 | Spec 工作单 | [`docs/opencode-adapter-spec.md`](./opencode-adapter-spec.md) |
 | 统一工作单 | [`docs/agent-adapter-spec-worklists.md`](./agent-adapter-spec-worklists.md#opencode) |
 | 本地观测 | 2026-06-08 本机 `opencode --version` 为 `1.16.2`；`~/.config/opencode/skills/` 和 `~/.config/opencode/opencode.json` 存在；未读取或修改真实 config 内容 |
 | Skill roots | 当前实现只扫描 native roots |
 | Skill 格式 | 每个 skill 一个目录加 `SKILL.md`；frontmatter `name`/`description` 必填；`name` 必须匹配目录名；unknown fields ignored |
 | 配置文件 | 全局 `~/.config/opencode/opencode.json`；项目根 `opencode.json`；`.opencode` 目录；`OPENCODE_CONFIG` / `OPENCODE_CONFIG_DIR`；managed config 只读 |
-| 启用控制 | `permission.skill` 支持 `allow` / `deny` / `ask`；`deny` 隐藏并拒绝 skill。Exact patch、re-enable、wildcard precedence、managed override 未验证 |
+| 启用控制 | `permission.skill` 支持 `allow` / `deny` / `ask`；V2.12 只写 exact `permission.skill.<name> = "deny"`，re-enable 只移除同名 exact deny，不改 wildcard rules |
 | Fixture | parser/scan contract fixtures 位于 `fixtures/opencode/` |
-| 行动项 | 继续用 `OPENCODE_CONFIG_DIR` 和 fixture project 做权限写入 round-trip；明确 `.claude`/`.agents` 兼容 roots 的去重策略；写入 adapter 继续 blocked |
+| 行动项 | 保持 native-root-only；继续不扫描 `.claude`/`.agents` compatibility roots，避免重复污染 |
 
 opencode roots 口径：
 

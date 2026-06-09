@@ -4,9 +4,9 @@
 >
 > 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.14 Hermes adapter support 进行中**。
+> 当前阶段：**V2.15 OpenClaw adapter support 进行中**。
 >
-> 近期主线：在 macOS app 中补齐多 agent 支持，按 V2.11-V2.15 版本线推进 opencode writable、Pi、Hermes 和 OpenClaw 的证据与适配。V2.11、V2.12、V2.13 已完成，V2.14 为当前阶段。
+> 近期主线：在 macOS app 中补齐多 agent 支持，按 V2.11-V2.15 版本线推进 opencode writable、Pi、Hermes 和 OpenClaw 的证据与适配。V2.11、V2.12、V2.13 已完成，V2.14 Hermes 已完成证据门 closeout 且仍 blocked，V2.15 为当前阶段。
 >
 > 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.10 各阶段能力、V2.9 Tool-global skill pool。V2.11 Adapter capability matrix 的首个 service/UI 切片已进入开发，后续候选变更仍需重新验证。
 >
@@ -269,7 +269,7 @@
 | --- | --- |
 | Codex adapter evidence | 已完成：见 [`codex-adapter-spec.md`](./codex-adapter-spec.md) 与 [`agent-adapter-spec-worklists.md`](./agent-adapter-spec-worklists.md#codex) |
 | Adapter core | 已集成：`crates/adapters/src/codex/` + `CodexAdapter` 注册 |
-| Commands / service scan-all and toggle integration | 已集成：`catalog.scanAll` 扫描 Claude Code、Codex 和 read-only opencode；Codex toggle 写用户 `config.toml`；opencode toggle read-only rejected |
+| Commands / service scan-all and toggle integration | 已集成：`catalog.scanAll` 扫描 Claude Code、Codex、guarded writable opencode 和 read-only Pi；Codex toggle 写用户 `config.toml`；opencode toggle/install 走 V2.12 exact `permission.skill` 与 snapshot/rollback；Pi writes remain blocked |
 | macOS UI agent visibility / scan-all flow | 已集成：toolbar/menu/store 使用 scan-all，fixture tests 覆盖 `codex` agent record |
 | Docs | 已更新；首轮 Computer Use 真实操作验证当时豁免，当前 mainline 已在 2026-06-09 后补通过 |
 
@@ -632,11 +632,13 @@
 
 **目标**：先拿到 maintainer-confirmed spec，再决定 Hermes 是否映射为 SkillInstance 以及可写范围。
 
-**状态**：blocked / planned。
+**状态（2026-06-09）**：completed evidence-gate closeout / still blocked。V2.14 复核后仍没有 maintainer-confirmed skill/package layout、discovery roots、config schema、SkillInstance 映射模型或 toggle/rollback 语义，因此不实现 Hermes scanner/parser，也不开放 writable/install。
 
 **退出条件**
-- [ ] Maintainer-confirmed roots、schema、skill/task model 和 toggle semantics 完成。
-- [ ] 若证据支持，Hermes scanner/parser 进入 implementation；否则 blocker 明确保留。
+- [x] Maintainer-confirmed roots、schema、skill/task model 和 toggle semantics 未满足时，blocker 明确保留。
+- [x] `adapter.listCapabilities` / `service.status.adapter_capabilities` 继续展示 Hermes blocked。
+- [x] 不新增 Hermes scanner/parser、install 或 writable affordance。
+- [x] `pnpm check:macos` 通过；真实交互 Computer Use 因当前会话锁屏按本轮要求跳过。
 
 ### 4.15 V2.15 OpenClaw adapter support
 

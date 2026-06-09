@@ -32,7 +32,7 @@
 **UI 外观路线**
 - macOS 产品壳使用 SwiftUI/AppKit 原生组件；这是唯一当前维护的产品 UI。
 - 旧 Tauri Web UI / Tauri IPC 壳已删除；当前产品能力只进入 native macOS shell。
-- V2 adapter 主线已接入 Codex writable-user-config adapter 和 read-only opencode adapter。Codex 实现边界继续遵守 `docs/codex-adapter-spec.md` 的 verified roots 和 user-config writable 写入规则；opencode 限定为 native roots `~/.config/opencode/skills` 与 active project `.opencode/skills`，不扫描 compatibility roots，不提供 writable toggle。签名、公证、DMG/ZIP 和 release artifact 自动化等公开发布事务先保留 runbook，等产品更成熟后再执行。
+- V2 adapter 主线已接入 Codex writable-user-config adapter、V2.12 guarded writable opencode native-root adapter 和 V2.13 read-only Pi adapter。Codex 实现边界继续遵守 `docs/codex-adapter-spec.md` 的 verified roots 和 user-config writable 写入规则；opencode 限定为 native roots `~/.config/opencode/skills` 与 active project `.opencode/skills`，不扫描 compatibility roots；Pi 只扫描 Pi-native roots，写入仍 blocked。签名、公证、DMG/ZIP 和 release artifact 自动化等公开发布事务先保留 runbook，等产品更成熟后再执行。
 - Liquid Glass 优先通过系统标准组件获得；`apps/macos/Package.swift` 继续以 macOS 13 作为最低部署目标，自定义 macOS 26+ glass API 必须 availability gate 并提供旧系统 fallback。
 - SwiftUI 壳不得重写 Rust core。
 
@@ -60,7 +60,7 @@ flowchart TD
   Protocol --> Service["Rust Service Facade<br/>scan · list · detail · toggle · config · snapshots · analyze"]
 
   Service --> Core["core<br/>types · traits · no I/O"]
-  Service --> Adapters["adapters<br/>Claude · Codex · read-only opencode · planned agents"]
+  Service --> Adapters["adapters<br/>Claude · Codex · writable opencode · read-only Pi · planned agents"]
   Service --> Scanner["scanner<br/>roots · discovery · symlink guard"]
   Service --> Catalog["catalog<br/>SQLite · snapshots · conflicts · findings"]
   Service --> AiCore["ai-core<br/>rules · optional LLM provider contracts"]
@@ -82,7 +82,7 @@ flowchart TD
 ## 4. 数据流：一次"扫描 + 展示"的生命周期
 
 ```
-1. macOS 原生 UI 触发 service method `catalog.scanAll` 扫描当前已实现的 Claude Code、Codex 和 read-only opencode adapters；`catalog.scanClaude` 保留为 Claude-only 兼容方法。未来文件 watcher 收到 `SKILL.md` / agent config 变更后可自动触发重扫。
+1. macOS 原生 UI 触发 service method `catalog.scanAll` 扫描当前已实现的 Claude Code、Codex、guarded writable opencode 和 read-only Pi adapters；`catalog.scanClaude` 保留为 Claude-only 兼容方法。未来文件 watcher 收到 `SKILL.md` / agent config 变更后可自动触发重扫。
 2. service facade / commands 调 scanner
 3. scanner 对每个 agent 调用对应 adapter.roots(ctx) → 拿到允许扫描根
 4. scanner 在允许根内枚举候选 `SKILL.md`，再调 adapter.parse(path) → 拿到 SkillInstance 候选

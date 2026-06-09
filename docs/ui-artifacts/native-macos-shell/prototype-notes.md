@@ -85,7 +85,7 @@ Status: implemented with automated validation passing. Real local Computer Use v
 Status: implemented with automated validation passing. Real local Computer Use validation is still pending for the same macOS/AX window-resolution blocker.
 
 - Agent filter includes `opencode`; grouped rows and detail metadata show opencode as a distinct adapter.
-- `catalog.scanAll` includes read-only opencode native roots alongside Claude Code and Codex.
+- `catalog.scanAll` includes guarded writable opencode native roots and read-only Pi roots alongside Claude Code and Codex.
 - No-project state shows global opencode skills from `~/.config/opencode/skills` when fixture or real roots exist.
 - Active project context can show project opencode skills from `.opencode/skills`; no-project skips project-local opencode roots.
 - Toggle UI for opencode rows is disabled with a read-only adapter reason and must not call `config.toggleSkill`.

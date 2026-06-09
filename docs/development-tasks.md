@@ -1,13 +1,13 @@
 # Development Tasks
 
-> Status: current planning and execution queue as of 2026-06-09. V2.1 through V2.10 are closed on the main line. Current phase is V2.14 Hermes adapter support; V2.13 Pi read-only adapter support is complete. Near-term priority is comprehensive agent adapter support for opencode writable support, Pi, Hermes, and OpenClaw evidence/implementation in the macOS app.
+> Status: current planning and execution queue as of 2026-06-09. V2.1 through V2.14 are closed on the main line. Current phase is V2.15 OpenClaw adapter support. Near-term priority is comprehensive agent adapter support for OpenClaw evidence/implementation, Hermes maintainer-confirmed spec follow-up, and Pi writable evidence in the macOS app.
 
 ## Current Baseline
 
 - Current branch baseline: `main` after V2.10 execution safety boundary docs/release consistency and 2026-06-09 real local Computer Use validation.
 - Product boundary: native macOS SwiftUI/AppKit shell plus Rust service protocol.
 - Completed V2 milestones: first Codex slice, V2.1 through V2.10.
-- Current priority: obtain V2.14 Hermes maintainer-confirmed spec and implementation scope, then close OpenClaw adapter gate.
+- Current priority: obtain V2.15 OpenClaw maintainer-confirmed spec and implementation scope. V2.14 closed Hermes without implementation because maintainer-confirmed spec is still missing.
 - Real local Computer Use baseline: passed on 2026-06-09 for the current mainline app against real local HOME/app data/Claude/Codex/opencode roots; future user-visible, UI, or service protocol changes must rerun it.
 - Quality gate for code/UI/protocol work: `pnpm check:macos`; add focused Rust/Swift tests when touching shared behavior.
 
@@ -19,8 +19,8 @@
 | V2.11 | Adapter Capability Matrix | Completed | Service protocol and macOS UI expose scan/toggle/install status and blockers for Claude Code, Codex, opencode, Pi, Hermes, and OpenClaw |
 | V2.12 | opencode writable support | Complete | Disposable local evidence verifies `permission.skill` writes, then guarded toggle/install is implemented and validated, or blocker remains explicit |
 | V2.13 | Pi adapter support | Complete | Pi-native global/project scanner/parser is implemented read-only; writable toggle/install remains blocked pending settings mutation/rollback evidence |
-| V2.14 | Hermes adapter support | In progress | Maintainer-confirmed spec moves Hermes from blocked to implementable, then adapter scope is implemented as evidence permits |
-| V2.15 | OpenClaw adapter support | Planned | Maintainer-confirmed spec moves OpenClaw from blocked to implementable, then adapter scope is implemented as evidence permits |
+| V2.14 | Hermes adapter support | Complete evidence-gate closeout; still blocked | No maintainer-confirmed roots/schema/model/toggle semantics were available, so no scanner/parser/writable adapter was implemented |
+| V2.15 | OpenClaw adapter support | In progress | Maintainer-confirmed spec moves OpenClaw from blocked to implementable, then adapter scope is implemented as evidence permits |
 
 ## Near-Term Priority: Comprehensive Agent Adapter Support
 
@@ -28,8 +28,8 @@
 
 **Priority order**
 
-1. V2.14 Hermes maintainer-confirmed spec and implementation scope.
-2. V2.15 OpenClaw maintainer-confirmed spec and implementation scope.
+1. V2.15 OpenClaw maintainer-confirmed spec and implementation scope.
+2. Hermes maintainer-confirmed spec follow-up; keep blocked until new evidence exists.
 3. Pi writable settings mutation/rollback evidence follow-up.
 
 **Tasks**
@@ -38,7 +38,7 @@
 - Build disposable local evidence harnesses for Pi and opencode writable semantics so tests never mutate the developer's real config by default.
 - Verify Pi scan roots, config schema, enable/disable semantics, project/global precedence, rollback behavior, and fixture coverage before implementing writes.
 - Verify opencode `permission.skill` patching, wildcard precedence, disable/re-enable behavior, config ownership, rollback path, and native-root-only scope before relaxing the read-only guard.
-- Obtain maintainer-confirmed Hermes roots, config schema, package/task model, toggle semantics, and credential-handling guidance before implementation.
+- Keep Hermes blocked until maintainer-confirmed roots, config schema, package/task model, toggle semantics, and credential-handling guidance exist.
 - Obtain maintainer-confirmed OpenClaw skill schema, config safety rules, install/toggle semantics, and credential-handling guidance before implementation.
 - Keep every new adapter behind the existing service protocol, snapshot, audit, permission, and privacy boundaries.
 - Update native macOS UI only as needed to expose newly supported agents, statuses, filters, findings, and guarded writable actions.
@@ -48,7 +48,7 @@
 
 - Pi has verified read/write semantics or an explicit blocker with disposable local evidence.
 - opencode writable support is either implemented behind tests and snapshots or remains blocked with precise missing evidence.
-- Hermes has maintainer-confirmed evidence sufficient for implementation, or remains explicitly blocked with the missing facts listed.
+- Hermes remains explicitly blocked with the missing facts listed until maintainer-confirmed evidence becomes available.
 - OpenClaw has maintainer-confirmed evidence sufficient for implementation, or remains explicitly blocked with the missing facts listed.
 - `docs/agent-adapters.md`, `docs/agent-adapter-spec-worklists.md`, `docs/development-tasks.md`, `docs/roadmap.md`, and `AGENTS.md` agree on adapter priority and current support state.
 
@@ -62,7 +62,7 @@ These items are real work, but they are not unfinished V2.1-V2.10 tasks.
 | P0 | V2.11 Adapter Capability Matrix | Completed and in use | Run focused protocol/UI checks when needed, then use the matrix as the gate for future Pi/opencode/Hermes/OpenClaw work | macOS UI shows precise scan/toggle/install status and blockers for all six agents |
 | P0 | Pi comprehensive adapter support | Read-only scanner complete; writable evidence incomplete | Continue disposable local Pi config verification for toggle/rollback semantics | Pi writable path remains blocked until settings mutation evidence passes |
 | P0 | opencode writable support | Read-only native-root support exists; writable semantics remain unverified; promoted to near-term priority | Verify `permission.skill` exact patch, re-enable behavior, wildcard precedence, config ownership, and rollback path | opencode writable toggle/install design is accepted and implemented behind snapshots/tests, or blocker remains explicit |
-| P0 | Hermes adapter support | Blocked by missing maintainer-confirmed semantics; promoted to near-term priority | Obtain maintainer-confirmed roots, config schema, package/task model, and toggle semantics | Hermes adapter spec moves from blocked to implementable, then read/write scope is implemented as evidence permits |
+| P0 | Hermes adapter support | V2.14 evidence gate closed; still blocked by missing maintainer-confirmed semantics | Obtain maintainer-confirmed roots, config schema, package/task model, and toggle semantics | Hermes adapter spec moves from blocked to implementable, then read/write scope is implemented as evidence permits |
 | P0 | OpenClaw adapter support | Blocked/partial evidence; promoted to near-term priority | Obtain maintainer-confirmed skill schema, config safety rules, install/toggle semantics, and credential handling guidance | OpenClaw adapter spec moves from blocked to implementable, then read/write scope is implemented as evidence permits |
 | P1 | Real sandbox runner | Deferred after V2.10 boundary | Design interpreter allowlist, cwd/env/network/files enforcement, stdout/stderr policy, resource limits, and audit persistence | Tests prove default-deny, confirmed execution, blocked/cancelled/failed/completed records, and no LLM-triggered execution |
 | P3 | GitHub clone import | Deferred from V2.9 | Define network opt-in, clone sandbox, source verification, and audit model | `catalog.importSkill` can support GitHub with explicit confirmation and no uncontrolled network behavior |
