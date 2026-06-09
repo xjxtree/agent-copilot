@@ -1,6 +1,6 @@
 # Hermes Adapter Spec Worklist
 
-> Status: P0 evidence update on 2026-06-10. Hermes Agent has confirmed first-class skills and is now a read-only scanner candidate. Writable toggle/install remain blocked.
+> Status: V2.17 read-only scanner implemented on 2026-06-10. Hermes Agent has confirmed first-class skills under active/profile Hermes home. Writable toggle/install remain blocked.
 
 ## 1. Evidence Summary
 
@@ -9,7 +9,7 @@ Sources checked:
 - Local skill doc: `$HOME/.agents/skills/hermes-ops/SKILL.md`.
 - Local machine checks: `command -v hermes`, `ls -ld "$HOME/.hermes"`.
 
-No adapter code has been added yet. P0 evidence used public Hermes Agent docs plus read-only `ssh macmini` checks to confirm the product identity and local skill layout.
+V2.17 adds scoped adapter code for read-only scanning only. P0 evidence used public Hermes Agent docs plus read-only `ssh macmini` checks to confirm the product identity and local skill layout.
 
 | Area | Status | Evidence |
 | --- | --- | --- |
@@ -18,30 +18,36 @@ No adapter code has been added yet. P0 evidence used public Hermes Agent docs pl
 | Skill-like unit | Confirmed | Official docs and macmini checks confirm first-class skills as directories containing `SKILL.md`. |
 | Config path/schema | Partial service evidence | The doc mentions `<hermes-home>/cron/jobs.json` and generic `hermes config validate`, but no full schema, version, or user-local config path is provided. |
 | Enable/disable semantics | Cron-only evidence | The doc says cron job entries should be disabled with `enabled: false` rather than deleted. Treat this only as cron task management evidence, not skill enable/disable semantics. |
-| Read-only catalog feasibility | Candidate after P0 evidence | Official docs and macmini checks confirm first-class skills under active Hermes home `skills/**/SKILL.md`. |
+| Read-only catalog feasibility | Implemented | Official docs and macmini checks confirm first-class skills under active Hermes home `skills/**/SKILL.md`; V2.17 scans only that root. |
 | Writable adapter feasibility | Blocked | There is no verified rollback-safe individual skill toggle schema for Hermes skills. |
 
 ## 2. Fixture Scope
 
-Fixture files under `fixtures/hermes/` are evidence samples only:
+Fixture files under `fixtures/hermes/` cover the V2.17 read-only scanner plus evidence-only cron samples:
 
 - `fixtures/hermes/README.md`
+- `fixtures/hermes/active-home/.hermes/skills/nested/research-brief/SKILL.md`
+- `fixtures/hermes/active-home/.hermes/skills/broken/malformed-metadata/SKILL.md`
+- `fixtures/hermes/active-home/.hermes/.env`
+- `fixtures/hermes/active-home/.hermes/auth.json`
+- `fixtures/hermes/active-home/.hermes/cron/jobs.json`
+- `fixtures/hermes/active-home/.hermes/logs/session.log`
 - `fixtures/hermes/service-evidence/cron-jobs.sample.json`
 
-The cron fixture is a minimal shape derived from the local `hermes-ops` doc's cron guidance. It is not a parser contract and must not be used to implement a Hermes adapter without maintainer confirmation.
+The cron fixture is a minimal shape derived from the local `hermes-ops` doc's cron guidance. It is not a parser contract and must not be mapped to `SkillInstance`.
 
 ## 3. Adapter Mapping Status
 
-No mapping is approved yet.
+Read-only skill mapping is approved for active/profile Hermes home only.
 
 | Shared field | Status |
 | --- | --- |
-| `AgentId` | Reserved as `hermes` in planning docs only. |
-| `Scope::AgentGlobal` | Blocked: no verified local skill root. |
+| `AgentId` | Implemented as `hermes`. |
+| `Scope::AgentGlobal` | Implemented for active/profile Hermes home `~/.hermes/skills/**/SKILL.md`. |
 | `Scope::AgentProject` | Blocked for generic project-local discovery; `skills.external_dirs` may later be modeled as explicit external roots, not automatic project roots. |
-| `SkillInstance.name` | Blocked: unknown whether Hermes has skills, commands, jobs, or tasks with stable names. |
-| `SkillInstance.description` | Blocked. |
-| `SkillInstance.enabled` | Blocked: cron `enabled: false` may not apply to skills. |
+| `SkillInstance.name` | Implemented as required YAML frontmatter `name`; malformed metadata becomes a broken record. |
+| `SkillInstance.description` | Implemented as required YAML frontmatter `description`. |
+| `SkillInstance.enabled` | Implemented as default enabled for discovered valid skills; no config-derived disable state is inferred. |
 | Config writes | Blocked: no verified Hermes config schema or toggle target. |
 
 ## 4. Required Maintainer Evidence
@@ -54,7 +60,7 @@ No mapping is approved yet.
 - Enable/disable semantics, including whether disabling requires config patching, CLI calls, cron changes, or is unsupported.
 - Safe rollback procedure for any write path.
 
-Until writable evidence exists, Hermes should be implemented only as a scoped read-only scanner. Generic project scan, install, toggle, and writable actions must stay disabled.
+Until writable evidence exists, Hermes remains only a scoped read-only scanner. Generic project scan, install, toggle, and writable actions must stay disabled.
 
 Project scope decision: Hermes does not currently have verified generic project-local skill discovery. The first scanner must ignore arbitrary project roots and scan only the active/profile Hermes home. `skills.external_dirs` can be evaluated later as explicit external read-only roots, and `cron.workdir` is execution context, not a skill root.
 
@@ -82,3 +88,11 @@ Implementation policy:
 - Skip secrets, `.env`, `auth.json`, logs, and cron job content.
 - Do not map cron jobs to `SkillInstance`.
 - Do not enable writable support until individual skill disable/re-enable schema and rollback-safe writes are verified.
+
+## 6. V2.17 Implementation Notes
+
+- Adapter module: `crates/adapters/src/hermes/`.
+- Scan root: `ctx.user_home/.hermes/skills` only, scoped as `agent-global`.
+- No `project_root`, `project_cwd`, or `extra_roots` are consumed by the Hermes adapter.
+- `config_paths` returns no paths so Hermes config snapshot/write flows remain blocked.
+- `catalog.scanAll` includes Hermes after OpenClaw in the supported read-only scan set.

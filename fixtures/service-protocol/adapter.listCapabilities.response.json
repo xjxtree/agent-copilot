@@ -142,11 +142,11 @@
     {
       "agent": "hermes",
       "display_name": "Hermes",
-      "status": "planned",
+      "status": "read-only",
       "scan": {
-        "supported": false,
-        "status": "read-only-candidate",
-        "reason": "P0 evidence confirmed Hermes Agent skills under ~/.hermes/skills/**/SKILL.md; read-only scanner is planned but not implemented."
+        "supported": true,
+        "status": "verified-read-only",
+        "reason": "V2.17 scans active Hermes home ~/.hermes/skills/**/SKILL.md without reading Hermes secrets, cron content, logs, or config files."
       },
       "project_scan": {
         "supported": false,
@@ -174,7 +174,7 @@
         "reason": "Hermes writable toggle/install remains blocked until individual skill disable schema and rollback-safe writes are verified."
       },
       "blockers": [
-        "Implement a scoped read-only scanner for active Hermes home skills before enabling UI support.",
+        "Generic Hermes project-local skill discovery is not confirmed and remains disabled.",
         "Confirm individual skill disable/re-enable schema and rollback semantics before writable support.",
         "Do not map Hermes cron jobs to SkillInstance in the first adapter slice."
       ]

@@ -478,7 +478,7 @@ fn hash_string(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use skills_copilot_adapters::{
-        ClaudeCodeAdapter, CodexAdapter, OpenclawAdapter, OpencodeAdapter, PiAdapter,
+        ClaudeCodeAdapter, CodexAdapter, HermesAdapter, OpenclawAdapter, OpencodeAdapter, PiAdapter,
     };
     use skills_copilot_core::{AdapterContext, AdapterRoot, RootSource};
 
@@ -872,6 +872,58 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_root);
     }
 
+    #[test]
+    fn hermes_scans_active_home_skills_only_and_ignores_service_files() {
+        let temp_root =
+            std::env::temp_dir().join(format!("skills-copilot-hermes-scan-{}", std::process::id()));
+        let home = temp_root.join("home");
+        let hermes_skill_path = write_hermes_skill(
+            &home.join(".hermes/skills/nested/research"),
+            "hermes-research",
+        );
+        write_hermes_skill(
+            &temp_root.join("repo/skills/project-skill"),
+            "project-skill",
+        );
+        std::fs::create_dir_all(home.join(".hermes/cron")).expect("create hermes cron dir");
+        std::fs::create_dir_all(home.join(".hermes/logs")).expect("create hermes logs dir");
+        std::fs::write(home.join(".hermes/.env"), "HERMES_TOKEN=<redacted>\n")
+            .expect("write redacted env fixture");
+        std::fs::write(
+            home.join(".hermes/auth.json"),
+            "{\"token\":\"<redacted>\"}\n",
+        )
+        .expect("write redacted auth fixture");
+        std::fs::write(
+            home.join(".hermes/cron/jobs.json"),
+            "{\"jobs\":[{\"id\":\"not-a-skill\",\"enabled\":false}]}\n",
+        )
+        .expect("write cron fixture");
+        std::fs::write(home.join(".hermes/logs/session.log"), "<redacted>\n")
+            .expect("write log fixture");
+
+        let ctx = AdapterContext {
+            user_home: home,
+            project_root: Some(temp_root.join("repo")),
+            project_cwd: Some(temp_root.join("repo/nested")),
+            extra_roots: vec![AdapterRoot {
+                scope: Scope::AgentGlobal,
+                path: temp_root.join("unverified"),
+                source: RootSource::Extra,
+            }],
+        };
+
+        let report = scan_agent(&HermesAdapter, &ctx).expect("scan succeeds");
+
+        assert_eq!(report.instances.len(), 1);
+        assert_eq!(report.instances[0].agent, AgentId::Hermes);
+        assert_eq!(report.instances[0].scope, Scope::AgentGlobal);
+        assert_eq!(report.instances[0].name, "hermes-research");
+        assert_eq!(report.instances[0].path, hermes_skill_path);
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
     fn fixture_path(relative: &str) -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../..")
@@ -887,6 +939,17 @@ mod tests {
             format!("---\nname: {name}\ndescription: {name} fixture\n---\nbody"),
         )
         .expect("write OpenClaw skill");
+        skill_path.canonicalize().expect("canonicalize skill path")
+    }
+
+    fn write_hermes_skill(root: &Path, name: &str) -> PathBuf {
+        std::fs::create_dir_all(root).expect("create Hermes skill dir");
+        let skill_path = root.join("SKILL.md");
+        std::fs::write(
+            &skill_path,
+            format!("---\nname: {name}\ndescription: {name} fixture\n---\nbody"),
+        )
+        .expect("write Hermes skill");
         skill_path.canonicalize().expect("canonicalize skill path")
     }
 }

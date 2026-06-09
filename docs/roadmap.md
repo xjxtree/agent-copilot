@@ -632,12 +632,12 @@
 
 **目标**：先拿到 maintainer-confirmed spec，再决定 Hermes 是否映射为 SkillInstance 以及可写范围。
 
-**状态（2026-06-10）**：read-only scanner candidate / writable still blocked。P0 evidence 确认 Hermes Agent 有 first-class skills 和 active Hermes home `skills/**/SKILL.md`；第一版只实现 scoped read-only scanner，不做 generic project scan、toggle、install 或 writable。`skills.external_dirs` 未来只按 explicit external roots 评估，不自动映射为 project roots。
+**状态（2026-06-10）**：V2.17 read-only scanner implemented / writable still blocked。P0 evidence 确认 Hermes Agent 有 first-class skills 和 active Hermes home `skills/**/SKILL.md`；第一版只实现 scoped read-only scanner，不做 generic project scan、toggle、install 或 writable。`skills.external_dirs` 未来只按 explicit external roots 评估，不自动映射为 project roots。
 
 **退出条件**
 - [x] P0 evidence 确认 Hermes skill-like unit 和 active Hermes home skill root。
-- [x] `adapter.listCapabilities` / `service.status.adapter_capabilities` 展示 Hermes read-only candidate，scan 仍 disabled until implementation.
-- [ ] Hermes scoped read-only scanner 实现并通过 fixture/real local validation。
+- [x] `adapter.listCapabilities` / `service.status.adapter_capabilities` 展示 Hermes supported read-only scan。
+- [x] Hermes scoped read-only scanner 实现并通过 focused fixture validation。
 - [x] Hermes install/toggle/writable 保持 blocked。
 - [x] `pnpm check:macos` 通过；真实交互 Computer Use 因当前会话锁屏按本轮要求跳过。
 
@@ -681,12 +681,13 @@
 - 不做 generic project scan。
 - `skills.external_dirs` 先保留为 future explicit external roots，不自动映射为 project roots。
 - 不读取 `.env`、`auth.json`、logs、cron job content。
+- 不做 Hermes CLI 调用。
 - 不把 cron jobs 映射为 `SkillInstance`。
 - 不做 install、toggle、writable。
 
 **退出条件**
-- [ ] Hermes read-only fixtures 覆盖 nested skills、malformed metadata、ignored secret/log/cron paths。
-- [ ] `catalog.scanAll` 能展示 Hermes skills，并在 capability matrix 中把 scan 从 disabled candidate 更新为 supported read-only。
+- [x] Hermes read-only fixtures 覆盖 nested skills、malformed metadata、ignored secret/log/cron paths。
+- [x] `catalog.scanAll` 能展示 Hermes skills，并在 capability matrix 中把 scan 从 disabled candidate 更新为 supported read-only。
 - [ ] UI 能按 Hermes 过滤、展示 active home/source/blocked writable reason。
 - [ ] `pnpm check:macos` 和真实本机 app validation 通过；若会话锁屏，明确记录 blocker。
 

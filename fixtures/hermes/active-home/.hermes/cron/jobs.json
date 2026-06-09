@@ -1,0 +1,8 @@
+{
+  "jobs": [
+    {
+      "id": "not-a-skill",
+      "enabled": false
+    }
+  ]
+}

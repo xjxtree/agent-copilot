@@ -87,7 +87,7 @@ pub struct AdapterFeatureCapability {
 | Codex | `verified` | 支持 | 支持用户 `config.toml` override；项目 `.codex/config.toml` 仍 blocked |
 | opencode | `verified` | 支持 native roots | 支持 guarded writable：exact `permission.skill` deny/re-enable、snapshot/rollback、tool-global install |
 | Pi | `read-only` | 支持 Pi-native roots | writable harness candidate；production writes blocked |
-| Hermes | `planned` | read-only scanner candidate | generic project scan、toggle、install、writable blocked；`skills.external_dirs` 未来按 explicit external roots 处理 |
+| Hermes | `read-only` | 支持 active/profile Hermes home | generic project scan、toggle、install、writable blocked；`skills.external_dirs` 未来按 explicit external roots 处理 |
 | OpenClaw | `read-only` | 支持 read-only filesystem scan | project scope 仅限 confirmed OpenClaw home workspace roots；toggle、install、writable blocked |
 
 > **实现要求**：所有适配器**无状态**。
@@ -173,17 +173,17 @@ Codex 当前实现边界：
 | 项 | 值 |
 | --- | --- |
 | AgentId | `hermes` |
-| 状态 | **V2.16 read-only scanner implemented / writable blocked** |
+| 状态 | **V2.17 read-only scanner implemented / writable blocked** |
 | Spec 工作单 | [`docs/hermes-adapter-spec.md`](./hermes-adapter-spec.md) |
 | 统一工作单 | [`docs/agent-adapter-spec-worklists.md`](./agent-adapter-spec-worklists.md#hermes) |
 | Evidence fixture | `fixtures/hermes/` 只保存 service evidence 样例，不是 parser contract |
 | 只读范围 | 只扫描 active Hermes home 的 `skills/**/SKILL.md`；不做 generic project scan；`skills.external_dirs` 未来按 explicit external roots 处理；不把 cron jobs 映射为 `SkillInstance` |
 | 写入范围 | 禁止写 Hermes 配置；individual skill disable schema 和 rollback-safe writes 未验证 |
-| 行动项 | ① 实现 scoped read-only scanner；② disposable 验证 malformed、archive、platform gating；③ 确认 individual skill disable/re-enable schema |
+| 行动项 | ① 保持 scoped read-only scanner；② 继续确认 profile/external_dirs 语义；③ 确认 individual skill disable/re-enable schema |
 
 Hermes P0 evidence 已确认它是 Nous Research Hermes Agent，且有 first-class skills 和 active Hermes home `skills/**/SKILL.md`。
 
-第一版只做 read-only scanner candidate；project discovery、toggle、install 和 writable 继续 blocked。
+第一版只做 read-only scanner；project discovery、toggle、install 和 writable 继续 blocked。
 
 ### 2.5 openclaw
 

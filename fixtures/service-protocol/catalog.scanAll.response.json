@@ -2,7 +2,7 @@
   "id": "fixture-scan-all",
   "ok": true,
   "result": {
-    "scanned_count": 3,
+    "scanned_count": 4,
     "skills": [
       {
         "id": "claude-skill-instance-id",
@@ -36,6 +36,17 @@
         "name": "global-review",
         "state": "loaded",
         "enabled": true
+      },
+      {
+        "id": "hermes-skill-instance-id",
+        "agent": "hermes",
+        "scope": "agent-global",
+        "path": "/tmp/skills-copilot-home/.hermes/skills/research-brief/SKILL.md",
+        "display_path": "/tmp/skills-copilot-home/.hermes/skills/research-brief/SKILL.md",
+        "definition_id": "hermes-definition-id",
+        "name": "research-brief",
+        "state": "loaded",
+        "enabled": true
       }
     ],
     "activity": {
@@ -43,24 +54,25 @@
       "status": "completed",
       "started_at": 1780590000000,
       "finished_at": 1780590000100,
-      "scanned_count": 3,
-      "skill_count": 3,
+      "scanned_count": 4,
+      "skill_count": 4,
       "finding_count": 0,
       "conflict_count": 0,
       "snapshot_count": 0,
       "roots": [
         "/tmp/skills-copilot-home/.claude/skills",
         "/tmp/skills-copilot-home/.agents/skills",
-        "/tmp/skills-copilot-home/.config/opencode/skills"
+        "/tmp/skills-copilot-home/.config/opencode/skills",
+        "/tmp/skills-copilot-home/.hermes/skills"
       ],
       "log_entries": [
         {
           "level": "info",
-          "message": "Queued Claude Code, Codex, and opencode scan across 3 root(s)."
+          "message": "Queued Claude Code, Codex, opencode, and Hermes scan across 4 root(s)."
         },
         {
           "level": "info",
-          "message": "Catalog refresh completed with 3 skill(s), 0 finding(s), and 0 conflict group(s)."
+          "message": "Catalog refresh completed with 4 skill(s), 0 finding(s), and 0 conflict group(s)."
         },
         {
           "level": "info",
@@ -73,6 +85,10 @@
         {
           "level": "info",
           "message": "opencode discovered 1 skill(s); catalog now has 1 skill(s), 0 broken, across 1 scanned root(s) and 0 skipped root(s)."
+        },
+        {
+          "level": "info",
+          "message": "Hermes discovered 1 skill(s); catalog now has 1 skill(s), 0 broken, across 1 scanned root(s) and 0 skipped root(s)."
         }
       ],
       "recovery_actions": [
@@ -124,6 +140,22 @@
           ],
           "roots_scanned": [
             "/tmp/skills-copilot-home/.config/opencode/skills"
+          ],
+          "roots_skipped": [],
+          "recovery_actions": []
+        },
+        {
+          "agent": "hermes",
+          "display_label": "Hermes",
+          "status": "completed",
+          "scanned_count": 1,
+          "catalog_count": 1,
+          "broken_count": 0,
+          "roots_considered": [
+            "/tmp/skills-copilot-home/.hermes/skills"
+          ],
+          "roots_scanned": [
+            "/tmp/skills-copilot-home/.hermes/skills"
           ],
           "roots_skipped": [],
           "recovery_actions": []

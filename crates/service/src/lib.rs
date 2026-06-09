@@ -2259,14 +2259,14 @@ mod tests {
             .and_then(Value::as_str)
             .expect("first log message");
         assert!(
-            first_message.contains("Claude Code, Codex, opencode, Pi, and OpenClaw"),
+            first_message.contains("Claude Code, Codex, opencode, Pi, OpenClaw, and Hermes"),
             "scanAll activity should name all supported adapters"
         );
         let summaries = activity
             .get("agent_summaries")
             .and_then(Value::as_array)
             .expect("agent summaries");
-        assert_eq!(summaries.len(), 5);
+        assert_eq!(summaries.len(), 6);
         let log_messages: Vec<&str> = activity
             .get("log_entries")
             .and_then(Value::as_array)

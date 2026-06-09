@@ -31,7 +31,7 @@ V2.11 adapter capability matrix note:
 
 - `adapter.listCapabilities.response.json` is the direct capability matrix fixture for Claude Code, Codex, opencode, Pi, Hermes, and OpenClaw.
 - `service.status.response.json` and `app.stateSnapshot.response.json` include `adapter_capabilities` so native UI shells can render adapter status without guessing from agent names.
-- The matrix is descriptive for unsupported agents: opencode is writable for native roots after V2.12 validation, Pi is read-only after V2.13 validation, and P0 evidence marks Hermes/OpenClaw as read-only scanner candidates while keeping scan support disabled until implementation lands.
+- The matrix is descriptive for unsupported write paths: opencode is writable for native roots after V2.12 validation, Pi is read-only after V2.13 validation, OpenClaw is read-only after V2.16 validation, and Hermes is read-only after V2.17 validation while unsupported write/install paths stay blocked.
 
 V2.13 Pi blocker note:
 
@@ -39,12 +39,12 @@ V2.13 Pi blocker note:
 - Pi fixtures under `fixtures/pi/` are read-only parser/scan contract samples until disposable local `agentDir` + project round-trip verifies mutation, rollback, and trust behavior.
 - `config.toggleSkill` and install UX for Pi must remain disabled in the matrix until Pi write evidence is completed.
 
-P0 Hermes candidate note:
+V2.17 Hermes read-only note:
 
-- Hermes is `planned` / `read-only-candidate` in `adapter.listCapabilities`, `service.status`, and `app.stateSnapshot`.
+- Hermes is `read-only` / `verified-read-only` in `adapter.listCapabilities`, `service.status`, and `app.stateSnapshot`.
 - Hermes generic project scan remains blocked; active/profile home is the only first-slice scope, with `skills.external_dirs` reserved for future explicit external roots.
-- The Hermes fixture directory contains evidence samples only; it is not a parser contract.
-- No `catalog.scanAll` fixture should include Hermes until the read-only scanner implementation lands.
+- The Hermes fixture directory contains active-home scanner contract fixtures plus evidence-only cron samples.
+- `catalog.scanAll` includes Hermes after the read-only scanner implementation lands.
 
 P0 OpenClaw candidate note:
 

@@ -10,8 +10,8 @@ use fs4::FileExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use skills_copilot_adapters::{
-    parse_codex_skill_config_entries, ClaudeCodeAdapter, CodexAdapter, OpenclawAdapter,
-    OpencodeAdapter, PiAdapter,
+    parse_codex_skill_config_entries, ClaudeCodeAdapter, CodexAdapter, HermesAdapter,
+    OpenclawAdapter, OpencodeAdapter, PiAdapter,
 };
 use skills_copilot_ai_core::{evaluate_mvp_rules, Finding, RuleContext, RuleReport, Severity};
 use skills_copilot_catalog::{
@@ -332,6 +332,7 @@ fn supported_scan_adapters() -> Vec<Box<dyn AgentAdapter>> {
         Box::new(OpencodeAdapter),
         Box::new(PiAdapter),
         Box::new(OpenclawAdapter),
+        Box::new(HermesAdapter),
     ]
 }
 
@@ -427,10 +428,10 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
         AdapterCapabilityRecord {
             agent: AgentId::Hermes.as_str(),
             display_name: "Hermes",
-            status: "planned",
-            scan: AdapterFeatureCapability::blocked(
-                "read-only-candidate",
-                "P0 evidence confirmed Hermes Agent skills under ~/.hermes/skills/**/SKILL.md; read-only scanner is planned but not implemented.",
+            status: "read-only",
+            scan: AdapterFeatureCapability::supported_with_reason(
+                "verified-read-only",
+                "V2.17 scans active Hermes home ~/.hermes/skills/**/SKILL.md without reading Hermes secrets, cron content, logs, or config files.",
             ),
             project_scan: AdapterFeatureCapability::blocked(
                 "blocked",
@@ -453,7 +454,7 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
                 "Hermes writable toggle/install remains blocked until individual skill disable schema and rollback-safe writes are verified.",
             ),
             blockers: vec![
-                "Implement a scoped read-only scanner for active Hermes home skills before enabling UI support.",
+                "Generic Hermes project-local skill discovery is not confirmed and remains disabled.",
                 "Confirm individual skill disable/re-enable schema and rollback semantics before writable support.",
                 "Do not map Hermes cron jobs to SkillInstance in the first adapter slice.",
             ],
@@ -2908,6 +2909,7 @@ fn scan_agent_id_to_catalog(
         AgentId::Opencode => scan_single_agent_to_catalog(&OpencodeAdapter, ctx, catalog),
         AgentId::Pi => scan_single_agent_to_catalog(&PiAdapter, ctx, catalog),
         AgentId::Openclaw => scan_single_agent_to_catalog(&OpenclawAdapter, ctx, catalog),
+        AgentId::Hermes => scan_single_agent_to_catalog(&HermesAdapter, ctx, catalog),
         agent => Err(CommandError::UnsafeConfigPath(format!(
             "{} skills are not supported by scan commands",
             agent.as_str()
@@ -4191,7 +4193,7 @@ mod tests {
     }
 
     #[test]
-    fn scan_all_includes_openclaw_after_pi() {
+    fn scan_all_includes_openclaw_and_hermes_after_pi() {
         let temp_root =
             std::env::temp_dir().join(format!("skills-copilot-pi-scan-all-{}", std::process::id()));
         let home = temp_root.join("home");
@@ -4199,6 +4201,7 @@ mod tests {
         let codex_path = write_codex_skill(&home, "codex-alpha");
         let opencode_path = write_opencode_global_skill(&home, "opencode-alpha");
         let pi_path = write_pi_global_skill(&home, "pi-alpha");
+        let hermes_path = write_hermes_global_skill(&home, "hermes-alpha");
 
         let catalog = Catalog::in_memory().expect("catalog opens");
         catalog.init().expect("catalog initializes");
@@ -4212,7 +4215,7 @@ mod tests {
         let report = scan_all_catalog_report(&ctx, &catalog).expect("scan all succeeds");
         let records = catalog.list_skill_records().expect("records list");
 
-        assert_eq!(report.scanned_count, 5);
+        assert_eq!(report.scanned_count, 6);
         assert_eq!(
             report
                 .agents
@@ -4224,9 +4227,10 @@ mod tests {
                 AgentId::Codex,
                 AgentId::Opencode,
                 AgentId::Pi,
-                AgentId::Openclaw
+                AgentId::Openclaw,
+                AgentId::Hermes
             ],
-            "scanAll reports OpenClaw after Pi"
+            "scanAll reports OpenClaw and Hermes after Pi"
         );
         assert!(records.iter().any(|record| {
             record.agent == "claude-code"
@@ -4246,6 +4250,9 @@ mod tests {
         }));
         assert!(records.iter().any(|record| {
             record.agent == "openclaw" && record.name == "codex-alpha" && record.path == codex_path
+        }));
+        assert!(records.iter().any(|record| {
+            record.agent == "hermes" && record.name == "hermes-alpha" && record.path == hermes_path
         }));
 
         let _ = std::fs::remove_dir_all(&temp_root);
@@ -6210,6 +6217,18 @@ mod tests {
             format!("---\nname: {name}\ndescription: {name} fixture\n---\nbody"),
         )
         .expect("write pi skill");
+        skill_path.canonicalize().expect("canonicalize skill path")
+    }
+
+    fn write_hermes_global_skill(root: &Path, name: &str) -> PathBuf {
+        let skill_dir = root.join(".hermes/skills").join(name);
+        std::fs::create_dir_all(&skill_dir).expect("create hermes skill dir");
+        let skill_path = skill_dir.join("SKILL.md");
+        std::fs::write(
+            &skill_path,
+            format!("---\nname: {name}\ndescription: {name} fixture\n---\nbody"),
+        )
+        .expect("write hermes skill");
         skill_path.canonicalize().expect("canonicalize skill path")
     }
 

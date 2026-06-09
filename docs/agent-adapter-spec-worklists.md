@@ -1,14 +1,14 @@
 # Agent Adapter Spec Worklists
 
 > Status: Codex first implementation, V2.1 dual adapter experience, V2.2 project context implementation, V2.3 Codex adapter hardening, V2.4 opencode read-only adapter, V2.5 audit hardening, V2.6 adapter changelog tracking, V2.7 LLM gate safety notes, V2.8-V2.10 safety/docs closeout, V2.11 Adapter Capability Matrix, V2.12 opencode writable, V2.13 Pi read-only scanner/parser, V2.14 Hermes evidence-gate closeout, and V2.15 OpenClaw evidence-gate closeout are integrated.
-> Real local UI validation passed for the current mainline app on 2026-06-09. Future user-visible, UI, or service-protocol candidates still require a fresh real local pass. opencode writable and Pi read-only scan are implemented; Pi writable support, Hermes, and OpenClaw remain blocked.
+> Real local UI validation passed for the current mainline app on 2026-06-09. Future user-visible, UI, or service-protocol candidates still require a fresh real local pass. opencode writable, Pi read-only scan, OpenClaw read-only scan, and Hermes read-only scan are implemented; Pi/Hermes/OpenClaw writable support remains blocked.
 > This document records what is verified enough to use for project instructions, and what is still missing before an adapter can be built.
 
 ## Current Rule
 
 Claude Code remains the mature baseline adapter. Codex has verified user/project roots, cwd-to-repo-root discovery, project-context-scoped scanning, and user-config writable toggles. V2.3 hardening added config patch robustness, explicit adapter states, root/config security regressions, and smoke/docs coverage. V2.4 added opencode as a read-only adapter for first-class native roots only.
 
-Pi production writable support remains blocked until the evidence harness is implemented. Opencode writable is enabled for native roots after V2.12 validation; Pi read-only scan is enabled for native roots after V2.13 validation. P0 evidence on 2026-06-10 promoted Hermes and OpenClaw from fully blocked to read-only scanner candidates, while keeping writable/install blocked.
+Pi production writable support remains blocked until the evidence harness is implemented. Opencode writable is enabled for native roots after V2.12 validation; Pi read-only scan is enabled for native roots after V2.13 validation. P0 evidence on 2026-06-10 promoted Hermes and OpenClaw from fully blocked to read-only scanner candidates; OpenClaw read-only scan is enabled after V2.16 and Hermes read-only scan is enabled after V2.17, while writable/install stay blocked.
 
 The macOS app now uses the service/UI adapter capability matrix as the front-door status surface for all six agents. The matrix must make read-only, planned, and blocked states explicit before any future write affordance is exposed.
 
@@ -95,14 +95,22 @@ Required next evidence:
 
 Project scope decision: Hermes has no confirmed generic project-level skills. The first read-only slice is limited to active/profile Hermes home `skills/**/SKILL.md`; explicit `skills.external_dirs` may be modeled later as external roots, not project roots.
 
+V2.17 verifier checklist for this read-only phase:
+- Scan only active/profile Hermes home `skills/**/SKILL.md`.
+- No generic project scans.
+- `skills.external_dirs` stays a future explicit external-root feature, not an auto scan root.
+- Exclude `.env`, `auth.json`, `logs`, `cron/jobs.json`, and cron task entries from `SkillInstance` mapping.
+- No `hermes` CLI calls in read-only catalog scanning.
+- Writable toggles/install remain blocked.
+
 | Area | Status |
 | --- | --- |
 | Public product identity | Confirmed by official Nous Hermes Agent docs and read-only macmini evidence. |
-| Skill discovery roots | Confirmed read-only candidate: active/profile Hermes home `skills/**/SKILL.md`. Generic project-local discovery is not confirmed; `skills.external_dirs` is an explicit external-root concept, not automatic project scope. |
+| Skill discovery roots | Implemented read-only: active/profile Hermes home `skills/**/SKILL.md`. Generic project-local discovery is not confirmed; `skills.external_dirs` is an explicit external-root concept, not automatic project scope. |
 | Config path/schema | Service evidence only: local docs mention `<hermes-home>/cron/jobs.json`, `<hermes-home>/logs/`, a Hermes repository under `<hermes-home>/`, and `hermes config validate`; no schema or user-local config path is verified for this product. |
 | Enable/disable semantics | Service cron evidence only: docs say cron jobs may be disabled with `enabled: false` rather than deleted. This is not verified as Hermes skill enable/disable behavior. |
-| Fixture requirement | Minimal evidence fixtures added under `fixtures/hermes/`, marked as service evidence samples and not parser contract. |
-| Implementation decision | P0 evidence confirms a read-only scanner candidate for active Hermes home `skills/**/SKILL.md`. Writable toggle/install remains blocked until individual skill disable schema and rollback-safe writes are verified. |
+| Fixture requirement | Scanner fixtures added under `fixtures/hermes/active-home/`; cron fixture remains evidence-only and not a parser contract. |
+| Implementation decision | V2.17 implements read-only scanning for active Hermes home `skills/**/SKILL.md`. Writable toggle/install remains blocked until individual skill disable schema and rollback-safe writes are verified. |
 
 Required next evidence:
 
