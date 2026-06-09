@@ -477,7 +477,9 @@ fn hash_string(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use skills_copilot_adapters::{ClaudeCodeAdapter, CodexAdapter, OpencodeAdapter, PiAdapter};
+    use skills_copilot_adapters::{
+        ClaudeCodeAdapter, CodexAdapter, OpenclawAdapter, OpencodeAdapter, PiAdapter,
+    };
     use skills_copilot_core::{AdapterContext, AdapterRoot, RootSource};
 
     use super::*;
@@ -806,9 +808,85 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_root);
     }
 
+    #[test]
+    fn openclaw_scans_documented_global_and_home_workspace_roots() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "skills-copilot-openclaw-scan-{}",
+            std::process::id()
+        ));
+        let home = temp_root.join("home");
+        let workspace = home.join(".openclaw/workspace");
+        write_openclaw_skill(&home.join(".openclaw/skills"), "managed-global");
+        write_openclaw_skill(&home.join(".agents/skills"), "personal-shared");
+        write_openclaw_skill(&workspace.join("skills"), "workspace-local");
+        write_openclaw_skill(&workspace.join(".agents/skills"), "workspace-agents");
+
+        let ctx = AdapterContext {
+            user_home: home,
+            project_root: Some(workspace),
+            project_cwd: None,
+            extra_roots: vec![],
+        };
+
+        let report = scan_agent(&OpenclawAdapter, &ctx).expect("scan succeeds");
+        let by_name: HashMap<_, _> = report
+            .instances
+            .iter()
+            .map(|skill| (skill.name.as_str(), skill.scope))
+            .collect();
+
+        assert_eq!(report.instances.len(), 4);
+        assert_eq!(by_name.get("managed-global"), Some(&Scope::AgentGlobal));
+        assert_eq!(by_name.get("personal-shared"), Some(&Scope::AgentGlobal));
+        assert_eq!(by_name.get("workspace-local"), Some(&Scope::AgentProject));
+        assert_eq!(by_name.get("workspace-agents"), Some(&Scope::AgentProject));
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn openclaw_does_not_scan_arbitrary_project_skill_roots() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "skills-copilot-openclaw-project-scope-{}",
+            std::process::id()
+        ));
+        let home = temp_root.join("home");
+        let project = temp_root.join("repo");
+        write_openclaw_skill(&project.join("skills"), "not-workspace-skills");
+        write_openclaw_skill(&project.join(".agents/skills"), "not-workspace-agents");
+
+        let ctx = AdapterContext {
+            user_home: home,
+            project_root: Some(project),
+            project_cwd: None,
+            extra_roots: vec![],
+        };
+
+        let report = scan_agent(&OpenclawAdapter, &ctx).expect("scan succeeds");
+
+        assert!(
+            report.instances.is_empty(),
+            "OpenClaw must not infer arbitrary repo skills or .agents roots as workspace roots"
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
     fn fixture_path(relative: &str) -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../..")
             .join(relative)
+    }
+
+    fn write_openclaw_skill(root: &Path, name: &str) -> PathBuf {
+        let skill_dir = root.join(name);
+        std::fs::create_dir_all(&skill_dir).expect("create OpenClaw skill dir");
+        let skill_path = skill_dir.join("SKILL.md");
+        std::fs::write(
+            &skill_path,
+            format!("---\nname: {name}\ndescription: {name} fixture\n---\nbody"),
+        )
+        .expect("write OpenClaw skill");
+        skill_path.canonicalize().expect("canonicalize skill path")
     }
 }

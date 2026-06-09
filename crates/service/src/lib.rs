@@ -2242,7 +2242,7 @@ mod tests {
 
         assert!(response.ok);
         let result = response.result.expect("scan all result");
-        assert_eq!(result.get("scanned_count").and_then(Value::as_u64), Some(2));
+        assert_eq!(result.get("scanned_count").and_then(Value::as_u64), Some(3));
         let activity = result
             .get("activity")
             .and_then(Value::as_object)
@@ -2259,14 +2259,14 @@ mod tests {
             .and_then(Value::as_str)
             .expect("first log message");
         assert!(
-            first_message.contains("Claude Code, Codex, opencode, and Pi"),
+            first_message.contains("Claude Code, Codex, opencode, Pi, and OpenClaw"),
             "scanAll activity should name all supported adapters"
         );
         let summaries = activity
             .get("agent_summaries")
             .and_then(Value::as_array)
             .expect("agent summaries");
-        assert_eq!(summaries.len(), 4);
+        assert_eq!(summaries.len(), 5);
         let log_messages: Vec<&str> = activity
             .get("log_entries")
             .and_then(Value::as_array)
@@ -2388,7 +2388,7 @@ mod tests {
 
         assert!(scan_response.ok);
         let result = scan_response.result.expect("scan all result");
-        assert_eq!(result.get("scanned_count").and_then(Value::as_u64), Some(4));
+        assert_eq!(result.get("scanned_count").and_then(Value::as_u64), Some(5));
         let skills = result
             .get("skills")
             .and_then(Value::as_array)

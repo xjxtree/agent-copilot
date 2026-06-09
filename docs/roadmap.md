@@ -645,12 +645,12 @@
 
 **目标**：先拿到 maintainer-confirmed spec，再决定 OpenClaw scan/toggle/install 范围。
 
-**状态（2026-06-10）**：read-only scanner candidate / writable still blocked。P0 evidence 确认 OpenClaw `SKILL.md` roots、schema、loading order、precedence 和 JSON list capability；第一版只实现 scoped filesystem read-only scanner，不调用 OpenClaw CLI，不做 toggle/install/writable。Project-like scope 只限 confirmed OpenClaw workspace roots `<workspace>/skills` 和 `<workspace>/.agents/skills`，不按任意 repo root 推断。
+**状态（2026-06-10）**：V2.16 read-only scanner implemented / writable still blocked。P0 evidence 确认 OpenClaw `SKILL.md` roots、schema、loading order、precedence 和 JSON list capability；第一版只实现 scoped filesystem read-only scanner，不调用 OpenClaw CLI，不做 toggle/install/writable。Project-like scope 只限 confirmed OpenClaw workspace roots `<workspace>/skills` 和 `<workspace>/.agents/skills`，不按任意 repo root 推断。
 
 **退出条件**
 - [x] P0 evidence 确认 OpenClaw read-only scanner 所需基础 roots/schema/precedence。
 - [x] `adapter.listCapabilities` / `service.status.adapter_capabilities` 展示 OpenClaw read-only candidate，scan 仍 disabled until implementation.
-- [ ] OpenClaw scoped read-only scanner 实现并通过 fixture/real local validation。
+- [x] OpenClaw scoped read-only scanner 实现并通过 focused fixture validation。
 - [x] OpenClaw install/toggle/writable 保持 blocked。
 - [x] `pnpm check:macos` 通过；真实交互 Computer Use 因当前会话锁屏按本轮要求跳过。
 
@@ -659,15 +659,16 @@
 **目标**：把 OpenClaw 已确认的 skill roots 纳入 catalog，只做管理和分析，不做执行、CLI 调用、install 或 writable toggle。
 
 **范围**
+- 仅做文件系统扫描；普通 catalog 扫描不调用 OpenClaw CLI、不写文件、不得触发 install/网关重启/安全扫描命令。
 - 扫描 documented `SKILL.md` directories。
 - Global/shared roots 包括 `~/.openclaw/skills`、`~/.agents/skills`、bundled skills 和配置化 extra dirs。
 - Project-like scope 只限 confirmed OpenClaw workspace roots：`<workspace>/skills` 和 `<workspace>/.agents/skills`。
 - 不推断任意 repo root，不发明 `.openclaw/skills` project root。
-- 不调用 OpenClaw CLI，不触发 cloud/security scan/plugin install/gateway restart。
 
 **退出条件**
-- [ ] OpenClaw read-only fixtures 覆盖 documented roots、missing-name fallback、missing description、duplicate/precedence 和 workspace scope。
-- [ ] `catalog.scanAll` 能展示 OpenClaw skills，并在 capability matrix 中把 scan 从 disabled candidate 更新为 supported read-only。
+- [x] OpenClaw read-only fixtures 覆盖 documented roots、missing-name fallback、missing description 和 workspace scope。
+- [x] OpenClaw 扫描只依赖文件系统，不调用 `openclaw` CLI，且不写入任何 OpenClaw 配置。
+- [x] `catalog.scanAll` 能展示 OpenClaw skills，并在 capability matrix 中把 scan 从 disabled candidate 更新为 supported read-only。
 - [ ] UI 能按 OpenClaw 过滤、展示 source/scope/blocked writable reason。
 - [ ] `pnpm check:macos` 和真实本机 app validation 通过；若会话锁屏，明确记录 blocker。
 

@@ -10,7 +10,8 @@ use fs4::FileExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use skills_copilot_adapters::{
-    parse_codex_skill_config_entries, ClaudeCodeAdapter, CodexAdapter, OpencodeAdapter, PiAdapter,
+    parse_codex_skill_config_entries, ClaudeCodeAdapter, CodexAdapter, OpenclawAdapter,
+    OpencodeAdapter, PiAdapter,
 };
 use skills_copilot_ai_core::{evaluate_mvp_rules, Finding, RuleContext, RuleReport, Severity};
 use skills_copilot_catalog::{
@@ -330,6 +331,7 @@ fn supported_scan_adapters() -> Vec<Box<dyn AgentAdapter>> {
         Box::new(CodexAdapter),
         Box::new(OpencodeAdapter),
         Box::new(PiAdapter),
+        Box::new(OpenclawAdapter),
     ]
 }
 
@@ -459,14 +461,14 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
         AdapterCapabilityRecord {
             agent: AgentId::Openclaw.as_str(),
             display_name: "OpenClaw",
-            status: "planned",
-            scan: AdapterFeatureCapability::blocked(
-                "read-only-candidate",
-                "P0 evidence confirmed OpenClaw SKILL.md roots and schema; read-only filesystem scanner is planned but not implemented.",
+            status: "read-only",
+            scan: AdapterFeatureCapability::supported_with_reason(
+                "verified-read-only",
+                "V2.16 scans documented OpenClaw filesystem roots without calling the OpenClaw CLI.",
             ),
-            project_scan: AdapterFeatureCapability::blocked(
-                "blocked",
-                "OpenClaw project scan is limited to confirmed OpenClaw workspace roots; arbitrary repo roots are not treated as OpenClaw projects.",
+            project_scan: AdapterFeatureCapability::supported_with_reason(
+                "verified-read-only",
+                "Project scan is limited to confirmed OpenClaw home workspace roots and only reads <workspace>/skills plus <workspace>/.agents/skills.",
             ),
             config_toggle: AdapterFeatureCapability::blocked(
                 "blocked",
@@ -485,8 +487,7 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
                 "OpenClaw writable toggle/install remains blocked until disposable config mutation and credential-safe rollback are verified.",
             ),
             blockers: vec![
-                "Implement a scoped read-only filesystem scanner before enabling UI support.",
-                "Confirm malformed/conflict behavior with fixtures before production scan.",
+                "Arbitrary repository roots are not OpenClaw projects and are not scanned as project roots.",
                 "Verify config mutation, credential preservation, and rollback before writable/install support.",
             ],
         },
@@ -2906,6 +2907,7 @@ fn scan_agent_id_to_catalog(
         AgentId::Codex => scan_single_agent_to_catalog(&CodexAdapter, ctx, catalog),
         AgentId::Opencode => scan_single_agent_to_catalog(&OpencodeAdapter, ctx, catalog),
         AgentId::Pi => scan_single_agent_to_catalog(&PiAdapter, ctx, catalog),
+        AgentId::Openclaw => scan_single_agent_to_catalog(&OpenclawAdapter, ctx, catalog),
         agent => Err(CommandError::UnsafeConfigPath(format!(
             "{} skills are not supported by scan commands",
             agent.as_str()
@@ -4022,7 +4024,7 @@ mod tests {
         let count = scan_all_to_catalog(&ctx, &catalog).expect("scan all succeeds");
         let records = catalog.list_skill_records().expect("records list");
 
-        assert_eq!(count, 4);
+        assert_eq!(count, 5);
         assert!(
             records
                 .iter()
@@ -4047,6 +4049,12 @@ mod tests {
                 .any(|record| record.agent == "codex" && record.name == "nested-gamma"),
             "Codex nested cwd fixture should be included in scanAll"
         );
+        assert!(
+            records
+                .iter()
+                .any(|record| record.agent == "openclaw" && record.name == "user-alpha"),
+            "OpenClaw should include documented shared ~/.agents/skills user roots"
+        );
     }
 
     #[test]
@@ -4066,7 +4074,7 @@ mod tests {
 
         let report = scan_all_catalog_report(&ctx, &catalog).expect("scan all succeeds");
 
-        assert_eq!(report.scanned_count, 4);
+        assert_eq!(report.scanned_count, 5);
         let claude = report
             .agents
             .iter()
@@ -4090,6 +4098,13 @@ mod tests {
             3,
             "Codex scans user, repo, and nested cwd roots"
         );
+        let openclaw = report
+            .agents
+            .iter()
+            .find(|agent| agent.agent == AgentId::Openclaw)
+            .expect("OpenClaw report");
+        assert_eq!(openclaw.display_name, "OpenClaw");
+        assert_eq!(openclaw.scanned_count, 1);
     }
 
     #[test]
@@ -4176,7 +4191,7 @@ mod tests {
     }
 
     #[test]
-    fn scan_all_includes_pi_after_opencode() {
+    fn scan_all_includes_openclaw_after_pi() {
         let temp_root =
             std::env::temp_dir().join(format!("skills-copilot-pi-scan-all-{}", std::process::id()));
         let home = temp_root.join("home");
@@ -4197,7 +4212,7 @@ mod tests {
         let report = scan_all_catalog_report(&ctx, &catalog).expect("scan all succeeds");
         let records = catalog.list_skill_records().expect("records list");
 
-        assert_eq!(report.scanned_count, 4);
+        assert_eq!(report.scanned_count, 5);
         assert_eq!(
             report
                 .agents
@@ -4208,9 +4223,10 @@ mod tests {
                 AgentId::ClaudeCode,
                 AgentId::Codex,
                 AgentId::Opencode,
-                AgentId::Pi
+                AgentId::Pi,
+                AgentId::Openclaw
             ],
-            "scanAll reports Pi after opencode"
+            "scanAll reports OpenClaw after Pi"
         );
         assert!(records.iter().any(|record| {
             record.agent == "claude-code"
@@ -4227,6 +4243,9 @@ mod tests {
         }));
         assert!(records.iter().any(|record| {
             record.agent == "pi" && record.name == "pi-alpha" && record.path == pi_path
+        }));
+        assert!(records.iter().any(|record| {
+            record.agent == "openclaw" && record.name == "codex-alpha" && record.path == codex_path
         }));
 
         let _ = std::fs::remove_dir_all(&temp_root);
@@ -5237,14 +5256,18 @@ mod tests {
 
         let records = catalog.list_skill_records().expect("records list");
         let findings = catalog.list_rule_findings().expect("findings list");
-        assert_eq!(records.len(), 6);
+        assert_eq!(
+            records.len(),
+            12,
+            "Codex and OpenClaw both scan the documented shared ~/.agents/skills root"
+        );
         assert_eq!(
             findings
                 .iter()
                 .filter(|finding| finding.rule_id == "frontmatter.tools-not-empty")
                 .count(),
-            2,
-            "empty array and blank string tools fields are reported"
+            4,
+            "empty array and blank string tools fields are reported for both shared-root agents"
         );
         assert!(
             has_rule_for_name(

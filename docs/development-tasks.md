@@ -21,7 +21,7 @@
 | V2.13 | Pi adapter support | Complete | Pi-native global/project scanner/parser is implemented read-only; writable toggle/install remains blocked pending settings mutation/rollback evidence |
 | V2.14 | Hermes adapter support | Complete evidence-gate closeout; P0 read-only candidate | P0 evidence later confirmed first-class Hermes skills; writable/install remains blocked |
 | V2.15 | OpenClaw adapter support | Complete evidence-gate closeout; P0 read-only candidate | P0 evidence later confirmed OpenClaw roots/schema for read-only scan; writable/install remains blocked |
-| V2.16 | OpenClaw read-only scanner | Planned | OpenClaw documented roots appear in catalog read-only; project scan is workspace-scoped only; no CLI calls, writes, or installs |
+| V2.16 | OpenClaw read-only scanner | Completed | OpenClaw documented roots appear in catalog read-only; scan is filesystem-only; project scan is workspace-scoped only (`<workspace>/skills`, `<workspace>/.agents/skills`); no arbitrary repo roots, CLI calls, writes, or installs |
 | V2.17 | Hermes read-only scanner | Planned | Active/profile Hermes home `skills/**/SKILL.md` appears in catalog read-only; no generic project scan, cron mapping, writes, or installs |
 | V2.18 | Cross-agent skill analysis | Planned | Duplicate names, shadowing, precedence conflicts, malformed skills, disabled states, and source overlap are grouped across agents |
 | V2.19 | Skill health dashboard and triage UX | Planned | Agent/project dashboards summarize health, findings, conflicts, risky scripts/permissions, and review status with actionable filters |
@@ -33,7 +33,7 @@
 
 **Priority order**
 
-1. V2.16 OpenClaw read-only scanner: filesystem scan only, project scope limited to confirmed OpenClaw workspace roots `<workspace>/skills` and `<workspace>/.agents/skills`, no CLI calls during ordinary scan, writable/install blocked.
+1. V2.16 OpenClaw read-only scanner: completed filesystem scan only, project scope limited to confirmed OpenClaw workspace roots `<workspace>/skills` and `<workspace>/.agents/skills`, no CLI calls during ordinary scan, no arbitrary repo roots, writable/install blocked.
 2. V2.17 Hermes read-only scanner: active Hermes home `skills/**/SKILL.md` only, no generic project scan, no cron-to-skill mapping, writable/install blocked.
 3. V2.18 Cross-agent skill analysis: duplicate/conflict/precedence/source-overlap analysis across supported agents.
 4. V2.19 Skill health dashboard and triage UX: aggregate health, findings, conflicts, risk, and review workflow.
@@ -71,7 +71,7 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 | P0 | Pi comprehensive adapter support | Read-only scanner complete; writable evidence supports a harness but not production writes | Implement disposable writable evidence harness for Pi-native roots and package filters; exclude `.agents/skills` compatibility roots from first writable slice | Harness proves native/global/project/package toggle, rollback, trust gate, invalid JSON behavior, and re-enable strategy |
 | P0 | opencode writable support | Read-only native-root support exists; writable semantics remain unverified; promoted to near-term priority | Verify `permission.skill` exact patch, re-enable behavior, wildcard precedence, config ownership, and rollback path | opencode writable toggle/install design is accepted and implemented behind snapshots/tests, or blocker remains explicit |
 | P0 | Hermes adapter support | Read-only scanner candidate after P0 evidence; writable/install blocked | Implement scoped read-only scan of active Hermes home `skills/**/SKILL.md`; skip generic project roots, dot dirs, and archives unless represented as explicit evidence | Hermes skills appear in catalog read-only; generic project scan and writes remain blocked |
-| P0 | OpenClaw adapter support | Read-only scanner candidate after P0 evidence; writable/install blocked | Implement scoped read-only filesystem scan over documented roots; project scan only for confirmed OpenClaw workspace roots; no OpenClaw CLI calls during ordinary scan | OpenClaw skills appear in catalog read-only; arbitrary repo roots and writes/install remain blocked |
+| P0 | OpenClaw adapter support | Read-only scanner implemented; writable/install blocked | Keep scoped read-only filesystem scan over documented roots; project scan only for confirmed OpenClaw workspace roots; no OpenClaw CLI calls during ordinary scan | OpenClaw skills appear in catalog read-only; arbitrary repo roots and writes/install remain blocked |
 | P0 | Cross-agent skill analysis | Planned | Extend catalog summaries with duplicate/conflict/precedence/source-overlap groups | Users can identify conflicting or duplicated skills across agents without manually comparing lists |
 | P0 | Skill health dashboard | Planned | Add dashboard summary cards and actionable filters for findings, conflicts, disabled skills, malformed metadata, risky scripts, and permission issues | Users can prioritize cleanup from a single management view |
 | P1 | Finding triage UX | Planned | Add reviewed/ignored state and grouping by rule, severity, agent, and source | Users can separate known issues from new actionable findings |

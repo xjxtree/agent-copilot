@@ -12,7 +12,7 @@ Sources checked:
 - Local skill doc: `$HOME/.agents/skills/alibabacloud-sas-openclaw-security/SKILL.md`.
 - Local machine checks: `command -v openclaw`, `ls -ld "$HOME/.openclaw"`, and redacted structure-only inspection of `$HOME/.openclaw/openclaw.json`.
 
-No adapter code has been added yet. P0 evidence used official docs plus read-only `ssh macmini` checks. No OpenClaw list/check/install/restart/security scan command was run.
+V2.16 adds a read-only filesystem scanner. P0 evidence used official docs plus read-only `ssh macmini` checks. No OpenClaw list/check/install/restart/security scan command was run during ordinary scanning.
 
 | Area | Status | Evidence |
 | --- | --- | --- |
@@ -27,25 +27,25 @@ No adapter code has been added yet. P0 evidence used official docs plus read-onl
 
 ## 2. Fixture Scope
 
-Fixture files under `fixtures/openclaw/` are evidence samples only:
+Fixture files under `fixtures/openclaw/` now include V2.16 read-only scanner contract samples plus evidence-only config samples:
 
 - `fixtures/openclaw/README.md`
 - `fixtures/openclaw/skill-evidence/sample-openclaw-skill/SKILL.md`
 - `fixtures/openclaw/config/openclaw.plugins.redacted.sample.json`
 
-The `SKILL.md` fixture is a future parser candidate only if maintainers confirm the local-doc evidence as canonical. The config fixture models only the plugin fields seen in local docs; it must not be treated as skill toggle contract.
+The `SKILL.md` fixtures cover parser and root-scope behavior for the read-only scanner. The config fixture models only the plugin fields seen in local docs; it must not be treated as skill toggle contract.
 
 ## 3. Adapter Mapping Status
 
-No mapping is approved yet.
+Read-only filesystem mapping is approved for V2.16. Writable mapping remains blocked.
 
 | Shared field | Status |
 | --- | --- |
-| `AgentId` | Reserved as `openclaw` in planning docs only. |
-| `Scope::AgentGlobal` | Blocked: candidate roots are local-doc evidence, not maintainer-confirmed adapter roots. |
-| `Scope::AgentProject` | Candidate only for confirmed OpenClaw workspace roots: `<workspace>/skills` and `<workspace>/.agents/skills`; arbitrary repo roots are not OpenClaw projects. |
-| `SkillInstance.name` | Candidate only: YAML frontmatter `name:` or directory basename fallback appears in security-scan docs. |
-| `SkillInstance.description` | Candidate only: likely YAML frontmatter, but required/optional status is unknown. |
+| `AgentId` | Implemented as `openclaw`. |
+| `Scope::AgentGlobal` | Implemented read-only for documented roots such as `~/.openclaw/skills`, `~/.agents/skills`, and bundled package skill roots. |
+| `Scope::AgentProject` | Implemented read-only only for confirmed OpenClaw home workspace roots: `<workspace>/skills` and `<workspace>/.agents/skills`; arbitrary repo roots are not OpenClaw projects. |
+| `SkillInstance.name` | Implemented as YAML frontmatter `name:` with directory basename fallback. |
+| `SkillInstance.description` | Implemented as optional YAML frontmatter `description`; missing descriptions stay visible with an empty description. |
 | `SkillInstance.enabled` | Blocked: plugin `enabled` is not verified as skill enabled state. |
 | Config writes | Blocked: `openclaw.json` can contain credentials and may be JSONC; no safe patch contract is verified. |
 

@@ -1,8 +1,8 @@
 # OpenClaw Evidence Fixtures
 
-These fixtures document local OpenClaw evidence only. They are not adapter implementation inputs.
+These fixtures document local OpenClaw evidence and the V2.16 read-only scanner contract.
 
-P0 evidence on 2026-06-10 promoted OpenClaw to a read-only scanner candidate. The samples below are useful for maintainer discussion, but they are not scanner/parser, install, toggle, or rollback contracts until the scanner fixture set is explicitly added.
+P0 evidence on 2026-06-10 promoted OpenClaw to a read-only scanner candidate. V2.16 adds a filesystem-only scanner contract for parsing `SKILL.md` directories. The config sample remains evidence-only and must not be used as a writable skill toggle contract.
 
 Evidence status:
 
@@ -12,6 +12,24 @@ Evidence status:
 - Local plugin docs patch `openclaw.json` plugin fields, but plugin `enabled` is not verified as skill enable/disable semantics.
 - A local `$HOME/.openclaw/openclaw.json` exists, but it was not copied because it may contain credentials and is not strict JSON.
 
-`skill-evidence/sample-openclaw-skill/SKILL.md` is a future parser candidate only if maintainers confirm the local-doc evidence as canonical.
+Scanner fixture scope:
+
+- `skill-evidence/sample-openclaw-skill/SKILL.md` covers a valid OpenClaw skill directory.
+- `user-home/.openclaw/skills/managed-global/SKILL.md` mirrors managed global OpenClaw skills.
+- `user-home/.agents/skills/personal-shared/SKILL.md` mirrors the documented shared personal skill root.
+- `user-home/.openclaw/workspace/skills/workspace-override/SKILL.md` mirrors `<workspace>/skills`.
+- `user-home/.openclaw/workspace/.agents/skills/workspace-agents/SKILL.md` mirrors `<workspace>/.agents/skills`.
+- `broken/missing-name/SKILL.md` confirms the read-only scanner falls back to the containing directory name.
+- `broken/missing-description/SKILL.md` confirms missing descriptions do not block read-only discovery.
+
+The V2.16 scanner must not infer arbitrary repository roots as OpenClaw workspaces, must not call `openclaw`, and must not write or patch `openclaw.json`.
 
 `config/openclaw.plugins.redacted.sample.json` is a minimal plugin evidence sample only. It is not a writable skill toggle contract.
+
+## Read-only scanner verifier checklist
+
+- [x] Confirm OpenClaw scan scope is filesystem-only and does not invoke `openclaw` CLI for ordinary catalog scans.
+- [x] Confirm workspace project scan is limited to `<workspace>/skills` and `<workspace>/.agents/skills` and does not infer arbitrary repo roots.
+- [x] Confirm `<workspace>/.openclaw/skills` is not used as a project inference root.
+- [x] Confirm no install/toggle/writable path is used by scanner flows.
+- [x] Confirm OpenClaw scan fixtures include documented global/project roots, missing-name fallback, missing description, and workspace-boundary checks.
