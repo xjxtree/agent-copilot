@@ -3,6 +3,7 @@ import Foundation
 enum ToolInstallTarget: String, Codable, CaseIterable, Identifiable, Hashable {
     case claudeCode = "claude-code"
     case codex
+    case opencode
 
     var id: String { rawValue }
 

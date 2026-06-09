@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use skills_copilot_core::{
-    AdapterContext, AdapterError, AdapterRoot, AgentAdapter, AgentId, PermissionRequest,
-    RootSource, Scope, SkillInstance, SkillState,
+    AdapterContext, AdapterError, AdapterRoot, AgentAdapter, AgentConfigAdapter,
+    AgentConfigDocument, AgentId, PermissionRequest, RootSource, Scope, SkillInstance, SkillState,
 };
 
 #[derive(Debug, Default)]
@@ -88,7 +88,19 @@ impl AgentAdapter for OpencodeAdapter {
     }
 
     fn config_paths(&self, _ctx: &AdapterContext) -> Vec<PathBuf> {
-        Vec::new()
+        vec![_ctx.user_home.join(".config/opencode/opencode.json")]
+    }
+}
+
+impl AgentConfigAdapter for OpencodeAdapter {
+    fn patch_enabled(
+        &self,
+        doc: &mut AgentConfigDocument,
+        instance: &SkillInstance,
+        on: bool,
+    ) -> Result<(), AdapterError> {
+        doc.text = patch_opencode_config(&doc.text, &instance.name, on)?;
+        Ok(())
     }
 }
 
@@ -209,6 +221,75 @@ fn containing_dir_name(path: &Path) -> String {
 
 fn stable_path_id(path: &Path) -> String {
     format!("opencode:{}", path.display())
+}
+
+fn patch_opencode_config(
+    content: &str,
+    skill_name: &str,
+    on: bool,
+) -> Result<String, AdapterError> {
+    validate_skill_name(skill_name).map_err(AdapterError::new)?;
+    let mut value = parse_opencode_config(content)?;
+    let root = object_mut(&mut value, "opencode config root")?;
+    let permission = root
+        .entry("permission".to_string())
+        .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+
+    if let Some(existing) = permission.as_str().map(str::to_string) {
+        *permission = serde_json::json!({ "*": existing });
+    }
+    let permission = object_mut(permission, "`permission` config")?;
+    let skill = permission
+        .entry("skill".to_string())
+        .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+
+    if let Some(existing) = skill.as_str().map(str::to_string) {
+        *skill = serde_json::json!({ "*": existing });
+    }
+    let skill = object_mut(skill, "`permission.skill` config")?;
+
+    if on {
+        if skill
+            .get(skill_name)
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|rule| rule == "deny")
+        {
+            skill.remove(skill_name);
+        }
+    } else {
+        skill.insert(
+            skill_name.to_string(),
+            serde_json::Value::String("deny".to_string()),
+        );
+    }
+
+    Ok(format!(
+        "{}\n",
+        serde_json::to_string_pretty(&value).map_err(|err| {
+            AdapterError::new(format!("failed to serialize opencode config: {err}"))
+        })?
+    ))
+}
+
+fn parse_opencode_config(content: &str) -> Result<serde_json::Value, AdapterError> {
+    let trimmed = content.trim();
+    if trimmed.is_empty() {
+        return Ok(serde_json::Value::Object(serde_json::Map::new()));
+    }
+    serde_json::from_str(trimmed).map_err(|err| {
+        AdapterError::new(format!(
+            "failed to parse opencode JSON config for writable patch: {err}; JSONC/commented configs are not rewritten because comments cannot be preserved"
+        ))
+    })
+}
+
+fn object_mut<'a>(
+    value: &'a mut serde_json::Value,
+    label: &str,
+) -> Result<&'a mut serde_json::Map<String, serde_json::Value>, AdapterError> {
+    value
+        .as_object_mut()
+        .ok_or_else(|| AdapterError::new(format!("{label} must be a JSON object")))
 }
 
 #[cfg(test)]
@@ -345,6 +426,86 @@ mod tests {
         assert!(skill.description.contains("single hyphen separators"));
     }
 
+    #[test]
+    fn patch_enabled_adds_exact_skill_deny_and_preserves_wildcard() {
+        let mut doc = AgentConfigDocument {
+            path: PathBuf::from("/tmp/opencode.json"),
+            format: skills_copilot_core::ConfigFormat::Json,
+            text: r#"{"permission":{"skill":{"*":"allow","internal-*":"deny"}}}"#.to_string(),
+        };
+        let skill = minimal_skill("global-review");
+
+        OpencodeAdapter
+            .patch_enabled(&mut doc, &skill, false)
+            .expect("disable patch");
+
+        let value: serde_json::Value = serde_json::from_str(&doc.text).expect("patched json");
+        assert_eq!(value["permission"]["skill"]["*"], "allow");
+        assert_eq!(value["permission"]["skill"]["internal-*"], "deny");
+        assert_eq!(value["permission"]["skill"]["global-review"], "deny");
+    }
+
+    #[test]
+    fn patch_enabled_removes_only_exact_deny() {
+        let mut doc = AgentConfigDocument {
+            path: PathBuf::from("/tmp/opencode.json"),
+            format: skills_copilot_core::ConfigFormat::Json,
+            text: r#"{"permission":{"skill":{"*":"ask","global-review":"deny","other":"ask"}}}"#
+                .to_string(),
+        };
+        let skill = minimal_skill("global-review");
+
+        OpencodeAdapter
+            .patch_enabled(&mut doc, &skill, true)
+            .expect("enable patch");
+
+        let value: serde_json::Value = serde_json::from_str(&doc.text).expect("patched json");
+        assert!(value["permission"]["skill"].get("global-review").is_none());
+        assert_eq!(value["permission"]["skill"]["*"], "ask");
+        assert_eq!(value["permission"]["skill"]["other"], "ask");
+    }
+
+    #[test]
+    fn patch_enabled_accepts_string_permission_defaults() {
+        let mut doc = AgentConfigDocument {
+            path: PathBuf::from("/tmp/opencode.json"),
+            format: skills_copilot_core::ConfigFormat::Json,
+            text: r#"{"permission":"ask"}"#.to_string(),
+        };
+        let skill = minimal_skill("global-review");
+
+        OpencodeAdapter
+            .patch_enabled(&mut doc, &skill, false)
+            .expect("disable patch");
+
+        let value: serde_json::Value = serde_json::from_str(&doc.text).expect("patched json");
+        assert_eq!(value["permission"]["*"], "ask");
+        assert_eq!(value["permission"]["skill"]["global-review"], "deny");
+    }
+
+    #[test]
+    fn patch_enabled_rejects_commented_jsonc_without_rewriting() {
+        let original = r#"{
+                // OpenCode accepts JSONC, but the managed write should not drop comments.
+                "permission": "ask"
+            }"#;
+        let mut doc = AgentConfigDocument {
+            path: PathBuf::from("/tmp/opencode.json"),
+            format: skills_copilot_core::ConfigFormat::Json,
+            text: original.to_string(),
+        };
+        let skill = minimal_skill("global-review");
+
+        let err = OpencodeAdapter
+            .patch_enabled(&mut doc, &skill, false)
+            .expect_err("commented JSONC should not be rewritten");
+
+        assert!(err
+            .message
+            .contains("JSONC/commented configs are not rewritten"));
+        assert_eq!(doc.text, original);
+    }
+
     fn write_skill(name: &str, content: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!(
             "skills-copilot-opencode-adapter-{}-{}",
@@ -364,5 +525,31 @@ mod tests {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../..")
             .join(relative)
+    }
+
+    fn minimal_skill(name: &str) -> SkillInstance {
+        SkillInstance {
+            id: name.to_string(),
+            agent: AgentId::Opencode,
+            scope: Scope::AgentGlobal,
+            project_root: None,
+            path: PathBuf::from(format!("/tmp/{name}/SKILL.md")),
+            display_path: PathBuf::from(format!("/tmp/{name}/SKILL.md")),
+            definition_id: name.to_string(),
+            name: name.to_string(),
+            display_name: name.to_string(),
+            description: String::new(),
+            version: None,
+            state: SkillState::Loaded,
+            enabled: true,
+            frontmatter_raw: String::new(),
+            body: String::new(),
+            scripts: Vec::new(),
+            permissions: PermissionRequest::default(),
+            fingerprint: String::new(),
+            mtime: 0,
+            first_seen: 0,
+            last_seen: 0,
+        }
     }
 }

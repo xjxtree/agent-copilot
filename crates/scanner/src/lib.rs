@@ -7,7 +7,8 @@ use std::{
 
 use sha2::{Digest, Sha256};
 use skills_copilot_core::{
-    AdapterContext, AdapterRoot, AgentAdapter, AgentId, Scope, SkillInstance, SkillState,
+    AdapterContext, AdapterRoot, AgentAdapter, AgentId, RootSource, Scope, SkillInstance,
+    SkillState,
 };
 use thiserror::Error;
 #[derive(Debug, Default)]
@@ -44,7 +45,7 @@ pub fn scan_agent(
 ) -> Result<ScanReport, ScannerError> {
     let mut report = ScanReport::default();
     let roots = adapter.roots(ctx);
-    let overrides = ClaudeSkillOverrides::preload(adapter.id(), ctx, &roots);
+    let overrides = SkillConfigOverrides::preload(adapter.id(), ctx, &roots);
     for root in roots {
         if !root.path.exists() {
             report.skipped_roots.push(root.path);
@@ -100,7 +101,7 @@ fn visit_root(
     root: &AdapterRoot,
     canonical_root: &Path,
     allowed_target_base: &Path,
-    overrides: &ClaudeSkillOverrides,
+    overrides: &SkillConfigOverrides,
     report: &mut ScanReport,
 ) -> Result<(), ScannerError> {
     // Each stack entry is (resolved_dir, display_root).
@@ -199,7 +200,7 @@ fn normalize_instance(
     ctx: &AdapterContext,
     root: &AdapterRoot,
     canonical_path: PathBuf,
-    overrides: &ClaudeSkillOverrides,
+    overrides: &SkillConfigOverrides,
     instance: &mut SkillInstance,
 ) {
     instance.scope = root.scope;
@@ -226,9 +227,9 @@ fn normalize_instance(
     instance.first_seen = instance.mtime;
     instance.last_seen = instance.mtime;
 
-    // Claude settings are scoped to Claude Code only. Keep the per-scan
-    // settings cache outside adapter parsing so one file is not reread for
-    // every skill in a root.
+    // Agent config overrides are scoped to the current adapter only. Keep the
+    // per-scan settings cache outside adapter parsing so one file is not reread
+    // for every skill in a root.
     if matches!(instance.state, SkillState::Loaded)
         && overrides.is_disabled(ctx, root, &instance.name)
     {
@@ -238,25 +239,38 @@ fn normalize_instance(
 }
 
 #[derive(Debug, Default)]
-struct ClaudeSkillOverrides {
+struct SkillConfigOverrides {
     disabled_by_settings_path: HashMap<PathBuf, HashSet<String>>,
 }
 
-impl ClaudeSkillOverrides {
+impl SkillConfigOverrides {
     fn preload(agent: AgentId, ctx: &AdapterContext, roots: &[AdapterRoot]) -> Self {
-        if agent != AgentId::ClaudeCode {
-            return Self::default();
-        }
-
         let mut disabled_by_settings_path = HashMap::new();
-        for settings_path in roots
-            .iter()
-            .filter_map(|root| claude_settings_path_for(ctx, root))
-            .collect::<HashSet<_>>()
-        {
-            if let Some(disabled) = read_disabled_skill_overrides(&settings_path) {
-                disabled_by_settings_path.insert(settings_path, disabled);
+        match agent {
+            AgentId::ClaudeCode => {
+                for settings_path in roots
+                    .iter()
+                    .filter_map(|root| claude_settings_path_for(ctx, root))
+                    .collect::<HashSet<_>>()
+                {
+                    if let Some(disabled) = read_disabled_claude_skill_overrides(&settings_path) {
+                        disabled_by_settings_path.insert(settings_path, disabled);
+                    }
+                }
             }
+            AgentId::Opencode => {
+                for settings_path in roots
+                    .iter()
+                    .filter_map(|root| opencode_settings_path_for(ctx, root))
+                    .collect::<HashSet<_>>()
+                {
+                    if let Some(disabled) = read_disabled_opencode_skill_permissions(&settings_path)
+                    {
+                        disabled_by_settings_path.insert(settings_path, disabled);
+                    }
+                }
+            }
+            _ => {}
         }
 
         Self {
@@ -265,7 +279,16 @@ impl ClaudeSkillOverrides {
     }
 
     fn is_disabled(&self, ctx: &AdapterContext, root: &AdapterRoot, skill_name: &str) -> bool {
-        claude_settings_path_for(ctx, root)
+        let settings_path = match root.source {
+            RootSource::UserHome if root.path.ends_with(".config/opencode/skills") => {
+                opencode_settings_path_for(ctx, root)
+            }
+            RootSource::Project if root.path.ends_with(".opencode/skills") => {
+                opencode_settings_path_for(ctx, root)
+            }
+            _ => claude_settings_path_for(ctx, root),
+        };
+        settings_path
             .and_then(|settings_path| self.disabled_by_settings_path.get(&settings_path))
             .is_some_and(|disabled| disabled.contains(skill_name))
     }
@@ -284,7 +307,16 @@ fn claude_settings_path_for(ctx: &AdapterContext, root: &AdapterRoot) -> Option<
     }
 }
 
-fn read_disabled_skill_overrides(settings_path: &Path) -> Option<HashSet<String>> {
+fn opencode_settings_path_for(ctx: &AdapterContext, root: &AdapterRoot) -> Option<PathBuf> {
+    match root.scope {
+        Scope::AgentGlobal => Some(ctx.user_home.join(".config/opencode/opencode.json")),
+        Scope::AgentProject => ctx.project_root.as_ref().map(|p| p.join("opencode.json")),
+        Scope::ToolGlobal => None,
+        _ => None,
+    }
+}
+
+fn read_disabled_claude_skill_overrides(settings_path: &Path) -> Option<HashSet<String>> {
     let Ok(content) = fs::read_to_string(settings_path) else {
         return None;
     };
@@ -301,6 +333,86 @@ fn read_disabled_skill_overrides(settings_path: &Path) -> Option<HashSet<String>
             .map(|(name, _)| name.clone())
             .collect(),
     )
+}
+
+fn read_disabled_opencode_skill_permissions(settings_path: &Path) -> Option<HashSet<String>> {
+    let Ok(content) = fs::read_to_string(settings_path) else {
+        return None;
+    };
+    let stripped = strip_json_comments(&content);
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&stripped) else {
+        return None;
+    };
+    let skill_permissions = value
+        .get("permission")
+        .and_then(|permission| permission.get("skill"))
+        .and_then(serde_json::Value::as_object)?;
+    Some(
+        skill_permissions
+            .iter()
+            .filter(|(_, value)| value.as_str() == Some("deny"))
+            .filter(|(name, _)| !name.contains('*') && !name.contains('?'))
+            .map(|(name, _)| name.clone())
+            .collect(),
+    )
+}
+
+fn strip_json_comments(content: &str) -> String {
+    let mut output = String::with_capacity(content.len());
+    let mut chars = content.chars().peekable();
+    let mut in_string = false;
+    let mut escaped = false;
+
+    while let Some(ch) = chars.next() {
+        if in_string {
+            output.push(ch);
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+
+        if ch == '"' {
+            in_string = true;
+            output.push(ch);
+            continue;
+        }
+
+        if ch == '/' {
+            match chars.peek().copied() {
+                Some('/') => {
+                    chars.next();
+                    for next in chars.by_ref() {
+                        if next == '\n' {
+                            output.push('\n');
+                            break;
+                        }
+                    }
+                    continue;
+                }
+                Some('*') => {
+                    chars.next();
+                    let mut previous = '\0';
+                    for next in chars.by_ref() {
+                        if previous == '*' && next == '/' {
+                            break;
+                        }
+                        previous = next;
+                    }
+                    continue;
+                }
+                _ => {}
+            }
+        }
+
+        output.push(ch);
+    }
+
+    output
 }
 
 fn broken_instance(
@@ -598,6 +710,52 @@ mod tests {
             report.instances.is_empty(),
             "project roots must not scan symlink targets outside the project root"
         );
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn opencode_permission_skill_deny_marks_exact_skill_disabled() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "skills-copilot-opencode-permission-{}",
+            std::process::id()
+        ));
+        let home = temp_root.join("home");
+        let skill_dir = home.join(".config/opencode/skills/global-review");
+        std::fs::create_dir_all(&skill_dir).expect("create opencode skill dir");
+        std::fs::create_dir_all(home.join(".config/opencode")).expect("create opencode config dir");
+        std::fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: global-review\ndescription: opencode disabled fixture\n---\nBody.",
+        )
+        .expect("write opencode SKILL.md");
+        std::fs::write(
+            home.join(".config/opencode/opencode.json"),
+            r#"{
+              // JSONC comments are accepted for readback.
+              "permission": {
+                "skill": {
+                  "*": "allow",
+                  "global-review": "deny"
+                }
+              }
+            }"#,
+        )
+        .expect("write opencode config");
+
+        let ctx = AdapterContext {
+            user_home: home,
+            project_root: None,
+            project_cwd: None,
+            extra_roots: vec![],
+        };
+
+        let report = scan_agent(&OpencodeAdapter, &ctx).expect("scan succeeds");
+
+        assert_eq!(report.instances.len(), 1);
+        assert_eq!(report.instances[0].name, "global-review");
+        assert!(!report.instances[0].enabled);
+        assert_eq!(report.instances[0].state, SkillState::Disabled);
 
         let _ = std::fs::remove_dir_all(&temp_root);
     }

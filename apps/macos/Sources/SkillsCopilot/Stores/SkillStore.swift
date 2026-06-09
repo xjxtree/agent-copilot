@@ -62,6 +62,17 @@ final class SkillStore: ObservableObject {
         isLoading || isScanning || isWriting || isProjectUpdating || isSavingSettings
     }
 
+    private func toggleDisabledReason(for skill: SkillRecord) -> String? {
+        let catalogReason = DisplayText.toggleDisabledReason(for: skill, isWriting: isWriting)
+        guard !isWriting,
+              let capability = adapterCapabilities.first(where: { $0.agent == skill.agent }),
+              !capability.configToggle.supported
+        else {
+            return catalogReason
+        }
+        return capability.configToggle.reason ?? catalogReason ?? UIStrings.readOnlyAdapterStatus(capability.displayName)
+    }
+
     var selectedSkill: SkillRecord? {
         let visibleSkills = filteredSkills
         if let selectedSkillID {
@@ -269,7 +280,7 @@ final class SkillStore: ObservableObject {
             return
         }
         guard let skill = selectedSkill else { return }
-        if let disabledReason = DisplayText.toggleDisabledReason(for: skill, isWriting: isWriting) {
+        if let disabledReason = toggleDisabledReason(for: skill) {
             errorMessage = disabledReason
             lastMutationMessage = nil
             return

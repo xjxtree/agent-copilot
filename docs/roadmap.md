@@ -4,9 +4,9 @@
 >
 > 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.11 Adapter Capability Matrix 进行中**。
+> 当前阶段：**V2.13 Pi adapter support 进行中**。
 >
-> 近期主线：在 macOS app 中补齐多 agent 支持，按 V2.11-V2.15 版本线推进 adapter capability matrix、opencode writable、Pi、Hermes 和 OpenClaw 的证据与适配。
+> 近期主线：在 macOS app 中补齐多 agent 支持，按 V2.11-V2.15 版本线推进 opencode writable、Pi、Hermes 和 OpenClaw 的证据与适配。V2.11 与 V2.12 已完成，V2.13 为当前阶段。
 >
 > 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.10 各阶段能力、V2.9 Tool-global skill pool。V2.11 Adapter capability matrix 的首个 service/UI 切片已进入开发，后续候选变更仍需重新验证。
 >
@@ -602,7 +602,7 @@
 
 **目标**：在 disposable local evidence 证明安全前提后，才允许 opencode 从 read-only 进入 guarded writable。
 
-**状态**：planned next。
+**状态（2026-06-09）**：completed。`permission.skill.<name> = "deny"` exact patch、re-enable、agent-config snapshot/rollback、tool-global install 到 native opencode roots、UI/service capability gating 和 fixture smoke 已通过 `pnpm check:macos`。
 
 **范围**
 - 用临时 HOME / `XDG_CONFIG_HOME` / `OPENCODE_CONFIG_DIR` / fixture project 验证 `permission.skill` 写入语义。
@@ -610,9 +610,11 @@
 - 证据充分后实现 guarded toggle/install；证据不足则保持 blocker。
 
 **退出条件**
-- [ ] Disposable evidence 不读取或修改真实 opencode config。
-- [ ] Toggle 前 agent-config snapshot，toggle 后 skill activity。
-- [ ] UI 和 service 都只在 writable verified 时开放 opencode 写入。
+- [x] Disposable evidence 使用临时 HOME / `XDG_CONFIG_HOME` / `OPENCODE_CONFIG_DIR` / fixture project，不读取不修改真实 opencode config。
+- [x] 完成 exact patch、re-enable、wildcard precedence、managed config ownership、rollback-safe write path 的本地 round-trip 验证。
+- [x] Toggle 前后的 catalog snapshot、agent-config snapshot、skill activity 符合预期，可回放恢复。
+- [x] 仅在上述代码实现与验证通过后，UI 和 service 才将 opencode 标记 writable 并开放 guarded toggle/install；否则 `blocked` 原因保持可见且不得移除。
+- [x] `pnpm check:macos` 通过；真实交互 Computer Use 因当前会话锁屏按本轮要求跳过。
 
 ### 4.13 V2.13 Pi adapter support
 

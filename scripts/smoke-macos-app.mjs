@@ -218,6 +218,7 @@ function createFixtureEnvironment() {
   const projectOpencodeSkillsRoot = join(projectRoot, ".opencode", "skills");
   const codexUserConfig = join(home, ".codex", "config.toml");
   const projectCodexConfig = join(projectRoot, ".codex", "config.toml");
+  const projectOpencodeConfig = join(projectRoot, "opencode.json");
   mkdirSync(claudeSkillsRoot, { recursive: true });
   mkdirSync(codexSkillsRoot, { recursive: true });
   mkdirSync(opencodeSkillsRoot, { recursive: true });
@@ -304,6 +305,7 @@ function createFixtureEnvironment() {
     home,
     projectCodexConfig,
     projectCwd,
+    projectOpencodeConfig,
     projectRoot,
     realOpencodeConfigSnapshot,
     root,
@@ -649,7 +651,7 @@ function runFixtureProjectContextSmoke(env, fixture, status) {
     "codex-project-smoke",
     "project Codex fixture missing after project.setContext -> scanAll",
   );
-  runFixtureOpencodeReadOnlySmoke(projectScan.skills, env);
+  runFixtureOpencodeWritableSmoke(projectScan.skills, env, fixture);
   runFixtureCodexConfigHardeningSmoke(env, fixture, projectScan.skills);
 
   const clearContext = callService("project.clearContext", {}, env);
@@ -689,21 +691,40 @@ function assertFixtureOpencodeGlobalSmoke(skills) {
   note("fixture opencode global smoke passed: native global root visible without project context");
 }
 
-function runFixtureOpencodeReadOnlySmoke(skills, env) {
+function runFixtureOpencodeWritableSmoke(skills, env, fixture) {
   const projectSkill = assertSkillPresent(
     skills,
     "opencode",
     "opencode-project-smoke",
     "project opencode fixture missing after project context scanAll",
   );
-  expectServiceError(
+  if (existsSync(fixture.projectOpencodeConfig)) {
+    fail(`project opencode config should not exist before toggle: ${fixture.projectOpencodeConfig}`);
+  }
+  const toggled = callService(
     "config.toggleSkill",
     { instance_id: projectSkill.id, on: false },
     env,
-    /opencode.*not writable|read-only|unsupported/i,
-    "opencode read-only toggle",
   );
-  note("fixture opencode smoke passed: project root visible and toggle rejected as read-only");
+  if (toggled.agent !== "opencode" || toggled.enabled !== false) {
+    fail("opencode toggle did not return a disabled opencode skill");
+  }
+  const config = JSON.parse(readFileSync(fixture.projectOpencodeConfig, "utf8"));
+  if (config?.permission?.skill?.["opencode-project-smoke"] !== "deny") {
+    fail("opencode project config missing managed permission.skill deny");
+  }
+  const rescanned = callService("catalog.scanAll", {}, env);
+  const disabled = assertSkillPresent(
+    rescanned.skills,
+    "opencode",
+    "opencode-project-smoke",
+    "project opencode fixture missing after writable toggle rescan",
+    { allowDisabled: true },
+  );
+  if (disabled.enabled !== false || disabled.state !== "disabled") {
+    fail("opencode rescan did not preserve disabled permission.skill state");
+  }
+  note("fixture opencode smoke passed: project root visible, toggle wrote permission.skill deny, rescan preserved disabled state");
 }
 
 function runFixtureCodexConfigHardeningSmoke(env, fixture, skills) {
@@ -836,12 +857,12 @@ function assertConfigBlock(content, path, expectedLine, label) {
   }
 }
 
-function assertSkillPresent(skills, agent, name, message) {
+function assertSkillPresent(skills, agent, name, message, options = {}) {
   const skill = findSkill(skills, agent, name);
   if (!skill) {
     fail(message);
   }
-  if (skill.state && skill.state !== "loaded") {
+  if (skill.state && skill.state !== "loaded" && !(options.allowDisabled && skill.state === "disabled")) {
     fail(`${message}; found ${name} with state ${skill.state}`);
   }
   return skill;

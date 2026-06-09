@@ -72,7 +72,7 @@ struct NativeListModelTest {
         )
         assertEqual(
             DisplayText.toggleDisabledReason(for: skills.first { $0.id == "omega" }!, isWriting: false),
-            UIStrings.toggleUnavailableReadOnlyAdapter(UIStrings.opencode),
+            nil,
             "opencode toggle disabled reason"
         )
 

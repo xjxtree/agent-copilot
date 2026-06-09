@@ -6,27 +6,57 @@
       "agent": "claude-code",
       "display_name": "Claude Code",
       "status": "verified",
-      "scan": { "supported": true, "status": "verified" },
-      "project_scan": { "supported": true, "status": "verified" },
-      "config_toggle": { "supported": true, "status": "verified" },
-      "config_snapshot": { "supported": true, "status": "verified" },
-      "install": { "supported": true, "status": "verified" },
-      "writable": { "supported": true, "status": "verified" },
+      "scan": {
+        "supported": true,
+        "status": "verified"
+      },
+      "project_scan": {
+        "supported": true,
+        "status": "verified"
+      },
+      "config_toggle": {
+        "supported": true,
+        "status": "verified"
+      },
+      "config_snapshot": {
+        "supported": true,
+        "status": "verified"
+      },
+      "install": {
+        "supported": true,
+        "status": "verified"
+      },
+      "writable": {
+        "supported": true,
+        "status": "verified"
+      },
       "blockers": []
     },
     {
       "agent": "codex",
       "display_name": "Codex",
       "status": "verified",
-      "scan": { "supported": true, "status": "verified" },
-      "project_scan": { "supported": true, "status": "verified" },
+      "scan": {
+        "supported": true,
+        "status": "verified"
+      },
+      "project_scan": {
+        "supported": true,
+        "status": "verified"
+      },
       "config_toggle": {
         "supported": true,
         "status": "verified-user-config",
         "reason": "Project skill toggles write only the user config.toml override; project-local .codex/config.toml remains blocked."
       },
-      "config_snapshot": { "supported": true, "status": "verified" },
-      "install": { "supported": true, "status": "verified" },
+      "config_snapshot": {
+        "supported": true,
+        "status": "verified"
+      },
+      "install": {
+        "supported": true,
+        "status": "verified"
+      },
       "writable": {
         "supported": true,
         "status": "verified-user-config",
@@ -39,34 +69,36 @@
     {
       "agent": "opencode",
       "display_name": "opencode",
-      "status": "read-only",
-      "scan": { "supported": true, "status": "verified" },
-      "project_scan": { "supported": true, "status": "verified" },
+      "status": "verified",
+      "scan": {
+        "supported": true,
+        "status": "verified"
+      },
+      "project_scan": {
+        "supported": true,
+        "status": "verified"
+      },
       "config_toggle": {
-        "supported": false,
-        "status": "blocked",
-        "reason": "opencode permission.skill patching, re-enable behavior, wildcard precedence, config ownership, and rollback path are not verified."
+        "supported": true,
+        "status": "verified-exact-skill-deny",
+        "reason": "V2.12 writes exact permission.skill.<name> = deny and re-enables by removing that exact deny without changing wildcard rules."
       },
       "config_snapshot": {
-        "supported": false,
-        "status": "blocked",
-        "reason": "No rollback-safe opencode config write path is verified yet."
+        "supported": true,
+        "status": "verified",
+        "reason": "opencode global/project opencode.json writes use snapshot, atomic write, verify, and rollback."
       },
       "install": {
-        "supported": false,
-        "status": "blocked",
-        "reason": "opencode install remains blocked until writable semantics are verified."
+        "supported": true,
+        "status": "verified",
+        "reason": "Tool-global skills can be installed to native opencode user/project skill roots after confirmation."
       },
       "writable": {
-        "supported": false,
-        "status": "blocked",
-        "reason": "opencode is native-root read-only until disposable local evidence proves safe writes."
+        "supported": true,
+        "status": "verified",
+        "reason": "Writable support is limited to native opencode roots and managed exact skill permission overrides."
       },
-      "blockers": [
-        "Verify permission.skill exact patch and re-enable behavior.",
-        "Verify wildcard precedence and managed config ownership.",
-        "Verify rollback-safe config writes before enabling toggle/install."
-      ]
+      "blockers": []
     },
     {
       "agent": "pi",

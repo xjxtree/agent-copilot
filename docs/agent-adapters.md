@@ -2,7 +2,7 @@
 
 > skills-copilot 支持的 6 个 agent 的适配要点。
 >
-> 当前版本线：V2.11 Adapter Capability Matrix 进行中；V2.12 opencode writable、V2.13 Pi、V2.14 Hermes、V2.15 OpenClaw 按证据门推进。
+> 当前版本线：V2.11 Adapter Capability Matrix 和 V2.12 opencode writable 已完成；当前阶段为 V2.13 Pi，随后推进 V2.14 Hermes 和 V2.15 OpenClaw。
 >
 > 扫描适配器实现 `AgentAdapter`。
 >

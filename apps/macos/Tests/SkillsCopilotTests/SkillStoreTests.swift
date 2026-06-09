@@ -17,7 +17,7 @@ struct SkillStoreTests {
         try await toggleSelectedSkillExposesWritingStateAndRefreshesSelection()
         try await writeOperationsIgnoreReentryWhileBusy()
         try await codexToggleAddsRestartRequiredNotice()
-        try await opencodeToggleIsReadOnlyAndDoesNotCallService()
+        try await opencodeToggleCallsServiceAndRefreshesSelection()
         try await toolGlobalToggleIsPreviewOnlyAndDoesNotCallService()
         try await reloadLoadsProjectContext()
         try await setProjectStoresContextAndScans()
@@ -181,7 +181,7 @@ struct SkillStoreTests {
         try expectEqual(countOccurrences("catalog.listFindings", in: fake.calls()), 0, "Scan refresh should not launch a separate findings list sidecar.")
         try expectEqual(countOccurrences("catalog.listConflicts", in: fake.calls()), 0, "Scan refresh should not launch a separate conflicts list sidecar.")
         try expectEqual(countMethodCalls("snapshot.list", in: fake.calls()), 0, "Scan refresh should not launch a global snapshots list sidecar.")
-        try expectEqual(countMethodCalls("snapshot.listAgentConfig", in: fake.calls()), 1, "Scan refresh should refresh the selected agent config history.")
+        try expectFalse(countMethodCalls("snapshot.listAgentConfig", in: fake.calls()) == 0, "Scan refresh should refresh at least one writable agent config history.")
     }
 
     private func searchAndFilterChangesNormalizeSelectionAndDetail() async throws {
@@ -327,7 +327,7 @@ struct SkillStoreTests {
         try expectContains(store.lastMutationMessage, UIStrings.codexRestartRequired, "Codex toggle should mention restart.")
     }
 
-    private func opencodeToggleIsReadOnlyAndDoesNotCallService() async throws {
+    private func opencodeToggleCallsServiceAndRefreshesSelection() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
         fake.activate(scenario: "opencode")
@@ -337,22 +337,22 @@ struct SkillStoreTests {
         store.selectedSkillID = "omega"
         await store.reload()
 
-        let expectedReason = UIStrings.toggleUnavailableReadOnlyAdapter(UIStrings.opencode)
         guard let selectedSkill = store.selectedSkill else {
             throw NativeModelTestFailure(description: "Fixture should select an opencode skill.")
         }
         try expectEqual(store.selectedSkill?.agent, "opencode", "Fixture should select an opencode skill.")
-        try expectEqual(
+        try expectNil(
             DisplayText.toggleDisabledReason(for: selectedSkill, isWriting: false),
-            expectedReason,
-            "opencode toggle should expose a read-only adapter reason."
+            "opencode toggle should be available in V2.12."
         )
 
         await store.toggleSelectedSkill(on: false)
 
-        try expectFalse(store.isWriting, "Read-only opencode toggle should not enter writing state.")
-        try expectEqual(store.errorMessage, expectedReason, "Read-only opencode toggle should surface the disabled reason.")
-        try expectFalse(fake.calls().contains("config.toggleSkill"), "Read-only opencode toggle should not call the write API.")
+        try expectFalse(store.isWriting, "opencode toggle should finish writing state.")
+        try expectNil(store.errorMessage, "opencode toggle should not surface a read-only error.")
+        try expectContains(fake.calls(), "config.toggleSkill", "opencode toggle should call the write API.")
+        try expectEqual(store.selectedSkill?.enabled, false, "opencode toggle refresh should expose the updated enabled state.")
+        try expectEqual(store.selectedSkillDetail?.enabled, false, "opencode toggle refresh should reload detail for the updated skill.")
     }
 
     private func toolGlobalToggleIsPreviewOnlyAndDoesNotCallService() async throws {
@@ -614,6 +614,7 @@ private final class FakeServiceScript {
         skills_toggled='[{"id":"alpha","agent":"claude-code","scope":"agent-global","path":"/tmp/global/alpha/SKILL.md","display_path":"/tmp/global/alpha/SKILL.md","definition_id":"def.alpha","name":"Alpha","state":"loaded","enabled":true},{"id":"beta","agent":"claude-code","scope":"agent-project","path":"/tmp/project/beta/SKILL.md","display_path":"/tmp/project/beta/SKILL.md","definition_id":"def.beta","name":"Beta","state":"loaded","enabled":false},{"id":"gamma","agent":"codex","scope":"agent-global","path":"/tmp/codex/skills/gamma/SKILL.md","display_path":"~/.codex/skills/gamma/SKILL.md","definition_id":"codex:gamma","name":"Gamma","state":"loaded","enabled":true}]'
         skills_codex_toggled='[{"id":"alpha","agent":"claude-code","scope":"agent-global","path":"/tmp/global/alpha/SKILL.md","display_path":"/tmp/global/alpha/SKILL.md","definition_id":"def.alpha","name":"Alpha","state":"loaded","enabled":true},{"id":"beta","agent":"claude-code","scope":"agent-project","path":"/tmp/project/beta/SKILL.md","display_path":"/tmp/project/beta/SKILL.md","definition_id":"def.beta","name":"Beta","state":"loaded","enabled":true},{"id":"gamma","agent":"codex","scope":"agent-global","path":"/tmp/codex/skills/gamma/SKILL.md","display_path":"~/.codex/skills/gamma/SKILL.md","definition_id":"codex:gamma","name":"Gamma","state":"loaded","enabled":false}]'
         skills_opencode='[{"id":"omega","agent":"opencode","scope":"agent-global","path":"/tmp/opencode/skills/omega/SKILL.md","display_path":"~/.config/opencode/skills/omega/SKILL.md","definition_id":"opencode:omega","name":"Omega","state":"loaded","enabled":true}]'
+        skills_opencode_toggled='[{"id":"omega","agent":"opencode","scope":"agent-global","path":"/tmp/opencode/skills/omega/SKILL.md","display_path":"~/.config/opencode/skills/omega/SKILL.md","definition_id":"opencode:omega","name":"Omega","state":"disabled","enabled":false}]'
         skills_toolglobal='[{"id":"tool-alpha","agent":"tool-global","scope":"tool-global","path":"/tmp/skills-copilot/staging/tool-alpha/SKILL.md","display_path":"Tool Pool/tool-alpha/SKILL.md","definition_id":"tool:alpha","name":"Tool Alpha","state":"loaded","enabled":true}]'
         findings_stale_before='[{"id":"finding-stale-before","instance_id":"beta","definition_id":"def.beta","rule_id":"frontmatter.required-fields","severity":"error","message":"before","suggestion":"Add missing metadata.","created_at":1}]'
         findings_stale_after_scan='[{"id":"finding-fresh-scan","instance_id":"beta","definition_id":"def.beta","rule_id":"fingerprint.changed","severity":"info","message":"scan","suggestion":"Review changed content.","created_at":2},{"id":"finding-fresh-codex","instance_id":"gamma","definition_id":"codex:gamma","rule_id":"path.outside-workspace","severity":"error","message":"codex","suggestion":"Move the skill under the project root.","created_at":3}]'
@@ -632,7 +633,11 @@ private final class FakeServiceScript {
             state_skills=$skills_codex_toggled
             state_findings='[]'
           elif [ "$scenario" = "opencode" ]; then
-            state_skills=$skills_opencode
+            if grep -q '"method":"config.toggleSkill"' "$SKILLS_COPILOT_FAKE_SERVICE_CALLS"; then
+              state_skills=$skills_opencode_toggled
+            else
+              state_skills=$skills_opencode
+            fi
             state_findings='[]'
           elif [ "$scenario" = "tool-global" ]; then
             state_skills=$skills_toolglobal
@@ -667,6 +672,7 @@ private final class FakeServiceScript {
         detail_gamma_scan='{"id":"gamma","agent":"codex","scope":"agent-global","path":"/tmp/codex/skills/gamma/SKILL.md","display_path":"~/.codex/skills/gamma/SKILL.md","definition_id":"codex:gamma","name":"Gamma","description":"Gamma skill","state":"loaded","enabled":true,"frontmatter_raw":"name: Gamma","body":"Gamma body","permissions":{"marker":"codex-scan"},"fingerprint":"fp-gamma-scan"}'
         detail_gamma_project='{"id":"gamma","agent":"codex","scope":"agent-global","path":"/tmp/codex/skills/gamma/SKILL.md","display_path":"~/.codex/skills/gamma/SKILL.md","definition_id":"codex:gamma","name":"Gamma","description":"Gamma skill","state":"loaded","enabled":true,"frontmatter_raw":"name: Gamma","body":"Gamma body","permissions":{"marker":"project"},"fingerprint":"fp-gamma-project"}'
         detail_omega='{"id":"omega","agent":"opencode","scope":"agent-global","path":"/tmp/opencode/skills/omega/SKILL.md","display_path":"~/.config/opencode/skills/omega/SKILL.md","definition_id":"opencode:omega","name":"Omega","description":"Omega skill","state":"loaded","enabled":true,"frontmatter_raw":"name: Omega","body":"Omega body","permissions":{},"fingerprint":"fp-omega"}'
+        detail_omega_disabled='{"id":"omega","agent":"opencode","scope":"agent-global","path":"/tmp/opencode/skills/omega/SKILL.md","display_path":"~/.config/opencode/skills/omega/SKILL.md","definition_id":"opencode:omega","name":"Omega","description":"Omega skill","state":"disabled","enabled":false,"frontmatter_raw":"name: Omega","body":"Omega body","permissions":{},"fingerprint":"fp-omega"}'
         detail_toolglobal='{"id":"tool-alpha","agent":"tool-global","scope":"tool-global","path":"/tmp/skills-copilot/staging/tool-alpha/SKILL.md","display_path":"Tool Pool/tool-alpha/SKILL.md","definition_id":"tool:alpha","name":"Tool Alpha","description":"Tool-global staged skill","state":"loaded","enabled":true,"frontmatter_raw":"name: Tool Alpha","body":"Tool Alpha body","permissions":{},"fingerprint":"fp-tool-alpha"}'
 
         case "$input" in
@@ -717,7 +723,11 @@ private final class FakeServiceScript {
             elif [ "$scenario" = "toggle-codex-disabled" ]; then
               respond '{"id":"test","ok":true,"result":'"$skills_codex_toggled"'}'
             elif [ "$scenario" = "opencode" ]; then
-              respond '{"id":"test","ok":true,"result":'"$skills_opencode"'}'
+              if grep -q '"method":"config.toggleSkill"' "$SKILLS_COPILOT_FAKE_SERVICE_CALLS"; then
+                respond '{"id":"test","ok":true,"result":'"$skills_opencode_toggled"'}'
+              else
+                respond '{"id":"test","ok":true,"result":'"$skills_opencode"'}'
+              fi
             elif [ "$scenario" = "tool-global" ]; then
               respond '{"id":"test","ok":true,"result":'"$skills_toolglobal"'}'
             else
@@ -788,7 +798,11 @@ private final class FakeServiceScript {
                 fi
                 ;;
               *\\"instance_id\\":\\"omega\\"*)
-                respond '{"id":"test","ok":true,"result":'"$detail_omega"'}'
+                if grep -q '"method":"config.toggleSkill"' "$SKILLS_COPILOT_FAKE_SERVICE_CALLS"; then
+                  respond '{"id":"test","ok":true,"result":'"$detail_omega_disabled"'}'
+                else
+                  respond '{"id":"test","ok":true,"result":'"$detail_omega"'}'
+                fi
                 ;;
               *\\"instance_id\\":\\"tool-alpha\\"*)
                 respond '{"id":"test","ok":true,"result":'"$detail_toolglobal"'}'
@@ -821,6 +835,8 @@ private final class FakeServiceScript {
               respond '{"id":"test","ok":true,"result":'"$detail_beta_disabled"'}'
             elif [ "$scenario" = "toggle-codex-disabled" ]; then
               respond '{"id":"test","ok":true,"result":'"$detail_gamma_disabled"'}'
+            elif [ "$scenario" = "opencode" ]; then
+              respond '{"id":"test","ok":true,"result":'"$detail_omega_disabled"'}'
             else
               respond '{"id":"test","ok":true,"result":'"$detail_beta_disabled"'}'
             fi

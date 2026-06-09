@@ -156,7 +156,7 @@ enum DisplayText {
     }
 
     static func isReadOnlyAdapter(_ agent: String) -> Bool {
-        !["claude-code", "codex"].contains(agent)
+        !["claude-code", "codex", "opencode"].contains(agent)
     }
 
     static func isToolGlobal(_ skill: SkillRecord) -> Bool {

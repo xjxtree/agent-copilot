@@ -1,8 +1,8 @@
 # skills-copilot Service Protocol
 
-> Status: V2.11 Adapter Capability Matrix is in progress.
+> Status: V2.12 opencode writable evidence and guarded implementation is complete; V2.13 Pi adapter support is next.
 >
-> Integrated: V2.9 Tool-global import/export/install, V2.10 skill execution safety boundary, and 2026-06-09 real local Computer Use validation for the current mainline app. V2.11 adds adapter capability status to the service protocol and macOS UI.
+> Integrated: V2.9 Tool-global import/export/install, V2.10 skill execution safety boundary, and 2026-06-09 real local Computer Use validation for the current mainline app. V2.11 added adapter capability status to the service protocol and macOS UI. V2.12 marks opencode writable for native roots after exact permission.skill deny/re-enable, snapshot/rollback, install, and fixture smoke validation pass.
 >
 > Product boundary: this protocol is the only supported boundary for the macOS native shell. Historical Tauri commands remain only in MVP documentation and git history.
 >

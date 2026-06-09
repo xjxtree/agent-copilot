@@ -367,30 +367,26 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
         AdapterCapabilityRecord {
             agent: AgentId::Opencode.as_str(),
             display_name: "opencode",
-            status: "read-only",
+            status: "verified",
             scan: AdapterFeatureCapability::supported("verified"),
             project_scan: AdapterFeatureCapability::supported("verified"),
-            config_toggle: AdapterFeatureCapability::blocked(
-                "blocked",
-                "opencode permission.skill patching, re-enable behavior, wildcard precedence, config ownership, and rollback path are not verified.",
+            config_toggle: AdapterFeatureCapability::supported_with_reason(
+                "verified-exact-skill-deny",
+                "V2.12 writes exact permission.skill.<name> = deny and re-enables by removing that exact deny without changing wildcard rules.",
             ),
-            config_snapshot: AdapterFeatureCapability::blocked(
-                "blocked",
-                "No rollback-safe opencode config write path is verified yet.",
+            config_snapshot: AdapterFeatureCapability::supported_with_reason(
+                "verified",
+                "opencode global/project opencode.json writes use the same snapshot, atomic write, verify, and rollback path as other writable adapters.",
             ),
-            install: AdapterFeatureCapability::blocked(
-                "blocked",
-                "opencode install remains blocked until writable semantics are verified.",
+            install: AdapterFeatureCapability::supported_with_reason(
+                "verified",
+                "Tool-global skills can be installed to native opencode user/project skill roots after confirmation.",
             ),
-            writable: AdapterFeatureCapability::blocked(
-                "blocked",
-                "opencode is native-root read-only until disposable local evidence proves safe writes.",
+            writable: AdapterFeatureCapability::supported_with_reason(
+                "verified",
+                "Writable support is limited to native opencode roots and managed exact skill permission overrides.",
             ),
-            blockers: vec![
-                "Verify permission.skill exact patch and re-enable behavior.",
-                "Verify wildcard precedence and managed config ownership.",
-                "Verify rollback-safe config writes before enabling toggle/install.",
-            ],
+            blockers: Vec::new(),
         },
         AdapterCapabilityRecord {
             agent: AgentId::Pi.as_str(),
@@ -1728,12 +1724,10 @@ fn preview_skill_install_from_tool_global(
     project_path: Option<&Path>,
     confirmed: bool,
 ) -> Result<SkillInstallPreviewRecord, CommandError> {
-    if target_agent == AgentId::Opencode {
-        return Err(CommandError::InstallUnsupported(
-            "opencode skills are read-only; install is not supported".to_string(),
-        ));
-    }
-    if !matches!(target_agent, AgentId::ClaudeCode | AgentId::Codex) {
+    if !matches!(
+        target_agent,
+        AgentId::ClaudeCode | AgentId::Codex | AgentId::Opencode
+    ) {
         return Err(CommandError::InstallUnsupported(format!(
             "{} skills are not writable by install commands",
             target_agent.as_str()
@@ -2653,9 +2647,16 @@ fn config_target_for_instance(
             Scope::ToolGlobal => Err(CommandError::UnsupportedScope(meta.scope)),
             _ => Err(CommandError::UnsupportedScope(meta.scope)),
         },
-        AgentId::Opencode => Err(CommandError::UnsafeConfigPath(
-            "opencode skills are read-only; config.toggleSkill is not supported".to_string(),
-        )),
+        AgentId::Opencode => match meta.scope {
+            Scope::AgentGlobal | Scope::AgentProject => Ok(ConfigTarget {
+                agent: AgentId::Opencode,
+                scope: meta.scope,
+                path: opencode_config_path(ctx, meta.scope)?,
+                format: ConfigFormat::Json,
+            }),
+            Scope::ToolGlobal => Err(CommandError::UnsupportedScope(meta.scope)),
+            _ => Err(CommandError::UnsupportedScope(meta.scope)),
+        },
         agent => Err(CommandError::UnsafeConfigPath(format!(
             "{} skills are not writable by config.toggleSkill",
             agent.as_str()
@@ -2735,9 +2736,12 @@ fn skill_install_root(
         (AgentId::Codex, Scope::AgentProject) => {
             Ok(target_project_root(ctx, project_path)?.join(".agents/skills"))
         }
-        (AgentId::Opencode, _) => Err(CommandError::InstallUnsupported(
-            "opencode skills are read-only; install is not supported".to_string(),
-        )),
+        (AgentId::Opencode, Scope::AgentGlobal) => {
+            Ok(ctx.user_home.join(".config/opencode/skills"))
+        }
+        (AgentId::Opencode, Scope::AgentProject) => {
+            Ok(target_project_root(ctx, project_path)?.join(".opencode/skills"))
+        }
         (_, Scope::ToolGlobal) => Err(CommandError::UnsupportedScope(scope)),
         (agent, _) => Err(CommandError::InstallUnsupported(format!(
             "{} skills are not writable by install commands",
@@ -2853,6 +2857,19 @@ fn codex_user_config_path_for(ctx: &AdapterContext, codex_home: Option<&Path>) -
     ctx.user_home.join(".codex/config.toml")
 }
 
+fn opencode_config_path(ctx: &AdapterContext, scope: Scope) -> Result<PathBuf, CommandError> {
+    match scope {
+        Scope::AgentGlobal => Ok(ctx.user_home.join(".config/opencode/opencode.json")),
+        Scope::AgentProject => ctx
+            .project_root
+            .as_ref()
+            .map(|root| root.join("opencode.json"))
+            .ok_or(CommandError::UnsupportedScope(scope)),
+        Scope::ToolGlobal => Err(CommandError::UnsupportedScope(scope)),
+        _ => Err(CommandError::UnsupportedScope(scope)),
+    }
+}
+
 fn should_honor_codex_home(ctx: &AdapterContext, codex_home: &Path) -> bool {
     codex_home.is_absolute()
         && normalize_path_lexically(codex_home)
@@ -2906,6 +2923,9 @@ fn patch_enabled_for_agent(
             .patch_enabled(doc, instance, on)
             .map_err(|err| CommandError::Adapter(err.message)),
         AgentId::Codex => CodexAdapter
+            .patch_enabled(doc, instance, on)
+            .map_err(|err| CommandError::Adapter(err.message)),
+        AgentId::Opencode => OpencodeAdapter
             .patch_enabled(doc, instance, on)
             .map_err(|err| CommandError::Adapter(err.message)),
         agent => Err(CommandError::UnsafeConfigPath(format!(
@@ -3033,6 +3053,46 @@ fn preview_context_from_snapshot(
                 extra_roots: vec![],
             })
         }
+        (AgentId::Opencode, Scope::AgentGlobal) => {
+            if target.file_name().and_then(|name| name.to_str()) != Some("opencode.json")
+                || parent.file_name().and_then(|name| name.to_str()) != Some("opencode")
+            {
+                return Err(CommandError::UnsafeConfigPath(format!(
+                    "snapshot target {} is not an opencode global config path",
+                    target.display()
+                )));
+            }
+            let user_home = parent
+                .parent()
+                .and_then(Path::parent)
+                .ok_or_else(|| {
+                    CommandError::UnsafeConfigPath(
+                        "opencode global config target has no user home".to_string(),
+                    )
+                })?
+                .to_path_buf();
+            Ok(AdapterContext {
+                user_home,
+                project_root: None,
+                project_cwd: None,
+                extra_roots: vec![],
+            })
+        }
+        (AgentId::Opencode, Scope::AgentProject) => {
+            if target.file_name().and_then(|name| name.to_str()) != Some("opencode.json") {
+                return Err(CommandError::UnsafeConfigPath(format!(
+                    "snapshot target {} is not an opencode project config path",
+                    target.display()
+                )));
+            }
+            let project_root = parent.to_path_buf();
+            Ok(AdapterContext {
+                user_home: project_root.clone(),
+                project_root: Some(project_root),
+                project_cwd: None,
+                extra_roots: vec![],
+            })
+        }
         _ => Err(CommandError::UnsafeConfigPath(format!(
             "snapshot agent {} scope {} is not previewable",
             snapshot.agent, snapshot.scope
@@ -3056,6 +3116,7 @@ fn agent_from_snapshot(agent: &str) -> Result<AgentId, CommandError> {
     match agent {
         "claude-code" => Ok(AgentId::ClaudeCode),
         "codex" => Ok(AgentId::Codex),
+        "opencode" => Ok(AgentId::Opencode),
         other => Err(CommandError::UnsafeConfigPath(format!(
             "snapshot agent {other} is not writable by config rollback commands"
         ))),
@@ -3083,6 +3144,12 @@ fn expected_config_target(
                 format: ConfigFormat::Toml,
             })
         }
+        AgentId::Opencode => Ok(ConfigTarget {
+            agent,
+            scope,
+            path: opencode_config_path(ctx, scope)?,
+            format: ConfigFormat::Json,
+        }),
         agent => Err(CommandError::UnsafeConfigPath(format!(
             "{} config writes are not supported",
             agent.as_str()
@@ -3109,7 +3176,7 @@ fn validate_config_write_target(
     let allowed_root = match scope {
         Scope::AgentGlobal if agent == AgentId::Codex => &ctx.user_home,
         Scope::AgentGlobal => &ctx.user_home,
-        Scope::AgentProject if agent == AgentId::ClaudeCode => ctx
+        Scope::AgentProject if matches!(agent, AgentId::ClaudeCode | AgentId::Opencode) => ctx
             .project_root
             .as_ref()
             .ok_or(CommandError::UnsupportedScope(scope))?,
@@ -4340,13 +4407,13 @@ mod tests {
     }
 
     #[test]
-    fn toggle_opencode_skill_is_rejected_as_read_only() {
+    fn toggle_opencode_skill_writes_permission_skill_deny_and_reenables() {
         let temp_root = std::env::temp_dir().join(format!(
             "skills-copilot-opencode-toggle-{}",
             std::process::id()
         ));
         let home = temp_root.join("home");
-        write_opencode_global_skill(&home, "read-only-skill");
+        write_opencode_global_skill(&home, "writable-skill");
 
         let catalog = Catalog::in_memory().expect("catalog opens");
         catalog.init().expect("catalog initializes");
@@ -4361,25 +4428,36 @@ mod tests {
             .list_skill_records()
             .expect("records")
             .into_iter()
-            .find(|record| record.agent == "opencode" && record.name == "read-only-skill")
+            .find(|record| record.agent == "opencode" && record.name == "writable-skill")
             .expect("opencode record");
 
-        let err = toggle_skill(&catalog, &ctx, &opencode_record.id, false)
-            .expect_err("opencode toggle must remain unsupported");
+        let disabled = toggle_skill(&catalog, &ctx, &opencode_record.id, false)
+            .expect("opencode disable succeeds");
 
-        assert!(
-            err.to_string().contains("opencode skills are read-only")
-                && err
-                    .to_string()
-                    .contains("config.toggleSkill is not supported"),
-            "unexpected opencode toggle error: {err}"
-        );
-        assert!(
-            !ctx.user_home
-                .join(".config/opencode/opencode.json")
-                .exists(),
-            "read-only rejection must not create an opencode config"
-        );
+        let config_path = ctx.user_home.join(".config/opencode/opencode.json");
+        let config: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&config_path).expect("opencode config"))
+                .expect("config json");
+        assert_eq!(config["permission"]["skill"]["writable-skill"], "deny");
+        assert!(!disabled.enabled);
+        assert_eq!(disabled.state, "disabled");
+
+        let snapshots = catalog
+            .list_config_snapshots("opencode", &config_path.to_string_lossy())
+            .expect("snapshots");
+        assert_eq!(snapshots.len(), 1);
+        assert_eq!(snapshots[0].scope, "agent-global");
+
+        let enabled = toggle_skill(&catalog, &ctx, &opencode_record.id, true)
+            .expect("opencode enable succeeds");
+        let config: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&config_path).expect("opencode config"))
+                .expect("config json");
+        assert!(config["permission"]["skill"]
+            .get("writable-skill")
+            .is_none());
+        assert!(enabled.enabled);
+        assert_eq!(enabled.state, "loaded");
 
         let _ = std::fs::remove_dir_all(&temp_root);
     }
@@ -5614,7 +5692,7 @@ mod tests {
     }
 
     #[test]
-    fn install_to_opencode_is_rejected_as_read_only() {
+    fn install_to_opencode_writes_native_user_skill_root() {
         let temp_root = std::env::temp_dir().join(format!(
             "skills-copilot-install-opencode-{}",
             std::process::id()
@@ -5638,22 +5716,26 @@ mod tests {
             extra_roots: vec![],
         };
 
-        let err = install_skill_from_tool_global(
+        let result = install_skill_from_tool_global(
             &catalog,
             &ctx,
             "tool-global-gamma",
             AgentId::Opencode,
             Scope::AgentGlobal,
             None,
-            false,
+            true,
         )
-        .expect_err("opencode install must be unsupported");
+        .expect("opencode install succeeds");
 
-        assert!(err.to_string().contains("opencode skills are read-only"));
-        assert!(
-            !home.join(".config/opencode").exists(),
-            "opencode rejection must not create writable roots"
-        );
+        let target = home.join(".config/opencode/skills/portable-gamma/SKILL.md");
+        assert!(result.wrote);
+        assert_eq!(result.target_path, target.to_string_lossy());
+        assert!(target.exists());
+        assert!(catalog
+            .list_skill_records()
+            .expect("records")
+            .iter()
+            .any(|record| record.agent == "opencode" && record.name == "portable-gamma"));
 
         let _ = std::fs::remove_dir_all(&temp_root);
     }

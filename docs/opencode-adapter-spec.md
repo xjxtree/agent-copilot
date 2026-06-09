@@ -1,6 +1,6 @@
 # opencode Adapter Evidence Spec
 
-> Evidence date: 2026-06-08. V2.4 decision: implement opencode as the third adapter in **read-only** mode only. Writable config mutation remains blocked.
+> Evidence date: 2026-06-09. V2.12 decision: opencode is upgraded from native-root read-only to **verified writable** for guarded app-managed writes. Writes are limited to exact-name `permission.skill` patches in verified `opencode.json` targets and tool-global installs into verified native opencode skill roots.
 
 ## Status
 
@@ -11,7 +11,16 @@ Read-only scanner/parser implementation is approved for first-class opencode-nat
 
 V2.4 must not scan opencode compatibility roots (`.agents/skills`, `~/.agents/skills`, `.claude/skills`, or `~/.claude/skills`) under the opencode adapter. Those roots are intentionally deferred so opencode does not duplicate Codex/Claude catalog entries.
 
-Writable toggle support is still blocked until we verify exact merge/precedence behavior on a disposable `OPENCODE_CONFIG_DIR` / fixture project, including re-enable rollback. The UI/service should treat opencode rows as read-only and surface the normal read-only adapter toggle-disabled reason.
+Writable toggle support is enabled for app-managed strict JSON config files:
+
+- Global skills patch `$HOME/.config/opencode/opencode.json`.
+- Project skills patch the active project root `opencode.json`.
+- Disable writes an exact skill-name rule under `permission.skill["<name>"] = "deny"`.
+- Re-enable removes only an exact `"deny"` entry for that skill name; exact `"ask"` and `"allow"` entries are preserved.
+- Every config toggle uses the existing snapshot, lock, atomic write, read-back verification, and rollback path.
+- Tool-global install copies only the source `SKILL.md` into `$HOME/.config/opencode/skills/<name>/SKILL.md` or `<project>/.opencode/skills/<name>/SKILL.md`.
+
+Remaining boundaries: JSONC/commented configs are not mutated by the app's strict JSON writer; managed config and `OPENCODE_CONFIG_CONTENT` can still override local files at opencode runtime; compatibility roots and custom `skills.paths` / `skills.urls` remain out of scope.
 
 Local validation on 2026-06-08:
 
@@ -22,6 +31,7 @@ Local validation on 2026-06-08:
 - No local opencode config content was inspected or modified.
 - Disposable read-only check: with temporary `HOME`, `XDG_CONFIG_HOME`, `OPENCODE_CONFIG_DIR`, and a temporary Git project, `opencode debug skill --pure` returned the synthetic `global-review`, `project-release`, and `nested-local` fixtures plus the built-in `customize-opencode` skill. No real config was read or modified. This confirms native global/project skill discovery and upward nested project discovery, but it does not verify writable permission mutation.
 - Disposable malformed check: the same command surfaced `name-mismatch` as `different-name` and surfaced a missing-description skill without a description; a missing-name skill was omitted. V2.4 should still use this app's stricter parser contract below so malformed rows become broken records rather than silently changing identity or disappearing.
+- Disposable writable check on 2026-06-09: `opencode debug skill --pure` continued listing synthetic skills even when temporary `OPENCODE_CONFIG_DIR/opencode.json` or project `opencode.json` set `permission.skill["<name>"] = "deny"`. Treat that command as discovery evidence only, not as proof of permission filtering. V2.12 therefore relies on official permission semantics for hide/reject behavior and verifies the app-owned write/snapshot/rollback/read-back path with fixture tests.
 
 Disposable command shape used:
 
@@ -129,12 +139,17 @@ Read-only state: **approved for V2.4 implementation**. The scanner can model ope
 
 Compatibility root state: **deferred**. Do not include `.claude/skills` or `.agents/skills` under the opencode adapter in V2.4. Claude/Codex ownership and duplicate suppression need a separate product decision.
 
-Writable state: **blocked**. A future writable adapter must first verify:
+Writable state: **verified for V2.12 guarded implementation**:
 
-- Whether writing `permission.skill["<exact-name>"] = "deny"` is the preferred per-skill disable operation.
-- Whether re-enable should delete the exact permission entry or set it to `"allow"`.
-- How global and project `permission.skill` maps merge when both contain matching wildcard and exact-name rules.
-- Whether product toggles should write only global config for global skills and only project config for project skills.
+- Disable writes `permission.skill["<exact-name>"] = "deny"` based on official opencode permission semantics.
+- Re-enable deletes only an exact `"deny"` entry and falls back to inherited/default behavior rather than forcing `"allow"`.
+- Global skills write only global config; project skills write only the active project root config.
+- App tests verify snapshot creation, atomic write/read-back, rollback, project-context guards, and tool-global install roots without touching real user HOME.
+
+Still deferred:
+
+- JSONC/commented config mutation; strict JSON is required for app-managed writes.
+- Runtime proof that `opencode debug skill --pure` reflects permission filtering; it currently appears to be discovery-only.
 - How to surface `"ask"` in UI; it is neither fully enabled nor disabled.
 - Whether compatible `.claude/skills` and `.agents/skills` roots should ever be exposed under the opencode adapter or left to their native adapters to avoid duplicate catalog entries.
 - Whether custom `skills.paths` / `skills.urls` should be scanned, and what trust/provenance labels they require.
