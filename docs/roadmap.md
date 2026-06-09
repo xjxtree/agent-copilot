@@ -183,7 +183,7 @@
 
 ## 2.5 macOS Native Productization — "功能对齐 + 删除旧 UI"（已完成）
 
-**目标**：在短期半年只考虑 macOS 桌面版的前提下，把当前验证壳里的产品能力迁移到 SwiftUI/AppKit 原生体验，完成 parity 后删除旧 Web UI 层，同时保留 Rust 核心与 service protocol，为后续 Windows/Linux shell 做准备。
+**目标**：在短期半年只考虑 macOS 桌面版的前提下，把当前验证壳里的产品能力迁移到 SwiftUI/AppKit 原生体验，完成 parity 后删除旧 Web UI 层，同时保留 Rust 核心与 service protocol 边界。
 
 **技术路线**
 - 核心：继续使用 Rust workspace crates，不重写 scanner/catalog/adapters/rules/snapshot/config write。
@@ -209,7 +209,7 @@
 
 - 不重写 Rust core。
 - 不重新引入 Web/Tauri 验证壳。
-- 不提前实现 Windows/Linux shell。
+- 不规划 Windows/Linux shell 或全平台 UI 适配。
 - 不为了 Liquid Glass 牺牲信息密度、对比度、键盘可达性、可访问性或旧 macOS fallback。
 - 不引入 cloud sync、telemetry 或默认联网。
 
@@ -252,7 +252,7 @@
 
 ## 4. V2 — "全 agent + 生态"
 
-**当前 V2 状态（2026-06-09）**：Codex adapter 首个实现切片、V2.1 Claude/Codex adapter experience、V2.2 project context、V2.3 adapter hardening、V2.4 opencode read-only adapter、V2.5 audit hardening、V2.6 manual readiness docs、V2.7 LLM local assist gate、V2.8 rules/permissions governance implementation、V2.9 Tool-global skill pool 和 V2.10 skill execution safety docs/release consistency 已通过多工作树并行推进并完成 closeout，且当前 mainline app 的真实本机 Computer Use 操作验证已在 2026-06-09 通过。当前近期主线调整为 **Comprehensive Agent Adapter Support**：优先补齐 Pi disposable local round-trip、opencode writable evidence/implementation、Hermes maintainer-confirmed spec、OpenClaw maintainer-confirmed spec，并在证据充分时推进 macOS app 内的支持。未来 Computer Use 重跑、真实 sandbox runner、GitHub clone import、script-file install 仍按跨版本 backlog 管理，不再误判为 V2.1-V2.10 未完成。可执行任务清单见 [`development-tasks.md`](./development-tasks.md)。V2.10 已完成安全边界文档同步：default-deny，不真实执行；逐次人工确认；cwd/env/network/files preview；blocked/cancelled/failure attempt audit；LLM 不可触发执行。真实 sandbox runner 和 successful execution output log 仍 deferred。V2.8 已完成 LLM status protocol compatibility、permissions roundtrip for V2.8 rules、explicit severity ordering、findings filtering/grouping UI、`app.stateSnapshot` refresh optimization，以及七条新本地规则：`frontmatter.tools-not-empty`、`permissions.network-declared`、`permissions.exec-needs-human`、`name.canonical-case`、`script.no-shebang`、`body.too-long`、`dependency.unknown`。Codex adapter core、commands/service、cwd→repo-root project discovery、macOS UI scan-all、agent filter、restart note、project context、config patch hardening、状态表达、安全回归、opencode native-root read-only 扫描、scanner/config/snapshot/service/UI/docs audit hardening、adapter changelog tracking、默认关闭的 LLM service/UI gate 和 request prepare/estimate 均已落地。opencode 范围限制为 `~/.config/opencode/skills` 和项目 `.opencode/skills`；不扫描 `.agents` / `.claude` compatibility roots；writable toggle/install 现已提升为近期证据与实现优先项，但在证据闭环前仍保持只读。
+**当前 V2 状态（2026-06-09）**：Codex adapter 首个实现切片、V2.1 Claude/Codex adapter experience、V2.2 project context、V2.3 adapter hardening、V2.4 opencode read-only adapter、V2.5 audit hardening、V2.6 manual readiness docs、V2.7 LLM local assist gate、V2.8 rules/permissions governance implementation、V2.9 Tool-global skill pool 和 V2.10 skill execution safety docs/release consistency 已通过多工作树并行推进并完成 closeout，且当前 mainline app 的真实本机 Computer Use 操作验证已在 2026-06-09 通过。当前近期主线调整为 **Comprehensive Agent Adapter Support**：优先补齐 Pi disposable local round-trip、opencode writable evidence/implementation、Hermes maintainer-confirmed spec、OpenClaw maintainer-confirmed spec，并在证据充分时推进 macOS app 内的支持。产品重心保持在 skills 的管理、检查、分析和配置审计；真实 sandbox runner、GitHub clone import、script-file install 已从活动 backlog 删除。可执行任务清单见 [`development-tasks.md`](./development-tasks.md)。V2.10 已完成安全边界文档同步：default-deny，不真实执行；blocked/cancelled/failure attempt audit；LLM 不可触发执行。当前产品方向不规划 successful execution output log。V2.8 已完成 LLM status protocol compatibility、permissions roundtrip for V2.8 rules、explicit severity ordering、findings filtering/grouping UI、`app.stateSnapshot` refresh optimization，以及七条新本地规则：`frontmatter.tools-not-empty`、`permissions.network-declared`、`permissions.exec-needs-human`、`name.canonical-case`、`script.no-shebang`、`body.too-long`、`dependency.unknown`。Codex adapter core、commands/service、cwd→repo-root project discovery、macOS UI scan-all、agent filter、restart note、project context、config patch hardening、状态表达、安全回归、opencode native-root read-only 扫描、scanner/config/snapshot/service/UI/docs audit hardening、adapter changelog tracking、默认关闭的 LLM service/UI gate 和 request prepare/estimate 均已落地。opencode 范围限制为 `~/.config/opencode/skills` 和项目 `.opencode/skills`；不扫描 `.agents` / `.claude` compatibility roots；writable toggle/install 现已提升为近期证据与实现优先项，但在证据闭环前仍保持只读。
 
 **V2 剩余开发判定**
 - 近期主线：Comprehensive Agent Adapter Support，优先补齐 Pi、opencode writable、Hermes、OpenClaw。
@@ -539,13 +539,13 @@
 - `git diff --check`
 - The current mainline app later passed real local Computer Use validation on 2026-06-09; future candidates still need a fresh real local pass.
 
-**Release / V2.10 closeout**：V2.9 Tool-global skill 池与导入导出已集成；V2.10 已把 Skill execution safety 边界同步到 roadmap / README / AGENTS / security model / service protocol / data model / macOS runbook / release checklist。2026-06-09 真实本机 Computer Use pass 已验证当前 mainline app：`pnpm check:macos` 通过，真实本机 app window 可解析，实际操作覆盖 scan-all、findings severity filter、conflicts、snapshot preview、Codex/opencode agent filter、project context set/clear、opencode read-only、LLM disabled controls 和 script safety preview；窗口级证据为 `docs/ui-artifacts/native-macos-shell/real-local-computer-use-2026-06-09.png`。后续继续推进 release gate、真实 sandbox runner 设计、Pi disposable local round-trip、opencode writable evidence、Hermes / OpenClaw maintainer spec，并在未来候选变更后重跑真实本机验证。
+**Release / V2.10 closeout**：V2.9 Tool-global skill 池与导入导出已集成；V2.10 已把 Skill execution safety 边界同步到 roadmap / README / AGENTS / security model / service protocol / data model / macOS runbook / release checklist。2026-06-09 真实本机 Computer Use pass 已验证当前 mainline app：`pnpm check:macos` 通过，真实本机 app window 可解析，实际操作覆盖 scan-all、findings severity filter、conflicts、snapshot preview、Codex/opencode agent filter、project context set/clear、opencode read-only、LLM disabled controls 和 script safety preview；窗口级证据为 `docs/ui-artifacts/native-macos-shell/real-local-computer-use-2026-06-09.png`。后续继续推进 Pi disposable local round-trip、opencode writable evidence、Hermes / OpenClaw read-only scanner，并在未来候选变更后重跑真实本机验证。
 
 ### 4.9 Tool-global skill 池与导入导出
 
 **目标**：把 `Scope::ToolGlobal` 从数据模型保留位推进为产品能力，用于本地导入、共享池和跨 agent 复用，但不绕过各 agent 的真实配置语义。
 
-**状态（2026-06-09）**：complete / automated validation passed。已完成 tool-global catalog/staging 基座、本地目录 import + audit、可复现 export bundle/manifest、manifest reimport 稳定性、Claude/Codex verified install flow、native macOS read-only preview/confirmation UI 和 service protocol fixtures；主线 `pnpm check:macos` 已通过。GitHub clone import、opencode writable install 和 script file install 仍不进入 V2.9。
+**状态（2026-06-09）**：complete / automated validation passed。已完成 tool-global catalog/staging 基座、本地目录 import + audit、可复现 export bundle/manifest、manifest reimport 稳定性、Claude/Codex verified install flow、native macOS read-only preview/confirmation UI 和 service protocol fixtures；主线 `pnpm check:macos` 已通过。GitHub clone import 和 script file install 已从活动 backlog 删除；opencode writable install 转入 adapter 主线。
 
 **范围**
 - Skill 导入：从本地目录或 GitHub repo 导入到 tool-global staging area，并运行规则审计。
@@ -568,7 +568,7 @@
 **范围**
 - 定义默认不执行的边界，以及未来执行前必须逐次确认的规则。
 - 定义 cwd/env/network/files preview、命令/interpreter preview、风险提示和 secret redaction 要求。
-- 定义 blocked/cancelled/failure attempt audit record；真实 sandbox runner 存在前不得写 successful execution output log。
+- 定义 blocked/cancelled/failure attempt audit record；当前产品方向不规划 successful execution output log。
 - 与 LLM 严格隔离：LLM 不得触发执行、不得代替用户确认、只能生成展示/复制用建议。
 
 **退出条件**
@@ -576,7 +576,7 @@
 - [x] 未来执行必须用户逐次确认，并显示 cwd/env/network/files 范围。
 - [x] security model 记录 default-deny、preview、audit、LLM separation 和 public release deferral。
 - [x] blocked/cancelled/failure attempts 有审计记录 contract；真实 runner 未实现前不得产生 `completed` execution record。
-- [ ] 真实 sandbox runner、interpreter allowlist、stdout/stderr policy 和 OS-level resource limits 完成实现与验证。
+- [x] 真实 sandbox runner 不进入当前产品规划；V2.10 只保留 default-deny 安全边界和审计一致性。
 
 ### 4.11 V2.11 Adapter Capability Matrix
 
@@ -654,20 +654,96 @@
 - [x] OpenClaw install/toggle/writable 保持 blocked。
 - [x] `pnpm check:macos` 通过；真实交互 Computer Use 因当前会话锁屏按本轮要求跳过。
 
-### 4.16 未来桌面壳与本地共享
+### 4.16 V2.16 OpenClaw read-only scanner
 
-**目标**：在 macOS 原生壳稳定后，评估 Windows/Linux shell 和本地团队共享 catalog，但继续坚持无云账号、无 telemetry、无默认联网。
+**目标**：把 OpenClaw 已确认的 skill roots 纳入 catalog，只做管理和分析，不做执行、CLI 调用、install 或 writable toggle。
 
 **范围**
-- Windows/Linux shell 只接 service protocol，不直接引用 Rust internals 或 macOS UI code。
-- Local sharing 仅限用户显式启用的本地网络/文件共享，不引入云同步。
-- 定义多机 catalog merge、冲突、安全边界和隐私提示。
-- 菜单栏常驻、后台 watcher/event stream 作为单独生命周期设计，不默认常驻。
+- 扫描 documented `SKILL.md` directories。
+- Global/shared roots 包括 `~/.openclaw/skills`、`~/.agents/skills`、bundled skills 和配置化 extra dirs。
+- Project-like scope 只限 confirmed OpenClaw workspace roots：`<workspace>/skills` 和 `<workspace>/.agents/skills`。
+- 不推断任意 repo root，不发明 `.openclaw/skills` project root。
+- 不调用 OpenClaw CLI，不触发 cloud/security scan/plugin install/gateway restart。
 
 **退出条件**
-- [ ] 至少一个非 macOS shell 原型能读取 service fixtures。
-- [ ] Local sharing 有明确 threat model 和 opt-in UX。
-- [ ] 后台 watcher/menu bar 设计包含权限、资源预算和退出策略。
+- [ ] OpenClaw read-only fixtures 覆盖 documented roots、missing-name fallback、missing description、duplicate/precedence 和 workspace scope。
+- [ ] `catalog.scanAll` 能展示 OpenClaw skills，并在 capability matrix 中把 scan 从 disabled candidate 更新为 supported read-only。
+- [ ] UI 能按 OpenClaw 过滤、展示 source/scope/blocked writable reason。
+- [ ] `pnpm check:macos` 和真实本机 app validation 通过；若会话锁屏，明确记录 blocker。
+
+### 4.17 V2.17 Hermes read-only scanner
+
+**目标**：把 active/profile Hermes home 的 first-class skills 纳入 catalog，只做只读管理和分析。
+
+**范围**
+- 扫描 active/profile Hermes home `skills/**/SKILL.md`。
+- 不做 generic project scan。
+- `skills.external_dirs` 先保留为 future explicit external roots，不自动映射为 project roots。
+- 不读取 `.env`、`auth.json`、logs、cron job content。
+- 不把 cron jobs 映射为 `SkillInstance`。
+- 不做 install、toggle、writable。
+
+**退出条件**
+- [ ] Hermes read-only fixtures 覆盖 nested skills、malformed metadata、ignored secret/log/cron paths。
+- [ ] `catalog.scanAll` 能展示 Hermes skills，并在 capability matrix 中把 scan 从 disabled candidate 更新为 supported read-only。
+- [ ] UI 能按 Hermes 过滤、展示 active home/source/blocked writable reason。
+- [ ] `pnpm check:macos` 和真实本机 app validation 通过；若会话锁屏，明确记录 blocker。
+
+### 4.18 V2.18 Cross-agent skill analysis
+
+**目标**：让用户看清多个 agent 之间的重复、冲突、shadowing、precedence 和 source overlap。
+
+**范围**
+- Cross-agent duplicate name analysis。
+- Same path / same content / same canonical name grouping。
+- Agent-specific precedence and shadowing explanation where evidence exists。
+- Disabled/enabled mismatch grouping。
+- Malformed/broken skills grouped by agent/source。
+- 不根据未验证 adapter 规则推导 unsupported roots。
+
+**退出条件**
+- [ ] Service protocol 输出 cross-agent analysis summary 和 per-group detail。
+- [ ] UI 提供 duplicate/conflict/overlap views 和可操作过滤。
+- [ ] Detail page 展示该 skill 是否与其他 agent/source 发生重复或冲突。
+- [ ] Fixtures 覆盖 Claude/Codex/opencode/Pi/OpenClaw/Hermes 的混合重复与 malformed cases。
+
+### 4.19 V2.19 Skill health dashboard and triage UX
+
+**目标**：把 app 的入口从长列表升级为“需要关注什么”的管理面板。
+
+**范围**
+- Agent/project health cards：total、enabled、disabled、findings、conflicts、malformed、risky scripts/permissions。
+- Findings grouping：rule、severity、agent、source、review state。
+- Triage state：reviewed、ignored、needs action，保存在本地 app data，不写 agent config。
+- Saved views：例如 high risk、disabled only、malformed only、current project only。
+
+**退出条件**
+- [ ] Sidebar/main dashboard 能直接进入高价值过滤视图。
+- [ ] Finding triage 状态不影响 adapter config、不隐藏未审计风险。
+- [ ] Dashboard 在侧边栏收缩/窗口放大时自适应。
+- [ ] `pnpm check:macos` 和真实本机 app validation 通过。
+
+### 4.20 V2.20 Read-only AI skill analysis assist
+
+**目标**：在 V2.7 disabled-by-default LLM gate 基础上，增加只读 AI 辅助分析能力，帮助用户理解 skill 作用、风险和修复方向。
+
+**范围**
+- 默认关闭，用户显式启用。
+- Skill purpose summary、risk summary、finding explanation、cross-agent fit analysis。
+- 只生成建议和解释，不自动写入 skill、config、snapshot 或 prompt/response artifacts。
+- 不执行 scripts，不触发 imports/install/toggle。
+- 不保存 credentials；如未来实现 provider，凭证优先 Keychain，fallback 必须 `0600` 且隐私检查覆盖。
+- LLM output 始终 untrusted，只能作为 review aid。
+
+**退出条件**
+- [ ] Service protocol 明确 prepare/estimate/review result 边界。
+- [ ] UI 明确显示 disabled/offline/unavailable reason、token/cost estimate 和隐私提示。
+- [ ] AI review 对单 skill、当前 filtered catalog、finding group 均可生成只读分析。
+- [ ] 无 Apply/Write/Execute 路径，隐私检查和 fixture 测试覆盖。
+
+### Removed from active planning: desktop shell expansion and local sharing
+
+Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signing, notarization, DMG/ZIP, and public distribution are not active roadmap items. The active roadmap remains focused on the macOS app and skills management, inspection, analysis, and configuration audit.
 
 ## 5. 风险与未决项
 

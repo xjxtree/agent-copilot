@@ -1,13 +1,13 @@
 # Development Tasks
 
-> Status: current planning and execution queue as of 2026-06-10. V2.1 through V2.15 are closed on the main line. Current phase is P0 adapter implementation from evidence: OpenClaw read-only scanner, Hermes read-only scanner, and Pi writable evidence harness.
+> Status: current planning and execution queue as of 2026-06-10. V2.1 through V2.15 are closed on the main line. Current phase is focused on skills management, inspection, analysis, and configuration audit.
 
 ## Current Baseline
 
 - Current branch baseline: `main` after V2.10 execution safety boundary docs/release consistency and 2026-06-09 real local Computer Use validation.
 - Product boundary: native macOS SwiftUI/AppKit shell plus Rust service protocol.
 - Completed V2 milestones: first Codex slice, V2.1 through V2.10.
-- Current priority: implement read-only scanner slices for OpenClaw and Hermes from confirmed public docs plus local/macmini evidence, then build a disposable Pi writable evidence harness before opening production writes.
+- Current priority: implement read-only scanner slices for OpenClaw and Hermes, then improve cross-agent analysis, health summaries, and read-only AI-assisted review.
 - Real local Computer Use baseline: passed on 2026-06-09 for the current mainline app against real local HOME/app data/Claude/Codex/opencode roots; future user-visible, UI, or service protocol changes must rerun it.
 - Quality gate for code/UI/protocol work: `pnpm check:macos`; add focused Rust/Swift tests when touching shared behavior.
 
@@ -21,23 +21,31 @@
 | V2.13 | Pi adapter support | Complete | Pi-native global/project scanner/parser is implemented read-only; writable toggle/install remains blocked pending settings mutation/rollback evidence |
 | V2.14 | Hermes adapter support | Complete evidence-gate closeout; P0 read-only candidate | P0 evidence later confirmed first-class Hermes skills; writable/install remains blocked |
 | V2.15 | OpenClaw adapter support | Complete evidence-gate closeout; P0 read-only candidate | P0 evidence later confirmed OpenClaw roots/schema for read-only scan; writable/install remains blocked |
+| V2.16 | OpenClaw read-only scanner | Planned | OpenClaw documented roots appear in catalog read-only; project scan is workspace-scoped only; no CLI calls, writes, or installs |
+| V2.17 | Hermes read-only scanner | Planned | Active/profile Hermes home `skills/**/SKILL.md` appears in catalog read-only; no generic project scan, cron mapping, writes, or installs |
+| V2.18 | Cross-agent skill analysis | Planned | Duplicate names, shadowing, precedence conflicts, malformed skills, disabled states, and source overlap are grouped across agents |
+| V2.19 | Skill health dashboard and triage UX | Planned | Agent/project dashboards summarize health, findings, conflicts, risky scripts/permissions, and review status with actionable filters |
+| V2.20 | Read-only AI skill analysis assist | Planned | Disabled-by-default AI review can summarize skill purpose/risk/findings without writing files, configs, prompts, credentials, or executing scripts |
 
 ## Near-Term Priority: Comprehensive Agent Adapter Support
 
-**Goal**: make the macOS app agent matrix materially more complete.
+**Goal**: make the macOS app materially better at managing, inspecting, and analyzing skills across agents.
 
 **Priority order**
 
-1. OpenClaw read-only scanner candidate: filesystem scan only, project scope limited to confirmed OpenClaw workspace roots `<workspace>/skills` and `<workspace>/.agents/skills`, no CLI calls during ordinary scan, writable/install blocked.
-2. Hermes read-only scanner candidate: active Hermes home `skills/**/SKILL.md` only, no generic project scan, no cron-to-skill mapping, writable/install blocked.
-3. Pi writable evidence harness: disposable settings mutation/rollback tests before production writable support.
+1. V2.16 OpenClaw read-only scanner: filesystem scan only, project scope limited to confirmed OpenClaw workspace roots `<workspace>/skills` and `<workspace>/.agents/skills`, no CLI calls during ordinary scan, writable/install blocked.
+2. V2.17 Hermes read-only scanner: active Hermes home `skills/**/SKILL.md` only, no generic project scan, no cron-to-skill mapping, writable/install blocked.
+3. V2.18 Cross-agent skill analysis: duplicate/conflict/precedence/source-overlap analysis across supported agents.
+4. V2.19 Skill health dashboard and triage UX: aggregate health, findings, conflicts, risk, and review workflow.
+5. V2.20 Read-only AI skill analysis assist: disabled-by-default, read-only model-assisted summaries and finding explanations.
+6. Pi writable evidence harness: keep planned, but schedule after read-only management and analysis improvements unless user explicitly prioritizes Pi writes.
 
 **Tasks**
 
 - Keep the service/UI adapter capability matrix current for Claude Code, Codex, opencode, Pi, Hermes, and OpenClaw so the macOS app can expose precise scan/toggle/install status before each adapter is fully implemented.
-- Build disposable local evidence harnesses for Pi and opencode writable semantics so tests never mutate the developer's real config by default.
-- Verify Pi scan roots, config schema, enable/disable semantics, project/global precedence, rollback behavior, and fixture coverage before implementing writes.
-- Verify opencode `permission.skill` patching, wildcard precedence, disable/re-enable behavior, config ownership, rollback path, and native-root-only scope before relaxing the read-only guard.
+- Add cross-agent analysis data to the service protocol without duplicating adapter-specific logic in the UI.
+- Add dashboard/triage UI that helps users answer: which skills exist, which are risky, which conflict, which are disabled, and what needs attention first.
+- Keep optional AI analysis read-only, disabled by default, and separate from all write/config/script paths.
 - Keep Hermes writable/install blocked until individual skill disable schema, profile scope, and rollback-safe writes are verified.
 - Keep OpenClaw writable/install blocked until disposable config mutation, credential preservation, and rollback-safe writes are verified.
 - Keep every new adapter behind the existing service protocol, snapshot, audit, permission, and privacy boundaries.
@@ -46,15 +54,15 @@
 
 **Exit Criteria**
 
-- Pi has verified read/write semantics or an explicit blocker with disposable local evidence.
-- opencode writable support is either implemented behind tests and snapshots or remains blocked with precise missing evidence.
-- Hermes remains explicitly blocked with the missing facts listed until maintainer-confirmed evidence becomes available.
-- OpenClaw remains explicitly blocked with the missing facts listed until maintainer-confirmed evidence becomes available.
+- OpenClaw and Hermes read-only skills are visible and correctly scoped in catalog/detail views.
+- Cross-agent duplicate/conflict/precedence analysis gives actionable grouping without inventing unsupported roots.
+- Skill health dashboard and triage UX reduce list scanning and make high-risk or broken skills easy to find.
+- AI-assisted analysis remains opt-in, read-only, privacy-safe, and impossible to use as an execution/write path.
 - `docs/agent-adapters.md`, `docs/agent-adapter-spec-worklists.md`, `docs/development-tasks.md`, `docs/roadmap.md`, and `AGENTS.md` agree on adapter priority and current support state.
 
-## Cross-Version Backlog
+## Current Backlog
 
-These items are real work, but they are not unfinished V2.1-V2.10 tasks.
+These items keep the product focused on managing, inspecting, and analyzing skills. Script execution, GitHub clone import, and script-file install are removed from the active backlog.
 
 | Priority | Work item | Current status | Next concrete task | Completion signal |
 | --- | --- | --- | --- | --- |
@@ -64,12 +72,14 @@ These items are real work, but they are not unfinished V2.1-V2.10 tasks.
 | P0 | opencode writable support | Read-only native-root support exists; writable semantics remain unverified; promoted to near-term priority | Verify `permission.skill` exact patch, re-enable behavior, wildcard precedence, config ownership, and rollback path | opencode writable toggle/install design is accepted and implemented behind snapshots/tests, or blocker remains explicit |
 | P0 | Hermes adapter support | Read-only scanner candidate after P0 evidence; writable/install blocked | Implement scoped read-only scan of active Hermes home `skills/**/SKILL.md`; skip generic project roots, dot dirs, and archives unless represented as explicit evidence | Hermes skills appear in catalog read-only; generic project scan and writes remain blocked |
 | P0 | OpenClaw adapter support | Read-only scanner candidate after P0 evidence; writable/install blocked | Implement scoped read-only filesystem scan over documented roots; project scan only for confirmed OpenClaw workspace roots; no OpenClaw CLI calls during ordinary scan | OpenClaw skills appear in catalog read-only; arbitrary repo roots and writes/install remain blocked |
-| P1 | Real sandbox runner | Deferred after V2.10 boundary | Design interpreter allowlist, cwd/env/network/files enforcement, stdout/stderr policy, resource limits, and audit persistence | Tests prove default-deny, confirmed execution, blocked/cancelled/failed/completed records, and no LLM-triggered execution |
-| P3 | GitHub clone import | Deferred from V2.9 | Define network opt-in, clone sandbox, source verification, and audit model | `catalog.importSkill` can support GitHub with explicit confirmation and no uncontrolled network behavior |
-| P3 | Script-file install | Deferred from V2.9/V2.10 | Define install target semantics for script files separate from tool-global skill directory install | Install flow supports script files without bypassing adapter verified paths |
+| P0 | Cross-agent skill analysis | Planned | Extend catalog summaries with duplicate/conflict/precedence/source-overlap groups | Users can identify conflicting or duplicated skills across agents without manually comparing lists |
+| P0 | Skill health dashboard | Planned | Add dashboard summary cards and actionable filters for findings, conflicts, disabled skills, malformed metadata, risky scripts, and permission issues | Users can prioritize cleanup from a single management view |
+| P1 | Finding triage UX | Planned | Add reviewed/ignored state and grouping by rule, severity, agent, and source | Users can separate known issues from new actionable findings |
+| P1 | Agent-config timeline | Planned | Show agent-config snapshots and activity history per agent without adding skill-content snapshots | Users can understand config changes and rollback points |
+| P1 | Read-only AI skill analysis assist | Planned | Reuse V2.7 disabled-by-default gate for opt-in skill purpose/risk/finding summaries; no provider/client/storage until explicitly implemented | Users get human-readable analysis without any write, execution, or credential risk |
 
 ## Version Selection Rule
 
-- If the task is adapter capability, Pi, opencode writable, Hermes, or OpenClaw support, use the Versioned Adapter Plan above.
-- If the task is real execution, adapter evidence, or a future real Computer Use rerun, use the backlog item name and priority above instead of inventing a V2.12 number.
-- Create a new numbered version only after the adapter priority exits or a deferred backlog item becomes large enough to need its own milestone.
+- If the task is OpenClaw/Hermes scanner work, use V2.16/V2.17.
+- If the task is cross-agent analysis, dashboard, triage, timeline, or AI-assisted read-only analysis, use V2.18-V2.20.
+- Do not create versions for script execution, GitHub clone import, script-file install, signing, notarization, DMG/ZIP, public distribution, or full-platform UI adaptation unless the product direction changes explicitly.
