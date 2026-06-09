@@ -36,8 +36,8 @@
 | Codex | 已支持已验证范围 | 支持 verified user/project roots、cwd→repo-root discovery、`catalog.scanAll`、agent filter、project context 归属和用户级 `config.toml` toggle。 |
 | opencode | 已支持已验证范围 | 支持 native roots：`~/.config/opencode/skills` 和当前项目 `.opencode/skills`；支持 guarded writable toggle/install，写入 exact `permission.skill.<name> = "deny"` 并保留 snapshot/rollback。 |
 | Pi | read-only | V2.13 已实现 Pi-native global/project scanner/parser；writable toggle/install 仍 blocked，等待 settings mutation/rollback 证据。 |
-| Hermes | read-only candidate | P0 evidence 已确认 Hermes Agent 有 first-class skills 和 `~/.hermes/skills/**/SKILL.md`；project scan、writable toggle/install 仍 blocked。 |
-| OpenClaw | read-only candidate | P0 evidence 已确认 OpenClaw `SKILL.md` roots、schema、precedence 和 `skills list --json`；writable toggle/install 仍 blocked。 |
+| Hermes | read-only candidate | P0 evidence 已确认 Hermes Agent 有 first-class skills 和 `~/.hermes/skills/**/SKILL.md`；不做 generic project scan；只支持 active/profile Hermes home，显式 `skills.external_dirs` 另行设计为 external roots；writable toggle/install 仍 blocked。 |
+| OpenClaw | read-only candidate | P0 evidence 已确认 OpenClaw `SKILL.md` roots、schema、precedence 和 `skills list --json`；project scope 仅限 OpenClaw workspace roots，不按任意 repo root 推断；writable toggle/install 仍 blocked。 |
 
 ## 近期版本规划
 

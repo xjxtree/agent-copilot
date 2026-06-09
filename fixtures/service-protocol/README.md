@@ -42,12 +42,14 @@ V2.13 Pi blocker note:
 P0 Hermes candidate note:
 
 - Hermes is `planned` / `read-only-candidate` in `adapter.listCapabilities`, `service.status`, and `app.stateSnapshot`.
+- Hermes generic project scan remains blocked; active/profile home is the only first-slice scope, with `skills.external_dirs` reserved for future explicit external roots.
 - The Hermes fixture directory contains evidence samples only; it is not a parser contract.
 - No `catalog.scanAll` fixture should include Hermes until the read-only scanner implementation lands.
 
 P0 OpenClaw candidate note:
 
 - OpenClaw is `planned` / `read-only-candidate` in `adapter.listCapabilities`, `service.status`, and `app.stateSnapshot`.
+- OpenClaw project scan is workspace-scoped only for confirmed OpenClaw workspace roots; arbitrary repo roots must not be inferred as OpenClaw projects.
 - The OpenClaw fixture directory contains evidence samples only; it is not a parser contract.
 - No `catalog.scanAll` fixture should include OpenClaw until the read-only scanner implementation lands.
 

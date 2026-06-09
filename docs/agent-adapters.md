@@ -87,8 +87,8 @@ pub struct AdapterFeatureCapability {
 | Codex | `verified` | 支持 | 支持用户 `config.toml` override；项目 `.codex/config.toml` 仍 blocked |
 | opencode | `verified` | 支持 native roots | 支持 guarded writable：exact `permission.skill` deny/re-enable、snapshot/rollback、tool-global install |
 | Pi | `read-only` | 支持 Pi-native roots | writable harness candidate；production writes blocked |
-| Hermes | `planned` | read-only scanner candidate | project scan、toggle、install、writable blocked |
-| OpenClaw | `planned` | read-only scanner candidate | toggle、install、writable blocked |
+| Hermes | `planned` | read-only scanner candidate | generic project scan、toggle、install、writable blocked；`skills.external_dirs` 未来按 explicit external roots 处理 |
+| OpenClaw | `planned` | read-only scanner candidate | project scope 仅限 confirmed OpenClaw workspace roots；toggle、install、writable blocked |
 
 > **实现要求**：所有适配器**无状态**。
 >
@@ -177,7 +177,7 @@ Codex 当前实现边界：
 | Spec 工作单 | [`docs/hermes-adapter-spec.md`](./hermes-adapter-spec.md) |
 | 统一工作单 | [`docs/agent-adapter-spec-worklists.md`](./agent-adapter-spec-worklists.md#hermes) |
 | Evidence fixture | `fixtures/hermes/` 只保存 service evidence 样例，不是 parser contract |
-| 只读范围 | 只扫描 active Hermes home 的 `skills/**/SKILL.md`；不把 cron jobs 映射为 `SkillInstance` |
+| 只读范围 | 只扫描 active Hermes home 的 `skills/**/SKILL.md`；不做 generic project scan；`skills.external_dirs` 未来按 explicit external roots 处理；不把 cron jobs 映射为 `SkillInstance` |
 | 写入范围 | 禁止写 Hermes 配置；individual skill disable schema 和 rollback-safe writes 未验证 |
 | 行动项 | ① 实现 scoped read-only scanner；② disposable 验证 malformed、archive、platform gating；③ 确认 individual skill disable/re-enable schema |
 
@@ -198,7 +198,7 @@ Hermes P0 evidence 已确认它是 Nous Research Hermes Agent，且有 first-cla
 | Evidence fixture | `fixtures/openclaw/` 保存 read-only evidence 样例和 redacted plugin config 样例，不是 writable toggle contract |
 | 行动项 | ① 维护者确认 roots / `openclaw skills list --eligible` 输出；② 提供 `SKILL.md` schema 与 malformed/conflict 行为；③ 确认技能启停语义、权限模型和 rollback-safe 配置写入路径 |
 
-OpenClaw P0 evidence 已确认官方 `SKILL.md` roots、frontmatter schema、loading order、precedence、`skills list --json` 和 config override 语义。
+OpenClaw P0 evidence 已确认官方 `SKILL.md` roots、frontmatter schema、loading order、precedence、`skills list --json` 和 config override 语义。Project-like scope 只按 OpenClaw workspace 处理：`<workspace>/skills` 和 `<workspace>/.agents/skills`；不把任意 repo root 推断为 OpenClaw project。
 
 第一版只做 read-only filesystem scanner；toggle/install/writable 继续 blocked，直到 disposable config mutation 证明 credential-safe rollback。
 

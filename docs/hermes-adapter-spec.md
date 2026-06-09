@@ -38,7 +38,7 @@ No mapping is approved yet.
 | --- | --- |
 | `AgentId` | Reserved as `hermes` in planning docs only. |
 | `Scope::AgentGlobal` | Blocked: no verified local skill root. |
-| `Scope::AgentProject` | Blocked: no verified project inheritance behavior. |
+| `Scope::AgentProject` | Blocked for generic project-local discovery; `skills.external_dirs` may later be modeled as explicit external roots, not automatic project roots. |
 | `SkillInstance.name` | Blocked: unknown whether Hermes has skills, commands, jobs, or tasks with stable names. |
 | `SkillInstance.description` | Blocked. |
 | `SkillInstance.enabled` | Blocked: cron `enabled: false` may not apply to skills. |
@@ -54,7 +54,9 @@ No mapping is approved yet.
 - Enable/disable semantics, including whether disabling requires config patching, CLI calls, cron changes, or is unsupported.
 - Safe rollback procedure for any write path.
 
-Until writable evidence exists, Hermes should be implemented only as a scoped read-only scanner. Project scan, install, toggle, and writable actions must stay disabled.
+Until writable evidence exists, Hermes should be implemented only as a scoped read-only scanner. Generic project scan, install, toggle, and writable actions must stay disabled.
+
+Project scope decision: Hermes does not currently have verified generic project-local skill discovery. The first scanner must ignore arbitrary project roots and scan only the active/profile Hermes home. `skills.external_dirs` can be evaluated later as explicit external read-only roots, and `cron.workdir` is execution context, not a skill root.
 
 ## 5. 2026-06-10 P0 Evidence Update
 

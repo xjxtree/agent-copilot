@@ -7,6 +7,7 @@ P0 evidence on 2026-06-10 promoted OpenClaw to a read-only scanner candidate. Th
 Evidence status:
 
 - Local OpenClaw security-scan docs list candidate skill roots and expect skill directories containing `SKILL.md`.
+- OpenClaw project-like scope is workspace-scoped only: `<workspace>/skills` and `<workspace>/.agents/skills`. Do not infer arbitrary repository roots or `.openclaw/skills` project roots.
 - The same docs extract skill names from YAML frontmatter `name:` and fall back to the directory basename.
 - Local plugin docs patch `openclaw.json` plugin fields, but plugin `enabled` is not verified as skill enable/disable semantics.
 - A local `$HOME/.openclaw/openclaw.json` exists, but it was not copied because it may contain credentials and is not strict JSON.

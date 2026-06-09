@@ -5,6 +5,7 @@ These fixtures document local Hermes evidence only. P0 evidence on 2026-06-10 pr
 Evidence status:
 
 - Official Hermes Agent docs and read-only macmini checks confirm first-class skills under active Hermes home `skills/**/SKILL.md`.
+- Hermes has no confirmed generic project-level skills. Do not scan arbitrary project roots; model `skills.external_dirs` only as future explicit external roots.
 - The only concrete schema-like clue is cron job management under `<hermes-home>/cron/jobs.json`.
 - Cron `enabled: false` is service-task evidence only and must not be treated as skill enable/disable semantics.
 

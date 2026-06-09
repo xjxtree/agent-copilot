@@ -93,10 +93,12 @@ Required next evidence:
 
 ## Hermes
 
+Project scope decision: Hermes has no confirmed generic project-level skills. The first read-only slice is limited to active/profile Hermes home `skills/**/SKILL.md`; explicit `skills.external_dirs` may be modeled later as external roots, not project roots.
+
 | Area | Status |
 | --- | --- |
-| Public product identity | Partially observed from local `hermes-ops` skill docs only: Hermes is described as a macmini-hosted service with CLI, home, repo, logs, and cron job configuration. Not enough to define a Skill adapter. |
-| Skill discovery roots | Not verified. The observed Hermes docs do not describe a `SKILL.md` directory layout or any first-class local skill package root. |
+| Public product identity | Confirmed by official Nous Hermes Agent docs and read-only macmini evidence. |
+| Skill discovery roots | Confirmed read-only candidate: active/profile Hermes home `skills/**/SKILL.md`. Generic project-local discovery is not confirmed; `skills.external_dirs` is an explicit external-root concept, not automatic project scope. |
 | Config path/schema | Service evidence only: local docs mention `<hermes-home>/cron/jobs.json`, `<hermes-home>/logs/`, a Hermes repository under `<hermes-home>/`, and `hermes config validate`; no schema or user-local config path is verified for this product. |
 | Enable/disable semantics | Service cron evidence only: docs say cron jobs may be disabled with `enabled: false` rather than deleted. This is not verified as Hermes skill enable/disable behavior. |
 | Fixture requirement | Minimal evidence fixtures added under `fixtures/hermes/`, marked as service evidence samples and not parser contract. |
@@ -112,10 +114,12 @@ Required next evidence:
 
 ## OpenClaw
 
+Project scope decision: OpenClaw project semantics are workspace-scoped only. Treat `<workspace>/skills` and `<workspace>/.agents/skills` as project roots only for a confirmed OpenClaw workspace; do not infer arbitrary repository roots or `.openclaw/skills`.
+
 | Area | Status |
 | --- | --- |
 | Public product identity | Partially observed from local OpenClaw-related skill docs: OpenClaw is described as an AI assistant and automation platform with plugins, gateway restart, and skill/package scanning workflows. |
-| Skill discovery roots | Partial read-only evidence from local OpenClaw security-scan skill docs: `$HOME/.openclaw/skills`, `$HOME/.openclaw/workspace`, `$HOME/.openclaw/extensions`, `$HOME/openclaw/workspace`, `/usr/lib/node_modules/openclaw/skills`, `/usr/local/lib/node_modules/openclaw/skills`, and `/opt/jvs-claw/base/lib/node_modules/openclaw/skills`; docs also mention `openclaw skills list --eligible`. These are not maintainer-confirmed adapter roots. |
+| Skill discovery roots | Confirmed read-only candidate from official docs and read-only macmini evidence: workspace roots `<workspace>/skills` and `<workspace>/.agents/skills`, global/shared roots, bundled roots, and configured extra dirs. Project scope is workspace-scoped only. |
 | Skill file/directory format | Partial read-only evidence: the local security-scan skill expects skill directories containing `SKILL.md`, extracts `name:` from YAML frontmatter, and falls back to the directory basename. This is script input evidence, not a full product spec. |
 | Config path/schema | Partial evidence only: local plugin docs use `openclaw config file` to locate `openclaw.json`; a user-local `~/.openclaw/openclaw.json` exists on this machine but is JSONC/non-strict JSON and was not copied because it may contain credentials. |
 | Enable/disable semantics | Plugin evidence only: local Tablestore Mem0 docs patch `.plugins.entries["openclaw-mem0"].enabled = true`, `.plugins.slots.memory`, and `.plugins.allow`. This does not verify skill enable/disable semantics. |

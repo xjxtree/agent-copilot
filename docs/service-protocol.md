@@ -126,8 +126,8 @@ Current matrix:
 | Codex | `verified` | Supported | Supported through user `config.toml`; project-local `.codex/config.toml` remains blocked |
 | opencode | `verified` | Supported for native roots | Supported through exact `permission.skill` deny/re-enable and strict JSON writes |
 | Pi | `read-only` | Pi-native roots scan | Writable evidence harness candidate; production writes blocked |
-| Hermes | `planned` | Read-only scanner candidate, not implemented | Project scan, toggle, install, and writable support blocked |
-| OpenClaw | `planned` | Read-only scanner candidate, not implemented | Toggle, install, and writable support blocked |
+| Hermes | `planned` | Read-only scanner candidate, not implemented | Generic project scan, toggle, install, and writable support blocked; explicit `skills.external_dirs` is future external-root policy only |
+| OpenClaw | `planned` | Read-only scanner candidate, not implemented | Project scan is limited to confirmed OpenClaw workspace roots; toggle, install, and writable support blocked |
 
 Native UI must use this matrix for affordance gating and explanations. It must not infer write support only from an agent name.
 

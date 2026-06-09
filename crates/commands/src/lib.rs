@@ -432,7 +432,7 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
             ),
             project_scan: AdapterFeatureCapability::blocked(
                 "blocked",
-                "Hermes project discovery semantics are not confirmed.",
+                "Hermes has no generic project-local skill discovery; project scan remains disabled unless explicit external_dirs policy is implemented.",
             ),
             config_toggle: AdapterFeatureCapability::blocked(
                 "blocked",
@@ -466,7 +466,7 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
             ),
             project_scan: AdapterFeatureCapability::blocked(
                 "blocked",
-                "OpenClaw project discovery semantics are not confirmed.",
+                "OpenClaw project scan is limited to confirmed OpenClaw workspace roots; arbitrary repo roots are not treated as OpenClaw projects.",
             ),
             config_toggle: AdapterFeatureCapability::blocked(
                 "blocked",

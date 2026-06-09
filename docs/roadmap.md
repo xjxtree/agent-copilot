@@ -632,7 +632,7 @@
 
 **目标**：先拿到 maintainer-confirmed spec，再决定 Hermes 是否映射为 SkillInstance 以及可写范围。
 
-**状态（2026-06-10）**：read-only scanner candidate / writable still blocked。P0 evidence 确认 Hermes Agent 有 first-class skills 和 active Hermes home `skills/**/SKILL.md`；第一版只实现 scoped read-only scanner，不做 project scan、toggle、install 或 writable。
+**状态（2026-06-10）**：read-only scanner candidate / writable still blocked。P0 evidence 确认 Hermes Agent 有 first-class skills 和 active Hermes home `skills/**/SKILL.md`；第一版只实现 scoped read-only scanner，不做 generic project scan、toggle、install 或 writable。`skills.external_dirs` 未来只按 explicit external roots 评估，不自动映射为 project roots。
 
 **退出条件**
 - [x] P0 evidence 确认 Hermes skill-like unit 和 active Hermes home skill root。
@@ -645,7 +645,7 @@
 
 **目标**：先拿到 maintainer-confirmed spec，再决定 OpenClaw scan/toggle/install 范围。
 
-**状态（2026-06-10）**：read-only scanner candidate / writable still blocked。P0 evidence 确认 OpenClaw `SKILL.md` roots、schema、loading order、precedence 和 JSON list capability；第一版只实现 scoped filesystem read-only scanner，不调用 OpenClaw CLI，不做 toggle/install/writable。
+**状态（2026-06-10）**：read-only scanner candidate / writable still blocked。P0 evidence 确认 OpenClaw `SKILL.md` roots、schema、loading order、precedence 和 JSON list capability；第一版只实现 scoped filesystem read-only scanner，不调用 OpenClaw CLI，不做 toggle/install/writable。Project-like scope 只限 confirmed OpenClaw workspace roots `<workspace>/skills` 和 `<workspace>/.agents/skills`，不按任意 repo root 推断。
 
 **退出条件**
 - [x] P0 evidence 确认 OpenClaw read-only scanner 所需基础 roots/schema/precedence。

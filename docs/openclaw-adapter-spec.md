@@ -43,7 +43,7 @@ No mapping is approved yet.
 | --- | --- |
 | `AgentId` | Reserved as `openclaw` in planning docs only. |
 | `Scope::AgentGlobal` | Blocked: candidate roots are local-doc evidence, not maintainer-confirmed adapter roots. |
-| `Scope::AgentProject` | Blocked: no project inheritance behavior is verified. |
+| `Scope::AgentProject` | Candidate only for confirmed OpenClaw workspace roots: `<workspace>/skills` and `<workspace>/.agents/skills`; arbitrary repo roots are not OpenClaw projects. |
 | `SkillInstance.name` | Candidate only: YAML frontmatter `name:` or directory basename fallback appears in security-scan docs. |
 | `SkillInstance.description` | Candidate only: likely YAML frontmatter, but required/optional status is unknown. |
 | `SkillInstance.enabled` | Blocked: plugin `enabled` is not verified as skill enabled state. |
@@ -62,6 +62,8 @@ No mapping is approved yet.
 Ordinary skills-copilot scans must not run OpenClaw cloud intelligence, cloud deep analysis, security audit, plugin install, gateway restart, or Alibaba Cloud CLI workflows.
 
 Until writable evidence exists, OpenClaw should be implemented only as a scoped read-only filesystem scanner. Install, toggle, and writable actions must stay disabled.
+
+Project/workspace scope decision: OpenClaw's project-like layer is workspace-scoped. The first read-only scanner may treat a selected directory as `Scope::AgentProject` only when it is the confirmed OpenClaw workspace or inside one, and then only scan `<workspace>/skills` and `<workspace>/.agents/skills`. Do not invent `.openclaw/skills` project roots and do not scan arbitrary repository roots as OpenClaw projects.
 
 ## 5. 2026-06-10 P0 Evidence Update
 

@@ -211,7 +211,7 @@
         "project_scan": {
           "supported": false,
           "status": "blocked",
-          "reason": "Hermes project discovery semantics are not confirmed."
+          "reason": "Hermes has no generic project-local skill discovery; project scan remains disabled unless explicit external_dirs policy is implemented."
         },
         "config_toggle": {
           "supported": false,
@@ -251,7 +251,7 @@
         "project_scan": {
           "supported": false,
           "status": "blocked",
-          "reason": "OpenClaw project discovery semantics are not confirmed."
+          "reason": "OpenClaw project scan is limited to confirmed OpenClaw workspace roots; arbitrary repo roots are not treated as OpenClaw projects."
         },
         "config_toggle": {
           "supported": false,

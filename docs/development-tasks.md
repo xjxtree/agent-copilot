@@ -28,8 +28,8 @@
 
 **Priority order**
 
-1. OpenClaw read-only scanner candidate: filesystem scan only, no CLI calls during ordinary scan, writable/install blocked.
-2. Hermes read-only scanner candidate: active Hermes home `skills/**/SKILL.md` only, no cron-to-skill mapping, writable/install blocked.
+1. OpenClaw read-only scanner candidate: filesystem scan only, project scope limited to confirmed OpenClaw workspace roots `<workspace>/skills` and `<workspace>/.agents/skills`, no CLI calls during ordinary scan, writable/install blocked.
+2. Hermes read-only scanner candidate: active Hermes home `skills/**/SKILL.md` only, no generic project scan, no cron-to-skill mapping, writable/install blocked.
 3. Pi writable evidence harness: disposable settings mutation/rollback tests before production writable support.
 
 **Tasks**
@@ -62,8 +62,8 @@ These items are real work, but they are not unfinished V2.1-V2.10 tasks.
 | P0 | V2.11 Adapter Capability Matrix | Completed and in use | Run focused protocol/UI checks when needed, then use the matrix as the gate for future Pi/opencode/Hermes/OpenClaw work | macOS UI shows precise scan/toggle/install status and blockers for all six agents |
 | P0 | Pi comprehensive adapter support | Read-only scanner complete; writable evidence supports a harness but not production writes | Implement disposable writable evidence harness for Pi-native roots and package filters; exclude `.agents/skills` compatibility roots from first writable slice | Harness proves native/global/project/package toggle, rollback, trust gate, invalid JSON behavior, and re-enable strategy |
 | P0 | opencode writable support | Read-only native-root support exists; writable semantics remain unverified; promoted to near-term priority | Verify `permission.skill` exact patch, re-enable behavior, wildcard precedence, config ownership, and rollback path | opencode writable toggle/install design is accepted and implemented behind snapshots/tests, or blocker remains explicit |
-| P0 | Hermes adapter support | Read-only scanner candidate after P0 evidence; writable/install blocked | Implement scoped read-only scan of active Hermes home `skills/**/SKILL.md`; skip dot dirs/archives unless represented as explicit evidence | Hermes skills appear in catalog read-only; project scan and writes remain blocked |
-| P0 | OpenClaw adapter support | Read-only scanner candidate after P0 evidence; writable/install blocked | Implement scoped read-only filesystem scan over documented roots; no OpenClaw CLI calls during ordinary scan | OpenClaw skills appear in catalog read-only; writes/install remain blocked |
+| P0 | Hermes adapter support | Read-only scanner candidate after P0 evidence; writable/install blocked | Implement scoped read-only scan of active Hermes home `skills/**/SKILL.md`; skip generic project roots, dot dirs, and archives unless represented as explicit evidence | Hermes skills appear in catalog read-only; generic project scan and writes remain blocked |
+| P0 | OpenClaw adapter support | Read-only scanner candidate after P0 evidence; writable/install blocked | Implement scoped read-only filesystem scan over documented roots; project scan only for confirmed OpenClaw workspace roots; no OpenClaw CLI calls during ordinary scan | OpenClaw skills appear in catalog read-only; arbitrary repo roots and writes/install remain blocked |
 | P1 | Real sandbox runner | Deferred after V2.10 boundary | Design interpreter allowlist, cwd/env/network/files enforcement, stdout/stderr policy, resource limits, and audit persistence | Tests prove default-deny, confirmed execution, blocked/cancelled/failed/completed records, and no LLM-triggered execution |
 | P3 | GitHub clone import | Deferred from V2.9 | Define network opt-in, clone sandbox, source verification, and audit model | `catalog.importSkill` can support GitHub with explicit confirmation and no uncontrolled network behavior |
 | P3 | Script-file install | Deferred from V2.9/V2.10 | Define install target semantics for script files separate from tool-global skill directory install | Install flow supports script files without bypassing adapter verified paths |
