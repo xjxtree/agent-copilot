@@ -2,7 +2,7 @@
 
 > skills-copilot 支持的 6 个 agent 的适配要点。
 >
-> 当前版本线：V2.11 Adapter Capability Matrix、V2.12 opencode writable、V2.13 Pi read-only scanner/parser、V2.14 Hermes evidence-gate closeout、V2.15 OpenClaw evidence-gate closeout、V2.16 OpenClaw read-only scanner、V2.17 Hermes read-only scanner、V2.18 cross-agent analysis、V2.19 skill health dashboard、V2.20 read-only AI skill analysis assist 已完成；V2.21 扫描准确性、去重与 agent 维度统计同步已完成；V2.22 finding/conflict 语义与验收同步进行中；V2.23 Health Dashboard / Adapter Capability UX 入口对齐进行中。
+> 当前版本线：V2.11 Adapter Capability Matrix、V2.12 opencode writable、V2.13 Pi read-only scanner/parser、V2.14 Hermes evidence-gate closeout、V2.15 OpenClaw evidence-gate closeout、V2.16 OpenClaw read-only scanner、V2.17 Hermes read-only scanner、V2.18 cross-agent analysis、V2.19 skill health dashboard、V2.20 read-only AI skill analysis assist、V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 诊断口径、V2.25 Agent-config timeline 均已完成。下一阶段 V2.26-V2.30 聚焦 finding 可解释性、skill identity/provenance、conflict 语义稳定、triage persistence 与 read-only AI analysis workflow。
 >
 > 扫描适配器实现 `AgentAdapter`。
 >
@@ -87,8 +87,8 @@ pub struct AdapterFeatureCapability {
 | Codex | `verified` | 支持（user + verified project roots） | 支持（仅用户 `config.toml`） | 支持（tool-global install） | 支持（verified） | 项目级 `.codex/config.toml`、plugin/admin/system roots blocked |
 | opencode | `verified` | 支持 native roots + 官方 `.claude` / `.agents` compatibility roots | 支持（exact `permission.skill` deny/re-enable） | 支持（native-root 安装） | 支持（managed permission overrides） | 自定义 `skills.paths` / `skills.urls` 暂停 |
 | Pi | `read-only` | 支持 Pi-native roots | blocked（evidence harness pending） | blocked | blocked | writable harness pending（production write 仍阻断） |
-| Hermes | `read-only` | 支持 active/profile Hermes home | blocked（read-only 扫描） | blocked | blocked | project scan / toggle / install / writable blocked，外部目录 policy 待证据 |
-| OpenClaw | `read-only` | 支持文档化 filesystem roots | blocked（read-only scan only） | blocked | blocked | project scope 限制、toggle/install/writable blocked |
+| Hermes | `read-only` | 支持 active/profile Hermes home | blocked（read-only 扫描） | blocked | blocked | generic project scan / toggle / install / writable blocked，外部目录 policy 待证据 |
+| OpenClaw | `read-only` | 支持文档化 filesystem roots | blocked（read-only scan only） | blocked | blocked | project scope 仅 workspace，toggle/install/writable blocked |
 
 > **实现要求**：所有适配器**无状态**。
 >
@@ -190,7 +190,7 @@ Hermes P0 evidence 已确认它是 Nous Research Hermes Agent，且有 first-cla
 | 项 | 值 |
 | --- | --- |
 | AgentId | `openclaw` |
-| 状态 | **Read-only scanner candidate after P0 evidence / writable blocked** |
+| 状态 | **Read-only scanner implemented / writable blocked** |
 | Spec 工作单 | [`docs/openclaw-adapter-spec.md`](./openclaw-adapter-spec.md) |
 | 统一工作单 | [`docs/agent-adapter-spec-worklists.md`](./agent-adapter-spec-worklists.md#openclaw) |
 | Candidate roots | `<workspace>/skills`、`<workspace>/.agents/skills`、`~/.agents/skills`、`~/.openclaw/skills`、bundled skills、`skills.load.extraDirs`；第一版只做 filesystem scan |
@@ -231,7 +231,7 @@ opencode roots 口径：
 - 去重策略原则：`id = hash(agent, scope, path)` 保留 adapter 内同物理源的唯一实例；不同 agent 的同名或同物理文件保留可见但不混淆为同一运行时状态。
 - 统计口径要求：跨 agent 的重复（同名、同路径、enabled mismatch）由 `catalog.analysis` 的 group 视图承载；`app.stateSnapshot.health` 提供 per-agent 汇总并保留实例维度计数，UI 过滤不改变总量定义。
 - 交叉验证要求：`catalog.scanAll.result.activity.agent_summaries`、`catalog.analysis`、`app.stateSnapshot.health` 对同一扫描上下文应可对齐（无新增或遗漏的可见实例）。
-- V2.22 进行时：冲突（conflict）与 cross-agent 重复需清晰分离，前者仅用于同一 selected/current agent runtime/name collision。
+- V2.22 已完成：冲突（conflict）与 cross-agent 重复需清晰分离，前者仅用于同一 selected/current agent runtime/name collision；后者由 `catalog.analysis` / Analysis UI 承载。
 
 ## 3. 跨 agent 公共问题
 

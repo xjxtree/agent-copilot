@@ -1,13 +1,13 @@
 # Development Tasks
 
-> Status: current planning and execution queue as of 2026-06-10. V2.1 through V2.24 are synchronized baseline, and V2.25 Agent-config timeline sync is in progress.
+> Status: current planning and execution queue as of 2026-06-10. V2.1 through V2.25 are synchronized baseline. The next execution line is V2.26-V2.30 skill management semantics and explainability.
 
 ## Current Baseline
 
-- Current branch baseline: `main` after V2.16-V2.21 management/analysis line and 2026-06-10 real local Computer Use validation; V2.22 finding/conflict 语义同步已收口，V2.23 Health Dashboard / Adapter Capability UX 与 V2.24 Detail 诊断口径已收口，V2.25 口径为 agent-config timeline 同步。
+- Current branch baseline: `main` after V2.16-V2.25 management/analysis/history line and 2026-06-10 real local Computer Use validation; V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 诊断口径、V2.25 Agent-config timeline 均已收口。
 - Product boundary: native macOS SwiftUI/AppKit shell plus Rust service protocol.
 - Completed V2 milestones: first Codex slice, V2.1 through V2.20.
-- Current priority: complete V2.25 Agent-config timeline（按 agent 的配置快照时间线，不混入 selected-skill detail），并保持 V2.24 口径（Findings=issue groups、Conflicts=current-agent only、Analysis=read-only/offline、History=toggle/config events）；不扩展 skill-toggle snapshot 与 skill-content snapshot；rollback 仅做 preview+confirm 二次确认。
+- Current priority: plan and implement V2.26-V2.30. Focus on finding explainability, skill identity/provenance dedupe, selected-agent conflict semantics, finding triage persistence, and read-only AI skill analysis workflow. Keep V2.24/V2.25 boundaries: Findings=issue groups, Conflicts=current-agent only, Analysis=read-only/offline, History=toggle/config events, no skill-toggle snapshot, no skill-content snapshot, and rollback remains preview+confirm.
 - Real local Computer Use baseline: passed on 2026-06-10 for the current mainline app against real local HOME/app data/Claude/Codex/opencode roots; validation explicitly targeted the current `dist/SkillsCopilot.app` bundle after detecting a stale same-bundle-id worktree app. Future user-visible, UI, or service protocol changes must rerun it.
 - Quality gate for code/UI/protocol work: `pnpm check:macos`; add focused Rust/Swift tests when touching shared behavior.
 
@@ -19,62 +19,60 @@
 | V2.11 | Adapter Capability Matrix | Completed | Service protocol and macOS UI expose scan/toggle/install status and blockers for Claude Code, Codex, opencode, Pi, Hermes, and OpenClaw |
 | V2.12 | opencode writable support | Complete | Disposable local evidence verifies `permission.skill` writes, then guarded toggle/install is implemented and validated, or blocker remains explicit |
 | V2.13 | Pi adapter support | Complete | Pi-native global/project scanner/parser is implemented read-only; writable toggle/install remains blocked pending settings mutation/rollback evidence |
-| V2.14 | Hermes adapter support | Complete evidence-gate closeout; P0 read-only candidate | P0 evidence later confirmed first-class Hermes skills; writable/install remains blocked |
-| V2.15 | OpenClaw adapter support | Complete evidence-gate closeout; P0 read-only candidate | P0 evidence later confirmed OpenClaw roots/schema for read-only scan; writable/install remains blocked |
+| V2.14 | Hermes adapter support | Complete evidence-gate closeout; read-only later implemented in V2.17 | P0 evidence later confirmed first-class Hermes skills; writable/install remains blocked |
+| V2.15 | OpenClaw adapter support | Complete evidence-gate closeout; read-only later implemented in V2.16 | P0 evidence later confirmed OpenClaw roots/schema for read-only scan; writable/install remains blocked |
 | V2.16 | OpenClaw read-only scanner | Completed | OpenClaw documented roots appear in catalog read-only; scan is filesystem-only; project scan is workspace-scoped only (`<workspace>/skills`, `<workspace>/.agents/skills`); no arbitrary repo roots, CLI calls, writes, or installs |
 | V2.17 | Hermes read-only scanner | Completed | Active/profile Hermes home `skills/**/SKILL.md` appears in catalog read-only; no generic project scan, cron mapping, writes, installs, CLI calls, or `.env`/`auth.json`/`logs`/`cron` mapping |
 | V2.18 | Cross-agent skill analysis | Completed | Duplicate names, shadowing, precedence conflicts, malformed skills, disabled states, and source overlap are grouped across agents |
 | V2.19 | Skill health dashboard and triage UX | Completed | `app.stateSnapshot.health` and native sidebar dashboard summarize health, findings, conflicts, risky scripts/permissions, and provide read-only triage filters |
 | V2.20 | Read-only AI skill analysis assist | Completed | Disabled-by-default offline review preview summarizes skill purpose/risk/findings without provider calls, network, credentials, writes, configs, prompts, or script execution |
 | V2.21 | Scan accuracy, dedupe behavior, and agent metric alignment | Completed | Normalize scan roots/path IDs, define deterministic duplicate handling across adapters, and align cross-agent visibility with catalog analysis + per-agent scan/activity and health metrics |
-| V2.22 | finding/conflict 语义与验收同步 | In progress | Unify conflict definition as same-agent runtime/name collision; move cross-agent duplicate/source-overlap to analysis insights; align default finding groups and count semantics |
-| V2.23 | Health Dashboard / Adapter Capability UX | In progress | Align health card action-summary behavior, selected-agent filtering, and explicit scan/toggle/install/read-only/blocked status display across AGENTS、roadmap、service protocol、UI 标准 |
-| V2.24 | Skill Detail 诊断工作台口径 | In progress | Detail=single skill workbench；Findings=issue groups；Conflicts=current-agent only；Analysis=read-only offline；History=toggle/config events only；no skill-content snapshot, no new script execute/write paths |
-| V2.25 | Agent-config timeline | In progress | per-agent `snapshot.listAgentConfig` 展示配置变更历史；多 agent 独立时间线；`snapshot.previewRollback` 与 `snapshot.rollback` 二次确认；不做 skill-toggle snapshot 或 skill-content snapshot |
+| V2.22 | finding/conflict 语义与验收同步 | Completed | Conflict=same-agent runtime/name collision; cross-agent duplicate/source-overlap lives in analysis; default findings use issue groups |
+| V2.23 | Health Dashboard / Adapter Capability UX | Completed | Health card action summaries, selected-agent filtering, and scan/toggle/install/read-only/blocked capability status are aligned |
+| V2.24 | Skill Detail 诊断工作台口径 | Completed | Detail=single skill workbench；Findings=issue groups；Conflicts=current-agent only；Analysis=read-only offline；History=toggle/config events only |
+| V2.25 | Agent-config timeline | Completed | Per-agent config timeline, preview diff + confirm rollback, no skill-toggle snapshot, no skill-content snapshot |
+| V2.26 | Finding explainability | Planned | Rule source, trigger reason, affected instances, risk subset relationship, and drill-down from Health/Detail are visible |
+| V2.27 | Skill identity/provenance dedupe | Planned | Agent/path/root/provenance identity is deterministic; Pi `.md` noise stays excluded; opencode compatibility roots are explainable |
+| V2.28 | Conflict semantic closeout | Planned | Same-agent conflicts and cross-agent analysis are separated in every UI/protocol surface |
+| V2.29 | Finding triage persistence | Planned | reviewed/ignored/needs-follow-up are persisted locally without writing agent config; changed fingerprints reopen findings |
+| V2.30 | AI skill analysis workflow | Planned | Disabled-by-default read-only AI analysis supports batch summaries and suggestion drafts without writes/execution/credentials |
+| V2.31-V2.35 | Cleanup workflow | Planned | Cleanup queue, rule tuning/suppression, safe batch actions, cross-agent comparison, local report export |
+| V2.36-V2.40 | Adapter trust and diagnostics | Planned | Pi writable evidence harness, guarded Pi slice if proven, Hermes external roots, OpenClaw workspace deepening, adapter diagnostics |
+| V2.41-V2.45 | Long-term governance | Planned | Quality score, stale/drift detection, local knowledge index, policy packs, review session mode |
 
-## Near-Term Priority: V2.25 Agent-config timeline 规划与验收同步
+## Near-Term Priority: V2.26-V2.30 可解释、可追踪、可整理
 
-**Goal**: with V2.23/24 as baseline, complete V2.25 timeline sync: per-agent config snapshots only, no selected-skill detail mixing, preview diff + 二次确认 rollback, no skill-content snapshot.
+**Goal**: turn current scan/health/detail/analysis surfaces into an explainable management workflow. Users should understand why a finding exists, where a skill came from, whether a conflict is same-agent or cross-agent, which issues are already reviewed, and how read-only AI can help summarize risks without causing writes or execution.
 
 **Priority order**
 
-1. V2.16 OpenClaw read-only scanner: completed filesystem scan only, project scope limited to confirmed OpenClaw workspace roots `<workspace>/skills` and `<workspace>/.agents/skills`, no CLI calls during ordinary scan, no arbitrary repo roots, writable/install blocked.
-2. V2.17 Hermes read-only scanner: completed active Hermes home `skills/**/SKILL.md` only, no generic project scan, no cron-to-skill mapping, no `.env`/`auth.json`/`logs`/`cron` mapping, no CLI calls, writable/install blocked.
-3. V2.18 Cross-agent skill analysis: completed duplicate/conflict/precedence/source-overlap analysis across supported agents.
-4. V2.19 Skill health dashboard and triage UX: completed aggregate health, findings, conflicts, risk, and read-only triage filters.
-5. V2.20 Read-only AI skill analysis assist: completed disabled-by-default, offline read-only summaries and finding explanations.
-6. Pi writable evidence harness: keep planned, but schedule after read-only management and analysis improvements unless user explicitly prioritizes Pi writes.
-7. V2.21 scan accuracy / dedupe / stats pass: completed doc/spec/test coverage for deterministic duplicate handling and agent-scoped counting before downstream triage rules depend on the data.
-8. V2.22 finding/conflict semantics sync: align same-agent conflict definition and cross-agent analysis separation before triage persistence.
-9. V2.23 Health Dashboard / Adapter Capability UX: selected-agent health cards as action summaries + explicit capability matrix state (scan/toggle/install/read-only/blocked).
-10. V2.24 Skill Detail 诊断口径同步: detail as single skill workbench; findings=issue groups; conflicts=current-agent only; analysis=read-only/offline assist; history=toggle/config events only.
-11. V2.25 Agent-config timeline: per-agent 独立配置时间线；不混入 selected-skill detail；预览 diff 后再二次确认回滚；不做 skill-toggle snapshot 或 skill-content snapshot。
+1. V2.26 Finding explainability: make every finding group explain rule source, trigger reason, affected instances, severity/risk mapping, and next action.
+2. V2.27 Skill identity/provenance dedupe: make agent/root/path/provenance deterministic; keep Pi `.md` resource noise excluded; label opencode native vs compatibility roots clearly.
+3. V2.28 Conflict semantic closeout: keep same-agent runtime/name collisions in Conflicts and move cross-agent duplicate/source overlap to Analysis only.
+4. V2.29 Finding triage persistence: add reviewed/ignored/needs-follow-up state in app-local catalog; do not write agent config; reopen changed fingerprints.
+5. V2.30 AI skill analysis workflow: improve disabled-by-default read-only AI summaries and suggestion drafts without provider calls by default, writes, execution, or credential storage.
+6. V2.31-V2.35 Cleanup workflow: build cleanup queue, rule tuning/suppression, safe batch actions, cross-agent comparison, and local report export after semantics are stable.
+7. V2.36-V2.40 Adapter trust and diagnostics: only after the management workflow is stable, run Pi writable evidence harness and deepen Hermes/OpenClaw diagnostics without guessing write semantics.
+8. V2.41-V2.45 Long-term governance: quality score, stale/drift detection, local knowledge index, policy packs, and review sessions.
 
 **Tasks**
 
-- Keep the service/UI adapter capability matrix current for Claude Code, Codex, opencode, Pi, Hermes, and OpenClaw so the macOS app can expose precise scan/toggle/install status before each adapter is fully implemented.
-- Add cross-agent analysis data to the service protocol without duplicating adapter-specific logic in the UI.
-- Add dashboard/triage UI that helps users answer: which skills exist, which are risky, which conflict, which are disabled, and what needs attention first.
-- Keep scan accuracy and dedupe behavior as blocking criteria for any new write-path work until duplicate handling is consistent across adapters.
+- Keep finding/risk/analysis labels explainable: risk is a subset of findings; analysis is cross-agent insight; conflict is selected-agent runtime/name collision.
+- Keep skill identity deterministic across all adapters and expose provenance labels in UI where user confusion is likely.
+- Keep triage state in app-local storage only; never hide unresolved high-risk findings by default.
 - Keep optional AI analysis read-only, disabled by default, and separate from all write/config/script paths.
-- Keep Hermes writable/install blocked until individual skill disable schema, profile scope, and rollback-safe writes are verified.
-- Keep OpenClaw writable/install blocked until disposable config mutation, credential preservation, and rollback-safe writes are verified.
-- Keep health sidebar rendering bound to selected/current agent; do not use the same data as cross-agent dashboard table.
-- Keep every new adapter behind the existing service protocol, snapshot, audit, permission, and privacy boundaries.
-- Update native macOS UI only as needed to expose newly supported agents, statuses, filters, findings, and guarded writable actions.
-- Add fixtures and non-destructive tests for every supported adapter mode before enabling writes.
+- Keep Hermes/OpenClaw writable/install blocked until individual skill disable schema, credential preservation, and rollback-safe writes are verified.
+- Keep Pi writable support blocked until the disposable evidence harness proves exact mutation and rollback semantics.
+- Keep every new write path behind service protocol, snapshot, audit, permission, and privacy boundaries.
+- Update native macOS UI only as needed to expose clearer explanations, statuses, filters, finding groups, and guarded writable actions.
 
 **Exit Criteria**
 
-- OpenClaw and Hermes read-only skills are visible and correctly scoped in catalog/detail views.
-- Cross-agent duplicate/conflict/precedence analysis gives actionable grouping without inventing unsupported roots.
-- Skill health dashboard and triage UX reduce list scanning and make high-risk or broken skills easy to find.
+- V2.26-V2.30 docs and code make finding/risk/conflict/analysis semantics explainable from Health, list, detail, and analysis views.
+- Skill provenance and dedupe behavior are deterministic enough that Pi/opencode/compatibility-root surprises can be explained from the UI.
+- Triage persistence helps reduce repeated noise without writing agent config or hiding changed high-risk findings.
 - AI-assisted analysis remains opt-in, read-only, privacy-safe, and impossible to use as an execution/write path.
-- `docs/agent-adapters.md`, `docs/agent-adapter-spec-worklists.md`, `docs/development-tasks.md`, `docs/roadmap.md`, and `AGENTS.md` agree on adapter priority and current support state.
-- V2.24 Detail 口径的基础数据对齐：Detail=single skill，Findings 与 issue groups 一致、Conflicts=当前 agent runtime/name collision、Analysis 只读离线、History 仅 toggle/config 事件，并确认不引入 skill-content snapshot 与新脚本执行路径。
-- V2.25 口径验收：agent-config history 仅展示 per-agent toggle/config 轨迹；timeline 以 agent 维度独立；`snapshot.previewRollback` 和 `snapshot.rollback` 需 preview diff + 二次确认。
-- V2.21 scan correctness rules are implemented and documented before adding triage persistence and metrics-consuming automation.
-- `selected agent` 健康摘要卡与 finding/conflict 计数定义在 roadmap / service protocol / adapter docs / ui 标准保持一致。
+- `docs/agent-adapters.md`, `docs/agent-adapter-spec-worklists.md`, `docs/development-tasks.md`, `docs/roadmap.md`, `docs/service-protocol.md`, `docs/data-model.md`, `docs/ui-delivery-standards.md`, and `AGENTS.md` agree on the current support state and next version line.
 
 ## Current Backlog
 
@@ -91,16 +89,24 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 | P0 | Cross-agent skill analysis | Implemented read-only | Keep catalog summaries for duplicate/conflict/precedence/source-overlap groups aligned with fixtures and UI needs | Users can identify conflicting or duplicated skills across agents without manually comparing lists |
 | P0 | Skill health dashboard | Implemented read-only | Keep dashboard summary cards and actionable filters for findings, conflicts, disabled skills, malformed metadata, risky scripts, and permission issues aligned with service health payload | Users can prioritize cleanup from a single management view |
 | P0 | V2.21 scan accuracy / dedupe / agent metrics | Completed | Add scan contract coverage for canonical path/id collision handling, source overlap handling, and per-agent stats consistency checks across scan activity + health payloads | Duplicate and overlap records are deterministic; per-agent counts in scan/activity and health payloads are documented and testable |
-| P0 | V2.22 finding/conflict semantics sync | In progress | Finalize conflict definition / cross-agent analysis separation; align default finding groups + instance/entry count retention; keep health and detail/list filter statistics consistent | Conflict/finding behavior is uniform across roadmap/tasks/service-protocol/data-model/adapter docs and can be traced in same scan context |
-| P0 | V2.23 Health Dashboard / Adapter Capability UX 同步 | In progress | 完成 selected-agent health 卡片、能力矩阵状态（scan/toggle/install/read-only/blocked）与 finding/conflict/count 对齐口径；同步到 roadmap/service-protocol/agent-adapters/ui 标准 | 核心工作流（侧栏、adapter matrix、findings 过滤）口径一致，且在 code 侧补齐验证记录前不闭环 |
-| P0 | V2.24 Skill Detail 诊断口径 | In progress | 单 skill Detail 工作台口径（Findings=issue groups、Conflicts=current-agent、Analysis read-only/offline、History=toggle/config events）收敛；禁止 skill-content snapshot 与新增脚本执行/写入路径 | catalog.detail（single skill）与 list/health/analysis 数字口径一致；code-side 验收（selected-agent 冲突、issue group、history）待补齐 |
+| P0 | V2.22 finding/conflict semantics sync | Completed | Keep conflict definition / cross-agent analysis separation stable when adding new UI | Conflict/finding behavior is uniform across roadmap/tasks/service-protocol/data-model/adapter docs and can be traced in same scan context |
+| P0 | V2.23 Health Dashboard / Adapter Capability UX 同步 | Completed | Keep selected-agent health card and capability matrix semantics stable when adding triage/explainability | 核心工作流（侧栏、adapter matrix、findings 过滤）口径一致 |
+| P0 | V2.24 Skill Detail 诊断口径 | Completed | Keep Detail=single skill workbench; Findings=issue groups; Conflicts=current-agent; Analysis read-only/offline; History=toggle/config events | catalog.detail（single skill）与 list/health/analysis 数字口径一致 |
+| P0 | V2.26 Finding explainability | Planned | Explain rule source, trigger reason, affected instances, severity/risk mapping, and next action in finding/detail surfaces | Users can understand every finding count and drill down from Health to concrete skill/rule/path context |
+| P0 | V2.27 Skill identity/provenance dedupe | Planned | Normalize and label agent/root/path/provenance; keep Pi `.md` noise excluded; clarify opencode native vs compatibility roots | Users can explain why each skill appears once, appears under multiple agents, or is intentionally excluded |
+| P0 | V2.28 Conflict semantic closeout | Planned | Audit remaining UI/protocol wording so same-agent conflicts and cross-agent analysis never share the same counter | Conflict tabs only show current-agent collisions; Analysis owns cross-agent duplicate/source-overlap |
+| P0 | V2.29 Finding triage persistence | Planned | Add app-local reviewed/ignored/needs-follow-up state with changed-fingerprint reopening | Users can separate known issues from new actionable findings without writing agent config |
+| P0 | V2.30 AI skill analysis workflow | Planned | Extend disabled-by-default read-only AI analysis to batch summaries and suggestion drafts | Users get readable skill analysis with no writes, no script execution, no provider calls by default, and no credential storage |
 | P1 | Finding triage persistence | Planned | Add reviewed/ignored state and grouping by rule, severity, agent, and source without writing agent config or hiding unresolved high-risk findings | Users can separate known issues from new actionable findings |
-| P1 | Agent-config timeline | In progress | Show per-agent config snapshots and activity history only for config/toggle events; enforce preview diff and second-step confirmation for rollback; do not add skill-content snapshot or skill-toggle snapshot | Users can understand config changes and rollback points |
+| P1 | Agent-config timeline | Completed | Keep per-agent config snapshots and activity history only for config/toggle events; enforce preview diff and second-step confirmation for rollback; do not add skill-content snapshot or skill-toggle snapshot | Users can understand config changes and rollback points |
 | P1 | Read-only AI skill analysis assist | Implemented offline preview | Keep V2.7 disabled-by-default gate and V2.20 offline purpose/risk/finding summaries free of provider/client/storage/write/execution paths | Users get human-readable analysis without any write, execution, or credential risk |
 
 ## Version Selection Rule
 
 - If the task is OpenClaw/Hermes scanner work, use V2.16/V2.17.
-- If the task is cross-agent analysis, dashboard, scan accuracy, dedupe, finding/conflict semantics, or triage, use V2.18-V2.24.
-- If the task is agent-config timeline/history/rollback, use V2.25.
+- If the task is already-completed cross-agent analysis, dashboard, scan accuracy, dedupe, finding/conflict semantics, single-skill detail, or agent-config timeline maintenance, reference V2.18-V2.25.
+- If the task improves finding explanations, skill identity/provenance, conflict semantics, triage persistence, or read-only AI analysis workflow, use V2.26-V2.30.
+- If the task builds cleanup queue, policy tuning, safe batch actions, cross-agent comparison, or local report export, use V2.31-V2.35.
+- If the task is Pi writable evidence, Hermes external roots, OpenClaw workspace deepening, or adapter diagnostics, use V2.36-V2.40.
+- If the task is quality scoring, stale/drift detection, local knowledge index, policy packs, or review session mode, use V2.41-V2.45.
 - Do not create versions for script execution, GitHub clone import, script-file install, signing, notarization, DMG/ZIP, public distribution, or full-platform UI adaptation unless the product direction changes explicitly.

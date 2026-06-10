@@ -1,6 +1,6 @@
 # skills-copilot Service Protocol
 
-> Status: V2.20 read-only AI skill analysis assist integrated. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, and V2.19 health dashboard are implemented; writable/install support remains blocked. V2.21 alignment for scan accuracy, dedupe behavior, and agent-level metrics is complete; V2.22 finding/conflict 语义与验收同步已收口；V2.23 Health Dashboard / Adapter Capability UX 同步作为前置；V2.24 Skill Detail 诊断口径在同步中；V2.25 Agent-config timeline 口径同步进行中。
+> Status: V2.25 Agent-config timeline integrated. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, V2.19 health dashboard, V2.20 read-only AI skill analysis assist, V2.21 scan accuracy/dedupe alignment, V2.22 finding/conflict semantics, V2.23 Health Dashboard / Adapter Capability UX, V2.24 Skill Detail diagnostics, and V2.25 Agent-config timeline are implemented or synchronized. Writable/install support for Pi/Hermes/OpenClaw remains blocked.
 >
 > Integrated: V2.9 Tool-global import/export/install, V2.10 skill execution safety boundary, and 2026-06-10 real local Computer Use validation for the current mainline app. V2.11 added adapter capability status to the service protocol and macOS UI. V2.12 marks opencode writable through exact permission.skill deny/re-enable after snapshot/rollback, install, and fixture smoke validation pass; current opencode scan follows native plus official compatibility roots while install targets remain native roots.
 >
@@ -84,7 +84,7 @@ It currently scans:
 
 It resolves the effective `ProjectContext` before adapter scanning.
 
-## V2.24 Skill Detail 诊断工作台（进行中）
+## V2.24 Skill Detail 诊断工作台（完成）
 
 V2.24 将 `catalog.getSkill` 与 detail 视图收敛为单 skill 诊断工作台，不新增 method：
 
@@ -95,9 +95,9 @@ V2.24 将 `catalog.getSkill` 与 detail 视图收敛为单 skill 诊断工作台
 - **History 定义**：`snapshot.list` / `snapshot.listAgentConfig` / `skill.listEvents` 在 V2.24 口径下仅用于 toggle/config 相关历史；不新增 skill-content snapshot。
 - **边界限制**：本阶段不新增 skill-content snapshot，不新增脚本执行或写入路径，detail 仅消费可读数据并发起已存在的受控 toggle/save/rollback 动作。
 
-该 section 仅用于验收对齐，不代表 V2.24 已完成。
+该 section 是当前完成口径；未来 detail 相关 UI/protocol 变更必须继续遵守该边界。
 
-## V2.25 Agent-config timeline（进行中）
+## V2.25 Agent-config timeline（完成）
 
 V2.25 聚焦 agent-config snapshot timeline 收敛，仍不新增 protocol method：
 
@@ -107,7 +107,7 @@ V2.25 聚焦 agent-config snapshot timeline 收敛，仍不新增 protocol metho
 - **二次确认**：`snapshot.rollback` 在 preview 核验后仍需用户二次确认，且与现有 `confirmed=true` 机制互斥表达，避免单击误操作即立即回滚。
 - **只读边界**：本阶段不做 skill-content snapshot，不做 skill-toggle snapshot，不把 detail 的 finding/conflict 历史与 agent-config timeline 混在一个视图中。
 
-该 section 为验收对齐用途，当前实现仍以现有 method 与现有 payload 执行。
+该 section 是当前完成口径；当前实现仍以现有 method 与现有 payload 执行，未来 rollback 相关 UI/service 变更仍需重新验证。
 
 ## V2.18 Cross-Agent Analysis Payload
 
@@ -187,9 +187,9 @@ Example shape:
 }
 ```
 
-## V2.23 Health / Adapter Capability Alignment（文档对齐）
+## V2.23 Health / Adapter Capability Alignment（完成口径）
 
-V2.23 当前阶段聚焦文档与验收口径：
+V2.23 已完成当前文档与验收口径：
 
 - `catalog.listConflicts` 与 Health conflict 卡片共享口径：仅 current selected/current agent 的 runtime/name collision。
 - `app.stateSnapshot.health` 与 `finding` 过滤一致：`finding_count` 与问题分组（issue group）默认口径一致；不得与 `catalog.analysis` 的 cross-agent 组重复叠加。
@@ -244,8 +244,8 @@ Current matrix（V2.23 对齐口径）:
 | Codex | `verified` | Supported | Supported（user `config.toml` only） | Supported（tool-global install to user/project roots） | Supported（用户级 settings patch） | `project-local` blocked |
 | opencode | `verified` | Supported（native + official compatibility roots） | Supported（managed exact `permission.skill` deny/re-enable） | Supported（native-root install target） | Supported（managed permission overrides） | `custom skills.paths/urls` blocked |
 | Pi | `read-only` | Supported（Pi-native roots） | Blocked（evidence harness pending） | Blocked | Blocked | `read-only` |
-| Hermes | `planned` | Read-only scanner candidate（候选） | Blocked | Blocked | Blocked | `planned / read-only` |
-| OpenClaw | `planned` | Read-only scanner candidate（候选） | Blocked | Blocked | Blocked | `project/read-only` |
+| Hermes | `read-only` | Supported（active/profile Hermes home skills） | Blocked | Blocked | Blocked | `read-only; generic project scan and writes blocked` |
+| OpenClaw | `read-only` | Supported（documented filesystem roots） | Blocked | Blocked | Blocked | `read-only; workspace-scoped project roots only` |
 
 Native UI must use this matrix for affordance gating and explanations. It must not infer write support only from an agent name.
 

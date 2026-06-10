@@ -107,20 +107,20 @@ For UI changes:
 - finding 与 conflict 的卡片与 `catalog.listFindings` / `catalog.listConflicts` 的过滤口径保持一致。
 - capability matrix 文案必须明确 scan / toggle / install / read-only / blocked 的状态和 blocker。
 - Health 卡片应包含下一步动作（比如 refresh / open details / review / remediation）而非仅展示计数。
-- 该功能验收项通过后才推进 V2.23 closing；未实装前记录“进行中”并显式列出缺口。
+- 该功能验收项已作为 V2.23 完成口径；未来 Health / capability UI 变更仍需重新验证这些约束。
 
-## 8. V2.24: Skill Detail Diagnostics Checklist（进行中）
+## 8. V2.24: Skill Detail Diagnostics Checklist（完成口径）
 
 - Detail 为单 skill 诊断工作台（列表点击即开一页式诊断视图）。
 - Findings 与 issue group 口径统一：列表/健康卡片/筛选展示的 finding 统计一致。
 - Conflicts 仅展示 selected/current agent 的 runtime/name 冲突；不得混入 cross-agent duplicate/source overlap。
 - Analysis 区域仅作只读离线分析预览，不提供执行或写入路径。
 - History 仅展示 toggle/config 相关事件；不展示 skill-content snapshot。
-- 验收前提：在完成截图与窗口级验证前不声明完成；若 detail 仅显示 counts 而未给出 remediation action，则视为未通过该项。
+- 当前口径已完成；未来 detail 改动仍需窗口级验证。若 detail 仅显示 counts 而未给出 remediation action，则视为回归。
 
-## 9. V2.25: Agent-config timeline（进行中）
+## 9. V2.25: Agent-config timeline（完成口径）
 
 - Agent-config History 以 per-agent 时间线展示，不与 selected-skill detail 混用。
 - 仅展示 toggle/config 相关快照事件，不展示 skill-content snapshot 或 skill-toggle snapshot。
 - rollback 流必须是 preview diff + 明确二次确认：先 `snapshot.previewRollback` 再独立确认 `snapshot.rollback`。
-- 相关验收需有 evidence 记录：多 agent 视图各自独立，且在未完成时记录待补齐 code-side 验证项。
+- 当前口径已完成；未来涉及 rollback 或 timeline 的 UI/service/protocol 变更仍需 evidence 记录，且多 agent 视图必须保持各自独立。

@@ -1,14 +1,14 @@
 # Agent Adapter Spec Worklists
 
 > Status: Codex first implementation, V2.1 dual adapter experience, V2.2 project context implementation, V2.3 Codex adapter hardening, V2.4 opencode read-only adapter, V2.5 audit hardening, V2.6 adapter changelog tracking, V2.7 LLM gate safety notes, V2.8-V2.10 safety/docs closeout, V2.11 Adapter Capability Matrix, V2.12 opencode writable, V2.13 Pi read-only scanner/parser, V2.14 Hermes evidence-gate closeout, and V2.15 OpenClaw evidence-gate closeout are integrated.
-> Real local UI validation passed for the current mainline app on 2026-06-09. Future user-visible, UI, or service-protocol candidates still require a fresh real local pass. opencode writable, Pi read-only scan, OpenClaw read-only scan, and Hermes read-only scan are implemented; Pi/Hermes/OpenClaw writable support remains blocked.
+> Real local UI validation passed for the current mainline app on 2026-06-10. Future user-visible, UI, or service-protocol candidates still require a fresh real local pass. opencode writable, Pi read-only scan, OpenClaw read-only scan, and Hermes read-only scan are implemented; Pi/Hermes/OpenClaw writable support remains blocked.
 > This document records what is verified enough to use for project instructions, and what is still missing before an adapter can be built.
 
 ## Current Rule
 
 Claude Code remains the mature baseline adapter. Codex has verified user/project roots, cwd-to-repo-root discovery, project-context-scoped scanning, and user-config writable toggles. V2.3 hardening added config patch robustness, explicit adapter states, root/config security regressions, and smoke/docs coverage. V2.4 added opencode as a read-only adapter for native roots; current opencode scan also follows official `.claude` / `.agents` compatibility roots.
 
-Pi production writable support remains blocked until the evidence harness is implemented. Opencode writable is enabled through managed `permission.skill` overrides after V2.12 validation; opencode install targets remain native roots. Pi read-only scan is enabled for native roots after V2.13 validation. P0 evidence on 2026-06-10 promoted Hermes and OpenClaw from fully blocked to read-only scanner candidates; OpenClaw read-only scan is enabled after V2.16 and Hermes read-only scan is enabled after V2.17, while writable/install stay blocked.
+Pi production writable support remains blocked until the evidence harness is implemented. Opencode writable is enabled through managed `permission.skill` overrides after V2.12 validation; opencode install targets remain native roots. Pi read-only scan is enabled for native roots after V2.13 validation. P0 evidence on 2026-06-10 promoted Hermes and OpenClaw from fully blocked to read-only scanner scope; OpenClaw read-only scan is enabled after V2.16 and Hermes read-only scan is enabled after V2.17, while writable/install stay blocked.
 
 The macOS app now uses the service/UI adapter capability matrix as the front-door status surface for all six agents. The matrix must make read-only, planned, and blocked states explicit before any future write affordance is exposed.
 
@@ -55,7 +55,7 @@ Required next evidence:
 | Config path/schema | Partially verified from official docs and local path existence: global `~/.pi/agent/settings.json`, project `.pi/settings.json`; resource arrays include `packages`, `extensions`, `skills`, `prompts`, `themes`, and `enableSkillCommands`. |
 | Enable/disable semantics | Partially documented but not writable-verified: `pi config` is the official enable/disable surface for package/local resources, and settings arrays/package filters support exclusions. Exact JSON mutation for direct local skill toggles is not verified. |
 | Fixture requirement | Minimal evidence fixtures added under `fixtures/pi/`. They are evidence samples, not parser contract fixtures. |
-| Implementation decision | Blocked for writable adapter. Read-only scanner/parser work has enough evidence to plan after duplicate-root and project-trust policy are decided. |
+| Implementation decision | Writable adapter remains blocked. Read-only scanner/parser is implemented for Pi-native directory skills under `SKILL.md`; direct root `.md` cataloging is intentionally excluded after real local validation showed ordinary resource noise. |
 
 Required next evidence:
 
@@ -127,12 +127,12 @@ Project scope decision: OpenClaw project semantics are workspace-scoped only. Tr
 | Area | Status |
 | --- | --- |
 | Public product identity | Partially observed from local OpenClaw-related skill docs: OpenClaw is described as an AI assistant and automation platform with plugins, gateway restart, and skill/package scanning workflows. |
-| Skill discovery roots | Confirmed read-only candidate from official docs and read-only macmini evidence: workspace roots `<workspace>/skills` and `<workspace>/.agents/skills`, global/shared roots, bundled roots, and configured extra dirs. Project scope is workspace-scoped only. |
+| Skill discovery roots | Confirmed read-only scope from official docs and read-only macmini evidence: workspace roots `<workspace>/skills` and `<workspace>/.agents/skills`, global/shared roots, bundled roots, and configured extra dirs. Project scope is workspace-scoped only. |
 | Skill file/directory format | Partial read-only evidence: the local security-scan skill expects skill directories containing `SKILL.md`, extracts `name:` from YAML frontmatter, and falls back to the directory basename. This is script input evidence, not a full product spec. |
 | Config path/schema | Partial evidence only: local plugin docs use `openclaw config file` to locate `openclaw.json`; a user-local `~/.openclaw/openclaw.json` exists on this machine but is JSONC/non-strict JSON and was not copied because it may contain credentials. |
 | Enable/disable semantics | Plugin evidence only: local Tablestore Mem0 docs patch `.plugins.entries["openclaw-mem0"].enabled = true`, `.plugins.slots.memory`, and `.plugins.allow`. This does not verify skill enable/disable semantics. |
 | Fixture requirement | Minimal evidence fixtures added under `fixtures/openclaw/`, marked as read-only evidence samples and not writable toggle contract. |
-| Implementation decision | P0 evidence confirms a read-only filesystem scanner candidate over documented roots. Writable adapter and install remain blocked until config mutation, credential preservation, and rollback behavior are verified. |
+| Implementation decision | Read-only filesystem scanner over documented roots is implemented. Writable adapter and install remain blocked until config mutation, credential preservation, and rollback behavior are verified. |
 
 Required next evidence:
 

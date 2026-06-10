@@ -185,7 +185,7 @@ pub enum ExecutionAttemptStatus {
     Failed,
 }
 
-### 1.9 V2.22 finding/conflict 语义对齐（进行中）
+### 1.9 V2.22 finding/conflict 语义对齐（完成口径）
 
 - conflict 的定义收敛为 `ConflictGroup`：同一 selected/current agent 内的 runtime/name 冲突或 shadowing，不跨 agent。
 - cross-agent duplicate / source overlap / enabled mismatch 仅作为 analysis group，不进入 `ConflictGroup`。

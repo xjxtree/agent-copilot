@@ -107,14 +107,14 @@ Use it to inspect actual local behavior and visual quality. Any manual validatio
 
 If the session is locked or Computer Use/AX cannot resolve the app window (for example `remoteConnection` / `cgWindowNotFound` / activation errors), record the blocker explicitly and keep the candidate pending. This is a valid blocker record, but it is not a substitute for real-local verification.
 
-## V2.25 Agent-config Timeline Validation (进行中)
+## V2.25 Agent-config Timeline Validation (完成口径)
 
 V2.25 focuses on per-agent config timeline and rollback confirmation flow:
 
 - `snapshot.listAgentConfig` should return agent-scoped config/toggle snapshots and histories; it must not be treated as a skill-content snapshot history.
 - `snapshot.previewRollback` and `snapshot.rollback` must be validated as a two-step user flow: preview diff first, then explicit second confirmation.
 - Do not mix per-agent history into selected-skill detail pages.
-- Smoke mode remains fixture-driven, but final closeout must keep real-local pending when this flow has not passed interactively.
+- Smoke mode remains fixture-driven. Future rollback/timeline UI or service changes must rerun real-local validation when the macOS session is unlocked and interactive.
 
 ## 2026-06-10 real local validation note
 

@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-**当前阶段**：V2.11-V2.15 多 agent adapter 版本线已完成。P0 evidence 已把 OpenClaw 和 Hermes 推进为 read-only scanner candidate；Pi 进入 writable evidence harness candidate。
+**当前阶段**：V2.25 Agent-config timeline 与 V2.21-V2.25 scan/finding/conflict/health/detail/history 口径已收口。下一阶段聚焦 V2.26-V2.30：finding 可解释性、skill 身份与去重、conflict 语义稳定、triage 持久化，以及 read-only AI skill analysis 工作流增强。
 
-**近期主线**：先实现 OpenClaw/Hermes read-only scanner 的受限切片，再做 Pi writable evidence harness。OpenClaw/Hermes writable/install 与 Pi production writable 仍保持 blocked，直到 disposable rollback 证据通过。
+**近期主线**：继续围绕 skills 管理、检查、分析和配置审计打磨体验。短期不做全平台 UI 适配、正式签名 release、notarization、DMG/ZIP 或 public distribution。OpenClaw/Hermes writable/install 与 Pi production writable 仍保持 blocked，直到 disposable rollback 证据通过。
 
 **已集成能力**：
 
@@ -20,9 +20,10 @@
 - V2.11 Adapter capability matrix 首个 service/UI 切片，用于展示六个 agent 的 scan/toggle/install 状态和 blocker。
 - V2.12 opencode guarded writable：native roots 支持 exact `permission.skill` deny/re-enable、snapshot/rollback 和 tool-global install。
 - V2.13 Pi read-only scanner/parser：支持 Pi-native global/project roots，Pi writes 继续 blocked。
-- V2.14 Hermes evidence-gate closeout：没有 maintainer-confirmed spec，不实现 scanner/parser 或 writable adapter。
-- V2.15 OpenClaw evidence-gate closeout：候选 roots/config 线索不足以作为 maintainer-confirmed spec，不实现 scanner/parser 或 writable adapter。
-- 2026-06-09 真实本机 app Computer Use validation 已通过。
+- V2.14 Hermes evidence-gate closeout 与 V2.17 Hermes read-only scanner：active/profile Hermes home `skills/**/SKILL.md` 只读进入 catalog。
+- V2.15 OpenClaw evidence-gate closeout 与 V2.16 OpenClaw read-only scanner：workspace/global documented filesystem roots 只读进入 catalog。
+- V2.18-V2.25：cross-agent analysis、skill health dashboard、read-only AI skill analysis、scan accuracy/dedupe、finding/conflict 语义、Health/Adapter Capability UX、Detail 诊断口径、Agent-config timeline 已集成。
+- 2026-06-10 真实本机 app Computer Use validation 已通过；后续 UI/service/protocol 变更仍需重跑。
 
 **当前产品 UI**：SwiftUI/AppKit macOS 原生壳 + Rust service protocol。
 
@@ -36,8 +37,8 @@
 | Codex | 已支持已验证范围 | 支持 verified user/project roots、cwd→repo-root discovery、`catalog.scanAll`、agent filter、project context 归属和用户级 `config.toml` toggle。 |
 | opencode | 已支持已验证范围 | 支持 native roots：`~/.config/opencode/skills` 和当前项目 `.opencode/skills`；支持 guarded writable toggle/install，写入 exact `permission.skill.<name> = "deny"` 并保留 snapshot/rollback。 |
 | Pi | read-only | V2.13 已实现 Pi-native global/project scanner/parser；writable toggle/install 仍 blocked，等待 settings mutation/rollback 证据。 |
-| Hermes | read-only candidate | P0 evidence 已确认 Hermes Agent 有 first-class skills 和 `~/.hermes/skills/**/SKILL.md`；不做 generic project scan；只支持 active/profile Hermes home，显式 `skills.external_dirs` 另行设计为 external roots；writable toggle/install 仍 blocked。 |
-| OpenClaw | read-only candidate | P0 evidence 已确认 OpenClaw `SKILL.md` roots、schema、precedence 和 `skills list --json`；project scope 仅限 OpenClaw workspace roots，不按任意 repo root 推断；writable toggle/install 仍 blocked。 |
+| Hermes | read-only | V2.17 已实现 active/profile Hermes home `skills/**/SKILL.md` 只读扫描；不做 generic project scan；显式 `skills.external_dirs` 另行设计为 external roots；writable toggle/install 仍 blocked。 |
+| OpenClaw | read-only | V2.16 已实现文档化 filesystem roots 只读扫描；project scope 仅限 OpenClaw workspace roots，不按任意 repo root 推断；writable toggle/install 仍 blocked。 |
 
 ## 近期版本规划
 
@@ -47,8 +48,8 @@
 | V2.11 | Adapter Capability Matrix：服务协议和 macOS UI 展示六个 agent 的能力状态与 blocker | 已完成 |
 | V2.12 | opencode writable evidence + guarded toggle/install | 已完成 |
 | V2.13 | Pi read-only scanner/parser + writable blocker | 已完成 |
-| V2.14 | Hermes maintainer-confirmed spec + adapter implementation scope | 已完成证据门 closeout；P0 evidence 后进入 read-only candidate |
-| V2.15 | OpenClaw maintainer-confirmed spec + adapter implementation scope | 已完成证据门 closeout；P0 evidence 后进入 read-only candidate |
+| V2.14 | Hermes maintainer-confirmed spec + adapter implementation scope | 已完成证据门 closeout；read-only scanner 后续已在 V2.17 实现 |
+| V2.15 | OpenClaw maintainer-confirmed spec + adapter implementation scope | 已完成证据门 closeout；read-only scanner 后续已在 V2.16 实现 |
 
 ## 它做什么
 

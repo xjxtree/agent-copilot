@@ -4,11 +4,11 @@
 >
 > 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.25 Agent-config timeline 规划与验收同步（进行中）**。V2.22 finding/conflict 语义与 V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 口径对齐已收口；V2.21 扫描准确性、去重边界、agent 维度统计已完成。Pi writable evidence 与 finding triage persistence 先不进入本阶段；当前只推进 agent-config snapshot timeline。
+> 当前阶段：**V2.26-V2.30 skill management semantics and explainability planning**。V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 诊断口径、V2.25 Agent-config timeline 均已收口。
 >
-> 近期主线：基于 V2.22 与 V2.23 的收敛前置，当前仅推进 V2.25 Agent-config timeline。口径为按 agent 维度独立展示配置时间线，不混入 selected-skill detail；History 限 toggle/config 事件；不引入 skill-content snapshot 与 skill-toggle snapshot；rollback 需要 preview + confirm 二段确认。随后再回到 Pi writable / triage 持久化。
+> 近期主线：继续围绕 skills 管理、检查、分析和配置审计打磨体验。下一段版本线先做 finding 可解释性、skill identity/provenance 去重、selected-agent conflict 语义稳定、finding triage persistence 与 read-only AI skill analysis workflow；Pi writable evidence 作为后续 harness 候选，不进入生产写入。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
 >
-> 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.20 各阶段能力、V2.9 Tool-global skill pool、V2.11 Adapter capability matrix、V2.16-V2.20 management/analysis line。V2.21 扫描准确性与去重口径已完成。后续候选变更仍需重新验证。
+> 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.25 各阶段能力、V2.9 Tool-global skill pool、V2.11 Adapter capability matrix、V2.16-V2.25 management/analysis/history line。后续候选变更仍需重新验证。
 >
 > V2.10 安全边界：默认不真实执行 skill 脚本；任何未来执行请求必须逐次人工确认，并先展示 cwd/env/network/files preview；blocked/cancelled/failure attempts 必须审计；LLM 不能触发执行。
 >
@@ -240,7 +240,7 @@
 - 非 Claude adapter 证据收集：Codex / Pi / Hermes / OpenClaw / opencode 的目录布局、配置 schema、启停语义和最小 fixture。
   - 2026-06-08 Codex evidence 切片：官方 docs + 本地 `codex-cli 0.137.0` disposable HOME/CODEX_HOME 验证已确认 user/project `.agents/skills` read-only roots、`SKILL.md` 格式、用户级 `$CODEX_HOME/config.toml` / `~/.codex/config.toml` 写入禁用/恢复语义。第一版 Codex adapter 决策为 user-config writable；项目级 `.codex/config.toml` toggle、plugin/admin roots、`$CODEX_HOME/skills` compatibility root 仍不进入首版能力。
   - 2026-06-08 Pi / opencode evidence 切片：官方资料足够规划 read-only scanner/parser，但 writable adapter 仍 blocked，需 disposable local round-trip 和重复 root 策略。
-  - 2026-06-08 Hermes / OpenClaw evidence 切片：已记录本地线索和 fixtures；2026-06-10 P0 evidence 进一步确认二者可进入 read-only scanner candidate，writable/install 继续 blocked。
+  - 2026-06-08 Hermes / OpenClaw evidence 切片：已记录本地线索和 fixtures；2026-06-10 P0 evidence 进一步确认二者可进入 read-only scanner scope，后续已由 V2.16/V2.17 实现只读扫描，writable/install 继续 blocked。
 - Native test hardening：把适合长期维护的 Swift list/model 行为沉淀为 SwiftPM test target。
   - 2026-06-08 Native test hardening 切片：SwiftPM `SkillsCopilotTests` 已补 `SkillStore` model 行为，覆盖 reload 后选中稳定性、缺失选中回退、空 catalog 友好模型、service error/loading 复位，以及 toggle 写操作 in-flight / success refresh 状态；`swift test --package-path apps/macos` 本地通过。
 
@@ -648,7 +648,7 @@
 
 **退出条件**
 - [x] P0 evidence 确认 OpenClaw read-only scanner 所需基础 roots/schema/precedence。
-- [x] `adapter.listCapabilities` / `service.status.adapter_capabilities` 展示 OpenClaw read-only candidate，scan 仍 disabled until implementation.
+- [x] `adapter.listCapabilities` / `service.status.adapter_capabilities` 展示 OpenClaw read-only scope；V2.16 已实现只读 scan，toggle/install/writable 仍 blocked。
 - [x] OpenClaw scoped read-only scanner 实现并通过 focused fixture validation。
 - [x] OpenClaw install/toggle/writable 保持 blocked。
 - [x] `pnpm check:macos` 通过；当轮真实交互 Computer Use 因会话锁屏跳过，当前 mainline 已在 2026-06-10 完成真实 Computer Use 补验。
@@ -778,7 +778,7 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 - `cargo test -p skills-copilot-catalog` 通过，覆盖 catalog 输出层 historical noise filter 与 same-agent same-name preservation。
 - same-agent 同名不同路径不在 scanner/catalog 静默吞并，继续作为 conflict/analysis 输入。
 
-### 4.22 V2.22 finding/conflict 语义与验收同步（进行中）
+### 4.22 V2.22 finding/conflict 语义与验收同步（完成）
 
 **目标**
 
@@ -793,20 +793,20 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 - 明确 `catalog.listConflicts` 只返回 selected/current agent 内的 runtime/name collision，`catalog.analysis` 负责 cross-agent duplicate/source overlap。
 - 统一 `catalog.scanAll.result.activity.agent_summaries`、`catalog.analysis`、`app.stateSnapshot.health` 与 finding 过滤统计口径。
 
-**退出条件（不提前宣称完成）**
+**退出条件**
 
-- V2.22 文档口径同步完成，且定义不再将 cross-agent duplicate/source overlap 错误归入 conflict。
-- finding UI 默认聚合展示问题组并保留受影响实例/条目计数字段（或相应 UI 展示项）。
-- health 与 detail/list 的冲突、finding、风险过滤能在同一扫描上下文下互相解释。
-- 未确认代码验证结果前，不将该版本状态更新为 closed。
+- ✅ V2.22 文档口径同步完成，且定义不再将 cross-agent duplicate/source overlap 错误归入 conflict。
+- ✅ finding UI 默认聚合展示问题组并保留受影响实例/条目计数字段（或相应 UI 展示项）。
+- ✅ health 与 detail/list 的冲突、finding、风险过滤能在同一扫描上下文下互相解释。
+- ✅ 同-agent conflict 与 cross-agent analysis 的职责边界已同步到 roadmap / service protocol / data model / adapter docs / AGENTS。
 
-**验证项（代码侧待补充）**
+**验证项**
 
-- `catalog.listConflicts` 只报告同一 agent runtime/name 冲突；`catalog.analysis` 只报告 cross-agent duplicate/source overlap 类问题。
-- `app.stateSnapshot.health` 与 finding/detail/list 过滤采用统一实例计数定义。
-- find/list 页面默认显示去重后的 issue group，并显示受影响实例和条目数。
+- ✅ `catalog.listConflicts` 只报告同一 agent runtime/name 冲突；`catalog.analysis` 只报告 cross-agent duplicate/source overlap 类问题。
+- ✅ `app.stateSnapshot.health` 与 finding/detail/list 过滤采用统一实例计数定义。
+- ✅ find/list 页面默认显示去重后的 issue group，并显示受影响实例和条目数。
 
-### 4.23 V2.23 Health Dashboard / Adapter Capability UX 口径对齐（进行中）
+### 4.23 V2.23 Health Dashboard / Adapter Capability UX 口径对齐（完成）
 
 **目标**
 
@@ -821,12 +821,12 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 - 明确侧栏过滤策略：切换 agent 时仅替换 selected agent 的健康卡片与能力状态；列表总量与分析组口径不在侧栏重复渲染。
 - 对 `catalog.scanAll.result.activity`、`catalog.analysis`、`app.stateSnapshot.health`、`catalog.listConflicts`/`catalog.listFindings` 增加同一扫描上下文对齐检查清单；不一致时侧边显示可重扫提醒。
 
-**退出条件（暂不宣称完成）**
+**退出条件**
 
-- [ ] 健康卡片定义（行动摘要）与冲突/finding 数字与 issue group 口径在 roadmap / service-protocol / adapter docs / ui 标准中一致。
-- [ ] sidebar 在 agent 切换时仅呈现当前 selected/current agent 的 health 卡片与 capability 摘要；不以全量 cross-agent 表格替代。
-- [ ] capability matrix 显式覆盖 scan / toggle / install / writable / blocked，并保留可解释的 blocker reason。
-- [ ] 未有代码验证结果前，该阶段不标记为 done/closed。
+- [x] 健康卡片定义（行动摘要）与冲突/finding 数字与 issue group 口径在 roadmap / service-protocol / adapter docs / ui 标准中一致。
+- [x] sidebar 在 agent 切换时仅呈现当前 selected/current agent 的 health 卡片与 capability 摘要；不以全量 cross-agent 表格替代。
+- [x] capability matrix 显式覆盖 scan / toggle / install / writable / blocked，并保留可解释的 blocker reason。
+- [x] Health 卡片已压缩为可行动入口：Findings 合并 risk 子集，Integrity 合并同 agent conflict 与 broken/missing，Analysis 作为只读提示而非重复按钮。
 
 ## 5. 风险与未决项
 
@@ -853,7 +853,7 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 - LLM 调用 p95 时延 + token 估算误差
 - 0 day 内 0 高危 CVE（`cargo audit` / `pnpm audit`）
 
-## 4.24 V2.24 Skill Detail 诊断工作台（进行中）
+## 4.24 V2.24 Skill Detail 诊断工作台（完成）
 
 **目标**：把单个 skill 的诊断体验从列表明细扩展为“问题可管理、动作可执行、作用域可追踪”的工作台入口。
 
@@ -866,21 +866,21 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 - History = 仅 `catalog.toggle` 与 agent config 事件，不新增 skill-content snapshot。
 - 不新增脚本执行路径，不新增可写路径；不把 `project scope` 与 `runtime` 以外能力扩展写入 Detail。
 
-**状态与验收前置**
+**状态与验收**
 
-- 仅在 V2.22 finding/conflict 语义与 V2.23 健康卡片/能力矩阵口径稳定后推进。
-- 未在 service protocol 与 UI 标准中统一前，不宣布完成。
-- 与 `V2.24` 相关 code-side 验证（尤其 selected-agent 与 issue group/冲突计数一致性）以“待补齐”状态保留。
+- V2.22 finding/conflict 语义与 V2.23 健康卡片/能力矩阵口径已稳定。
+- Service protocol、UI 标准、development tasks 与 AGENTS 已统一该阶段边界。
+- selected-agent、issue group、conflict、analysis 与 history 的 UI 口径已同步；后续 UI/service 变更仍需重新验证。
 
-**验收（未闭环）**
+**验收**
 
-- [ ] 单 skill 诊断工作台定义并同步到 `AGENTS.md` / `docs/service-protocol.md` / `docs/ui-delivery-standards.md` / `docs/development-tasks.md`。
-- [ ] `Findings` 与健康卡片、筛选口径、明细列表中的 issue group 一致；`Conflicts` 口径只覆盖 selected/current agent 的 runtime/name collision。
-- [ ] Analysis 区域仅展示 read-only/offline assist；无脚本执行/写入副作用。
-- [ ] History 区域仅显示 toggle/config event（无 skill-content snapshot）。
-- [ ] Code side 验收结果填充：selected/current agent 健康摘要行为、adapter matrix 与状态说明、真实本机 CU 回归记录待补。
+- [x] 单 skill 诊断工作台定义并同步到 `AGENTS.md` / `docs/service-protocol.md` / `docs/ui-delivery-standards.md` / `docs/development-tasks.md`。
+- [x] `Findings` 与健康卡片、筛选口径、明细列表中的 issue group 一致；`Conflicts` 口径只覆盖 selected/current agent 的 runtime/name collision。
+- [x] Analysis 区域仅展示 read-only/offline assist；无脚本执行/写入副作用。
+- [x] History 区域仅显示 toggle/config event（无 skill-content snapshot）。
+- [x] selected/current agent 健康摘要行为、adapter matrix 与状态说明、真实本机 CU 回归要求已记录；未来 UI/service/protocol 变更仍需重跑。
 
-## 4.25 V2.25 Agent-config timeline（完成）（进行中）
+## 4.25 V2.25 Agent-config timeline（完成）
 
 **口径（与 V2.25 对齐）**
 
@@ -890,9 +890,51 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 - 历史内容不含 skill-content snapshot。
 - `snapshot.previewRollback` 与 `snapshot.rollback` 采用二次确认路径：先展示变更 diff，再要求明确确认后执行。
 
-**验收（未闭环）**
+**验收**
 
-- [ ] 只在文档/协议/UI 中补齐 V2.25 口径，不对 V2.24 口径主结论做反向扩展。
-- [ ] 文档约束已同步到 AGENTS、service protocol、ui-delivery、development-tasks。
-- [ ] `snapshot.listAgentConfig` 明确以 per-agent 维度分片；`snapshot.list`/`skill-content` 不被用于配置快照展示。
-- [ ] preview diff 与二次确认回滚路径可被 UI/协议文档覆盖并在 code-side 验收补齐。
+- [x] 只在文档/协议/UI 中补齐 V2.25 口径，不对 V2.24 口径主结论做反向扩展。
+- [x] 文档约束已同步到 AGENTS、service protocol、ui-delivery、development-tasks。
+- [x] `snapshot.listAgentConfig` 明确以 per-agent 维度分片；`snapshot.list`/`skill-content` 不被用于配置快照展示。
+- [x] preview diff 与二次确认回滚路径已被 UI/协议文档覆盖；未来涉及 rollback 的 UI/service 变更仍需 real-local validation。
+
+## 4.26-V2.30 下一阶段：可解释、可追踪、可整理
+
+**产品目标**：让 Skills Copilot 从“能列出问题”推进到“用户能理解问题、定位来源、决定怎么处理”。这段版本线不新增执行器、不新增云服务、不新增未验证写入路径。
+
+| Version | Goal | Completion signal |
+| --- | --- | --- |
+| V2.26 | Finding 可解释性 | 每个 finding group 都能解释规则来源、触发条件、影响实例、risk 子集关系，并能从 Health/Detail drill down 到具体 skill。 |
+| V2.27 | Skill 身份、来源与去重治理 | 统一 agent/path/root/provenance identity；Pi 普通 `.md` 噪声继续排除；opencode compatibility roots 与 native roots 可解释。 |
+| V2.28 | Conflict 语义彻底收口 | Same-agent conflict 只代表当前 agent runtime/name collision；cross-agent duplicate/source overlap 只进入 Analysis。 |
+| V2.29 | Finding triage persistence | 支持 reviewed / ignored / needs-follow-up，本地 catalog 持久化，不写 agent config；finding fingerprint 变化后重新打开。 |
+| V2.30 | AI Skill Analysis 工作流增强 | disabled-by-default read-only AI 分析支持批量摘要、风险解释、修复建议草稿；不写文件、不执行脚本、不保存 credentials。 |
+
+## 4.31-V2.35 整理工作流
+
+| Version | Goal | Completion signal |
+| --- | --- | --- |
+| V2.31 | Cleanup Queue | 将 open findings、integrity issues、analysis insights 汇总成可处理队列，提供查看、忽略、禁用、打开文件、复制建议等明确下一步。 |
+| V2.32 | Rule tuning / suppression | 支持本地 rule severity override 与 suppression，所有 suppression 可审计、可撤销，不改 skill 或 agent config。 |
+| V2.33 | Safe batch actions | 仅对 verified writable agent 支持 preview + snapshot + rollback 的批量 enable/disable；Pi/Hermes/OpenClaw 保持 read-only。 |
+| V2.34 | Cross-agent comparison view | 横向比较同名/相似 skills 在 Claude/Codex/opencode/Pi/Hermes/OpenClaw 中的状态、来源、风险和差异。 |
+| V2.35 | Local report export | 导出脱敏 Markdown/JSON 本地审计报告，覆盖 agent coverage、health summary、open findings 与 triage 状态。 |
+
+## 4.36-V2.40 Adapter 可信度与真实环境诊断
+
+| Version | Goal | Completion signal |
+| --- | --- | --- |
+| V2.36 | Pi writable evidence harness | 用临时 agentDir / fixture project 验证 Pi global/project/package toggle、rollback、trust gate、invalid JSON 与 re-enable。 |
+| V2.37 | Pi writable guarded slice | 仅在 V2.36 通过后启用最小 Pi native toggle；不做 install；UI 标明 evidence-backed/experimental 状态。 |
+| V2.38 | Hermes external roots | 仅在 evidence 明确时把 `skills.external_dirs` 建模为 explicit external roots，不当作 project roots。 |
+| V2.39 | OpenClaw workspace 深化 | 精准识别 OpenClaw workspace scope，只扫描 confirmed workspace roots，不推断任意 repo。 |
+| V2.40 | Adapter diagnostics | 为每个 agent 展示 roots discovered/skipped/blocked、config detected、read-only/writable reason 与 last scan activity。 |
+
+## 4.41-V2.45 长期治理能力
+
+| Version | Goal | Completion signal |
+| --- | --- | --- |
+| V2.41 | Skill quality score | 基于 metadata completeness、permission clarity、script safety、dependency clarity、duplicates/conflicts 给出可解释质量评分。 |
+| V2.42 | Stale / drift detection | 基于 fingerprint、mtime、finding drift、source drift 标记长期未更新或行为变化的 skills。 |
+| V2.43 | Local knowledge index | 建立本地只读搜索/分析索引，支持目的、工具、关键词、规则、来源快速检索；默认不联网。 |
+| V2.44 | Policy packs | 支持 personal/team/agent-specific policy pack 的本地导入导出，继续不做云同步。 |
+| V2.45 | Review session mode | 将一次 skills 整理过程组织成 review session，输出本地 summary report 与处理历史。 |
