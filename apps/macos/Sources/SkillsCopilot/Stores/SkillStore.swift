@@ -5,6 +5,8 @@ final class SkillStore: ObservableObject {
     @Published private(set) var skills: [SkillRecord] = []
     @Published private(set) var findings: [RuleFindingRecord] = []
     @Published private(set) var conflicts: [ConflictGroupRecord] = []
+    @Published private(set) var cleanupQueue = CleanupQueueResult.emptyFallback()
+    @Published private(set) var isLoadingCleanupQueue = false
     @Published private(set) var healthSummary = SkillHealthSummary.empty
     @Published private(set) var agentConfigSnapshots: [ConfigSnapshotRecord] = []
     @Published private(set) var isLoadingAgentConfigSnapshots = false
@@ -44,11 +46,14 @@ final class SkillStore: ObservableObject {
         didSet {
             handleListCriteriaChanged()
             Task { await loadAgentConfigSnapshots() }
+            Task { await loadCleanupQueue() }
         }
     }
     @Published var stateFilter: SkillStateFilter = .all {
         didSet { handleListCriteriaChanged() }
     }
+    @Published var cleanupKindFilter: CleanupQueueKindFilter = .all
+    @Published var cleanupPriorityFilter: CleanupQueuePriorityFilter = .all
     @Published var sortOrder: SkillSortOrder = .name {
         didSet { handleListCriteriaChanged() }
     }
@@ -147,6 +152,15 @@ final class SkillStore: ObservableObject {
         SkillListModel.groupedByAgent(filteredSkills)
     }
 
+    var filteredCleanupQueueItems: [CleanupQueueItem] {
+        CleanupQueueModel.filtered(
+            items: cleanupQueue.items,
+            kindFilter: cleanupKindFilter,
+            priorityFilter: cleanupPriorityFilter,
+            agentFilter: agentFilter
+        )
+    }
+
     var selectedFindings: [RuleFindingRecord] {
         guard let skill = selectedSkill else { return [] }
         return findings.filter { finding in
@@ -159,6 +173,22 @@ final class SkillStore: ObservableObject {
         guard !keys.isEmpty else { return }
         Task {
             await setFindingTriageStatus(status, triageKeys: keys)
+        }
+    }
+
+    func openCleanupQueueItem(_ item: CleanupQueueItem) {
+        if let skillID = item.skillID, skills.contains(where: { $0.id == skillID }) {
+            selectedSkillID = skillID
+        }
+        switch item.kind {
+        case .finding, .integrity:
+            selectedDetailSection = .findings
+        case .conflict:
+            selectedDetailSection = .conflicts
+        case .analysis:
+            selectedDetailSection = .analysis
+        case .unknown:
+            selectedDetailSection = .overview
         }
     }
 
@@ -219,6 +249,7 @@ final class SkillStore: ObservableObject {
 
         do {
             try await refreshCollections()
+            await loadCleanupQueue()
             refreshStatusMessage = UIStrings.refreshReloaded(skills.count, findings.count, sameAgentRuntimeConflictCount)
             appendRefreshLog(level: "info", message: refreshStatusMessage)
             canRetryLastRefresh = false
@@ -244,6 +275,7 @@ final class SkillStore: ObservableObject {
             let result = try await service.scanAll()
             detailsByID.removeAll()
             try await refreshCollections()
+            await loadCleanupQueue()
             lastMutationMessage = UIStrings.scannedSkills(result.scannedCount)
             applyRefreshActivity(result.activity)
             await loadSelectedDetail()
@@ -567,6 +599,19 @@ final class SkillStore: ObservableObject {
             await loadSkillEventsIfNeeded(instanceID: id)
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    func loadCleanupQueue() async {
+        guard !isLoadingCleanupQueue else { return }
+        isLoadingCleanupQueue = true
+        defer { isLoadingCleanupQueue = false }
+
+        do {
+            let agent = agentFilter == .all ? nil : agentFilter.rawValue
+            cleanupQueue = try await service.listCleanupQueue(agent: agent, limit: 100)
+        } catch {
+            cleanupQueue = .emptyFallback(reason: UIStrings.cleanupUnavailableFallback)
         }
     }
 

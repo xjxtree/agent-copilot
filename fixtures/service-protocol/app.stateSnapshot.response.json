@@ -16,6 +16,7 @@
         "llm.status",
         "llm.prepareAction",
         "llm.prepareSkillAnalysis",
+        "cleanup.listQueue",
         "script.previewExecution",
         "script.execute",
         "project.getContext",

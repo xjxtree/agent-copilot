@@ -1,0 +1,8 @@
+{
+  "id": "fixture-cleanup-list-queue",
+  "method": "cleanup.listQueue",
+  "params": {
+    "agent": "codex",
+    "limit": 25
+  }
+}

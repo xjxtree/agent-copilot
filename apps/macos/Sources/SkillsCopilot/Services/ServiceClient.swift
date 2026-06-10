@@ -51,6 +51,11 @@ private struct ServiceRequest<Params: Encodable>: Encodable {
 
 private struct EmptyParams: Encodable {}
 
+private struct CleanupListQueueParams: Encodable {
+    let agent: String?
+    let limit: Int?
+}
+
 private struct GetSkillParams: Encodable {
     let instanceId: String
 
@@ -220,6 +225,17 @@ final class ServiceClient {
 
     func appStateSnapshot() async throws -> AppStateSnapshot {
         try await call(method: "app.stateSnapshot", params: EmptyParams())
+    }
+
+    func listCleanupQueue(agent: String? = nil, limit: Int? = nil) async throws -> CleanupQueueResult {
+        do {
+            return try await call(
+                method: "cleanup.listQueue",
+                params: CleanupListQueueParams(agent: agent, limit: limit)
+            )
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .emptyFallback(reason: UIStrings.cleanupUnavailableFallback)
+        }
     }
 
     func listSkills() async throws -> [SkillRecord] {

@@ -159,3 +159,14 @@ For UI changes:
 - Analysis 界面需展示：summary、risk explanation、cleanup/suggestion draft。
 - 草稿内容为 copy-only，不能承载直接写入动作；分析面不得展示或触发文件写入、agent-config 写入、snapshot 写入、script execute、credentials save。
 - AI 提示不应修改 finding triage 的持久状态（Open / Reviewed / Ignored / Needs follow-up）。
+
+## 15. V2.31: Cleanup Queue（已完成）
+
+- Scope：把 open findings、完整性问题和 analysis insights 聚合为 review 队列，作为下一步处理入口。
+- 交付边界：
+  - 队列默认 read-only：展示清单、排序、筛选、分组与 next action 建议。
+  - next action 只允许跳转到现有已安全实现的动作入口（detail 打开、筛选聚焦、scan/refresh、现有 toggle/save/rollback）。
+  - 阶段内不新增自动清理、自动写入、自动 install、脚本执行、provider 调用、credential 写入路径。
+- 验收证据要求：
+  - 文档与 roadmap/status 文案保持一致：V2.31 为清理队列聚合阶段，仍是 review-first 且默认安全。
+  - UI 验证若出现 queue 相关新视图，按现有规则补全完整 app-window 截图和变更记录；无代码改动则记录为文档更新，不新增 smoke。

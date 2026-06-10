@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeMap,
     env, fs,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
@@ -45,6 +46,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "llm.status",
     "llm.prepareAction",
     "llm.prepareSkillAnalysis",
+    "cleanup.listQueue",
     "script.previewExecution",
     "script.execute",
     "project.getContext",
@@ -204,6 +206,50 @@ pub struct ScriptExecutionStatus {
     pub audit_scope: String,
     pub audit_path: String,
     pub llm_initiation_allowed: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct CleanupListQueueParams {
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CleanupQueue {
+    pub summary: CleanupQueueSummary,
+    pub items: Vec<CleanupQueueItem>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CleanupQueueSummary {
+    pub total_count: usize,
+    pub counts_by_kind: BTreeMap<String, usize>,
+    pub counts_by_priority: BTreeMap<String, usize>,
+    pub read_only: bool,
+    pub writes_allowed: bool,
+    pub provider_request_sent: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CleanupQueueItem {
+    pub id: String,
+    pub kind: String,
+    pub severity: String,
+    pub priority: String,
+    pub agent: Option<String>,
+    pub scope: Option<String>,
+    pub skill_id: Option<String>,
+    pub definition_id: Option<String>,
+    pub skill_name: Option<String>,
+    pub title: String,
+    pub detail: String,
+    pub recommended_next_action_label: String,
+    pub source_id: String,
+    pub read_only: bool,
+    pub writes_allowed: bool,
+    pub provider_request_sent: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -607,6 +653,14 @@ impl ServiceHost {
                 let params: LlmPrepareSkillAnalysisParams = serde_json::from_value(request.params)?;
                 serde_json::to_value(self.prepare_llm_skill_analysis(params)?).map_err(Into::into)
             }
+            "cleanup.listQueue" => {
+                let params: CleanupListQueueParams = if request.params.is_null() {
+                    CleanupListQueueParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.cleanup_list_queue(params)?).map_err(Into::into)
+            }
             "script.previewExecution" => {
                 let params: ScriptExecutionRequest = serde_json::from_value(request.params)?;
                 let adapter_ctx = self.effective_adapter_ctx()?;
@@ -907,6 +961,195 @@ impl ServiceHost {
             health,
             snapshots: list_snapshots(&catalog)?,
         })
+    }
+
+    pub fn cleanup_list_queue(
+        &self,
+        params: CleanupListQueueParams,
+    ) -> Result<CleanupQueue, ServiceError> {
+        let Some(catalog) = self.open_existing_catalog_read_only()? else {
+            return Ok(cleanup_queue_response(Vec::new(), params.limit));
+        };
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let skills = self.list_visible_skill_records(&catalog)?;
+        let findings = list_findings(&catalog)?;
+        let conflicts = list_conflicts(&catalog)?;
+        let analysis = analyze_catalog(&catalog, &adapter_ctx)?;
+        let agent_filter = params.agent.as_deref().filter(|agent| !agent.is_empty());
+        let mut items = Vec::new();
+
+        let skill_by_id = skills
+            .iter()
+            .map(|skill| (skill.id.as_str(), skill))
+            .collect::<BTreeMap<_, _>>();
+        let skills_by_definition = skills.iter().fold(
+            BTreeMap::<&str, Vec<&SkillRecord>>::new(),
+            |mut by_definition, skill| {
+                by_definition
+                    .entry(skill.definition_id.as_str())
+                    .or_default()
+                    .push(skill);
+                by_definition
+            },
+        );
+
+        for skill in &skills {
+            if !agent_matches(agent_filter, Some(skill.agent.as_str())) {
+                continue;
+            }
+            if matches!(skill.state.as_str(), "broken" | "missing") {
+                let severity = if skill.state == "missing" {
+                    "error"
+                } else {
+                    "critical"
+                };
+                items.push(CleanupQueueItem {
+                    id: format!("cleanup:integrity:{}:{}", skill.state, skill.id),
+                    kind: "integrity".to_string(),
+                    severity: severity.to_string(),
+                    priority: priority_for(severity).to_string(),
+                    agent: Some(skill.agent.clone()),
+                    scope: Some(skill.scope.clone()),
+                    skill_id: Some(skill.id.clone()),
+                    definition_id: Some(skill.definition_id.clone()),
+                    skill_name: Some(skill.name.clone()),
+                    title: format!("{} skill record: {}", skill.state, skill.name),
+                    detail: "This catalog row is not currently loaded cleanly. Inspect the source and rescan before relying on it.".to_string(),
+                    recommended_next_action_label: "Inspect skill details".to_string(),
+                    source_id: skill.id.clone(),
+                    read_only: true,
+                    writes_allowed: false,
+                    provider_request_sent: false,
+                });
+            }
+        }
+
+        for conflict in &conflicts {
+            let members = conflict
+                .instance_ids
+                .iter()
+                .filter_map(|instance_id| skill_by_id.get(instance_id.as_str()).copied())
+                .collect::<Vec<_>>();
+            if let Some(agent) = agent_filter {
+                let matching_member_count =
+                    members.iter().filter(|skill| skill.agent == agent).count();
+                if matching_member_count < 2 {
+                    continue;
+                }
+            }
+            let first = members.first().copied();
+            items.push(CleanupQueueItem {
+                id: format!("cleanup:conflict:{}", conflict.id),
+                kind: "conflict".to_string(),
+                severity: "error".to_string(),
+                priority: "high".to_string(),
+                agent: first.map(|skill| skill.agent.clone()),
+                scope: first.map(|skill| skill.scope.clone()),
+                skill_id: conflict
+                    .winner_id
+                    .clone()
+                    .or_else(|| first.map(|skill| skill.id.clone())),
+                definition_id: Some(conflict.definition_id.clone()),
+                skill_name: first.map(|skill| skill.name.clone()),
+                title: format!("Same-agent conflict: {}", conflict.reason),
+                detail: format!(
+                    "{} skill records share a runtime conflict for definition {}.",
+                    conflict.instance_ids.len(),
+                    conflict.definition_id
+                ),
+                recommended_next_action_label: "Review conflict details".to_string(),
+                source_id: conflict.id.clone(),
+                read_only: true,
+                writes_allowed: false,
+                provider_request_sent: false,
+            });
+        }
+
+        for finding in &findings {
+            if finding.triage_status == "ignored" {
+                continue;
+            }
+            let skill = finding
+                .instance_id
+                .as_deref()
+                .and_then(|instance_id| skill_by_id.get(instance_id).copied())
+                .or_else(|| {
+                    finding
+                        .definition_id
+                        .as_deref()
+                        .and_then(|definition_id| skills_by_definition.get(definition_id))
+                        .and_then(|skills| skills.first().copied())
+                });
+            if !agent_matches(agent_filter, skill.map(|skill| skill.agent.as_str())) {
+                continue;
+            }
+            items.push(CleanupQueueItem {
+                id: format!("cleanup:finding:{}", finding.id),
+                kind: "finding".to_string(),
+                severity: finding.severity.clone(),
+                priority: priority_for(&finding.severity).to_string(),
+                agent: skill.map(|skill| skill.agent.clone()),
+                scope: skill.map(|skill| skill.scope.clone()),
+                skill_id: finding
+                    .instance_id
+                    .clone()
+                    .or_else(|| skill.map(|skill| skill.id.clone())),
+                definition_id: finding.definition_id.clone(),
+                skill_name: skill.map(|skill| skill.name.clone()),
+                title: format!("{} finding: {}", finding.rule_id, finding.message),
+                detail: finding.suggestion.clone().unwrap_or_else(|| {
+                    "Review this rule finding before relying on the skill.".to_string()
+                }),
+                recommended_next_action_label: "Review finding".to_string(),
+                source_id: finding.id.clone(),
+                read_only: true,
+                writes_allowed: false,
+                provider_request_sent: false,
+            });
+        }
+
+        for group in &analysis.groups {
+            if let Some(agent) = agent_filter {
+                if !group.agents.iter().any(|group_agent| group_agent == agent) {
+                    continue;
+                }
+            }
+            let first = group
+                .instance_ids
+                .iter()
+                .filter_map(|instance_id| skill_by_id.get(instance_id.as_str()).copied())
+                .find(|skill| agent_matches(agent_filter, Some(skill.agent.as_str())))
+                .or_else(|| {
+                    group
+                        .instance_ids
+                        .iter()
+                        .filter_map(|instance_id| skill_by_id.get(instance_id.as_str()).copied())
+                        .next()
+                });
+            items.push(CleanupQueueItem {
+                id: format!("cleanup:analysis:{}", group.id),
+                kind: "analysis".to_string(),
+                severity: group.severity.clone(),
+                priority: priority_for(&group.severity).to_string(),
+                agent: first.map(|skill| skill.agent.clone()),
+                scope: first.map(|skill| skill.scope.clone()),
+                skill_id: first.map(|skill| skill.id.clone()),
+                definition_id: None,
+                skill_name: group
+                    .canonical_name
+                    .clone()
+                    .or_else(|| first.map(|skill| skill.name.clone())),
+                title: group.title.clone(),
+                detail: group.explanation.clone(),
+                recommended_next_action_label: "Inspect analysis insight".to_string(),
+                source_id: group.id.clone(),
+                read_only: true,
+                writes_allowed: false,
+                provider_request_sent: false,
+            });
+        }
+
+        Ok(cleanup_queue_response(items, params.limit))
     }
 
     fn list_visible_skill_records(
@@ -1902,6 +2145,80 @@ fn supported_methods() -> Vec<&'static str> {
     SUPPORTED_METHODS.to_vec()
 }
 
+fn cleanup_queue_response(mut items: Vec<CleanupQueueItem>, limit: Option<usize>) -> CleanupQueue {
+    items.sort_by(|left, right| {
+        cleanup_kind_rank(&left.kind)
+            .cmp(&cleanup_kind_rank(&right.kind))
+            .then_with(|| {
+                severity_rank_for_queue(&left.severity)
+                    .cmp(&severity_rank_for_queue(&right.severity))
+            })
+            .then_with(|| left.agent.cmp(&right.agent))
+            .then_with(|| left.skill_name.cmp(&right.skill_name))
+            .then_with(|| left.skill_id.cmp(&right.skill_id))
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    if let Some(limit) = limit {
+        items.truncate(limit);
+    }
+
+    let mut counts_by_kind = BTreeMap::new();
+    let mut counts_by_priority = BTreeMap::new();
+    for item in &items {
+        *counts_by_kind.entry(item.kind.clone()).or_insert(0) += 1;
+        *counts_by_priority.entry(item.priority.clone()).or_insert(0) += 1;
+    }
+
+    CleanupQueue {
+        summary: CleanupQueueSummary {
+            total_count: items.len(),
+            counts_by_kind,
+            counts_by_priority,
+            read_only: true,
+            writes_allowed: false,
+            provider_request_sent: false,
+        },
+        items,
+    }
+}
+
+fn agent_matches(filter: Option<&str>, agent: Option<&str>) -> bool {
+    match filter {
+        Some(filter) => agent == Some(filter),
+        None => true,
+    }
+}
+
+fn cleanup_kind_rank(kind: &str) -> u8 {
+    match kind {
+        "integrity" => 0,
+        "conflict" => 1,
+        "finding" => 2,
+        "analysis" => 3,
+        _ => 4,
+    }
+}
+
+fn severity_rank_for_queue(severity: &str) -> u8 {
+    match severity {
+        "critical" => 0,
+        "error" => 1,
+        "warn" | "warning" => 2,
+        "info" => 3,
+        _ => 4,
+    }
+}
+
+fn priority_for(severity: &str) -> &'static str {
+    match severity {
+        "critical" => "critical",
+        "error" => "high",
+        "warn" | "warning" => "medium",
+        "info" => "low",
+        _ => "low",
+    }
+}
+
 fn parse_agent_param(agent: &str) -> Result<AgentId, ServiceError> {
     match agent {
         "claude-code" => Ok(AgentId::ClaudeCode),
@@ -1928,7 +2245,7 @@ fn parse_scope_param(scope: &str) -> Result<Scope, ServiceError> {
 mod tests {
     use super::*;
     use serde::de::DeserializeOwned;
-    use skills_copilot_catalog::RuleFindingDraft;
+    use skills_copilot_catalog::{ConflictGroupDraft, RuleFindingDraft, SkillDefinitionDraft};
     use skills_copilot_core::{AgentId, PermissionRequest, SkillInstance, SkillState};
 
     #[test]
@@ -1963,6 +2280,7 @@ mod tests {
         assert!(methods.contains(&Value::String("llm.status".to_string())));
         assert!(methods.contains(&Value::String("llm.prepareAction".to_string())));
         assert!(methods.contains(&Value::String("llm.prepareSkillAnalysis".to_string())));
+        assert!(methods.contains(&Value::String("cleanup.listQueue".to_string())));
         assert!(methods.contains(&Value::String("script.previewExecution".to_string())));
         assert!(methods.contains(&Value::String("script.execute".to_string())));
         assert!(methods.contains(&Value::String("project.getContext".to_string())));
@@ -2141,6 +2459,173 @@ mod tests {
         );
 
         let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn cleanup_queue_orders_counts_and_filters_read_only_items() {
+        let unique = unique_suffix();
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-cleanup-queue-test-{}-{unique}",
+            std::process::id()
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_cleanup_queue_fixture(&host);
+
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("cleanup".to_string()),
+            method: "cleanup.listQueue".to_string(),
+            params: json!({}),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("cleanup result");
+        assert_eq!(
+            result
+                .pointer("/summary/read_only")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/writes_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        let items = result
+            .get("items")
+            .and_then(Value::as_array)
+            .expect("queue items");
+        assert!(
+            items.len() >= 5,
+            "expected aggregate queue items: {items:?}"
+        );
+        assert_eq!(
+            items
+                .iter()
+                .map(|item| item.get("kind").and_then(Value::as_str).unwrap())
+                .take(4)
+                .collect::<Vec<_>>(),
+            vec!["integrity", "conflict", "finding", "finding"]
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/counts_by_kind/integrity")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/counts_by_kind/conflict")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert!(result
+            .pointer("/summary/counts_by_kind/analysis")
+            .and_then(Value::as_u64)
+            .is_some_and(|count| count >= 1));
+        assert!(
+            items
+                .iter()
+                .all(|item| item.get("read_only").and_then(Value::as_bool) == Some(true)),
+            "all queue items should be read-only"
+        );
+        assert!(
+            items
+                .iter()
+                .all(|item| item.get("writes_allowed").and_then(Value::as_bool) == Some(false)),
+            "queue must expose no write affordance"
+        );
+        assert!(
+            !items.iter().any(
+                |item| item.get("source_id").and_then(Value::as_str) == Some("ignored-finding")
+            ),
+            "ignored triage findings should not be queued"
+        );
+
+        let filtered = host.handle(ServiceRequest {
+            id: Some("cleanup-filtered".to_string()),
+            method: "cleanup.listQueue".to_string(),
+            params: json!({ "agent": "codex", "limit": 2 }),
+        });
+        assert!(filtered.ok, "{:?}", filtered.error);
+        let filtered_result = filtered.result.expect("filtered cleanup");
+        let filtered_items = filtered_result
+            .get("items")
+            .and_then(Value::as_array)
+            .expect("filtered items");
+        assert_eq!(filtered_items.len(), 2);
+        assert!(filtered_items.iter().all(|item| {
+            item.get("agent")
+                .and_then(Value::as_str)
+                .is_none_or(|agent| agent == "codex")
+        }));
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn cleanup_queue_missing_catalog_returns_empty_without_creating_app_data() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-cleanup-empty-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("cleanup-empty".to_string()),
+            method: "cleanup.listQueue".to_string(),
+            params: Value::Null,
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("cleanup result");
+        assert_eq!(
+            result
+                .pointer("/summary/total_count")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            result.get("items").and_then(Value::as_array).map(Vec::len),
+            Some(0)
+        );
+        assert!(
+            !app_data_dir.exists(),
+            "cleanup.listQueue must not initialize app data when there is no catalog"
+        );
     }
 
     #[test]
@@ -3697,6 +4182,16 @@ mod tests {
                     prepare.included_skill_count + prepare.excluded_missing_count
                 );
             }
+            "cleanup.listQueue" => {
+                let queue: WireCleanupQueue = decode_fixture_result(method, result, path);
+                assert_eq!(queue.summary.total_count, queue.items.len());
+                assert!(queue.summary.read_only);
+                assert!(!queue.summary.writes_allowed);
+                assert!(!queue.summary.provider_request_sent);
+                assert!(queue.items.iter().all(|item| item.read_only));
+                assert!(queue.items.iter().all(|item| !item.writes_allowed));
+                assert!(queue.items.iter().all(|item| !item.provider_request_sent));
+            }
             "script.previewExecution" => {
                 let preview: WireScriptExecutionPreviewRecord =
                     decode_fixture_result(method, result, path);
@@ -4261,6 +4756,48 @@ mod tests {
     #[allow(dead_code)]
     #[derive(Debug, Deserialize)]
     #[serde(deny_unknown_fields)]
+    struct WireCleanupQueue {
+        summary: WireCleanupQueueSummary,
+        items: Vec<WireCleanupQueueItem>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireCleanupQueueSummary {
+        total_count: usize,
+        counts_by_kind: BTreeMap<String, usize>,
+        counts_by_priority: BTreeMap<String, usize>,
+        read_only: bool,
+        writes_allowed: bool,
+        provider_request_sent: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireCleanupQueueItem {
+        id: String,
+        kind: String,
+        severity: String,
+        priority: String,
+        agent: Option<String>,
+        scope: Option<String>,
+        skill_id: Option<String>,
+        definition_id: Option<String>,
+        skill_name: Option<String>,
+        title: String,
+        detail: String,
+        recommended_next_action_label: String,
+        source_id: String,
+        read_only: bool,
+        writes_allowed: bool,
+        provider_request_sent: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
     struct WireLlmConfirmationRequirement {
         required: bool,
         message: String,
@@ -4754,6 +5291,164 @@ mod tests {
                 created_at: 1,
             }])
             .expect("upsert llm fixture finding");
+    }
+
+    fn seed_catalog_with_cleanup_queue_fixture(host: &ServiceHost) {
+        fs::create_dir_all(&host.app_data_dir).expect("create app data");
+        let catalog = Catalog::open(&host.catalog_path()).expect("open catalog");
+        catalog.init().expect("init catalog");
+        let instances = vec![
+            cleanup_skill(
+                "claude-alpha",
+                AgentId::ClaudeCode,
+                Scope::AgentGlobal,
+                "shared-fixture",
+                "Shared Fixture",
+                SkillState::Loaded,
+                true,
+            ),
+            cleanup_skill(
+                "codex-alpha",
+                AgentId::Codex,
+                Scope::AgentGlobal,
+                "shared-fixture",
+                "Shared Fixture",
+                SkillState::Loaded,
+                true,
+            ),
+            cleanup_skill(
+                "codex-conflict-a",
+                AgentId::Codex,
+                Scope::AgentGlobal,
+                "codex-conflict-definition",
+                "Codex Conflict",
+                SkillState::Loaded,
+                true,
+            ),
+            cleanup_skill(
+                "codex-conflict-b",
+                AgentId::Codex,
+                Scope::AgentProject,
+                "codex-conflict-definition",
+                "Codex Conflict",
+                SkillState::Loaded,
+                true,
+            ),
+            cleanup_skill(
+                "broken-skill",
+                AgentId::ClaudeCode,
+                Scope::AgentGlobal,
+                "broken-definition",
+                "Broken Fixture",
+                SkillState::Broken,
+                false,
+            ),
+        ];
+        catalog
+            .upsert_skill_instances(&instances)
+            .expect("upsert cleanup skills");
+        catalog
+            .refresh_rule_findings(&[
+                RuleFindingDraft {
+                    id: "error-finding".to_string(),
+                    instance_id: Some("codex-alpha".to_string()),
+                    definition_id: Some("shared-fixture".to_string()),
+                    rule_id: "permissions.exec-needs-human".to_string(),
+                    severity: "error".to_string(),
+                    message: "Execution permission needs human review.".to_string(),
+                    suggestion: Some(
+                        "Keep execution disabled unless explicitly reviewed.".to_string(),
+                    ),
+                    created_at: 1,
+                },
+                RuleFindingDraft {
+                    id: "warn-finding".to_string(),
+                    instance_id: Some("claude-alpha".to_string()),
+                    definition_id: Some("shared-fixture".to_string()),
+                    rule_id: "body.too-long".to_string(),
+                    severity: "warn".to_string(),
+                    message: "Skill body is long.".to_string(),
+                    suggestion: Some("Move reference content into references/.".to_string()),
+                    created_at: 2,
+                },
+                RuleFindingDraft {
+                    id: "ignored-finding".to_string(),
+                    instance_id: Some("claude-alpha".to_string()),
+                    definition_id: Some("shared-fixture".to_string()),
+                    rule_id: "fingerprint.changed".to_string(),
+                    severity: "info".to_string(),
+                    message: "Fingerprint changed.".to_string(),
+                    suggestion: Some("Review the changed skill.".to_string()),
+                    created_at: 3,
+                },
+            ])
+            .expect("refresh cleanup findings");
+        let ignored_key = catalog
+            .list_rule_findings()
+            .expect("list seeded findings")
+            .into_iter()
+            .find(|finding| finding.id == "ignored-finding")
+            .expect("ignored finding")
+            .triage_key;
+        catalog
+            .set_finding_triage(&ignored_key, "ignored", Some("not actionable"), 4)
+            .expect("ignore fixture finding");
+        catalog
+            .refresh_definitions_and_conflicts(
+                &[SkillDefinitionDraft {
+                    id: "codex-conflict-definition".to_string(),
+                    canonical_name: "codex-conflict".to_string(),
+                    description: "Codex conflict fixture.".to_string(),
+                    active_instance: Some("codex-conflict-a".to_string()),
+                    has_multiple_instances: true,
+                    has_conflict: true,
+                }],
+                &[ConflictGroupDraft {
+                    id: "codex-runtime-conflict".to_string(),
+                    definition_id: "codex-conflict-definition".to_string(),
+                    reason: "content-drift".to_string(),
+                    winner_id: Some("codex-conflict-a".to_string()),
+                    instance_ids: vec![
+                        "codex-conflict-a".to_string(),
+                        "codex-conflict-b".to_string(),
+                    ],
+                }],
+            )
+            .expect("refresh cleanup conflicts");
+    }
+
+    fn cleanup_skill(
+        id: &str,
+        agent: AgentId,
+        scope: Scope,
+        definition_id: &str,
+        name: &str,
+        state: SkillState,
+        enabled: bool,
+    ) -> SkillInstance {
+        SkillInstance {
+            id: id.to_string(),
+            agent,
+            scope,
+            project_root: None,
+            path: PathBuf::from(format!("/tmp/skills-copilot-cleanup/{id}/SKILL.md")),
+            display_path: PathBuf::from(format!("/tmp/skills-copilot-cleanup/{id}/SKILL.md")),
+            definition_id: definition_id.to_string(),
+            name: name.to_string(),
+            display_name: name.to_string(),
+            description: "Cleanup queue fixture skill.".to_string(),
+            version: None,
+            state,
+            enabled,
+            frontmatter_raw: format!("name: {name}\ndescription: Cleanup queue fixture\n"),
+            body: "Cleanup queue fixture body.".to_string(),
+            scripts: Vec::new(),
+            permissions: PermissionRequest::default(),
+            fingerprint: format!("fingerprint-{id}"),
+            mtime: 1,
+            first_seen: 1,
+            last_seen: 1,
+        }
     }
 
     fn unique_suffix() -> u128 {

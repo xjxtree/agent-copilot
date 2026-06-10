@@ -16,7 +16,7 @@ struct SkillListModelTests {
     private func detailWorkbenchSectionsExposeDiagnostics() throws {
         try expectEqual(
             DetailSection.visibleCases,
-            [.overview, .findings, .conflicts, .history, .analysis],
+            [.overview, .cleanup, .findings, .conflicts, .history, .analysis],
             "Skill detail should expose the full diagnostic workbench section order."
         )
         try expectEqual(DetailSection.conflicts.title, "Same-agent Conflicts", "Conflicts tab should advertise same-agent scope.")

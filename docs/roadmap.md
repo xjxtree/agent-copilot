@@ -4,9 +4,9 @@
 >
 > 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.31 Cleanup Queue（进行中）**。V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout、V2.29 Finding triage persistence、V2.30 AI skill analysis workflow 均已收口。
+> 当前阶段：**V2.32 Rule tuning / suppression（进行中）**。V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout、V2.29 Finding triage persistence、V2.30 AI skill analysis workflow、V2.31 Cleanup Queue 均已收口。V2.32 聚焦 app-local rule severity override 与 suppression，必须可审计、可撤销，不写 skill 文件或 agent config。
 >
-> 近期主线：继续围绕 skills 管理、检查、分析和配置审计打磨体验。下一段版本线聚焦 Cleanup Queue；Pi writable evidence 作为后续 harness 候选，不进入生产写入。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
+> 近期主线：继续围绕 skills 管理、检查、分析和配置审计打磨体验。下一段版本线聚焦 Cleanup workflow 的 rule tuning、suppression、safe batch actions、comparison 和 report export；Pi writable evidence 作为后续 harness 候选，不进入生产写入。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
 >
 > 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.25 各阶段能力、V2.9 Tool-global skill pool、V2.11 Adapter capability matrix、V2.16-V2.25 management/analysis/history line。后续候选变更仍需重新验证。
 >
@@ -949,12 +949,23 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
   - 分析结果与执行链路、凭据存储、文件/agent-config 写入完全解耦；不创建或更新 skill-toggle snapshot / skill-content snapshot。
   - AI 分析不改写、回写或重置 V2.29 finding triage（Open / Reviewed / Ignored / Needs follow-up）状态。
 
+### 4.31-V2.31 Cleanup Queue（已完成）
+
+- 目标：把可立即处理的清理任务从“零散计数+规则页”转为一个统一、可执行（仅引导）队列。
+- 边界：队列仅聚合以下三类来源：
+  - `catalog.listFindings` 的未处理 finding issue groups（open）
+  - 整体发现/风控完整性项（如 broken/malformed/missing）
+  - `catalog.analysis` 的 cross-agent 洞察
+- 队列行为：默认只读列表和过滤，不自动触发写操作；任何下一步入口只允许跳转到现有安全动作（如 detail/health/filter、现有 toggle/save/rollback/scan）。
+- 安全约束：本阶段不新增 script execute、provider/凭据链路、agent-config 写入、skill-content snapshot、skill-toggle snapshot 或其他新自动 write path；队列本身不保存新的持久实体。
+- 度量：队列状态应反映 app-local finding triage（Open/Reviewed/Ignored/Needs follow-up）并与 existing health/list/detail 口径一致。
+
 ## 4.31-V2.35 整理工作流
 
 | Version | Goal | Completion signal |
 | --- | --- | --- |
-| V2.31 | Cleanup Queue | 将 open findings、integrity issues、analysis insights 汇总成可处理队列，提供查看、忽略、禁用、打开文件、复制建议等明确下一步。 |
-| V2.32 | Rule tuning / suppression | 支持本地 rule severity override 与 suppression，所有 suppression 可审计、可撤销，不改 skill 或 agent config。 |
+| V2.31 | Cleanup Queue | 将 open findings、integrity issues、analysis insights 汇总成默认 read-only 的可处理队列；提供可复核的查看、跳转、清理建议和现有安全动作入口；不新增自动清理、脚本执行、provider 调用或 agent-config/snapshot 写入。 |
+| V2.32 | Rule tuning / suppression | 进行中：支持本地 rule severity override 与 suppression，所有 suppression 可审计、可撤销，不改 skill 或 agent config。 |
 | V2.33 | Safe batch actions | 仅对 verified writable agent 支持 preview + snapshot + rollback 的批量 enable/disable；Pi/Hermes/OpenClaw 保持 read-only。 |
 | V2.34 | Cross-agent comparison view | 横向比较同名/相似 skills 在 Claude/Codex/opencode/Pi/Hermes/OpenClaw 中的状态、来源、风险和差异。 |
 | V2.35 | Local report export | 导出脱敏 Markdown/JSON 本地审计报告，覆盖 agent coverage、health summary、open findings 与 triage 状态。 |

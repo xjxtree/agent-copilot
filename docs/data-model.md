@@ -207,13 +207,21 @@ pub enum ExecutionAttemptStatus {
     Failed,
 }
 
+```
+
 ### 1.11 V2.22 finding/conflict 语义对齐（完成口径）
 
 - conflict 的定义收敛为 `ConflictGroup`：同一 selected/current agent 内的 runtime/name 冲突或 shadowing，不跨 agent。
 - cross-agent duplicate / source overlap / enabled mismatch 仅作为 analysis group，不进入 `ConflictGroup`；health 冲突计数只消费 same-agent `ConflictGroup`，不消费 cross-agent analysis 计数。
 - finding 默认展示采用去重后的问题组（issue key 级别）并保留受影响实例数与受影响条目数，避免同一问题在实例列表重复呈现。
 - health 与 detail/list 统计口径共享同一可见实例定义：同一扫描上下文下，`ConflictGroup`（同 agent）计数与 analysis groups（跨 agent）计数可互斥解释。
-```
+
+### 1.12 V2.31 Cleanup Queue（已完成）
+
+- V2.31 的 Cleanup Queue 不新增持久化表或列；它是现有持久化实体与视图的可复合输出。
+- queue 项来自已有模型数据：`rule_finding` / triage 持久状态 / `catalog.analysis` / `app.stateSnapshot.health`；不新增独立的 queue state schema。
+- queue 的动作状态不写入独立队列实体；任何状态回写仍由现有 V2.29 triage 持久化链路处理。
+- 本阶段不得把清理队列设计为新的 data mutation actor；任何写入动作仍需走现有的受控 service method（toggle/save/rollback/scan），并受现有安全边界约束。
 
 审计记录不得保存 secret env value、任意文件内容、LLM prompt/response，或未实现 runner 的 stdout/stderr。LLM 不能成为 `ExecutionRequester`，也不能代替用户确认。
 

@@ -39,6 +39,32 @@ enum UIStrings {
     static let overview = text("detail.overview", "Overview")
     static let findings = text("detail.findings", "Findings")
     static let conflicts = text("detail.conflicts", "Conflicts")
+    static let cleanupQueue = text("cleanup.queue", "Cleanup Queue")
+    static let cleanupKindFinding = text("cleanup.kind.finding", "Findings")
+    static let cleanupKindIntegrity = text("cleanup.kind.integrity", "Integrity")
+    static let cleanupKindConflict = text("cleanup.kind.conflict", "Same-agent conflicts")
+    static let cleanupKindAnalysis = text("cleanup.kind.analysis", "Analysis insights")
+    static let cleanupPriorityCritical = text("cleanup.priority.critical", "Critical")
+    static let cleanupPriorityHigh = text("cleanup.priority.high", "High")
+    static let cleanupPriorityMedium = text("cleanup.priority.medium", "Medium")
+    static let cleanupPriorityLow = text("cleanup.priority.low", "Low")
+    static let cleanupPriorityInfo = text("cleanup.priority.info", "Info")
+    static let cleanupFilterKind = text("cleanup.filter.kind", "Kind")
+    static let cleanupFilterPriority = text("cleanup.filter.priority", "Priority")
+    static let cleanupFilterAllKinds = text("cleanup.filter.allKinds", "All kinds")
+    static let cleanupFilterAllPriorities = text("cleanup.filter.allPriorities", "All priorities")
+    static let cleanupFilterCriticalHigh = text("cleanup.filter.criticalHigh", "Critical / High")
+    static let cleanupFilterLowInfo = text("cleanup.filter.lowInfo", "Low / Info")
+    static let cleanupUntitledItem = text("cleanup.item.untitled", "Cleanup item")
+    static let cleanupDefaultNextAction = text("cleanup.item.nextAction", "Open detail")
+    static let cleanupUnavailableFallback = text("cleanup.unavailableFallback", "Cleanup Queue is unavailable in this service build. Showing a local empty read-only fallback; no writes, scripts, AI provider calls, or credentials are used.")
+    static let cleanupQueueReadOnlyBoundary = text("cleanup.readOnlyBoundary", "Work through open findings, integrity issues, same-agent conflicts, and analysis insights from one read-only queue. Actions only open existing detail views; they do not write agent config, edit skills, execute scripts, call an AI provider, or store credentials.")
+    static let cleanupEmptyTitle = text("cleanup.empty.title", "No Cleanup Queue items")
+    static let cleanupEmptyMessage = text("cleanup.empty.message", "There are no open cleanup items for the current service response.")
+    static let cleanupNoFilteredItems = text("cleanup.empty.filtered", "No queue items match the selected kind, priority, and agent filters.")
+    static let cleanupAIBlocked = text("cleanup.safety.aiBlocked", "AI blocked")
+    static let cleanupCredentialsBlocked = text("cleanup.safety.credentialsBlocked", "Credentials blocked")
+    static let cleanupOpenExistingDetailHelp = text("cleanup.action.openExistingDetail.help", "Open the existing read-only detail section for this item.")
     static let noSkillsInCatalog = text("empty.noSkillsInCatalog", "No skills in catalog")
     static let noSkillsMatchSearch = text("empty.noSkillsMatchSearch", "No skills match this search")
     static let noProjectSelected = text("project.none", "No Project")
@@ -481,6 +507,10 @@ enum UIStrings {
 
     static func projectValidationFailed(_ reason: String) -> String {
         format("project.validationFailed", "Project validation failed: %@.", reason)
+    }
+
+    static func cleanupAgentFilterNote(_ agent: String) -> String {
+        format("cleanup.filter.agentNote", "Agent filter: %@", agent)
     }
 
     static func text(_ key: String, _ defaultValue: String) -> String {

@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-**当前阶段**：V2.30 AI skill analysis workflow 已完成，V2.31 Cleanup Queue 已启动。V2.30 验收口径为：用户显式触发、仅 selected/batch 预览（summary + risk explanation + cleanup draft），默认 disabled-by-default read-only；默认不联网、不创建 provider client，不发起 background 自动分析；不写文件、不写 agent config、不写 skill-toggle 或 skill-content snapshot、不执行脚本、也不保存 credentials。V2.29 验收口径为把 finding triage 持久化为 app-local catalog/app data 状态（`Open` / `Reviewed` / `Ignored` / `Needs follow-up`），仅写本地 app 状态，不写 agent config，不创建 skill-toggle snapshot 或 skill-content snapshot；finding fingerprint 或受影响实例集合变化后自动重置为 `Open`。继续围绕 skills 管理、检查、分析和配置审计推进。
+**当前阶段**：V2.31 Cleanup Queue 已完成并通过真实本机 App 验证，V2.32 Rule tuning / suppression 已启动。V2.31 验收口径为把 open findings、完整性问题、same-agent conflicts 与 analysis insights 组合成可处理的 review queue，默认 read-only 列表化，不新增自动写入、脚本执行、AI provider 调用、credential 保存或 snapshot 写入路径。V2.30 验收口径为：用户显式触发、仅 selected/batch 预览（summary + risk explanation + cleanup draft），默认 disabled-by-default read-only；默认不联网、不创建 provider client，不发起 background 自动分析；不写文件、不写 agent config、不写 skill-toggle 或 skill-content snapshot、不执行脚本、也不保存 credentials。继续围绕 skills 管理、检查、分析和配置审计推进。
 
 **近期主线**：继续围绕 skills 管理、检查、分析和配置审计打磨体验。短期不做全平台 UI 适配、正式签名 release、notarization、DMG/ZIP 或 public distribution。OpenClaw/Hermes writable/install 与 Pi production writable 仍保持 blocked，直到 disposable rollback 证据通过。
 
@@ -22,7 +22,7 @@
 - V2.13 Pi read-only scanner/parser：支持 Pi-native global/project roots，Pi writes 继续 blocked。
 - V2.14 Hermes evidence-gate closeout 与 V2.17 Hermes read-only scanner：active/profile Hermes home `skills/**/SKILL.md` 只读进入 catalog。
 - V2.15 OpenClaw evidence-gate closeout 与 V2.16 OpenClaw read-only scanner：workspace/global documented filesystem roots 只读进入 catalog。
-- V2.18-V2.30：cross-agent analysis、skill health dashboard、read-only AI skill analysis、scan accuracy/dedupe、finding/conflict 语义、Health/Adapter Capability UX、Detail 诊断口径、Agent-config timeline、Finding explainability、skill identity/provenance dedupe、conflict semantic closeout、finding triage persistence、AI skill analysis workflow 已收口；V2.31 Cleanup Queue 正在进行。
+- V2.18-V2.31：cross-agent analysis、skill health dashboard、read-only AI skill analysis、scan accuracy/dedupe、finding/conflict 语义、Health/Adapter Capability UX、Detail 诊断口径、Agent-config timeline、Finding explainability、skill identity/provenance dedupe、conflict semantic closeout、finding triage persistence、AI skill analysis workflow、Cleanup Queue 已收口；V2.32 Rule tuning / suppression 正在进行。
 - 2026-06-10 真实本机 app Computer Use validation 已通过；后续 UI/service/protocol 变更仍需重跑。
 
 **当前产品 UI**：SwiftUI/AppKit macOS 原生壳 + Rust service protocol。
@@ -44,7 +44,8 @@
 
 | 版本 | 目标 | 状态 |
 | --- | --- | --- |
-| V2.31 | Cleanup Queue | 进行中 |
+| V2.31 | Cleanup Queue（默认 read-only 列表 + 现有安全动作入口） | 已完成 |
+| V2.32 | Rule tuning / suppression（本地 rule override / suppression，可审计可撤销） | 进行中 |
 | V2.30 | AI skill analysis workflow（selected/batch read-only 预览，默认禁用，非凭证/非写入） | Completed |
 | V2.29 | Finding triage persistence（Open / Reviewed / Ignored / Needs follow-up；仅 app-local） | Completed |
 | V2.28 | Conflict semantic closeout（验收：Conflicts=当前 agent runtime/name collision；Analysis=cross-agent duplicate/source overlap/enabled mismatch；health conflict_count 不含 cross-agent analysis） | 已完成 |
@@ -63,6 +64,7 @@
 - **配置管理**：启用 / 禁用、读写 agent 配置文件，支持原子写、快照和回滚。
 - **冲突与权限**：检测同名 skill 冲突，展示权限声明和规则 findings。
 - **Tool-global skill 池**：本地目录导入到 app-controlled staging，审计后 read-only preview，并可经确认安装到 Claude/Codex verified skill root。
+- **Cleanup Queue**：把 open findings、完整性问题和 analysis insights 聚合成可处理队列，主要支持查看详情、跳转到现有安全动作入口、或获取建议草稿进行人工处理。
 - **Skill 执行安全边界**：默认不真实执行脚本；任何未来执行请求都必须展示 cwd/env/network/files 预览并逐次确认。
 - **AI 增强 gate**：规则引擎默认离线运行；LLM 目前只提供默认关闭的 prepare/estimate gate，不声明真实 provider/network/credential storage 已完成。
 
@@ -73,6 +75,7 @@
 - 不在默认路径真实执行 skill 自带脚本。
 - 不触发后台自动分析；LLM 不会在未显式用户操作时发起 provider 请求。
 - 不让 LLM 触发执行、写入或确认用户动作。
+- 不在 Cleanup Queue 阶段新增自动清理、自动写入或自动执行链路。
 
 ## 文档导航
 

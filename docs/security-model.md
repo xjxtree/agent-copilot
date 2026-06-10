@@ -178,6 +178,13 @@ V2.4 把 opencode 作为第三个 adapter 接入 catalog；当前实现按官方
 - finding fingerprint 或受影响实例变化时，状态必须回退为 `Open`，防止旧结论静默覆盖新风险。
 - triage 操作不能触发脚本执行，不得进行 AI 写回，不得发起 provider 调用，不得写入或读取凭据，也不应触发任何 agent config 快照/回写流程（包括 skill-toggle 或 skill-content snapshot）。
 
+### 2.4.4 Cleanup Queue 边界（V2.31）
+
+- V2.31 将 open findings、完整性问题与 cross-agent analysis insights 汇总成 review queue，只用于 UI 列表化与导航，不定义新的执行动作。
+- queue 默认 read-only：允许过滤/排序/跳转到 detail、health、analysis 等已存在的安全通道；不得在 queue 层直接触发写入、安装、脚本执行或 provider。
+- queue 不新增持久化实体；其持久状态只复用 V2.29 的 finding triage 状态（Open / Reviewed / Ignored / Needs follow-up），并保持与现有 health/list/detail 口径一致。
+- queue 阶段不得增加 credential 持久化、agent-config 写入、snapshot 写入、AI write-back 或 skill-content/safety toggle snapshot 等新路径；建议动作仅可指向现有 guard 流程（toggle/save/rollback）或只读查看路径。
+
 ### 2.5 LLM 凭据泄露
 
 **风险**：用户配的 API key 落到 git 仓库或同步盘。

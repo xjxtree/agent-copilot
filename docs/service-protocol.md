@@ -1,6 +1,6 @@
 # skills-copilot Service Protocol
 
-> Status: V2.30 AI skill analysis workflow integrated; V2.31 Cleanup Queue is active. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, V2.19 health dashboard, V2.20 read-only AI skill analysis assist, V2.21 scan accuracy/dedupe alignment, V2.22 finding/conflict semantics, V2.23 Health Dashboard / Adapter Capability UX, V2.24 Skill Detail diagnostics, V2.25 Agent-config timeline, V2.26 Finding explainability, V2.27 Skill identity/provenance dedupe, V2.28 Conflict semantic closeout, and V2.29 Finding triage persistence are implemented or synchronized. V2.30 adds `llm.prepareSkillAnalysis` for user-triggered selected/batch read-only previews; it does not call providers by default, write files/config, create snapshots, execute scripts, save credentials, or mutate triage state.
+> Status: V2.31 Cleanup Queue is integrated; V2.32 Rule tuning / suppression is active. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, V2.19 health dashboard, V2.20 read-only AI skill analysis assist, V2.21 scan accuracy/dedupe alignment, V2.22 finding/conflict semantics, V2.23 Health Dashboard / Adapter Capability UX, V2.24 Skill Detail diagnostics, V2.25 Agent-config timeline, V2.26 Finding explainability, V2.27 Skill identity/provenance dedupe, V2.28 Conflict semantic closeout, V2.29 Finding triage persistence, V2.30 AI skill analysis workflow, and V2.31 Cleanup Queue are implemented or synchronized. V2.30 adds `llm.prepareSkillAnalysis` for user-triggered selected/batch read-only previews; it does not call providers by default, write files/config, create snapshots, execute scripts, save credentials, or mutate triage state. V2.31 adds `cleanup.listQueue` as a read-only aggregation method; it does not add write, execution, provider, credential, or snapshot methods.
 >
 > Integrated: V2.9 Tool-global import/export/install, V2.10 skill execution safety boundary, and 2026-06-10 real local Computer Use validation for the current mainline app. V2.11 added adapter capability status to the service protocol and macOS UI. V2.12 marks opencode writable through exact permission.skill deny/re-enable after snapshot/rollback, install, and fixture smoke validation pass; current opencode scan follows native plus official compatibility roots while install targets remain native roots.
 >
@@ -173,6 +173,19 @@ V2.25 聚焦 agent-config snapshot timeline 收敛，仍不新增 protocol metho
 - Provider networking is out of default scope for this phase (`llm.prepareAction` remains read-only unless explicit opt-in and explicit provider path is implemented later).
 - No files are written by analysis action; no `agent-config` writes, no `snapshot` writes, no skill-content/skill-toggle snapshot generation, and no script execution.
 - Analysis call result must not mutate finding triage state, and must not create credentials side effects.
+
+## V2.31 Cleanup Queue（completed）
+
+- Scope: The cleanup queue is an app-local review surface composed from existing read-only protocol payloads and exposed through `cleanup.listQueue`; no new write, execute, provider, credential, or snapshot protocol method is introduced.
+- Composition source:
+  - open findings from `catalog.listFindings` (issue groups with triage state),
+  - integrity-related issue indicators from existing health/finding diagnostics,
+  - cross-agent analysis from `catalog.analysis`.
+- Behavioral boundary:
+  - queue is read-only by default (list/filter/search/ordering);
+  - queue entries are actionable only through existing safe action surfaces (open detail, apply existing filters, `catalog.scanAll`/refresh, existing toggle/rollback path, etc.);
+  - queue itself does not trigger scans, config writes, installs, script execution, provider calls, credential writes, snapshot creation, or other automatic remediation actions.
+- Data model boundary: no new persistence entity is introduced for queue rows. Existing V2.29 triage persistence state is reused, and queue render state can be recomputed on each relevant read request.
 
 ## V2.18 Cross-Agent Analysis Payload
 
