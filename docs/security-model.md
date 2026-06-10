@@ -26,6 +26,8 @@
 >
 > V2.7 LLM 本地辅助分析当前只实现 disabled-by-default gate 和 request prepare/estimate。V2.30 已实现的边界在此基础上要求：仅由用户显式触发的 `selected`/`batch` 场景返回本地 review preview，默认不发起 provider 网络请求；它不保存 credentials、不创建 provider client、不发起网络请求，也不把 LLM prompt/response/token/cost 写入 SQLite、项目目录或 logs。
 >
+> V2.41+ 将 AI 大模型介入提升为核心分析能力，但只能在用户显式配置 provider 并确认 prompt preview 后调用。Provider 支持方向是 OpenAI-compatible 与 Claude-compatible 接口标准；endpoint/API key/model 均由用户配置。API key 优先存入 Keychain；任何 fallback 必须显式 opt-in、权限检查，并且不得把 secret 写入 SQLite、项目目录、日志、报告、截图或 prompt artifacts。
+>
 > V2.10 skill execution safety 当前是 default-deny 边界：
 >
 > - 没有真实执行能力默认开启。
@@ -164,10 +166,12 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
 
 **缓解**：
 - V2.7 当前没有真实 provider 调用；prepare/estimate 只在本地计算请求预算和显示 disabled/unconfigured 状态
+- V2.41+ 真实 provider 调用必须经过 prompt preview / redaction / token estimate；用户确认的是“将这些字段发往这个 endpoint”，不是确认任何写入或执行
 - LLM 输出限定为 JSON schema，解析失败直接丢弃
 - LLM 输出**永远不**进入 IPC 命令、不进入 catalog
 - UI 渲染 LLM 文本时按纯文本处理（不解析 markdown 里的链接作为命令）
 - 用户从 LLM 拿到的 `draft_frontmatter` 只是草稿展示/复制内容，不存在 Apply / Write；真实写入必须由用户进入正常编辑/保存路径，并经 Rust service 的格式校验、snapshot、原子写和回读验证
+- AI task readiness、routing confidence、trace analysis、remediation planner、policy explanation 等都属于 judgment output；它们不能直接触发 toggle、install、rollback、script execution、triage mutation 或 policy mutation
 
 ### 2.4.1 Skill execution safety boundary（V2.10）
 
@@ -188,6 +192,28 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
 - 默认路径不写文件、不写 agent-config，不建 skill-toggle / skill-content 快照，不执行 `script.execute`。
 - V2.30 草稿输出仅作 `review` 与复制使用，不能直接 apply；不会持久化 triage 状态（`Open / Reviewed / Ignored / Needs follow-up`）。
 - 当前阶段不读取或写入 LLM credentials；未来 provider 路径需显式 opt-in，并延续 V2.7 的 Keychain 优先边界。
+
+### 2.4.3 V2.41-V2.70 AI-native provider boundary（planned）
+
+**风险**：AI-native 分析会引入真实出站请求、用户配置的 endpoint/API key、prompt 内容、模型响应和成本/调用历史；如果边界不清晰，可能泄露本地路径、skill 内容、agent config、凭据或让 AI 输出绕过安全写入流程。
+
+**缓解**
+
+- Provider 配置只支持用户显式创建的 profile；默认 disabled/unconfigured。
+- 支持 OpenAI-compatible 与 Claude-compatible 两类接口标准；不得暗中改写 endpoint 或把请求发往非用户确认的服务。
+- API key 优先 Keychain；fallback 文件必须 `0600`，且默认不得保存 secret，除非用户明确选择。
+- 每次 provider 请求必须展示：
+  - provider/profile/model/base URL
+  - prompt scope
+  - included/excluded fields
+  - redaction summary
+  - token/cost estimate
+  - 是否会发送 skill body、frontmatter、finding summary、trace excerpt 或 policy context
+- Prompt preview 和 redaction 结果可以短暂显示；默认不持久化 raw prompt/response。
+- V2.69 provider observability 只能默认保存非敏感 metadata：timestamp、provider type、model、token/cost、status/error、rate-limit state、redaction status。保存 raw prompt/response 需要单独设计和明确用户 opt-in，且不得进入普通 report export。
+- Imported trace/log 必须本地脱敏后再允许进入 provider prompt；默认不得发送 credentials、tokens、real home paths、temp paths、private URLs 或 raw config secrets。
+- AI 输出永远是 untrusted suggestion；写入仍必须走已有 safe write path：preview-first、explicit confirm、snapshot、atomic write、readback verify、rollback。
+- AI 不能成为 `ExecutionRequester`，不能创建 `Completed` execution record，不能确认脚本执行。
 
 ### 2.4.3 Finding triage persistence 边界（V2.29）
 

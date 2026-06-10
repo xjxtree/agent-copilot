@@ -470,3 +470,26 @@ CREATE TABLE config_snapshot (
   - Normalize/replace local paths, home paths, app-data roots, project roots, and project cwd with placeholders (`$HOME`, `<project-root>`, `<project-cwd>`, `<app-data-dir>`, `<redacted>`).
 - Explicitly excluded from report data model: provider/AI outputs, credentials, signed package metadata, distribution targets, telemetry records, and script execution traces.
 - Completed without adding persistent catalog schema; exports are generated from existing read models and written as redacted local artifacts.
+
+## V2.41-V2.70 AI-native task governance planning
+
+The next planning line introduces AI-native analysis models, but schema changes must remain incremental and evidence-driven. Current V2.40 code has no persistent provider profile, prompt, response, benchmark, trace, review session, policy, or governance-pack schema.
+
+Planned model families:
+
+- `ProviderProfile`（V2.41）：provider type (`openai-compatible` / `claude-compatible`), base URL, model, headers/API version metadata, enabled state, budget settings, and credential storage reference. API keys must not be stored in SQLite; prefer Keychain references.
+- `PromptPreview`（V2.42）：ephemeral request preview with included/excluded fields, redaction summary, token/cost estimate, destination, and confirmation id. Raw prompt should not be persisted by default.
+- `SkillQualityScore`（V2.43）：derived score from deterministic evidence plus optional AI explanation. Persist only if needed for cache/review; must include source evidence hash and stale invalidation.
+- `TaskReadinessAssessment`（V2.44-V2.45）：task text/normalized intent, candidate skills, agent/scope availability, confidence, match reasons, ambiguity, gaps, and risk notes. Raw user task text may be sensitive; persistence requires explicit design and redaction.
+- `TaskBenchmark` / `RoutingRegression`（V2.46-V2.47）：user-defined task cases, expected/acceptable skills, baseline readiness, and regression results.
+- `TraceImport` / `RoutingAccuracy`（V2.48-V2.49）：local imported transcript/log metadata, redaction result, expected vs actual skill selection, hit/miss/wrong-pick/ambiguity metrics. Raw trace content must not be stored by default.
+- `KnowledgeIndex` / `SimilarityGroup` / `CapabilityTaxonomy`（V2.51-V2.54）：local-only index and derived groupings; no default network dependency.
+- `ReviewSession` / `RemediationHistory`（V2.56-V2.61）：local review state, actions considered, decisions, reopened issues, and summary. AI suggestions remain untrusted and cannot directly mutate skill files or agent config.
+- `PolicyPack` / `PolicyProfile` / `ComplianceReport`（V2.63-V2.66）：local policy schema, import/export metadata, profile bindings, deterministic evidence, and optional AI explanation.
+- `ProviderCallMetadata`（V2.69）：timestamp, provider type, model, token/cost, status/error, rate-limit state, redaction status. Do not persist API keys, raw prompts, raw responses, credentials, or local paths by default.
+
+Cross-cutting constraints:
+
+- Every persisted AI-derived record must include enough deterministic evidence identifiers to know when it is stale.
+- AI output is explanation/suggestion data; it must not become an execution requester, config writer, snapshot actor, or hidden policy mutation.
+- Local report exports may include AI summaries only after redaction and only when they do not contain credentials, raw prompts, raw responses, or unredacted paths.

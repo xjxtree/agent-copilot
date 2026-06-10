@@ -1,13 +1,14 @@
 # Development Tasks
 
-> Status: current planning and execution queue as of 2026-06-10. V2.1 through V2.40 are synchronized baseline; V2.41-V2.45 are planned long-term governance candidates, not yet in implementation.
+> Status: current planning and execution queue as of 2026-06-11. V2.1 through V2.40 are synchronized baseline; V2.41-V2.70 are planned as one unified AI-native, task-centered skills governance line, not separate product branches.
 
 ## Current Baseline
 
 - Current branch baseline: `main` after V2.16-V2.28 management/analysis/history/explainability/provenance/conflict-semantics line and 2026-06-10 real local Computer Use validation; V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout 均已收口。
 - Product boundary: native macOS SwiftUI/AppKit shell plus Rust service protocol.
 - Completed V2 milestones: first Codex slice, V2.1 through V2.40.
-- Current priority: keep V2.26 finding explainability, V2.27 identity/provenance, V2.28 conflict semantics, V2.29 finding triage persistence, V2.30 read-only AI analysis, V2.31 read-only cleanup queue, V2.32 app-local rule tuning, V2.33 preview-first + explicit-confirm batch actions, V2.34 read-only comparison, V2.35 local redacted export, V2.36 disposable evidence, V2.37 guarded Pi toggle, V2.38 Hermes external roots, V2.39 OpenClaw workspace scope, and V2.40 adapter diagnostics stable. V2.40 surfaces discovered/skipped/blocked roots, config detected context, write capability reasons, and per-agent last scan activity without adding writes, script execution, AI automatic writes, or credential persistence.
+- Current priority: keep V2.26 finding explainability, V2.27 identity/provenance, V2.28 conflict semantics, V2.29 finding triage persistence, V2.30 read-only AI analysis, V2.31 read-only cleanup queue, V2.32 app-local rule tuning, V2.33 preview-first + explicit-confirm batch actions, V2.34 read-only comparison, V2.35 local redacted export, V2.36 disposable evidence, V2.37 guarded Pi toggle, V2.38 Hermes external roots, V2.39 OpenClaw workspace scope, and V2.40 adapter diagnostics stable while starting V2.41-V2.70 as a single AI-native product line. V2.41 should add user-configured OpenAI-compatible / Claude-compatible provider foundations before higher-level AI task readiness, routing, trace analysis, remediation, policy, and governance workflows.
+- Current code gap: the macOS app and Rust service already expose disabled-by-default `llm.status`, `llm.prepareAction`, `llm.prepareSkillAnalysis`, provider/model metadata, token/cost estimate DTOs, and read-only preview UI. They do not yet implement real provider clients, endpoint/key configuration, network calls, Keychain credential persistence, prompt preview transport, or Claude/OpenAI-compatible request execution. V2.41-V2.42 must close this foundation gap before any feature claims AI model-backed analysis.
 - Real local Computer Use baseline: passed on 2026-06-10 for a previous mainline app against real local HOME/app data/Claude/Codex/opencode roots; validation explicitly targeted the current `dist/SkillsCopilot.app` bundle after detecting a stale same-bundle-id worktree app. V2.40 completed real app smoke launch/window id check, but Computer Use/AX/capture returned `cgWindowNotFound` / 0 visible windows / no visible window; future user-visible, UI, or service protocol changes must rerun Computer Use and keep any blocker explicit.
 - Quality gate for code/UI/protocol work: `pnpm check:macos`; add focused Rust/Swift tests when touching shared behavior.
 
@@ -46,11 +47,40 @@
 | V2.38 | Hermes external roots | Completed | Explicit `skills.external_dirs` are modeled as read-only external roots in adapter/scanner/UI provenance; no generic project scan, writable toggle, install, scripts, AI write-back, or credentials |
 | V2.39 | OpenClaw workspace deepening | Completed | Tightened workspace-scope detection and skipped/blocked root explanations without arbitrary repo inference or writes |
 | V2.40 | Adapter diagnostics | Completed | Surface discovered/skipped/blocked roots, config detected, read-only/writable reason, and last scan activity per agent via read-only protocol/status/state fields and sidebar UI; no new writes, execution, provider calls, credentials, or telemetry |
-| V2.41-V2.45 | Long-term governance | Planned | Quality score, stale/drift detection, local knowledge index, policy packs, review session mode |
+| V2.41 | AI Provider Foundation | Planned | User-configured OpenAI-compatible and Claude-compatible endpoint/API key/model settings, Keychain-first storage, test connection, budget controls, and disabled/unconfigured state; no automatic analysis, writes, scripts, telemetry, or credential leakage |
+| V2.42 | Prompt preview / redaction / token estimate | Planned | Every AI call shows prompt scope, included/excluded fields, redaction summary, estimated tokens/cost, and explicit confirmation before network request |
+| V2.43 | AI Skill Quality Score | Planned | AI-assisted quality score explains metadata completeness, permission clarity, script/dependency risk, findings, conflicts, and suggested improvements from local evidence |
+| V2.44 | AI Task Readiness Check | Planned | User enters a real task; app evaluates which agents/skills are available, enabled, scoped correctly, risky, or missing |
+| V2.45 | AI Routing Confidence | Planned | Rank candidate skills for a task with confidence, match reasons, ambiguity/collision warnings, and likely wrong-pick explanations |
+| V2.46 | Task Benchmark Set | Planned | Users define common tasks and expected/acceptable skills for repeatable local readiness evaluation |
+| V2.47 | Routing Regression Detection | Planned | Detect when skill changes, disablement, drift, or findings reduce task-to-skill readiness versus the benchmark baseline |
+| V2.48 | Agent Behavior Trace Import | Planned | Import local transcript/log evidence, redact sensitive content, and analyze whether the agent selected, missed, or confused expected skills |
+| V2.49 | Routing Accuracy Dashboard | Planned | Summarize benchmark/trace hit rate, miss rate, wrong-pick rate, ambiguity, gaps, and per-agent readiness |
+| V2.50 | Cross-agent Task Readiness | Planned | Compare Claude/Codex/opencode/Pi/Hermes/OpenClaw readiness for the same task using skills, state, scope, quality, and routing confidence |
+| V2.51 | Stale / Drift Detection | Planned | Identify stale skills, fingerprint drift, finding drift, source drift, and changed readiness impact |
+| V2.52 | Local Knowledge Index | Planned | Build local-only search/index for purpose, tools, keywords, rules, source, task fit, and risk; no default network |
+| V2.53 | Similar Skill Grouping | Planned | Detect duplicate/similar/confusable skills and explain whether they help coverage or create routing ambiguity |
+| V2.54 | Capability Taxonomy | Planned | Classify skills into capability domains and map coverage across agents/workspaces |
+| V2.55 | Workspace Readiness Check | Planned | Evaluate whether the current project has the right skills enabled and scoped per agent for expected work |
+| V2.56 | AI Remediation Planner | Planned | Convert findings, gaps, ambiguity, and drift into prioritized read-only remediation plans |
+| V2.57 | Fix Preview Drafts | Planned | Generate copy/edit-ready frontmatter, permission, dependency, and description drafts; no direct apply from AI output |
+| V2.58 | Impact Preview | Planned | Preview task, agent, skill, snapshot, and rollback impact before enable/disable/edit/remediation actions |
+| V2.59 | Batch Review Workflow | Planned | Batch review by task, risk, rule, agent, and workspace; writes remain preview-first and explicit-confirm only |
+| V2.60 | Remediation History | Planned | Track local remediation decisions, recurrence, reopened issues, and task-readiness improvements |
+| V2.61 | AI Review Session | Planned | Organize a skills review around a task/workspace/agent set with AI-generated summary and next-action queue |
+| V2.62 | AI Governance Report | Planned | Generate local redacted AI-assisted reports for task readiness, routing accuracy, quality, policy, and remediation status |
+| V2.63 | Policy Pack Schema | Planned | Define local policy packs for quality, risk, permissions, task readiness, routing thresholds, and provider usage rules |
+| V2.64 | Policy Import / Export | Planned | Import/export policy packs locally with redaction and versioned compatibility checks; no cloud sync |
+| V2.65 | Agent / Workspace Policy Profile | Planned | Apply different policy profiles per agent/workspace without writing skill files unless user explicitly confirms a safe path |
+| V2.66 | Policy Compliance Report | Planned | Report compliance against local policy packs, including AI-assisted explanations and deterministic evidence |
+| V2.67 | Local Skill Map | Planned | Visualize skill relationships, sources, capabilities, similar groups, conflicts, and task coverage locally |
+| V2.68 | Governance Review Pack | Planned | Bundle review session, routing accuracy, policy compliance, remediation history, and export artifacts into one local pack |
+| V2.69 | AI Provider Observability | Planned | Track local call history metadata, cost, token use, provider errors, rate limits, and redaction status without storing secrets or raw prompts by default |
+| V2.70 | Safe Write Expansion Planning | Planned | Produce evidence-based plans for future writable expansion only; no new writes without verified rollback-safe agent/root evidence |
 
-## Near-Term Priority: V2.26-V2.35 可解释、可追踪、可整理
+## Baseline and Next Priority: V2.26-V2.70
 
-**Goal**: turn current scan/health/detail/analysis surfaces into an explainable management workflow. Users should understand why a finding exists, where a skill came from, whether a conflict is same-agent or cross-agent, which issues are already reviewed, and how read-only AI can help summarize risks without causing writes or execution.
+**Goal**: keep the completed V2.26-V2.40 management/analysis baseline stable, then move into a single AI-native task-centered governance line. Users should understand why a finding exists, where a skill came from, whether a conflict is same-agent or cross-agent, which issues are already reviewed, and whether a real task can be routed to the right skill/agent with acceptable quality and risk.
 
 **Priority order**
 
@@ -64,14 +94,14 @@
 8. V2.34 Cross-agent comparison view: completed; compare same-name/similar skills across agents by state, source, risk, writable capability, and differences without adding write paths.
 9. V2.35 Local report export: completed; generate redacted local Markdown/JSON audit reports from existing read models without distribution, provider calls, credentials, scripts, or automatic writes.
 10. V2.36-V2.40 Adapter trust and diagnostics: completed; V2.36 Pi writable evidence harness, V2.37 minimal guarded Pi native toggle, V2.38 Hermes external roots, V2.39 OpenClaw workspace scope, and V2.40 read-only adapter diagnostics are complete. Do not extend write semantics without fresh rollback-safe evidence.
-11. V2.41-V2.45 Long-term governance: quality score, stale/drift detection, local knowledge index, policy packs, and review sessions.
+11. V2.41-V2.70 AI-native task-centered governance: provider foundation first, then prompt safety, AI skill quality, task readiness, routing confidence, benchmarks/regression, trace analysis, drift/knowledge, remediation, policy, governance reports, provider observability, and evidence-only safe write expansion planning.
 
 **Tasks**
 
 - Keep finding/risk/analysis labels explainable: risk is a subset of findings; analysis is cross-agent insight; conflict is selected-agent runtime/name collision.
 - Keep skill identity deterministic across all adapters and expose provenance labels in UI where user confusion is likely.
 - Keep triage state in app-local storage only; never hide unresolved high-risk findings by default.
-- Keep optional AI analysis read-only, disabled by default, and separate from all write/config/script paths. It must remain explicit user-triggered, support selected/batch preview only, and must not perform provider calls or triage state changes by default.
+- Keep optional AI analysis user-triggered and separated from all write/config/script paths. Starting V2.41, provider calls are allowed only when the user explicitly configures an OpenAI-compatible or Claude-compatible endpoint/key/model and confirms a redacted prompt preview; AI output remains untrusted and cannot directly write, execute, or change triage/config state.
 - Keep Hermes/OpenClaw writable/install blocked until individual skill disable schema, credential preservation, and rollback-safe writes are verified.
 - Keep Pi install and compatibility-root writes blocked; Pi toggle support is limited to the V2.37 guarded native global/project/package scope with snapshot/rollback.
 - Keep every new write path behind service protocol, snapshot, audit, permission, and privacy boundaries.
@@ -92,6 +122,12 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 | Priority | Work item | Current status | Next concrete task | Completion signal |
 | --- | --- | --- | --- | --- |
 | P0 | Real local Computer Use rerun gate | Previous mainline pass completed on 2026-06-10; V2.37 slice hit Computer Use `cgWindowNotFound` despite direct CG/AX window evidence | Rerun the real app against local HOME after UI/service/protocol changes, explicitly targeting the current `dist/SkillsCopilot.app` bundle when stale same-bundle-id worktree apps exist, covering project context, scan-all, agent filter, findings filtering/grouping, health dashboard, AI review preview, and script safety preview | App-window-only evidence and runbook notes updated for the new slice, or an explicit tool/session blocker is recorded |
+| P0 | V2.41 AI Provider Foundation | Planned | Implement user-configured OpenAI-compatible / Claude-compatible provider profiles, Keychain-first API key storage, test connection, model/base URL settings, disabled/unconfigured states, and budget controls | Users can safely configure their own endpoint/key/model without any background calls, writes, scripts, telemetry, or credential leakage |
+| P0 | V2.42 Prompt Preview / Redaction | Planned | Add prompt preview, redaction summary, included/excluded field display, token/cost estimate, destination preview, and explicit confirmation before each provider request | Every model call is visible, redacted, user-confirmed, and auditable before network egress |
+| P0 | V2.43-V2.45 AI quality/readiness/routing | Planned | Build AI-assisted skill quality score, task readiness check, and routing confidence using local evidence plus user-confirmed provider calls | Users can judge whether a real task has the right available skills and whether the agent is likely to select correctly |
+| P1 | V2.46-V2.50 Benchmark / trace / routing accuracy | Planned | Add task benchmark set, routing regression detection, local trace import, routing accuracy dashboard, and cross-agent task readiness | Users can compare expected vs actual skill selection and detect readiness regressions |
+| P1 | V2.51-V2.60 Knowledge / remediation workflow | Planned | Add stale/drift detection, local knowledge index, similar skill grouping, capability taxonomy, workspace readiness, AI remediation planner, fix drafts, impact preview, batch review, and remediation history | Users can find, prioritize, and safely work through skill quality/routing issues |
+| P1 | V2.61-V2.70 Policy / governance / provider observability | Planned | Add AI review session, governance report, policy packs, compliance reports, local skill map, provider observability, and evidence-only safe write expansion planning | Users can produce local governance artifacts and plan future write expansion without guessing unsafe writes |
 | P0 | V2.11 Adapter Capability Matrix | Completed and in use | Run focused protocol/UI checks when needed, then use the matrix as the gate for future Pi/opencode/Hermes/OpenClaw work | macOS UI shows precise scan/toggle/install status and blockers for all six agents |
 | P0 | Pi comprehensive adapter support | Read-only scanner complete; V2.37 guarded native toggle complete; install and compatibility-root writes blocked | Keep Pi toggle limited to global/project/package write scope and keep install/AI auto-write/script execution credentials-unsafe paths blocked; exclude arbitrary compatibility roots from write path | Guarded native toggle preserves preview/snapshot/rollback, trust gate, invalid JSON/config handling, re-enable behavior, and disabled-state rescan |
 | P0 | opencode support | Native and official compatibility roots are scanned; guarded `permission.skill` writes are implemented; install targets remain native roots | Keep compatibility-root scan coverage and managed permission/write tests current; custom `skills.paths` / `skills.urls` remain deferred pending evidence | opencode-visible skills match current official discovery roots without enabling unverified custom paths or unsafe file writes |
@@ -125,7 +161,7 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 - If the task improves finding explanations, skill identity/provenance, conflict semantics, triage persistence, or read-only AI analysis workflow, use V2.26-V2.30.
 - If the task builds cleanup queue, policy tuning, safe batch actions, cross-agent comparison, or local report export, use V2.31-V2.35.
 - If the task is Pi writable evidence, Hermes external roots, OpenClaw workspace deepening, or adapter diagnostics, use V2.36-V2.40.
-- If the task is quality scoring, stale/drift detection, local knowledge index, policy packs, or review session mode, use V2.41-V2.45.
+- If the task is AI provider foundation, prompt safety, AI quality/readiness/routing, task benchmark/regression, trace analysis, knowledge index, remediation, policy, governance report, provider observability, or safe write expansion planning, use V2.41-V2.70.
 - Do not create versions for script execution, GitHub clone import, script-file install, signing, notarization, DMG/ZIP, public distribution, or full-platform UI adaptation unless the product direction changes explicitly.
 
 ## V2.35 Local report export — completed

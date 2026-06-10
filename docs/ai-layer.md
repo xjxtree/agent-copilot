@@ -1,14 +1,21 @@
-# AI 层：规则引擎 + 可选 LLM
+# AI 层：本地事实层 + AI-native 判断层
 
-> 原则：**默认离线，所有“扫描 / 分析 / 校验”类能力走规则引擎**。
+> 原则：**本地 deterministic 逻辑负责事实，用户显式配置的大模型负责复杂判断**。
 >
-> LLM 是可选增强，仅在用户显式开启时调用，并且只读**用户授权范围内的内容**。
+> Scanner / rules / catalog 始终是事实来源；LLM/AI provider 是 AI agent skills 的核心分析增强，用于质量、任务可用性、routing 置信度、trace 分析、remediation 和治理总结。
 >
-> V2.7 当前实现边界：
+> 当前实现边界（V2.40 baseline）：
 >
 > - 只落地 disabled-by-default 的 service/UI gate 和 request prepare/estimate 能力。
 > - 用户主动触发 Analyze / Recommend / conflict explanation / draft frontmatter 前，可以展示 provider、model、token/cost 估算和不可用原因。
 > - **不实现真实 provider、网络调用或凭据保存**。
+>
+> V2.41+ 规划边界：
+>
+> - 用户可以显式配置 OpenAI-compatible 或 Claude-compatible endpoint、API key 和 model。
+> - API key 优先存入 macOS Keychain；fallback 文件必须权限检查且不得默认保存 secret。
+> - 每次真实 provider 调用前必须展示 prompt preview、redaction summary、token/cost estimate 和 network destination。
+> - AI 输出默认 read-only，不直接写 skill、不改 agent config、不执行脚本、不改变 triage 或 policy 状态。
 
 ## 1. 双层分工
 
@@ -18,14 +25,44 @@
 | 权限声明合规（缺字段、越权） | 规则 | scan 后台 + 用户 toggle 前 |
 | 冲突检测 / 优先级计算 | 规则 | 实时 |
 | 备份 / 回滚 | 规则 | 任何写操作前 |
-| skill 描述语义分析（"这个 skill 到底是干嘛的"） | LLM | 用户主动点"Analyze" |
-| 给"我的工作流"推荐 skill | LLM | 用户主动点"Recommend" |
-| 解释冲突 / 给出处理建议（"为什么 shadowed"） | LLM | 用户主动问 |
-| 改写 frontmatter / 生成草稿 | LLM | 用户主动进入编辑模式 |
+| skill 描述语义分析（"这个 skill 到底是干嘛的"） | LLM / AI provider | 用户主动点 Analyze |
+| 任务可用性判断（"这个任务哪个 agent/skill 能做"） | LLM + 本地证据 | 用户输入任务并确认分析 |
+| routing 置信度和错选/漏选解释 | LLM + 本地证据 | 用户主动运行 task readiness / benchmark |
+| trace/log 中实际选 skill 的准确性判断 | LLM + 本地证据 | 用户导入 trace 并确认分析 |
+| 修复建议 / review session / governance report | LLM + 本地证据 | 用户主动生成 |
+| 改写 frontmatter / 生成草稿 | LLM | 用户主动进入编辑模式；草稿仍不可直接 apply |
 
 > **关键约束**：LLM **永远不直接执行** toggle、edit、delete 等写操作。所有"看起来 LLM 在做"的动作，最终都是"LLM 给提案 → 用户在 UI shell 确认 → Rust service / 规则引擎执行"。
 >
 > V2.7 的 draft frontmatter 更严格：当前只允许作为草稿展示或复制，不提供 Apply / Write。真实写入仍必须由用户进入已有的正常编辑/保存路径，并经 Rust service 的校验、snapshot 和原子写流程。
+
+## 1.1 Provider 标准（V2.41+）
+
+V2.41 起优先支持两类接口标准，而不是绑定单一厂商：
+
+| Provider type | 必填配置 | 说明 |
+| --- | --- | --- |
+| OpenAI-compatible | `base_url`、`api_key`、`model` | 兼容 OpenAI、企业代理、LiteLLM、vLLM、Ollama/OpenAI-compatible gateway 等。 |
+| Claude-compatible | `base_url`、`api_key`、`model`、API version/header | 兼容 Anthropic Claude 和 Claude-compatible gateway。 |
+
+Provider 配置原则：
+
+- endpoint/API key/model 由用户自己配置。
+- key 不写 SQLite、project directory、logs、prompt artifacts、response artifacts、report exports 或 screenshots。
+- provider call 只在用户发起具体分析动作并确认 prompt preview 后发生。
+- provider request/response 默认不持久化；V2.69 provider observability 只能保存 call metadata、token/cost、错误码、redaction status 等非敏感信息。
+- provider 不得成为写入者、执行者或确认者。
+
+## 1.2 V2.41-V2.70 AI-native 能力线
+
+| Version | AI role | 本地事实来源 |
+| --- | --- | --- |
+| V2.41-V2.42 | Provider config、prompt preview、redaction、token/cost estimate | service status、settings、Keychain/fallback permission checks |
+| V2.43-V2.45 | Skill quality、task readiness、routing confidence | metadata、findings、conflicts、analysis、adapter diagnostics |
+| V2.46-V2.50 | benchmark、regression、trace import、routing dashboard、cross-agent task readiness | benchmark set、catalog snapshots、imported trace evidence |
+| V2.51-V2.55 | stale/drift、knowledge index、similar grouping、taxonomy、workspace readiness | fingerprints、mtime、source/root provenance、local index |
+| V2.56-V2.60 | remediation planner、fix drafts、impact preview、batch review、history | findings、triage、policy, snapshots, writable capability matrix |
+| V2.61-V2.70 | review session、governance report、policy packs、skill map、provider observability、safe write planning | local reports, policy profiles, call metadata, evidence gates |
 
 ## 2. 规则引擎
 

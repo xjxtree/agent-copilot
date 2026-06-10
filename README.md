@@ -6,7 +6,7 @@
 
 **当前阶段**：V2.40 Adapter diagnostics 已完成并通过 focused Rust/Swift checks、`pnpm check:macos`、真实 app smoke launch、`pnpm check:privacy` 与截图人工检查。V2.40 新增 read-only adapter diagnostics，展示每个 agent 的 roots discovered/skipped/blocked、config detected、read-only/writable reason 与 last scan activity；不新增写入、install、script execution、AI 自动写回、credentials 或 telemetry。
 
-**近期主线**：继续围绕 skills 管理、检查、分析和配置审计打磨体验。短期不做全平台 UI 适配、正式签名 release、notarization、DMG/ZIP 或 public distribution。OpenClaw/Hermes writable/install 与 Pi install 仍保持 blocked；Pi production toggle 仅限 V2.37 evidence-backed guarded native scope，不自动开放兼容根写入。后续规划应基于 V2.40 已完成的 read-only diagnostics 继续提升可解释性和排障效率。
+**近期主线**：后续统一为 **AI-native Task-centered Skills Governance**。本地 scanner/rules/catalog 继续负责事实层；复杂分析、任务可用性、routing 置信度、质量判断、修复建议和治理报告优先接入用户自配大模型。短期不做全平台 UI 适配、正式签名 release、notarization、DMG/ZIP 或 public distribution。OpenClaw/Hermes writable/install 与 Pi install 仍保持 blocked；Pi production toggle 仅限 V2.37 evidence-backed guarded native scope，不自动开放兼容根写入。
 
 **已集成能力**：
 
@@ -23,6 +23,7 @@
 - V2.14 Hermes evidence-gate closeout 与 V2.17 Hermes read-only scanner：active/profile Hermes home `skills/**/SKILL.md` 只读进入 catalog。
 - V2.15 OpenClaw evidence-gate closeout 与 V2.16 OpenClaw read-only scanner：workspace/global documented filesystem roots 只读进入 catalog。
 - V2.18-V2.40：cross-agent analysis、skill health dashboard、read-only AI skill analysis、scan accuracy/dedupe、finding/conflict 语义、Health/Adapter Capability UX、Detail 诊断口径、Agent-config timeline、Finding explainability、skill identity/provenance dedupe、conflict semantic closeout、finding triage persistence、AI skill analysis workflow、Cleanup Queue、Rule tuning / suppression、Safe batch actions、Cross-agent comparison view、Local report export、Pi writable evidence harness、Pi guarded writable toggle、Hermes external roots、OpenClaw workspace deepening、Adapter diagnostics 已收口。
+- V2.41-V2.70 规划线：AI Provider Foundation、Prompt Preview/Redaction、AI Skill Quality、AI Task Readiness、AI Routing Confidence、Task Benchmark/Regression、Trace Analysis、Routing Accuracy Dashboard、Local Knowledge Index、Remediation Workflow、Policy/Governance Pack 等统一纳入同一条 task-centered skills governance 主线。
 - 2026-06-10 真实本机 app Computer Use validation 曾对之前 mainline baseline 通过；V2.40 slice 已完成真实 app smoke launch/window id 检查，但 Computer Use/AX/capture 本轮返回 `cgWindowNotFound` / 0 visible windows / 无可见窗口，作为工具/窗口层 blocker 记录，后续 UI/service/protocol 变更仍需重跑并记录 blocker。
 
 **当前产品 UI**：SwiftUI/AppKit macOS 原生壳 + Rust service protocol。
@@ -40,7 +41,7 @@
 | Hermes | read-only | V2.17 已实现 active/profile Hermes home `skills/**/SKILL.md` 只读扫描；V2.38 已支持显式 `skills.external_dirs` 作为 read-only external roots；不做 generic project scan；writable toggle/install 仍 blocked。 |
 | OpenClaw | read-only | V2.16 已实现文档化 filesystem roots 只读扫描；V2.39 深化 workspace scope，仅 `<workspace>/skills` 和 `<workspace>/.agents/skills` 会被视为 OpenClaw workspace roots，不按任意 repo root 推断；writable toggle/install 仍 blocked。 |
 
-## 近期版本规划
+## 后续统一版本规划
 
 | 版本 | 目标 | 状态 |
 | --- | --- | --- |
@@ -54,17 +55,15 @@
 | V2.38 | Hermes external roots | 已完成：将配置 `skills.external_dirs` 作为 explicit external roots 进入只读扫描与 UI provenance，不推断 generic project roots；writable/install 继续 blocked |
 | V2.39 | OpenClaw workspace 深化 | 已完成：精准识别 OpenClaw workspace scope，只扫描 confirmed workspace roots，不推断任意 repo；writable/install 继续 blocked |
 | V2.40 | Adapter diagnostics | 已完成：read-only `adapter.listDiagnostics`、`service.status` / `app.stateSnapshot` diagnostics、scan activity summary 与 sidebar Adapter Capabilities 诊断展示已接入；无新增写入、执行、provider、credential 或 telemetry 路径 |
-| V2.30 | AI skill analysis workflow（selected/batch read-only 预览，默认禁用，非凭证/非写入） | Completed |
-| V2.29 | Finding triage persistence（Open / Reviewed / Ignored / Needs follow-up；仅 app-local） | Completed |
-| V2.28 | Conflict semantic closeout（验收：Conflicts=当前 agent runtime/name collision；Analysis=cross-agent duplicate/source overlap/enabled mismatch；health conflict_count 不含 cross-agent analysis） | 已完成 |
-| V2.27 | Skill identity/provenance dedupe | 已完成 |
-| V2.26 | Finding explainability | 已完成 |
-| V2.10 | Skill execution safety boundary / docs consistency | 已关闭 |
-| V2.11 | Adapter Capability Matrix：服务协议和 macOS UI 展示六个 agent 的能力状态与 blocker | 已完成 |
-| V2.12 | opencode writable evidence + guarded toggle/install | 已完成 |
-| V2.13 | Pi read-only scanner/parser + writable blocker | 已完成 |
-| V2.14 | Hermes maintainer-confirmed spec + adapter implementation scope | 已完成证据门 closeout；read-only scanner 后续已在 V2.17 实现 |
-| V2.15 | OpenClaw maintainer-confirmed spec + adapter implementation scope | 已完成证据门 closeout；read-only scanner 后续已在 V2.16 实现 |
+| V2.41 | AI Provider Foundation | Planned：用户配置 OpenAI-compatible / Claude-compatible endpoint、API key、model；Keychain-first；测试连接、预算和禁用态清晰展示 |
+| V2.42 | Prompt Preview / Redaction | Planned：每次 AI 分析前展示 prompt scope、脱敏摘要、token/cost estimate、发送字段和排除字段 |
+| V2.43 | AI Skill Quality Score | Planned：结合本地 findings/metadata 与模型判断，给出可解释质量分和改进建议 |
+| V2.44 | AI Task Readiness Check | Planned：用户输入真实任务，评估当前 agent/skills 是否准备好、缺什么、风险在哪 |
+| V2.45 | AI Routing Confidence | Planned：解释 task-to-skill 匹配置信度、相似/歧义候选、错选风险 |
+| V2.46-V2.50 | Task benchmark / trace / routing accuracy | Planned：维护任务基准、检测 routing 回归、导入 agent trace、本地分析漏选/错选/命中率 |
+| V2.51-V2.55 | Drift / knowledge / taxonomy / workspace readiness | Planned：发现 stale/drift，建立本地知识索引、相似 skill 分组、能力分类和 workspace readiness |
+| V2.56-V2.60 | AI remediation workflow | Planned：AI 生成处理建议、fix draft、impact preview、batch review 和 remediation history |
+| V2.61-V2.70 | Review / policy / governance | Planned：AI review session、governance report、policy pack、compliance report、local skill map、provider observability、safe write expansion planning |
 
 ## 它做什么
 
@@ -75,7 +74,7 @@
 - **Tool-global skill 池**：本地目录导入到 app-controlled staging，审计后 read-only preview，并可经确认安装到 Claude/Codex verified skill root。
 - **Cleanup Queue**：把 open findings、完整性问题和 analysis insights 聚合成可处理队列，主要支持查看详情、跳转到现有安全动作入口、或获取建议草稿进行人工处理。
 - **Skill 执行安全边界**：默认不真实执行脚本；任何未来执行请求都必须展示 cwd/env/network/files 预览并逐次确认。
-- **AI 增强 gate**：规则引擎默认离线运行；LLM 目前只提供默认关闭的 prepare/estimate gate，不声明真实 provider/network/credential storage 已完成。
+- **AI-native 分析 gate**：规则引擎和 scanner 默认离线提供事实层；LLM 目前只提供默认关闭的 prepare/estimate gate，不声明真实 provider/network/credential storage 已完成。V2.41 起规划支持用户配置 OpenAI-compatible / Claude-compatible endpoint、API key 和 model，用于复杂分析判断。
 
 ## 它不做什么
 
@@ -115,7 +114,7 @@
 | 内核 | Rust workspace crates：core / adapters / scanner / catalog / ai-core / commands / service。 |
 | Service protocol | typed JSON / JSON-RPC stdio sidecar，位于 `crates/service`。 |
 | 持久化 | SQLite catalog + JSON runtime state。 |
-| LLM | V2.7 optional assist gate；当前只有 provider preference、gate 和 prepare/estimate 边界。 |
+| LLM / AI Analysis | V2.7/V2.30 optional assist gate；当前只有 provider preference、gate 和 prepare/estimate 边界，没有真实 provider client、网络调用或 credential storage。V2.41+ 规划支持用户自配 OpenAI-compatible / Claude-compatible endpoint。 |
 
 ## 开发运行
 

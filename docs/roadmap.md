@@ -6,7 +6,7 @@
 >
 > 当前阶段：**V2.40 Adapter diagnostics 已完成**。V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout、V2.29 Finding triage persistence、V2.30 AI skill analysis workflow、V2.31 Cleanup Queue、V2.32 Rule tuning / suppression、V2.33 Safe batch actions、V2.34 Cross-agent comparison view、V2.35 Local report export、V2.36 Pi writable evidence harness、V2.37 Pi writable guarded slice、V2.38 Hermes external roots、V2.39 OpenClaw workspace 深化、V2.40 Adapter diagnostics 均已收口。V2.40 只新增 read-only diagnostics；OpenClaw/Hermes writable/install 与 Pi install 继续 blocked。
 >
-> 近期主线：继续围绕 skills 管理、检查、分析和配置审计打磨体验。V2.40 Adapter trust and diagnostics 已完成，下一段版本线可从 V2.41-V2.45 长期治理能力中择优推进。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
+> 近期主线：继续围绕 AI agent skills 的管理、检查、分析和配置审计打磨体验。V2.40 Adapter trust and diagnostics 已完成，下一段版本线统一为 **V2.41-V2.70 AI-native Task-centered Skills Governance**：本地 scanner/rules/catalog 提供事实层，用户自配 OpenAI-compatible / Claude-compatible 大模型负责复杂质量判断、任务可用性、routing 置信度、trace 分析、remediation、policy 与治理报告。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
 >
 > 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.25 各阶段能力、V2.9 Tool-global skill pool、V2.11 Adapter capability matrix、V2.16-V2.25 management/analysis/history line。后续候选变更仍需重新验证。
 >
@@ -982,15 +982,48 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 | V2.39 | OpenClaw workspace 深化 | 已完成：精准识别 OpenClaw workspace scope，只扫描 confirmed workspace roots，不推断任意 repo。 |
 | V2.40 | Adapter diagnostics | 已完成：新增 read-only adapter diagnostics protocol/status/state fields、scan activity summary 与 sidebar Adapter Capabilities 诊断展示；保持无新增写入/执行/provider/credential/telemetry 路径。 |
 
-## 4.41-V2.45 长期治理能力
+## 4.41-V2.70 AI-native Task-centered Skills Governance
+
+该阶段不是多个产品方向分支，而是一条统一工作流：
+
+1. 本地扫描和规则引擎生成可验证事实：agent、scope、state、metadata、findings、conflicts、analysis、adapter diagnostics。
+2. 用户显式配置 OpenAI-compatible 或 Claude-compatible provider 后，AI 参与复杂判断：quality、task readiness、routing confidence、capability gap、trace accuracy、remediation、policy explanation。
+3. 用户围绕真实任务和工作区进行 review session，形成本地治理报告和可追溯处理历史。
+
+当前代码检查结论：主线已有 `llm.status` / `llm.prepareAction` / `llm.prepareSkillAnalysis`、provider/model DTO、token/cost estimate 和 macOS read-only preview UI；尚未实现真实 provider client、endpoint/key 配置、网络调用、Keychain credential storage、prompt preview transport 或 Claude/OpenAI-compatible request execution。因此 V2.41-V2.42 是后续 AI-native 能力的必要基础设施，不应跳过。
 
 | Version | Goal | Completion signal |
 | --- | --- | --- |
-| V2.41 | Skill quality score | 基于 metadata completeness、permission clarity、script safety、dependency clarity、duplicates/conflicts 给出可解释质量评分。 |
-| V2.42 | Stale / drift detection | 基于 fingerprint、mtime、finding drift、source drift 标记长期未更新或行为变化的 skills。 |
-| V2.43 | Local knowledge index | 建立本地只读搜索/分析索引，支持目的、工具、关键词、规则、来源快速检索；默认不联网。 |
-| V2.44 | Policy packs | 支持 personal/team/agent-specific policy pack 的本地导入导出，继续不做云同步。 |
-| V2.45 | Review session mode | 将一次 skills 整理过程组织成 review session，输出本地 summary report 与处理历史。 |
+| V2.41 | AI Provider Foundation | 用户可配置 OpenAI-compatible / Claude-compatible endpoint、API key、model、headers/API version；Keychain-first；fallback 文件权限检查；test connection、预算、disabled/unconfigured state 清晰可见；不自动分析、不写入、不执行。 |
+| V2.42 | Prompt Preview / Redaction / Token Estimate | 每次 AI 调用前展示 prompt scope、included/excluded fields、脱敏摘要、token/cost estimate、provider/model、network destination；用户确认后才发送。 |
+| V2.43 | AI Skill Quality Score | 基于本地 metadata/findings/conflicts/adapter diagnostics 与模型判断，给出 quality score、分项理由、风险说明和改进建议。 |
+| V2.44 | AI Task Readiness Check | 用户输入真实任务，评估当前 agent/skills 是否可用、启用、在正确 scope、风险可控，以及缺少什么。 |
+| V2.45 | AI Routing Confidence | 对 task-to-skill 候选排序，解释匹配证据、置信度、相似/歧义候选、错选/漏选风险。 |
+| V2.46 | Task Benchmark Set | 用户维护常见任务、期望 skills、可接受 agent/scope 和成功标准，用于长期 readiness 回归。 |
+| V2.47 | Routing Regression Detection | skills 改动、禁用、漂移、finding 增减后，检测任务命中率或 routing confidence 是否下降。 |
+| V2.48 | Agent Behavior Trace Import | 导入本地 transcript/log，先脱敏，再分析 agent 实际选 skill 是否命中、漏选、错选或被重复 skill 干扰。 |
+| V2.49 | Routing Accuracy Dashboard | 展示 hit/miss/wrong-pick/ambiguity/gap 指标，按 agent、workspace、task benchmark 和时间维度汇总。 |
+| V2.50 | Cross-agent Task Readiness | 同一任务横向比较 Claude/Codex/opencode/Pi/Hermes/OpenClaw 的 skill 可见性、质量、风险和 routing confidence。 |
+| V2.51 | Stale / Drift Detection | 基于 fingerprint、mtime、finding drift、source drift 和 readiness 变化标记过期或行为漂移 skills。 |
+| V2.52 | Local Knowledge Index | 建立本地只读索引，按任务、用途、工具、关键词、规则、来源、agent、风险和能力域检索；默认不联网。 |
+| V2.53 | Similar Skill Grouping | AI + 本地证据发现重复、相似、容易混淆的 skills，说明是 coverage redundancy 还是 routing ambiguity。 |
+| V2.54 | Capability Taxonomy | 将 skills 归类到能力域，展示覆盖、缺口、重复和 agent 间差异。 |
+| V2.55 | Workspace Readiness Check | 判断当前项目在各 agent 下的 skills 是否完整、可用、风险可控，输出 readiness checklist。 |
+| V2.56 | AI Remediation Planner | 将 findings、gap、routing ambiguity、drift 转成优先级明确的只读处理计划。 |
+| V2.57 | Fix Preview Drafts | 生成 frontmatter、description、permissions、dependency、policy 的修复草稿；草稿只能展示/复制或进入已有安全编辑流。 |
+| V2.58 | Impact Preview | 在 enable/disable/edit/remediation 前展示影响的 task、agent、skill、snapshot/rollback 计划和风险变化。 |
+| V2.59 | Batch Review Workflow | 按任务、风险、规则、agent、workspace 批量 review；写入仍限 verified writable roots，且必须 preview-first + explicit confirm。 |
+| V2.60 | Remediation History | 本地记录处理决策、复发、reopened issue、readiness 改善，不写 agent config 或 skill 内容除非用户走安全写入路径。 |
+| V2.61 | AI Review Session | 围绕 task/workspace/agent set 组织 review session，生成 AI summary、下一步队列和本地 session record。 |
+| V2.62 | AI Governance Report | 导出本地脱敏治理报告，覆盖 task readiness、routing accuracy、quality、policy、remediation 和 provider usage metadata。 |
+| V2.63 | Policy Pack Schema | 定义本地 policy pack：质量、风险、权限、task readiness、routing confidence、provider usage 和写入门槛。 |
+| V2.64 | Policy Import / Export | 本地导入/导出 policy pack，做版本兼容和隐私校验，不云同步。 |
+| V2.65 | Agent / Workspace Policy Profile | 为不同 agent/workspace 应用不同 policy profile，不自动写 skill 或 agent config。 |
+| V2.66 | Policy Compliance Report | 基于 deterministic evidence + AI explanation 输出合规报告，并区分 must-fix / should-review / accepted risk。 |
+| V2.67 | Local Skill Map | 本地可视化 skill 关系、来源、能力域、相似组、冲突、任务覆盖和风险。 |
+| V2.68 | Governance Review Pack | 将 review session、routing accuracy、policy compliance、remediation history 和 export artifacts 汇总成完整本地治理包。 |
+| V2.69 | AI Provider Observability | 本地记录调用元数据、token/cost、失败原因、限流状态、redaction status；默认不存 raw prompt/response，不存 secrets。 |
+| V2.70 | Safe Write Expansion Planning | 基于现有 governance/evidence 输出后续 writable 扩展计划；没有 rollback-safe evidence 的 agent/root 继续 blocked。 |
 
 ## V2.35 Local report export (completed)
 
