@@ -5,6 +5,7 @@ struct SkillListModelTests {
         try searchMatchesNameDefinitionAndDisplayPathCaseInsensitively()
         try agentFiltersLimitResultsAndGroupsUseStableAdapterOrder()
         try stateFiltersUseEffectiveStatusFindingsAndConflicts()
+        try conflictFiltersUseCurrentAgentRuntimeSemantics()
         try sortOrdersAreStableForCoreListColumns()
     }
 
@@ -42,6 +43,24 @@ struct SkillListModelTests {
         try expectEqual(filtered(stateFilter: .withConflicts).map(\.id), ["epsilon", "gamma"], "Conflicts filter")
         try expectEqual(filtered(stateFilter: .needsTriage).map(\.id), ["delta", "epsilon", "gamma", "theta"], "Needs triage filter")
         try expectEqual(filtered(stateFilter: .risky).map(\.id), ["gamma"], "Risky filter")
+    }
+
+    private func conflictFiltersUseCurrentAgentRuntimeSemantics() throws {
+        try expectEqual(
+            filtered(agentFilter: .claudeCode, stateFilter: .withConflicts).map(\.id),
+            [],
+            "Cross-agent duplicate/source overlap should not appear as a Claude Code runtime conflict."
+        )
+        try expectEqual(
+            filtered(agentFilter: .codex, stateFilter: .withConflicts).map(\.id),
+            ["epsilon", "gamma"],
+            "Same-agent Codex runtime conflicts should remain visible for the current agent."
+        )
+        try expectEqual(
+            filtered(agentFilter: .all, stateFilter: .withConflicts).map(\.id),
+            ["epsilon", "gamma"],
+            "All-agent conflict filter should still use same-agent conflict semantics."
+        )
     }
 
     private func agentFiltersLimitResultsAndGroupsUseStableAdapterOrder() throws {

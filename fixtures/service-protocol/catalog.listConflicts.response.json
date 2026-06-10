@@ -5,7 +5,7 @@
     {
       "id": "conflict-definition-id",
       "definition_id": "definition-id",
-      "reason": "multiple active instances",
+      "reason": "content-drift",
       "winner_id": "skill-instance-id",
       "instance_ids": [
         "skill-instance-id",

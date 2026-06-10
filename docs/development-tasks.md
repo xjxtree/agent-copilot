@@ -1,13 +1,13 @@
 # Development Tasks
 
-> Status: current planning and execution queue as of 2026-06-10. V2.1 through V2.21 are closed on the main line. V2.22 finding/conflict 语义与验收同步正在进行中。
+> Status: current planning and execution queue as of 2026-06-10. V2.1 through V2.22 are closed/closeout in progress; V2.23 Health Dashboard / Adapter Capability UX 同步正在进行中。
 
 ## Current Baseline
 
 - Current branch baseline: `main` after V2.16-V2.21 management/analysis line and 2026-06-10 real local Computer Use validation; V2.22 finding/conflict 语义同步正在推进。
 - Product boundary: native macOS SwiftUI/AppKit shell plus Rust service protocol.
 - Completed V2 milestones: first Codex slice, V2.1 through V2.20.
-- Current priority: keep read-only management and analysis stable while completing V2.22 finding/conflict semantics sync, preparing Pi writable evidence, finding triage persistence, and agent-config timeline follow-ups. V2.21 completed explicit scan accuracy, dedupe, and per-agent statistic requirements.
+- Current priority: complete V2.23 Health Dashboard / Adapter Capability UX 对齐（selected-agent 健康摘要、能力矩阵可写/阻断状态、finding/conflict 口径统一），同时保持 Pi writable evidence、finding triage persistence、agent-config timeline 为后续候选。
 - Real local Computer Use baseline: passed on 2026-06-10 for the current mainline app against real local HOME/app data/Claude/Codex/opencode roots; validation explicitly targeted the current `dist/SkillsCopilot.app` bundle after detecting a stale same-bundle-id worktree app. Future user-visible, UI, or service protocol changes must rerun it.
 - Quality gate for code/UI/protocol work: `pnpm check:macos`; add focused Rust/Swift tests when touching shared behavior.
 
@@ -28,10 +28,11 @@
 | V2.20 | Read-only AI skill analysis assist | Completed | Disabled-by-default offline review preview summarizes skill purpose/risk/findings without provider calls, network, credentials, writes, configs, prompts, or script execution |
 | V2.21 | Scan accuracy, dedupe behavior, and agent metric alignment | Completed | Normalize scan roots/path IDs, define deterministic duplicate handling across adapters, and align cross-agent visibility with catalog analysis + per-agent scan/activity and health metrics |
 | V2.22 | finding/conflict 语义与验收同步 | In progress | Unify conflict definition as same-agent runtime/name collision; move cross-agent duplicate/source-overlap to analysis insights; align default finding groups and count semantics |
+| V2.23 | Health Dashboard / Adapter Capability UX | In progress | Align health card action-summary behavior, selected-agent filtering, and explicit scan/toggle/install/read-only/blocked status display across AGENTS、roadmap、service protocol、UI 标准 |
 
-## Near-Term Priority: Comprehensive Agent Adapter Support
+## Near-Term Priority: Comprehensive Agent Adapter Support + V2.23 UX alignment
 
-**Goal**: make the macOS app materially better at managing, inspecting, and analyzing skills across agents.
+**Goal**: make the macOS app materially better at managing, inspecting, and analyzing skills across agents, with V2.23 first-class UX alignment on sidebar health and capability gating.
 
 **Priority order**
 
@@ -43,6 +44,7 @@
 6. Pi writable evidence harness: keep planned, but schedule after read-only management and analysis improvements unless user explicitly prioritizes Pi writes.
 7. V2.21 scan accuracy / dedupe / stats pass: completed doc/spec/test coverage for deterministic duplicate handling and agent-scoped counting before downstream triage rules depend on the data.
 8. V2.22 finding/conflict semantics sync: align same-agent conflict definition and cross-agent analysis separation before triage persistence.
+9. V2.23 Health Dashboard / Adapter Capability UX: selected-agent health cards as action summaries + explicit capability matrix state (scan/toggle/install/read-only/blocked).
 
 **Tasks**
 
@@ -53,6 +55,7 @@
 - Keep optional AI analysis read-only, disabled by default, and separate from all write/config/script paths.
 - Keep Hermes writable/install blocked until individual skill disable schema, profile scope, and rollback-safe writes are verified.
 - Keep OpenClaw writable/install blocked until disposable config mutation, credential preservation, and rollback-safe writes are verified.
+- Keep health sidebar rendering bound to selected/current agent; do not use the same data as cross-agent dashboard table.
 - Keep every new adapter behind the existing service protocol, snapshot, audit, permission, and privacy boundaries.
 - Update native macOS UI only as needed to expose newly supported agents, statuses, filters, findings, and guarded writable actions.
 - Add fixtures and non-destructive tests for every supported adapter mode before enabling writes.
@@ -65,6 +68,7 @@
 - AI-assisted analysis remains opt-in, read-only, privacy-safe, and impossible to use as an execution/write path.
 - `docs/agent-adapters.md`, `docs/agent-adapter-spec-worklists.md`, `docs/development-tasks.md`, `docs/roadmap.md`, and `AGENTS.md` agree on adapter priority and current support state.
 - V2.21 scan correctness rules are implemented and documented before adding triage persistence and metrics-consuming automation.
+- `selected agent` 健康摘要卡与 finding/conflict 计数定义在 roadmap / service protocol / adapter docs / ui 标准保持一致。
 
 ## Current Backlog
 
@@ -82,6 +86,7 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 | P0 | Skill health dashboard | Implemented read-only | Keep dashboard summary cards and actionable filters for findings, conflicts, disabled skills, malformed metadata, risky scripts, and permission issues aligned with service health payload | Users can prioritize cleanup from a single management view |
 | P0 | V2.21 scan accuracy / dedupe / agent metrics | Completed | Add scan contract coverage for canonical path/id collision handling, source overlap handling, and per-agent stats consistency checks across scan activity + health payloads | Duplicate and overlap records are deterministic; per-agent counts in scan/activity and health payloads are documented and testable |
 | P0 | V2.22 finding/conflict semantics sync | In progress | Finalize conflict definition / cross-agent analysis separation; align default finding groups + instance/entry count retention; keep health and detail/list filter statistics consistent | Conflict/finding behavior is uniform across roadmap/tasks/service-protocol/data-model/adapter docs and can be traced in same scan context |
+| P0 | V2.23 Health Dashboard / Adapter Capability UX 同步 | In progress | 完成 selected-agent health 卡片、能力矩阵状态（scan/toggle/install/read-only/blocked）与 finding/conflict/count 对齐口径；同步到 roadmap/service-protocol/agent-adapters/ui 标准 | 核心工作流（侧栏、adapter matrix、findings 过滤）口径一致，且在 code 侧补齐验证记录前不闭环 |
 | P1 | Finding triage persistence | Planned | Add reviewed/ignored state and grouping by rule, severity, agent, and source without writing agent config or hiding unresolved high-risk findings | Users can separate known issues from new actionable findings |
 | P1 | Agent-config timeline | Planned | Show agent-config snapshots and activity history per agent without adding skill-content snapshots | Users can understand config changes and rollback points |
 | P1 | Read-only AI skill analysis assist | Implemented offline preview | Keep V2.7 disabled-by-default gate and V2.20 offline purpose/risk/finding summaries free of provider/client/storage/write/execution paths | Users get human-readable analysis without any write, execution, or credential risk |

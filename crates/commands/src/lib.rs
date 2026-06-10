@@ -927,6 +927,10 @@ pub fn build_skill_health_summary(
     analysis: &CrossAgentAnalysisRecord,
 ) -> SkillHealthSummary {
     let findings = dedupe_rule_finding_records(findings);
+    let agent_by_instance_id = instances
+        .iter()
+        .map(|inst| (inst.id.as_str(), inst.agent.as_str()))
+        .collect::<BTreeMap<_, _>>();
     let malformed_instance_ids = malformed_instance_ids(instances, &findings);
     let risky_script_instance_ids = risky_script_instance_ids(instances, &findings);
     let risky_permission_instance_ids = risky_permission_instance_ids(instances, &findings);
@@ -1019,7 +1023,10 @@ pub fn build_skill_health_summary(
             .count(),
         malformed_count: malformed_instance_ids.len(),
         finding_count: findings_by_severity.total(),
-        conflict_count: conflicts.len(),
+        conflict_count: conflicts
+            .iter()
+            .filter(|conflict| conflict_has_same_agent_instances(&agent_by_instance_id, conflict))
+            .count(),
         risky_script_count: risky_script_instance_ids.len(),
         risky_permission_count: risky_permission_instance_ids.len(),
         findings_by_severity,
@@ -1266,6 +1273,23 @@ fn conflict_applies_to_agent_instances(
         .filter(|instance_id| instance_ids.contains(instance_id.as_str()))
         .count()
         > 1
+}
+
+fn conflict_has_same_agent_instances(
+    agent_by_instance_id: &BTreeMap<&str, &str>,
+    conflict: &ConflictGroupRecord,
+) -> bool {
+    let mut counts_by_agent = BTreeMap::new();
+    for instance_id in &conflict.instance_ids {
+        if let Some(agent) = agent_by_instance_id.get(instance_id.as_str()) {
+            let count = counts_by_agent.entry(*agent).or_insert(0usize);
+            *count += 1;
+            if *count > 1 {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn append_duplicate_name_groups(
@@ -7311,6 +7335,110 @@ mod v219_skill_health_tests {
         assert_eq!(codex.conflict_count, 0);
         assert_eq!(codex.risky_permission_count, 1);
         assert!(codex.analysis_group_count >= 1);
+    }
+
+    #[test]
+    fn health_summary_dedupes_findings_and_counts_only_same_agent_runtime_conflicts() {
+        let claude_user = health_skill(
+            "claude-user-review",
+            AgentId::ClaudeCode,
+            Scope::AgentGlobal,
+            "review-diff",
+            true,
+            SkillState::Loaded,
+        );
+        let claude_project = health_skill(
+            "claude-project-review",
+            AgentId::ClaudeCode,
+            Scope::AgentProject,
+            "review-diff",
+            true,
+            SkillState::Loaded,
+        );
+        let codex_review = health_skill(
+            "codex-review",
+            AgentId::Codex,
+            Scope::AgentGlobal,
+            "review-diff",
+            true,
+            SkillState::Loaded,
+        );
+        let opencode_review = health_skill(
+            "opencode-review",
+            AgentId::Opencode,
+            Scope::AgentGlobal,
+            "review-diff",
+            true,
+            SkillState::Loaded,
+        );
+        let instances = vec![claude_user, claude_project, codex_review, opencode_review];
+        let duplicate_finding = health_finding(
+            "finding-1",
+            Some("claude-user-review"),
+            None,
+            "body.too-long",
+            "warning",
+        );
+        let mut duplicate_finding_with_new_id = duplicate_finding.clone();
+        duplicate_finding_with_new_id.id = "finding-1-duplicate-row".to_string();
+        let findings = vec![
+            duplicate_finding,
+            duplicate_finding_with_new_id,
+            health_finding(
+                "finding-2",
+                Some("codex-review"),
+                None,
+                "permissions.exec-needs-human",
+                "warning",
+            ),
+        ];
+        let conflicts = vec![
+            ConflictGroupRecord {
+                id: "same-agent-claude-runtime".to_string(),
+                definition_id: "def.review-diff".to_string(),
+                reason: "content-drift".to_string(),
+                winner_id: Some("claude-user-review".to_string()),
+                instance_ids: vec![
+                    "claude-user-review".to_string(),
+                    "claude-project-review".to_string(),
+                ],
+            },
+            ConflictGroupRecord {
+                id: "stale-cross-agent-duplicate".to_string(),
+                definition_id: "def.review-diff".to_string(),
+                reason: "cross-agent-duplicate-name".to_string(),
+                winner_id: None,
+                instance_ids: vec![
+                    "claude-user-review".to_string(),
+                    "codex-review".to_string(),
+                    "opencode-review".to_string(),
+                ],
+            },
+        ];
+        let analysis = analyze_skill_instances(&instances);
+
+        let health = build_skill_health_summary(&instances, &findings, &conflicts, &analysis);
+
+        assert_eq!(health.finding_count, 2);
+        assert_eq!(health.findings_by_severity.warning_count, 2);
+        assert_eq!(health.conflict_count, 1);
+        assert_eq!(health.analysis_groups.duplicate_name_count, 1);
+
+        let claude = health
+            .agent_summaries
+            .iter()
+            .find(|summary| summary.agent == "claude-code")
+            .expect("claude health summary");
+        assert_eq!(claude.finding_count, 1);
+        assert_eq!(claude.conflict_count, 1);
+
+        let codex = health
+            .agent_summaries
+            .iter()
+            .find(|summary| summary.agent == "codex")
+            .expect("codex health summary");
+        assert_eq!(codex.finding_count, 1);
+        assert_eq!(codex.conflict_count, 0);
     }
 
     #[test]

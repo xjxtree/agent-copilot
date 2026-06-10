@@ -2,7 +2,7 @@
 
 > skills-copilot 支持的 6 个 agent 的适配要点。
 >
-> 当前版本线：V2.11 Adapter Capability Matrix、V2.12 opencode writable、V2.13 Pi read-only scanner/parser、V2.14 Hermes evidence-gate closeout、V2.15 OpenClaw evidence-gate closeout、V2.16 OpenClaw read-only scanner、V2.17 Hermes read-only scanner、V2.18 cross-agent analysis、V2.19 skill health dashboard、V2.20 read-only AI skill analysis assist 已完成；V2.21 扫描准确性、去重与 agent 维度统计同步已完成；V2.22 finding/conflict 语义与验收同步进行中。
+> 当前版本线：V2.11 Adapter Capability Matrix、V2.12 opencode writable、V2.13 Pi read-only scanner/parser、V2.14 Hermes evidence-gate closeout、V2.15 OpenClaw evidence-gate closeout、V2.16 OpenClaw read-only scanner、V2.17 Hermes read-only scanner、V2.18 cross-agent analysis、V2.19 skill health dashboard、V2.20 read-only AI skill analysis assist 已完成；V2.21 扫描准确性、去重与 agent 维度统计同步已完成；V2.22 finding/conflict 语义与验收同步进行中；V2.23 Health Dashboard / Adapter Capability UX 入口对齐进行中。
 >
 > 扫描适配器实现 `AgentAdapter`。
 >
@@ -77,18 +77,18 @@ pub struct AdapterFeatureCapability {
 }
 ```
 
-该矩阵通过 `service.status.adapter_capabilities` 和 `adapter.listCapabilities` 暴露给 macOS UI。UI 必须根据该矩阵显示 scan/toggle/install 能力和 blocker，不应仅根据 agent 名称推断可写能力。
+该矩阵通过 `service.status.adapter_capabilities` 和 `adapter.listCapabilities` 暴露给 macOS UI。UI 必须根据该矩阵显示 scan/toggle/install 能力和 blocker，不应仅根据 agent 名称推断可写能力；侧栏健康摘要也应使用 current selected/current agent 过滤后的能力与计数视图。
 
 当前能力状态：
 
-| Agent | 状态 | Scan | Toggle / writable |
-| --- | --- | --- | --- |
-| Claude Code | `verified` | 支持 | 支持，走 settings snapshot/lock/atomic write/read-back/rescan |
-| Codex | `verified` | 支持 | 支持用户 `config.toml` override；项目 `.codex/config.toml` 仍 blocked |
-| opencode | `verified` | 支持 native roots 与官方 `.claude` / `.agents` compatibility roots | 支持 guarded writable：exact `permission.skill` deny/re-enable、snapshot/rollback；tool-global install 仍限 native roots |
-| Pi | `read-only` | 支持 Pi-native roots | writable harness candidate；production writes blocked |
-| Hermes | `read-only` | 支持 active/profile Hermes home | generic project scan、toggle、install、writable blocked；`skills.external_dirs` 未来按 explicit external roots 处理 |
-| OpenClaw | `read-only` | 支持 read-only filesystem scan | project scope 仅限 confirmed OpenClaw home workspace roots；toggle、install、writable blocked |
+| Agent | 状态 | Scan | Toggle | Install | Writable | Blocker |
+| --- | --- | --- | --- | --- | --- | --- |
+| Claude Code | `verified` | 支持（settings、project roots） | 支持（verified） | 支持（tool-global install） | 支持（verified） | `project-local` settings 与非 verified 目标 blocked |
+| Codex | `verified` | 支持（user + verified project roots） | 支持（仅用户 `config.toml`） | 支持（tool-global install） | 支持（verified） | 项目级 `.codex/config.toml`、plugin/admin/system roots blocked |
+| opencode | `verified` | 支持 native roots + 官方 `.claude` / `.agents` compatibility roots | 支持（exact `permission.skill` deny/re-enable） | 支持（native-root 安装） | 支持（managed permission overrides） | 自定义 `skills.paths` / `skills.urls` 暂停 |
+| Pi | `read-only` | 支持 Pi-native roots | blocked（evidence harness pending） | blocked | blocked | writable harness pending（production write 仍阻断） |
+| Hermes | `read-only` | 支持 active/profile Hermes home | blocked（read-only 扫描） | blocked | blocked | project scan / toggle / install / writable blocked，外部目录 policy 待证据 |
+| OpenClaw | `read-only` | 支持文档化 filesystem roots | blocked（read-only scan only） | blocked | blocked | project scope 限制、toggle/install/writable blocked |
 
 > **实现要求**：所有适配器**无状态**。
 >

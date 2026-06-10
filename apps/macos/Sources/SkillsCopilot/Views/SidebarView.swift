@@ -113,32 +113,12 @@ private struct AgentWorkspaceHeader: View {
                 AdapterCapabilityCard(capability: capability)
             }
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 8) {
-                AgentStatTile(
-                    value: "\(agentSkills.count)",
-                    label: UIStrings.text("sidebar.stat.skills", "Skills"),
-                    systemImage: "square.stack"
-                )
-                AgentStatTile(
-                    value: "\(enabledAgentSkills.count)",
-                    label: UIStrings.text("sidebar.stat.enabled", "Enabled"),
-                    systemImage: "checkmark.circle"
-                )
-                AgentStatTile(
-                    value: "\(agentFindingCount)",
-                    label: UIStrings.findings,
-                    systemImage: "exclamationmark.triangle"
-                )
-                AgentStatTile(
-                    value: "\(agentConflictCount)",
-                    label: UIStrings.conflicts,
-                    systemImage: "rectangle.2.swap"
-                )
-            }
-
             SkillHealthDashboardCard(
                 summary: store.healthSummary,
                 agentSummary: store.selectedAgentHealthSummary,
+                totalCount: agentSkills.count,
+                enabledCount: enabledAgentSkills.count,
+                disabledCount: disabledAgentSkills.count,
                 findingDisplayCount: agentFindingCount,
                 conflictDisplayCount: agentConflictCount,
                 onFilter: { filter in
@@ -197,6 +177,10 @@ private struct AgentWorkspaceHeader: View {
         agentSkills.filter { DisplayText.statusKind($0.state, enabled: $0.enabled) == .enabled }
     }
 
+    private var disabledAgentSkills: [SkillRecord] {
+        agentSkills.filter { DisplayText.statusKind($0.state, enabled: $0.enabled) == .disabled }
+    }
+
     private var agentFindingCount: Int {
         let agentSkillIDs = Set(agentSkills.map(\.id))
         return FindingDisplayModel.issueGroups(
@@ -239,6 +223,9 @@ private struct AgentWorkspaceHeader: View {
 private struct SkillHealthDashboardCard: View {
     let summary: SkillHealthSummary
     let agentSummary: AgentSkillHealthSummary?
+    let totalCount: Int
+    let enabledCount: Int
+    let disabledCount: Int
     let findingDisplayCount: Int
     let conflictDisplayCount: Int
     let onFilter: (SkillStateFilter) -> Void
@@ -274,85 +261,165 @@ private struct SkillHealthDashboardCard: View {
                     .font(.caption.bold())
                     .foregroundStyle(healthColor)
                 Spacer()
-                Text(title)
+                Text(statusTitle)
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            VStack(spacing: 7) {
-                HealthSummaryRow(
-                    title: UIStrings.text("health.riskSignals", "Risk signals"),
-                    value: riskCount,
-                    systemImage: "lock.trianglebadge.exclamationmark",
-                    tint: riskCount > 0 ? .orange : .secondary
-                )
-                HealthSummaryRow(
-                    title: UIStrings.text("health.brokenMissing", "Broken / missing"),
-                    value: malformedCount,
-                    systemImage: "wrench.and.screwdriver",
-                    tint: malformedCount > 0 ? .red : .secondary
-                )
-                HealthSummaryRow(
-                    title: UIStrings.text("health.analysisGroups", "Analysis groups"),
-                    value: analysisCount,
-                    systemImage: "point.3.connected.trianglepath.dotted",
-                    tint: analysisCount > 0 ? .blue : .secondary
-                )
-            }
-
-            HStack(spacing: 8) {
-                HealthFilterButton(title: UIStrings.text("health.filter.triage", "Triage"), systemImage: "line.3.horizontal.decrease.circle", showTitle: true, onTap: { onFilter(.needsTriage) })
-                HealthFilterButton(title: UIStrings.text("health.filter.risk", "Risk"), systemImage: "lock.trianglebadge.exclamationmark", showTitle: true, onTap: { onFilter(.risky) })
-                if findingCount > 0 {
-                    HealthFilterButton(title: UIStrings.findings, systemImage: "exclamationmark.triangle", showTitle: false, onTap: { onFilter(.withFindings) })
-                }
-                if conflictCount > 0 {
-                    HealthFilterButton(title: UIStrings.conflicts, systemImage: "rectangle.2.swap", showTitle: false, onTap: { onFilter(.withConflicts) })
-                }
+                    .fontWeight(.bold)
+                    .foregroundStyle(healthColor)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(healthColor.opacity(0.12), in: Capsule())
+                    .help(title)
             }
 
             Text(summaryText)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
+
+            HStack(spacing: 6) {
+                HealthCountChip(
+                    title: UIStrings.text("sidebar.stat.enabled", "Enabled"),
+                    value: enabledCount,
+                    systemImage: "checkmark.circle.fill",
+                    tint: .green
+                )
+                HealthCountChip(
+                    title: UIStrings.text("filter.disabled", "Disabled"),
+                    value: disabledCount,
+                    systemImage: "pause.circle.fill",
+                    tint: disabledCount > 0 ? .orange : .secondary
+                )
+            }
+
+            VStack(spacing: 7) {
+                HealthActionRow(
+                    title: UIStrings.text("health.findingIssueGroups", "Finding groups"),
+                    value: findingCount,
+                    systemImage: "exclamationmark.triangle",
+                    tint: findingCount > 0 ? .orange : .secondary,
+                    actionTitle: UIStrings.text("health.openFindings", "Open"),
+                    isActionEnabled: findingCount > 0,
+                    onTap: { onFilter(.withFindings) }
+                )
+                HealthActionRow(
+                    title: UIStrings.text("health.sameAgentConflicts", "Same-agent conflicts"),
+                    value: conflictCount,
+                    systemImage: "rectangle.2.swap",
+                    tint: conflictCount > 0 ? .red : .secondary,
+                    actionTitle: UIStrings.text("health.openConflicts", "Open"),
+                    isActionEnabled: conflictCount > 0,
+                    onTap: { onFilter(.withConflicts) }
+                )
+                HealthActionRow(
+                    title: UIStrings.text("health.brokenMissing", "Broken / missing"),
+                    value: malformedCount,
+                    systemImage: "wrench.and.screwdriver",
+                    tint: malformedCount > 0 ? .red : .secondary,
+                    actionTitle: UIStrings.text("health.filter.triage", "Triage"),
+                    isActionEnabled: malformedCount > 0,
+                    onTap: { onFilter(.needsTriage) }
+                )
+                HealthActionRow(
+                    title: UIStrings.text("health.riskAnalysis", "Risk / analysis"),
+                    value: riskAnalysisCount,
+                    systemImage: "point.3.connected.trianglepath.dotted",
+                    tint: riskAnalysisCount > 0 ? .blue : .secondary,
+                    actionTitle: UIStrings.text("health.filter.risk", "Risk"),
+                    isActionEnabled: riskCount > 0,
+                    onTap: { onFilter(.risky) }
+                )
+            }
+
+            Text(UIStrings.text("health.scopeHint", "\(title) · \(totalCount) skills"))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                    .lineLimit(1)
         }
         .padding(10)
         .background(healthColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
     }
 
+    private var riskAnalysisCount: Int {
+        riskCount + analysisCount
+    }
+
+    private var statusTitle: String {
+        if summary.totalCount == 0 || totalCount == 0 {
+            return UIStrings.text("health.status.noData", "No data")
+        }
+        if malformedCount > 0 || conflictCount > 0 {
+            return UIStrings.text("health.status.attention", "Attention")
+        }
+        if findingCount > 0 || riskCount > 0 {
+            return UIStrings.text("health.status.review", "Review")
+        }
+        return UIStrings.text("health.status.clean", "Clean")
+    }
+
     private var summaryText: String {
-        if summary.totalCount == 0 {
+        if summary.totalCount == 0 || totalCount == 0 {
             return UIStrings.text("health.empty", "Run Scan to build a skill health summary.")
         }
         if conflictCount > 0 {
             return UIStrings.text("health.summary.conflicts", "\(conflictCount) same-agent conflicts need review.")
         }
-        if riskCount > 0 {
-            return UIStrings.text("health.summary.risk", "\(riskCount) risk signals; use Triage to inspect findings.")
+        if findingCount > 0 {
+            return UIStrings.text("health.summary.findings", "\(findingCount) finding issue groups need review.")
         }
         if malformedCount > 0 {
             return UIStrings.text("health.summary.malformed", "\(malformedCount) broken or missing records need cleanup.")
+        }
+        if riskCount > 0 {
+            return UIStrings.text("health.summary.risk", "\(riskCount) risk signals; use Risk to inspect findings.")
         }
         return UIStrings.text("health.summary.clean", "No same-agent conflicts or broken records.")
     }
 
     private var healthColor: Color {
-        if malformedCount > 0 {
+        if malformedCount > 0 || conflictCount > 0 {
             return .red
         }
-        if findingCount > 0 || conflictCount > 0 || riskCount > 0 {
+        if findingCount > 0 || riskCount > 0 {
             return .orange
         }
         return .green
     }
 }
 
-private struct HealthSummaryRow: View {
+private struct HealthCountChip: View {
     let title: String
     let value: Int
     let systemImage: String
     let tint: Color
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: systemImage)
+                .foregroundStyle(tint)
+            Text("\(value)")
+                .fontWeight(.bold)
+                .monospacedDigit()
+            Text(title)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .font(.caption2)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.22), in: Capsule())
+        .help(title)
+    }
+}
+
+private struct HealthActionRow: View {
+    let title: String
+    let value: Int
+    let systemImage: String
+    let tint: Color
+    let actionTitle: String
+    let isActionEnabled: Bool
+    let onTap: () -> Void
 
     var body: some View {
         HStack(spacing: 7) {
@@ -367,32 +434,15 @@ private struct HealthSummaryRow: View {
             Text("\(value)")
                 .font(.caption.bold())
                 .monospacedDigit()
+            Button(actionTitle, action: onTap)
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+                .disabled(!isActionEnabled)
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.22), in: RoundedRectangle(cornerRadius: 8))
-    }
-}
-
-private struct HealthFilterButton: View {
-    let title: String
-    let systemImage: String
-    let showTitle: Bool
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            if showTitle {
-                Label(title, systemImage: systemImage)
-            } else {
-                Label(title, systemImage: systemImage)
-                    .labelStyle(.iconOnly)
-            }
-        }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-        .help(title)
     }
 }
 
@@ -424,7 +474,7 @@ private struct AdapterCapabilityCard: View {
                 Text(primaryBlocker)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(1)
             }
         }
         .padding(10)
@@ -432,7 +482,16 @@ private struct AdapterCapabilityCard: View {
     }
 
     private var statusTitle: String {
-        capability.status.replacingOccurrences(of: "-", with: " ").capitalized
+        switch capability.status {
+        case "verified":
+            return UIStrings.text("adapter.status.verified", "Verified")
+        case "read-only":
+            return UIStrings.text("adapter.status.readOnly", "Read-only")
+        case "planned":
+            return UIStrings.text("adapter.status.planned", "Planned")
+        default:
+            return UIStrings.text("adapter.status.blocked", "Blocked")
+        }
     }
 
     private var statusIcon: String {
@@ -465,17 +524,56 @@ private struct CapabilityPill: View {
     let feature: AdapterFeatureCapability
 
     var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: feature.supported ? "checkmark.circle.fill" : "lock.fill")
-            Text(title)
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 4) {
+                Image(systemName: featureIcon)
+                Text(title)
+                    .lineLimit(1)
+            }
+            Text(featureTitle)
                 .lineLimit(1)
         }
         .font(.caption2.bold())
-        .foregroundStyle(feature.supported ? .green : .secondary)
+        .foregroundStyle(featureColor)
         .padding(.horizontal, 7)
-        .padding(.vertical, 4)
-        .background(.quaternary.opacity(0.32), in: Capsule())
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(featureColor.opacity(feature.supported ? 0.12 : 0.08), in: RoundedRectangle(cornerRadius: 8))
         .help(feature.reason ?? feature.status)
+    }
+
+    private var featureTitle: String {
+        if feature.supported {
+            return UIStrings.text("adapter.feature.verified", "Verified")
+        }
+        switch feature.status {
+        case "read-only":
+            return UIStrings.text("adapter.feature.readOnly", "Read-only")
+        case "planned":
+            return UIStrings.text("adapter.feature.planned", "Planned")
+        default:
+            return UIStrings.text("adapter.feature.blocked", "Blocked")
+        }
+    }
+
+    private var featureIcon: String {
+        if feature.supported {
+            return "checkmark.circle.fill"
+        }
+        if feature.status == "read-only" {
+            return "lock.fill"
+        }
+        return "exclamationmark.triangle.fill"
+    }
+
+    private var featureColor: Color {
+        if feature.supported {
+            return .green
+        }
+        if feature.status == "read-only" || feature.status == "planned" {
+            return .orange
+        }
+        return .red
     }
 }
 

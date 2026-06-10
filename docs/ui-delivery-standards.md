@@ -21,6 +21,7 @@ Before every major version or major feature starts:
 - Define the target shell: macOS native now; future Windows/Linux shell only after macOS parity.
 - Document the user flow, states, data dependencies, empty/error/loading states, keyboard flow, and accessibility concerns.
 - Record expected screenshots or wireframes for desktop and minimum supported window size.
+- For Health Dashboard / Adapter Capability UX changes，额外记录侧栏 selected-agent 切换、卡片行动摘要、scan/toggle/install/blocker 状态展示的状态流与文案。
 
 Recommended artifact layout:
 
@@ -46,6 +47,7 @@ After development and test verification:
 - Update `verification.md` with the app build, date, tested flows, and known gaps.
 - If the finished UI intentionally differs from the prototype, document the reason.
 - Do not mark a UI feature complete if the latest completed screenshot is stale.
+- Health 区块必须以行动摘要（可执行动作）展示；若只剩全量数字复用表格，不算该特性完成。
 
 ## 4. Required macOS App Verification
 
@@ -98,3 +100,11 @@ For UI changes:
 - [ ] I updated or added the prototype artifact before implementation.
 - [ ] I updated the completed UI screenshot after implementation, using a complete app-window-only capture.
 - [ ] I checked minimum window size, keyboard flow, and accessibility-sensitive settings where relevant.
+
+## 7. V2.23: Health Dashboard & Adapter Capability UX Checklist
+
+- 侧栏必须只呈现当前 selected/current agent 的 health 行动摘要；不得在侧栏重复展示跨 agent 的 full list table。
+- finding 与 conflict 的卡片与 `catalog.listFindings` / `catalog.listConflicts` 的过滤口径保持一致。
+- capability matrix 文案必须明确 scan / toggle / install / read-only / blocked 的状态和 blocker。
+- Health 卡片应包含下一步动作（比如 refresh / open details / review / remediation）而非仅展示计数。
+- 该功能验收项通过后才推进 V2.23 closing；未实装前记录“进行中”并显式列出缺口。

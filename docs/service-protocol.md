@@ -1,6 +1,6 @@
 # skills-copilot Service Protocol
 
-> Status: V2.20 read-only AI skill analysis assist integrated. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, and V2.19 health dashboard are implemented; writable/install support remains blocked. V2.21 alignment for scan accuracy, dedupe behavior, and agent-level metrics is complete; V2.22 finding/conflict语义与验收同步进行中。
+> Status: V2.20 read-only AI skill analysis assist integrated. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, and V2.19 health dashboard are implemented; writable/install support remains blocked. V2.21 alignment for scan accuracy, dedupe behavior, and agent-level metrics is complete; V2.22 finding/conflict 语义与验收同步进行中; V2.23 Health Dashboard / Adapter Capability UX 口径同步进行中。
 >
 > Integrated: V2.9 Tool-global import/export/install, V2.10 skill execution safety boundary, and 2026-06-10 real local Computer Use validation for the current mainline app. V2.11 added adapter capability status to the service protocol and macOS UI. V2.12 marks opencode writable through exact permission.skill deny/re-enable after snapshot/rollback, install, and fixture smoke validation pass; current opencode scan follows native plus official compatibility roots while install targets remain native roots.
 >
@@ -56,7 +56,7 @@ This stdio shape can later move behind a local socket without changing method pa
 | `catalog.getSkill` | No | Native macOS Overview detail | `SkillDetailRecord` for `{ "instance_id": "..." }` |
 | `catalog.analysis` | No | Native macOS analysis/read flow | `CrossAgentAnalysisRecord` grouping duplicate names, canonical-name overlap, shared source paths, enabled-state mismatches, broken/missing rows, and supported precedence/shadowing explanations |
 | `catalog.listFindings` | No | Native macOS Findings segment | `RuleFindingRecord[]` |
-| `catalog.listConflicts` | No | Native macOS Conflicts segment（同一 selected/current agent） | `ConflictGroupRecord[]` |
+| `catalog.listConflicts` | No | Native macOS Conflicts segment（仅同一 selected/current agent） | `ConflictGroupRecord[]` |
 | `catalog.importSkill` | Yes, writes app-controlled staging/catalog only | V2.9 tool-global import | imported read-only `SkillRecord`, staging path, filtered findings, and audit summary |
 | `catalog.scanAll` | Yes, refreshes catalog | Native macOS toolbar Scan action | scanned count, refreshed `SkillRecord[]`, and refresh activity summary for supported adapters |
 | `catalog.scanClaude` | Yes, refreshes catalog | Compatibility / Claude-only diagnostics | scanned count, refreshed `SkillRecord[]`, and refresh activity summary |
@@ -138,7 +138,7 @@ Precedence notes are intentionally conservative. The service may choose a `winne
 
 The summary includes total/enabled/disabled counts, broken/missing/malformed counts, finding counts by severity, conflict counts, risky script and permission counts, cross-agent analysis group counts, and per-agent summaries for native dashboard and read-only triage filters. Per-agent finding and risk counts are instance-scoped by `instance_id`; definition-only findings are not expanded across same-name skills. Per-agent conflict counts only include conflicts where at least two instances from that same agent participate; cross-agent duplicate names, source overlap, or enabled-state mismatch remain in `catalog.analysis`, not in a selected agent's skill conflict detail. V2.19 does not persist reviewed/ignored finding state.
 
-健康口径（health）与 detail/list 过滤必须使用同一实例可见性定义；`conflict_count` 不从 cross-agent duplicate/source overlap 口径叠加，且应可与 `catalog.analysis` 分组数量在同一扫描上下文下对齐。 
+健康口径（health）与 detail/list 过滤必须使用同一实例可见性定义；`finding_count` 与 issue group 口径一致，`conflict_count` 不从 cross-agent duplicate/source overlap 口径叠加，且应可与 `catalog.analysis` 分组数量在同一扫描上下文下对齐。V2.23 要求这些数字用于 sidebar 行动摘要卡片，而非重复统计表。
 
 Example shape:
 
@@ -161,6 +161,17 @@ Example shape:
   ]
 }
 ```
+
+## V2.23 Health / Adapter Capability Alignment（文档对齐）
+
+V2.23 当前阶段聚焦文档与验收口径：
+
+- `catalog.listConflicts` 与 Health conflict 卡片共享口径：仅 current selected/current agent 的 runtime/name collision。
+- `app.stateSnapshot.health` 与 `finding` 过滤一致：`finding_count` 与问题分组（issue group）默认口径一致；不得与 `catalog.analysis` 的 cross-agent 组重复叠加。
+- sidebar 仅展示 current selected/current agent 的卡片，不以 `catalog.analysis` 或全量 analysis 数字填充侧栏。
+- `adapter.listCapabilities` / `service.status.adapter_capabilities` 必须显示每项能力 `scan` / `config_toggle` / `install` / `writable` 的显式 supported、状态、原因，并清晰标注 read-only 与 blocked。
+
+上述要求不引入新 method；请仅通过现有 payload 的可解释字段驱动 UI。
 
 ## Adapter Capability Payload
 
@@ -199,16 +210,16 @@ Example shape:
 }
 ```
 
-Current matrix:
+Current matrix（V2.23 对齐口径）:
 
-| Agent | Top-level status | Scan | Writable/toggle |
-| --- | --- | --- | --- |
-| Claude Code | `verified` | Supported | Supported through verified settings writes |
-| Codex | `verified` | Supported | Supported through user `config.toml`; project-local `.codex/config.toml` remains blocked |
-| opencode | `verified` | Supported for native roots plus official `.claude` / `.agents` compatibility roots | Supported through exact `permission.skill` deny/re-enable and strict JSON writes; installs remain native-root-only |
-| Pi | `read-only` | Pi-native roots scan | Writable evidence harness candidate; production writes blocked |
-| Hermes | `planned` | Read-only scanner candidate, not implemented | Generic project scan, toggle, install, and writable support blocked; explicit `skills.external_dirs` is future external-root policy only |
-| OpenClaw | `planned` | Read-only scanner candidate, not implemented | Project scan is limited to confirmed OpenClaw workspace roots; toggle, install, and writable support blocked |
+| Agent | Top-level status | Scan | Toggle | Install | Writable | Read-only/Blocked |
+| --- | --- | --- | --- | --- | --- | --- |
+| Claude Code | `verified` | Supported | Supported（verified settings writes） | Supported（tool-global install to verified target） | Supported | `none` |
+| Codex | `verified` | Supported | Supported（user `config.toml` only） | Supported（tool-global install to user/project roots） | Supported（用户级 settings patch） | `project-local` blocked |
+| opencode | `verified` | Supported（native + official compatibility roots） | Supported（managed exact `permission.skill` deny/re-enable） | Supported（native-root install target） | Supported（managed permission overrides） | `custom skills.paths/urls` blocked |
+| Pi | `read-only` | Supported（Pi-native roots） | Blocked（evidence harness pending） | Blocked | Blocked | `read-only` |
+| Hermes | `planned` | Read-only scanner candidate（候选） | Blocked | Blocked | Blocked | `planned / read-only` |
+| OpenClaw | `planned` | Read-only scanner candidate（候选） | Blocked | Blocked | Blocked | `project/read-only` |
 
 Native UI must use this matrix for affordance gating and explanations. It must not infer write support only from an agent name.
 

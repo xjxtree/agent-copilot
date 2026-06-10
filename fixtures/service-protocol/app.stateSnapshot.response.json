@@ -351,6 +351,51 @@
         "affected_skill_count": 0
       },
       "groups": []
+    },
+    "health": {
+      "total_count": 1,
+      "enabled_count": 1,
+      "disabled_count": 0,
+      "broken_count": 0,
+      "missing_count": 0,
+      "malformed_count": 1,
+      "finding_count": 1,
+      "conflict_count": 0,
+      "risky_script_count": 0,
+      "risky_permission_count": 0,
+      "findings_by_severity": {
+        "error_count": 1,
+        "warning_count": 0,
+        "info_count": 0
+      },
+      "analysis_groups": {
+        "total_count": 0,
+        "error_count": 0,
+        "warning_count": 0,
+        "info_count": 0,
+        "duplicate_name_count": 0,
+        "canonical_name_count": 0,
+        "path_overlap_count": 0,
+        "enabled_mismatch_count": 0,
+        "malformed_count": 0,
+        "precedence_count": 0
+      },
+      "agent_summaries": [
+        {
+          "agent": "claude-code",
+          "total_count": 1,
+          "enabled_count": 1,
+          "disabled_count": 0,
+          "broken_count": 0,
+          "missing_count": 0,
+          "malformed_count": 1,
+          "finding_count": 1,
+          "conflict_count": 0,
+          "risky_script_count": 0,
+          "risky_permission_count": 0,
+          "analysis_group_count": 0
+        }
+      ]
     }
   }
 }

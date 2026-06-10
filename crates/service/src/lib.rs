@@ -3443,6 +3443,7 @@ mod tests {
         findings: Vec<WireRuleFindingRecord>,
         conflicts: Vec<WireConflictGroupRecord>,
         analysis: WireCrossAgentAnalysisRecord,
+        health: SkillHealthSummary,
         snapshots: Vec<WireConfigSnapshotRecord>,
     }
 

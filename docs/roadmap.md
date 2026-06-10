@@ -4,9 +4,9 @@
 >
 > 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.22 finding/conflict 语义与验收同步（进行中）**；V2.21 扫描准确性、去重边界、agent 维度统计已完成。Pi writable evidence、finding triage persistence 和 agent-config timeline 仍为后续候选跟进项。
+> 当前阶段：**V2.23 Health Dashboard / Adapter Capability UX 对齐（进行中）**；V2.22 finding/conflict 语义与验收同步作为前置约束仍在收口。V2.21 扫描准确性、去重边界、agent 维度统计已完成。Pi writable evidence、finding triage persistence 和 agent-config timeline 仍为后续候选跟进项。
 >
-> 近期主线：在 macOS app 中补齐多 agent skills 管理、检查和分析能力，V2.16-V2.20 已完成 OpenClaw read-only scanner、Hermes read-only scanner、cross-agent skill analysis、skill health dashboard 和 read-only AI skill analysis assist。V2.21 负责扫描准确性、去重边界和 agent 维度统计口径同步；Pi writable 仍保持 evidence harness candidate，生产写入需等 rollback-safe evidence 通过。
+> 近期主线：在 V2.22 口径收口后，优先完成 V2.23 侧栏健康卡片与 adapter 能力面板对齐：侧栏只看当前 selected/current agent，health 卡片做行动摘要；finding/conflict 与 issue group 口径统一；随后继续推进 Pi writable / triage 持久化 / agent-config timeline 等候选项。V2.16-V2.20 已完成 OpenClaw read-only scanner、Hermes read-only scanner、cross-agent skill analysis、skill health dashboard 和 read-only AI skill analysis assist。V2.21 负责扫描准确性、去重边界和 agent 维度统计口径同步；Pi writable 仍保持 evidence harness candidate，生产写入需等 rollback-safe evidence 通过。
 >
 > 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.20 各阶段能力、V2.9 Tool-global skill pool、V2.11 Adapter capability matrix、V2.16-V2.20 management/analysis line。V2.21 扫描准确性与去重口径已完成。后续候选变更仍需重新验证。
 >
@@ -805,6 +805,28 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 - `catalog.listConflicts` 只报告同一 agent runtime/name 冲突；`catalog.analysis` 只报告 cross-agent duplicate/source overlap 类问题。
 - `app.stateSnapshot.health` 与 finding/detail/list 过滤采用统一实例计数定义。
 - find/list 页面默认显示去重后的 issue group，并显示受影响实例和条目数。
+
+### 4.23 V2.23 Health Dashboard / Adapter Capability UX 口径对齐（进行中）
+
+**目标**
+
+- 统一侧栏健康区行为：仅展示当前 `selected/current agent` 的健康摘要与风险优先级，不展示重复的全量或 cross-agent 统计表。
+- 把 Health 卡片定义为可行动摘要：每张卡片都对应可见操作入口（复检、跳转、修复入口）与影响范围说明。
+- 使 finding、issue group、conflict 数字与详情一致：`finding_count` 与 issue group 口径一致；`conflict_count` 与当前 agent runtime/name 冲突一致，不混入 cross-agent duplicate/source overlap。
+- 让 `adapter.listCapabilities` 与 `service.status.adapter_capabilities` 的 UI 表达明确 `scan / toggle / install / read-only / blocked` 状态，并与 `app.stateSnapshot.health` 与筛选上下文一致。
+
+**范围**
+
+- 在 `service-protocol`、`agent-adapters` 与 `ui-delivery-standards` 中同步能力矩阵可读文本与状态枚举：read-only 与 blocked 必须有独立原因。
+- 明确侧栏过滤策略：切换 agent 时仅替换 selected agent 的健康卡片与能力状态；列表总量与分析组口径不在侧栏重复渲染。
+- 对 `catalog.scanAll.result.activity`、`catalog.analysis`、`app.stateSnapshot.health`、`catalog.listConflicts`/`catalog.listFindings` 增加同一扫描上下文对齐检查清单；不一致时侧边显示可重扫提醒。
+
+**退出条件（暂不宣称完成）**
+
+- [ ] 健康卡片定义（行动摘要）与冲突/finding 数字与 issue group 口径在 roadmap / service-protocol / adapter docs / ui 标准中一致。
+- [ ] sidebar 在 agent 切换时仅呈现当前 selected/current agent 的 health 卡片与 capability 摘要；不以全量 cross-agent 表格替代。
+- [ ] capability matrix 显式覆盖 scan / toggle / install / writable / blocked，并保留可解释的 blocker reason。
+- [ ] 未有代码验证结果前，该阶段不标记为 done/closed。
 
 ## 5. 风险与未决项
 
