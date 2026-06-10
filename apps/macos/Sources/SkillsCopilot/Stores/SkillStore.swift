@@ -161,6 +161,10 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    var sameAgentRuntimeConflictCount: Int {
+        SkillListModel.sameAgentConflictGroupCount(skills: skills, conflicts: conflicts)
+    }
+
     var selectedSkillEvents: [SkillEventRecord] {
         guard let id = selectedSkill?.id else { return [] }
         return (skillEventsByID[id] ?? []).filter(\.isToggleActivity)
@@ -197,7 +201,7 @@ final class SkillStore: ObservableObject {
 
         do {
             try await refreshCollections()
-            refreshStatusMessage = UIStrings.refreshReloaded(skills.count, findings.count, conflicts.count)
+            refreshStatusMessage = UIStrings.refreshReloaded(skills.count, findings.count, sameAgentRuntimeConflictCount)
             appendRefreshLog(level: "info", message: refreshStatusMessage)
             canRetryLastRefresh = false
             await loadSelectedDetail()
@@ -619,7 +623,7 @@ final class SkillStore: ObservableObject {
                 activity.scannedCount,
                 activity.skillCount,
                 activity.findingCount,
-                activity.conflictCount
+                sameAgentRuntimeConflictCount
             )
             refreshLogEntries = activity.logEntries + refreshLogEntries
             trimRefreshLog()
@@ -628,7 +632,7 @@ final class SkillStore: ObservableObject {
                 skills.count,
                 skills.count,
                 findings.count,
-                conflicts.count
+                sameAgentRuntimeConflictCount
             )
             appendRefreshLog(level: "info", message: refreshStatusMessage)
         }

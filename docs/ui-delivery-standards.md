@@ -136,5 +136,18 @@ For UI changes:
 
 - Catalog/analysis 视图必须展示一致的来源标签（provenance）：`native` 与 `compatibility` 应在 opencode 条目中可见，用于区分为何同名技能可重复出现但不构成同一运行时。
 - 重复展示行为在文案上应可追踪：当同一 skill 名称/路径跨 agent 出现时，UI 说明应导向 Analysis，而非把其计入 Conflict 卡片。
+
+## 12. V2.28: Conflict semantic closeout（完成）
+
+- Conflicts 仅展示 selected/current agent 的 runtime/name 冲突，不得将 cross-agent duplicate/source overlap/enabled mismatch 合并进来。
+- cross-agent duplicate / source overlap / enabled mismatch 仅通过 `catalog.analysis` 暴露，不应出现在 conflict card、冲突 tab 或 selected-agent 的冲突计数中。
+- `Health` 口径要求：`conflict_count` 不得包含 cross-agent 分析组；仅统计同 agent 冲突分组的实例。
+- 不变更点：本里程碑仍不新增 skill-content snapshot、skill-toggle snapshot、脚本执行、AI 写入/凭据存储。
 - 入口筛选与列表/详情中的身份字段需支持 `agent / scope / definition / path` 维度解释；`Pi` 列表应不显示资源噪声 `.md`。
 - 保持现有边界：不变更 writable/write/blocker 状态、不新增脚本执行链路、不展示 credentials。
+
+## 13. V2.29: Finding triage persistence（进行中）
+
+- Finding triage 状态只能是 app-local 状态，不写 agent config、不创建 skill-toggle snapshot、不创建 skill-content snapshot。
+- UI 应让用户清楚区分 Open / Reviewed / Ignored / Needs follow-up，并说明 fingerprint 或受影响实例变化会重新打开 triage。
+- Triage 操作不得触发脚本执行、AI 写入、provider 调用或 credentials 保存。

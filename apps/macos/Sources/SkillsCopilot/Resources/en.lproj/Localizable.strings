@@ -15,7 +15,7 @@
 "action.confirmInstall" = "Confirm Install";
 "llm.action.analyze" = "Analyze";
 "llm.action.recommend" = "Recommend";
-"llm.action.explainConflict" = "Explain Conflict";
+"llm.action.explainConflict" = "Explain Same-agent Conflict";
 "llm.action.draftFrontmatter" = "Draft Frontmatter";
 "action.chooseProject" = "Choose Project";
 "action.clearProject" = "Clear Project";
@@ -41,6 +41,9 @@
 "detail.overview" = "Overview";
 "detail.findings" = "Findings";
 "detail.conflicts" = "Conflicts";
+"detail.conflicts.sameAgentTab" = "Same-agent Conflicts";
+"detail.sectionScopeHint" = "Conflicts are current-agent runtime/name collisions. Cross-agent duplicate names and source overlap are Analysis insights.";
+"filter.sameAgentConflicts" = "Same-agent Conflicts";
 "empty.noSkillsInCatalog" = "No skills in catalog";
 "empty.noSkillsMatchSearch" = "No skills match this search";
 "project.none" = "No Project";
@@ -257,7 +260,7 @@
 "menu.skills" = "Skills";
 "menu.showOverview" = "Show Overview";
 "menu.showFindings" = "Show Findings";
-"menu.showConflicts" = "Show Conflicts";
+"menu.showConflicts" = "Show Same-agent Conflicts";
 "menu.clearSearch" = "Clear Search";
 "sidebar.enabledSummary" = "%d of %d enabled";
 "sidebar.visibleSummary" = "%d visible";
@@ -276,8 +279,8 @@
 "findings.remediation.fallback" = "Review rule %@, update the skill source, then rescan to confirm the finding is resolved.";
 "permissions.unknownValue" = "Unknown (%@)";
 "message.scannedSkills" = "Scanned %d skills across supported adapters.";
-"refresh.reloaded" = "Reloaded %d skills, %d findings, and %d conflicts.";
-"refresh.scanComplete" = "Scan complete: %d scanned, %d in catalog, %d findings, %d conflicts.";
+"refresh.reloaded" = "Reloaded %d skills, %d findings, and %d same-agent conflicts.";
+"refresh.scanComplete" = "Scan complete: %d scanned, %d in catalog, %d findings, %d same-agent conflicts.";
 "refresh.failed" = "Refresh failed: %@. Retry when the issue is fixed.";
 "state.unknownValue" = "Unknown (%@)";
 "detail.toggleUnavailable.readOnlyAdapter" = "%@ skills are read-only in this build.";

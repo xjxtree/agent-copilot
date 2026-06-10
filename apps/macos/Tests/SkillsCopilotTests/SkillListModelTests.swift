@@ -19,6 +19,7 @@ struct SkillListModelTests {
             [.overview, .findings, .conflicts, .history, .analysis],
             "Skill detail should expose the full diagnostic workbench section order."
         )
+        try expectEqual(DetailSection.conflicts.title, "Same-agent Conflicts", "Conflicts tab should advertise same-agent scope.")
         try expectEqual(DetailSection.history.title, "History", "History section title")
         try expectEqual(DetailSection.analysis.title, "Analysis", "Analysis section title")
     }
@@ -111,6 +112,11 @@ struct SkillListModelTests {
             filtered(agentFilter: .all, stateFilter: .withConflicts).map(\.id),
             ["epsilon", "gamma"],
             "All-agent conflict filter should still use same-agent conflict semantics."
+        )
+        try expectEqual(
+            SkillListModel.sameAgentConflictGroupCount(skills: Self.skills, conflicts: Self.conflicts),
+            1,
+            "Presentation conflict count should exclude cross-agent duplicate/source-overlap groups."
         )
     }
 

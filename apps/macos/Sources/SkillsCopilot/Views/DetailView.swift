@@ -20,7 +20,7 @@ enum DetailSection: String, CaseIterable, Identifiable {
         case .findings:
             return UIStrings.findings
         case .conflicts:
-            return UIStrings.conflicts
+            return UIStrings.text("detail.conflicts.sameAgentTab", "Same-agent Conflicts")
         case .history:
             return UIStrings.text("detail.history", "History")
         case .analysis:
@@ -274,6 +274,11 @@ private struct DetailSectionSwitcher: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .frame(maxWidth: 560, alignment: .leading)
+
+            Text(UIStrings.text("detail.sectionScopeHint", "Conflicts are current-agent runtime/name collisions. Cross-agent duplicate names and source overlap are Analysis insights."))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -382,9 +387,9 @@ private struct AnalysisSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 10) {
-                Label(UIStrings.text("analysis.workbench", "Read-only analysis workbench"), systemImage: "sparkles.rectangle.stack")
+                Label(UIStrings.text("analysis.workbench", "Read-only Analysis / Insights workbench"), systemImage: "sparkles.rectangle.stack")
                     .font(.headline)
-                Text(UIStrings.text("analysis.workbench.summary", "Use offline/AI-assisted review to understand purpose, risk, findings, and cross-agent duplicate/source-overlap signals. This panel does not write config, modify skills, or execute scripts."))
+                Text(UIStrings.text("analysis.workbench.summary", "Use offline/AI-assisted review to understand purpose, risk, findings, and cross-agent duplicate/source-overlap insights. This panel does not write config, modify skills, or execute scripts."))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 Label(UIStrings.text("analysis.crossAgentNote", "Cross-agent duplicates and source overlap live here as analysis insights; same-agent runtime/name collisions remain in Conflicts."), systemImage: "rectangle.3.group.bubble")
@@ -2034,7 +2039,7 @@ private struct ConflictsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 8) {
-                Label(UIStrings.text("conflicts.sameAgentWorkbench", "Same-agent conflict workbench"), systemImage: "person.crop.circle.badge.exclamationmark")
+                Label(UIStrings.text("conflicts.sameAgentWorkbench", "Current-agent conflict workbench"), systemImage: "person.crop.circle.badge.exclamationmark")
                     .font(.headline)
                 Text(UIStrings.text("conflicts.sameAgentExplanation", "Conflicts only include current-agent runtime/name collisions. Cross-agent duplicate names and source overlap are analysis insights, so they are reviewed from the Analysis tab instead of inflating conflict counts."))
                     .font(.callout)

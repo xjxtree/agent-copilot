@@ -85,6 +85,7 @@ pub enum SkillState {
 V2.27 口径补充：`definition` 维度参与去重解释（非存储主键变更）：
 
 - 用于可解释显示与 cross-agent 对齐的 `skill_group_key` 采用 `(agent, scope, definition_id, path)`。
+- 在 V2.28 冲突收口下，`skill_group_key` 的 cross-agent 关系继续作为 analysis 信息承载（如同名/同路径/enabled 不一致），不得直接转化为冲突组实例。
 - `definition_id` 为 canonical name hash；定义与实例共享时可稳定解释“为何一份 physical file 在不同 agent 下重复显示”。
 - 来自 opencode 的同名扫描条目要在 DTO 中携带 provenance 标签（`native` / `compatibility`）与 source root 说明。
 - Pi `.md` 噪声继续排除：目录型 `SKILL.md` 外的直接 `.md`、root `SKILL.md`、`references/SKILL.md` 不进入 `SkillInstance` 列表。
@@ -129,6 +130,8 @@ pub enum ConflictReason {
 ```
 
 > 当前 `ai-core` / catalog DTO 使用字符串 reason（如 `content-drift`、`name-collision`）和 `instance_ids` 字段暴露给 UI；`ConflictReason` enum 是核心模型语义说明，后续可以收敛成 typed record。Cross-agent duplicate/source-overlap 与 enabled-state mismatch 通过 `CrossAgentAnalysisRecord` 作为 analysis insights 表达，不作为 `ConflictGroup`。
+
+- V2.28 closeout 补充：`app.stateSnapshot.health.conflict_count` 与 `catalog.listConflicts` 的实例语义必须一致，仅计入 `ConflictGroup`（selected/current agent runtime/name collision）；任何 cross-agent 分析口径（duplicate/source-overlap/enabled-mismatch）不得影响 health 冲突计数。
 
 ### 1.6 `PermissionRequest`
 
@@ -195,7 +198,7 @@ pub enum ExecutionAttemptStatus {
 ### 1.9 V2.22 finding/conflict 语义对齐（完成口径）
 
 - conflict 的定义收敛为 `ConflictGroup`：同一 selected/current agent 内的 runtime/name 冲突或 shadowing，不跨 agent。
-- cross-agent duplicate / source overlap / enabled mismatch 仅作为 analysis group，不进入 `ConflictGroup`。
+- cross-agent duplicate / source overlap / enabled mismatch 仅作为 analysis group，不进入 `ConflictGroup`；health 冲突计数只消费 same-agent `ConflictGroup`，不消费 cross-agent analysis 计数。
 - finding 默认展示采用去重后的问题组（issue key 级别）并保留受影响实例数与受影响条目数，避免同一问题在实例列表重复呈现。
 - health 与 detail/list 统计口径共享同一可见实例定义：同一扫描上下文下，`ConflictGroup`（同 agent）计数与 analysis groups（跨 agent）计数可互斥解释。
 ```

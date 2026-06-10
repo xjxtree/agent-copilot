@@ -797,7 +797,15 @@ pub fn list_findings(catalog: &Catalog) -> Result<Vec<RuleFindingRecord>, Comman
 }
 
 pub fn list_conflicts(catalog: &Catalog) -> Result<Vec<ConflictGroupRecord>, CommandError> {
-    Ok(catalog.list_conflict_groups()?)
+    let records = catalog.list_skill_records()?;
+    let agent_by_instance_id = records
+        .iter()
+        .map(|record| (record.id.as_str(), record.agent.as_str()))
+        .collect::<BTreeMap<_, _>>();
+    Ok(runtime_conflict_groups(
+        catalog.list_conflict_groups()?,
+        &agent_by_instance_id,
+    ))
 }
 
 pub fn analyze_catalog(
@@ -958,7 +966,10 @@ pub fn build_skill_health_summary(
             .count();
         let conflict_count = conflicts
             .iter()
-            .filter(|conflict| conflict_applies_to_agent_instances(&member_ids, conflict))
+            .filter(|conflict| {
+                conflict_is_runtime_same_agent(&agent_by_instance_id, conflict)
+                    && conflict_applies_to_agent_instances(&member_ids, conflict)
+            })
             .count();
         let analysis_group_count = analysis
             .groups
@@ -1025,7 +1036,7 @@ pub fn build_skill_health_summary(
         finding_count: findings_by_severity.total(),
         conflict_count: conflicts
             .iter()
-            .filter(|conflict| conflict_has_same_agent_instances(&agent_by_instance_id, conflict))
+            .filter(|conflict| conflict_is_runtime_same_agent(&agent_by_instance_id, conflict))
             .count(),
         risky_script_count: risky_script_instance_ids.len(),
         risky_permission_count: risky_permission_instance_ids.len(),
@@ -1290,6 +1301,28 @@ fn conflict_has_same_agent_instances(
         }
     }
     false
+}
+
+fn runtime_conflict_groups(
+    conflicts: Vec<ConflictGroupRecord>,
+    agent_by_instance_id: &BTreeMap<&str, &str>,
+) -> Vec<ConflictGroupRecord> {
+    conflicts
+        .into_iter()
+        .filter(|conflict| conflict_is_runtime_same_agent(agent_by_instance_id, conflict))
+        .collect()
+}
+
+fn conflict_is_runtime_same_agent(
+    agent_by_instance_id: &BTreeMap<&str, &str>,
+    conflict: &ConflictGroupRecord,
+) -> bool {
+    is_runtime_conflict_reason(&conflict.reason)
+        && conflict_has_same_agent_instances(agent_by_instance_id, conflict)
+}
+
+fn is_runtime_conflict_reason(reason: &str) -> bool {
+    matches!(reason, "name-collision" | "content-drift")
 }
 
 fn append_duplicate_name_groups(
@@ -7508,6 +7541,95 @@ mod v219_skill_health_tests {
     }
 
     #[test]
+    fn list_conflicts_returns_only_same_agent_runtime_name_collisions() {
+        let catalog = Catalog::in_memory().expect("catalog opens");
+        catalog.init().expect("catalog initializes");
+        let (instances, conflicts) = runtime_and_analysis_conflict_fixture();
+        for instance in &instances {
+            catalog
+                .upsert_skill_instance(instance)
+                .expect("upsert fixture skill");
+        }
+        let conflict_drafts = conflicts
+            .iter()
+            .map(|conflict| ConflictGroupDraft {
+                id: conflict.id.clone(),
+                definition_id: conflict.definition_id.clone(),
+                reason: conflict.reason.clone(),
+                winner_id: conflict.winner_id.clone(),
+                instance_ids: conflict.instance_ids.clone(),
+            })
+            .collect::<Vec<_>>();
+        catalog
+            .refresh_definitions_and_conflicts(
+                &[SkillDefinitionDraft {
+                    id: "def.review-diff".to_string(),
+                    canonical_name: "review-diff".to_string(),
+                    description: "fixture skill".to_string(),
+                    active_instance: Some("claude-user-review".to_string()),
+                    has_multiple_instances: true,
+                    has_conflict: true,
+                }],
+                &conflict_drafts,
+            )
+            .expect("refresh conflicts");
+
+        let visible_conflicts = list_conflicts(&catalog).expect("list command conflicts");
+
+        assert_eq!(
+            visible_conflicts
+                .iter()
+                .map(|conflict| conflict.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["same-agent-claude-runtime"],
+            "conflict APIs expose same-agent runtime/name collisions only"
+        );
+    }
+
+    #[test]
+    fn health_summary_keeps_analysis_only_rows_out_of_conflict_counts() {
+        let (instances, conflicts) = runtime_and_analysis_conflict_fixture();
+        let analysis = analyze_skill_instances(&instances);
+
+        assert_eq!(analysis.summary.duplicate_name_groups, 1);
+        assert_eq!(analysis.summary.path_overlap_groups, 1);
+        assert_eq!(analysis.summary.enabled_mismatch_groups, 1);
+
+        let health = build_skill_health_summary(&instances, &[], &conflicts, &analysis);
+
+        assert_eq!(health.conflict_count, 1);
+        assert_eq!(health.analysis_groups.duplicate_name_count, 1);
+        assert_eq!(health.analysis_groups.path_overlap_count, 1);
+        assert_eq!(health.analysis_groups.enabled_mismatch_count, 1);
+
+        let claude = health
+            .agent_summaries
+            .iter()
+            .find(|summary| summary.agent == "claude-code")
+            .expect("claude health summary");
+        let codex = health
+            .agent_summaries
+            .iter()
+            .find(|summary| summary.agent == "codex")
+            .expect("codex health summary");
+        let opencode = health
+            .agent_summaries
+            .iter()
+            .find(|summary| summary.agent == "opencode")
+            .expect("opencode health summary");
+
+        assert_eq!(claude.conflict_count, 1);
+        assert_eq!(
+            codex.conflict_count, 0,
+            "same-agent source overlap remains analysis-only"
+        );
+        assert_eq!(
+            opencode.conflict_count, 0,
+            "cross-agent enabled-state mismatch remains analysis-only"
+        );
+    }
+
+    #[test]
     fn refresh_rule_outputs_dedupes_same_skill_rule_message_and_remediation() {
         let catalog = Catalog::in_memory().expect("catalog opens");
         catalog.init().expect("catalog initializes");
@@ -7536,6 +7658,99 @@ mod v219_skill_health_tests {
             findings[0].suggestion.as_deref(),
             Some("Split long reference material into references/.")
         );
+    }
+
+    fn runtime_and_analysis_conflict_fixture() -> (Vec<SkillInstance>, Vec<ConflictGroupRecord>) {
+        let claude_user = health_skill(
+            "claude-user-review",
+            AgentId::ClaudeCode,
+            Scope::AgentGlobal,
+            "review-diff",
+            true,
+            SkillState::Loaded,
+        );
+        let claude_project = health_skill(
+            "claude-project-review",
+            AgentId::ClaudeCode,
+            Scope::AgentProject,
+            "review-diff",
+            true,
+            SkillState::Loaded,
+        );
+        let codex_review = health_skill(
+            "codex-review",
+            AgentId::Codex,
+            Scope::AgentGlobal,
+            "review-diff",
+            true,
+            SkillState::Loaded,
+        );
+        let mut codex_overlap = health_skill(
+            "codex-overlap",
+            AgentId::Codex,
+            Scope::AgentProject,
+            "review-diff",
+            false,
+            SkillState::Disabled,
+        );
+        codex_overlap.path = codex_review.path.clone();
+        codex_overlap.display_path = codex_review.display_path.clone();
+        let opencode_review = health_skill(
+            "opencode-review",
+            AgentId::Opencode,
+            Scope::AgentGlobal,
+            "review-diff",
+            false,
+            SkillState::Disabled,
+        );
+        let conflicts = vec![
+            ConflictGroupRecord {
+                id: "same-agent-claude-runtime".to_string(),
+                definition_id: "def.review-diff".to_string(),
+                reason: "content-drift".to_string(),
+                winner_id: Some("claude-user-review".to_string()),
+                instance_ids: vec![
+                    "claude-user-review".to_string(),
+                    "claude-project-review".to_string(),
+                ],
+            },
+            ConflictGroupRecord {
+                id: "analysis-cross-agent-duplicate".to_string(),
+                definition_id: "def.review-diff".to_string(),
+                reason: "cross-agent-duplicate-name".to_string(),
+                winner_id: None,
+                instance_ids: vec![
+                    "claude-user-review".to_string(),
+                    "codex-review".to_string(),
+                    "opencode-review".to_string(),
+                ],
+            },
+            ConflictGroupRecord {
+                id: "analysis-source-overlap".to_string(),
+                definition_id: "def.review-diff".to_string(),
+                reason: "source-overlap".to_string(),
+                winner_id: None,
+                instance_ids: vec!["codex-review".to_string(), "codex-overlap".to_string()],
+            },
+            ConflictGroupRecord {
+                id: "analysis-enabled-state-mismatch".to_string(),
+                definition_id: "def.review-diff".to_string(),
+                reason: "enabled-state-mismatch".to_string(),
+                winner_id: None,
+                instance_ids: vec!["codex-review".to_string(), "opencode-review".to_string()],
+            },
+        ];
+
+        (
+            vec![
+                claude_user,
+                claude_project,
+                codex_review,
+                codex_overlap,
+                opencode_review,
+            ],
+            conflicts,
+        )
     }
 
     fn health_skill(

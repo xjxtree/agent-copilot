@@ -18,7 +18,7 @@ enum UIStrings {
     static let confirmInstall = text("action.confirmInstall", "Confirm Install")
     static let llmAnalyze = text("llm.action.analyze", "Analyze")
     static let llmRecommend = text("llm.action.recommend", "Recommend")
-    static let llmExplainConflict = text("llm.action.explainConflict", "Explain Conflict")
+    static let llmExplainConflict = text("llm.action.explainConflict", "Explain Same-agent Conflict")
     static let llmDraftFrontmatter = text("llm.action.draftFrontmatter", "Draft Frontmatter")
     static let chooseProject = text("action.chooseProject", "Choose Project")
     static let clearProject = text("action.clearProject", "Clear Project")
@@ -250,7 +250,7 @@ enum UIStrings {
     static let menuSkills = text("menu.skills", "Skills")
     static let menuShowOverview = text("menu.showOverview", "Show Overview")
     static let menuShowFindings = text("menu.showFindings", "Show Findings")
-    static let menuShowConflicts = text("menu.showConflicts", "Show Conflicts")
+    static let menuShowConflicts = text("menu.showConflicts", "Show Same-agent Conflicts")
     static let menuClearSearch = text("menu.clearSearch", "Clear Search")
 
     static func enabledSummary(enabled: Int, total: Int) -> String {
@@ -326,11 +326,11 @@ enum UIStrings {
     }
 
     static func refreshReloaded(_ skills: Int, _ findings: Int, _ conflicts: Int) -> String {
-        format("refresh.reloaded", "Reloaded %d skills, %d findings, and %d conflicts.", skills, findings, conflicts)
+        format("refresh.reloaded", "Reloaded %d skills, %d findings, and %d same-agent conflicts.", skills, findings, conflicts)
     }
 
     static func refreshScanComplete(_ scanned: Int, _ skills: Int, _ findings: Int, _ conflicts: Int) -> String {
-        format("refresh.scanComplete", "Scan complete: %d scanned, %d in catalog, %d findings, %d conflicts.", scanned, skills, findings, conflicts)
+        format("refresh.scanComplete", "Scan complete: %d scanned, %d in catalog, %d findings, %d same-agent conflicts.", scanned, skills, findings, conflicts)
     }
 
     static func refreshFailed(_ reason: String) -> String {

@@ -216,10 +216,10 @@ private struct AgentWorkspaceHeader: View {
     }
 
     private var agentConflictCount: Int {
-        let agentSkillIDs = Set(agentSkills.map(\.id))
-        return store.conflicts.filter { conflict in
-            conflict.instanceIds.filter { agentSkillIDs.contains($0) }.count > 1
-        }.count
+        SkillListModel.sameAgentConflictGroupCount(
+            skills: agentSkills,
+            conflicts: store.conflicts
+        )
     }
 
     private func shortTitle(for filter: SkillAgentFilter) -> String {
@@ -314,7 +314,7 @@ private struct SkillHealthDashboardCard: View {
     }
 
     private var analysisSummaryText: String {
-        UIStrings.text("health.analysisInline", "\(analysisCount) analysis groups available in Analysis.")
+        UIStrings.text("health.analysisInline", "\(analysisCount) cross-agent analysis groups available in Analysis.")
     }
 
     var body: some View {
@@ -411,7 +411,7 @@ private struct SkillHealthDashboardCard: View {
             return UIStrings.text("health.empty", "Run Scan to build a skill health summary.")
         }
         if conflictCount > 0 {
-            return UIStrings.text("health.summary.conflicts", "\(conflictCount) same-agent conflicts need review.")
+            return UIStrings.text("health.summary.conflicts", "\(conflictCount) same-agent runtime/name conflicts need review.")
         }
         if brokenMissingCount > 0 {
             return UIStrings.text("health.summary.brokenMissing", "\(brokenMissingCount) broken or missing records need cleanup.")
@@ -426,7 +426,7 @@ private struct SkillHealthDashboardCard: View {
             return UIStrings.text("health.summary.risk", "\(riskCount) risk signals; use Risk to inspect findings.")
         }
         if analysisCount > 0 {
-            return UIStrings.text("health.summary.analysis", "\(analysisCount) analysis groups available; open Analysis to inspect overlaps.")
+            return UIStrings.text("health.summary.analysis", "\(analysisCount) cross-agent analysis groups available; open Analysis to inspect duplicate names or source overlap.")
         }
         return UIStrings.text("health.summary.clean", "No same-agent conflicts or broken records.")
     }

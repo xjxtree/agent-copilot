@@ -41,7 +41,7 @@ enum SkillStateFilter: String, CaseIterable, Identifiable {
         case .withFindings:
             return UIStrings.findings
         case .withConflicts:
-            return UIStrings.conflicts
+            return UIStrings.text("filter.sameAgentConflicts", "Same-agent Conflicts")
         }
     }
 }
@@ -138,7 +138,6 @@ enum SkillListModel {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         let findingInstanceIDs = Set(findings.compactMap(\.instanceId))
         let riskyFindingInstanceIDs = Set(findings.filter(Self.isRiskFinding).compactMap(\.instanceId))
-        let conflictInstanceIDs = Set(conflicts.flatMap(\.instanceIds))
         let sameAgentConflictInstanceIDs = sameAgentConflictInstanceIDs(skills: skills, conflicts: conflicts)
         let searched = query.isEmpty
             ? skills
@@ -182,8 +181,7 @@ enum SkillListModel {
             case .withFindings:
                 return findingInstanceIDs.contains(skill.id)
             case .withConflicts:
-                return conflictInstanceIDs.contains(skill.id)
-                    && sameAgentConflictInstanceIDs.contains(skill.id)
+                return sameAgentConflictInstanceIDs.contains(skill.id)
             }
         }
         return filtered.sorted { lhs, rhs in
@@ -271,20 +269,37 @@ enum SkillListModel {
         finding.isRiskCategoryFinding
     }
 
-    private static func sameAgentConflictInstanceIDs(
+    static func sameAgentConflictGroupCount(
+        skills: [SkillRecord],
+        conflicts: [ConflictGroupRecord]
+    ) -> Int {
+        sameAgentConflictGroups(skills: skills, conflicts: conflicts).count
+    }
+
+    static func sameAgentConflictInstanceIDs(
         skills: [SkillRecord],
         conflicts: [ConflictGroupRecord]
     ) -> Set<String> {
+        sameAgentConflictGroups(skills: skills, conflicts: conflicts)
+            .reduce(into: Set<String>()) { ids, groupIDs in
+                ids.formUnion(groupIDs)
+            }
+    }
+
+    private static func sameAgentConflictGroups(
+        skills: [SkillRecord],
+        conflicts: [ConflictGroupRecord]
+    ) -> [[String]] {
         let agentBySkillID = Dictionary(uniqueKeysWithValues: skills.map { ($0.id, $0.agent) })
-        var ids = Set<String>()
+        var groups: [[String]] = []
         for conflict in conflicts {
             let groupedIDs = Dictionary(grouping: conflict.instanceIds) { instanceID in
                 agentBySkillID[instanceID]
             }
             for (agent, instanceIDs) in groupedIDs where agent != nil && instanceIDs.count > 1 {
-                ids.formUnion(instanceIDs)
+                groups.append(instanceIDs)
             }
         }
-        return ids
+        return groups
     }
 }
