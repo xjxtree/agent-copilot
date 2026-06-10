@@ -117,6 +117,18 @@ struct DetailView: View {
                             llmStatus: store.llmStatus,
                             isPreparing: { action in store.isPreparingLLMAction(action) },
                             result: { action in store.llmPrepareResult(for: action) },
+                            skillAnalysisResult: { kind, scope in store.skillAnalysisPrepareResult(kind: kind, scope: scope) },
+                            isPreparingSkillAnalysis: { kind, scope in store.isPreparingSkillAnalysis(kind: kind, scope: scope) },
+                            onPrepareSkillAnalysis: { kind, scope in
+                                Task {
+                                    switch scope.key {
+                                    case LLMSkillAnalysisRequestScope.visible.key:
+                                        await store.prepareVisibleSkillAnalysis(kind: kind)
+                                    default:
+                                        await store.prepareSelectedSkillAnalysis(kind: kind)
+                                    }
+                                }
+                            },
                             onPrepare: { action in
                                 Task {
                                     switch action {
@@ -379,6 +391,9 @@ private struct AnalysisSection: View {
     let llmStatus: LLMStatus
     let isPreparing: (LLMAction) -> Bool
     let result: (LLMAction) -> LLMPrepareResult?
+    let skillAnalysisResult: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> LLMSkillAnalysisPrepareResult?
+    let isPreparingSkillAnalysis: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> Bool
+    let onPrepareSkillAnalysis: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> Void
     let onPrepare: (LLMAction) -> Void
     let scriptPreview: ScriptExecutionPreview?
     let isPreviewingScript: Bool
@@ -400,6 +415,12 @@ private struct AnalysisSection: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .adaptiveMaterialSurface()
 
+            SkillAnalysisPreparePanel(
+                result: skillAnalysisResult,
+                isPreparing: isPreparingSkillAnalysis,
+                onPrepare: onPrepareSkillAnalysis
+            )
+
             LLMAssistPanel(
                 status: llmStatus,
                 isPreparing: isPreparing,
@@ -416,6 +437,175 @@ private struct AnalysisSection: View {
         }
     }
 
+}
+
+
+private struct SkillAnalysisPreparePanel: View {
+    let result: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> LLMSkillAnalysisPrepareResult?
+    let isPreparing: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> Bool
+    let onPrepare: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.llmSkillAnalysis, systemImage: "sparkles.square.filled.on.square")
+                    .font(.headline)
+                Spacer()
+                Label(UIStrings.readOnlyPreview, systemImage: "lock.shield")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Label(UIStrings.llmSkillAnalysisSafetyTitle, systemImage: "checkmark.shield")
+                .font(.subheadline.bold())
+            Text(UIStrings.llmSkillAnalysisSafetyCopy)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 8) {
+                ForEach(LLMSkillAnalysisKind.allCases) { kind in
+                    Button {
+                        onPrepare(kind, .selected)
+                    } label: {
+                        Label("\(UIStrings.llmSkillAnalysisPrepareSelected) \(kind.title)", systemImage: kind.systemImage)
+                    }
+                    .disabled(isPreparing(kind, .selected))
+                    .help(UIStrings.llmSkillAnalysisSafetyCopy)
+                }
+            }
+
+            HStack(spacing: 8) {
+                Button {
+                    onPrepare(.overview, .visible)
+                } label: {
+                    Label(UIStrings.llmSkillAnalysisPrepareVisible, systemImage: "rectangle.grid.2x2")
+                }
+                .disabled(isPreparing(.overview, .visible))
+                .help(UIStrings.llmSkillAnalysisSafetyCopy)
+            }
+
+            ForEach(LLMSkillAnalysisKind.allCases) { kind in
+                if isPreparing(kind, .selected) {
+                    Label(UIStrings.llmPreparing, systemImage: "hourglass")
+                        .foregroundStyle(.secondary)
+                } else if let result = result(kind, .selected) {
+                    SkillAnalysisPrepareResultView(result: result, scope: .selected)
+                }
+            }
+
+            if isPreparing(.overview, .visible) {
+                Label(UIStrings.llmPreparing, systemImage: "hourglass")
+                    .foregroundStyle(.secondary)
+            } else if let result = result(.overview, .visible) {
+                SkillAnalysisPrepareResultView(result: result, scope: .visible)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct SkillAnalysisPrepareResultView: View {
+    let result: LLMSkillAnalysisPrepareResult
+    let scope: LLMSkillAnalysisRequestScope
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("\(scope.title) · \(result.analysisKind.title)", systemImage: result.enabled ? "doc.text.magnifyingglass" : "nosign")
+                .font(.subheadline.bold())
+                .foregroundStyle(result.enabled ? .primary : .secondary)
+
+            if let reason = result.disabledReason, !reason.isEmpty {
+                Text(reason)
+                    .foregroundStyle(.secondary)
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                MetadataRow(label: UIStrings.skills, value: String(result.selectedSkillCount))
+                MetadataRow(label: UIStrings.llmSkillAnalysisExcludedMissing, value: "\(result.excludedCount) / \(result.missingCount)")
+                MetadataRow(label: UIStrings.llmSkillAnalysisWriteBack, value: safetyValue(result.safety.writeBackEnabled, safeText: UIStrings.llmSkillAnalysisBlocked))
+                MetadataRow(label: UIStrings.llmSkillAnalysisScriptExecution, value: safetyValue(result.safety.scriptExecutionEnabled, safeText: UIStrings.llmSkillAnalysisBlocked))
+                MetadataRow(label: UIStrings.llmSkillAnalysisCredentialStorage, value: safetyValue(result.safety.credentialStorageEnabled, safeText: UIStrings.llmSkillAnalysisBlocked))
+                MetadataRow(label: UIStrings.llmSkillAnalysisConfirmation, value: result.safety.confirmationRequired ? UIStrings.llmSkillAnalysisRequired : UIStrings.unknown)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(UIStrings.llmSkillAnalysisIncludedSkills)
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                Text(includedSkillsText)
+                    .font(.callout)
+                    .foregroundStyle(result.includedSkills.isEmpty ? .secondary : .primary)
+                    .textSelection(.enabled)
+            }
+
+            DraftTextBlock(title: UIStrings.llmSkillAnalysisSummaryDraft, text: result.summaryDraft)
+            DraftTextBlock(title: UIStrings.llmSkillAnalysisPromptDraft, text: result.promptDraft)
+
+            Label(UIStrings.llmSkillAnalysisSafetyCopy, systemImage: "nosign")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var includedSkillsText: String {
+        guard !result.includedSkills.isEmpty else { return UIStrings.llmSkillAnalysisNoIncludedSkills }
+        return result.includedSkills.map { skill in
+            "\(skill.name) (\(DisplayText.agent(skill.agent)))"
+        }.joined(separator: ", ")
+    }
+
+    private func safetyValue(_ isEnabled: Bool, safeText: String) -> String {
+        isEnabled ? UIStrings.llmSkillAnalysisEnabledUnsafe : safeText
+    }
+}
+
+private struct DraftTextBlock: View {
+    let title: String
+    let text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(title, systemImage: "doc.on.doc")
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            Text(text.isEmpty ? UIStrings.llmSkillAnalysisNoDraft : text)
+                .font(.system(.callout, design: .monospaced))
+                .foregroundStyle(text.isEmpty ? .secondary : .primary)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
+                .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
+        }
+    }
+}
+
+private extension LLMSkillAnalysisKind {
+    var title: String {
+        switch self {
+        case .overview:
+            return UIStrings.text("llm.skillAnalysis.kind.overview", "Overview")
+        case .risk:
+            return UIStrings.text("llm.skillAnalysis.kind.risk", "Risk")
+        case .cleanup:
+            return UIStrings.text("llm.skillAnalysis.kind.cleanup", "Cleanup")
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .overview:
+            return "text.magnifyingglass"
+        case .risk:
+            return "shield.lefthalf.filled"
+        case .cleanup:
+            return "sparkles"
+        }
+    }
 }
 
 private struct LLMAssistPanel: View {

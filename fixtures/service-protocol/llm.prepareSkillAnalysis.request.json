@@ -1,0 +1,8 @@
+{
+  "id": "fixture-llm-prepare-skill-analysis",
+  "method": "llm.prepareSkillAnalysis",
+  "params": {
+    "instance_ids": ["skill-instance-id", "missing-skill-id"],
+    "analysis_kind": "overview"
+  }
+}

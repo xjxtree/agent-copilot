@@ -173,6 +173,7 @@ pub struct SkillScript {
 - 只在 app-local 持久层持久化，不写 agent config，不创建 skill-content snapshot 或 skill-toggle snapshot。
 - 当 finding fingerprint 或受影响实例签名变化时，已有 triage 状态回退为 `Open`（重新复核）。
 - 保持与现有口径一致：V2.22 finding/conflict 分离、V2.28 same-agent conflict 口径不变，cross-agent 仍留在 `Analysis`。不得与脚本执行、AI 回写、provider 调用或凭据持久化耦合。
+- V2.30 AI 分析草稿（summary/risk/explanation/remediation）不引入新的持久化实体；该信息仅在协议返回中作为 display payload 存在，不能作为 catalog/app-data 或 triage 的持久字段写入。
 
 ### 1.10 `SkillExecutionAuditRecord`
 

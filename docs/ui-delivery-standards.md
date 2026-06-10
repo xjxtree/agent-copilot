@@ -151,3 +151,11 @@ For UI changes:
 - Finding triage 状态只能是 app-local 状态（catalog/app data），不写 agent config、不创建 skill-toggle snapshot、不创建 skill-content snapshot。
 - UI 应让用户清楚区分 Open / Reviewed / Ignored / Needs follow-up，并说明 fingerprint 或受影响实例变化会自动将 triage 重置为 Open。
 - Triage 操作不得触发脚本执行、AI 写入、provider 调用或 credentials 保存；不通过 triage 创建任何 skill-toggle / skill-content snapshot。
+
+## 14. V2.30: AI skill analysis workflow（completed）
+
+- Analysis 以用户显式触发为入口（selected / batch），不得加入扫描后自动触发流程。
+- 默认状态为 disabled-by-default，面向 review 的 `prepare/preview` 为 read-only；默认不启用外部 provider 调用。
+- Analysis 界面需展示：summary、risk explanation、cleanup/suggestion draft。
+- 草稿内容为 copy-only，不能承载直接写入动作；分析面不得展示或触发文件写入、agent-config 写入、snapshot 写入、script execute、credentials save。
+- AI 提示不应修改 finding triage 的持久状态（Open / Reviewed / Ignored / Needs follow-up）。

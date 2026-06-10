@@ -6,6 +6,7 @@ struct LLMModelTests {
         try statusDecodesSnakeCasePayload()
         try statusDecodesRealServicePayload()
         try prepareResultDecodesEstimatePayload()
+        try skillAnalysisPrepareDecodesFlexiblePayload()
     }
 
     private struct ServiceEnvelope<ResultPayload: Decodable>: Decodable {
@@ -107,4 +108,45 @@ struct LLMModelTests {
         try expectEqual(result.estimate?.estimatedCostUSD, 0.0125, "LLM prepare result should decode estimated cost.")
         try expectEqual(result.confirmationRequired, true, "LLM prepare result should decode confirmation requirement.")
     }
+
+    private func skillAnalysisPrepareDecodesFlexiblePayload() throws {
+        let data = Data(
+            """
+            {
+              "enabled": false,
+              "reason": "Disabled by default.",
+              "analysis_kind": "risk",
+              "selected_skill_count": 2,
+              "included_skills": [
+                {"instance_id":"beta","name":"Beta","agent":"claude-code"},
+                {"instance_id":"gamma","name":"Gamma","agent":"codex"}
+              ],
+              "excluded_count": 1,
+              "missing_count": 0,
+              "prompt_preview": "Review risk only.",
+              "summary_draft": "Risk preview draft.",
+              "write_back_enabled": false,
+              "script_execution_enabled": false,
+              "credential_storage_enabled": false,
+              "confirmation_required": true
+            }
+            """.utf8
+        )
+
+        let result = try JSONDecoder().decode(LLMSkillAnalysisPrepareResult.self, from: data)
+
+        try expectEqual(result.enabled, false, "Skill analysis prepare should decode disabled default.")
+        try expectEqual(result.disabledReason, "Disabled by default.", "Skill analysis prepare should decode reason fallback.")
+        try expectEqual(result.analysisKind, .risk, "Skill analysis prepare should decode analysis kind.")
+        try expectEqual(result.selectedSkillCount, 2, "Skill analysis prepare should decode selected skill count.")
+        try expectEqual(result.includedSkills.map(\.name), ["Beta", "Gamma"], "Skill analysis prepare should decode included skill names.")
+        try expectEqual(result.excludedCount, 1, "Skill analysis prepare should decode excluded count.")
+        try expectEqual(result.promptDraft, "Review risk only.", "Skill analysis prepare should decode prompt preview fallback.")
+        try expectEqual(result.summaryDraft, "Risk preview draft.", "Skill analysis prepare should decode summary draft.")
+        try expectFalse(result.safety.writeBackEnabled, "Skill analysis prepare should keep write-back disabled.")
+        try expectFalse(result.safety.scriptExecutionEnabled, "Skill analysis prepare should keep script execution disabled.")
+        try expectFalse(result.safety.credentialStorageEnabled, "Skill analysis prepare should keep credential storage disabled.")
+        try expectEqual(result.safety.confirmationRequired, true, "Skill analysis prepare should require confirmation.")
+    }
+
 }

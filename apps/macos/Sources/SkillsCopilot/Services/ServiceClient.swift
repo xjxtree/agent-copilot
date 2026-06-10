@@ -83,6 +83,16 @@ private struct ToolInstallPreviewParams: Encodable {
     }
 }
 
+private struct PrepareSkillAnalysisParams: Encodable {
+    let instanceIDs: [String]
+    let analysisKind: LLMSkillAnalysisKind
+
+    enum CodingKeys: String, CodingKey {
+        case instanceIDs = "instance_ids"
+        case analysisKind = "analysis_kind"
+    }
+}
+
 private struct PrepareLLMActionParams: Encodable {
     let action: LLMAction
     let instanceId: String
@@ -237,6 +247,17 @@ final class ServiceClient {
             )
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .disabledFallback(action: action)
+        }
+    }
+
+    func prepareSkillAnalysis(instanceIDs: [String], kind: LLMSkillAnalysisKind) async throws -> LLMSkillAnalysisPrepareResult {
+        do {
+            return try await call(
+                method: "llm.prepareSkillAnalysis",
+                params: PrepareSkillAnalysisParams(instanceIDs: instanceIDs, analysisKind: kind)
+            )
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable(kind: kind)
         }
     }
 

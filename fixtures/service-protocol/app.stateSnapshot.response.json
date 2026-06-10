@@ -15,6 +15,7 @@
         "adapter.listCapabilities",
         "llm.status",
         "llm.prepareAction",
+        "llm.prepareSkillAnalysis",
         "script.previewExecution",
         "script.execute",
         "project.getContext",

@@ -15,6 +15,8 @@ final class SkillStore: ObservableObject {
     @Published private(set) var llmStatus = LLMStatus.disabledFallback()
     @Published private(set) var llmPrepareResults: [LLMAction: LLMPrepareResult] = [:]
     @Published private(set) var preparingLLMActions: Set<LLMAction> = []
+    @Published private(set) var skillAnalysisPrepareResults: [String: LLMSkillAnalysisPrepareResult] = [:]
+    @Published private(set) var preparingSkillAnalysisKeys: Set<String> = []
     @Published private(set) var scriptExecutionPreviews: [SkillRecord.ID: ScriptExecutionPreview] = [:]
     @Published private(set) var previewingScriptExecutionSkillIDs: Set<SkillRecord.ID> = []
     @Published private(set) var projectContextState: ProjectContextState?
@@ -190,6 +192,14 @@ final class SkillStore: ObservableObject {
 
     func isPreparingLLMAction(_ action: LLMAction) -> Bool {
         preparingLLMActions.contains(action)
+    }
+
+    func skillAnalysisPrepareResult(kind: LLMSkillAnalysisKind, scope: LLMSkillAnalysisRequestScope) -> LLMSkillAnalysisPrepareResult? {
+        skillAnalysisPrepareResults[skillAnalysisKey(kind: kind, scope: scope)]
+    }
+
+    func isPreparingSkillAnalysis(kind: LLMSkillAnalysisKind, scope: LLMSkillAnalysisRequestScope) -> Bool {
+        preparingSkillAnalysisKeys.contains(skillAnalysisKey(kind: kind, scope: scope))
     }
 
     func scriptExecutionPreview(for skill: SkillRecord) -> ScriptExecutionPreview? {
@@ -436,6 +446,17 @@ final class SkillStore: ObservableObject {
         await prepareLLMAction(.draftFrontmatter)
     }
 
+    func prepareSelectedSkillAnalysis(kind: LLMSkillAnalysisKind) async {
+        guard let skill = selectedSkill else { return }
+        await prepareSkillAnalysis(kind: kind, scope: .selected, instanceIDs: [skill.id])
+    }
+
+    func prepareVisibleSkillAnalysis(kind: LLMSkillAnalysisKind) async {
+        let instanceIDs = filteredSkills.map(\.id)
+        guard !instanceIDs.isEmpty else { return }
+        await prepareSkillAnalysis(kind: kind, scope: .visible, instanceIDs: instanceIDs)
+    }
+
     func previewScriptExecutionSafety(for skill: SkillRecord) async {
         guard !isRefreshBusy else {
             scriptExecutionPreviews[skill.id] = .unavailable(skill: skill, reason: UIStrings.operationUnavailableBusy)
@@ -585,6 +606,8 @@ final class SkillStore: ObservableObject {
         let currentSkillIDs = Set(snapshot.skills.map(\.id))
         scriptExecutionPreviews = scriptExecutionPreviews.filter { currentSkillIDs.contains($0.key) }
         skillEventsByID = skillEventsByID.filter { currentSkillIDs.contains($0.key) }
+        skillAnalysisPrepareResults.removeAll()
+        preparingSkillAnalysisKeys.removeAll()
         refreshWatcherMessage(from: self.status)
         normalizeSelectionToVisibleSkills()
     }
@@ -615,6 +638,27 @@ final class SkillStore: ObservableObject {
                 errorMessage = error.localizedDescription
             }
         }
+    }
+
+    private func prepareSkillAnalysis(kind: LLMSkillAnalysisKind, scope: LLMSkillAnalysisRequestScope, instanceIDs: [String]) async {
+        let key = skillAnalysisKey(kind: kind, scope: scope)
+        guard !isRefreshBusy else {
+            skillAnalysisPrepareResults[key] = .unavailable(kind: kind, reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        preparingSkillAnalysisKeys.insert(key)
+        defer { preparingSkillAnalysisKeys.remove(key) }
+
+        do {
+            skillAnalysisPrepareResults[key] = try await service.prepareSkillAnalysis(instanceIDs: instanceIDs, kind: kind)
+        } catch {
+            skillAnalysisPrepareResults[key] = .unavailable(kind: kind, reason: error.localizedDescription)
+        }
+    }
+
+    private func skillAnalysisKey(kind: LLMSkillAnalysisKind, scope: LLMSkillAnalysisRequestScope) -> String {
+        "\(scope.key):\(kind.rawValue)"
     }
 
     private func prepareLLMAction(_ action: LLMAction) async {

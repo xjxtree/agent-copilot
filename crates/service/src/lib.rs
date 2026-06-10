@@ -44,6 +44,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "adapter.listCapabilities",
     "llm.status",
     "llm.prepareAction",
+    "llm.prepareSkillAnalysis",
     "script.previewExecution",
     "script.execute",
     "project.getContext",
@@ -214,6 +215,39 @@ pub struct LlmPrepareActionParams {
     pub user_intent: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct LlmPrepareSkillAnalysisParams {
+    #[serde(default)]
+    pub instance_ids: Vec<String>,
+    pub analysis_kind: LlmSkillAnalysisKind,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LlmSkillAnalysisKind {
+    Overview,
+    Risk,
+    Cleanup,
+}
+
+impl LlmSkillAnalysisKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Overview => "overview",
+            Self::Risk => "risk",
+            Self::Cleanup => "cleanup",
+        }
+    }
+
+    fn output_token_estimate(self) -> u32 {
+        match self {
+            Self::Overview => 650,
+            Self::Risk => 800,
+            Self::Cleanup => 700,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LlmActionKind {
@@ -257,6 +291,43 @@ pub struct LlmPrepareActionResult {
     pub privacy_notes: Vec<String>,
     pub confirmation: LlmConfirmationRequirement,
     pub review_preview: LlmReviewPreview,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LlmPrepareSkillAnalysisResult {
+    pub enabled: bool,
+    pub disabled_reason: String,
+    pub analysis_kind: &'static str,
+    pub selected_skill_count: usize,
+    pub included_skill_count: usize,
+    pub excluded_missing_count: usize,
+    pub included_skills: Vec<LlmSkillAnalysisIncludedSkill>,
+    pub prompt_draft: String,
+    pub summary_draft: String,
+    pub safety_flags: LlmSkillAnalysisSafetyFlags,
+    pub estimated_input_tokens: u32,
+    pub estimated_output_tokens: u32,
+    pub estimated_total_tokens: u32,
+    pub provider_request_sent: bool,
+    pub generated_by: &'static str,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LlmSkillAnalysisIncludedSkill {
+    pub instance_id: String,
+    pub name: String,
+    pub agent: String,
+    pub scope: String,
+    pub enabled: bool,
+    pub disabled_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LlmSkillAnalysisSafetyFlags {
+    pub write_back_enabled: bool,
+    pub script_execution_enabled: bool,
+    pub credential_storage_enabled: bool,
+    pub confirmation_required: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -531,6 +602,10 @@ impl ServiceHost {
             "llm.prepareAction" => {
                 let params: LlmPrepareActionParams = serde_json::from_value(request.params)?;
                 serde_json::to_value(self.prepare_llm_action(params)?).map_err(Into::into)
+            }
+            "llm.prepareSkillAnalysis" => {
+                let params: LlmPrepareSkillAnalysisParams = serde_json::from_value(request.params)?;
+                serde_json::to_value(self.prepare_llm_skill_analysis(params)?).map_err(Into::into)
             }
             "script.previewExecution" => {
                 let params: ScriptExecutionRequest = serde_json::from_value(request.params)?;
@@ -1006,6 +1081,121 @@ impl ServiceHost {
                 ],
             },
             review_preview,
+        })
+    }
+
+    pub fn prepare_llm_skill_analysis(
+        &self,
+        params: LlmPrepareSkillAnalysisParams,
+    ) -> Result<LlmPrepareSkillAnalysisResult, ServiceError> {
+        let status = self.llm_status();
+        let selected_skill_count = params.instance_ids.len();
+        let mut included_skills = Vec::new();
+        let mut estimate_parts = vec![params.analysis_kind.as_str().to_string()];
+        let Some(catalog) = self.open_existing_catalog_read_only()? else {
+            let disabled_reason = status.reason.clone();
+            let prompt_draft = skill_analysis_prompt_draft(
+                params.analysis_kind,
+                selected_skill_count,
+                &included_skills,
+                selected_skill_count,
+            );
+            let summary_draft = skill_analysis_summary_draft(
+                params.analysis_kind,
+                selected_skill_count,
+                &included_skills,
+                selected_skill_count,
+            );
+            let estimated_input_tokens = estimate_tokens(&[&prompt_draft, &summary_draft]);
+            let estimated_output_tokens = params.analysis_kind.output_token_estimate();
+            let estimated_total_tokens = estimated_input_tokens
+                .saturating_add(estimated_output_tokens)
+                .min(status.single_request_token_limit);
+            return Ok(LlmPrepareSkillAnalysisResult {
+                enabled: false,
+                disabled_reason,
+                analysis_kind: params.analysis_kind.as_str(),
+                selected_skill_count,
+                included_skill_count: 0,
+                excluded_missing_count: selected_skill_count,
+                included_skills,
+                prompt_draft,
+                summary_draft,
+                safety_flags: llm_skill_analysis_safety_flags(),
+                estimated_input_tokens,
+                estimated_output_tokens,
+                estimated_total_tokens,
+                provider_request_sent: false,
+                generated_by: "deterministic-service",
+            });
+        };
+
+        for instance_id in &params.instance_ids {
+            let Some(detail) = catalog.get_skill_detail(instance_id)? else {
+                continue;
+            };
+            estimate_parts.extend([
+                detail.name.clone(),
+                detail.agent.clone(),
+                detail.scope.clone(),
+                detail.description.clone(),
+                detail.frontmatter_raw.clone(),
+                detail.body.clone(),
+            ]);
+            included_skills.push(LlmSkillAnalysisIncludedSkill {
+                instance_id: detail.id,
+                name: detail.name,
+                agent: detail.agent,
+                scope: detail.scope,
+                enabled: detail.enabled,
+                disabled_reason: if detail.enabled {
+                    None
+                } else {
+                    Some("Skill is disabled in the current catalog state.".to_string())
+                },
+            });
+        }
+
+        let excluded_missing_count = selected_skill_count.saturating_sub(included_skills.len());
+        let prompt_draft = skill_analysis_prompt_draft(
+            params.analysis_kind,
+            selected_skill_count,
+            &included_skills,
+            excluded_missing_count,
+        );
+        let summary_draft = skill_analysis_summary_draft(
+            params.analysis_kind,
+            selected_skill_count,
+            &included_skills,
+            excluded_missing_count,
+        );
+        estimate_parts.extend([prompt_draft.clone(), summary_draft.clone()]);
+        let estimate_refs = estimate_parts
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        let estimated_input_tokens = estimate_tokens(&estimate_refs);
+        let estimated_output_tokens = params.analysis_kind.output_token_estimate();
+        let estimated_total_tokens = estimated_input_tokens
+            .saturating_add(estimated_output_tokens)
+            .min(status.single_request_token_limit);
+
+        Ok(LlmPrepareSkillAnalysisResult {
+            enabled: false,
+            disabled_reason: status.reason,
+            analysis_kind: params.analysis_kind.as_str(),
+            selected_skill_count,
+            included_skill_count: included_skills.len(),
+            excluded_missing_count,
+            included_skills,
+            prompt_draft,
+            summary_draft,
+            safety_flags: llm_skill_analysis_safety_flags(),
+            estimated_input_tokens,
+            estimated_output_tokens,
+            estimated_total_tokens,
+            provider_request_sent: false,
+            generated_by: "deterministic-service",
         })
     }
 
@@ -1624,6 +1814,64 @@ fn llm_review_redaction() -> LlmReviewRedaction {
     }
 }
 
+fn llm_skill_analysis_safety_flags() -> LlmSkillAnalysisSafetyFlags {
+    LlmSkillAnalysisSafetyFlags {
+        write_back_enabled: false,
+        script_execution_enabled: false,
+        credential_storage_enabled: false,
+        confirmation_required: true,
+    }
+}
+
+fn skill_analysis_prompt_draft(
+    analysis_kind: LlmSkillAnalysisKind,
+    selected_skill_count: usize,
+    included_skills: &[LlmSkillAnalysisIncludedSkill],
+    excluded_missing_count: usize,
+) -> String {
+    let included = skill_analysis_included_summary(included_skills);
+    format!(
+        "Prepare a read-only {kind} analysis for {selected_skill_count} selected skill instance(s). Included skills: {included}. Missing or excluded selections: {excluded_missing_count}. Do not write files, change agent config, execute scripts, store credentials, create snapshots, or call tools.",
+        kind = analysis_kind.as_str()
+    )
+}
+
+fn skill_analysis_summary_draft(
+    analysis_kind: LlmSkillAnalysisKind,
+    selected_skill_count: usize,
+    included_skills: &[LlmSkillAnalysisIncludedSkill],
+    excluded_missing_count: usize,
+) -> String {
+    let disabled_count = included_skills
+        .iter()
+        .filter(|skill| !skill.enabled)
+        .count();
+    format!(
+        "Local preview only: {kind} analysis queued for {selected_skill_count} selected skill instance(s), with {} included, {excluded_missing_count} missing or excluded, and {disabled_count} currently disabled. Provider calls, write-back, script execution, credential storage, and snapshots are disabled.",
+        included_skills.len(),
+        kind = analysis_kind.as_str()
+    )
+}
+
+fn skill_analysis_included_summary(included_skills: &[LlmSkillAnalysisIncludedSkill]) -> String {
+    if included_skills.is_empty() {
+        return "none".to_string();
+    }
+    included_skills
+        .iter()
+        .map(|skill| {
+            format!(
+                "{} ({}, {}, enabled={})",
+                redact_for_llm_preview(&skill.name),
+                redact_for_llm_preview(&skill.agent),
+                redact_for_llm_preview(&skill.scope),
+                skill.enabled
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
 fn redact_for_llm_preview(value: &str) -> String {
     let mut redacted = value
         .split_whitespace()
@@ -1714,6 +1962,7 @@ mod tests {
         assert!(methods.contains(&Value::String("app.stateSnapshot".to_string())));
         assert!(methods.contains(&Value::String("llm.status".to_string())));
         assert!(methods.contains(&Value::String("llm.prepareAction".to_string())));
+        assert!(methods.contains(&Value::String("llm.prepareSkillAnalysis".to_string())));
         assert!(methods.contains(&Value::String("script.previewExecution".to_string())));
         assert!(methods.contains(&Value::String("script.execute".to_string())));
         assert!(methods.contains(&Value::String("project.getContext".to_string())));
@@ -2316,6 +2565,129 @@ mod tests {
         let serialized = serde_json::to_string(&response.result).expect("serialize response");
         assert!(!serialized.contains("OPENAI_API_KEY=<redacted>"));
         assert!(!serialized.contains("Analyze local skill posture"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn llm_prepare_skill_analysis_is_read_only_and_reports_missing_selection() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-llm-skill-analysis-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-llm-skill-analysis-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_llm_skill(&host, &app_data_dir.join("fixture-skill").join("SKILL.md"));
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("llm-skill-analysis".to_string()),
+            method: "llm.prepareSkillAnalysis".to_string(),
+            params: json!({
+                "instance_ids": ["llm-skill-id", "missing-skill-id"],
+                "analysis_kind": "risk"
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("skill analysis prepare result");
+        assert_eq!(result.get("enabled").and_then(Value::as_bool), Some(false));
+        assert_eq!(
+            result.get("analysis_kind").and_then(Value::as_str),
+            Some("risk")
+        );
+        assert_eq!(
+            result.get("selected_skill_count").and_then(Value::as_u64),
+            Some(2)
+        );
+        assert_eq!(
+            result.get("included_skill_count").and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            result.get("excluded_missing_count").and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/write_back_enabled")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/script_execution_enabled")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/credential_storage_enabled")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/confirmation_required")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/included_skills/0/name")
+                .and_then(Value::as_str),
+            Some("llm-fixture")
+        );
+        assert!(result
+            .get("estimated_total_tokens")
+            .and_then(Value::as_u64)
+            .is_some_and(|tokens| tokens > 0));
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+        assert!(!app_data_dir.join("llm-credentials.json").exists());
+        assert!(!app_data_dir.join("llm-config.json").exists());
+        let serialized = serde_json::to_string(&result).expect("serialize result");
+        assert!(!serialized.contains("OPENAI_API_KEY=<redacted>"));
+        assert!(!serialized.contains("Analyze local skill posture"));
+        assert!(!serialized.contains("fixture-skill"));
 
         let _ = fs::remove_dir_all(app_data_dir);
         let _ = fs::remove_dir_all(user_home);
@@ -3311,6 +3683,20 @@ mod tests {
                 assert!(prepare.draft_requires_user_copy);
                 assert!(prepare.confirmation.required);
             }
+            "llm.prepareSkillAnalysis" => {
+                let prepare: WireLlmPrepareSkillAnalysisResult =
+                    decode_fixture_result(method, result, path);
+                assert!(!prepare.enabled);
+                assert!(!prepare.provider_request_sent);
+                assert!(!prepare.safety_flags.write_back_enabled);
+                assert!(!prepare.safety_flags.script_execution_enabled);
+                assert!(!prepare.safety_flags.credential_storage_enabled);
+                assert!(prepare.safety_flags.confirmation_required);
+                assert_eq!(
+                    prepare.selected_skill_count,
+                    prepare.included_skill_count + prepare.excluded_missing_count
+                );
+            }
             "script.previewExecution" => {
                 let preview: WireScriptExecutionPreviewRecord =
                     decode_fixture_result(method, result, path);
@@ -3627,6 +4013,9 @@ mod tests {
                 "confirmed": false
             }),
             "llm.prepareAction" => json!({ "kind": "recommend", "user_intent": "fixture" }),
+            "llm.prepareSkillAnalysis" => {
+                json!({ "instance_ids": ["missing-skill"], "analysis_kind": "overview" })
+            }
             "script.previewExecution" => json!({
                 "command": ["echo", "preview-only"],
                 "initiated_by": "user"
@@ -3824,6 +4213,49 @@ mod tests {
         privacy_notes: Vec<String>,
         confirmation: WireLlmConfirmationRequirement,
         review_preview: WireLlmReviewPreview,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireLlmPrepareSkillAnalysisResult {
+        enabled: bool,
+        disabled_reason: String,
+        analysis_kind: String,
+        selected_skill_count: usize,
+        included_skill_count: usize,
+        excluded_missing_count: usize,
+        included_skills: Vec<WireLlmSkillAnalysisIncludedSkill>,
+        prompt_draft: String,
+        summary_draft: String,
+        safety_flags: WireLlmSkillAnalysisSafetyFlags,
+        estimated_input_tokens: u32,
+        estimated_output_tokens: u32,
+        estimated_total_tokens: u32,
+        provider_request_sent: bool,
+        generated_by: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireLlmSkillAnalysisIncludedSkill {
+        instance_id: String,
+        name: String,
+        agent: String,
+        scope: String,
+        enabled: bool,
+        disabled_reason: Option<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireLlmSkillAnalysisSafetyFlags {
+        write_back_enabled: bool,
+        script_execution_enabled: bool,
+        credential_storage_enabled: bool,
+        confirmation_required: bool,
     }
 
     #[allow(dead_code)]

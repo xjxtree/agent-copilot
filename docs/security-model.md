@@ -24,7 +24,7 @@
 >
 > skills-copilot **不**在默认路径自行执行 skill 脚本。
 >
-> V2.7 LLM 本地辅助分析当前只实现 disabled-by-default gate 和 request prepare/estimate。它不保存 credentials、不创建 provider client、不发起网络请求，也不把 LLM prompt/response/token/cost 写入 SQLite、项目目录或 logs。
+> V2.7 LLM 本地辅助分析当前只实现 disabled-by-default gate 和 request prepare/estimate。V2.30 已实现的边界在此基础上要求：仅由用户显式触发的 `selected`/`batch` 场景返回本地 review preview，默认不发起 provider 网络请求；它不保存 credentials、不创建 provider client、不发起网络请求，也不把 LLM prompt/response/token/cost 写入 SQLite、项目目录或 logs。
 >
 > V2.10 skill execution safety 当前是 default-deny 边界：
 >
@@ -163,7 +163,15 @@ V2.4 把 opencode 作为第三个 adapter 接入 catalog；当前实现按官方
 - 真实 sandbox runner 未实现前，不得产生 `Completed` execution record，不得保存 stdout/stderr，不得把执行输出写回 skill 文件、catalog frontmatter、LLM prompt/response 或配置文件。
 - public release/signing/notarization/DMG 自动化不因该边界完成而变成当前能力；它们仍按 release checklist deferred。
 
-### 2.4.2 Finding triage persistence 边界（V2.29）
+### 2.4.2 V2.30 AI skill analysis 边界（completed）
+
+- 分析路径默认 `read-only`，仅由用户显式触发；支持 `selected` / `batch` 范围。
+- 分析默认处于 disabled-by-default 模式，优先本地 `prepare/preview`；当前不执行背景分析，不提供自动重算触发器。
+- 默认路径不写文件、不写 agent-config，不建 skill-toggle / skill-content 快照，不执行 `script.execute`。
+- V2.30 草稿输出仅作 `review` 与复制使用，不能直接 apply；不会持久化 triage 状态（`Open / Reviewed / Ignored / Needs follow-up`）。
+- 当前阶段不读取或写入 LLM credentials；未来 provider 路径需显式 opt-in，并延续 V2.7 的 Keychain 优先边界。
+
+### 2.4.3 Finding triage persistence 边界（V2.29）
 
 - Finding triage 持久化只发生在 app-local catalog/app data 层，目标是降低重复噪音并提示用户复核；不参与 agent 配置写入，也不改写 skill 内容。
 - triage 状态值限定为 `Open` / `Reviewed` / `Ignored` / `Needs follow-up`。

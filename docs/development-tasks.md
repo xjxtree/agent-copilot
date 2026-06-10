@@ -1,13 +1,13 @@
 # Development Tasks
 
-> Status: current planning and execution queue as of 2026-06-10. V2.1 through V2.29 are synchronized baseline, and V2.30 is active/in-progress.
+> Status: current planning and execution queue as of 2026-06-10. V2.1 through V2.30 are synchronized baseline, and V2.31 is active/in-progress.
 
 ## Current Baseline
 
 - Current branch baseline: `main` after V2.16-V2.28 management/analysis/history/explainability/provenance/conflict-semantics line and 2026-06-10 real local Computer Use validation; V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout 均已收口。
 - Product boundary: native macOS SwiftUI/AppKit shell plus Rust service protocol.
 - Completed V2 milestones: first Codex slice, V2.1 through V2.28.
-- Current priority: V2.30 AI skill analysis workflow is active after V2.29 finding triage persistence completed. Keep V2.26 finding explainability stable: rule source + trigger reason/message + affected instances + scan entries + severity/risk relation must remain visible. Keep V2.27 identity/provenance stable: agent/scope/definition/path, native vs compatibility labels, and Pi `.md` noise exclusion must remain explainable. Keep V2.28 conflict semantics stable: Conflicts=current-agent runtime/name collisions only, Analysis=cross-agent duplicate/source-overlap/enabled mismatch, health conflict_count excludes cross-agent analysis groups. Keep V2.24/V2.25 boundaries: Findings=issue groups, History=toggle/config events, no skill-content snapshot, no skill-toggle snapshot, no script execution, and rollback remains preview+confirm. V2.29 triage persistence must be app-local catalog/app-data only (Open / Reviewed / Ignored / Needs follow-up), no skill-toggle snapshot, no skill-content snapshot, no agent-config writes, and no script execution / AI write-back / credential persistence. It must reopen automatically on finding fingerprint or affected-instance set changes.
+- Current priority: V2.31 Cleanup Queue is active after V2.30 AI skill analysis workflow completed. Keep V2.26 finding explainability, V2.27 identity/provenance, V2.28 conflict semantics, V2.29 finding triage persistence, and V2.30 read-only AI analysis stable. Cleanup work must stay app-local/read-only by default unless an existing guarded service write path is explicitly invoked by the user.
 - Real local Computer Use baseline: passed on 2026-06-10 for the current mainline app against real local HOME/app data/Claude/Codex/opencode roots; validation explicitly targeted the current `dist/SkillsCopilot.app` bundle after detecting a stale same-bundle-id worktree app. Future user-visible, UI, or service protocol changes must rerun it.
 - Quality gate for code/UI/protocol work: `pnpm check:macos`; add focused Rust/Swift tests when touching shared behavior.
 
@@ -35,8 +35,9 @@
 | V2.27 | Skill identity/provenance dedupe | Completed | Agent/scope/definition/path identity is deterministic; Pi `.md` noise stays excluded; opencode native and compatibility roots are explainable in UI |
 | V2.28 | Conflict semantic closeout | Completed | Conflicts = selected/current agent runtime/name collisions only; cross-agent duplicate/source-overlap/enabled-mismatch = `Analysis` only; health conflict_count must not include cross-agent analysis groups |
 | V2.29 | Finding triage persistence | Completed | reviewed/ignored/needs-follow-up are persisted in app-local catalog/app data; no agent-config writes, no skill-toggle snapshot, no skill-content snapshot; no script execution / AI write-back / credential persistence; findings reopen when fingerprint or affected-instance set changes |
-| V2.30 | AI skill analysis workflow | In Progress | Disabled-by-default read-only AI analysis supports batch summaries and suggestion drafts without writes/execution/credentials |
-| V2.31-V2.35 | Cleanup workflow | Planned | Cleanup queue, rule tuning/suppression, safe batch actions, cross-agent comparison, local report export |
+| V2.30 | AI skill analysis workflow | Completed | User-triggered selected/batch read-only previews with summary + risk explanation + cleanup draft. Default local prepare/preview only; no background analysis; no writes, agent-config writes, snapshots, execution, or credential persistence |
+| V2.31 | Cleanup Queue | In Progress | Aggregate open findings, integrity issues, and analysis insights into a review queue with clear next actions and no new automatic write path |
+| V2.32-V2.35 | Cleanup workflow | Planned | Rule tuning/suppression, safe batch actions, cross-agent comparison, local report export |
 | V2.36-V2.40 | Adapter trust and diagnostics | Planned | Pi writable evidence harness, guarded Pi slice if proven, Hermes external roots, OpenClaw workspace deepening, adapter diagnostics |
 | V2.41-V2.45 | Long-term governance | Planned | Quality score, stale/drift detection, local knowledge index, policy packs, review session mode |
 
@@ -49,8 +50,8 @@
 1. V2.27 Skill identity/provenance dedupe: completed; keep agent/scope/definition/path identity deterministic, Pi `.md` resource noise excluded, and native vs compatibility roots explainable.
 2. V2.28 Conflict semantic closeout: completed; keep same-agent runtime/name collisions in Conflicts for selected/current agent, keep cross-agent duplicate/source overlap/enabled-mismatch in Analysis, and ensure health conflict_count stays aligned to selected/current conflict groups.
 3. V2.29 Finding triage persistence: completed; add reviewed/ignored/needs-follow-up state in app-local catalog/app data; do not write agent config, skill-toggle snapshot, or skill-content snapshot; no script execution / AI write-back / credential persistence; reopen when finding fingerprint or affected-instance set changes.
-4. V2.30 AI skill analysis workflow: in progress; improve disabled-by-default read-only AI summaries and suggestion drafts without provider calls by default, writes, execution, or credential storage.
-5. V2.31-V2.35 Cleanup workflow: build cleanup queue, rule tuning/suppression, safe batch actions, cross-agent comparison, and local report export after semantics are stable.
+4. V2.30 AI skill analysis workflow: completed; disabled-by-default read-only AI summaries and suggestion drafts are prepared without provider calls by default, writes, execution, or credential storage.
+5. V2.31 Cleanup Queue: in progress; build a review queue from open findings, integrity issues, and analysis insights before later tuning/suppression/reporting work.
 7. V2.36-V2.40 Adapter trust and diagnostics: only after the management workflow is stable, run Pi writable evidence harness and deepen Hermes/OpenClaw diagnostics without guessing write semantics.
 8. V2.41-V2.45 Long-term governance: quality score, stale/drift detection, local knowledge index, policy packs, and review sessions.
 
@@ -59,7 +60,7 @@
 - Keep finding/risk/analysis labels explainable: risk is a subset of findings; analysis is cross-agent insight; conflict is selected-agent runtime/name collision.
 - Keep skill identity deterministic across all adapters and expose provenance labels in UI where user confusion is likely.
 - Keep triage state in app-local storage only; never hide unresolved high-risk findings by default.
-- Keep optional AI analysis read-only, disabled by default, and separate from all write/config/script paths.
+- Keep optional AI analysis read-only, disabled by default, and separate from all write/config/script paths. It must remain explicit user-triggered, support selected/batch preview only, and must not perform provider calls or triage state changes by default.
 - Keep Hermes/OpenClaw writable/install blocked until individual skill disable schema, credential preservation, and rollback-safe writes are verified.
 - Keep Pi writable support blocked until the disposable evidence harness proves exact mutation and rollback semantics.
 - Keep every new write path behind service protocol, snapshot, audit, permission, and privacy boundaries.
@@ -70,7 +71,7 @@
 - V2.26-V2.30 docs and code make finding/risk/conflict/analysis semantics explainable from Health, list, detail, and analysis views.
 - Skill provenance and dedupe behavior are deterministic enough that Pi/opencode/compatibility-root surprises can be explained from the UI.
 - Triage persistence helps reduce repeated noise while avoiding agent-config writes, script execution, AI write-back, and credential persistence; affected-instance drift should reopen triage automatically.
-- AI-assisted analysis remains opt-in, read-only, privacy-safe, and impossible to use as an execution/write path.
+- AI-assisted analysis remains opt-in, read-only, privacy-safe, user-triggered, and impossible to use as an execution/write path. It must keep analysis scope read-only, copy-only draft outputs, and no background triggers.
 - `docs/agent-adapters.md`, `docs/agent-adapter-spec-worklists.md`, `docs/development-tasks.md`, `docs/roadmap.md`, `docs/service-protocol.md`, `docs/data-model.md`, `docs/ui-delivery-standards.md`, and `AGENTS.md` agree on the current support state and next version line.
 
 ## Current Backlog
@@ -95,7 +96,8 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 | P0 | V2.27 Skill identity/provenance dedupe | Completed | Keep agent/scope/definition/path identity deterministic; keep Pi `.md` noise excluded; label opencode native vs compatibility roots | Users can explain why each skill appears once, appears under multiple agents, or is intentionally excluded |
 | P0 | V2.28 Conflict semantic closeout | Completed | Keep UI/protocol wording so same-agent conflicts and cross-agent analysis never share the same counter | Conflict tabs only show current-agent collisions; Analysis owns cross-agent duplicate/source-overlap |
 | P0 | V2.29 Finding triage persistence | Completed | Add app-local reviewed/ignored/needs-follow-up state in catalog/app data with automatic reopen on changed finding fingerprint or affected-instance set; no agent-config writes, no skill-toggle snapshot, no skill-content snapshot; no script execution / AI write-back / credential persistence | Users can separate known issues from new actionable findings without write-path side effects |
-| P0 | V2.30 AI skill analysis workflow | In Progress | Extend disabled-by-default read-only AI analysis to batch summaries and suggestion drafts | Users get readable skill analysis with no writes, no script execution, no provider calls by default, and no credential storage |
+| P0 | V2.30 AI skill analysis workflow | Completed | Extend disabled-by-default read-only AI analysis to batch summaries and suggestion drafts | Users get readable skill analysis with no writes, no script execution, no provider calls by default, and no credential storage |
+| P0 | V2.31 Cleanup Queue | In Progress | Turn open findings, integrity issues, and analysis insights into an app-local queue with clear next actions | Users can work down skill cleanup items without losing the read-only/default-safe boundary |
 | P1 | Finding triage usability and grouping | Planned | Add grouping and shortcut filters for reviewed/ignored/needs follow-up findings (by rule / severity / agent / source) without writing agent config, script execution, AI write-back, or credentials | Users can act on persistent triage faster without widening state persistence scope |
 | P1 | Agent-config timeline | Completed | Keep per-agent config snapshots and activity history only for config/toggle events; enforce preview diff and second-step confirmation for rollback; do not add skill-content snapshot or skill-toggle snapshot | Users can understand config changes and rollback points |
 | P1 | Read-only AI skill analysis assist | Implemented offline preview | Keep V2.7 disabled-by-default gate and V2.20 offline purpose/risk/finding summaries free of provider/client/storage/write/execution paths | Users get human-readable analysis without any write, execution, or credential risk |

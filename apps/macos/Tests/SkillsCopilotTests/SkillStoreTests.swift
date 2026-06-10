@@ -30,6 +30,8 @@ struct SkillStoreTests {
         try await projectValidationErrorSkipsScanAndSurfacesMessage()
         try await reloadFallsBackToDisabledLLMWhenOldServiceDoesNotSupportMethods()
         try await prepareLLMActionStoresEstimateWithoutProviderCall()
+        try await prepareSkillAnalysisUsesReadOnlyPrepareContract()
+        try await prepareSkillAnalysisFallsBackWhenMethodUnavailable()
         try await llmPreparePreviewIsScopedToSelectedSkillAndReadOnly()
         try await previewScriptExecutionSafetyStoresBlockedPreviewWithoutExecute()
     }
@@ -597,6 +599,55 @@ struct SkillStoreTests {
         try expectFalse(fake.calls().contains("llm.complete"), "LLM prepare should not call a provider completion method.")
     }
 
+
+    private func prepareSkillAnalysisUsesReadOnlyPrepareContract() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "llm-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+        await store.prepareSelectedSkillAnalysis(kind: .risk)
+        await store.prepareVisibleSkillAnalysis(kind: .overview)
+
+        let selected = store.skillAnalysisPrepareResult(kind: .risk, scope: .selected)
+        try expectEqual(selected?.enabled, false, "Skill analysis prepare should stay disabled by default.")
+        try expectEqual(selected?.analysisKind, .risk, "Selected skill analysis should preserve requested kind.")
+        try expectEqual(selected?.selectedSkillCount, 1, "Selected skill analysis should include one skill.")
+        try expectEqual(selected?.includedSkills.map(\.name), ["Beta"], "Selected skill analysis should expose included skill names.")
+        try expectFalse(selected?.safety.writeBackEnabled ?? true, "Skill analysis prepare must not enable write-back.")
+        try expectFalse(selected?.safety.scriptExecutionEnabled ?? true, "Skill analysis prepare must not enable script execution.")
+        try expectFalse(selected?.safety.credentialStorageEnabled ?? true, "Skill analysis prepare must not enable credential storage.")
+        try expectEqual(selected?.safety.confirmationRequired, true, "Skill analysis prepare should require confirmation.")
+
+        let visible = store.skillAnalysisPrepareResult(kind: .overview, scope: .visible)
+        try expectEqual(visible?.selectedSkillCount, 2, "Visible skill analysis should include current visible filtered skills.")
+        let calls = fake.calls()
+        try expectContains(calls, "llm.prepareSkillAnalysis", "Skill analysis should use the V2.30 prepare method.")
+        try expectContains(calls, "\"analysis_kind\":\"risk\"", "Skill analysis should send requested risk kind.")
+        try expectContains(calls, "\"instance_ids\":[\"beta\"]", "Selected skill analysis should send selected instance IDs only.")
+        try expectFalse(calls.contains("llm.complete"), "Skill analysis prepare must not call provider completion.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Skill analysis prepare must not call write paths.")
+        try expectFalse(calls.contains("script.execute"), "Skill analysis prepare must not call execution paths.")
+    }
+
+    private func prepareSkillAnalysisFallsBackWhenMethodUnavailable() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "old-service")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+        await store.prepareSelectedSkillAnalysis(kind: .cleanup)
+
+        let result = store.skillAnalysisPrepareResult(kind: .cleanup, scope: .selected)
+        try expectEqual(result?.enabled, false, "Unavailable skill analysis should be disabled.")
+        try expectEqual(result?.disabledReason, UIStrings.llmSkillAnalysisUnavailable, "Unavailable skill analysis should expose quiet fallback reason.")
+        try expectContains(result?.summaryDraft, "Disabled fallback preview only", "Unavailable skill analysis should provide read-only preview copy.")
+    }
+
     private func llmPreparePreviewIsScopedToSelectedSkillAndReadOnly() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -852,6 +903,19 @@ private final class FakeServiceScript {
               respond '{"id":"test","ok":true,"result":{"enabled":true,"provider":"openai","model":"gpt-5","disabled_reason":null,"supported_actions":["analyze","recommend","explain_conflict","draft_frontmatter"]}}'
             else
               respond '{"id":"test","ok":true,"result":{"enabled":false,"provider":null,"model":null,"disabled_reason":"LLM is disabled.","supported_actions":["analyze","recommend","explain_conflict","draft_frontmatter"]}}'
+            fi
+            ;;
+          *\\"llm.prepareSkillAnalysis\\"*)
+            if [ "$scenario" = "old-service" ]; then
+              respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: llm.prepareSkillAnalysis"}}'
+            elif [ "$scenario" = "llm-ready" ]; then
+              if printf '%s' "$input" | grep -q '\\"analysis_kind\\":\\"risk\\"'; then
+                respond '{"id":"test","ok":true,"result":{"enabled":false,"disabled_reason":"AI analysis is disabled by default.","analysis_kind":"risk","selected_skill_count":1,"included_skills":[{"instance_id":"beta","name":"Beta","agent":"claude-code"}],"excluded_count":0,"missing_count":0,"prompt_draft":"Risk prompt for Beta.","summary_draft":"Risk summary for Beta.","write_back_enabled":false,"script_execution_enabled":false,"credential_storage_enabled":false,"confirmation_required":true}}'
+              else
+                respond '{"id":"test","ok":true,"result":{"enabled":false,"disabled_reason":"AI analysis is disabled by default.","analysis_kind":"overview","selected_skill_count":2,"included_skills":[{"instance_id":"alpha","name":"Alpha","agent":"claude-code"},{"instance_id":"beta","name":"Beta","agent":"claude-code"}],"excluded_count":0,"missing_count":0,"prompt_draft":"Overview prompt for visible skills.","summary_draft":"Overview summary for visible skills.","safety":{"write_back_enabled":false,"script_execution_enabled":false,"credential_storage_enabled":false,"confirmation_required":true}}}'
+              fi
+            else
+              respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: llm.prepareSkillAnalysis"}}'
             fi
             ;;
           *\\"llm.prepareAction\\"*)

@@ -1,6 +1,6 @@
 # skills-copilot Service Protocol
 
-> Status: V2.29 Finding triage persistence integrated; V2.30 AI skill analysis workflow is active. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, V2.19 health dashboard, V2.20 read-only AI skill analysis assist, V2.21 scan accuracy/dedupe alignment, V2.22 finding/conflict semantics, V2.23 Health Dashboard / Adapter Capability UX, V2.24 Skill Detail diagnostics, V2.25 Agent-config timeline, V2.26 Finding explainability, V2.27 Skill identity/provenance dedupe, and V2.28 Conflict semantic closeout are implemented or synchronized. V2.28 acceptance is now complete: `Conflicts` = selected/current agent runtime/name collisions; cross-agent duplicate/source-overlap/enabled mismatch stays in `Analysis` only; `health.conflict_count` only reflects same-agent conflict groups. V2.29 在协议口径上仅新增 app-local finding triage persistence（Open / Reviewed / Ignored / Needs follow-up），不改动 agent-config 写入面、skill-content 快照、skill-toggle snapshot、脚本执行边界或凭据存储面。
+> Status: V2.30 AI skill analysis workflow integrated; V2.31 Cleanup Queue is active. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, V2.19 health dashboard, V2.20 read-only AI skill analysis assist, V2.21 scan accuracy/dedupe alignment, V2.22 finding/conflict semantics, V2.23 Health Dashboard / Adapter Capability UX, V2.24 Skill Detail diagnostics, V2.25 Agent-config timeline, V2.26 Finding explainability, V2.27 Skill identity/provenance dedupe, V2.28 Conflict semantic closeout, and V2.29 Finding triage persistence are implemented or synchronized. V2.30 adds `llm.prepareSkillAnalysis` for user-triggered selected/batch read-only previews; it does not call providers by default, write files/config, create snapshots, execute scripts, save credentials, or mutate triage state.
 >
 > Integrated: V2.9 Tool-global import/export/install, V2.10 skill execution safety boundary, and 2026-06-10 real local Computer Use validation for the current mainline app. V2.11 added adapter capability status to the service protocol and macOS UI. V2.12 marks opencode writable through exact permission.skill deny/re-enable after snapshot/rollback, install, and fixture smoke validation pass; current opencode scan follows native plus official compatibility roots while install targets remain native roots.
 >
@@ -45,7 +45,8 @@ This stdio shape can later move behind a local socket without changing method pa
 | `service.status` | No | Diagnostics, adapter gating, and smoke tests | protocol version, app version, app data dir, catalog path, user home, supported methods, adapter capabilities, refresh capability state, and LLM gate status |
 | `adapter.listCapabilities` | No | Native macOS agent selector/status gating | adapter capability matrix for scan, project scan, config toggle, config snapshot, install, writable state, and current blockers |
 | `llm.status` | No | Native macOS LLM affordance gating | disabled-by-default LLM status: enabled/configured/provider/model/reason/token limit/budget/credential persistence policy |
-| `llm.prepareAction` | No | Native macOS user-triggered LLM preflight | provider/model/token/cost estimate, confirmation requirement, prompt scope, privacy notes, deterministic read-only review preview, and write-back guard for a requested LLM action |
+| `llm.prepareAction` | No | Native macOS user-triggered LLM preflight | user-triggered selected/batch preflight, optional provider/model/token/cost estimate, confirmation requirement, prompt scope, privacy notes, deterministic read-only review preview, and write-back guard for a requested LLM action |
+| `llm.prepareSkillAnalysis` | No | Native macOS user-triggered selected/batch skill analysis preview | deterministic local read-only summary/risk/cleanup draft, included/missing skill counts, token estimate, and safety flags with write-back/script/credential storage disabled |
 | `script.previewExecution` | No | Native macOS script safety preview | command/cwd/env/network/files previews, risks, and confirmation requirement |
 | `script.execute` | No | Native macOS script execution intent (default-deny path) | blocked/cancelled/failed attempt audit with redacted preview metadata; no real execution while runner is deferred |
 | `project.getContext` | No | Native macOS project selector/read flow | `{ active: ProjectContext|null, recent: ProjectContext[] }` |
@@ -160,6 +161,18 @@ V2.25 聚焦 agent-config snapshot timeline 收敛，仍不新增 protocol metho
 - 每个 finding issue group 采用 `Open / Reviewed / Ignored / Needs follow-up`，初始缺省为 Open。
 - 复查规则：finding fingerprint 或受影响实例集合（instance signature）变化时，已持久化 triage 状态应回到 Open，用于重新提示。
 - 本阶段禁止任何 agent-config 持久化路径参与 triage 存储；不得产生 skill-toggle snapshot 或 skill-content snapshot；不得将 triage 改动与脚本执行、provider 调用、AI 回写、凭据写入耦合。
+
+## V2.30 AI skill analysis workflow（completed）
+
+- Scope: AI analysis must be user-triggered, `selected` or `batch` scoped, and never background/scheduled.
+- `llm.prepareSkillAnalysis` returns a deterministic local-only review preview by default, including:
+  - risk summary
+  - finding/risk explanation
+  - cleanup/suggestion draft
+- Drafts are `copy-only`; no action path consumes these drafts directly as write/apply operations.
+- Provider networking is out of default scope for this phase (`llm.prepareAction` remains read-only unless explicit opt-in and explicit provider path is implemented later).
+- No files are written by analysis action; no `agent-config` writes, no `snapshot` writes, no skill-content/skill-toggle snapshot generation, and no script execution.
+- Analysis call result must not mutate finding triage state, and must not create credentials side effects.
 
 ## V2.18 Cross-Agent Analysis Payload
 

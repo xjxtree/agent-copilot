@@ -4,9 +4,9 @@
 >
 > 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.30 AI skill analysis workflow（进行中）**。V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout 均已收口。
+> 当前阶段：**V2.31 Cleanup Queue（进行中）**。V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout、V2.29 Finding triage persistence、V2.30 AI skill analysis workflow 均已收口。
 >
-> 近期主线：继续围绕 skills 管理、检查、分析和配置审计打磨体验。下一段版本线聚焦 disabled-by-default read-only AI skill analysis workflow；Pi writable evidence 作为后续 harness 候选，不进入生产写入。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
+> 近期主线：继续围绕 skills 管理、检查、分析和配置审计打磨体验。下一段版本线聚焦 Cleanup Queue；Pi writable evidence 作为后续 harness 候选，不进入生产写入。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
 >
 > 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.25 各阶段能力、V2.9 Tool-global skill pool、V2.11 Adapter capability matrix、V2.16-V2.25 management/analysis/history line。后续候选变更仍需重新验证。
 >
@@ -916,7 +916,7 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 | V2.27 | Skill 身份、来源与去重治理（完成） | 已完成：统一 agent/scope/definition/path identity；opencode native 与 compatibility provenance 可见；Pi `.md` 资源噪声继续排除；跨 agent duplicate/source overlap 保持在 Analysis。 |
 | V2.28 | Conflict 语义彻底收口（完成） | 已完成：Same-agent conflict 只代表当前 selected/current agent runtime/name collision；cross-agent duplicate/source overlap/enabled mismatch 只进入 Analysis；`Health` 的 `conflict_count` 不能叠加 cross-agent 分析组。 |
 | V2.29 | Finding triage persistence（completed） | 支持 reviewed / ignored / needs-follow-up，本地 catalog 持久化，不写 agent config；finding fingerprint 变化后重新打开。 |
-| V2.30 | AI Skill Analysis 工作流增强（进行中） | disabled-by-default read-only AI 分析支持批量摘要、风险解释、修复建议草稿；不写文件、不执行脚本、不保存 credentials。 |
+| V2.30 | AI Skill Analysis 工作流增强（completed） | 用户触发（selected/batch）只读预览；默认 disabled-by-default，先本地 prepare/preview，不触发 provider 调用；支持总结、风险解释、清理建议草稿（copy-only）；不写文件、不触发 agent-config 写入、不建 snapshot、不执行脚本、不保存凭据。 |
 
 ### 4.27-V2.27 Skill 身份 / 来源 / 去重（完成）
 
@@ -938,6 +938,16 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 - 边界：triage 状态仅写入 app-local catalog/app data，不写 agent config；持久状态仅为 `Open` / `Reviewed` / `Ignored` / `Needs follow-up`。finding fingerprint 或受影响实例集合（signature）变化后，已 triage 的 finding 自动回到 `Open`。
 - 状态不走任何 agent-config 持久化路径，不创建 skill-toggle snapshot 或 skill-content snapshot。
 - triage 操作不得触发脚本执行、AI 写回、provider 调用或凭据保存。
+
+### 4.30-V2.30 AI skill analysis workflow（completed）
+
+- 目标：把可解释性向 cleanup 决策延伸，但不扩大写入/执行边界。
+- 范围：
+  - 用户显式触发 `selected` 或 `batch` 分析预览；不提供后台自动触发。
+  - 默认 `disabled-by-default`、read-only，优先本地 prepare/preview；除非未来显式 opt-in 开通，否则不发起 provider 网络调用。
+  - 返回内容包含 summary、risk explanation、cleanup/suggestion draft，草稿仅供复制/展示，不可直接 apply。
+  - 分析结果与执行链路、凭据存储、文件/agent-config 写入完全解耦；不创建或更新 skill-toggle snapshot / skill-content snapshot。
+  - AI 分析不改写、回写或重置 V2.29 finding triage（Open / Reviewed / Ignored / Needs follow-up）状态。
 
 ## 4.31-V2.35 整理工作流
 
