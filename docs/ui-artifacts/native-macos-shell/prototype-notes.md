@@ -50,16 +50,16 @@ Status: implemented with automated validation passing. Real local Computer Use v
 
 - [x] `pnpm check:macos` completes; exact result is recorded.
 - [x] `pnpm dev:macos` launches the real local app process.
-- [ ] Scan / scan-all is operated in the real app and the visible summary distinguishes Claude Code from Codex.
-- [ ] Agent filter is operated for `All`, `Claude Code`, and `Codex`.
-- [ ] Codex visibility is confirmed with real/local fixture roots, or the missing-root state is recorded.
-- [ ] Claude Code list/detail/toggle/settings/snapshot regression is checked.
+- [x] Scan / scan-all is operated in the real app and the visible summary distinguishes Claude Code from Codex.
+- [x] Agent filter was operated for `All`, `Claude Code`, and `Codex` during the V2.1 real local pass; later UI revisions removed `All` by design.
+- [x] Codex visibility is confirmed with real/local fixture roots, or the missing-root state is recorded.
+- [x] Claude Code list/detail/toggle/settings/snapshot regression is checked.
 - [ ] Codex toggle displays a restart note for Codex runtime config reload after write/rescan.
-- [ ] Completed evidence is captured with a full app-window-only screenshot, not a desktop screenshot.
+- [x] Completed evidence is captured with a full app-window-only screenshot, not a desktop screenshot.
 
 ## V2.2 Project Context Prototype Update
 
-Status: implemented with automated validation passing. Real local Computer Use validation is still pending because the current macOS/AX session cannot resolve the SkillsCopilot window; smoke evidence remains fixture evidence only.
+Status: implemented with automated validation passing. The original macOS/AX window-resolution blocker has been superseded by later real local Computer Use passes, including the 2026-06-10 current-mainline validation against the explicit `dist/SkillsCopilot.app` bundle path.
 
 - The sidebar or toolbar summary shows active project context: env override, selected/persisted project, or no-project.
 - Project picker actions route through `project.setContext`; clear routes through `project.clearContext`.
@@ -72,17 +72,17 @@ Status: implemented with automated validation passing. Real local Computer Use v
 
 ## V2.2 Coordinator Validation Checklist
 
-- [ ] `cargo test --workspace`
-- [ ] `cargo clippy --workspace --all-targets --all-features`
-- [ ] `swift test --package-path apps/macos`
-- [ ] `pnpm check:macos`
-- [ ] Fixture smoke project context scenario: no-project, set project, scan-all, switch/clear project, confirm catalog ownership and toggle target boundaries.
-- [ ] Real local app project context scenario with Computer Use/AX when the macOS session is unlocked and a SkillsCopilot window is visible.
-- [x] If Computer Use/AX cannot see the app window, record the blocker and keep real local Computer Use validation pending.
+- [x] `cargo test --workspace`
+- [x] `cargo clippy --workspace --all-targets --all-features`
+- [x] `swift test --package-path apps/macos`
+- [x] `pnpm check:macos`
+- [x] Fixture smoke project context scenario: no-project, set project, scan-all, switch/clear project, confirm catalog ownership and toggle target boundaries.
+- [x] Real local app project context scenario with Computer Use/AX when the macOS session is unlocked and a SkillsCopilot window is visible.
+- [x] If Computer Use/AX cannot see the app window, record the blocker and keep real local Computer Use validation pending; current mainline blocker is resolved as of 2026-06-10.
 
 ## V2.4 Opencode Read-only Prototype Update
 
-Status: implemented with automated validation passing. Real local Computer Use validation is still pending for the same macOS/AX window-resolution blocker.
+Status: implemented with automated validation passing. The original macOS/AX window-resolution blocker has been superseded by later real local Computer Use passes; current mainline validation passed on 2026-06-10 when targeting the explicit `dist/SkillsCopilot.app` bundle path.
 
 - Agent filter includes `opencode`; grouped rows and detail metadata show opencode as a distinct adapter.
 - `catalog.scanAll` includes guarded writable opencode native roots and read-only Pi roots alongside Claude Code and Codex.

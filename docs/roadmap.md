@@ -596,7 +596,7 @@
 - [x] macOS UI 能展示六个 agent 的能力状态、只读/blocked 原因和当前 agent skill 列表。
 - [x] opencode toggle/install 仍被服务端稳定拒绝，且 UI 显示 read-only blocker。
 - [x] `pnpm check:macos` 通过。
-- [x] 当前会话锁屏，按本轮执行要求跳过真实交互 Computer Use validation；fixture smoke 与窗口级 capture 已通过。
+- [x] 当轮因会话锁屏跳过真实交互 Computer Use validation；当前 mainline 已在 2026-06-10 用当前 `dist/SkillsCopilot.app` 完成真实 Computer Use 补验。
 
 ### 4.12 V2.12 opencode writable support
 
@@ -614,7 +614,7 @@
 - [x] 完成 exact patch、re-enable、wildcard precedence、managed config ownership、rollback-safe write path 的本地 round-trip 验证。
 - [x] Toggle 前后的 catalog snapshot、agent-config snapshot、skill activity 符合预期，可回放恢复。
 - [x] 仅在上述代码实现与验证通过后，UI 和 service 才将 opencode 标记 writable 并开放 guarded toggle/install；否则 `blocked` 原因保持可见且不得移除。
-- [x] `pnpm check:macos` 通过；真实交互 Computer Use 因当前会话锁屏按本轮要求跳过。
+- [x] `pnpm check:macos` 通过；当轮真实交互 Computer Use 因会话锁屏跳过，当前 mainline 已在 2026-06-10 完成真实 Computer Use 补验。
 
 ### 4.13 V2.13 Pi adapter support
 
@@ -625,7 +625,7 @@
 **退出条件**
 - [x] Pi scan roots、project precedence、malformed behavior 有 fixture。
 - [x] macOS UI 支持 Pi filter、status、findings、activity 和 read-only capability blocker。
-- [x] `pnpm check:macos` 通过；真实交互 Computer Use 因当前会话锁屏按本轮要求跳过。
+- [x] `pnpm check:macos` 通过；当轮真实交互 Computer Use 因会话锁屏跳过，当前 mainline 已在 2026-06-10 完成真实 Computer Use 补验。
 - [ ] Pi settings schema 和 enable/disable 语义完成 disposable 验证；该项保留为后续 writable follow-up，不阻塞 V2.13 read-only closeout。
 
 ### 4.14 V2.14 Hermes adapter support
@@ -639,7 +639,7 @@
 - [x] `adapter.listCapabilities` / `service.status.adapter_capabilities` 展示 Hermes supported read-only scan。
 - [x] Hermes scoped read-only scanner 实现并通过 focused fixture validation。
 - [x] Hermes install/toggle/writable 保持 blocked。
-- [x] `pnpm check:macos` 通过；真实交互 Computer Use 因当前会话锁屏按本轮要求跳过。
+- [x] `pnpm check:macos` 通过；当轮真实交互 Computer Use 因会话锁屏跳过，当前 mainline 已在 2026-06-10 完成真实 Computer Use 补验。
 
 ### 4.15 V2.15 OpenClaw adapter support
 
@@ -652,7 +652,7 @@
 - [x] `adapter.listCapabilities` / `service.status.adapter_capabilities` 展示 OpenClaw read-only candidate，scan 仍 disabled until implementation.
 - [x] OpenClaw scoped read-only scanner 实现并通过 focused fixture validation。
 - [x] OpenClaw install/toggle/writable 保持 blocked。
-- [x] `pnpm check:macos` 通过；真实交互 Computer Use 因当前会话锁屏按本轮要求跳过。
+- [x] `pnpm check:macos` 通过；当轮真实交互 Computer Use 因会话锁屏跳过，当前 mainline 已在 2026-06-10 完成真实 Computer Use 补验。
 
 ### 4.16 V2.16 OpenClaw read-only scanner
 
@@ -669,8 +669,8 @@
 - [x] OpenClaw read-only fixtures 覆盖 documented roots、missing-name fallback、missing description 和 workspace scope。
 - [x] OpenClaw 扫描只依赖文件系统，不调用 `openclaw` CLI，且不写入任何 OpenClaw 配置。
 - [x] `catalog.scanAll` 能展示 OpenClaw skills，并在 capability matrix 中把 scan 从 disabled candidate 更新为 supported read-only。
-- [ ] UI 能按 OpenClaw 过滤、展示 source/scope/blocked writable reason。
-- [ ] `pnpm check:macos` 和真实本机 app validation 通过；若会话锁屏，明确记录 blocker。
+- [x] UI 能按 OpenClaw 过滤，并通过统一 detail/source/scope 与 capability matrix 展示 read-only / blocked writable reason；若本机无 OpenClaw roots，显示 missing/empty 状态。
+- [x] `pnpm check:macos` 通过；当前 mainline 已在 2026-06-10 完成真实本机 app validation，验证时显式选择当前 `dist/SkillsCopilot.app` bundle。
 
 ### 4.17 V2.17 Hermes read-only scanner
 
@@ -688,8 +688,8 @@
 **退出条件**
 - [x] Hermes read-only fixtures 覆盖 nested skills、malformed metadata、ignored secret/log/cron paths。
 - [x] `catalog.scanAll` 能展示 Hermes skills，并在 capability matrix 中把 scan 从 disabled candidate 更新为 supported read-only。
-- [ ] UI 能按 Hermes 过滤、展示 active home/source/blocked writable reason。
-- [ ] `pnpm check:macos` 和真实本机 app validation 通过；若会话锁屏，明确记录 blocker。
+- [x] UI 能按 Hermes 过滤，并通过统一 detail/source/scope 与 capability matrix 展示 active home / read-only / blocked writable reason；若本机无 Hermes roots，显示 missing/empty 状态。
+- [x] `pnpm check:macos` 通过；当前 mainline 已在 2026-06-10 完成真实本机 app validation，验证时显式选择当前 `dist/SkillsCopilot.app` bundle。
 
 ### 4.18 V2.18 Cross-agent skill analysis
 
@@ -709,8 +709,8 @@
 - [x] Service protocol 输出 cross-agent analysis summary 和 per-group detail。
 - [x] `app.stateSnapshot` 包含 cross-agent analysis payload。
 - [x] Tests 覆盖 duplicate、canonical overlap、source overlap、enabled mismatch、malformed 和 same-agent precedence/shadowing。
-- [ ] UI 提供 duplicate/conflict/overlap views 和可操作过滤，移入 V2.19 dashboard/triage。
-- [ ] Detail page 展示该 skill 是否与其他 agent/source 发生重复或冲突，移入 V2.19 dashboard/triage。
+- [x] UI 通过 V2.19 health dashboard / Risk / Triage filters 暴露 duplicate/conflict/overlap analysis groups；更深的专用 analysis view 可作为后续增强，不阻塞 V2.18 closeout。
+- [x] Detail/assist flow 通过 V2.20 read-only review preview 展示 cross-agent fit；默认详情页常驻 badge/section 可作为后续增强，不阻塞 V2.18 closeout。
 
 ### 4.19 V2.19 Skill health dashboard and triage UX
 
@@ -727,7 +727,7 @@
 - [x] Sidebar dashboard 能直接进入 Risk / Triage 高价值过滤视图。
 - [x] Health summary 不影响 adapter config、不隐藏未审计风险。
 - [x] Dashboard 在侧边栏中随布局自适应；更深主面板视图留到后续 UX 切片。
-- [x] `pnpm check:macos` 通过；真实本机 Computer Use 因当前会话锁屏按本轮要求可忽略。
+- [x] `pnpm check:macos` 通过；当轮真实本机 Computer Use 因会话锁屏按本轮要求可忽略，当前 mainline 已在 2026-06-10 完成真实 Computer Use 补验。
 
 ### 4.20 V2.20 Read-only AI skill analysis assist
 
