@@ -4,15 +4,15 @@
 >
 > 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.11-V2.15 多 agent adapter 版本线已完成，进入 adapter evidence backlog**。
+> 当前阶段：**V2.16-V2.20 skills management and analysis 版本线已完成，进入 Pi writable evidence、finding triage persistence 和 agent-config timeline follow-up**。
 >
-> 近期主线：在 macOS app 中补齐多 agent 支持，V2.11-V2.15 已完成 adapter capability matrix、opencode writable、Pi read-only、Hermes evidence-gate closeout 和 OpenClaw evidence-gate closeout。P0 evidence 已将 OpenClaw/Hermes 推进为 read-only scanner candidates，并将 Pi writable 推进为 evidence harness candidate。
+> 近期主线：在 macOS app 中补齐多 agent skills 管理、检查和分析能力，V2.16-V2.20 已完成 OpenClaw read-only scanner、Hermes read-only scanner、cross-agent skill analysis、skill health dashboard 和 read-only AI skill analysis assist。Pi writable 仍保持 evidence harness candidate，生产写入需等 rollback-safe evidence 通过。
 >
-> 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.10 各阶段能力、V2.9 Tool-global skill pool。V2.11 Adapter capability matrix 的首个 service/UI 切片已进入开发，后续候选变更仍需重新验证。
+> 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.20 各阶段能力、V2.9 Tool-global skill pool、V2.11 Adapter capability matrix、V2.16-V2.20 management/analysis line。后续候选变更仍需重新验证。
 >
 > V2.10 安全边界：默认不真实执行 skill 脚本；任何未来执行请求必须逐次人工确认，并先展示 cwd/env/network/files preview；blocked/cancelled/failure attempts 必须审计；LLM 不能触发执行。
 >
-> 真实本机 app 的 Computer Use 操作验证已在 2026-06-09 对当前 mainline app 通过。后续用户可见、UI 或 service protocol 变更仍需重跑，且不能用 smoke 截图替代。
+> 真实本机 app 的 Computer Use 操作验证已在 2026-06-10 对当前 mainline app 通过，验证时显式选择当前 `dist/SkillsCopilot.app` bundle 以避开同 bundle id 的旧 worktree 注册路径。后续用户可见、UI 或 service protocol 变更仍需重跑，且不能用 smoke 截图替代。
 
 ## 0. 设计阶段（已完成）
 

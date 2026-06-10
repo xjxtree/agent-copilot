@@ -1,14 +1,14 @@
 # Development Tasks
 
-> Status: current planning and execution queue as of 2026-06-10. V2.1 through V2.15 are closed on the main line. Current phase is focused on skills management, inspection, analysis, and configuration audit.
+> Status: current planning and execution queue as of 2026-06-10. V2.1 through V2.20 are closed on the main line. Current phase is focused on skills management, inspection, analysis, configuration audit, and the next evidence-backed follow-up slices.
 
 ## Current Baseline
 
-- Current branch baseline: `main` after V2.10 execution safety boundary docs/release consistency and 2026-06-09 real local Computer Use validation.
+- Current branch baseline: `main` after V2.16-V2.20 management/analysis line and 2026-06-10 real local Computer Use validation.
 - Product boundary: native macOS SwiftUI/AppKit shell plus Rust service protocol.
-- Completed V2 milestones: first Codex slice, V2.1 through V2.10.
-- Current priority: implement read-only scanner slices for OpenClaw and Hermes, then improve cross-agent analysis, health summaries, and read-only AI-assisted review.
-- Real local Computer Use baseline: passed on 2026-06-09 for the current mainline app against real local HOME/app data/Claude/Codex/opencode roots; future user-visible, UI, or service protocol changes must rerun it.
+- Completed V2 milestones: first Codex slice, V2.1 through V2.20.
+- Current priority: keep read-only management and analysis stable while preparing Pi writable evidence, finding triage persistence, and agent-config timeline follow-ups.
+- Real local Computer Use baseline: passed on 2026-06-10 for the current mainline app against real local HOME/app data/Claude/Codex/opencode roots; validation explicitly targeted the current `dist/SkillsCopilot.app` bundle after detecting a stale same-bundle-id worktree app. Future user-visible, UI, or service protocol changes must rerun it.
 - Quality gate for code/UI/protocol work: `pnpm check:macos`; add focused Rust/Swift tests when touching shared behavior.
 
 ## Versioned Adapter Plan
@@ -66,7 +66,7 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 
 | Priority | Work item | Current status | Next concrete task | Completion signal |
 | --- | --- | --- | --- | --- |
-| P0 | Real local Computer Use rerun gate | Completed for the current mainline app on 2026-06-09; recurring for future user-visible changes | Rerun the real app against local HOME after UI/service/protocol changes, covering project context, scan-all, agent filter, findings filtering/grouping, opencode read-only toggle, and script safety preview | App-window-only evidence and runbook notes updated for the new candidate |
+| P0 | Real local Computer Use rerun gate | Completed for the current mainline app on 2026-06-10; recurring for future user-visible changes | Rerun the real app against local HOME after UI/service/protocol changes, explicitly targeting the current `dist/SkillsCopilot.app` bundle when stale same-bundle-id worktree apps exist, covering project context, scan-all, agent filter, findings filtering/grouping, health dashboard, AI review preview, and script safety preview | App-window-only evidence and runbook notes updated for the new candidate |
 | P0 | V2.11 Adapter Capability Matrix | Completed and in use | Run focused protocol/UI checks when needed, then use the matrix as the gate for future Pi/opencode/Hermes/OpenClaw work | macOS UI shows precise scan/toggle/install status and blockers for all six agents |
 | P0 | Pi comprehensive adapter support | Read-only scanner complete; writable evidence supports a harness but not production writes | Implement disposable writable evidence harness for Pi-native roots and package filters; exclude `.agents/skills` compatibility roots from first writable slice | Harness proves native/global/project/package toggle, rollback, trust gate, invalid JSON behavior, and re-enable strategy |
 | P0 | opencode writable support | Read-only native-root support exists; writable semantics remain unverified; promoted to near-term priority | Verify `permission.skill` exact patch, re-enable behavior, wildcard precedence, config ownership, and rollback path | opencode writable toggle/install design is accepted and implemented behind snapshots/tests, or blocker remains explicit |
