@@ -50,16 +50,35 @@ struct SidebarView: View {
                     SidebarEmptyMessage(message: emptyFilteredMessage)
                 }
             } else {
-                Section(UIStrings.text("sidebar.currentAgentSkills", "\(store.agentFilter.title) Skills")) {
+                Section(skillListSectionTitle) {
                     ForEach(store.filteredSkills) { skill in
                         SkillRow(skill: skill)
                             .tag(skill.id)
                     }
                 }
+                .id(skillListRefreshID)
             }
         }
         .listStyle(.sidebar)
         .navigationTitle(UIStrings.skills)
+    }
+
+    private var skillListSectionTitle: String {
+        let count = store.filteredSkills.count
+        if store.stateFilter == .all, store.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return UIStrings.text("sidebar.currentAgentSkills", "\(store.agentFilter.title) Skills")
+        }
+        return UIStrings.text("sidebar.filteredAgentSkills", "\(store.agentFilter.title) Skills · \(count) shown")
+    }
+
+    private var skillListRefreshID: String {
+        [
+            store.agentFilter.rawValue,
+            store.stateFilter.rawValue,
+            store.sortOrder.rawValue,
+            store.searchText,
+            String(store.filteredSkills.count)
+        ].joined(separator: "|")
     }
 
     private var emptyCatalogMessage: String {
@@ -237,8 +256,11 @@ private struct SkillHealthDashboardCard: View {
         agentSummary.map { DisplayText.agent($0.agent) } ?? UIStrings.text("health.allAgents", "All Agents")
     }
 
-    private var malformedCount: Int {
-        agentSummary?.malformedCount ?? summary.malformedCount
+    private var brokenMissingCount: Int {
+        if let agentSummary {
+            return agentSummary.brokenCount + agentSummary.missingCount
+        }
+        return summary.brokenCount + summary.missingCount
     }
 
     private var findingCount: Int {
@@ -255,6 +277,44 @@ private struct SkillHealthDashboardCard: View {
 
     private var analysisCount: Int {
         agentSummary?.analysisGroupCount ?? summary.analysisGroups.totalCount
+    }
+
+    private var findingsTitle: String {
+        let base = UIStrings.text("health.findingIssueGroups", "Finding groups")
+        guard riskCount > 0 else { return base }
+        return "\(base) · \(riskCount) \(UIStrings.text("health.riskSuffix", "risk"))"
+    }
+
+    private var integrityCount: Int {
+        conflictCount + brokenMissingCount
+    }
+
+    private var integrityTitle: String {
+        if conflictCount > 0 && brokenMissingCount > 0 {
+            return UIStrings.text("health.integrityMixed", "Integrity issues")
+        }
+        if conflictCount > 0 {
+            return UIStrings.text("health.sameAgentConflicts", "Same-agent conflicts")
+        }
+        if brokenMissingCount > 0 {
+            return UIStrings.text("health.brokenMissing", "Broken / missing")
+        }
+        return UIStrings.text("health.integrityClean", "Integrity checks")
+    }
+
+    private var integrityActionTitle: String {
+        if conflictCount > 0 {
+            return UIStrings.text("health.openConflicts", "Open")
+        }
+        return UIStrings.text("health.filter.brokenMissing", "Filter")
+    }
+
+    private var integrityFilter: SkillStateFilter {
+        conflictCount > 0 ? .withConflicts : .brokenOrMissing
+    }
+
+    private var analysisSummaryText: String {
+        UIStrings.text("health.analysisInline", "\(analysisCount) analysis groups available in Analysis.")
     }
 
     var body: some View {
@@ -296,41 +356,32 @@ private struct SkillHealthDashboardCard: View {
 
             VStack(spacing: 7) {
                 HealthActionRow(
-                    title: UIStrings.text("health.findingIssueGroups", "Finding groups"),
+                    title: findingsTitle,
                     value: findingCount,
                     systemImage: "exclamationmark.triangle",
-                    tint: findingCount > 0 ? .orange : .secondary,
+                    tint: findingCount > 0 || riskCount > 0 ? .orange : .secondary,
                     actionTitle: UIStrings.text("health.openFindings", "Open"),
                     isActionEnabled: findingCount > 0,
                     onTap: { onFilter(.withFindings) }
                 )
                 HealthActionRow(
-                    title: UIStrings.text("health.sameAgentConflicts", "Same-agent conflicts"),
-                    value: conflictCount,
-                    systemImage: "rectangle.2.swap",
-                    tint: conflictCount > 0 ? .red : .secondary,
-                    actionTitle: UIStrings.text("health.openConflicts", "Open"),
-                    isActionEnabled: conflictCount > 0,
-                    onTap: { onFilter(.withConflicts) }
-                )
-                HealthActionRow(
-                    title: UIStrings.text("health.brokenMissing", "Broken / missing"),
-                    value: malformedCount,
+                    title: integrityTitle,
+                    value: integrityCount,
                     systemImage: "wrench.and.screwdriver",
-                    tint: malformedCount > 0 ? .red : .secondary,
-                    actionTitle: UIStrings.text("health.filter.triage", "Triage"),
-                    isActionEnabled: malformedCount > 0,
-                    onTap: { onFilter(.needsTriage) }
+                    tint: integrityCount > 0 ? .red : .secondary,
+                    actionTitle: integrityActionTitle,
+                    isActionEnabled: integrityCount > 0,
+                    onTap: { onFilter(integrityFilter) }
                 )
-                HealthActionRow(
-                    title: UIStrings.text("health.riskAnalysis", "Risk / analysis"),
-                    value: riskAnalysisCount,
-                    systemImage: "point.3.connected.trianglepath.dotted",
-                    tint: riskAnalysisCount > 0 ? .blue : .secondary,
-                    actionTitle: UIStrings.text("health.filter.risk", "Risk"),
-                    isActionEnabled: riskCount > 0,
-                    onTap: { onFilter(.risky) }
-                )
+            }
+
+            if analysisCount > 0 {
+                Text(analysisSummaryText)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .padding(.horizontal, 8)
+                    .padding(.top, -2)
             }
 
             Text(UIStrings.text("health.scopeHint", "\(title) · \(totalCount) skills"))
@@ -342,18 +393,14 @@ private struct SkillHealthDashboardCard: View {
         .background(healthColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
     }
 
-    private var riskAnalysisCount: Int {
-        riskCount + analysisCount
-    }
-
     private var statusTitle: String {
         if summary.totalCount == 0 || totalCount == 0 {
             return UIStrings.text("health.status.noData", "No data")
         }
-        if malformedCount > 0 || conflictCount > 0 {
+        if integrityCount > 0 {
             return UIStrings.text("health.status.attention", "Attention")
         }
-        if findingCount > 0 || riskCount > 0 {
+        if findingCount > 0 || riskCount > 0 || analysisCount > 0 {
             return UIStrings.text("health.status.review", "Review")
         }
         return UIStrings.text("health.status.clean", "Clean")
@@ -366,23 +413,29 @@ private struct SkillHealthDashboardCard: View {
         if conflictCount > 0 {
             return UIStrings.text("health.summary.conflicts", "\(conflictCount) same-agent conflicts need review.")
         }
+        if brokenMissingCount > 0 {
+            return UIStrings.text("health.summary.brokenMissing", "\(brokenMissingCount) broken or missing records need cleanup.")
+        }
+        if findingCount > 0 && riskCount > 0 {
+            return UIStrings.text("health.summary.findingsWithRisk", "\(findingCount) finding groups include \(riskCount) risk signals.")
+        }
         if findingCount > 0 {
             return UIStrings.text("health.summary.findings", "\(findingCount) finding issue groups need review.")
         }
-        if malformedCount > 0 {
-            return UIStrings.text("health.summary.malformed", "\(malformedCount) broken or missing records need cleanup.")
-        }
         if riskCount > 0 {
             return UIStrings.text("health.summary.risk", "\(riskCount) risk signals; use Risk to inspect findings.")
+        }
+        if analysisCount > 0 {
+            return UIStrings.text("health.summary.analysis", "\(analysisCount) analysis groups available; open Analysis to inspect overlaps.")
         }
         return UIStrings.text("health.summary.clean", "No same-agent conflicts or broken records.")
     }
 
     private var healthColor: Color {
-        if malformedCount > 0 || conflictCount > 0 {
+        if integrityCount > 0 {
             return .red
         }
-        if findingCount > 0 || riskCount > 0 {
+        if findingCount > 0 || riskCount > 0 || analysisCount > 0 {
             return .orange
         }
         return .green

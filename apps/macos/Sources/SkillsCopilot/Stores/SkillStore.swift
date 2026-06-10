@@ -47,7 +47,9 @@ final class SkillStore: ObservableObject {
     @Published var stateFilter: SkillStateFilter = .all {
         didSet { handleListCriteriaChanged() }
     }
-    @Published var sortOrder: SkillSortOrder = .name
+    @Published var sortOrder: SkillSortOrder = .name {
+        didSet { handleListCriteriaChanged() }
+    }
     @Published var errorMessage: String?
 
     private let service: ServiceClient

@@ -3,6 +3,7 @@ import Foundation
 enum SkillStateFilter: String, CaseIterable, Identifiable {
     case all
     case needsTriage
+    case brokenOrMissing
     case risky
     case enabled
     case disabled
@@ -21,6 +22,8 @@ enum SkillStateFilter: String, CaseIterable, Identifiable {
             return UIStrings.text("filter.all", "All")
         case .needsTriage:
             return UIStrings.text("filter.needsTriage", "Needs Triage")
+        case .brokenOrMissing:
+            return UIStrings.text("filter.brokenOrMissing", "Broken / Missing")
         case .risky:
             return UIStrings.text("filter.risky", "Risky")
         case .enabled:
@@ -159,6 +162,9 @@ enum SkillListModel {
                     || status == .broken
                     || status == .missing
                     || status == .unknown
+            case .brokenOrMissing:
+                let status = DisplayText.statusKind(skill.state, enabled: skill.enabled)
+                return status == .broken || status == .missing
             case .risky:
                 return riskyFindingInstanceIDs.contains(skill.id)
             case .enabled:

@@ -85,6 +85,7 @@ struct SkillListModelTests {
         try expectEqual(filtered(stateFilter: .disabled).map(\.id), ["beta"], "Disabled filter")
         try expectEqual(filtered(stateFilter: .broken).map(\.id), ["delta"], "Broken filter")
         try expectEqual(filtered(stateFilter: .missing).map(\.id), ["epsilon"], "Missing filter")
+        try expectEqual(filtered(stateFilter: .brokenOrMissing).map(\.id), ["delta", "epsilon"], "Broken / Missing filter")
         try expectEqual(filtered(stateFilter: .shadowed).map(\.id), ["zeta"], "Shadowed filter")
         try expectEqual(filtered(stateFilter: .unknown).map(\.id), ["theta"], "Unknown filter")
         try expectEqual(filtered(stateFilter: .withFindings).map(\.id), ["gamma"], "Findings filter")
