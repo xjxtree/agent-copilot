@@ -4,6 +4,8 @@ enum DetailSection: String, CaseIterable, Identifiable {
     case overview
     case findings
     case conflicts
+    case history
+    case analysis
 
     var id: String { rawValue }
 
@@ -19,6 +21,10 @@ enum DetailSection: String, CaseIterable, Identifiable {
             return UIStrings.findings
         case .conflicts:
             return UIStrings.conflicts
+        case .history:
+            return UIStrings.text("detail.history", "History")
+        case .analysis:
+            return UIStrings.text("detail.analysis", "Analysis")
         }
     }
 }
@@ -47,9 +53,11 @@ struct DetailView: View {
                     )
                     HeaderView(
                         skill: skill,
+                        detail: store.selectedSkillDetail,
                         findingCount: selectedFindingGroups.count,
                         conflictCount: store.selectedConflicts.count,
                         isWriting: store.isWriting,
+                        llmStatus: store.llmStatus,
                         adapterCapability: store.adapterCapabilities.first { $0.agent == skill.agent },
                         onSelectSection: { section in
                             store.selectedDetailSection = section
@@ -67,12 +75,8 @@ struct DetailView: View {
                             SkillSummaryCard(
                                 skill: skill,
                                 detail: store.selectedSkillDetail,
+                                scriptPreview: store.scriptExecutionPreview(for: skill),
                                 isLoading: store.isLoadingDetail
-                            )
-
-                            RecentActivityCard(
-                                events: store.selectedSkillEvents,
-                                isLoading: store.isLoadingSelectedSkillEvents
                             )
 
                             DisclosureGroup {
@@ -90,34 +94,6 @@ struct DetailView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .adaptiveMaterialSurface()
 
-                            OverviewSecondaryTools(
-                                llmStatus: store.llmStatus,
-                                isPreparing: { action in store.isPreparingLLMAction(action) },
-                                result: { action in store.llmPrepareResult(for: action) },
-                                onPrepare: { action in
-                                    Task {
-                                        switch action {
-                                        case .analyze:
-                                            await store.prepareAnalyzeLLM()
-                                        case .recommend:
-                                            await store.prepareRecommendLLM()
-                                        case .explainConflict:
-                                            await store.prepareExplainConflictLLM()
-                                        case .draftFrontmatter:
-                                            await store.prepareDraftFrontmatterLLM()
-                                        }
-                                    }
-                                },
-                                skill: skill,
-                                scriptPreview: store.scriptExecutionPreview(for: skill),
-                                isPreviewingScript: store.isPreviewingScriptExecution(for: skill),
-                                onPreviewScript: {
-                                    Task {
-                                        await store.previewScriptExecutionSafety(for: skill)
-                                    }
-                                }
-                            )
-
                             if DisplayText.isToolGlobal(skill) {
                                 ToolGlobalPreviewCard(skill: skill)
                             }
@@ -129,6 +105,39 @@ struct DetailView: View {
                             conflicts: store.selectedConflicts,
                             selectedSkillID: skill.id,
                             currentAgentSkillIDs: Set(store.skills.filter { $0.agent == skill.agent }.map(\.id))
+                        )
+                    case .history:
+                        HistorySection(
+                            events: store.selectedSkillEvents,
+                            isLoading: store.isLoadingSelectedSkillEvents
+                        )
+                    case .analysis:
+                        AnalysisSection(
+                            skill: skill,
+                            llmStatus: store.llmStatus,
+                            isPreparing: { action in store.isPreparingLLMAction(action) },
+                            result: { action in store.llmPrepareResult(for: action) },
+                            onPrepare: { action in
+                                Task {
+                                    switch action {
+                                    case .analyze:
+                                        await store.prepareAnalyzeLLM()
+                                    case .recommend:
+                                        await store.prepareRecommendLLM()
+                                    case .explainConflict:
+                                        await store.prepareExplainConflictLLM()
+                                    case .draftFrontmatter:
+                                        await store.prepareDraftFrontmatterLLM()
+                                    }
+                                }
+                            },
+                            scriptPreview: store.scriptExecutionPreview(for: skill),
+                            isPreviewingScript: store.isPreviewingScriptExecution(for: skill),
+                            onPreviewScript: {
+                                Task {
+                                    await store.previewScriptExecutionSafety(for: skill)
+                                }
+                            }
                         )
                     }
                 } else {
@@ -150,12 +159,13 @@ struct DetailView: View {
 private struct SkillSummaryCard: View {
     let skill: SkillRecord
     let detail: SkillDetailRecord?
+    let scriptPreview: ScriptExecutionPreview?
     let isLoading: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline) {
-                Label(UIStrings.text("detail.summary", "Summary"), systemImage: "text.alignleft")
+                Label(UIStrings.text("detail.diagnosticOverview", "Diagnostic Overview"), systemImage: "stethoscope")
                     .font(.headline)
                 Spacer()
                 if isLoading {
@@ -171,18 +181,17 @@ private struct SkillSummaryCard: View {
                 .lineLimit(nil)
                 .textSelection(.enabled)
 
-            HStack(spacing: 8) {
-                SummaryChip(title: UIStrings.agent, value: DisplayText.agent(skill.agent), systemImage: "person.crop.circle")
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 10)], alignment: .leading, spacing: 10) {
+                SummaryChip(title: UIStrings.source, value: skill.displayPath, systemImage: "doc")
                 SummaryChip(title: UIStrings.scope, value: DisplayText.scope(skill.scope), systemImage: "folder")
                 SummaryChip(title: UIStrings.state, value: DisplayText.state(skill.state, enabled: skill.enabled), systemImage: DisplayText.stateSystemImage(skill.state, enabled: skill.enabled))
+                SummaryChip(title: UIStrings.text("detail.enabled", "Enabled"), value: skill.enabled ? UIStrings.stateEnabled : UIStrings.stateDisabled, systemImage: skill.enabled ? "checkmark.circle" : "pause.circle")
             }
 
-            Label(skill.displayPath, systemImage: "doc")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .textSelection(.enabled)
+            OverviewRiskPanel(
+                permissionSummary: PermissionDisplayModel.summary(for: detail?.permissions ?? .null),
+                scriptPreview: scriptPreview
+            )
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -194,6 +203,55 @@ private struct SkillSummaryCard: View {
             return UIStrings.noDescription
         }
         return description
+    }
+}
+
+private struct OverviewRiskPanel: View {
+    let permissionSummary: PermissionSummary
+    let scriptPreview: ScriptExecutionPreview?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.text("detail.permissionScriptRisk", "Permissions & script risk"), systemImage: "shield.lefthalf.filled")
+                    .font(.subheadline.bold())
+                Spacer()
+                Label(scriptState, systemImage: scriptPreview == nil ? "nosign" : "checkmark.shield")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], alignment: .leading, spacing: 8) {
+                ForEach(permissionSummary.rows.prefix(5)) { row in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(row.label)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(row.value)
+                            .font(.caption.bold())
+                            .lineLimit(2)
+                            .truncationMode(.middle)
+                    }
+                    .padding(9)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+                }
+            }
+
+            Text(permissionSummary.note)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private var scriptState: String {
+        if let preview = scriptPreview {
+            return preview.executionAllowed ? UIStrings.executionBlocked : UIStrings.scriptExecutionPreviewOnly
+        }
+        return UIStrings.scriptExecutionPreviewOnly
     }
 }
 
@@ -246,60 +304,48 @@ private struct SummaryChip: View {
     }
 }
 
-private struct OverviewSecondaryTools: View {
+private struct AnalysisSection: View {
+    let skill: SkillRecord
     let llmStatus: LLMStatus
     let isPreparing: (LLMAction) -> Bool
     let result: (LLMAction) -> LLMPrepareResult?
     let onPrepare: (LLMAction) -> Void
-    let skill: SkillRecord
     let scriptPreview: ScriptExecutionPreview?
     let isPreviewingScript: Bool
     let onPreviewScript: () -> Void
 
-    @State private var isExpanded = false
-
     var body: some View {
-        DisclosureGroup(isExpanded: $isExpanded) {
-            VStack(alignment: .leading, spacing: 16) {
-                LLMAssistPanel(
-                    status: llmStatus,
-                    isPreparing: isPreparing,
-                    result: result,
-                    onPrepare: onPrepare
-                )
-
-                ScriptExecutionSafetyCard(
-                    skill: skill,
-                    preview: scriptPreview,
-                    isPreviewing: isPreviewingScript,
-                    onPreview: onPreviewScript
-                )
-            }
-            .padding(.top, 12)
-        } label: {
-            HStack(alignment: .center, spacing: 10) {
-                Image(systemName: "sparkles.rectangle.stack")
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 10) {
+                Label(UIStrings.text("analysis.workbench", "Read-only analysis workbench"), systemImage: "sparkles.rectangle.stack")
+                    .font(.headline)
+                Text(UIStrings.text("analysis.workbench.summary", "Use offline/AI-assisted review to understand purpose, risk, findings, and cross-agent duplicate/source-overlap signals. This panel does not write config, modify skills, or execute scripts."))
+                    .font(.callout)
                     .foregroundStyle(.secondary)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(UIStrings.text("detail.assistAndSafety", "Assist & Safety"))
-                        .font(.headline)
-                    Text(summary)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
+                Label(UIStrings.text("analysis.crossAgentNote", "Cross-agent duplicates and source overlap live here as analysis insights; same-agent runtime/name collisions remain in Conflicts."), systemImage: "rectangle.3.group.bubble")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .adaptiveMaterialSurface()
+
+            LLMAssistPanel(
+                status: llmStatus,
+                isPreparing: isPreparing,
+                result: result,
+                onPrepare: onPrepare
+            )
+
+            ScriptExecutionSafetyCard(
+                skill: skill,
+                preview: scriptPreview,
+                isPreviewing: isPreviewingScript,
+                onPreview: onPreviewScript
+            )
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .adaptiveMaterialSurface()
     }
 
-    private var summary: String {
-        let llm = llmStatus.enabled ? UIStrings.llmEnabled : UIStrings.llmDisabled
-        let script = scriptPreview == nil ? UIStrings.scriptExecutionPreviewOnly : UIStrings.executionBlocked
-        return UIStrings.text("detail.assistAndSafety.summary", "\(llm) LLM assist · \(script) scripts")
-    }
 }
 
 private struct LLMAssistPanel: View {
@@ -704,9 +750,11 @@ private extension JSONValue {
 
 private struct HeaderView: View {
     let skill: SkillRecord
+    let detail: SkillDetailRecord?
     let findingCount: Int
     let conflictCount: Int
     let isWriting: Bool
+    let llmStatus: LLMStatus
     let adapterCapability: AdapterCapabilityRecord?
     let onSelectSection: (DetailSection) -> Void
     let onToggle: (Bool) -> Void
@@ -715,44 +763,45 @@ private struct HeaderView: View {
         let disabledReason = toggleDisabledReason
         let isEffectivelyEnabled = DisplayText.statusKind(skill.state, enabled: skill.enabled) == .enabled
 
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .firstTextBaseline) {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 20) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(skill.name)
                         .font(.largeTitle.bold())
-                    Text("\(DisplayText.agent(skill.agent)) · \(DisplayText.scope(skill.scope))")
+                    Text(skill.definitionId)
+                        .font(.callout)
                         .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
                 }
                 Spacer()
-                if DisplayText.isReadOnlyPreview(skill) {
-                    Label(DisplayText.isToolGlobal(skill) ? UIStrings.readOnlyPreview : UIStrings.readOnly, systemImage: "lock.fill")
-                        .font(.caption.bold())
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .adaptiveMaterialSurface()
-                        .help(disabledReason ?? UIStrings.readOnly)
-                }
+                VStack(alignment: .trailing, spacing: 8) {
+                    Label(
+                        DisplayText.isToolGlobal(skill) ? UIStrings.readOnlyPreview : DisplayText.state(skill.state, enabled: skill.enabled),
+                        systemImage: DisplayText.isToolGlobal(skill) ? "eye" : DisplayText.stateSystemImage(skill.state, enabled: skill.enabled)
+                    )
+                    .labelStyle(.titleAndIcon)
+                    .foregroundStyle(DisplayText.isToolGlobal(skill) ? .secondary : DisplayText.stateColor(skill.state, enabled: skill.enabled))
 
-                Label(
-                    DisplayText.isToolGlobal(skill) ? UIStrings.readOnlyPreview : DisplayText.state(skill.state, enabled: skill.enabled),
-                    systemImage: DisplayText.isToolGlobal(skill) ? "eye" : DisplayText.stateSystemImage(skill.state, enabled: skill.enabled)
-                )
-                .labelStyle(.titleAndIcon)
-                .foregroundStyle(DisplayText.isToolGlobal(skill) ? .secondary : DisplayText.stateColor(skill.state, enabled: skill.enabled))
+                    if DisplayText.isReadOnlyPreview(skill) {
+                        Label(DisplayText.isToolGlobal(skill) ? UIStrings.readOnlyPreview : UIStrings.readOnly, systemImage: "lock.fill")
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+                            .help(disabledReason ?? UIStrings.readOnly)
+                    }
 
-                Button {
-                    onToggle(!isEffectivelyEnabled)
-                } label: {
+                    Button {
+                        onToggle(!isEffectivelyEnabled)
+                    } label: {
                     Label(
                         isEffectivelyEnabled ? UIStrings.disable : UIStrings.enable,
                         systemImage: isEffectivelyEnabled ? "pause.circle" : "play.circle"
                     )
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(disabledReason != nil)
+                    .help(disabledReason ?? "")
+                    .accessibilityHint(disabledReason ?? "")
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(disabledReason != nil)
-                .help(disabledReason ?? "")
-                .accessibilityHint(disabledReason ?? "")
             }
 
             if let disabledReason {
@@ -761,24 +810,30 @@ private struct HeaderView: View {
                     .foregroundStyle(.secondary)
             }
 
-            HStack(spacing: 10) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 155), spacing: 10)], alignment: .leading, spacing: 10) {
+                SummaryChip(title: UIStrings.agent, value: DisplayText.agent(skill.agent), systemImage: "person.crop.circle")
+                SummaryChip(title: UIStrings.scope, value: DisplayText.scope(skill.scope), systemImage: "folder")
+                SummaryChip(title: UIStrings.state, value: DisplayText.state(skill.state, enabled: skill.enabled), systemImage: DisplayText.stateSystemImage(skill.state, enabled: skill.enabled))
                 CountBadge(
-                    label: UIStrings.findings,
+                    label: UIStrings.text("detail.issueGroups", "Issue groups"),
                     value: findingCount,
                     systemImage: "exclamationmark.triangle",
                     tint: .orange,
                     action: { onSelectSection(.findings) }
                 )
                 CountBadge(
-                    label: UIStrings.conflicts,
+                    label: UIStrings.text("detail.sameAgentConflicts", "Same-agent conflicts"),
                     value: conflictCount,
                     systemImage: "rectangle.2.swap",
                     tint: .red,
                     action: { onSelectSection(.conflicts) }
                 )
+                SummaryChip(title: UIStrings.text("detail.riskAnalysis", "Risk / analysis"), value: riskAnalysisStatus, systemImage: riskAnalysisImage)
             }
         }
+        .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
     }
 
     private var toggleDisabledReason: String? {
@@ -787,6 +842,37 @@ private struct HeaderView: View {
             return catalogReason
         }
         return adapterCapability.configToggle.reason ?? catalogReason ?? UIStrings.readOnlyAdapterStatus(adapterCapability.displayName)
+    }
+
+    private var riskAnalysisStatus: String {
+        if findingCount > 0 || conflictCount > 0 {
+            return UIStrings.text("detail.reviewQueued", "Review queued")
+        }
+        if permissionRiskCount > 0 {
+            return UIStrings.text("detail.riskDeclared", "Risk declared")
+        }
+        return llmStatus.enabled ? UIStrings.text("detail.aiReady", "AI ready") : UIStrings.text("detail.offlineReady", "Offline ready")
+    }
+
+    private var riskAnalysisImage: String {
+        if findingCount > 0 || conflictCount > 0 || permissionRiskCount > 0 {
+            return "exclamationmark.triangle"
+        }
+        return llmStatus.enabled ? "sparkles" : "checkmark.seal"
+    }
+
+    private var permissionRiskCount: Int {
+        guard let detail, case .object(let object) = detail.permissions else {
+            return 0
+        }
+        var count = 0
+        if case .bool(true)? = object["exec"] {
+            count += 1
+        }
+        if case .string(let network)? = object["network"], network == "full" {
+            count += 1
+        }
+        return count
     }
 }
 
@@ -822,6 +908,28 @@ private struct RecentActivityCard: View {
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
         .adaptiveMaterialSurface()
+    }
+}
+
+private struct HistorySection: View {
+    let events: [SkillEventRecord]
+    let isLoading: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Label(UIStrings.text("history.activity", "Configuration activity"), systemImage: "clock.arrow.circlepath")
+                    .font(.headline)
+                Text(UIStrings.text("history.activity.summary", "History shows lightweight enable, disable, and config-action events that the service already records. Skill-content snapshots are intentionally not shown here."))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .adaptiveMaterialSurface()
+
+            RecentActivityCard(events: events, isLoading: isLoading)
+        }
     }
 }
 
@@ -1477,6 +1585,15 @@ private struct FindingsSection: View {
         ).count
     }
 
+    private var visibleImpactedCount: Int {
+        let ids = Set(FindingDisplayModel.filtered(
+            findings: findings,
+            severityFilter: severityFilter,
+            ruleFilter: ruleFilter
+        ).compactMap(\.instanceId))
+        return max(ids.count, visibleEntryCount == 0 ? 0 : 1)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if findings.isEmpty {
@@ -1486,6 +1603,13 @@ private struct FindingsSection: View {
                     message: UIStrings.noFindingsForSkillMessage(DisplayText.agent(skill.agent))
                 )
             } else {
+                FindingsSummaryStrip(
+                    visibleIssueCount: visibleIssueCount,
+                    totalIssueCount: totalIssueCount,
+                    visibleEntryCount: visibleEntryCount,
+                    visibleImpactedCount: visibleImpactedCount
+                )
+
                 findingFilters
 
                 if visibleGroups.isEmpty {
@@ -1560,6 +1684,25 @@ private struct FindingsSection: View {
     }
 }
 
+private struct FindingsSummaryStrip: View {
+    let visibleIssueCount: Int
+    let totalIssueCount: Int
+    let visibleEntryCount: Int
+    let visibleImpactedCount: Int
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 10)], alignment: .leading, spacing: 10) {
+            SummaryChip(title: UIStrings.text("findings.summary.issueGroups", "Issue groups"), value: "\(visibleIssueCount) / \(totalIssueCount)", systemImage: "rectangle.stack.badge.exclamationmark")
+            SummaryChip(title: UIStrings.text("findings.summary.impacted", "Impacted"), value: "\(visibleImpactedCount)", systemImage: "target")
+            SummaryChip(title: UIStrings.text("findings.summary.entries", "Scan entries"), value: "\(visibleEntryCount)", systemImage: "list.bullet.rectangle")
+            SummaryChip(title: UIStrings.findingRemediation, value: UIStrings.text("findings.summary.remediation", "Grouped below"), systemImage: "wrench.and.screwdriver")
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
 private struct FindingIssueCard: View {
     let issue: FindingIssueGroup
     let severityTitle: String
@@ -1570,6 +1713,12 @@ private struct FindingIssueCard: View {
                 Label(issue.ruleId, systemImage: "exclamationmark.triangle")
                     .font(.headline)
                 Spacer()
+                Text(UIStrings.findingIssueImpact(issue.impactedInstanceCount, issue.entryCount))
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.quaternary.opacity(0.35), in: Capsule())
                 Text(severityTitle)
                     .font(.caption.bold())
                     .foregroundStyle(.secondary)
@@ -1577,16 +1726,12 @@ private struct FindingIssueCard: View {
 
             Text(issue.message)
 
-            Text(UIStrings.findingIssueImpact(issue.impactedInstanceCount, issue.entryCount))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
             VStack(alignment: .leading, spacing: 5) {
                 Label(UIStrings.findingRemediation, systemImage: "wrench.and.screwdriver")
                     .font(.caption.bold())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.blue)
                 Text(issue.remediation)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary)
             }
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1683,9 +1828,16 @@ private struct ConflictsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label(UIStrings.currentAgentConflictsOnly, systemImage: "person.crop.circle.badge.exclamationmark")
-                .font(.callout)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 8) {
+                Label(UIStrings.text("conflicts.sameAgentWorkbench", "Same-agent conflict workbench"), systemImage: "person.crop.circle.badge.exclamationmark")
+                    .font(.headline)
+                Text(UIStrings.text("conflicts.sameAgentExplanation", "Conflicts only include current-agent runtime/name collisions. Cross-agent duplicate names and source overlap are analysis insights, so they are reviewed from the Analysis tab instead of inflating conflict counts."))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .adaptiveMaterialSurface()
 
             if conflicts.isEmpty {
                 EmptyState(title: UIStrings.noConflicts, systemImage: "checkmark.circle", message: UIStrings.noConflictsMessage)
@@ -1693,8 +1845,17 @@ private struct ConflictsSection: View {
                 ForEach(conflicts) { conflict in
                     let currentAgentInstanceIDs = conflict.instanceIds.filter { currentAgentSkillIDs.contains($0) }
                     VStack(alignment: .leading, spacing: 10) {
-                        Text(conflict.reason)
-                            .font(.headline)
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(conflict.reason)
+                                .font(.headline)
+                            Spacer()
+                            Text(UIStrings.text("conflicts.currentAgentOnlyBadge", "current agent only"))
+                                .font(.caption.bold())
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(.quaternary.opacity(0.35), in: Capsule())
+                        }
                         MetadataLine(label: UIStrings.definition, value: conflict.definitionId)
                         MetadataLine(label: UIStrings.winner, value: conflict.winnerId ?? UIStrings.none)
                         Text(UIStrings.instances)

@@ -1,13 +1,13 @@
 # Development Tasks
 
-> Status: current planning and execution queue as of 2026-06-10. V2.1 through V2.22 are closed/closeout in progress; V2.23 Health Dashboard / Adapter Capability UX 同步正在进行中。
+> Status: current planning and execution queue as of 2026-06-10. V2.1 through V2.23 are closeout / in progress; V2.24 Skill Detail 诊断工作台同步正在进行中。
 
 ## Current Baseline
 
-- Current branch baseline: `main` after V2.16-V2.21 management/analysis line and 2026-06-10 real local Computer Use validation; V2.22 finding/conflict 语义同步正在推进。
+- Current branch baseline: `main` after V2.16-V2.21 management/analysis line and 2026-06-10 real local Computer Use validation; V2.22 finding/conflict 语义同步已收口，V2.23 Health Dashboard / Adapter Capability UX 与 V2.24 Detail 诊断口径同步在推进。
 - Product boundary: native macOS SwiftUI/AppKit shell plus Rust service protocol.
 - Completed V2 milestones: first Codex slice, V2.1 through V2.20.
-- Current priority: complete V2.23 Health Dashboard / Adapter Capability UX 对齐（selected-agent 健康摘要、能力矩阵可写/阻断状态、finding/conflict 口径统一），同时保持 Pi writable evidence、finding triage persistence、agent-config timeline 为后续候选。
+- Current priority: complete V2.24 Skill Detail 诊断工作台口径同步（selected-agent 详情诊断、Findings=issue groups、Conflicts=current-agent only、Analysis=read-only/offline、History=toggle/config events）；同时保持 Pi writable evidence、finding triage persistence、agent-config timeline 为后续候选。
 - Real local Computer Use baseline: passed on 2026-06-10 for the current mainline app against real local HOME/app data/Claude/Codex/opencode roots; validation explicitly targeted the current `dist/SkillsCopilot.app` bundle after detecting a stale same-bundle-id worktree app. Future user-visible, UI, or service protocol changes must rerun it.
 - Quality gate for code/UI/protocol work: `pnpm check:macos`; add focused Rust/Swift tests when touching shared behavior.
 
@@ -29,10 +29,11 @@
 | V2.21 | Scan accuracy, dedupe behavior, and agent metric alignment | Completed | Normalize scan roots/path IDs, define deterministic duplicate handling across adapters, and align cross-agent visibility with catalog analysis + per-agent scan/activity and health metrics |
 | V2.22 | finding/conflict 语义与验收同步 | In progress | Unify conflict definition as same-agent runtime/name collision; move cross-agent duplicate/source-overlap to analysis insights; align default finding groups and count semantics |
 | V2.23 | Health Dashboard / Adapter Capability UX | In progress | Align health card action-summary behavior, selected-agent filtering, and explicit scan/toggle/install/read-only/blocked status display across AGENTS、roadmap、service protocol、UI 标准 |
+| V2.24 | Skill Detail 诊断工作台口径 | In progress | Detail=single skill workbench；Findings=issue groups；Conflicts=current-agent only；Analysis=read-only offline；History=toggle/config events only；no skill-content snapshot, no new script execute/write paths |
 
-## Near-Term Priority: Comprehensive Agent Adapter Support + V2.23 UX alignment
+## Near-Term Priority: Comprehensive Agent Adapter Support + V2.24 Detail 诊断口径同步
 
-**Goal**: make the macOS app materially better at managing, inspecting, and analyzing skills across agents, with V2.23 first-class UX alignment on sidebar health and capability gating.
+**Goal**: make the macOS app materially better at managing, inspecting, and analyzing skills across agents, with V2.23 侧栏/能力矩阵对齐作为基础，V2.24 继续收敛 Skill Detail 诊断口径。
 
 **Priority order**
 
@@ -45,6 +46,7 @@
 7. V2.21 scan accuracy / dedupe / stats pass: completed doc/spec/test coverage for deterministic duplicate handling and agent-scoped counting before downstream triage rules depend on the data.
 8. V2.22 finding/conflict semantics sync: align same-agent conflict definition and cross-agent analysis separation before triage persistence.
 9. V2.23 Health Dashboard / Adapter Capability UX: selected-agent health cards as action summaries + explicit capability matrix state (scan/toggle/install/read-only/blocked).
+10. V2.24 Skill Detail 诊断口径同步: detail as single skill workbench; findings=issue groups; conflicts=current-agent only; analysis=read-only/offline assist; history=toggle/config events only.
 
 **Tasks**
 
@@ -67,6 +69,7 @@
 - Skill health dashboard and triage UX reduce list scanning and make high-risk or broken skills easy to find.
 - AI-assisted analysis remains opt-in, read-only, privacy-safe, and impossible to use as an execution/write path.
 - `docs/agent-adapters.md`, `docs/agent-adapter-spec-worklists.md`, `docs/development-tasks.md`, `docs/roadmap.md`, and `AGENTS.md` agree on adapter priority and current support state.
+- V2.24 Detail 口径的基础数据对齐：Detail=single skill，Findings 与 issue groups 一致、Conflicts=当前 agent runtime/name collision、Analysis 只读离线、History 仅 toggle/config 事件，并确认不引入 skill-content snapshot 与新脚本执行路径。
 - V2.21 scan correctness rules are implemented and documented before adding triage persistence and metrics-consuming automation.
 - `selected agent` 健康摘要卡与 finding/conflict 计数定义在 roadmap / service protocol / adapter docs / ui 标准保持一致。
 
@@ -87,6 +90,7 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 | P0 | V2.21 scan accuracy / dedupe / agent metrics | Completed | Add scan contract coverage for canonical path/id collision handling, source overlap handling, and per-agent stats consistency checks across scan activity + health payloads | Duplicate and overlap records are deterministic; per-agent counts in scan/activity and health payloads are documented and testable |
 | P0 | V2.22 finding/conflict semantics sync | In progress | Finalize conflict definition / cross-agent analysis separation; align default finding groups + instance/entry count retention; keep health and detail/list filter statistics consistent | Conflict/finding behavior is uniform across roadmap/tasks/service-protocol/data-model/adapter docs and can be traced in same scan context |
 | P0 | V2.23 Health Dashboard / Adapter Capability UX 同步 | In progress | 完成 selected-agent health 卡片、能力矩阵状态（scan/toggle/install/read-only/blocked）与 finding/conflict/count 对齐口径；同步到 roadmap/service-protocol/agent-adapters/ui 标准 | 核心工作流（侧栏、adapter matrix、findings 过滤）口径一致，且在 code 侧补齐验证记录前不闭环 |
+| P0 | V2.24 Skill Detail 诊断口径 | In progress | 单 skill Detail 工作台口径（Findings=issue groups、Conflicts=current-agent、Analysis read-only/offline、History=toggle/config events）收敛；禁止 skill-content snapshot 与新增脚本执行/写入路径 | catalog.detail（single skill）与 list/health/analysis 数字口径一致；code-side 验收（selected-agent 冲突、issue group、history）待补齐 |
 | P1 | Finding triage persistence | Planned | Add reviewed/ignored state and grouping by rule, severity, agent, and source without writing agent config or hiding unresolved high-risk findings | Users can separate known issues from new actionable findings |
 | P1 | Agent-config timeline | Planned | Show agent-config snapshots and activity history per agent without adding skill-content snapshots | Users can understand config changes and rollback points |
 | P1 | Read-only AI skill analysis assist | Implemented offline preview | Keep V2.7 disabled-by-default gate and V2.20 offline purpose/risk/finding summaries free of provider/client/storage/write/execution paths | Users get human-readable analysis without any write, execution, or credential risk |
@@ -94,5 +98,5 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 ## Version Selection Rule
 
 - If the task is OpenClaw/Hermes scanner work, use V2.16/V2.17.
-- If the task is cross-agent analysis, dashboard, scan accuracy, dedupe, finding/conflict semantics, or triage, use V2.18-V2.22.
+- If the task is cross-agent analysis, dashboard, scan accuracy, dedupe, finding/conflict semantics, or triage, use V2.18-V2.24.
 - Do not create versions for script execution, GitHub clone import, script-file install, signing, notarization, DMG/ZIP, public distribution, or full-platform UI adaptation unless the product direction changes explicitly.

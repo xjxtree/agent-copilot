@@ -2,11 +2,59 @@
 
 struct SkillListModelTests {
     func run() throws {
+        try detailWorkbenchSectionsExposeDiagnostics()
+        try findingIssueGroupsPreserveRemediationAndImpactCounts()
         try searchMatchesNameDefinitionAndDisplayPathCaseInsensitively()
         try agentFiltersLimitResultsAndGroupsUseStableAdapterOrder()
         try stateFiltersUseEffectiveStatusFindingsAndConflicts()
         try conflictFiltersUseCurrentAgentRuntimeSemantics()
         try sortOrdersAreStableForCoreListColumns()
+    }
+
+    private func detailWorkbenchSectionsExposeDiagnostics() throws {
+        try expectEqual(
+            DetailSection.visibleCases,
+            [.overview, .findings, .conflicts, .history, .analysis],
+            "Skill detail should expose the full diagnostic workbench section order."
+        )
+        try expectEqual(DetailSection.history.title, "History", "History section title")
+        try expectEqual(DetailSection.analysis.title, "Analysis", "Analysis section title")
+    }
+
+    private func findingIssueGroupsPreserveRemediationAndImpactCounts() throws {
+        let findings = [
+            RuleFindingRecord(
+                id: "finding-1",
+                instanceId: "alpha",
+                definitionId: "def.alpha",
+                ruleId: "permissions.exec-needs-human",
+                severity: "warning",
+                message: "Execution requires a human gate.",
+                suggestion: "Require human confirmation before execution.",
+                createdAt: 30
+            ),
+            RuleFindingRecord(
+                id: "finding-2",
+                instanceId: "beta",
+                definitionId: "def.beta",
+                ruleId: "permissions.exec-needs-human",
+                severity: "warning",
+                message: "Execution requires a human gate.",
+                suggestion: "Require human confirmation before execution.",
+                createdAt: 20
+            ),
+        ]
+
+        let groups = FindingDisplayModel.issueGroups(
+            findings: findings,
+            severityFilter: FindingDisplayModel.allFilterValue,
+            ruleFilter: FindingDisplayModel.allFilterValue
+        )
+
+        try expectEqual(groups.count, 1, "Matching findings should collapse into one issue group.")
+        try expectEqual(groups[0].impactedInstanceCount, 2, "Issue groups should retain impacted instance count.")
+        try expectEqual(groups[0].entryCount, 2, "Issue groups should retain scan entry count.")
+        try expectEqual(groups[0].remediation, "Require human confirmation before execution.", "Issue groups should keep remediation text.")
     }
 
     private func searchMatchesNameDefinitionAndDisplayPathCaseInsensitively() throws {

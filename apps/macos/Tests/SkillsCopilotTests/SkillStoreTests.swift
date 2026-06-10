@@ -10,6 +10,7 @@ struct SkillStoreTests {
         try await serviceErrorClearsLoadingAndKeepsReadableError()
         try await reloadUsesStateSnapshotForCollectionRefresh()
         try await stateSnapshotRefreshesDoNotReuseStaleFindingsOrPermissions()
+        try await selectedDetailDataIsScopedToCurrentAgentAndSkill()
         try await scanAllUsesGenericCatalogMethod()
         try await searchAndFilterChangesNormalizeSelectionAndDetail()
         try await refreshOperationsIgnoreReentryWhileBusy()
@@ -25,6 +26,7 @@ struct SkillStoreTests {
         try await projectValidationErrorSkipsScanAndSurfacesMessage()
         try await reloadFallsBackToDisabledLLMWhenOldServiceDoesNotSupportMethods()
         try await prepareLLMActionStoresEstimateWithoutProviderCall()
+        try await llmPreparePreviewIsScopedToSelectedSkillAndReadOnly()
         try await previewScriptExecutionSafetyStoresBlockedPreviewWithoutExecute()
     }
 
@@ -160,6 +162,32 @@ struct SkillStoreTests {
         try expectEqual(store.findings.map(\.id), ["finding-toggle"], "Adapter state changes should replace stale findings.")
         try expectEqual(store.selectedFindings.map(\.id), ["finding-toggle"], "Adapter state changes should keep selected findings fresh.")
         try expectEqual(permissionMarker(store.selectedSkillDetail), "toggle", "Adapter state changes should reload selected detail permissions.")
+    }
+
+    private func selectedDetailDataIsScopedToCurrentAgentAndSkill() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "detail-scope")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+
+        try expectEqual(store.selectedSkill?.id, "beta", "Fixture should select the Claude beta skill.")
+        try expectEqual(store.selectedFindings.map(\.id), ["finding-beta-instance"], "Selected findings must use the selected instance, not a shared definition or another agent.")
+        try expectEqual(store.selectedConflicts.map(\.id), ["conflict-beta-alpha"], "Selected conflicts should include only same-agent runtime conflicts for the selected skill.")
+        try expectEqual(store.selectedSkillEvents.map(\.id), [1001], "Selected history should show only toggle activity for the current skill.")
+
+        store.agentFilter = .codex
+        try await waitUntil("Agent filter should move detail selection to the Codex skill and load its events.") {
+            store.selectedSkillID == "gamma" && store.selectedSkillEvents.map(\.id) == [2001]
+        }
+
+        try expectEqual(store.selectedSkill?.agent, "codex", "Selection should now be scoped to the Codex agent.")
+        try expectEqual(store.selectedFindings.map(\.id), ["finding-gamma-instance"], "Changing agents must not keep Claude findings on the detail page.")
+        try expectEqual(store.selectedConflicts.map(\.id), [], "Cross-agent duplicate/source overlap must not appear as a detail conflict.")
+        try expectContains(fake.calls(), "\"instance_id\":\"beta\"", "Skill event fetch should request the selected beta instance.")
+        try expectContains(fake.calls(), "\"instance_id\":\"gamma\"", "Skill event fetch should request the selected gamma instance after agent change.")
     }
 
     private func scanAllUsesGenericCatalogMethod() async throws {
@@ -486,6 +514,36 @@ struct SkillStoreTests {
         try expectFalse(fake.calls().contains("llm.complete"), "LLM prepare should not call a provider completion method.")
     }
 
+    private func llmPreparePreviewIsScopedToSelectedSkillAndReadOnly() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "llm-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+        await store.prepareAnalyzeLLM()
+
+        try expectEqual(store.llmPrepareResult(for: .analyze)?.action, .analyze, "Beta analyze preview should be available while beta is selected.")
+
+        store.agentFilter = .codex
+        try await waitUntil("Agent filter should move selection away from beta.") {
+            store.selectedSkillID == "gamma"
+        }
+
+        try expectNil(store.llmPrepareResult(for: .analyze), "LLM preview prepared for beta must not be reused after selecting another agent skill.")
+        await store.prepareAnalyzeLLM()
+
+        let calls = fake.calls()
+        try expectContains(calls, "\"instance_id\":\"beta\"", "LLM prepare should send the beta instance context.")
+        try expectContains(calls, "\"agent\":\"claude-code\"", "LLM prepare should send beta's agent context.")
+        try expectContains(calls, "\"instance_id\":\"gamma\"", "LLM prepare should send the gamma instance context after selection changes.")
+        try expectContains(calls, "\"agent\":\"codex\"", "LLM prepare should send gamma's agent context.")
+        try expectFalse(calls.contains("llm.complete"), "LLM prepare must not call a provider completion method.")
+        try expectFalse(calls.contains("config.toggleSkill"), "LLM analysis preview must not call write paths.")
+        try expectFalse(calls.contains("script.execute"), "LLM analysis preview must not call execution paths.")
+    }
+
     private func previewScriptExecutionSafetyStoresBlockedPreviewWithoutExecute() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -620,18 +678,25 @@ private final class FakeServiceScript {
         findings_stale_after_scan='[{"id":"finding-fresh-scan","instance_id":"beta","definition_id":"def.beta","rule_id":"fingerprint.changed","severity":"info","message":"scan","suggestion":"Review changed content.","created_at":2},{"id":"finding-fresh-codex","instance_id":"gamma","definition_id":"codex:gamma","rule_id":"path.outside-workspace","severity":"error","message":"codex","suggestion":"Move the skill under the project root.","created_at":3}]'
         findings_stale_after_project='[{"id":"finding-project","instance_id":"gamma","definition_id":"codex:gamma","rule_id":"name.collision","severity":"warning","message":"project","suggestion":"Review duplicate names.","created_at":4}]'
         findings_stale_after_toggle='[{"id":"finding-toggle","instance_id":"beta","definition_id":"def.beta","rule_id":"path.outside-workspace","severity":"error","message":"toggle","suggestion":"Move the skill under the project root.","created_at":5}]'
+        findings_detail_scope='[{"id":"finding-beta-instance","instance_id":"beta","definition_id":"def.beta","rule_id":"fingerprint.changed","severity":"info","message":"beta instance","suggestion":"Review beta.","created_at":6},{"id":"finding-beta-definition-only","instance_id":"alpha","definition_id":"def.beta","rule_id":"name.collision","severity":"warning","message":"shared definition, wrong skill","suggestion":"Do not show on beta detail.","created_at":7},{"id":"finding-gamma-instance","instance_id":"gamma","definition_id":"codex:gamma","rule_id":"path.outside-workspace","severity":"error","message":"gamma instance","suggestion":"Review gamma.","created_at":8}]'
+        conflicts_detail_scope='[{"id":"conflict-beta-alpha","definition_id":"def.beta","reason":"content-drift","winner_id":null,"instance_ids":["beta","alpha"]},{"id":"conflict-beta-gamma-cross-agent","definition_id":"def.beta","reason":"source-overlap","winner_id":null,"instance_ids":["beta","gamma"]},{"id":"conflict-alpha-gamma-no-selected","definition_id":"def.shared","reason":"source-overlap","winner_id":null,"instance_ids":["alpha","gamma"]}]'
+        events_beta='[{"id":1001,"instance_id":"beta","kind":"toggle","payload":{"enabled":false,"agent":"claude-code","skill_name":"Beta"},"occurred_at":10},{"id":1000,"instance_id":"beta","kind":"scan","payload":{"summary":"rescan"},"occurred_at":9}]'
+        events_gamma='[{"id":2001,"instance_id":"gamma","kind":"toggle","payload":{"enabled":true,"agent":"codex","skill_name":"Gamma"},"occurred_at":11}]'
 
         state_snapshot_response() {
           if [ "$scenario" = "error" ]; then service_error; fi
           if [ "$scenario" = "empty" ]; then
             state_skills='[]'
             state_findings='[]'
+            state_conflicts='[]'
           elif [ "$scenario" = "toggle-disabled" ]; then
             state_skills=$skills_toggled
             state_findings='[]'
+            state_conflicts='[]'
           elif [ "$scenario" = "toggle-codex-disabled" ]; then
             state_skills=$skills_codex_toggled
             state_findings='[]'
+            state_conflicts='[]'
           elif [ "$scenario" = "opencode" ]; then
             if grep -q '"method":"config.toggleSkill"' "$SKILLS_COPILOT_FAKE_SERVICE_CALLS"; then
               state_skills=$skills_opencode_toggled
@@ -639,26 +704,37 @@ private final class FakeServiceScript {
               state_skills=$skills_opencode
             fi
             state_findings='[]'
+            state_conflicts='[]'
           elif [ "$scenario" = "tool-global" ]; then
             state_skills=$skills_toolglobal
             state_findings='[]'
+            state_conflicts='[]'
           elif [ "$scenario" = "stale-before" ]; then
             state_skills=$skills_normal
             state_findings=$findings_stale_before
+            state_conflicts='[]'
           elif [ "$scenario" = "stale-after-scan" ]; then
             state_skills=$skills_normal
             state_findings=$findings_stale_after_scan
+            state_conflicts='[]'
           elif [ "$scenario" = "stale-after-project" ]; then
             state_skills=$skills_normal
             state_findings=$findings_stale_after_project
+            state_conflicts='[]'
           elif [ "$scenario" = "stale-after-toggle" ]; then
             state_skills=$skills_toggled
             state_findings=$findings_stale_after_toggle
+            state_conflicts='[]'
+          elif [ "$scenario" = "detail-scope" ]; then
+            state_skills=$skills_normal
+            state_findings=$findings_detail_scope
+            state_conflicts=$conflicts_detail_scope
           else
             state_skills=$skills_normal
             state_findings='[]'
+            state_conflicts='[]'
           fi
-          respond '{"id":"test","ok":true,"result":{"status":{"protocol_version":1,"version":"test","app_data_dir":"/tmp/skills-copilot","catalog_path":"/tmp/skills-copilot/catalog.sqlite","user_home":"/tmp/home","supported_methods":["app.stateSnapshot","service.status","catalog.listSkills","catalog.scanAll","catalog.getSkill","catalog.listFindings","catalog.listConflicts","skill.listEvents","snapshot.list","snapshot.listAgentConfig","config.toggleSkill","project.getContext","project.setContext","project.clearContext","project.validateContext"]},"skills":'"$state_skills"',"findings":'"$state_findings"',"conflicts":[],"snapshots":[]}}'
+          respond '{"id":"test","ok":true,"result":{"status":{"protocol_version":1,"version":"test","app_data_dir":"/tmp/skills-copilot","catalog_path":"/tmp/skills-copilot/catalog.sqlite","user_home":"/tmp/home","supported_methods":["app.stateSnapshot","service.status","catalog.listSkills","catalog.scanAll","catalog.getSkill","catalog.listFindings","catalog.listConflicts","skill.listEvents","snapshot.list","snapshot.listAgentConfig","config.toggleSkill","project.getContext","project.setContext","project.clearContext","project.validateContext"]},"skills":'"$state_skills"',"findings":'"$state_findings"',"conflicts":'"$state_conflicts"',"snapshots":[]}}'
         }
 
         detail_alpha='{"id":"alpha","agent":"claude-code","scope":"agent-global","path":"/tmp/global/alpha/SKILL.md","display_path":"/tmp/global/alpha/SKILL.md","definition_id":"def.alpha","name":"Alpha","description":"Alpha skill","state":"loaded","enabled":true,"frontmatter_raw":"name: Alpha","body":"Alpha body","permissions":{"marker":"alpha"},"fingerprint":"fp-alpha"}'
@@ -819,6 +895,16 @@ private final class FakeServiceScript {
             respond '{"id":"test","ok":true,"result":[]}'
             ;;
           *\\"skill.listEvents\\"*)
+            if [ "$scenario" = "detail-scope" ]; then
+              case "$input" in
+                *\\"instance_id\\":\\"beta\\"*)
+                  respond '{"id":"test","ok":true,"result":'"$events_beta"'}'
+                  ;;
+                *\\"instance_id\\":\\"gamma\\"*)
+                  respond '{"id":"test","ok":true,"result":'"$events_gamma"'}'
+                  ;;
+              esac
+            fi
             respond '{"id":"test","ok":true,"result":[]}'
             ;;
           *\\"snapshot.listAgentConfig\\"*)

@@ -4,9 +4,9 @@
 >
 > 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.23 Health Dashboard / Adapter Capability UX 对齐（进行中）**；V2.22 finding/conflict 语义与验收同步作为前置约束仍在收口。V2.21 扫描准确性、去重边界、agent 维度统计已完成。Pi writable evidence、finding triage persistence 和 agent-config timeline 仍为后续候选跟进项。
+> 当前阶段：**V2.24 Skill Detail 诊断工作台规划与验收同步（进行中）**。V2.22 finding/conflict 语义与验收同步作为前置约束已收口；V2.23 Health Dashboard / Adapter Capability UX 口径作为基础完成与稳定；V2.21 扫描准确性、去重边界、agent 维度统计已完成。Pi writable evidence、finding triage persistence 和 agent-config timeline 仍为后续候选跟进项。
 >
-> 近期主线：在 V2.22 口径收口后，优先完成 V2.23 侧栏健康卡片与 adapter 能力面板对齐：侧栏只看当前 selected/current agent，health 卡片做行动摘要；finding/conflict 与 issue group 口径统一；随后继续推进 Pi writable / triage 持久化 / agent-config timeline 等候选项。V2.16-V2.20 已完成 OpenClaw read-only scanner、Hermes read-only scanner、cross-agent skill analysis、skill health dashboard 和 read-only AI skill analysis assist。V2.21 负责扫描准确性、去重边界和 agent 维度统计口径同步；Pi writable 仍保持 evidence harness candidate，生产写入需等 rollback-safe evidence 通过。
+> 近期主线：基于 V2.22 与 V2.23 的收敛前置，优先完成 V2.24 Detail 诊断工作台口径：Detail 是单 skill 工作台；发现与问题分组（issue groups）对齐；冲突仅按 selected/current agent runtime/name collision；Analysis 维持只读离线辅助手段；History 限于 toggle/config 事件（不引入 skill-content snapshot）。随后按需推进 Pi writable / triage 持久化 / agent-config timeline 候选项。V2.16-V2.20 已完成 OpenClaw read-only scanner、Hermes read-only scanner、cross-agent skill analysis、skill health dashboard 和 read-only AI skill analysis assist。V2.21 负责扫描准确性、去重边界和 agent 维度统计口径同步；Pi writable 仍保持 evidence harness candidate，生产写入需等 rollback-safe evidence 通过。
 >
 > 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.20 各阶段能力、V2.9 Tool-global skill pool、V2.11 Adapter capability matrix、V2.16-V2.20 management/analysis line。V2.21 扫描准确性与去重口径已完成。后续候选变更仍需重新验证。
 >
@@ -852,3 +852,30 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 - 10k skills 下的 scan → catalog 耗时与搜索响应
 - LLM 调用 p95 时延 + token 估算误差
 - 0 day 内 0 高危 CVE（`cargo audit` / `pnpm audit`）
+
+## 4.24 V2.24 Skill Detail 诊断工作台（进行中）
+
+**目标**：把单个 skill 的诊断体验从列表明细扩展为“问题可管理、动作可执行、作用域可追踪”的工作台入口。
+
+**口径（与 V2.24 对齐）**
+
+- Detail = 单 skill 诊断工作台（列表中点击某个 skill 的一页式诊断视图）。
+- Findings = 问题分组（issue groups），与 `catalog.listFindings` 与 health 计数口径保持一致。
+- Conflicts = only current/selected agent 的 runtime/name 冲突口径。
+- Analysis = read-only/offline 辅助判断，不触发写入、不调用外部 provider。
+- History = 仅 `catalog.toggle` 与 agent config 事件，不新增 skill-content snapshot。
+- 不新增脚本执行路径，不新增可写路径；不把 `project scope` 与 `runtime` 以外能力扩展写入 Detail。
+
+**状态与验收前置**
+
+- 仅在 V2.22 finding/conflict 语义与 V2.23 健康卡片/能力矩阵口径稳定后推进。
+- 未在 service protocol 与 UI 标准中统一前，不宣布完成。
+- 与 `V2.24` 相关 code-side 验证（尤其 selected-agent 与 issue group/冲突计数一致性）以“待补齐”状态保留。
+
+**验收（未闭环）**
+
+- [ ] 单 skill 诊断工作台定义并同步到 `AGENTS.md` / `docs/service-protocol.md` / `docs/ui-delivery-standards.md` / `docs/development-tasks.md`。
+- [ ] `Findings` 与健康卡片、筛选口径、明细列表中的 issue group 一致；`Conflicts` 口径只覆盖 selected/current agent 的 runtime/name collision。
+- [ ] Analysis 区域仅展示 read-only/offline assist；无脚本执行/写入副作用。
+- [ ] History 区域仅显示 toggle/config event（无 skill-content snapshot）。
+- [ ] Code side 验收结果填充：selected/current agent 健康摘要行为、adapter matrix 与状态说明、真实本机 CU 回归记录待补。

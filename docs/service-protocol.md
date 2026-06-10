@@ -1,6 +1,6 @@
 # skills-copilot Service Protocol
 
-> Status: V2.20 read-only AI skill analysis assist integrated. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, and V2.19 health dashboard are implemented; writable/install support remains blocked. V2.21 alignment for scan accuracy, dedupe behavior, and agent-level metrics is complete; V2.22 finding/conflict 语义与验收同步进行中; V2.23 Health Dashboard / Adapter Capability UX 口径同步进行中。
+> Status: V2.20 read-only AI skill analysis assist integrated. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, and V2.19 health dashboard are implemented; writable/install support remains blocked. V2.21 alignment for scan accuracy, dedupe behavior, and agent-level metrics is complete; V2.22 finding/conflict 语义与验收同步已收口；V2.23 Health Dashboard / Adapter Capability UX 同步作为前置；V2.24 Skill Detail 诊断工作台口径同步进行中。
 >
 > Integrated: V2.9 Tool-global import/export/install, V2.10 skill execution safety boundary, and 2026-06-10 real local Computer Use validation for the current mainline app. V2.11 added adapter capability status to the service protocol and macOS UI. V2.12 marks opencode writable through exact permission.skill deny/re-enable after snapshot/rollback, install, and fixture smoke validation pass; current opencode scan follows native plus official compatibility roots while install targets remain native roots.
 >
@@ -53,10 +53,10 @@ This stdio shape can later move behind a local socket without changing method pa
 | `project.clearContext` | Yes, writes app state | Native macOS project selector | clears active context, keeps recent contexts |
 | `project.validateContext` | No | Native macOS project selector preflight | validates `{ root_path, current_cwd?, name? }` and returns a `ProjectContext` with `validation_error` set on failure |
 | `catalog.listSkills` | No | Native macOS launch/read flow | `SkillRecord[]` |
-| `catalog.getSkill` | No | Native macOS Overview detail | `SkillDetailRecord` for `{ "instance_id": "..." }` |
-| `catalog.analysis` | No | Native macOS analysis/read flow | `CrossAgentAnalysisRecord` grouping duplicate names, canonical-name overlap, shared source paths, enabled-state mismatches, broken/missing rows, and supported precedence/shadowing explanations |
-| `catalog.listFindings` | No | Native macOS Findings segment | `RuleFindingRecord[]` |
-| `catalog.listConflicts` | No | Native macOS Conflicts segment（仅同一 selected/current agent） | `ConflictGroupRecord[]` |
+| `catalog.getSkill` | No | Native macOS Overview detail / single skill detail workbench | `SkillDetailRecord` for `{ "instance_id": "..." }` |
+| `catalog.analysis` | No | Native macOS analysis/read flow（read-only/offline） | `CrossAgentAnalysisRecord` grouping duplicate names, canonical-name overlap, shared source paths, enabled-state mismatches, broken/missing rows, and supported precedence/shadowing explanations |
+| `catalog.listFindings` | No | Native macOS Findings segment（问题分组，issue groups） | `RuleFindingRecord[]` |
+| `catalog.listConflicts` | No | Native macOS Conflicts segment（仅当前 selected/current agent） | `ConflictGroupRecord[]` |
 | `catalog.importSkill` | Yes, writes app-controlled staging/catalog only | V2.9 tool-global import | imported read-only `SkillRecord`, staging path, filtered findings, and audit summary |
 | `catalog.scanAll` | Yes, refreshes catalog | Native macOS toolbar Scan action | scanned count, refreshed `SkillRecord[]`, and refresh activity summary for supported adapters |
 | `catalog.scanClaude` | Yes, refreshes catalog | Compatibility / Claude-only diagnostics | scanned count, refreshed `SkillRecord[]`, and refresh activity summary |
@@ -66,8 +66,8 @@ This stdio shape can later move behind a local socket without changing method pa
 | `config.toggleSkill` | Yes, writes agent config | Native macOS Enable / Disable action | updated `SkillRecord` |
 | `config.readClaudeSettings` | No | Native macOS Settings editor load action | `ConfigDocumentRecord` |
 | `config.saveClaudeSettings` | Yes, writes Claude settings and rescans | Native macOS Settings editor Save action | saved `ConfigDocumentRecord` |
-| `snapshot.list` | No | Compatibility / diagnostics | global `ConfigSnapshotRecord[]` |
-| `snapshot.listAgentConfig` | No | Native macOS Agent Config History | agent-config `ConfigSnapshotRecord[]` filtered by `{ "agent": "...", "scope"?: "agent-global" }` |
+| `snapshot.list` | No | Compatibility / diagnostics | global `ConfigSnapshotRecord[]` (app-level, not skill-content snapshots) |
+| `snapshot.listAgentConfig` | No | Native macOS Agent Config History（仅 toggle/config history） | agent-config `ConfigSnapshotRecord[]` filtered by `{ "agent": "...", "scope"?: "agent-global" }` |
 | `snapshot.previewRollback` | No | Native macOS Agent Config History preview action | snapshot, current content, read error, and changed flag |
 | `snapshot.rollback` | Yes, writes agent config snapshot content and rescans | Native macOS Agent Config History rollback action | rescanned skill count |
 
@@ -83,6 +83,19 @@ It currently scans:
 - Hermes (read-only active/profile home skills)
 
 It resolves the effective `ProjectContext` before adapter scanning.
+
+## V2.24 Skill Detail 诊断工作台（进行中）
+
+V2.24 将 `catalog.getSkill` 与 detail 视图收敛为单 skill 诊断工作台，不新增 method：
+
+- **Detail 定义**：Detail 为单个 skill 的诊断工作台，负责展示该 skill 的定义、finding、conflict、analysis 及 history 信息。
+- **Findings 定义**：`catalog.listFindings` 口径为 issue groups，与 health 计数与筛选口径对齐。
+- **Conflicts 定义**：`catalog.listConflicts` 仅返回 selected/current agent 的 runtime/name collision，保持 current-agent scope。
+- **Analysis 定义**：`catalog.analysis` 为 read-only/offline 的 cross-agent 分析洞察，不触发写入、不调用外部服务。
+- **History 定义**：`snapshot.list` / `snapshot.listAgentConfig` / `skill.listEvents` 在 V2.24 口径下仅用于 toggle/config 相关历史；不新增 skill-content snapshot。
+- **边界限制**：本阶段不新增 skill-content snapshot，不新增脚本执行或写入路径，detail 仅消费可读数据并发起已存在的受控 toggle/save/rollback 动作。
+
+该 section 仅用于验收对齐，不代表 V2.24 已完成。
 
 ## V2.18 Cross-Agent Analysis Payload
 
@@ -170,6 +183,7 @@ V2.23 当前阶段聚焦文档与验收口径：
 - `app.stateSnapshot.health` 与 `finding` 过滤一致：`finding_count` 与问题分组（issue group）默认口径一致；不得与 `catalog.analysis` 的 cross-agent 组重复叠加。
 - sidebar 仅展示 current selected/current agent 的卡片，不以 `catalog.analysis` 或全量 analysis 数字填充侧栏。
 - `adapter.listCapabilities` / `service.status.adapter_capabilities` 必须显示每项能力 `scan` / `config_toggle` / `install` / `writable` 的显式 supported、状态、原因，并清晰标注 read-only 与 blocked。
+- Detail 口径补充：Findings 映射 issue groups，Conflicts 仅 selected/current agent；Analysis read-only/offline；History 限 toggle/config event（history 仅 agent-config 轨迹，不做 skill-content snapshot）。
 
 上述要求不引入新 method；请仅通过现有 payload 的可解释字段驱动 UI。
 

@@ -108,3 +108,12 @@ For UI changes:
 - capability matrix 文案必须明确 scan / toggle / install / read-only / blocked 的状态和 blocker。
 - Health 卡片应包含下一步动作（比如 refresh / open details / review / remediation）而非仅展示计数。
 - 该功能验收项通过后才推进 V2.23 closing；未实装前记录“进行中”并显式列出缺口。
+
+## 8. V2.24: Skill Detail Diagnostics Checklist（进行中）
+
+- Detail 为单 skill 诊断工作台（列表点击即开一页式诊断视图）。
+- Findings 与 issue group 口径统一：列表/健康卡片/筛选展示的 finding 统计一致。
+- Conflicts 仅展示 selected/current agent 的 runtime/name 冲突；不得混入 cross-agent duplicate/source overlap。
+- Analysis 区域仅作只读离线分析预览，不提供执行或写入路径。
+- History 仅展示 toggle/config 相关事件；不展示 skill-content snapshot。
+- 验收前提：在完成截图与窗口级验证前不声明完成；若 detail 仅显示 counts 而未给出 remediation action，则视为未通过该项。

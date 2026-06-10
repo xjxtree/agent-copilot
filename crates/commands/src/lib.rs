@@ -5671,6 +5671,40 @@ mod tests {
             "snapshot captures pre-toggle state"
         );
 
+        let events = list_skill_events(&catalog, "toggle-off-id", Some(10)).expect("list events");
+        assert_eq!(
+            events.len(),
+            1,
+            "toggle writes one current-skill history event"
+        );
+        assert_eq!(events[0].instance_id, "toggle-off-id");
+        assert_eq!(events[0].kind, "toggle");
+        assert_eq!(events[0].payload["enabled"], serde_json::json!(false));
+        assert_eq!(
+            events[0].payload["previous_enabled"],
+            serde_json::json!(true)
+        );
+        assert_eq!(events[0].payload["agent"], serde_json::json!("claude-code"));
+        assert_eq!(
+            events[0].payload["scope"],
+            serde_json::json!("agent-global")
+        );
+        assert_eq!(events[0].payload["skill_name"], serde_json::json!("foo"));
+        assert_eq!(
+            events[0].payload["config_scope"],
+            serde_json::json!("agent-global")
+        );
+        assert!(
+            events[0].payload.get("target").is_some(),
+            "event payload should include the config target for lightweight History"
+        );
+        assert!(
+            events[0].payload.get("body").is_none()
+                && events[0].payload.get("frontmatter_raw").is_none()
+                && events[0].payload.get("permissions").is_none(),
+            "event payload remains a lightweight summary, not a full skill snapshot"
+        );
+
         let _ = std::fs::remove_dir_all(&temp_root);
     }
 
