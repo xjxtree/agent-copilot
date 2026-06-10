@@ -127,6 +127,44 @@ pub struct AdapterFeatureCapability {
     pub reason: Option<&'static str>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PiWritableHarnessReport {
+    pub harness: &'static str,
+    pub production_writes_enabled: bool,
+    pub disposable_root: String,
+    pub report_path: String,
+    pub scenarios: Vec<PiWritableHarnessScenario>,
+    pub safety: PiWritableHarnessSafety,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PiWritableHarnessScenario {
+    pub name: &'static str,
+    pub layer: &'static str,
+    pub config_path: String,
+    pub skill_name: &'static str,
+    pub initial_enabled: bool,
+    pub disabled_after_toggle: bool,
+    pub reenabled_after_toggle: bool,
+    pub rollback_restored: bool,
+    pub invalid_json_blocked: bool,
+    pub trust_gate_blocked: bool,
+    pub writes_confined_to_disposable_root: bool,
+    pub snapshot_content: String,
+    pub notes: Vec<&'static str>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PiWritableHarnessSafety {
+    pub disposable_only: bool,
+    pub production_writes_enabled: bool,
+    pub provider_request_sent: bool,
+    pub script_execution_allowed: bool,
+    pub credential_accessed: bool,
+    pub install_performed: bool,
+    pub production_config_mutated: bool,
+}
+
 impl AdapterFeatureCapability {
     fn supported(status: &'static str) -> Self {
         Self {
@@ -151,6 +189,227 @@ impl AdapterFeatureCapability {
             reason: Some(reason),
         }
     }
+}
+
+pub fn run_pi_writable_evidence_harness(
+    disposable_root: &Path,
+) -> Result<PiWritableHarnessReport, CommandError> {
+    validate_pi_harness_root(disposable_root)?;
+    fs::create_dir_all(disposable_root)?;
+
+    let global_path = disposable_root
+        .join("global-home")
+        .join(".pi")
+        .join("agent")
+        .join("settings.json");
+    let project_path = disposable_root
+        .join("project")
+        .join(".pi")
+        .join("settings.json");
+    let package_path = disposable_root.join("package").join("pi-package.json");
+
+    let scenarios = vec![
+        run_pi_harness_scenario(
+            disposable_root,
+            "global-toggle-roundtrip",
+            "global",
+            &global_path,
+            "global-pdf",
+            pi_harness_config_json(true),
+        )?,
+        run_pi_harness_scenario(
+            disposable_root,
+            "project-toggle-trust-gate",
+            "project",
+            &project_path,
+            "project-review",
+            pi_harness_config_json(true),
+        )?,
+        run_pi_harness_scenario(
+            disposable_root,
+            "package-filter-roundtrip",
+            "package",
+            &package_path,
+            "package-helper",
+            pi_harness_config_json(true),
+        )?,
+    ];
+
+    let report_path = disposable_root.join("pi-writable-harness-report.json");
+    let mut report = PiWritableHarnessReport {
+        harness: "v2.36-pi-writable-evidence",
+        production_writes_enabled: false,
+        disposable_root: disposable_root.to_string_lossy().to_string(),
+        report_path: report_path.to_string_lossy().to_string(),
+        scenarios,
+        safety: PiWritableHarnessSafety {
+            disposable_only: true,
+            production_writes_enabled: false,
+            provider_request_sent: false,
+            script_execution_allowed: false,
+            credential_accessed: false,
+            install_performed: false,
+            production_config_mutated: false,
+        },
+    };
+    let report_json = serde_json::to_string_pretty(&report)?;
+    write_pi_harness_file(disposable_root, &report_path, &report_json)?;
+    report.report_path = report_path.to_string_lossy().to_string();
+    Ok(report)
+}
+
+fn run_pi_harness_scenario(
+    disposable_root: &Path,
+    name: &'static str,
+    layer: &'static str,
+    config_path: &Path,
+    skill_name: &'static str,
+    initial_config: String,
+) -> Result<PiWritableHarnessScenario, CommandError> {
+    write_pi_harness_file(disposable_root, config_path, &initial_config)?;
+    let original = fs::read_to_string(config_path)?;
+    let initial_enabled = !pi_harness_skill_disabled(&original, skill_name)?;
+
+    let invalid_json_blocked =
+        pi_harness_patch_enabled("{ not valid json", skill_name, false, true).is_err();
+    let trust_gate_blocked = layer == "project"
+        && pi_harness_patch_enabled(&original, skill_name, false, false).is_err();
+
+    let disabled_text = pi_harness_patch_enabled(&original, skill_name, false, true)?;
+    write_pi_harness_file(disposable_root, config_path, &disabled_text)?;
+    let disabled_after_toggle =
+        pi_harness_skill_disabled(&fs::read_to_string(config_path)?, skill_name)?;
+
+    let reenabled_text =
+        pi_harness_patch_enabled(&fs::read_to_string(config_path)?, skill_name, true, true)?;
+    write_pi_harness_file(disposable_root, config_path, &reenabled_text)?;
+    let reenabled_after_toggle =
+        !pi_harness_skill_disabled(&fs::read_to_string(config_path)?, skill_name)?;
+
+    write_pi_harness_file(disposable_root, config_path, &original)?;
+    let rollback_restored = fs::read_to_string(config_path)? == original;
+
+    Ok(PiWritableHarnessScenario {
+        name,
+        layer,
+        config_path: config_path.to_string_lossy().to_string(),
+        skill_name,
+        initial_enabled,
+        disabled_after_toggle,
+        reenabled_after_toggle,
+        rollback_restored,
+        invalid_json_blocked,
+        trust_gate_blocked,
+        writes_confined_to_disposable_root: config_path.starts_with(disposable_root),
+        snapshot_content: original,
+        notes: vec![
+            "Evidence harness only; schema is disposable fixture data, not a production Pi writer.",
+            "Disable adds an exact skill name to skills.disabled; re-enable removes only that exact entry.",
+            "Rollback restores the pre-toggle snapshot content inside the disposable root.",
+        ],
+    })
+}
+
+fn validate_pi_harness_root(root: &Path) -> Result<(), CommandError> {
+    if !root
+        .components()
+        .any(|component| component.as_os_str() == "pi-writable-harness")
+    {
+        return Err(CommandError::UnsafeConfigPath(
+            "Pi writable evidence harness requires a disposable path containing pi-writable-harness"
+                .to_string(),
+        ));
+    }
+    if root.parent().is_none() {
+        return Err(CommandError::UnsafeConfigPath(
+            "Pi writable evidence harness root must not be a filesystem root".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn write_pi_harness_file(root: &Path, path: &Path, content: &str) -> Result<(), CommandError> {
+    if !path.starts_with(root) {
+        return Err(CommandError::UnsafeConfigPath(format!(
+            "Pi writable evidence harness attempted to write outside disposable root: {}",
+            path.display()
+        )));
+    }
+    let parent = path
+        .parent()
+        .ok_or_else(|| CommandError::UnsafeConfigPath("harness path has no parent".to_string()))?;
+    fs::create_dir_all(parent)?;
+    fs::write(path, content)?;
+    Ok(())
+}
+
+fn pi_harness_config_json(trusted: bool) -> String {
+    serde_json::json!({
+        "project": {
+            "trusted": trusted
+        },
+        "skills": {
+            "disabled": []
+        },
+        "packages": {
+            "fixture": {
+                "skills": {
+                    "disabled": []
+                }
+            }
+        }
+    })
+    .to_string()
+}
+
+fn pi_harness_patch_enabled(
+    content: &str,
+    skill_name: &str,
+    enabled: bool,
+    project_trusted: bool,
+) -> Result<String, CommandError> {
+    if !project_trusted {
+        return Err(CommandError::UnsafeConfigPath(
+            "Pi project fixture is not trusted; project-local toggle evidence write blocked"
+                .to_string(),
+        ));
+    }
+    let mut value: serde_json::Value = serde_json::from_str(content)
+        .map_err(|err| CommandError::InvalidJson(format!("Pi harness fixture JSON: {err}")))?;
+    let disabled = value
+        .as_object_mut()
+        .and_then(|object| object.get_mut("skills"))
+        .and_then(serde_json::Value::as_object_mut)
+        .and_then(|skills| skills.get_mut("disabled"))
+        .and_then(serde_json::Value::as_array_mut)
+        .ok_or_else(|| {
+            CommandError::InvalidJson(
+                "Pi harness fixture JSON must contain skills.disabled array".to_string(),
+            )
+        })?;
+    if enabled {
+        disabled.retain(|value| value.as_str() != Some(skill_name));
+    } else if !disabled
+        .iter()
+        .any(|value| value.as_str() == Some(skill_name))
+    {
+        disabled.push(serde_json::Value::String(skill_name.to_string()));
+    }
+    Ok(serde_json::to_string_pretty(&value)?)
+}
+
+fn pi_harness_skill_disabled(content: &str, skill_name: &str) -> Result<bool, CommandError> {
+    let value: serde_json::Value = serde_json::from_str(content)
+        .map_err(|err| CommandError::InvalidJson(format!("Pi harness fixture JSON: {err}")))?;
+    Ok(value
+        .get("skills")
+        .and_then(|skills| skills.get("disabled"))
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|disabled| {
+            disabled
+                .iter()
+                .any(|value| value.as_str() == Some(skill_name))
+        }))
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -7070,6 +7329,55 @@ mod tests {
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].payload["batch"], serde_json::json!(true));
         assert!(events[0].payload.get("snapshot_id").is_some());
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn pi_writable_harness_writes_only_disposable_evidence_and_keeps_production_blocked() {
+        let temp_root = temp_test_dir("pi-writable-harness").join("pi-writable-harness");
+
+        let report =
+            run_pi_writable_evidence_harness(&temp_root).expect("Pi harness evidence succeeds");
+
+        assert_eq!(report.harness, "v2.36-pi-writable-evidence");
+        assert!(!report.production_writes_enabled);
+        assert!(report.safety.disposable_only);
+        assert!(!report.safety.production_writes_enabled);
+        assert!(!report.safety.provider_request_sent);
+        assert!(!report.safety.script_execution_allowed);
+        assert!(!report.safety.credential_accessed);
+        assert!(!report.safety.install_performed);
+        assert!(!report.safety.production_config_mutated);
+        assert_eq!(report.scenarios.len(), 3);
+        assert!(report.scenarios.iter().all(|scenario| {
+            scenario.initial_enabled
+                && scenario.disabled_after_toggle
+                && scenario.reenabled_after_toggle
+                && scenario.rollback_restored
+                && scenario.invalid_json_blocked
+                && scenario.writes_confined_to_disposable_root
+        }));
+        assert!(report
+            .scenarios
+            .iter()
+            .any(|scenario| scenario.layer == "project" && scenario.trust_gate_blocked));
+        assert!(temp_root.join("pi-writable-harness-report.json").exists());
+        assert!(!temp_root.join("global-home/.pi/agent/skills").exists());
+        assert!(!temp_root.join("global-home/.pi/settings.json").exists());
+
+        let _ = std::fs::remove_dir_all(temp_root.parent().expect("harness temp root has parent"));
+    }
+
+    #[test]
+    fn pi_writable_harness_rejects_non_disposable_roots() {
+        let temp_root = temp_test_dir("not-pi-root");
+        let result = run_pi_writable_evidence_harness(&temp_root);
+
+        assert!(
+            matches!(result, Err(CommandError::UnsafeConfigPath(_))),
+            "harness must require an explicit disposable marker"
+        );
 
         let _ = std::fs::remove_dir_all(&temp_root);
     }

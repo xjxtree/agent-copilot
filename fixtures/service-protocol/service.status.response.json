@@ -12,6 +12,7 @@
       "app.stateSnapshot",
       "service.status",
       "adapter.listCapabilities",
+    "evidence.piWritableHarness",
       "llm.status",
       "llm.prepareAction",
       "llm.prepareSkillAnalysis",

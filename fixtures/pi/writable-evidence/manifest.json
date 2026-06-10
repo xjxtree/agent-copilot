@@ -1,0 +1,32 @@
+{
+  "notice": "V2.36 Pi writable evidence-only harness. Production Pi writable support remains blocked.",
+  "configFile": "config/pi-settings.enabled.json",
+  "skills": [
+    {
+      "name": "global-evidence-toggle",
+      "scope": "global",
+      "path": "home/.pi/agent/skills/global-evidence-toggle/SKILL.md"
+    },
+    {
+      "name": "project-evidence-toggle",
+      "scope": "project",
+      "path": "project/.pi/skills/project-evidence-toggle/SKILL.md"
+    },
+    {
+      "name": "package-evidence-toggle",
+      "scope": "package",
+      "path": "project/packages/app/.pi/skills/package-evidence-toggle/SKILL.md",
+      "package": "npm:example-pi-package"
+    }
+  ],
+  "cases": {
+    "enabled": "config/pi-settings.enabled.json",
+    "disabledGlobal": "config/pi-settings.disabled-global.json",
+    "disabledProjectPackage": "config/pi-settings.disabled-project-package.json",
+    "packageFilterDisabled": "config/pi-settings.package-filter-disabled.json",
+    "invalidJson": "config/pi-settings.invalid-json.json",
+    "untrustedProject": "config/pi-settings.untrusted-project.json",
+    "rollbackBefore": "rollback/pi-settings.before.json",
+    "rollbackAfterDisable": "rollback/pi-settings.after-disable.json"
+  }
+}

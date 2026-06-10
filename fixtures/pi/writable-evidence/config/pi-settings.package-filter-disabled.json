@@ -1,0 +1,13 @@
+{
+  "notice": "Evidence-only candidate Pi package filter. Do not use for production writes.",
+  "trust": {
+    "projectRootTrusted": true
+  },
+  "disabledSkills": [],
+  "packages": [
+    {
+      "source": "npm:example-pi-package",
+      "skills": []
+    }
+  ]
+}

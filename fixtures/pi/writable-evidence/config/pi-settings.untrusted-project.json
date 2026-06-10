@@ -1,0 +1,15 @@
+{
+  "notice": "Evidence-only candidate Pi settings. Project/package writes must be blocked when trust is false.",
+  "trust": {
+    "projectRootTrusted": false
+  },
+  "disabledSkills": [],
+  "packages": [
+    {
+      "source": "npm:example-pi-package",
+      "skills": [
+        "package-evidence-toggle"
+      ]
+    }
+  ]
+}

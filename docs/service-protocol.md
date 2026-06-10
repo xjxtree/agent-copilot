@@ -1,6 +1,17 @@
 # skills-copilot Service Protocol
 
-> Status: V2.35 Local report export is integrated; V2.36 Pi writable evidence harness is active. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, V2.19 health dashboard, V2.20 read-only AI skill analysis assist, V2.21 scan accuracy/dedupe alignment, V2.22 finding/conflict semantics, V2.23 Health Dashboard / Adapter Capability UX, V2.24 Skill Detail diagnostics, V2.25 Agent-config timeline, V2.26 Finding explainability, V2.27 Skill identity/provenance dedupe, V2.28 Conflict semantic closeout, V2.29 Finding triage persistence, V2.30 AI skill analysis workflow, V2.31 Cleanup Queue, V2.32 Rule tuning / suppression, V2.33 Safe batch actions, V2.34 Cross-agent comparison view, and V2.35 Local report export are implemented or synchronized. V2.33 adds `batch.previewSkillToggles` and `batch.applySkillToggles` for preview-first verified writable toggles with explicit confirmation and matching preview id before apply; V2.34 adds read-only `comparison.listCrossAgent`; V2.35 adds user-triggered local/redacted `report.exportLocal`. These keep Pi/Hermes/OpenClaw read-only where applicable and do not write skill content, execute scripts, call providers, store credentials, or create public distribution artifacts.
+> Status: V2.36 Pi writable evidence harness is integrated and evidence-only; V2.37 Pi writable guarded slice is active. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, V2.19 health dashboard, V2.20 read-only AI skill analysis assist, V2.21 scan accuracy/dedupe alignment, V2.22 finding/conflict semantics, V2.23 Health Dashboard / Adapter Capability UX, V2.24 Skill Detail diagnostics, V2.25 Agent-config timeline, V2.26 Finding explainability, V2.27 Skill identity/provenance dedupe, V2.28 Conflict semantic closeout, V2.29 Finding triage persistence, V2.30 AI skill analysis workflow, V2.31 Cleanup Queue, V2.32 Rule tuning / suppression, V2.33 Safe batch actions, V2.34 Cross-agent comparison view, V2.35 Local report export, and V2.36 Pi writable evidence harness are implemented or synchronized. V2.33 adds `batch.previewSkillToggles` and `batch.applySkillToggles` for preview-first verified writable toggles with explicit confirmation and matching preview id before apply; V2.34 adds read-only `comparison.listCrossAgent`; V2.35 adds user-triggered local/redacted `report.exportLocal`; V2.36 adds evidence-only `evidence.piWritableHarness`. V2.37 may add a guarded Pi toggle surface; Pi install stays blocked.
+
+## V2.36 Pi writable evidence harness（完成）
+
+- V2.36 阶段为 evidence-only：`catalog.scanAll`/`config.toggleSkill` 与 write 类 API 在 Pi 侧仍以 capability gating 方式阻断生产写入；只新增 evidence-only `evidence.piWritableHarness`，不会直接写真实 `pi` settings。
+- 核心证据路径要求包含：
+  - global/project/package toggle 变更语义（含 `pi config` 与 package filters）
+  - rollback（可重放回滚）
+  - trust gate（trusted / untrusted 项目上下文）
+  - invalid JSON/config 损坏输入时的失败回退
+  - re-enable 行为
+- 上述证据已通过，V2.37 的 guarded writable slice 可以进入设计与实现候选；V2.37 仍必须保持 preview/rollback/disabled-state rescan 边界，Pi install 继续 blocked。
 >
 > Integrated: V2.9 Tool-global import/export/install, V2.10 skill execution safety boundary, and 2026-06-10 real local Computer Use validation for the current mainline app. V2.11 added adapter capability status to the service protocol and macOS UI. V2.12 marks opencode writable through exact permission.skill deny/re-enable after snapshot/rollback, install, and fixture smoke validation pass; current opencode scan follows native plus official compatibility roots while install targets remain native roots.
 >
@@ -360,7 +371,7 @@ Current matrix（V2.23 对齐口径）:
 | Claude Code | `verified` | Supported | Supported（verified settings writes） | Supported（tool-global install to verified target） | Supported | `none` |
 | Codex | `verified` | Supported | Supported（user `config.toml` only） | Supported（tool-global install to user/project roots） | Supported（用户级 settings patch） | `project-local` blocked |
 | opencode | `verified` | Supported（native + official compatibility roots） | Supported（managed exact `permission.skill` deny/re-enable） | Supported（native-root install target） | Supported（managed permission overrides） | `custom skills.paths/urls` blocked |
-| Pi | `read-only` | Supported（Pi-native roots） | Blocked（evidence harness pending） | Blocked | Blocked | `read-only` |
+| Pi | `read-only` + V2.36 evidence passed | Supported（Pi-native roots） | V2.37 guarded toggle candidate | Blocked | Blocked | `read-only` |
 | Hermes | `read-only` | Supported（active/profile Hermes home skills） | Blocked | Blocked | Blocked | `read-only; generic project scan and writes blocked` |
 | OpenClaw | `read-only` | Supported（documented filesystem roots） | Blocked | Blocked | Blocked | `read-only; workspace-scoped project roots only` |
 

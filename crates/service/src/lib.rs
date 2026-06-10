@@ -19,15 +19,15 @@ use skills_copilot_commands::{
     list_agent_config_snapshots, list_conflicts, list_cross_agent_comparisons, list_finding_triage,
     list_findings, list_rule_tuning, list_skill_events, list_snapshots, preview_script_execution,
     preview_skill_toggles, preview_snapshot_rollback, read_claude_settings,
-    record_blocked_script_execution, rollback_snapshot, save_claude_settings,
-    scan_all_catalog_report, scan_claude_to_catalog, set_finding_triage,
+    record_blocked_script_execution, rollback_snapshot, run_pi_writable_evidence_harness,
+    save_claude_settings, scan_all_catalog_report, scan_claude_to_catalog, set_finding_triage,
     set_rule_severity_override, set_rule_suppression, skill_health_summary, toggle_skill,
     AdapterCapabilityRecord, AgentCatalogScanReport, BatchToggleApplyRecord,
     BatchTogglePreviewRecord, ConfigDocumentRecord, CrossAgentAnalysisRecord,
-    CrossAgentComparisonRecord, ExportedSkillBundle, ScriptExecutionAttemptRecord,
-    ScriptExecutionPreviewRecord, ScriptExecutionRequest, SkillHealthSummary,
-    SkillInstallPreviewRecord, SnapshotRollbackPreviewRecord, ToolGlobalImportResult,
-    SCRIPT_EXECUTION_DISABLED_REASON,
+    CrossAgentComparisonRecord, ExportedSkillBundle, PiWritableHarnessReport,
+    ScriptExecutionAttemptRecord, ScriptExecutionPreviewRecord, ScriptExecutionRequest,
+    SkillHealthSummary, SkillInstallPreviewRecord, SnapshotRollbackPreviewRecord,
+    ToolGlobalImportResult, SCRIPT_EXECUTION_DISABLED_REASON,
 };
 use skills_copilot_core::{AdapterContext, AdapterRoot, AgentId, RootSource, Scope};
 use thiserror::Error;
@@ -47,6 +47,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "app.stateSnapshot",
     "service.status",
     "adapter.listCapabilities",
+    "evidence.piWritableHarness",
     "llm.status",
     "llm.prepareAction",
     "llm.prepareSkillAnalysis",
@@ -639,6 +640,12 @@ pub struct BatchApplySkillTogglesParams {
     pub preview_token: String,
 }
 
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct PiWritableHarnessParams {
+    #[serde(default)]
+    pub run_label: Option<String>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct InstallSkillParams {
     pub instance_id: String,
@@ -782,6 +789,16 @@ impl ServiceHost {
             "adapter.listCapabilities" => {
                 let adapter_ctx = self.effective_adapter_ctx()?;
                 serde_json::to_value(list_adapter_capabilities(&adapter_ctx)).map_err(Into::into)
+            }
+            "evidence.piWritableHarness" => {
+                let params: PiWritableHarnessParams = if request.params.is_null() {
+                    PiWritableHarnessParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                let report: PiWritableHarnessReport =
+                    run_pi_writable_evidence_harness(&self.pi_writable_harness_root(params))?;
+                serde_json::to_value(report).map_err(Into::into)
             }
             "llm.status" => serde_json::to_value(self.llm_status()).map_err(Into::into),
             "llm.prepareAction" => {
@@ -1554,6 +1571,19 @@ impl ServiceHost {
             llm: self.llm_status(),
             script_execution: self.script_execution_status(),
         }
+    }
+
+    fn pi_writable_harness_root(&self, params: PiWritableHarnessParams) -> PathBuf {
+        let label = params
+            .run_label
+            .as_deref()
+            .map(sanitize_harness_label)
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| format!("run-{}", unix_timestamp_millis()));
+        self.app_data_dir
+            .join("evidence")
+            .join("pi-writable-harness")
+            .join(label)
     }
 
     pub fn llm_status(&self) -> LlmStatus {
@@ -2782,6 +2812,14 @@ fn redact_for_llm_preview(value: &str) -> String {
 
 fn supported_methods() -> Vec<&'static str> {
     SUPPORTED_METHODS.to_vec()
+}
+
+fn sanitize_harness_label(label: &str) -> String {
+    label
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
+        .take(80)
+        .collect()
 }
 
 fn cleanup_queue_response(mut items: Vec<CleanupQueueItem>, limit: Option<usize>) -> CleanupQueue {
@@ -5199,6 +5237,27 @@ mod tests {
                 let _: Vec<WireAdapterCapabilityRecord> =
                     decode_fixture_result(method, result, path);
             }
+            "evidence.piWritableHarness" => {
+                let report: WirePiWritableHarnessReport =
+                    decode_fixture_result(method, result, path);
+                assert!(!report.production_writes_enabled);
+                assert!(!report.safety.production_writes_enabled);
+                assert!(report.safety.disposable_only);
+                assert!(!report.safety.provider_request_sent);
+                assert!(!report.safety.script_execution_allowed);
+                assert!(!report.safety.credential_accessed);
+                assert!(!report.safety.install_performed);
+                assert!(!report.safety.production_config_mutated);
+                assert!(!report.scenarios.is_empty());
+                assert!(report.scenarios.iter().all(|scenario| {
+                    scenario.initial_enabled
+                        && scenario.disabled_after_toggle
+                        && scenario.reenabled_after_toggle
+                        && scenario.rollback_restored
+                        && scenario.invalid_json_blocked
+                        && scenario.writes_confined_to_disposable_root
+                }));
+            }
             "llm.status" => {
                 let status: WireLlmStatus = decode_fixture_result(method, result, path);
                 assert!(!status.enabled);
@@ -5613,6 +5672,7 @@ mod tests {
             "llm.prepareSkillAnalysis" => {
                 json!({ "instance_ids": ["missing-skill"], "analysis_kind": "overview" })
             }
+            "evidence.piWritableHarness" => json!({ "run_label": "dispatch-fixture" }),
             "report.exportLocal" => json!({ "formats": ["json"] }),
             "script.previewExecution" => json!({
                 "command": ["echo", "preview-only"],
@@ -5748,6 +5808,50 @@ mod tests {
         supported: bool,
         status: String,
         reason: Option<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WirePiWritableHarnessReport {
+        harness: String,
+        production_writes_enabled: bool,
+        disposable_root: String,
+        report_path: String,
+        scenarios: Vec<WirePiWritableHarnessScenario>,
+        safety: WirePiWritableHarnessSafety,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WirePiWritableHarnessScenario {
+        name: String,
+        layer: String,
+        config_path: String,
+        skill_name: String,
+        initial_enabled: bool,
+        disabled_after_toggle: bool,
+        reenabled_after_toggle: bool,
+        rollback_restored: bool,
+        invalid_json_blocked: bool,
+        trust_gate_blocked: bool,
+        writes_confined_to_disposable_root: bool,
+        snapshot_content: String,
+        notes: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WirePiWritableHarnessSafety {
+        disposable_only: bool,
+        production_writes_enabled: bool,
+        provider_request_sent: bool,
+        script_execution_allowed: bool,
+        credential_accessed: bool,
+        install_performed: bool,
+        production_config_mutated: bool,
     }
 
     #[allow(dead_code)]

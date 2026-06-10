@@ -2,7 +2,7 @@
 
 > skills-copilot 支持的 6 个 agent 的适配要点。
 >
-> 当前版本线：V2.11 Adapter Capability Matrix、V2.12 opencode writable、V2.13 Pi read-only scanner/parser、V2.14 Hermes evidence-gate closeout、V2.15 OpenClaw evidence-gate closeout、V2.16 OpenClaw read-only scanner、V2.17 Hermes read-only scanner、V2.18 cross-agent analysis、V2.19 skill health dashboard、V2.20 read-only AI skill analysis assist、V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout 均已完成。下一阶段 V2.29-V2.30 聚焦 triage persistence 与 read-only AI analysis workflow。V2.28 验收关键已收口：同 agent 的 runtime/name collision 进入 `Conflicts`；跨 agent duplicate/source overlap/enabled mismatch 进入 `Analysis`；health 冲突计数不包含 cross-agent analysis 分组。
+> 当前版本线：V2.11 Adapter Capability Matrix、V2.12 opencode writable、V2.13 Pi read-only scanner/parser、V2.14 Hermes evidence-gate closeout、V2.15 OpenClaw evidence-gate closeout、V2.16 OpenClaw read-only scanner、V2.17 Hermes read-only scanner、V2.18 cross-agent analysis、V2.19 skill health dashboard、V2.20 read-only AI skill analysis assist、V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout 均已完成。V2.29 Finding triage persistence、V2.30 read-only AI analysis workflow、V2.31 Cleanup Queue、V2.32 Rule tuning / suppression、V2.33 Safe batch actions、V2.34 Cross-agent comparison view、V2.35 Local report export、V2.36 Pi writable evidence harness 均已收口。V2.37 Pi writable guarded slice 已启动；V2.28 验收关键已收口：同 agent 的 runtime/name collision 进入 `Conflicts`；跨 agent duplicate/source overlap/enabled mismatch 进入 `Analysis`；health 冲突计数不包含 cross-agent analysis 分组。
 >
 > 扫描适配器实现 `AgentAdapter`。
 >
@@ -86,7 +86,7 @@ pub struct AdapterFeatureCapability {
 | Claude Code | `verified` | 支持（settings、project roots） | 支持（verified） | 支持（tool-global install） | 支持（verified） | `project-local` settings 与非 verified 目标 blocked |
 | Codex | `verified` | 支持（user + verified project roots） | 支持（仅用户 `config.toml`） | 支持（tool-global install） | 支持（verified） | 项目级 `.codex/config.toml`、plugin/admin/system roots blocked |
 | opencode | `verified` | 支持 native roots + 官方 `.claude` / `.agents` compatibility roots | 支持（exact `permission.skill` deny/re-enable） | 支持（native-root 安装） | 支持（managed permission overrides） | 自定义 `skills.paths` / `skills.urls` 暂停 |
-| Pi | `read-only` | 支持 Pi-native roots | blocked（evidence harness pending） | blocked | blocked | writable harness pending（production write 仍阻断） |
+| Pi | `read-only` + V2.36 evidence passed | 支持 Pi-native roots | V2.37 guarded toggle candidate | blocked | blocked | V2.36 evidence passed: global/project/package toggle、rollback、trust gate、invalid JSON/config、re-enable；install 仍 blocked |
 | Hermes | `read-only` | 支持 active/profile Hermes home | blocked（read-only 扫描） | blocked | blocked | generic project scan / toggle / install / writable blocked，外部目录 policy 待证据 |
 | OpenClaw | `read-only` | 支持文档化 filesystem roots | blocked（read-only scan only） | blocked | blocked | project scope 仅 workspace，toggle/install/writable blocked |
 
@@ -155,7 +155,7 @@ Codex 当前实现边界：
 | 项 | 值 |
 | --- | --- |
 | AgentId | `pi` |
-| 状态 | **Read-only implemented; writable harness candidate** —— P0 evidence 已确认 Pi-native 和 package filter mutation 语义，但 production writes 仍需 harness 验证 |
+| 状态 | **Read-only implemented; writable harness candidate** —— P0 evidence 证据正在补齐：global/project/package toggle、rollback、trust gate、invalid JSON/config、re-enable；生产写入仍 blocked |
 | Spec 工作单 | [`docs/pi-adapter-spec.md`](./pi-adapter-spec.md) |
 | 统一工作单 | [`docs/agent-adapter-spec-worklists.md`](./agent-adapter-spec-worklists.md#pi-coding-agent) |
 | 本地观测 | 2026-06-08 本机 `pi --version` 为 `0.78.1`；`~/.pi/agent/skills/` 和 `~/.pi/agent/settings.json` 存在；未读取或修改真实 settings 内容 |
@@ -164,7 +164,7 @@ Codex 当前实现边界：
 | 配置文件 | 全局 `~/.pi/agent/settings.json`；项目 `.pi/settings.json`；project settings override/merge global settings |
 | 启用控制 | `pi config` 是官方资源启停界面；settings/package filters 支持排除资源。但 direct local skill toggle 的 exact JSON mutation、re-enable、project trust 行为未验证 |
 | Fixture | 最小 evidence fixtures 位于 `fixtures/pi/` |
-| 行动项 | 先做 disposable `agentDir`/fixture project round-trip；按 V2.21 定义明确 `.agents/skills` 与 global/project root 关系；先补扫描准确性口径与去重约束，再考虑 write adapter，写入 adapter 继续 blocked |
+| 行动项 | 先做 disposable `agentDir`/fixture project round-trip（global/project/package）；先补全扫描准确性与去重约束；再完成 Pi writable 证据（toggle、rollback、trust gate、invalid JSON/config、re-enable）；未通过前 V2.37 writable slice 继续 blocked |
 
 > 目前只允许基于该 spec 做 read-only scanner/parser 设计；不要写可修改 Pi settings 的 adapter，直到 `pi config` 的 exact JSON mutation 和回滚语义完成本地验证。
 

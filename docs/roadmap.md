@@ -4,9 +4,9 @@
 >
 > 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.36 Pi writable evidence harness（进行中）**。V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout、V2.29 Finding triage persistence、V2.30 AI skill analysis workflow、V2.31 Cleanup Queue、V2.32 Rule tuning / suppression、V2.33 Safe batch actions、V2.34 Cross-agent comparison view、V2.35 Local report export 均已收口。V2.36 聚焦 disposable Pi writable evidence harness；Pi production writable/toggle/install 仍 blocked，直到 rollback-safe evidence 通过。
+> 当前阶段：**V2.37 Pi writable guarded slice（进行中）**。V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout、V2.29 Finding triage persistence、V2.30 AI skill analysis workflow、V2.31 Cleanup Queue、V2.32 Rule tuning / suppression、V2.33 Safe batch actions、V2.34 Cross-agent comparison view、V2.35 Local report export、V2.36 Pi writable evidence harness 均已收口。V2.36 evidence 范围限定于 disposable agentDir/fixture project，并已覆盖 global/project/package toggle 语义、rollback、trust gate、invalid JSON/config 与 re-enable；V2.37 只做 evidence-backed 最小 Pi native toggle，Pi install 继续 blocked。
 >
-> 近期主线：继续围绕 skills 管理、检查、分析和配置审计打磨体验。下一段版本线聚焦 Adapter trust and diagnostics：Pi writable evidence harness、guarded Pi slice（仅证据通过后）、Hermes external roots、OpenClaw workspace deepening 和 adapter diagnostics。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
+> 近期主线：继续围绕 skills 管理、检查、分析和配置审计打磨体验。下一段版本线聚焦 Adapter trust and diagnostics：V2.37 evidence-backed Pi guarded toggle、Hermes external roots、OpenClaw workspace deepening 和 adapter diagnostics。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
 >
 > 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.25 各阶段能力、V2.9 Tool-global skill pool、V2.11 Adapter capability matrix、V2.16-V2.25 management/analysis/history line。后续候选变更仍需重新验证。
 >
@@ -974,7 +974,7 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 
 | Version | Goal | Completion signal |
 | --- | --- | --- |
-| V2.36 | Pi writable evidence harness | 进行中：用临时 agentDir / fixture project 验证 Pi global/project/package toggle、rollback、trust gate、invalid JSON 与 re-enable；生产 writable 保持 blocked。 |
+| V2.36 | Pi writable evidence harness | 已完成：用临时 agentDir / fixture project 验证 Pi global/project/package toggle、rollback、trust gate、invalid JSON 与 re-enable；生产 writable 保持 blocked。 |
 | V2.37 | Pi writable guarded slice | 仅在 V2.36 通过后启用最小 Pi native toggle；不做 install；UI 标明 evidence-backed/experimental 状态。 |
 | V2.38 | Hermes external roots | 仅在 evidence 明确时把 `skills.external_dirs` 建模为 explicit external roots，不当作 project roots。 |
 | V2.39 | OpenClaw workspace 深化 | 精准识别 OpenClaw workspace scope，只扫描 confirmed workspace roots，不推断任意 repo。 |

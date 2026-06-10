@@ -1,0 +1,7 @@
+{
+  "id": "evidence-pi-writable-harness-fixture",
+  "method": "evidence.piWritableHarness",
+  "params": {
+    "run_label": "fixture"
+  }
+}
