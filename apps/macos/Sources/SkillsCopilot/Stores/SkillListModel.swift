@@ -134,11 +134,9 @@ enum SkillListModel {
     ) -> [SkillRecord] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         let findingInstanceIDs = Set(findings.compactMap(\.instanceId))
-        let findingDefinitionIDs = Set(findings.compactMap(\.definitionId))
         let riskyFindingInstanceIDs = Set(findings.filter(Self.isRiskFinding).compactMap(\.instanceId))
-        let riskyFindingDefinitionIDs = Set(findings.filter(Self.isRiskFinding).compactMap(\.definitionId))
-        let conflictDefinitionIDs = Set(conflicts.map(\.definitionId))
         let conflictInstanceIDs = Set(conflicts.flatMap(\.instanceIds))
+        let sameAgentConflictInstanceIDs = sameAgentConflictInstanceIDs(skills: skills, conflicts: conflicts)
         let searched = query.isEmpty
             ? skills
             : skills.filter { skill in
@@ -157,14 +155,12 @@ enum SkillListModel {
             case .needsTriage:
                 let status = DisplayText.statusKind(skill.state, enabled: skill.enabled)
                 return findingInstanceIDs.contains(skill.id)
-                    || findingDefinitionIDs.contains(skill.definitionId)
-                    || conflictDefinitionIDs.contains(skill.definitionId)
-                    || conflictInstanceIDs.contains(skill.id)
+                    || sameAgentConflictInstanceIDs.contains(skill.id)
                     || status == .broken
                     || status == .missing
                     || status == .unknown
             case .risky:
-                return riskyFindingInstanceIDs.contains(skill.id) || riskyFindingDefinitionIDs.contains(skill.definitionId)
+                return riskyFindingInstanceIDs.contains(skill.id)
             case .enabled:
                 return DisplayText.statusKind(skill.state, enabled: skill.enabled) == .enabled
             case .disabled:
@@ -178,9 +174,10 @@ enum SkillListModel {
             case .unknown:
                 return DisplayText.statusKind(skill.state, enabled: skill.enabled) == .unknown
             case .withFindings:
-                return findingInstanceIDs.contains(skill.id) || findingDefinitionIDs.contains(skill.definitionId)
+                return findingInstanceIDs.contains(skill.id)
             case .withConflicts:
-                return conflictDefinitionIDs.contains(skill.definitionId) || conflictInstanceIDs.contains(skill.id)
+                return conflictInstanceIDs.contains(skill.id)
+                    && sameAgentConflictInstanceIDs.contains(skill.id)
             }
         }
         return filtered.sorted { lhs, rhs in
@@ -275,5 +272,22 @@ enum SkillListModel {
         default:
             return finding.ruleId.hasPrefix("script.")
         }
+    }
+
+    private static func sameAgentConflictInstanceIDs(
+        skills: [SkillRecord],
+        conflicts: [ConflictGroupRecord]
+    ) -> Set<String> {
+        let agentBySkillID = Dictionary(uniqueKeysWithValues: skills.map { ($0.id, $0.agent) })
+        var ids = Set<String>()
+        for conflict in conflicts {
+            let groupedIDs = Dictionary(grouping: conflict.instanceIds) { instanceID in
+                agentBySkillID[instanceID]
+            }
+            for (agent, instanceIDs) in groupedIDs where agent != nil && instanceIDs.count > 1 {
+                ids.formUnion(instanceIDs)
+            }
+        }
+        return ids
     }
 }

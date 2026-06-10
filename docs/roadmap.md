@@ -247,12 +247,12 @@
 **退出条件**
 - [x] scan / watcher / refresh 关键路径有用户可见 summary 状态、错误和恢复验证；实时 watcher/event stream 明确 defer 到 V2 后续设计。
 - [x] 发布前安全 checklist 中 high/critical audit、canonicalize 和 fuzz 有明确结果或决策。
-- [x] 至少一个非 Claude adapter 完成 spec 证据清单；当前 Codex 已完成 writable adapter 切片，opencode 已完成 read-only native-root adapter 切片，当前 mainline 真实本机 UI 操作验证已在 2026-06-09 补跑通过。Pi / Hermes / OpenClaw 仍不得按猜测实现。
+- [x] 至少一个非 Claude adapter 完成 spec 证据清单；当前 Codex 已完成 writable adapter 切片，opencode 已从 read-only native-root adapter 扩展到 official compatibility-root scan + guarded writes，当前 mainline 真实本机 UI 操作验证已在 2026-06-10 补跑通过。Pi / Hermes / OpenClaw 仍不得按猜测实现。
 - [x] SwiftPM test target 覆盖核心 native view model/list model 行为，Node 脚本保留为集成/布局辅助。
 
 ## 4. V2 — "全 agent + 生态"
 
-**当前 V2 状态（2026-06-09）**：Codex adapter 首个实现切片、V2.1 Claude/Codex adapter experience、V2.2 project context、V2.3 adapter hardening、V2.4 opencode read-only adapter、V2.5 audit hardening、V2.6 manual readiness docs、V2.7 LLM local assist gate、V2.8 rules/permissions governance implementation、V2.9 Tool-global skill pool 和 V2.10 skill execution safety docs/release consistency 已通过多工作树并行推进并完成 closeout，且当前 mainline app 的真实本机 Computer Use 操作验证已在 2026-06-09 通过。当前近期主线调整为 **Comprehensive Agent Adapter Support**：优先补齐 Pi disposable local round-trip、opencode writable evidence/implementation、Hermes maintainer-confirmed spec、OpenClaw maintainer-confirmed spec，并在证据充分时推进 macOS app 内的支持。产品重心保持在 skills 的管理、检查、分析和配置审计；真实 sandbox runner、GitHub clone import、script-file install 已从活动 backlog 删除。可执行任务清单见 [`development-tasks.md`](./development-tasks.md)。V2.10 已完成安全边界文档同步：default-deny，不真实执行；blocked/cancelled/failure attempt audit；LLM 不可触发执行。当前产品方向不规划 successful execution output log。V2.8 已完成 LLM status protocol compatibility、permissions roundtrip for V2.8 rules、explicit severity ordering、findings filtering/grouping UI、`app.stateSnapshot` refresh optimization，以及七条新本地规则：`frontmatter.tools-not-empty`、`permissions.network-declared`、`permissions.exec-needs-human`、`name.canonical-case`、`script.no-shebang`、`body.too-long`、`dependency.unknown`。Codex adapter core、commands/service、cwd→repo-root project discovery、macOS UI scan-all、agent filter、restart note、project context、config patch hardening、状态表达、安全回归、opencode native-root read-only 扫描、scanner/config/snapshot/service/UI/docs audit hardening、adapter changelog tracking、默认关闭的 LLM service/UI gate 和 request prepare/estimate 均已落地。opencode 范围限制为 `~/.config/opencode/skills` 和项目 `.opencode/skills`；不扫描 `.agents` / `.claude` compatibility roots；writable toggle/install 现已提升为近期证据与实现优先项，但在证据闭环前仍保持只读。
+**当前 V2 状态（2026-06-10）**：Codex adapter 首个实现切片、V2.1 Claude/Codex adapter experience、V2.2 project context、V2.3 adapter hardening、V2.4 opencode read-only adapter、V2.5 audit hardening、V2.6 manual readiness docs、V2.7 LLM local assist gate、V2.8 rules/permissions governance implementation、V2.9 Tool-global skill pool、V2.10 skill execution safety docs/release consistency、V2.11-V2.20 adapter/management/analysis line 已完成 closeout，且当前 mainline app 的真实本机 Computer Use 操作验证已在 2026-06-10 通过。产品重心保持在 skills 的管理、检查、分析和配置审计；真实 sandbox runner、GitHub clone import、script-file install 已从活动 backlog 删除。可执行任务清单见 [`development-tasks.md`](./development-tasks.md)。V2.10 已完成安全边界文档同步：default-deny，不真实执行；blocked/cancelled/failure attempt audit；LLM 不可触发执行。当前产品方向不规划 successful execution output log。V2.8 已完成 LLM status protocol compatibility、permissions roundtrip for V2.8 rules、explicit severity ordering、findings filtering/grouping UI、`app.stateSnapshot` refresh optimization，以及七条新本地规则：`frontmatter.tools-not-empty`、`permissions.network-declared`、`permissions.exec-needs-human`、`name.canonical-case`、`script.no-shebang`、`body.too-long`、`dependency.unknown`。Codex adapter core、commands/service、cwd→repo-root project discovery、macOS UI scan-all、agent filter、restart note、project context、config patch hardening、状态表达、安全回归、opencode native + compatibility root 扫描、guarded opencode permission writes、scanner/config/snapshot/service/UI/docs audit hardening、adapter changelog tracking、默认关闭的 LLM service/UI gate 和 request prepare/estimate 均已落地。
 
 **V2 剩余开发判定**
 - 近期主线：Comprehensive Agent Adapter Support，优先补齐 Pi、opencode writable、Hermes、OpenClaw。
@@ -425,18 +425,17 @@
 **状态**：complete / automated validation passed；current mainline real local Computer Use validation passed on 2026-06-09。fixture smoke 截图仍不能替代后续候选变更的真实本机验证。
 
 **范围**
-- 只扫描 opencode native roots：用户 `~/.config/opencode/skills` 和当前项目 `.opencode/skills`。
-- 不扫描 opencode `.agents/skills` 或 `.claude/skills` compatibility roots，避免与 Codex / Claude Code native adapters 重复污染 catalog。
+- 当前实现扫描 opencode native roots 与官方 `.agents/skills` / `.claude/skills` compatibility roots；重复关系交给 cross-agent analysis 展示。
 - 解析 opencode `SKILL.md` frontmatter：`name` / `description` 必填，`name` 必须匹配目录；缺失或不匹配应作为 broken/malformed 记录，不让整次 scan 失败。
 - 接入 `catalog.scanAll`、project context 和 agent filter/status；read-only rows 的 toggle 必须被 UI/service 明确拒绝。
-- Smoke fixture 使用临时 HOME/project 创建 global 和 project native opencode skills，并在 service 支持 opencode 时断言 no-project global 可见、project context 下 project skill 可见、toggle read-only rejected。
+- Smoke fixture 使用临时 HOME/project 创建 opencode native/compatibility roots，并在 service 支持 opencode 时断言 no-project global 可见、project context 下 project skill 可见、guarded toggle path 符合 capability matrix。
 - Writable opencode toggle 继续 blocked；`permission.skill` 的 exact patch / re-enable / wildcard precedence / managed config 行为未完成 disposable round-trip 前不得实现。
 
 **退出条件**
 - [x] opencode read-only scanner/parser 与 Claude Code / Codex 共存，不产生 compatibility-root 重复污染。
 - [x] `catalog.scanAll` 在 no-project 下展示 global opencode，在 active project context 下展示 project opencode。
 - [x] UI/service 对 opencode toggle 展示并返回 read-only/unsupported 原因，不创建或修改 opencode config。
-- [x] Smoke coverage 使用临时 native opencode roots，且不触碰真实用户 config。
+- [x] Smoke coverage 使用临时 opencode roots，且不触碰真实用户 config。
 - [x] Coordinator final validation 后同步 README / AGENTS / roadmap / runbook 状态为 complete。
 
 ### 4.5 V2.5 Audit Hardening
@@ -620,7 +619,7 @@
 
 **目标**：先实现证据充分的 Pi-native read-only scanner/parser，并保留 Pi writable blocker，直到 settings mutation / rollback 语义完成 disposable round-trip。
 
-**状态（2026-06-09）**：completed。V2.13 已实现 Pi-native `~/.pi/agent/skills` 与项目 `.pi/skills` scanner/parser，支持目录 `SKILL.md` 与 Pi-native root `.md` skills；`pnpm check:macos` 通过。Pi toggle/install/snapshot writes 仍 blocked。
+**状态（2026-06-10）**：completed with local-noise hardening。V2.13 已实现 Pi-native `~/.pi/agent/skills` 与项目 `.pi/skills` scanner/parser，当前只 catalog 目录型 `SKILL.md`；Pi-native root `.md` 在真实本机验证中会混入大量普通资源文档，暂不展示。`pnpm check:macos` 通过。Pi toggle/install/snapshot writes 仍 blocked。
 
 **退出条件**
 - [x] Pi scan roots、project precedence、malformed behavior 有 fixture。
@@ -714,7 +713,7 @@
 
 ### 4.19 V2.19 Skill health dashboard and triage UX
 
-**状态（2026-06-10）**：completed read-only dashboard slice。`app.stateSnapshot.health` 已提供 health summary；macOS sidebar 已增加 health dashboard card、Risk / Triage 快捷过滤。Reviewed/ignored 持久化 triage state 不在本切片内，仍作为后续 finding triage persistence 处理。
+**状态（2026-06-10）**：completed read-only dashboard slice。`app.stateSnapshot.health` 已提供 health summary；macOS sidebar 已增加 health dashboard card、Risk / Triage 快捷过滤。当前详情页和 agent health 的 finding 计数按具体 `instance_id` 归属，agent conflict 只统计同一 agent 内至少两个 instance 参与的冲突；跨 agent 同名/路径重叠/状态不一致保留在 cross-agent analysis，不混入所选 agent 的 skill conflict。Reviewed/ignored 持久化 triage state 不在本切片内，仍作为后续 finding triage persistence 处理。
 
 **目标**：把 app 的入口从长列表升级为“需要关注什么”的管理面板。
 
@@ -758,7 +757,7 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 | 项 | 风险 | 缓解 |
 | --- | --- | --- |
 | Codex skills spec 仍在演化 | adapter 频繁 breaking | doc 里维护 spec 版本号；spec 一变先升 catalog schema |
-| Pi / Hermes / OpenClaw 的真实写入语义未知 | 适配器猜错 | adapter capability matrix 必须展示 blocker；opencode writable 已在 V2.12 限定 native roots；Pi production writable、Hermes writable/install、OpenClaw writable/install 未完成 disposable rollback evidence 前继续 blocked |
+| Pi / Hermes / OpenClaw 的真实写入语义未知 | 适配器猜错 | adapter capability matrix 必须展示 blocker；opencode writable 已在 V2.12 限定为 managed `permission.skill` writes 和 native install targets；Pi production writable、Hermes writable/install、OpenClaw writable/install 未完成 disposable rollback evidence 前继续 blocked |
 | Codex evidence 被误读成完整运行时支持 | 用户或 agent 误以为所有 Codex roots / project config / plugin skills 均已支持 | roadmap / AGENTS / adapter docs 明确：当前只实现 verified user/project roots + user-config writable；project config、plugin/admin/system roots 仍待后续决策 |
 | 贡献者门槛（Rust） | 社区贡献慢 | doc 写明"轻量贡献（rule / UI）只需 TS / Rust 单语言"；提供 good first issue |
 | LLM 成本失控 | 用户被烧钱 | 月度上限 + 单次上限 + 默认 LLM 关闭 |

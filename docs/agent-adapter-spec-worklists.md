@@ -6,9 +6,9 @@
 
 ## Current Rule
 
-Claude Code remains the mature baseline adapter. Codex has verified user/project roots, cwd-to-repo-root discovery, project-context-scoped scanning, and user-config writable toggles. V2.3 hardening added config patch robustness, explicit adapter states, root/config security regressions, and smoke/docs coverage. V2.4 added opencode as a read-only adapter for first-class native roots only.
+Claude Code remains the mature baseline adapter. Codex has verified user/project roots, cwd-to-repo-root discovery, project-context-scoped scanning, and user-config writable toggles. V2.3 hardening added config patch robustness, explicit adapter states, root/config security regressions, and smoke/docs coverage. V2.4 added opencode as a read-only adapter for native roots; current opencode scan also follows official `.claude` / `.agents` compatibility roots.
 
-Pi production writable support remains blocked until the evidence harness is implemented. Opencode writable is enabled for native roots after V2.12 validation; Pi read-only scan is enabled for native roots after V2.13 validation. P0 evidence on 2026-06-10 promoted Hermes and OpenClaw from fully blocked to read-only scanner candidates; OpenClaw read-only scan is enabled after V2.16 and Hermes read-only scan is enabled after V2.17, while writable/install stay blocked.
+Pi production writable support remains blocked until the evidence harness is implemented. Opencode writable is enabled through managed `permission.skill` overrides after V2.12 validation; opencode install targets remain native roots. Pi read-only scan is enabled for native roots after V2.13 validation. P0 evidence on 2026-06-10 promoted Hermes and OpenClaw from fully blocked to read-only scanner candidates; OpenClaw read-only scan is enabled after V2.16 and Hermes read-only scan is enabled after V2.17, while writable/install stay blocked.
 
 The macOS app now uses the service/UI adapter capability matrix as the front-door status surface for all six agents. The matrix must make read-only, planned, and blocked states explicit before any future write affordance is exposed.
 
@@ -51,7 +51,7 @@ Required next evidence:
 | Project instruction entrypoint | Verified from official Pi SDK docs: default resource discovery includes `AGENTS.md` context files walking up from `cwd`; project trust affects whether project-local inputs are loaded. |
 | Extension discovery | Verified as a separate Pi concept: global `~/.pi/agent/extensions/`, project `.pi/extensions/`, and settings/package extension paths. Extensions are not skills and must not be mapped into `SkillInstance` without a product decision. |
 | Skill discovery roots | Verified from official Pi docs for read-only planning: global `~/.pi/agent/skills/` and `~/.agents/skills/`; project `.pi/skills/` and `.agents/skills/` from `cwd`/ancestors. Pi also supports settings/package skill paths. |
-| Skill file/directory format | Verified: directories with `SKILL.md` are discovered recursively; Pi-native `~/.pi/agent/skills/` and `.pi/skills/` also discover direct root `.md` skills; `.agents/skills` root `.md` files are ignored. Required frontmatter: `name`, `description`. |
+| Skill file/directory format | Verified: directories with `SKILL.md` are discovered recursively. Direct root `.md` files may be agent-visible in Pi-native roots, but Skills Copilot intentionally does not catalog them after real local validation showed they include many ordinary resource documents. Required frontmatter for cataloged `SKILL.md`: `name`, `description`. |
 | Config path/schema | Partially verified from official docs and local path existence: global `~/.pi/agent/settings.json`, project `.pi/settings.json`; resource arrays include `packages`, `extensions`, `skills`, `prompts`, `themes`, and `enableSkillCommands`. |
 | Enable/disable semantics | Partially documented but not writable-verified: `pi config` is the official enable/disable surface for package/local resources, and settings arrays/package filters support exclusions. Exact JSON mutation for direct local skill toggles is not verified. |
 | Fixture requirement | Minimal evidence fixtures added under `fixtures/pi/`. They are evidence samples, not parser contract fixtures. |
@@ -75,18 +75,18 @@ Required next evidence:
 | Project instruction entrypoint | Verified: opencode uses `AGENTS.md` for project rules and falls back to `CLAUDE.md` only when `AGENTS.md` is absent. |
 | Agent definitions | Public docs describe opencode agent configuration and prompt files. Agents are not the same as this app's Skill model. |
 | Command definitions | Public docs describe custom commands under opencode command locations. Commands are not needed for the skill adapter evidence gate. |
-| Skill discovery roots | V2.4 implementation decision: read-only native roots only. Scan global `~/.config/opencode/skills/<name>/SKILL.md` and project `.opencode/skills/<name>/SKILL.md` walking from `project_cwd` upward to `project_root`. Do not scan `.claude/skills` or `.agents/skills` compatibility roots under opencode in V2.4. |
+| Skill discovery roots | Current implementation scans official OpenCode roots: global/project `.opencode/skills`, `.claude/skills`, and `.agents/skills`, walking project roots from `project_cwd` upward to `project_root`. |
 | Skill file/directory format | Verified: one folder per skill name with `SKILL.md`; required YAML frontmatter fields `name` and `description`; `name` must match the containing directory. Missing `name`, missing `description`, or name/directory mismatch should produce broken records rather than aborting the scan. |
 | Config path/schema | Partially verified from official docs and local path existence: global `~/.config/opencode/opencode.json`, project `opencode.json`, `.opencode` directories, and custom/managed config paths. |
 | Enable/disable semantics | Partially documented but not writable-verified: pattern permissions under `permission.skill` support `allow`, `deny`, and `ask`; `deny` hides/rejects a skill. Exact write and re-enable semantics remain unverified. |
 | Fixture requirement | Parser/scan contract fixtures promoted under `fixtures/opencode/`: valid global, valid project, nested project root, name mismatch, missing description, and missing name. The config fixture remains writable-evidence only. |
-| Implementation decision | V2.4 read-only implementation approved for native roots only. Writable adapter remains blocked. Compatibility roots and custom configured skill paths are intentionally deferred to avoid duplicate pollution with Claude/Codex. |
+| Implementation decision | Native and compatibility roots are scanned. Writable config is guarded through exact `permission.skill` rules; tool-global installs remain limited to native opencode roots. Custom configured skill paths remain deferred. |
 
 Required next evidence:
 
 - Keep disposable local verification scoped to temporary `HOME`, `XDG_CONFIG_HOME`, `OPENCODE_CONFIG_DIR`, and fixture projects. The 2026-06-08 `opencode debug skill --pure` check confirmed synthetic native global/project/nested project skills were listed without reading or modifying real config.
 - Capture exact config patch behavior for disabling one skill by exact name, re-enabling that skill, and resolving wildcard/exact-name conflicts.
-- Decide in a later slice whether `.claude/skills` and `.agents/skills` compatibility roots should ever be exposed through opencode or left to native/shared adapters to avoid duplicate catalog entries.
+- Decide in a later slice whether custom configured skill paths should be exposed through opencode after non-destructive evidence confirms their semantics.
 - Decide in a later slice whether custom `skills.paths` / `skills.urls` are in scope, and what trust/provenance labels they need.
 - Decide UI semantics for `ask`; it is neither fully enabled nor disabled.
 - Verify behavior when managed config or `OPENCODE_CONFIG_CONTENT` overrides local writable config.

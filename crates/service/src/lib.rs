@@ -613,8 +613,7 @@ impl ServiceHost {
                 let adapter_ctx = self.effective_adapter_ctx()?;
                 let started_at = unix_timestamp_millis();
                 let scanned_count = scan_claude_to_catalog(&adapter_ctx, &catalog)?;
-                let skills = catalog
-                    .list_skill_records_for_project_context(adapter_ctx.project_root.as_deref())?;
+                let skills = self.list_visible_skill_records(&catalog)?;
                 let findings: Vec<RuleFindingRecord> = list_findings(&catalog)?;
                 let conflicts: Vec<ConflictGroupRecord> = list_conflicts(&catalog)?;
                 let snapshots: Vec<ConfigSnapshotRecord> = list_snapshots(&catalog)?;
@@ -645,8 +644,7 @@ impl ServiceHost {
                 let started_at = unix_timestamp_millis();
                 let scan_report = scan_all_catalog_report(&adapter_ctx, &catalog)?;
                 let scanned_count = scan_report.scanned_count;
-                let skills = catalog
-                    .list_skill_records_for_project_context(adapter_ctx.project_root.as_deref())?;
+                let skills = self.list_visible_skill_records(&catalog)?;
                 let findings: Vec<RuleFindingRecord> = list_findings(&catalog)?;
                 let conflicts: Vec<ConflictGroupRecord> = list_conflicts(&catalog)?;
                 let snapshots: Vec<ConfigSnapshotRecord> = list_snapshots(&catalog)?;
@@ -802,7 +800,12 @@ impl ServiceHost {
         catalog: &Catalog,
     ) -> Result<Vec<SkillRecord>, ServiceError> {
         let adapter_ctx = self.effective_adapter_ctx()?;
-        Ok(catalog.list_skill_records_for_project_context(adapter_ctx.project_root.as_deref())?)
+        let skills =
+            catalog.list_skill_records_for_project_context(adapter_ctx.project_root.as_deref())?;
+        Ok(skills
+            .into_iter()
+            .filter(|skill| !is_pi_plain_markdown_catalog_noise(skill))
+            .collect())
     }
 
     pub fn status(&self) -> ServiceStatus {
@@ -1468,6 +1471,16 @@ fn extra_claude_roots_from_env() -> Vec<AdapterRoot> {
 
 fn display_path(path: &Path) -> String {
     path.to_string_lossy().to_string()
+}
+
+fn is_pi_plain_markdown_catalog_noise(skill: &SkillRecord) -> bool {
+    skill.agent == AgentId::Pi.as_str()
+        && skill
+            .path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            == Some("md")
+        && skill.path.file_name().and_then(|name| name.to_str()) != Some("SKILL.md")
 }
 
 fn unix_timestamp_millis() -> i64 {
@@ -2709,7 +2722,7 @@ mod tests {
 
         assert!(response.ok);
         let result = response.result.expect("scan all result");
-        assert_eq!(result.get("scanned_count").and_then(Value::as_u64), Some(3));
+        assert_eq!(result.get("scanned_count").and_then(Value::as_u64), Some(4));
         let activity = result
             .get("activity")
             .and_then(Value::as_object)
@@ -2855,7 +2868,7 @@ mod tests {
 
         assert!(scan_response.ok);
         let result = scan_response.result.expect("scan all result");
-        assert_eq!(result.get("scanned_count").and_then(Value::as_u64), Some(5));
+        assert_eq!(result.get("scanned_count").and_then(Value::as_u64), Some(8));
         let skills = result
             .get("skills")
             .and_then(Value::as_array)

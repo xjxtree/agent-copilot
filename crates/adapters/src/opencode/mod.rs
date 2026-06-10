@@ -18,11 +18,23 @@ impl AgentAdapter for OpencodeAdapter {
     }
 
     fn roots(&self, ctx: &AdapterContext) -> Vec<AdapterRoot> {
-        let mut roots = vec![AdapterRoot {
-            scope: Scope::AgentGlobal,
-            path: ctx.user_home.join(".config/opencode/skills"),
-            source: RootSource::UserHome,
-        }];
+        let mut roots = vec![
+            AdapterRoot {
+                scope: Scope::AgentGlobal,
+                path: ctx.user_home.join(".config/opencode/skills"),
+                source: RootSource::UserHome,
+            },
+            AdapterRoot {
+                scope: Scope::AgentGlobal,
+                path: ctx.user_home.join(".claude/skills"),
+                source: RootSource::UserHome,
+            },
+            AdapterRoot {
+                scope: Scope::AgentGlobal,
+                path: ctx.user_home.join(".agents/skills"),
+                source: RootSource::UserHome,
+            },
+        ];
 
         if let Some(project_root) = &ctx.project_root {
             roots.extend(opencode_project_skill_roots(
@@ -200,6 +212,16 @@ fn opencode_project_skill_roots(
             path: dir.join(".opencode/skills"),
             source: RootSource::Project,
         });
+        roots.push(AdapterRoot {
+            scope: Scope::AgentProject,
+            path: dir.join(".claude/skills"),
+            source: RootSource::Project,
+        });
+        roots.push(AdapterRoot {
+            scope: Scope::AgentProject,
+            path: dir.join(".agents/skills"),
+            source: RootSource::Project,
+        });
         if dir == project_root {
             break;
         }
@@ -299,7 +321,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn exposes_native_user_and_project_roots_only() {
+    fn exposes_documented_native_and_compatibility_roots() {
         let adapter = OpencodeAdapter;
         let ctx = AdapterContext {
             user_home: PathBuf::from("/tmp/home"),
@@ -314,26 +336,46 @@ mod tests {
 
         let roots = adapter.roots(&ctx);
 
-        assert_eq!(roots.len(), 4);
+        assert_eq!(roots.len(), 12);
         assert_eq!(
             roots[0].path,
             PathBuf::from("/tmp/home/.config/opencode/skills")
         );
+        assert_eq!(roots[1].path, PathBuf::from("/tmp/home/.claude/skills"));
+        assert_eq!(roots[2].path, PathBuf::from("/tmp/home/.agents/skills"));
         assert_eq!(roots[0].scope, Scope::AgentGlobal);
         assert_eq!(roots[0].source, RootSource::UserHome);
         assert_eq!(
-            roots[1].path,
+            roots[3].path,
             PathBuf::from("/tmp/project/nested/deeper/.opencode/skills")
         );
         assert_eq!(
-            roots[2].path,
+            roots[4].path,
+            PathBuf::from("/tmp/project/nested/deeper/.claude/skills")
+        );
+        assert_eq!(
+            roots[5].path,
+            PathBuf::from("/tmp/project/nested/deeper/.agents/skills")
+        );
+        assert_eq!(
+            roots[6].path,
             PathBuf::from("/tmp/project/nested/.opencode/skills")
         );
         assert_eq!(
-            roots[3].path,
+            roots[7].path,
+            PathBuf::from("/tmp/project/nested/.claude/skills")
+        );
+        assert_eq!(
+            roots[8].path,
+            PathBuf::from("/tmp/project/nested/.agents/skills")
+        );
+        assert_eq!(
+            roots[9].path,
             PathBuf::from("/tmp/project/.opencode/skills")
         );
-        for root in &roots[1..] {
+        assert_eq!(roots[10].path, PathBuf::from("/tmp/project/.claude/skills"));
+        assert_eq!(roots[11].path, PathBuf::from("/tmp/project/.agents/skills"));
+        for root in &roots[3..] {
             assert_eq!(root.scope, Scope::AgentProject);
             assert_eq!(root.source, RootSource::Project);
         }
@@ -341,19 +383,7 @@ mod tests {
             roots
                 .iter()
                 .all(|root| !root.path.starts_with("/tmp/unverified")),
-            "opencode V2.4 does not scan extra compatibility roots"
-        );
-        assert!(
-            roots
-                .iter()
-                .all(|root| !root.path.ends_with(".agents/skills")),
-            "opencode V2.4 does not scan .agents compatibility roots"
-        );
-        assert!(
-            roots
-                .iter()
-                .all(|root| !root.path.ends_with(".claude/skills")),
-            "opencode V2.4 does not scan .claude compatibility roots"
+            "opencode must not scan unverified extra roots"
         );
     }
 

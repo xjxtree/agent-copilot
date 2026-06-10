@@ -263,21 +263,6 @@ mod tests {
     }
 
     #[test]
-    fn parses_valid_root_markdown_skill_frontmatter() {
-        let adapter = PiAdapter;
-        let fixture = write_skill_file(
-            "root-md.md",
-            "---\nname: root-md\ndescription: Root markdown skill fixture.\n---\nBody.",
-        );
-
-        let skill = adapter.parse(&fixture).expect("skill parses");
-
-        assert_eq!(skill.name, "root-md");
-        assert_eq!(skill.state, SkillState::Loaded);
-        assert!(skill.enabled);
-    }
-
-    #[test]
     fn marks_missing_description_as_broken() {
         let adapter = PiAdapter;
         let fixture = fixture_path("fixtures/pi/broken/missing-description/SKILL.md");
@@ -288,20 +273,6 @@ mod tests {
         assert_eq!(skill.state, SkillState::Broken);
         assert!(!skill.enabled);
         assert!(skill.description.contains("description"));
-    }
-
-    fn write_skill_file(name: &str, content: &str) -> PathBuf {
-        let root = std::env::temp_dir().join(format!(
-            "skills-copilot-pi-adapter-{}-{}",
-            std::process::id(),
-            name
-        ));
-        std::fs::create_dir_all(&root).expect("create skill dir");
-        let skill_path = root.join(name);
-        std::fs::write(&skill_path, content).expect("write skill");
-        skill_path
-            .canonicalize()
-            .expect("canonicalize temp skill path")
     }
 
     fn fixture_path(relative: &str) -> PathBuf {

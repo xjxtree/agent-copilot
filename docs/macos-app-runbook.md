@@ -76,7 +76,7 @@ It verifies:
 - a visible `SkillsCopilot` app window exists
 - app-window-only screenshot capture works
 - service fixture flow covers Scan, Enable/Disable, Settings save, Snapshot Preview, and Snapshot Rollback
-- V2.4 opencode fixture roots are isolated to temporary native opencode roots: `~/.config/opencode/skills` and project `.opencode/skills`; smoke must not create or scan real user opencode config
+- opencode fixture roots are isolated to temporary roots: native `~/.config/opencode/skills` / project `.opencode/skills` plus official `.claude` / `.agents` compatibility roots when covered by the scenario; smoke must not create or scan real user opencode config
 - when the integrated service reports opencode rows from `catalog.scanAll`, smoke verifies global opencode skills without project context, project opencode skills with project context, and `config.toggleSkill` rejection/read-only behavior
 - V2.9 tool-global validation is covered by Rust service tests, Swift UI/model tests, layout checks, and service fixtures: tool-global rows must display as read-only previews, toggle must remain disabled, import writes only app-controlled staging/catalog, export manifests remain reproducible, and install/copy to Claude/Codex must be confirmation-gated through verified write paths
 - V2.10 execution safety validation is a boundary check, not a runner check.

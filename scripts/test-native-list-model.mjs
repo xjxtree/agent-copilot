@@ -113,7 +113,7 @@ struct NativeListModelTest {
         )
         assertEqual(
             filter(stateFilter: .withConflicts).map(\.id),
-            ["beta"],
+            ["epsilon", "gamma"],
             "conflicts filter"
         )
 
@@ -250,10 +250,10 @@ struct NativeListModelTest {
     private static let conflicts: [ConflictGroupRecord] = [
         ConflictGroupRecord(
             id: "conflict-1",
-            definitionId: "def.beta",
+            definitionId: "def.codex",
             reason: "name-collision",
-            winnerId: "beta",
-            instanceIds: ["beta"]
+            winnerId: "gamma",
+            instanceIds: ["gamma", "epsilon"]
         ),
     ]
 

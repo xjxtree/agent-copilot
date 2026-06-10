@@ -2,7 +2,7 @@
 
 > Status: V2.20 read-only AI skill analysis assist integrated. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, and V2.19 health dashboard are implemented; writable/install support remains blocked.
 >
-> Integrated: V2.9 Tool-global import/export/install, V2.10 skill execution safety boundary, and 2026-06-10 real local Computer Use validation for the current mainline app. V2.11 added adapter capability status to the service protocol and macOS UI. V2.12 marks opencode writable for native roots after exact permission.skill deny/re-enable, snapshot/rollback, install, and fixture smoke validation pass.
+> Integrated: V2.9 Tool-global import/export/install, V2.10 skill execution safety boundary, and 2026-06-10 real local Computer Use validation for the current mainline app. V2.11 added adapter capability status to the service protocol and macOS UI. V2.12 marks opencode writable through exact permission.skill deny/re-enable after snapshot/rollback, install, and fixture smoke validation pass; current opencode scan follows native plus official compatibility roots while install targets remain native roots.
 >
 > Product boundary: this protocol is the only supported boundary for the macOS native shell. Historical Tauri commands remain only in MVP documentation and git history.
 >
@@ -77,7 +77,7 @@ It currently scans:
 
 - Claude Code
 - Codex
-- opencode (verified writable for native roots)
+- opencode (verified writable through managed permission overrides; scans native plus official compatibility roots)
 - Pi (read-only native roots)
 - OpenClaw (read-only filesystem roots)
 - Hermes (read-only active/profile home skills)
@@ -134,7 +134,7 @@ Precedence notes are intentionally conservative. The service may choose a `winne
 
 `app.stateSnapshot.health` returns an additive, read-only summary derived from the same visible catalog rows, findings, conflicts, and cross-agent analysis groups. It does not write agent configs, import skills, execute scripts, call provider APIs, or infer unsupported roots.
 
-The summary includes total/enabled/disabled counts, broken/missing/malformed counts, finding counts by severity, conflict counts, risky script and permission counts, cross-agent analysis group counts, and per-agent summaries for native dashboard and read-only triage filters. V2.19 does not persist reviewed/ignored finding state.
+The summary includes total/enabled/disabled counts, broken/missing/malformed counts, finding counts by severity, conflict counts, risky script and permission counts, cross-agent analysis group counts, and per-agent summaries for native dashboard and read-only triage filters. Per-agent finding and risk counts are instance-scoped by `instance_id`; definition-only findings are not expanded across same-name skills. Per-agent conflict counts only include conflicts where at least two instances from that same agent participate; cross-agent duplicate names, path overlap, or enabled-state mismatch remain in `catalog.analysis`, not in a selected agent's skill conflict detail. V2.19 does not persist reviewed/ignored finding state.
 
 Example shape:
 
@@ -182,15 +182,15 @@ Example shape:
   "install": {
     "supported": true,
     "status": "verified",
-    "reason": "Tool-global skills can be installed to native opencode user/project skill roots after confirmation."
+    "reason": "Tool-global skills can be installed to native opencode user/project skill roots after confirmation; compatibility roots are scanned but not install targets."
   },
   "writable": {
     "supported": true,
     "status": "verified",
-    "reason": "Writable support is limited to native opencode roots and managed exact skill permission overrides."
+    "reason": "Writable support uses managed exact skill permission overrides; file installs stay limited to native opencode roots."
   },
   "blockers": [
-    "Do not scan opencode .agents or .claude compatibility roots."
+    "Scan official opencode compatibility roots as read-only sources; keep custom skills.paths and skills.urls deferred."
   ]
 }
 ```
@@ -201,7 +201,7 @@ Current matrix:
 | --- | --- | --- | --- |
 | Claude Code | `verified` | Supported | Supported through verified settings writes |
 | Codex | `verified` | Supported | Supported through user `config.toml`; project-local `.codex/config.toml` remains blocked |
-| opencode | `verified` | Supported for native roots | Supported through exact `permission.skill` deny/re-enable and strict JSON writes |
+| opencode | `verified` | Supported for native roots plus official `.claude` / `.agents` compatibility roots | Supported through exact `permission.skill` deny/re-enable and strict JSON writes; installs remain native-root-only |
 | Pi | `read-only` | Pi-native roots scan | Writable evidence harness candidate; production writes blocked |
 | Hermes | `planned` | Read-only scanner candidate, not implemented | Generic project scan, toggle, install, and writable support blocked; explicit `skills.external_dirs` is future external-root policy only |
 | OpenClaw | `planned` | Read-only scanner candidate, not implemented | Project scan is limited to confirmed OpenClaw workspace roots; toggle, install, and writable support blocked |
@@ -487,7 +487,7 @@ No-project behavior:
 - Project context validation canonicalizes `root_path` and `current_cwd`, defaults `current_cwd` to `root_path`, requires both paths to be readable directories, and rejects `current_cwd` outside `root_path` after canonicalization, including symlink escapes.
 - `project.setContext` writes schema version 1 app state atomically to `project-context.json`. `project.clearContext` removes the active context and retains the recent list.
 - Adapter context priority is env override first (`SKILLS_COPILOT_PROJECT_CWD` / `SKILLS_COPILOT_PROJECT_ROOT`), then stored active project context, then no project context.
-- `config.toggleSkill` snapshots the target agent config, takes a file lock, writes atomically, verifies read-back content, rolls back on verification failure, records a local `skill_event`, and refreshes catalog state. Claude Code writes `.claude/settings*.json`; Codex writes only the user `config.toml` `[[skills.config]]` override and never project `.codex/config.toml`. Opencode is read-only in V2.4: UI should disable toggle for opencode rows with a read-only adapter reason, and direct service attempts return a stable unsupported/read-only error without creating or modifying opencode config.
+- `config.toggleSkill` snapshots the target agent config, takes a file lock, writes atomically, verifies read-back content, rolls back on verification failure, records a local `skill_event`, and refreshes catalog state. Claude Code writes `.claude/settings*.json`; Codex writes only the user `config.toml` `[[skills.config]]` override and never project `.codex/config.toml`. Opencode writes only exact `permission.skill.<name> = "deny"` rules in verified `opencode.json` config targets; compatibility-root files are scanned but never modified by toggle.
 - `config.saveClaudeSettings` validates JSON, snapshots the target config, takes a file lock, writes atomically, verifies read-back content, rolls back on verification failure, and rescans before returning.
 - `snapshot.listAgentConfig` is the product UI path for rollback history. It returns config snapshots by agent/scope and must not be treated as skill content history.
 - `snapshot.rollback` writes the stored agent config snapshot content through the locked write path and rescans before returning the refreshed count.

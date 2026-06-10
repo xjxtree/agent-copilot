@@ -387,11 +387,11 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
             ),
             install: AdapterFeatureCapability::supported_with_reason(
                 "verified",
-                "Tool-global skills can be installed to native opencode user/project skill roots after confirmation.",
+                "Tool-global skills can be installed to native opencode user/project skill roots after confirmation; compatibility roots are scanned but not install targets.",
             ),
             writable: AdapterFeatureCapability::supported_with_reason(
                 "verified",
-                "Writable support is limited to native opencode roots and managed exact skill permission overrides.",
+                "Writable support uses managed exact skill permission overrides; file installs stay limited to native opencode roots.",
             ),
             blockers: Vec::new(),
         },
@@ -804,8 +804,9 @@ pub fn analyze_catalog(
     catalog: &Catalog,
     ctx: &AdapterContext,
 ) -> Result<CrossAgentAnalysisRecord, CommandError> {
-    let instances =
-        catalog.list_skill_instances_for_project_context(ctx.project_root.as_deref())?;
+    let instances = visible_catalog_instances(
+        catalog.list_skill_instances_for_project_context(ctx.project_root.as_deref())?,
+    );
     Ok(analyze_skill_instances(&instances))
 }
 
@@ -813,8 +814,9 @@ pub fn skill_health_summary(
     catalog: &Catalog,
     ctx: &AdapterContext,
 ) -> Result<SkillHealthSummary, CommandError> {
-    let instances =
-        catalog.list_skill_instances_for_project_context(ctx.project_root.as_deref())?;
+    let instances = visible_catalog_instances(
+        catalog.list_skill_instances_for_project_context(ctx.project_root.as_deref())?,
+    );
     let findings = catalog.list_rule_findings()?;
     let conflicts = catalog.list_conflict_groups()?;
     let analysis = analyze_skill_instances(&instances);
@@ -945,17 +947,13 @@ pub fn build_skill_health_summary(
             .iter()
             .map(|inst| inst.id.as_str())
             .collect::<BTreeSet<_>>();
-        let member_definition_ids = members
-            .iter()
-            .map(|inst| inst.definition_id.as_str())
-            .collect::<BTreeSet<_>>();
         let finding_count = findings
             .iter()
-            .filter(|finding| finding_applies_to(&member_ids, &member_definition_ids, finding))
+            .filter(|finding| finding_applies_to(&member_ids, finding))
             .count();
         let conflict_count = conflicts
             .iter()
-            .filter(|conflict| conflict_applies_to(&member_ids, &member_definition_ids, conflict))
+            .filter(|conflict| conflict_applies_to_agent_instances(&member_ids, conflict))
             .count();
         let analysis_group_count = analysis
             .groups
@@ -1191,31 +1189,23 @@ fn health_analysis_group_counts(analysis: &CrossAgentAnalysisRecord) -> HealthAn
     }
 }
 
-fn finding_applies_to(
-    instance_ids: &BTreeSet<&str>,
-    definition_ids: &BTreeSet<&str>,
-    finding: &RuleFindingRecord,
-) -> bool {
+fn finding_applies_to(instance_ids: &BTreeSet<&str>, finding: &RuleFindingRecord) -> bool {
     finding
         .instance_id
         .as_deref()
         .is_some_and(|instance_id| instance_ids.contains(instance_id))
-        || finding
-            .definition_id
-            .as_deref()
-            .is_some_and(|definition_id| definition_ids.contains(definition_id))
 }
 
-fn conflict_applies_to(
+fn conflict_applies_to_agent_instances(
     instance_ids: &BTreeSet<&str>,
-    definition_ids: &BTreeSet<&str>,
     conflict: &ConflictGroupRecord,
 ) -> bool {
-    definition_ids.contains(conflict.definition_id.as_str())
-        || conflict
-            .instance_ids
-            .iter()
-            .any(|instance_id| instance_ids.contains(instance_id.as_str()))
+    conflict
+        .instance_ids
+        .iter()
+        .filter(|instance_id| instance_ids.contains(instance_id.as_str()))
+        .count()
+        > 1
 }
 
 fn append_duplicate_name_groups(
@@ -2673,8 +2663,9 @@ fn refresh_catalog_rule_outputs(
     ctx: &AdapterContext,
     previous_fingerprints: std::collections::HashMap<String, String>,
 ) -> Result<(), CommandError> {
-    let instances =
-        catalog.list_skill_instances_for_project_context(ctx.project_root.as_deref())?;
+    let instances = visible_catalog_instances(
+        catalog.list_skill_instances_for_project_context(ctx.project_root.as_deref())?,
+    );
     let mut rule_report = evaluate_mvp_rules(
         &instances,
         &RuleContext {
@@ -2686,6 +2677,19 @@ fn refresh_catalog_rule_outputs(
 }
 
 const BODY_TOO_LONG_CHAR_THRESHOLD: usize = 32_000;
+
+fn visible_catalog_instances(instances: Vec<SkillInstance>) -> Vec<SkillInstance> {
+    instances
+        .into_iter()
+        .filter(|instance| !is_pi_plain_markdown_catalog_noise(instance.agent, &instance.path))
+        .collect()
+}
+
+fn is_pi_plain_markdown_catalog_noise(agent: AgentId, path: &Path) -> bool {
+    agent == AgentId::Pi
+        && path.extension().and_then(|extension| extension.to_str()) == Some("md")
+        && path.file_name().and_then(|name| name.to_str()) != Some("SKILL.md")
+}
 
 fn append_v28_local_rule_findings(instances: &[SkillInstance], report: &mut RuleReport) {
     for inst in instances {
@@ -4724,7 +4728,7 @@ mod tests {
         let count = scan_all_to_catalog(&ctx, &catalog).expect("scan all succeeds");
         let records = catalog.list_skill_records().expect("records list");
 
-        assert_eq!(count, 5);
+        assert_eq!(count, 8);
         assert!(
             records
                 .iter()
@@ -4755,6 +4759,24 @@ mod tests {
                 .any(|record| record.agent == "openclaw" && record.name == "user-alpha"),
             "OpenClaw should include documented shared ~/.agents/skills user roots"
         );
+        assert!(
+            records
+                .iter()
+                .any(|record| record.agent == "opencode" && record.name == "user-alpha"),
+            "opencode should include documented shared ~/.agents/skills user roots"
+        );
+        assert!(
+            records
+                .iter()
+                .any(|record| record.agent == "opencode" && record.name == "repo-beta"),
+            "opencode should include documented project .agents/skills compatibility roots"
+        );
+        assert!(
+            records
+                .iter()
+                .any(|record| record.agent == "opencode" && record.name == "nested-gamma"),
+            "opencode should include nested project .agents/skills compatibility roots"
+        );
     }
 
     #[test]
@@ -4774,7 +4796,7 @@ mod tests {
 
         let report = scan_all_catalog_report(&ctx, &catalog).expect("scan all succeeds");
 
-        assert_eq!(report.scanned_count, 5);
+        assert_eq!(report.scanned_count, 8);
         let claude = report
             .agents
             .iter()
@@ -4797,6 +4819,18 @@ mod tests {
             codex.scanned_roots.len(),
             3,
             "Codex scans user, repo, and nested cwd roots"
+        );
+        let opencode = report
+            .agents
+            .iter()
+            .find(|agent| agent.agent == AgentId::Opencode)
+            .expect("opencode report");
+        assert_eq!(opencode.display_name, "opencode");
+        assert_eq!(opencode.scanned_count, 3);
+        assert_eq!(
+            opencode.scanned_roots.len(),
+            3,
+            "opencode scans user, repo, and nested cwd .agents compatibility roots"
         );
         let openclaw = report
             .agents
@@ -4913,7 +4947,7 @@ mod tests {
         let report = scan_all_catalog_report(&ctx, &catalog).expect("scan all succeeds");
         let records = catalog.list_skill_records().expect("records list");
 
-        assert_eq!(report.scanned_count, 6);
+        assert_eq!(report.scanned_count, 8);
         assert_eq!(
             report
                 .agents
@@ -4943,6 +4977,12 @@ mod tests {
                 && record.name == "opencode-alpha"
                 && record.path == opencode_path
         }));
+        assert!(records
+            .iter()
+            .any(|record| record.agent == "opencode" && record.name == "claude-alpha"));
+        assert!(records
+            .iter()
+            .any(|record| record.agent == "opencode" && record.name == "codex-alpha"));
         assert!(records.iter().any(|record| {
             record.agent == "pi" && record.name == "pi-alpha" && record.path == pi_path
         }));
@@ -5121,7 +5161,7 @@ mod tests {
             .find(|record| record.id == tool_global.id)
             .expect("tool-global record");
 
-        assert_eq!(records.len(), 2);
+        assert_eq!(records.len(), 3);
         assert_eq!(agent_global.scope, "agent-global");
         assert_eq!(tool_global_after.scope, "tool-global");
         assert_eq!(
@@ -5134,6 +5174,9 @@ mod tests {
         assert_eq!(conflicts[0].reason, "content-drift");
         assert!(conflicts[0].instance_ids.contains(&agent_global.id));
         assert!(conflicts[0].instance_ids.contains(&tool_global.id));
+        assert!(records
+            .iter()
+            .any(|record| record.agent == "opencode" && record.name == "shared-alpha"));
 
         let _ = std::fs::remove_dir_all(&temp_root);
     }
@@ -5963,16 +6006,16 @@ mod tests {
         let findings = catalog.list_rule_findings().expect("findings list");
         assert_eq!(
             records.len(),
-            12,
-            "Codex and OpenClaw both scan the documented shared ~/.agents/skills root"
+            18,
+            "Codex, OpenClaw, and opencode scan the documented shared ~/.agents/skills root"
         );
         assert_eq!(
             findings
                 .iter()
                 .filter(|finding| finding.rule_id == "frontmatter.tools-not-empty")
                 .count(),
-            4,
-            "empty array and blank string tools fields are reported for both shared-root agents"
+            6,
+            "empty array and blank string tools fields are reported for all shared-root agents"
         );
         assert!(
             has_rule_for_name(
@@ -7185,7 +7228,7 @@ mod v219_skill_health_tests {
         assert_eq!(codex.total_count, 1);
         assert_eq!(codex.disabled_count, 1);
         assert_eq!(codex.finding_count, 1);
-        assert_eq!(codex.conflict_count, 1);
+        assert_eq!(codex.conflict_count, 0);
         assert_eq!(codex.risky_permission_count, 1);
         assert!(codex.analysis_group_count >= 1);
     }

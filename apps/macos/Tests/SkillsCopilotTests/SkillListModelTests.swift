@@ -38,9 +38,9 @@ struct SkillListModelTests {
         try expectEqual(filtered(stateFilter: .missing).map(\.id), ["epsilon"], "Missing filter")
         try expectEqual(filtered(stateFilter: .shadowed).map(\.id), ["zeta"], "Shadowed filter")
         try expectEqual(filtered(stateFilter: .unknown).map(\.id), ["theta"], "Unknown filter")
-        try expectEqual(filtered(stateFilter: .withFindings).map(\.id), ["alpha", "gamma"], "Findings filter")
-        try expectEqual(filtered(stateFilter: .withConflicts).map(\.id), ["beta", "gamma"], "Conflicts filter")
-        try expectEqual(filtered(stateFilter: .needsTriage).map(\.id), ["alpha", "beta", "delta", "epsilon", "gamma", "theta"], "Needs triage filter")
+        try expectEqual(filtered(stateFilter: .withFindings).map(\.id), ["gamma"], "Findings filter")
+        try expectEqual(filtered(stateFilter: .withConflicts).map(\.id), ["epsilon", "gamma"], "Conflicts filter")
+        try expectEqual(filtered(stateFilter: .needsTriage).map(\.id), ["delta", "epsilon", "gamma", "theta"], "Needs triage filter")
         try expectEqual(filtered(stateFilter: .risky).map(\.id), ["gamma"], "Risky filter")
     }
 
@@ -186,14 +186,14 @@ struct SkillListModelTests {
             definitionId: "def.beta",
             reason: "name-collision",
             winnerId: "beta",
-            instanceIds: []
+            instanceIds: ["beta", "gamma"]
         ),
         ConflictGroupRecord(
             id: "conflict-instance",
             definitionId: "def.unmatched",
             reason: "path-collision",
             winnerId: nil,
-            instanceIds: ["gamma"]
+            instanceIds: ["gamma", "epsilon"]
         ),
     ]
 }

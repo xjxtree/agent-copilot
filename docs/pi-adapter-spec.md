@@ -4,7 +4,9 @@
 
 ## Status
 
-Read-only scanner/parser support is implemented for Pi-native `~/.pi/agent/skills` and project `.pi/skills` roots. Writable toggle support is still blocked in production because Pi has multiple resource sources, package filters, project trust behavior, and compatibility roots. P0 evidence on 2026-06-10 confirmed enough mutation semantics to build a disposable harness first.
+Read-only scanner/parser support is implemented for Pi-native `~/.pi/agent/skills` and project `.pi/skills` roots, limited to directories containing `SKILL.md`. Writable toggle support is still blocked in production because Pi has multiple resource sources, package filters, project trust behavior, and compatibility roots. P0 evidence on 2026-06-10 confirmed enough mutation semantics to build a disposable harness first.
+
+Real local catalog validation on 2026-06-10 found that treating direct root `.md` files as skills pulls large numbers of ordinary Pi resource documents into the product list as broken/non-skill rows. Skills Copilot therefore intentionally does not scan direct root `.md` files for Pi until a narrower official or harness-backed discriminator exists.
 
 Local validation on 2026-06-08:
 
@@ -52,7 +54,7 @@ Pi also discovers extensions, prompts, themes, settings, custom models, credenti
 Pi skill file rules:
 
 - A skill is a directory with a required `SKILL.md`; everything else in the directory is freeform.
-- In `~/.pi/agent/skills/` and `.pi/skills/`, direct root `.md` files are also discovered as individual skills.
+- In `~/.pi/agent/skills/` and `.pi/skills/`, direct root `.md` files may be agent-visible in Pi, but Skills Copilot does not catalog them because local validation showed they are indistinguishable from ordinary resource documents at scale.
 - In `~/.agents/skills/` and project `.agents/skills/`, root `.md` files are ignored.
 - Directories containing `SKILL.md` are discovered recursively in all skill locations.
 - `--no-skills` disables discovery, but explicit `--skill` paths still load.
@@ -96,7 +98,7 @@ Package evidence:
 
 ## Adapter Decision
 
-Read-only state: **implemented in V2.13**. The scanner models Pi-native skills under `.pi/skills` and `~/.pi/agent/skills`. `.agents/skills` compatibility roots remain out of scope until conflict policy is decided.
+Read-only state: **implemented in V2.13**. The scanner models Pi-native directory skills under `.pi/skills/**/SKILL.md` and `~/.pi/agent/skills/**/SKILL.md`. `.agents/skills` compatibility roots and direct root `.md` cataloging remain out of scope until conflict/noise policy is decided.
 
 Writable state: **harness candidate, production blocked**. A future writable adapter must first implement disposable tests for:
 

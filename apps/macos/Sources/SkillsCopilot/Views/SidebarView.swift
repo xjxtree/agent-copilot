@@ -89,11 +89,7 @@ private struct AgentWorkspaceHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                Image(systemName: agentIcon)
-                    .font(.title3)
-                    .foregroundStyle(Color.accentColor)
-                    .frame(width: 28, height: 28)
-                    .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
+                AgentIconBadge(filter: store.agentFilter)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(store.agentFilter.title)
@@ -200,44 +196,11 @@ private struct AgentWorkspaceHeader: View {
     }
 
     private var agentFindingCount: Int {
-        let instanceIDs = Set(agentSkills.map(\.id))
-        let definitionIDs = Set(agentSkills.map(\.definitionId))
-        return store.findings.filter { finding in
-            if let instanceID = finding.instanceId, instanceIDs.contains(instanceID) {
-                return true
-            }
-            if let definitionID = finding.definitionId, definitionIDs.contains(definitionID) {
-                return true
-            }
-            return false
-        }.count
+        store.selectedAgentHealthSummary?.findingCount ?? 0
     }
 
     private var agentConflictCount: Int {
-        let instanceIDs = Set(agentSkills.map(\.id))
-        let definitionIDs = Set(agentSkills.map(\.definitionId))
-        return store.conflicts.filter { conflict in
-            definitionIDs.contains(conflict.definitionId) || conflict.instanceIds.contains { instanceIDs.contains($0) }
-        }.count
-    }
-
-    private var agentIcon: String {
-        switch store.agentFilter {
-        case .claudeCode:
-            return "sparkles"
-        case .codex:
-            return "chevron.left.forwardslash.chevron.right"
-        case .opencode:
-            return "curlybraces"
-        case .pi:
-            return "p.circle"
-        case .hermes:
-            return "h.circle"
-        case .openclaw:
-            return "pawprint"
-        case .all:
-            return "square.grid.2x2"
-        }
+        store.selectedAgentHealthSummary?.conflictCount ?? 0
     }
 
     private func shortTitle(for filter: SkillAgentFilter) -> String {
@@ -269,18 +232,6 @@ private struct SkillHealthDashboardCard: View {
         agentSummary.map { DisplayText.agent($0.agent) } ?? UIStrings.text("health.allAgents", "All Agents")
     }
 
-    private var totalCount: Int {
-        agentSummary?.totalCount ?? summary.totalCount
-    }
-
-    private var enabledCount: Int {
-        agentSummary?.enabledCount ?? summary.enabledCount
-    }
-
-    private var disabledCount: Int {
-        agentSummary?.disabledCount ?? summary.disabledCount
-    }
-
     private var malformedCount: Int {
         agentSummary?.malformedCount ?? summary.malformedCount
     }
@@ -302,7 +253,7 @@ private struct SkillHealthDashboardCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 7) {
                 Label(UIStrings.text("health.title", "Health"), systemImage: "stethoscope")
                     .font(.caption.bold())
@@ -314,28 +265,42 @@ private struct SkillHealthDashboardCard: View {
                     .lineLimit(1)
             }
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 7) {
-                HealthMetricPill(value: totalCount, label: UIStrings.text("health.total", "Total"), systemImage: "square.stack")
-                HealthMetricPill(value: enabledCount, label: UIStrings.text("health.enabled", "Enabled"), systemImage: "checkmark.circle")
-                HealthMetricPill(value: disabledCount, label: UIStrings.text("health.disabled", "Disabled"), systemImage: "pause.circle")
-                HealthMetricPill(value: malformedCount, label: UIStrings.text("health.malformed", "Broken/Missing"), systemImage: "wrench.and.screwdriver")
-                HealthMetricPill(value: findingCount, label: UIStrings.findings, systemImage: "exclamationmark.triangle")
-                HealthMetricPill(value: conflictCount, label: UIStrings.conflicts, systemImage: "rectangle.2.swap")
-                HealthMetricPill(value: riskCount, label: UIStrings.text("health.risk", "Risk"), systemImage: "lock.trianglebadge.exclamationmark")
-                HealthMetricPill(value: analysisCount, label: UIStrings.text("health.analysis", "Analysis"), systemImage: "point.3.connected.trianglepath.dotted")
+            VStack(spacing: 7) {
+                HealthSummaryRow(
+                    title: UIStrings.text("health.riskSignals", "Risk signals"),
+                    value: riskCount,
+                    systemImage: "lock.trianglebadge.exclamationmark",
+                    tint: riskCount > 0 ? .orange : .secondary
+                )
+                HealthSummaryRow(
+                    title: UIStrings.text("health.brokenMissing", "Broken / missing"),
+                    value: malformedCount,
+                    systemImage: "wrench.and.screwdriver",
+                    tint: malformedCount > 0 ? .red : .secondary
+                )
+                HealthSummaryRow(
+                    title: UIStrings.text("health.analysisGroups", "Analysis groups"),
+                    value: analysisCount,
+                    systemImage: "point.3.connected.trianglepath.dotted",
+                    tint: analysisCount > 0 ? .blue : .secondary
+                )
             }
 
-            HStack(spacing: 6) {
-                HealthFilterButton(title: UIStrings.text("health.filter.triage", "Triage"), systemImage: "line.3.horizontal.decrease.circle", onTap: { onFilter(.needsTriage) })
-                HealthFilterButton(title: UIStrings.text("health.filter.risk", "Risk"), systemImage: "lock.trianglebadge.exclamationmark", onTap: { onFilter(.risky) })
-                HealthFilterButton(title: UIStrings.findings, systemImage: "exclamationmark.triangle", onTap: { onFilter(.withFindings) })
-                HealthFilterButton(title: UIStrings.conflicts, systemImage: "rectangle.2.swap", onTap: { onFilter(.withConflicts) })
+            HStack(spacing: 8) {
+                HealthFilterButton(title: UIStrings.text("health.filter.triage", "Triage"), systemImage: "line.3.horizontal.decrease.circle", showTitle: true, onTap: { onFilter(.needsTriage) })
+                HealthFilterButton(title: UIStrings.text("health.filter.risk", "Risk"), systemImage: "lock.trianglebadge.exclamationmark", showTitle: true, onTap: { onFilter(.risky) })
+                if findingCount > 0 {
+                    HealthFilterButton(title: UIStrings.findings, systemImage: "exclamationmark.triangle", showTitle: false, onTap: { onFilter(.withFindings) })
+                }
+                if conflictCount > 0 {
+                    HealthFilterButton(title: UIStrings.conflicts, systemImage: "rectangle.2.swap", showTitle: false, onTap: { onFilter(.withConflicts) })
+                }
             }
 
             Text(summaryText)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-                .lineLimit(3)
+                .lineLimit(2)
         }
         .padding(10)
         .background(healthColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
@@ -345,57 +310,70 @@ private struct SkillHealthDashboardCard: View {
         if summary.totalCount == 0 {
             return UIStrings.text("health.empty", "Run Scan to build a skill health summary.")
         }
-        return UIStrings.text(
-            "health.summary",
-            "\(summary.findingsBySeverity.errorCount) errors, \(summary.findingsBySeverity.warningCount) warnings, \(summary.conflictCount) conflicts, and \(summary.analysisGroups.totalCount) analysis groups across the visible catalog."
-        )
+        if conflictCount > 0 {
+            return UIStrings.text("health.summary.conflicts", "\(conflictCount) same-agent conflicts need review.")
+        }
+        if riskCount > 0 {
+            return UIStrings.text("health.summary.risk", "\(riskCount) risk signals; use Triage to inspect findings.")
+        }
+        if malformedCount > 0 {
+            return UIStrings.text("health.summary.malformed", "\(malformedCount) broken or missing records need cleanup.")
+        }
+        return UIStrings.text("health.summary.clean", "No same-agent conflicts or broken records.")
     }
 
     private var healthColor: Color {
-        if summary.findingsBySeverity.errorCount > 0 || summary.malformedCount > 0 {
+        if malformedCount > 0 {
             return .red
         }
-        if summary.findingsBySeverity.warningCount > 0 || summary.conflictCount > 0 || summary.riskCount > 0 {
+        if findingCount > 0 || conflictCount > 0 || riskCount > 0 {
             return .orange
         }
         return .green
     }
 }
 
-private struct HealthMetricPill: View {
+private struct HealthSummaryRow: View {
+    let title: String
     let value: Int
-    let label: String
     let systemImage: String
+    let tint: Color
 
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 7) {
             Image(systemName: systemImage)
+                .foregroundStyle(tint)
+                .frame(width: 16)
+            Text(title)
+                .font(.caption)
                 .foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: 1) {
-                Text("\(value)")
-                    .font(.subheadline.bold())
-                Text(label)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
+                .lineLimit(1)
+            Spacer(minLength: 6)
+            Text("\(value)")
+                .font(.caption.bold())
+                .monospacedDigit()
         }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 8))
+        .background(.quaternary.opacity(0.22), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
 private struct HealthFilterButton: View {
     let title: String
     let systemImage: String
+    let showTitle: Bool
     let onTap: () -> Void
 
     var body: some View {
         Button(action: onTap) {
-            Label(title, systemImage: systemImage)
-                .labelStyle(.iconOnly)
+            if showTitle {
+                Label(title, systemImage: systemImage)
+            } else {
+                Label(title, systemImage: systemImage)
+                    .labelStyle(.iconOnly)
+            }
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
@@ -526,6 +504,155 @@ private struct AgentConfigHistoryDisclosure: View {
                 }
             }
         }
+    }
+}
+
+private struct AgentIconBadge: View {
+    let filter: SkillAgentFilter
+
+    var body: some View {
+        ZStack {
+            if let image = AgentIconProvider.image(for: filter) {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 24, height: 24)
+                    .clipShape(RoundedRectangle(cornerRadius: 5))
+                    .accessibilityLabel(DisplayText.agent(filter.rawValue))
+            } else {
+                Image(systemName: fallbackSystemImage)
+                    .font(.title3)
+                    .foregroundStyle(Color.accentColor)
+                    .accessibilityLabel(DisplayText.agent(filter.rawValue))
+            }
+        }
+        .frame(width: 28, height: 28)
+        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var fallbackSystemImage: String {
+        switch filter {
+        case .claudeCode:
+            return "sparkles"
+        case .codex:
+            return "chevron.left.forwardslash.chevron.right"
+        case .opencode:
+            return "curlybraces"
+        case .pi:
+            return "p.circle"
+        case .hermes:
+            return "h.circle"
+        case .openclaw:
+            return "pawprint"
+        case .all:
+            return "square.grid.2x2"
+        }
+    }
+}
+
+private enum AgentIconProvider {
+    static func image(for filter: SkillAgentFilter) -> NSImage? {
+        for candidate in candidates(for: filter) {
+            if let image = load(candidate: candidate) {
+                image.size = NSSize(width: 32, height: 32)
+                return image
+            }
+        }
+        return nil
+    }
+
+    private static func candidates(for filter: SkillAgentFilter) -> [AgentIconCandidate] {
+        switch filter {
+        case .claudeCode:
+            return [
+                .appBundle("/Applications/Claude.app"),
+                .resource("/Applications/Claude.app/Contents/Resources/electron.icns"),
+                .fileIcon("/opt/homebrew/bin/claude")
+            ]
+        case .codex:
+            return [
+                .appBundle("/Applications/Codex.app"),
+                .resource("/Applications/Codex.app/Contents/Resources/icon.icns"),
+                .resource("/Applications/Codex.app/Contents/Resources/app.icns"),
+                .resource("/Applications/Codex.app/Contents/Resources/default_app/icon.png"),
+                .fileIcon("/opt/homebrew/bin/codex")
+            ]
+        case .opencode:
+            return [
+                .appBundle("/Applications/OpenCode.app"),
+                .appBundle("/Applications/opencode.app"),
+                .resource("/Applications/OpenCode.app/Contents/Resources/icon.icns"),
+                .fileIcon("/opt/homebrew/bin/opencode")
+            ]
+        case .pi:
+            return [
+                .bundledResource("PiBadge.svg"),
+                .appBundle("/Applications/Pi.app"),
+                .appBundle("/Applications/Pi Coding Agent.app"),
+                .resource("/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/assets/icon.png"),
+                .resource("/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/resources/icon.png"),
+                .resource("/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/dist/icon.png"),
+                .fileIcon("/opt/homebrew/bin/pi")
+            ]
+        case .hermes:
+            return [
+                .bundledResource("HermesIcon.png")
+            ]
+        case .openclaw:
+            return [
+                .bundledResource("OpenClawIcon.svg")
+            ]
+        case .all:
+            return []
+        }
+    }
+
+    private static func load(candidate: AgentIconCandidate) -> NSImage? {
+        switch candidate.kind {
+        case .bundledResource:
+            guard let url = Bundle.module.url(forResource: candidate.path, withExtension: nil) else {
+                return nil
+            }
+            return NSImage(contentsOf: url)
+        case .appBundle, .fileIcon:
+            guard FileManager.default.fileExists(atPath: candidate.path) else {
+                return nil
+            }
+            return NSWorkspace.shared.icon(forFile: candidate.path)
+        case .resource:
+            guard FileManager.default.fileExists(atPath: candidate.path) else {
+                return nil
+            }
+            return NSImage(contentsOfFile: candidate.path)
+        }
+    }
+}
+
+private struct AgentIconCandidate {
+    enum Kind {
+        case appBundle
+        case fileIcon
+        case bundledResource
+        case resource
+    }
+
+    let kind: Kind
+    let path: String
+
+    static func appBundle(_ path: String) -> AgentIconCandidate {
+        AgentIconCandidate(kind: .appBundle, path: path)
+    }
+
+    static func fileIcon(_ path: String) -> AgentIconCandidate {
+        AgentIconCandidate(kind: .fileIcon, path: path)
+    }
+
+    static func bundledResource(_ path: String) -> AgentIconCandidate {
+        AgentIconCandidate(kind: .bundledResource, path: path)
+    }
+
+    static func resource(_ path: String) -> AgentIconCandidate {
+        AgentIconCandidate(kind: .resource, path: path)
     }
 }
 

@@ -85,12 +85,12 @@ Status: implemented with automated validation passing. The original macOS/AX win
 Status: implemented with automated validation passing. The original macOS/AX window-resolution blocker has been superseded by later real local Computer Use passes; current mainline validation passed on 2026-06-10 when targeting the explicit `dist/SkillsCopilot.app` bundle path.
 
 - Agent filter includes `opencode`; grouped rows and detail metadata show opencode as a distinct adapter.
-- `catalog.scanAll` includes guarded writable opencode native roots and read-only Pi roots alongside Claude Code and Codex.
+- `catalog.scanAll` includes guarded writable opencode config/native install support, opencode native plus compatibility scan roots, and read-only Pi roots alongside Claude Code and Codex.
 - No-project state shows global opencode skills from `~/.config/opencode/skills` when fixture or real roots exist.
 - Active project context can show project opencode skills from `.opencode/skills`; no-project skips project-local opencode roots.
 - Toggle UI for opencode rows is disabled with a read-only adapter reason and must not call `config.toggleSkill`.
 - Direct service attempts to toggle opencode return read-only/unsupported and must not create or modify opencode config.
-- The UI does not scan or label `.agents` / `.claude` compatibility roots as opencode.
+- The UI can label `.agents` / `.claude` compatibility roots as opencode-visible rows when OpenCode would load them; cross-agent analysis should explain overlap with Claude/Codex.
 
 ## Visual Direction
 

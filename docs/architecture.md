@@ -1,6 +1,6 @@
 # skills-copilot — 架构总览
 
-> 状态：**V2.10 Skill execution safety boundary documented；V2.9 Tool-global import/export/install integrated；real local Computer Use validation passed on 2026-06-09**。Claude Code 的扫描、catalog、规则诊断、启停、快照回滚、配置编辑器 MVP、i18n、基础 V1 面板、macOS Native Productization、V2 Prep 安全门、refresh-summary UX、native test hardening 和 adapter evidence gates 已完成。V2 已集成 Codex adapter core、`catalog.scanAll`、Codex user-config toggle 分发、cwd→repo-root project discovery、Project Context、macOS scan-all UI、read-only/native-root-only opencode adapter、V2.5 scanner/config/snapshot/service/UI/docs audit hardening、V2.6 手工 release checklist / adapter changelog tracking、V2.7 disabled-by-default LLM service/UI gate、V2.8 rules/permissions governance、V2.9 Tool-global skill pool，以及 V2.10 default-deny skill execution safety docs/release consistency。V2.10 不声明真实 script runner、sandbox runtime 或 LLM-triggered execution；当前 mainline app 已完成真实本机 Computer Use 操作验证，后续用户可见、UI 或 service protocol 变更仍需重跑。产品方向已更新为 **Rust 跨平台核心 + 服务协议 + macOS SwiftUI/AppKit 原生壳**；`crates/service` stdio sidecar 和 `apps/macos` SwiftUI 壳是当前产品边界，macOS 原生 UI 是唯一维护的产品 UI。旧 Tauri + React UI / Tauri IPC 壳已删除。详见 [macos-native-plan.md](./macos-native-plan.md)、[service-protocol.md](./service-protocol.md) 和 [ui-delivery-standards.md](./ui-delivery-standards.md)。
+> 状态：**V2.10 Skill execution safety boundary documented；V2.9 Tool-global import/export/install integrated；real local Computer Use validation passed on 2026-06-10**。Claude Code 的扫描、catalog、规则诊断、启停、快照回滚、配置编辑器 MVP、i18n、基础 V1 面板、macOS Native Productization、V2 Prep 安全门、refresh-summary UX、native test hardening 和 adapter evidence gates 已完成。V2 已集成 Codex adapter core、`catalog.scanAll`、Codex user-config toggle 分发、cwd→repo-root project discovery、Project Context、macOS scan-all UI、opencode native/compatibility-root scan and guarded writes、V2.5 scanner/config/snapshot/service/UI/docs audit hardening、V2.6 手工 release checklist / adapter changelog tracking、V2.7 disabled-by-default LLM service/UI gate、V2.8 rules/permissions governance、V2.9 Tool-global skill pool，以及 V2.10 default-deny skill execution safety docs/release consistency。V2.10 不声明真实 script runner、sandbox runtime 或 LLM-triggered execution；当前 mainline app 已完成真实本机 Computer Use 操作验证，后续用户可见、UI 或 service protocol 变更仍需重跑。产品方向已更新为 **Rust 跨平台核心 + 服务协议 + macOS SwiftUI/AppKit 原生壳**；`crates/service` stdio sidecar 和 `apps/macos` SwiftUI 壳是当前产品边界，macOS 原生 UI 是唯一维护的产品 UI。旧 Tauri + React UI / Tauri IPC 壳已删除。详见 [macos-native-plan.md](./macos-native-plan.md)、[service-protocol.md](./service-protocol.md) 和 [ui-delivery-standards.md](./ui-delivery-standards.md)。
 
 ## 1. 目标与非目标
 
@@ -32,7 +32,7 @@
 **UI 外观路线**
 - macOS 产品壳使用 SwiftUI/AppKit 原生组件；这是唯一当前维护的产品 UI。
 - 旧 Tauri Web UI / Tauri IPC 壳已删除；当前产品能力只进入 native macOS shell。
-- V2 adapter 主线已接入 Codex writable-user-config adapter、V2.12 guarded writable opencode native-root adapter 和 V2.13 read-only Pi adapter。Codex 实现边界继续遵守 `docs/codex-adapter-spec.md` 的 verified roots 和 user-config writable 写入规则；opencode 限定为 native roots `~/.config/opencode/skills` 与 active project `.opencode/skills`，不扫描 compatibility roots；Pi 只扫描 Pi-native roots，写入仍 blocked。签名、公证、DMG/ZIP 和 release artifact 自动化等公开发布事务先保留 runbook，等产品更成熟后再执行。
+- V2 adapter 主线已接入 Codex writable-user-config adapter、V2.12 guarded writable opencode config/native-install adapter 和 V2.13 read-only Pi adapter。Codex 实现边界继续遵守 `docs/codex-adapter-spec.md` 的 verified roots 和 user-config writable 写入规则；opencode 扫描 native roots 与官方 `.claude` / `.agents` compatibility roots，写入通过 managed `permission.skill`，install 仍限 native opencode roots；Pi 只扫描 Pi-native roots，写入仍 blocked。签名、公证、DMG/ZIP 和 release artifact 自动化等公开发布事务先保留 runbook，等产品更成熟后再执行。
 - Liquid Glass 优先通过系统标准组件获得；`apps/macos/Package.swift` 继续以 macOS 13 作为最低部署目标，自定义 macOS 26+ glass API 必须 availability gate 并提供旧系统 fallback。
 - SwiftUI 壳不得重写 Rust core。
 
@@ -114,7 +114,7 @@ flowchart TD
 - 解析失败不能让整个 scan 崩，要降级为 `state=broken` 并记日志
 - 任何写操作（toggle、edit config）必须走"原子写 + 回滚"路径
 - Codex adapter 只能扫描已验证的 user/project `.agents/skills` roots；首版 toggle 只写用户 `config.toml`，不得写 `<repo>/.codex/config.toml` 或扫描 plugin/admin/system roots
-- Opencode adapter 只能扫描 native opencode roots：`~/.config/opencode/skills` 和 active project `.opencode/skills`；不得扫描 `.agents` / `.claude` compatibility roots，且 V2.4 toggle 必须保持 read-only/unsupported
+- Opencode adapter 扫描官方 roots：`~/.config/opencode/skills`、active project `.opencode/skills`、全局/项目 `.claude/skills`、全局/项目 `.agents/skills`；custom `skills.paths` / `skills.urls` 仍 deferred。Writes 只能走 managed `permission.skill` config override，install 只能写 native opencode roots
 
 ## 7. 错误与日志
 

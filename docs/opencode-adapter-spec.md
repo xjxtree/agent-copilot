@@ -1,15 +1,19 @@
 # opencode Adapter Evidence Spec
 
-> Evidence date: 2026-06-09. V2.12 decision: opencode is upgraded from native-root read-only to **verified writable** for guarded app-managed writes. Writes are limited to exact-name `permission.skill` patches in verified `opencode.json` targets and tool-global installs into verified native opencode skill roots.
+> Evidence date: 2026-06-10. Current decision: opencode scans native roots plus official `.claude` / `.agents` compatibility roots. Guarded writes remain limited to exact-name `permission.skill` patches in verified `opencode.json` targets, and tool-global installs remain limited to verified native opencode skill roots.
 
 ## Status
 
-Read-only scanner/parser implementation is approved for first-class opencode-native skills only. V2.4 must scan:
+Scanner/parser implementation follows the current official OpenCode Agent Skills discovery set. It scans:
 
 - Global native root: `~/.config/opencode/skills/<name>/SKILL.md`.
 - Project native roots: `.opencode/skills/<name>/SKILL.md`, walking from `project_cwd` upward through ancestors until `project_root`.
+- Global Claude-compatible root: `~/.claude/skills/<name>/SKILL.md`.
+- Project Claude-compatible roots: `.claude/skills/<name>/SKILL.md`, walking from `project_cwd` upward through ancestors until `project_root`.
+- Global agent-compatible root: `~/.agents/skills/<name>/SKILL.md`.
+- Project agent-compatible roots: `.agents/skills/<name>/SKILL.md`, walking from `project_cwd` upward through ancestors until `project_root`.
 
-V2.4 must not scan opencode compatibility roots (`.agents/skills`, `~/.agents/skills`, `.claude/skills`, or `~/.claude/skills`) under the opencode adapter. Those roots are intentionally deferred so opencode does not duplicate Codex/Claude catalog entries.
+Compatibility roots are scan-only sources under the opencode adapter. They intentionally create cross-agent overlap with Claude/Codex roots when the same physical or named skill is available to multiple agents; the app should surface that through cross-agent analysis rather than hiding the opencode-visible skill.
 
 Writable toggle support is enabled for app-managed strict JSON config files:
 
@@ -20,7 +24,7 @@ Writable toggle support is enabled for app-managed strict JSON config files:
 - Every config toggle uses the existing snapshot, lock, atomic write, read-back verification, and rollback path.
 - Tool-global install copies only the source `SKILL.md` into `$HOME/.config/opencode/skills/<name>/SKILL.md` or `<project>/.opencode/skills/<name>/SKILL.md`.
 
-Remaining boundaries: JSONC/commented configs are not mutated by the app's strict JSON writer; managed config and `OPENCODE_CONFIG_CONTENT` can still override local files at opencode runtime; compatibility roots and custom `skills.paths` / `skills.urls` remain out of scope.
+Remaining boundaries: JSONC/commented configs are not mutated by the app's strict JSON writer; managed config and `OPENCODE_CONFIG_CONTENT` can still override local files at opencode runtime; custom `skills.paths` / `skills.urls` remain out of scope.
 
 Local validation on 2026-06-08:
 
@@ -75,11 +79,14 @@ Official opencode skill paths:
 | Project agent-compatible | `.agents/skills/<name>/SKILL.md` |
 | Global agent-compatible | `~/.agents/skills/<name>/SKILL.md` |
 
-OpenCode itself can load native roots plus Claude/agent-compatible roots. V2.4 intentionally narrows the product adapter to native roots only:
+OpenCode itself can load native roots plus Claude/agent-compatible roots. The product adapter now mirrors those documented roots:
 
 - Include: `.opencode/skills/<name>/SKILL.md` found while walking from `project_cwd` upward to `project_root`.
 - Include: `~/.config/opencode/skills/<name>/SKILL.md`.
-- Exclude: `.claude/skills`, `~/.claude/skills`, `.agents/skills`, and `~/.agents/skills`.
+- Include: `.claude/skills/<name>/SKILL.md` found while walking from `project_cwd` upward to `project_root`.
+- Include: `~/.claude/skills/<name>/SKILL.md`.
+- Include: `.agents/skills/<name>/SKILL.md` found while walking from `project_cwd` upward to `project_root`.
+- Include: `~/.agents/skills/<name>/SKILL.md`.
 - Exclude: built-in `<built-in>` skills and non-filesystem skills.
 - Exclude: custom `skills.paths` / `skills.urls` from `opencode.json` until a later evidence pass defines duplicate handling, trust, and read-only provenance.
 
@@ -137,7 +144,7 @@ OpenCode can also disable the entire `skill` tool for an agent, but that is an a
 
 Read-only state: **approved for V2.4 implementation**. The scanner can model opencode-native skills under `.opencode/skills` and `~/.config/opencode/skills` using the parser/scan contract fixtures below.
 
-Compatibility root state: **deferred**. Do not include `.claude/skills` or `.agents/skills` under the opencode adapter in V2.4. Claude/Codex ownership and duplicate suppression need a separate product decision.
+Compatibility root state: **implemented as scan-only**. `.claude/skills` and `.agents/skills` are included under the opencode adapter because current OpenCode official docs list them as discoverable. Claude/Codex ownership and duplicates should be explained by cross-agent analysis rather than suppressing opencode rows.
 
 Writable state: **verified for V2.12 guarded implementation**:
 
@@ -151,7 +158,7 @@ Still deferred:
 - JSONC/commented config mutation; strict JSON is required for app-managed writes.
 - Runtime proof that `opencode debug skill --pure` reflects permission filtering; it currently appears to be discovery-only.
 - How to surface `"ask"` in UI; it is neither fully enabled nor disabled.
-- Whether compatible `.claude/skills` and `.agents/skills` roots should ever be exposed under the opencode adapter or left to their native adapters to avoid duplicate catalog entries.
+- Whether custom `skills.paths` / `skills.urls` should be exposed under the opencode adapter after non-destructive evidence confirms their semantics.
 - Whether custom `skills.paths` / `skills.urls` should be scanned, and what trust/provenance labels they require.
 - Whether managed config or `OPENCODE_CONFIG_CONTENT` can make a local write ineffective.
 

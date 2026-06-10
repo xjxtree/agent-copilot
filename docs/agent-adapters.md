@@ -85,7 +85,7 @@ pub struct AdapterFeatureCapability {
 | --- | --- | --- | --- |
 | Claude Code | `verified` | 支持 | 支持，走 settings snapshot/lock/atomic write/read-back/rescan |
 | Codex | `verified` | 支持 | 支持用户 `config.toml` override；项目 `.codex/config.toml` 仍 blocked |
-| opencode | `verified` | 支持 native roots | 支持 guarded writable：exact `permission.skill` deny/re-enable、snapshot/rollback、tool-global install |
+| opencode | `verified` | 支持 native roots 与官方 `.claude` / `.agents` compatibility roots | 支持 guarded writable：exact `permission.skill` deny/re-enable、snapshot/rollback；tool-global install 仍限 native roots |
 | Pi | `read-only` | 支持 Pi-native roots | writable harness candidate；production writes blocked |
 | Hermes | `read-only` | 支持 active/profile Hermes home | generic project scan、toggle、install、writable blocked；`skills.external_dirs` 未来按 explicit external roots 处理 |
 | OpenClaw | `read-only` | 支持 read-only filesystem scan | project scope 仅限 confirmed OpenClaw home workspace roots；toggle、install、writable blocked |
@@ -160,7 +160,7 @@ Codex 当前实现边界：
 | 统一工作单 | [`docs/agent-adapter-spec-worklists.md`](./agent-adapter-spec-worklists.md#pi-coding-agent) |
 | 本地观测 | 2026-06-08 本机 `pi --version` 为 `0.78.1`；`~/.pi/agent/skills/` 和 `~/.pi/agent/settings.json` 存在；未读取或修改真实 settings 内容 |
 | Skill roots | 官方 Pi docs：全局 `~/.pi/agent/skills/`、`~/.agents/skills/`；项目 `.pi/skills/`、从 `cwd`/父级到 repo root 的 `.agents/skills/`；settings/package 也可添加 skill paths |
-| Skill 格式 | 目录含 `SKILL.md`；Pi-native roots 也支持 root `.md` 单文件 skills；frontmatter `name`/`description` 必填，missing description 不加载 |
+| Skill 格式 | Skills Copilot 当前只 catalog 目录型 `SKILL.md`；Pi-native root `.md` 可能被 Pi agent 识别，但真实本机验证显示会混入大量普通资源文档，暂不展示；frontmatter `name`/`description` 必填 |
 | 配置文件 | 全局 `~/.pi/agent/settings.json`；项目 `.pi/settings.json`；project settings override/merge global settings |
 | 启用控制 | `pi config` 是官方资源启停界面；settings/package filters 支持排除资源。但 direct local skill toggle 的 exact JSON mutation、re-enable、project trust 行为未验证 |
 | Fixture | 最小 evidence fixtures 位于 `fixtures/pi/` |
@@ -207,22 +207,22 @@ V2.16 第一版只做 read-only filesystem scanner；toggle/install/writable 继
 | 项 | 值 |
 | --- | --- |
 | AgentId | `opencode` |
-| 状态 | **Verified guarded writable for native roots** —— V2.4 已实现 native-root-only scanner/parser；V2.12 已实现 exact `permission.skill` deny/re-enable、snapshot/rollback 和 native-root install |
+| 状态 | **Verified guarded writable with compatibility scanning** —— scanner 覆盖 opencode native roots 与官方 `.claude` / `.agents` compatibility roots；V2.12 已实现 exact `permission.skill` deny/re-enable、snapshot/rollback，native-root install 仍为唯一 install target |
 | Spec 工作单 | [`docs/opencode-adapter-spec.md`](./opencode-adapter-spec.md) |
 | 统一工作单 | [`docs/agent-adapter-spec-worklists.md`](./agent-adapter-spec-worklists.md#opencode) |
 | 本地观测 | 2026-06-08 本机 `opencode --version` 为 `1.16.2`；`~/.config/opencode/skills/` 和 `~/.config/opencode/opencode.json` 存在；未读取或修改真实 config 内容 |
-| Skill roots | 当前实现只扫描 native roots |
+| Skill roots | 扫描 `~/.config/opencode/skills`、项目 `.opencode/skills`、`~/.claude/skills`、项目 `.claude/skills`、`~/.agents/skills`、项目 `.agents/skills` |
 | Skill 格式 | 每个 skill 一个目录加 `SKILL.md`；frontmatter `name`/`description` 必填；`name` 必须匹配目录名；unknown fields ignored |
 | 配置文件 | 全局 `~/.config/opencode/opencode.json`；项目根 `opencode.json`；`.opencode` 目录；`OPENCODE_CONFIG` / `OPENCODE_CONFIG_DIR`；managed config 只读 |
 | 启用控制 | `permission.skill` 支持 `allow` / `deny` / `ask`；V2.12 只写 exact `permission.skill.<name> = "deny"`，re-enable 只移除同名 exact deny，不改 wildcard rules |
 | Fixture | parser/scan contract fixtures 位于 `fixtures/opencode/` |
-| 行动项 | 保持 native-root-only；继续不扫描 `.claude`/`.agents` compatibility roots，避免重复污染 |
+| 行动项 | 兼容 roots 已纳入 opencode 扫描；继续用 cross-agent analysis 暴露与 Claude/Codex 的重复关系，install 仍只写 native opencode roots |
 
 opencode roots 口径：
 
 - 当前实现扫描用户 native root：`~/.config/opencode/skills/<name>/SKILL.md`。
 - 当前实现扫描项目 native root：`.opencode/skills/<name>/SKILL.md`。
-- 官方还描述了 `.claude/skills` 和 `.agents/skills` compatibility roots，但当前实现不扫描，避免重复归属和跨 adapter 污染。
+- 当前实现按官方文档扫描 `.claude/skills` 和 `.agents/skills` compatibility roots；这些记录归属 opencode 视图，同时由 cross-agent analysis 表达与 Claude/Codex 的重复和冲突。
 - 项目 discovery 从 cwd 向上到 Git worktree。
 
 ## 3. 跨 agent 公共问题

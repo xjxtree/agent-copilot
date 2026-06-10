@@ -137,14 +137,16 @@ final class SkillStore: ObservableObject {
     var selectedFindings: [RuleFindingRecord] {
         guard let skill = selectedSkill else { return [] }
         return findings.filter { finding in
-            finding.instanceId == skill.id || finding.definitionId == skill.definitionId
+            finding.instanceId == skill.id
         }
     }
 
     var selectedConflicts: [ConflictGroupRecord] {
         guard let skill = selectedSkill else { return [] }
+        let sameAgentSkillIDs = Set(skills.filter { $0.agent == skill.agent }.map(\.id))
         return conflicts.filter { conflict in
-            conflict.definitionId == skill.definitionId || conflict.instanceIds.contains(skill.id)
+            conflict.instanceIds.contains(skill.id)
+                && conflict.instanceIds.filter { sameAgentSkillIDs.contains($0) }.count > 1
         }
     }
 

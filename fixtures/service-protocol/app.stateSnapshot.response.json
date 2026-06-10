@@ -153,12 +153,12 @@
           "install": {
             "supported": true,
             "status": "verified",
-            "reason": "Tool-global skills can be installed to native opencode user/project skill roots after confirmation."
+            "reason": "Tool-global skills can be installed to native opencode user/project skill roots after confirmation; compatibility roots are scanned but not install targets."
           },
           "writable": {
             "supported": true,
             "status": "verified",
-            "reason": "Writable support is limited to native opencode roots and managed exact skill permission overrides."
+            "reason": "Writable support uses managed exact skill permission overrides; file installs stay limited to native opencode roots."
           },
           "blockers": []
         },

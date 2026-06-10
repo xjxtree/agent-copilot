@@ -7,8 +7,7 @@ use std::{
 
 use sha2::{Digest, Sha256};
 use skills_copilot_core::{
-    AdapterContext, AdapterRoot, AgentAdapter, AgentId, RootSource, Scope, SkillInstance,
-    SkillState,
+    AdapterContext, AdapterRoot, AgentAdapter, AgentId, Scope, SkillInstance, SkillState,
 };
 use thiserror::Error;
 #[derive(Debug, Default)]
@@ -156,7 +155,7 @@ fn visit_root(
                 stack.push((path.clone(), display_path));
                 continue;
             }
-            if entry.file_name() == "SKILL.md" || is_pi_root_markdown_skill(adapter.id(), &path) {
+            if entry.file_name() == "SKILL.md" {
                 let Ok(canonical_path) = path.canonicalize() else {
                     continue;
                 };
@@ -194,12 +193,6 @@ fn allowed_target_base(ctx: &AdapterContext, root: &AdapterRoot, canonical_root:
 
 fn is_allowed_scan_target(path: &Path, canonical_root: &Path, allowed_target_base: &Path) -> bool {
     path.starts_with(canonical_root) || path.starts_with(allowed_target_base)
-}
-
-fn is_pi_root_markdown_skill(agent: AgentId, path: &Path) -> bool {
-    agent == AgentId::Pi
-        && path.extension().and_then(|extension| extension.to_str()) == Some("md")
-        && path.file_name().and_then(|name| name.to_str()) != Some("SKILL.md")
 }
 
 fn normalize_instance(
@@ -244,8 +237,9 @@ fn normalize_instance(
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct SkillConfigOverrides {
+    agent: AgentId,
     disabled_by_settings_path: HashMap<PathBuf, HashSet<String>>,
 }
 
@@ -280,19 +274,16 @@ impl SkillConfigOverrides {
         }
 
         Self {
+            agent,
             disabled_by_settings_path,
         }
     }
 
     fn is_disabled(&self, ctx: &AdapterContext, root: &AdapterRoot, skill_name: &str) -> bool {
-        let settings_path = match root.source {
-            RootSource::UserHome if root.path.ends_with(".config/opencode/skills") => {
-                opencode_settings_path_for(ctx, root)
-            }
-            RootSource::Project if root.path.ends_with(".opencode/skills") => {
-                opencode_settings_path_for(ctx, root)
-            }
-            _ => claude_settings_path_for(ctx, root),
+        let settings_path = match self.agent {
+            AgentId::Opencode => opencode_settings_path_for(ctx, root),
+            AgentId::ClaudeCode => claude_settings_path_for(ctx, root),
+            _ => None,
         };
         settings_path
             .and_then(|settings_path| self.disabled_by_settings_path.get(&settings_path))
@@ -559,10 +550,13 @@ mod tests {
         assert_eq!(codex.instances[0].state, SkillState::Loaded);
         assert!(codex.instances[0].enabled);
 
-        assert_eq!(opencode.instances.len(), 1);
-        assert_eq!(opencode.instances[0].name, "same-name");
-        assert_eq!(opencode.instances[0].state, SkillState::Loaded);
-        assert!(opencode.instances[0].enabled);
+        assert_eq!(opencode.instances.len(), 3);
+        assert!(opencode
+            .instances
+            .iter()
+            .all(|skill| skill.name == "same-name"
+                && skill.state == SkillState::Loaded
+                && skill.enabled));
 
         let _ = std::fs::remove_dir_all(&temp_root);
     }
@@ -769,7 +763,69 @@ mod tests {
     }
 
     #[test]
-    fn pi_scans_native_directory_and_root_markdown_skills() {
+    fn opencode_scans_claude_and_agent_compatible_roots_with_opencode_permissions() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "skills-copilot-opencode-compat-{}",
+            std::process::id()
+        ));
+        let home = temp_root.join("home");
+        let claude_skill_dir = home.join(".claude/skills/claude-compatible");
+        let agent_skill_dir = home.join(".agents/skills/agent-compatible");
+        std::fs::create_dir_all(&claude_skill_dir).expect("create Claude-compatible skill dir");
+        std::fs::create_dir_all(&agent_skill_dir).expect("create agent-compatible skill dir");
+        std::fs::create_dir_all(home.join(".config/opencode")).expect("create opencode config dir");
+        std::fs::write(
+            claude_skill_dir.join("SKILL.md"),
+            "---\nname: claude-compatible\ndescription: opencode Claude compatibility fixture\n---\nBody.",
+        )
+        .expect("write Claude-compatible SKILL.md");
+        std::fs::write(
+            agent_skill_dir.join("SKILL.md"),
+            "---\nname: agent-compatible\ndescription: opencode agent compatibility fixture\n---\nBody.",
+        )
+        .expect("write agent-compatible SKILL.md");
+        std::fs::write(
+            home.join(".claude/settings.json"),
+            "{\n  \"skillOverrides\": {\n    \"claude-compatible\": \"off\"\n  }\n}\n",
+        )
+        .expect("write Claude settings");
+        std::fs::write(
+            home.join(".config/opencode/opencode.json"),
+            r#"{"permission":{"skill":{"agent-compatible":"deny"}}}"#,
+        )
+        .expect("write opencode config");
+
+        let ctx = AdapterContext {
+            user_home: home,
+            project_root: None,
+            project_cwd: None,
+            extra_roots: vec![],
+        };
+
+        let report = scan_agent(&OpencodeAdapter, &ctx).expect("scan succeeds");
+        let by_name: HashMap<_, _> = report
+            .instances
+            .iter()
+            .map(|skill| (skill.name.as_str(), (skill.state.clone(), skill.enabled)))
+            .collect();
+
+        assert_eq!(report.instances.len(), 2);
+        assert_eq!(
+            by_name.get("claude-compatible"),
+            Some(&(SkillState::Loaded, true)),
+            "opencode compatibility roots must not inherit Claude skillOverrides"
+        );
+        assert_eq!(
+            by_name.get("agent-compatible"),
+            Some(&(SkillState::Disabled, false)),
+            "opencode compatibility roots must honor opencode permission.skill"
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn pi_scans_native_directory_skills_and_ignores_plain_markdown() {
         let temp_root =
             std::env::temp_dir().join(format!("skills-copilot-pi-scan-{}", std::process::id()));
         let home = temp_root.join("home");
@@ -785,7 +841,14 @@ mod tests {
             root.join("root-note.md"),
             "---\nname: root-note\ndescription: Pi root markdown fixture\n---\nBody.",
         )
-        .expect("write pi root markdown skill");
+        .expect("write pi root markdown");
+        let nested_reference_dir = dir_skill.join("references");
+        std::fs::create_dir_all(&nested_reference_dir).expect("create nested reference dir");
+        std::fs::write(
+            nested_reference_dir.join("implementation.md"),
+            "---\nname: implementation\ndescription: This markdown is support material, not a Pi root skill.\n---\nBody.",
+        )
+        .expect("write nested reference markdown");
 
         let ctx = AdapterContext {
             user_home: home,
@@ -801,9 +864,10 @@ mod tests {
             .map(|skill| skill.name.as_str())
             .collect();
 
-        assert_eq!(report.instances.len(), 2);
+        assert_eq!(report.instances.len(), 1);
         assert!(names.contains("global-pdf"));
-        assert!(names.contains("root-note"));
+        assert!(!names.contains("root-note"));
+        assert!(!names.contains("implementation"));
 
         let _ = std::fs::remove_dir_all(&temp_root);
     }
