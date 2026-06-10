@@ -2,7 +2,7 @@
 
 > skills-copilot 支持的 6 个 agent 的适配要点。
 >
-> 当前版本线：V2.11 Adapter Capability Matrix、V2.12 opencode writable、V2.13 Pi read-only scanner/parser、V2.14 Hermes evidence-gate closeout、V2.15 OpenClaw evidence-gate closeout、V2.16 OpenClaw read-only scanner、V2.17 Hermes read-only scanner、V2.18 cross-agent analysis、V2.19 skill health dashboard、V2.20 read-only AI skill analysis assist 已完成。
+> 当前版本线：V2.11 Adapter Capability Matrix、V2.12 opencode writable、V2.13 Pi read-only scanner/parser、V2.14 Hermes evidence-gate closeout、V2.15 OpenClaw evidence-gate closeout、V2.16 OpenClaw read-only scanner、V2.17 Hermes read-only scanner、V2.18 cross-agent analysis、V2.19 skill health dashboard、V2.20 read-only AI skill analysis assist 已完成；V2.21 扫描准确性、去重与 agent 维度统计同步已完成。
 >
 > 扫描适配器实现 `AgentAdapter`。
 >
@@ -164,7 +164,7 @@ Codex 当前实现边界：
 | 配置文件 | 全局 `~/.pi/agent/settings.json`；项目 `.pi/settings.json`；project settings override/merge global settings |
 | 启用控制 | `pi config` 是官方资源启停界面；settings/package filters 支持排除资源。但 direct local skill toggle 的 exact JSON mutation、re-enable、project trust 行为未验证 |
 | Fixture | 最小 evidence fixtures 位于 `fixtures/pi/` |
-| 行动项 | 先做 disposable `agentDir`/fixture project round-trip；明确 `.agents/skills` 去重策略；再考虑 read-only adapter，写入 adapter 继续 blocked |
+| 行动项 | 先做 disposable `agentDir`/fixture project round-trip；按 V2.21 定义明确 `.agents/skills` 与 global/project root 关系；先补扫描准确性口径与去重约束，再考虑 write adapter，写入 adapter 继续 blocked |
 
 > 目前只允许基于该 spec 做 read-only scanner/parser 设计；不要写可修改 Pi settings 的 adapter，直到 `pi config` 的 exact JSON mutation 和回滚语义完成本地验证。
 
@@ -216,7 +216,7 @@ V2.16 第一版只做 read-only filesystem scanner；toggle/install/writable 继
 | 配置文件 | 全局 `~/.config/opencode/opencode.json`；项目根 `opencode.json`；`.opencode` 目录；`OPENCODE_CONFIG` / `OPENCODE_CONFIG_DIR`；managed config 只读 |
 | 启用控制 | `permission.skill` 支持 `allow` / `deny` / `ask`；V2.12 只写 exact `permission.skill.<name> = "deny"`，re-enable 只移除同名 exact deny，不改 wildcard rules |
 | Fixture | parser/scan contract fixtures 位于 `fixtures/opencode/` |
-| 行动项 | 兼容 roots 已纳入 opencode 扫描；继续用 cross-agent analysis 暴露与 Claude/Codex 的重复关系，install 仍只写 native opencode roots |
+| 行动项 | 兼容 roots 已纳入 opencode 扫描；按 V2.21 扫描准确性与 path 去重口径保留重复来源；继续用 cross-agent analysis 暴露与 Claude/Codex 的重复关系，install 仍只写 native opencode roots |
 
 opencode roots 口径：
 
@@ -224,6 +224,13 @@ opencode roots 口径：
 - 当前实现扫描项目 native root：`.opencode/skills/<name>/SKILL.md`。
 - 当前实现按官方文档扫描 `.claude/skills` 和 `.agents/skills` compatibility roots；这些记录归属 opencode 视图，同时由 cross-agent analysis 表达与 Claude/Codex 的重复和冲突。
 - 项目 discovery 从 cwd 向上到 Git worktree。
+
+### 3.5 扫描准确性与去重统计（V2.21 完成）
+
+- 扫描结果必须先 canonicalize path 与 root，再做去重，避免同一目录在软链接、别名路径、项目上行扫描中重复入库。
+- 去重策略原则：`id = hash(agent, scope, path)` 保留 adapter 内同物理源的唯一实例；不同 agent 的同名或同物理文件保留可见但不混淆为同一运行时状态。
+- 统计口径要求：跨 agent 的重复（同名、同路径、enabled mismatch）由 `catalog.analysis` 的 group 视图承载；`app.stateSnapshot.health` 提供 per-agent 汇总并保留实例维度计数，UI 过滤不改变总量定义。
+- 交叉验证要求：`catalog.scanAll.result.activity.agent_summaries`、`catalog.analysis`、`app.stateSnapshot.health` 对同一扫描上下文应可对齐（无新增或遗漏的可见实例）。
 
 ## 3. 跨 agent 公共问题
 

@@ -4,7 +4,7 @@ This file is the shared project instruction entrypoint for coding agents such as
 
 ## Project State
 
-- Current phase: V2.16-V2.20 skills management and analysis line is complete. OpenClaw and Hermes read-only scanners, cross-agent analysis, skill health dashboard, and read-only AI skill analysis assist are integrated. Pi writable support remains an evidence-harness candidate; writable/install support remains blocked until rollback-safe evidence passes.
+- Current phase: V2.16-V2.20 skills management and analysis line is complete. V2.21 scan accuracy, dedupe, and agent-dimension statistics sync is complete. OpenClaw and Hermes read-only scanners, cross-agent analysis, skill health dashboard, and read-only AI skill analysis assist are integrated. Pi writable support remains an evidence-harness candidate; writable/install support remains blocked until rollback-safe evidence passes.
 - Near-term priority: skills management, inspection, analysis, and configuration audit in the macOS app, with Pi writable evidence, finding triage persistence, and agent-config timeline as follow-up candidates.
 - V2.11 scope: service/UI adapter capability matrix for Claude Code, Codex, opencode, Pi, Hermes, and OpenClaw, exposing scan/toggle/install status and blockers before new write affordances are enabled.
 - Versioned adapter plan: V2.12 opencode writable evidence and guarded implementation complete; V2.13 Pi read-only scanner/parser complete with writable still blocked and direct root `.md` cataloging disabled due to real local noise; V2.14 Hermes and V2.15 OpenClaw evidence gates closed without implementation because maintainer-confirmed specs are missing.

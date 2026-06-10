@@ -1,6 +1,6 @@
 # skills-copilot Service Protocol
 
-> Status: V2.20 read-only AI skill analysis assist integrated. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, and V2.19 health dashboard are implemented; writable/install support remains blocked.
+> Status: V2.20 read-only AI skill analysis assist integrated. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, and V2.19 health dashboard are implemented; writable/install support remains blocked. V2.21 alignment for scan accuracy, dedupe behavior, and agent-level metrics is implemented.
 >
 > Integrated: V2.9 Tool-global import/export/install, V2.10 skill execution safety boundary, and 2026-06-10 real local Computer Use validation for the current mainline app. V2.11 added adapter capability status to the service protocol and macOS UI. V2.12 marks opencode writable through exact permission.skill deny/re-enable after snapshot/rollback, install, and fixture smoke validation pass; current opencode scan follows native plus official compatibility roots while install targets remain native roots.
 >

@@ -1,12 +1,18 @@
 # Pi Adapter Evidence Spec
 
-> Evidence date: 2026-06-10. V2.13 implements the evidence-backed read-only scanner/parser slice only; Pi writable support should proceed through a disposable evidence harness before production writes are enabled.
+> Evidence date: 2026-06-10. V2.13 implements the evidence-backed read-only scanner/parser slice only; V2.21 completed scan-accuracy / dedupe / agent-metric wording alignment before any production write path.
 
 ## Status
 
 Read-only scanner/parser support is implemented for Pi-native `~/.pi/agent/skills` and project `.pi/skills` roots, limited to directories containing `SKILL.md`. Writable toggle support is still blocked in production because Pi has multiple resource sources, package filters, project trust behavior, and compatibility roots. P0 evidence on 2026-06-10 confirmed enough mutation semantics to build a disposable harness first.
 
 Real local catalog validation on 2026-06-10 found that treating direct root `.md` files as skills pulls large numbers of ordinary Pi resource documents into the product list as broken/non-skill rows. Skills Copilot therefore intentionally does not scan direct root `.md` files for Pi until a narrower official or harness-backed discriminator exists.
+
+V2.21 scan-alignment focus (completed):
+
+- 目录扫描优先以 canonical path + scope 为基准去重；不在当前版本加入基于猜测字段的重复抑制。
+- 兼容根与原生根重叠导致的重复，优先保留可解释记录并通过 cross-agent 分析口径展示，不通过静默过滤解决。
+- agent 维度统计以现有 protocol payload 为准，避免 UI filter 改变总量定义。
 
 Local validation on 2026-06-08:
 
@@ -113,6 +119,12 @@ Writable state: **harness candidate, production blocked**. A future writable ada
 - Invalid JSON rollback and Skills Copilot snapshot/atomic/write-back behavior.
 - Re-enable strategy: follow Pi's observed `+path` behavior unless a harness proves deleting managed `-path` entries is safer.
 - Package install/remove is a separate decision from direct skill copy/install; do not mix them in the first writable patch.
+
+V2.21 validation scope:
+
+- 校验扫描 root 与 settings path 在项目/用户上下文中是否稳定映射，避免同一 skill 因上下文漂移重复计入。
+- 校验同 path 同名在同一会话只保留一条实例；重复关系仅作为 cross-agent 分析数据公开。
+- 校验 `catalog.scanAll`/`catalog.analysis`/`app.stateSnapshot.health` 在同一上下文下可复核一致。
 
 ## Fixtures
 

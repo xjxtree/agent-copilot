@@ -299,11 +299,12 @@ impl Catalog {
                 instance.scope.as_str(),
                 instance.project_root.as_deref().and_then(Path::to_str),
                 project_context,
-            ) {
+            ) && catalog_path_has_skill_shape(instance.agent.as_str(), &instance.path)
+            {
                 instances.push(instance);
             }
         }
-        Ok(instances)
+        Ok(dedup_skill_instances(instances))
     }
 
     /// List skill records visible for the current project context.
@@ -350,11 +351,12 @@ impl Catalog {
                 &record.scope,
                 project_root.as_deref(),
                 project_context,
-            ) {
+            ) && catalog_path_has_skill_shape(&record.agent, &record.path)
+            {
                 records.push(record);
             }
         }
-        Ok(records)
+        Ok(dedup_skill_records(records))
     }
 
     /// Mark every record for `agent` whose path is under one of `scanned_roots`
@@ -1087,6 +1089,98 @@ fn skill_instance_from_row(row: &Row<'_>) -> rusqlite::Result<SkillInstance> {
     })
 }
 
+fn catalog_path_has_skill_shape(agent: &str, path: &Path) -> bool {
+    match agent {
+        "pi" => {
+            if path.file_name().and_then(|name| name.to_str()) != Some("SKILL.md") {
+                return false;
+            }
+            if path
+                .parent()
+                .and_then(Path::file_name)
+                .and_then(|name| name.to_str())
+                == Some("skills")
+            {
+                return false;
+            }
+            !path
+                .components()
+                .any(|component| component.as_os_str().to_str() == Some("references"))
+        }
+        "hermes" | "openclaw" | "opencode" => {
+            path.file_name().and_then(|name| name.to_str()) == Some("SKILL.md")
+        }
+        _ => true,
+    }
+}
+
+fn dedup_skill_records(records: Vec<SkillRecord>) -> Vec<SkillRecord> {
+    let mut by_identity: HashMap<(String, String, String), usize> = HashMap::new();
+    let mut deduped: Vec<SkillRecord> = Vec::new();
+
+    for record in records {
+        let key = (
+            record.agent.clone(),
+            record.scope.clone(),
+            record.path.to_string_lossy().into_owned(),
+        );
+        if let Some(&index) = by_identity.get(&key) {
+            if catalog_state_rank(&record.state) < catalog_state_rank(&deduped[index].state) {
+                deduped[index] = record;
+            }
+            continue;
+        }
+
+        by_identity.insert(key, deduped.len());
+        deduped.push(record);
+    }
+
+    deduped
+}
+
+fn dedup_skill_instances(instances: Vec<SkillInstance>) -> Vec<SkillInstance> {
+    let mut by_identity: HashMap<(String, String, String), usize> = HashMap::new();
+    let mut deduped: Vec<SkillInstance> = Vec::new();
+
+    for instance in instances {
+        let key = (
+            instance.agent.as_str().to_string(),
+            instance.scope.as_str().to_string(),
+            instance.path.to_string_lossy().into_owned(),
+        );
+        if let Some(&index) = by_identity.get(&key) {
+            if skill_state_rank(&instance.state) < skill_state_rank(&deduped[index].state) {
+                deduped[index] = instance;
+            }
+            continue;
+        }
+
+        by_identity.insert(key, deduped.len());
+        deduped.push(instance);
+    }
+
+    deduped
+}
+
+fn catalog_state_rank(state: &str) -> usize {
+    match state {
+        "loaded" | "disabled" => 0,
+        "broken" => 1,
+        "shadowed" => 2,
+        "missing" => 3,
+        _ => 4,
+    }
+}
+
+fn skill_state_rank(state: &SkillState) -> usize {
+    match state {
+        SkillState::Loaded | SkillState::Disabled => 0,
+        SkillState::Broken => 1,
+        SkillState::Shadowed => 2,
+        SkillState::Missing => 3,
+    }
+}
+
 fn skill_event_from_row(row: &Row<'_>) -> rusqlite::Result<SkillEventRecord> {
     let payload_raw: String = row.get(3)?;
     Ok(SkillEventRecord {
@@ -1218,9 +1312,43 @@ fn network_access_key(access: &NetworkAccess) -> &str {
 #[cfg(test)]
 mod tests {
     use skills_copilot_adapters::ClaudeCodeAdapter;
-    use skills_copilot_core::{AgentAdapter, AgentId, NetworkAccess, PermissionRequest, Scope};
+    use skills_copilot_core::{
+        AgentAdapter, AgentId, NetworkAccess, PermissionRequest, Scope, SkillState,
+    };
 
     use super::*;
+
+    fn catalog_test_instance(
+        agent: AgentId,
+        scope: Scope,
+        path: &str,
+        name: &str,
+        state: SkillState,
+    ) -> SkillInstance {
+        SkillInstance {
+            id: format!("{}:{path}", agent.as_str()),
+            agent,
+            scope,
+            project_root: None,
+            path: PathBuf::from(path),
+            display_path: PathBuf::from(path),
+            definition_id: name.to_ascii_lowercase(),
+            name: name.to_string(),
+            display_name: name.to_string(),
+            description: "catalog test fixture".to_string(),
+            version: None,
+            enabled: matches!(state, SkillState::Loaded | SkillState::Disabled),
+            state,
+            frontmatter_raw: format!("name: {name}\ndescription: catalog test fixture"),
+            body: "body".to_string(),
+            scripts: Vec::new(),
+            permissions: PermissionRequest::default(),
+            fingerprint: String::new(),
+            mtime: 0,
+            first_seen: 0,
+            last_seen: 0,
+        }
+    }
 
     #[test]
     fn initializes_and_upserts_skill_records() {
@@ -1239,6 +1367,81 @@ mod tests {
 
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].name, "summarize-changes");
+    }
+
+    #[test]
+    fn list_skill_records_keeps_same_agent_same_name_different_paths() {
+        let catalog = Catalog::in_memory().expect("catalog opens");
+        catalog.init().expect("schema initializes");
+        let native = catalog_test_instance(
+            AgentId::Opencode,
+            Scope::AgentGlobal,
+            "/tmp/home/.config/opencode/skills/shared-review/SKILL.md",
+            "shared-review",
+            SkillState::Loaded,
+        );
+        let duplicate_missing = catalog_test_instance(
+            AgentId::Opencode,
+            Scope::AgentGlobal,
+            "/tmp/home/.agents/skills/shared-review/SKILL.md",
+            "shared-review",
+            SkillState::Missing,
+        );
+
+        catalog
+            .upsert_skill_instances(&[duplicate_missing, native])
+            .expect("upsert duplicate records");
+        let records = catalog.list_skill_records().expect("records list");
+
+        assert_eq!(records.len(), 2);
+        assert!(records
+            .iter()
+            .any(|record| record.name == "shared-review" && record.state == "loaded"));
+        assert!(records
+            .iter()
+            .any(|record| record.name == "shared-review" && record.state == "missing"));
+    }
+
+    #[test]
+    fn list_skill_records_filters_pi_historical_markdown_noise() {
+        let catalog = Catalog::in_memory().expect("catalog opens");
+        catalog.init().expect("schema initializes");
+        let real = catalog_test_instance(
+            AgentId::Pi,
+            Scope::AgentGlobal,
+            "/tmp/home/.pi/agent/skills/global-pdf/SKILL.md",
+            "global-pdf",
+            SkillState::Loaded,
+        );
+        let root_markdown = catalog_test_instance(
+            AgentId::Pi,
+            Scope::AgentGlobal,
+            "/tmp/home/.pi/agent/skills/root-note.md",
+            "root-note",
+            SkillState::Missing,
+        );
+        let root_skill_md = catalog_test_instance(
+            AgentId::Pi,
+            Scope::AgentGlobal,
+            "/tmp/home/.pi/agent/skills/SKILL.md",
+            "root-noise",
+            SkillState::Missing,
+        );
+        let reference_skill_md = catalog_test_instance(
+            AgentId::Pi,
+            Scope::AgentGlobal,
+            "/tmp/home/.pi/agent/skills/global-pdf/references/SKILL.md",
+            "reference-noise",
+            SkillState::Missing,
+        );
+
+        catalog
+            .upsert_skill_instances(&[real, root_markdown, root_skill_md, reference_skill_md])
+            .expect("upsert Pi records");
+        let records = catalog.list_skill_records().expect("records list");
+
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].name, "global-pdf");
     }
 
     #[test]

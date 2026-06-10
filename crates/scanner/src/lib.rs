@@ -44,6 +44,7 @@ pub fn scan_agent(
 ) -> Result<ScanReport, ScannerError> {
     let mut report = ScanReport::default();
     let roots = adapter.roots(ctx);
+    let mut scanned_root_keys = HashSet::new();
     let overrides = SkillConfigOverrides::preload(adapter.id(), ctx, &roots);
     for root in roots {
         if !root.path.exists() {
@@ -61,6 +62,14 @@ pub fn scan_agent(
             report.skipped_roots.push(root.path);
             continue;
         }
+        let root_key = format!(
+            "{}|{}",
+            root.scope.as_str(),
+            canonical_root.to_string_lossy()
+        );
+        if !scanned_root_keys.insert(root_key) {
+            continue;
+        }
         report.scanned_roots.push(canonical_root.clone());
         let allowed_target_base = allowed_target_base(ctx, &root, &canonical_root);
         visit_root(
@@ -73,6 +82,7 @@ pub fn scan_agent(
             &mut report,
         )?;
     }
+    report.instances = dedup_instances(report.instances);
     Ok(report)
 }
 
@@ -119,10 +129,9 @@ fn visit_root(
             path: dir.clone(),
             source,
         })?;
+        let mut entries = entries.filter_map(Result::ok).collect::<Vec<_>>();
+        entries.sort_by_key(|entry| entry.file_name());
         for entry in entries {
-            let Ok(entry) = entry else {
-                continue;
-            };
             let path = entry.path();
             let display_path = display_root.join(entry.file_name());
             let Ok(file_type) = entry.file_type() else {
@@ -142,6 +151,9 @@ fn visit_root(
                     .map(|n| n == "SKILL.md")
                     .unwrap_or(false)
                 {
+                    if !adapter_accepts_skill_path(adapter.id(), canonical_root, &resolved) {
+                        continue;
+                    }
                     let mut instance = adapter.parse(&resolved).unwrap_or_else(|err| {
                         broken_instance(adapter, root, resolved.clone(), err.message)
                     });
@@ -162,6 +174,9 @@ fn visit_root(
                 if !is_allowed_scan_target(&canonical_path, canonical_root, allowed_target_base) {
                     continue;
                 }
+                if !adapter_accepts_skill_path(adapter.id(), canonical_root, &canonical_path) {
+                    continue;
+                }
                 let mut instance = adapter.parse(&canonical_path).unwrap_or_else(|err| {
                     broken_instance(adapter, root, canonical_path.clone(), err.message)
                 });
@@ -172,6 +187,43 @@ fn visit_root(
         }
     }
     Ok(())
+}
+
+fn adapter_accepts_skill_path(
+    agent: AgentId,
+    canonical_root: &Path,
+    canonical_path: &Path,
+) -> bool {
+    if agent != AgentId::Pi {
+        return true;
+    }
+    let Ok(relative) = canonical_path.strip_prefix(canonical_root) else {
+        return false;
+    };
+    let components = relative.components().collect::<Vec<_>>();
+    components.len() == 2
+        && canonical_path.file_name().and_then(|name| name.to_str()) == Some("SKILL.md")
+}
+
+fn dedup_instances(instances: Vec<SkillInstance>) -> Vec<SkillInstance> {
+    let mut seen_paths = HashSet::new();
+    let mut deduped = Vec::new();
+
+    for instance in instances {
+        let path_key = format!(
+            "{}|{}|{}",
+            instance.agent.as_str(),
+            instance.scope.as_str(),
+            instance.path.to_string_lossy()
+        );
+        if !seen_paths.insert(path_key) {
+            continue;
+        }
+
+        deduped.push(instance);
+    }
+
+    deduped
 }
 
 fn allowed_target_base(ctx: &AdapterContext, root: &AdapterRoot, canonical_root: &Path) -> PathBuf {
@@ -825,6 +877,50 @@ mod tests {
     }
 
     #[test]
+    fn opencode_keeps_native_and_compatible_roots_for_conflict_analysis() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "skills-copilot-opencode-dedup-{}",
+            std::process::id()
+        ));
+        let home = temp_root.join("home");
+        let native_skill_dir = home.join(".config/opencode/skills/shared-review");
+        let claude_skill_dir = home.join(".claude/skills/shared-review");
+        let agents_skill_dir = home.join(".agents/skills/shared-review");
+        std::fs::create_dir_all(&native_skill_dir).expect("create native skill dir");
+        std::fs::create_dir_all(&claude_skill_dir).expect("create Claude-compatible skill dir");
+        std::fs::create_dir_all(&agents_skill_dir).expect("create agents-compatible skill dir");
+        for dir in [&native_skill_dir, &claude_skill_dir, &agents_skill_dir] {
+            std::fs::write(
+                dir.join("SKILL.md"),
+                "---\nname: shared-review\ndescription: duplicate opencode fixture\n---\nBody.",
+            )
+            .expect("write duplicate opencode skill");
+        }
+
+        let ctx = AdapterContext {
+            user_home: home.clone(),
+            project_root: None,
+            project_cwd: None,
+            extra_roots: vec![],
+        };
+
+        let report = scan_agent(&OpencodeAdapter, &ctx).expect("scan succeeds");
+
+        assert_eq!(report.instances.len(), 3);
+        assert!(report.instances.iter().any(|skill| skill.path
+            == native_skill_dir
+                .join("SKILL.md")
+                .canonicalize()
+                .expect("canonical native path")));
+        assert!(report
+            .instances
+            .iter()
+            .all(|skill| skill.name == "shared-review"));
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
     fn pi_scans_native_directory_skills_and_ignores_plain_markdown() {
         let temp_root =
             std::env::temp_dir().join(format!("skills-copilot-pi-scan-{}", std::process::id()));
@@ -849,6 +945,16 @@ mod tests {
             "---\nname: implementation\ndescription: This markdown is support material, not a Pi root skill.\n---\nBody.",
         )
         .expect("write nested reference markdown");
+        std::fs::write(
+            nested_reference_dir.join("SKILL.md"),
+            "---\nname: implementation\ndescription: This nested SKILL.md is support material, not a Pi root skill.\n---\nBody.",
+        )
+        .expect("write nested reference SKILL.md");
+        std::fs::write(
+            root.join("SKILL.md"),
+            "---\nname: root-noise\ndescription: Historical catalog noise, not a Pi directory skill.\n---\nBody.",
+        )
+        .expect("write root SKILL.md noise");
 
         let ctx = AdapterContext {
             user_home: home,
@@ -868,6 +974,7 @@ mod tests {
         assert!(names.contains("global-pdf"));
         assert!(!names.contains("root-note"));
         assert!(!names.contains("implementation"));
+        assert!(!names.contains("root-noise"));
 
         let _ = std::fs::remove_dir_all(&temp_root);
     }
@@ -880,7 +987,9 @@ mod tests {
         ));
         let home = temp_root.join("home");
         let workspace = home.join(".openclaw/workspace");
-        write_openclaw_skill(&home.join(".openclaw/skills"), "managed-global");
+        let managed_global_path =
+            write_openclaw_skill(&home.join(".openclaw/skills"), "managed-global");
+        write_openclaw_skill(&home.join(".agents/skills"), "managed-global");
         write_openclaw_skill(&home.join(".agents/skills"), "personal-shared");
         write_openclaw_skill(&workspace.join("skills"), "workspace-local");
         write_openclaw_skill(&workspace.join(".agents/skills"), "workspace-agents");
@@ -899,11 +1008,21 @@ mod tests {
             .map(|skill| (skill.name.as_str(), skill.scope))
             .collect();
 
-        assert_eq!(report.instances.len(), 4);
+        assert_eq!(report.instances.len(), 5);
         assert_eq!(by_name.get("managed-global"), Some(&Scope::AgentGlobal));
         assert_eq!(by_name.get("personal-shared"), Some(&Scope::AgentGlobal));
         assert_eq!(by_name.get("workspace-local"), Some(&Scope::AgentProject));
         assert_eq!(by_name.get("workspace-agents"), Some(&Scope::AgentProject));
+        assert_eq!(
+            report
+                .instances
+                .iter()
+                .find(|skill| skill.name == "managed-global")
+                .expect("managed global")
+                .path,
+            managed_global_path,
+            "OpenClaw native global root wins over shared compatibility root"
+        );
 
         let _ = std::fs::remove_dir_all(&temp_root);
     }

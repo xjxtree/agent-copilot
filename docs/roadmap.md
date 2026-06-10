@@ -4,11 +4,11 @@
 >
 > 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.16-V2.20 skills management and analysis 版本线已完成，进入 Pi writable evidence、finding triage persistence 和 agent-config timeline follow-up**。
+> 当前阶段：**V2.21 规划同步启动：扫描准确性、去重边界、agent 维度统计**。Pi writable evidence、finding triage persistence 和 agent-config timeline 仍为后续候选跟进项。
 >
-> 近期主线：在 macOS app 中补齐多 agent skills 管理、检查和分析能力，V2.16-V2.20 已完成 OpenClaw read-only scanner、Hermes read-only scanner、cross-agent skill analysis、skill health dashboard 和 read-only AI skill analysis assist。Pi writable 仍保持 evidence harness candidate，生产写入需等 rollback-safe evidence 通过。
+> 近期主线：在 macOS app 中补齐多 agent skills 管理、检查和分析能力，V2.16-V2.20 已完成 OpenClaw read-only scanner、Hermes read-only scanner、cross-agent skill analysis、skill health dashboard 和 read-only AI skill analysis assist。V2.21 负责扫描准确性、去重边界和 agent 维度统计口径同步；Pi writable 仍保持 evidence harness candidate，生产写入需等 rollback-safe evidence 通过。
 >
-> 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.20 各阶段能力、V2.9 Tool-global skill pool、V2.11 Adapter capability matrix、V2.16-V2.20 management/analysis line。后续候选变更仍需重新验证。
+> 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.20 各阶段能力、V2.9 Tool-global skill pool、V2.11 Adapter capability matrix、V2.16-V2.20 management/analysis line。V2.21 扫描准确性与去重口径已完成。后续候选变更仍需重新验证。
 >
 > V2.10 安全边界：默认不真实执行 skill 脚本；任何未来执行请求必须逐次人工确认，并先展示 cwd/env/network/files preview；blocked/cancelled/failure attempts 必须审计；LLM 不能触发执行。
 >
@@ -751,6 +751,32 @@
 ### Removed from active planning: desktop shell expansion and local sharing
 
 Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signing, notarization, DMG/ZIP, and public distribution are not active roadmap items. The active roadmap remains focused on the macOS app and skills management, inspection, analysis, and configuration audit.
+
+### 4.21 V2.21 扫描准确性、去重与 agent 维度统计（完成）
+
+**目标**
+
+- 统一扫描口径，明确可扫描根、扫描顺序、扫描范围边界，减少重复遍历和不一致计数。
+- 明确去重口径：同一物理路径在 `catalog` 侧只保留一条实例；同名 skill 的跨 agent 重复不通过去重压制，而是由 cross-agent 分析入口统一说明。
+- 统一 agent 维度统计基准：`catalog.scanAll.result.activity`、`catalog.analysis`、`app.stateSnapshot.health` 使用一致的计数含义与过滤条件，避免 UI 与协议对同一批次出现不同结论。
+
+**范围**
+
+- 对照 `docs/agent-adapters.md`、`docs/pi-adapter-spec.md`、`docs/opencode-adapter-spec.md`，补齐 V2.21 的“扫描准确性、去重、agent 统计”文档口径。
+- 明确 fixture 场景中去重与重复来源（path overlap / duplicate name / precedence shadow）对诊断和计数的影响。
+- 已完成 scanner 与 catalog 侧实现：根路径 canonicalization 后跳过重复 root，扫描结果按 `agent/scope/path` 去重；Pi 只接受 `<pi-root>/<skill-name>/SKILL.md`，过滤 direct `.md`、root `SKILL.md` 和 nested `references/SKILL.md` 噪声；same-agent 同名不同路径继续保留用于 conflict/analysis。
+
+**退出条件**
+
+- 文档口径更新包含：扫描根确定性、duplicate/path-overlap 的可复现解释、agent 维度统计定义。
+- V2.21 口径下的 `catalog.analysis`、`app.stateSnapshot.health`、agent 过滤统计由同一定义驱动，能够交叉解释。
+- 下一版本（如 finding triage persistence）可直接复用该口径，不额外定义新的重复规则。
+
+**验证**
+
+- `cargo test -p skills-copilot-scanner` 通过，覆盖 root canonicalization、Pi 噪声过滤、opencode compatibility roots、Hermes/OpenClaw documented roots。
+- `cargo test -p skills-copilot-catalog` 通过，覆盖 catalog 输出层 historical noise filter 与 same-agent same-name preservation。
+- same-agent 同名不同路径不在 scanner/catalog 静默吞并，继续作为 conflict/analysis 输入。
 
 ## 5. 风险与未决项
 

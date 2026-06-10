@@ -1,6 +1,6 @@
 # opencode Adapter Evidence Spec
 
-> Evidence date: 2026-06-10. Current decision: opencode scans native roots plus official `.claude` / `.agents` compatibility roots. Guarded writes remain limited to exact-name `permission.skill` patches in verified `opencode.json` targets, and tool-global installs remain limited to verified native opencode skill roots.
+> Evidence date: 2026-06-10. Current decision: opencode scans native roots plus official `.claude` / `.agents` compatibility roots. Guarded writes remain limited to exact-name `permission.skill` patches in verified `opencode.json` targets, and tool-global installs remain limited to verified native opencode skill roots. V2.21 completed scan-accuracy, dedupe, and agent-metric alignment requirements.
 
 ## Status
 
@@ -14,6 +14,12 @@ Scanner/parser implementation follows the current official OpenCode Agent Skills
 - Project agent-compatible roots: `.agents/skills/<name>/SKILL.md`, walking from `project_cwd` upward through ancestors until `project_root`.
 
 Compatibility roots are scan-only sources under the opencode adapter. They intentionally create cross-agent overlap with Claude/Codex roots when the same physical or named skill is available to multiple agents; the app should surface that through cross-agent analysis rather than hiding the opencode-visible skill.
+
+V2.21 completed focus:
+
+- 扫描准确性：canonicalize 根与路径后再去重，避免软链接、重叠根导致同一技能被计入多次。
+- 去重规则：按 `agent/scope/path` 作为去重主键；同名但不同源 agent 的实例保留并由 `catalog.analysis` 公开重复来源，不做隐式吞并。
+- 统计口径：统一 `catalog.scanAll.result.activity`、`catalog.analysis` 与 `app.stateSnapshot.health` 的 per-agent 计数含义，避免 filter 造成统计口径漂移。
 
 Writable toggle support is enabled for app-managed strict JSON config files:
 
