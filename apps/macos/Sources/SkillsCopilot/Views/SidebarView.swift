@@ -139,6 +139,8 @@ private struct AgentWorkspaceHeader: View {
             SkillHealthDashboardCard(
                 summary: store.healthSummary,
                 agentSummary: store.selectedAgentHealthSummary,
+                findingDisplayCount: agentFindingCount,
+                conflictDisplayCount: agentConflictCount,
                 onFilter: { filter in
                     store.stateFilter = filter
                 }
@@ -196,11 +198,22 @@ private struct AgentWorkspaceHeader: View {
     }
 
     private var agentFindingCount: Int {
-        store.selectedAgentHealthSummary?.findingCount ?? 0
+        let agentSkillIDs = Set(agentSkills.map(\.id))
+        return FindingDisplayModel.issueGroups(
+            findings: store.findings.filter { finding in
+                guard let instanceId = finding.instanceId else { return false }
+                return agentSkillIDs.contains(instanceId)
+            },
+            severityFilter: FindingDisplayModel.allFilterValue,
+            ruleFilter: FindingDisplayModel.allFilterValue
+        ).count
     }
 
     private var agentConflictCount: Int {
-        store.selectedAgentHealthSummary?.conflictCount ?? 0
+        let agentSkillIDs = Set(agentSkills.map(\.id))
+        return store.conflicts.filter { conflict in
+            conflict.instanceIds.filter { agentSkillIDs.contains($0) }.count > 1
+        }.count
     }
 
     private func shortTitle(for filter: SkillAgentFilter) -> String {
@@ -226,6 +239,8 @@ private struct AgentWorkspaceHeader: View {
 private struct SkillHealthDashboardCard: View {
     let summary: SkillHealthSummary
     let agentSummary: AgentSkillHealthSummary?
+    let findingDisplayCount: Int
+    let conflictDisplayCount: Int
     let onFilter: (SkillStateFilter) -> Void
 
     private var title: String {
@@ -237,11 +252,11 @@ private struct SkillHealthDashboardCard: View {
     }
 
     private var findingCount: Int {
-        agentSummary?.findingCount ?? summary.findingCount
+        findingDisplayCount
     }
 
     private var conflictCount: Int {
-        agentSummary?.conflictCount ?? summary.conflictCount
+        conflictDisplayCount
     }
 
     private var riskCount: Int {

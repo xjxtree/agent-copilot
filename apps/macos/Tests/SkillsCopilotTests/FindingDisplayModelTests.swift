@@ -4,6 +4,7 @@ struct FindingDisplayModelTests {
     func run() throws {
         try groupsSortBySeverityThenRule()
         try filtersBySeverityAndRule()
+        try issueGroupsDeduplicateRepeatedScanEntries()
         try remediationUsesSuggestionThenRuleFallback()
         try permissionSummaryLabelsUnknownAndUndeclaredValues()
     }
@@ -17,9 +18,9 @@ struct FindingDisplayModelTests {
 
         try expectEqual(groups.map(\.severityKey), ["error", "warning", "info"], "Severity groups should use stable priority order.")
         try expectEqual(
-            groups.flatMap { $0.findings.map(\.id) },
+            groups.flatMap { $0.issues.map(\.representative.id) },
             ["error-frontmatter", "warning-frontmatter-new", "warning-path", "info-fingerprint"],
-            "Findings should be sorted within severity groups by rule and recency."
+            "Finding issue groups should be sorted within severity groups by rule and recency."
         )
     }
 
@@ -31,7 +32,7 @@ struct FindingDisplayModelTests {
         )
 
         try expectEqual(warningGroups.map(\.severityKey), ["warning"], "Severity filter should keep one severity group.")
-        try expectEqual(warningGroups.first?.findings.map(\.id), ["warning-frontmatter-new", "warning-path"], "Severity filter should keep matching findings.")
+        try expectEqual(warningGroups.first?.issues.map(\.representative.id), ["warning-frontmatter-new", "warning-path"], "Severity filter should keep matching findings.")
 
         let ruleGroups = FindingDisplayModel.grouped(
             findings: Self.findings,
@@ -40,7 +41,49 @@ struct FindingDisplayModelTests {
         )
 
         try expectEqual(ruleGroups.map(\.severityKey), ["error", "warning"], "Rule filter should preserve severity grouping.")
-        try expectEqual(ruleGroups.flatMap { $0.findings.map(\.id) }, ["error-frontmatter", "warning-frontmatter-new"], "Rule filter should keep matching rule IDs.")
+        try expectEqual(ruleGroups.flatMap { $0.issues.map(\.representative.id) }, ["error-frontmatter", "warning-frontmatter-new"], "Rule filter should keep matching rule IDs.")
+    }
+
+    private func issueGroupsDeduplicateRepeatedScanEntries() throws {
+        let groups = FindingDisplayModel.issueGroups(
+            findings: [
+                Self.finding(
+                    id: "duplicate-older",
+                    instanceId: "alpha",
+                    ruleId: "permissions.network-declared",
+                    severity: "warning",
+                    message: "Network permission missing",
+                    createdAt: 10,
+                    suggestion: "Declare network access."
+                ),
+                Self.finding(
+                    id: "duplicate-newer",
+                    instanceId: "beta",
+                    ruleId: "permissions.network-declared",
+                    severity: "warning",
+                    message: "Network permission missing",
+                    createdAt: 20,
+                    suggestion: "Declare network access."
+                ),
+                Self.finding(
+                    id: "distinct-message",
+                    instanceId: "gamma",
+                    ruleId: "permissions.network-declared",
+                    severity: "warning",
+                    message: "Different duplicate context",
+                    createdAt: 30,
+                    suggestion: "Declare network access."
+                ),
+            ],
+            severityFilter: FindingDisplayModel.allFilterValue,
+            ruleFilter: FindingDisplayModel.allFilterValue
+        )
+
+        try expectEqual(groups.count, 2, "Repeated scan entries with the same rule, severity, message, and remediation should collapse into one issue group.")
+        let duplicateGroup = groups.first { $0.message == "Network permission missing" }
+        try expectEqual(duplicateGroup?.entryCount, 2, "Issue groups should keep the raw scan entry count for impact context.")
+        try expectEqual(duplicateGroup?.impactedInstanceCount, 2, "Issue groups should count impacted skill instances separately from scan entries.")
+        try expectEqual(duplicateGroup?.representative.id, "duplicate-newer", "The newest finding should be the representative entry for a deduped issue group.")
     }
 
     private func remediationUsesSuggestionThenRuleFallback() throws {
@@ -148,18 +191,20 @@ struct FindingDisplayModelTests {
 
     private static func finding(
         id: String,
+        instanceId: String = "alpha",
         ruleId: String,
         severity: String,
+        message: String? = nil,
         createdAt: Int64,
         suggestion: String? = nil
     ) -> RuleFindingRecord {
         RuleFindingRecord(
             id: id,
-            instanceId: "alpha",
+            instanceId: instanceId,
             definitionId: nil,
             ruleId: ruleId,
             severity: severity,
-            message: "Finding \(id)",
+            message: message ?? "Finding \(id)",
             suggestion: suggestion,
             createdAt: createdAt
         )

@@ -76,7 +76,7 @@ enum UIStrings {
     static let noMatchingFindings = text("empty.noMatchingFindings", "No Matching Findings")
     static let noMatchingFindingsMessage = text("empty.noMatchingFindings.message", "Adjust the severity or rule filter to show findings.")
     static let noConflicts = text("empty.noConflicts", "No Conflicts")
-    static let noConflictsMessage = text("empty.noConflicts.message", "No conflict group currently references this skill.")
+    static let noConflictsMessage = text("empty.noConflicts.message", "No same-agent conflict currently references this skill in the current agent. Cross-agent duplicates are not shown as conflicts.")
     static let noSnapshots = text("empty.noSnapshots", "No Agent Config History")
     static let noSnapshotsMessage = text("empty.noSnapshots.message", "No agent config snapshots have been recorded for this agent yet.")
     static let snapshotPreview = text("snapshot.preview", "Agent Config Preview")
@@ -106,6 +106,7 @@ enum UIStrings {
     static let allSeverities = text("findings.filter.allSeverities", "All Severities")
     static let allRuleIDs = text("findings.filter.allRules", "All Rule IDs")
     static let findingRemediation = text("findings.remediation", "Suggested remediation")
+    static let currentAgentConflictsOnly = text("conflicts.currentAgentOnly", "Current agent only. Cross-agent duplicates are omitted from conflicts.")
     static let remediationFrontmatterRequired = text("findings.remediation.frontmatterRequired", "Add the required frontmatter fields in SKILL.md, then rescan.")
     static let remediationToolsNotEmpty = text("findings.remediation.toolsNotEmpty", "Declare the allowed tools the skill needs, or remove tool-dependent instructions.")
     static let remediationPathExists = text("findings.remediation.pathExists", "Restore the source file or remove the stale catalog entry, then scan again.")
@@ -226,8 +227,16 @@ enum UIStrings {
         format("findings.visibleSummary", "%d of %d findings", visible, total)
     }
 
-    static func findingGroupCount(_ count: Int) -> String {
-        format("findings.groupCount", "%d findings", count)
+    static func visibleFindingGroupsSummary(_ visibleGroups: Int, _ totalGroups: Int, _ visibleEntries: Int) -> String {
+        format("findings.visibleGroupSummary", "%d of %d issue groups · %d scan entries", visibleGroups, totalGroups, visibleEntries)
+    }
+
+    static func findingSeverityGroupCount(_ count: Int) -> String {
+        format("findings.severityGroupCount", "%d issue groups", count)
+    }
+
+    static func findingIssueImpact(_ instances: Int, _ entries: Int) -> String {
+        format("findings.issueImpact", "Impacted instances: %d · Scan entries: %d", instances, entries)
     }
 
     static func noFindingsForSkillMessage(_ agent: String) -> String {

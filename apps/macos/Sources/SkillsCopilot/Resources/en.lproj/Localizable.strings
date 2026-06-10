@@ -75,7 +75,7 @@
 "empty.noMatchingFindings" = "No Matching Findings";
 "empty.noMatchingFindings.message" = "Adjust the severity or rule filter to show findings.";
 "empty.noConflicts" = "No Conflicts";
-"empty.noConflicts.message" = "No conflict group currently references this skill.";
+"empty.noConflicts.message" = "No same-agent conflict currently references this skill in the current agent. Cross-agent duplicates are not shown as conflicts.";
 "empty.noSnapshots" = "No Agent Config History";
 "empty.noSnapshots.message" = "No agent config snapshots have been recorded for this agent yet.";
 "snapshot.preview" = "Agent Config Preview";
@@ -106,6 +106,7 @@
 "findings.filter.allSeverities" = "All Severities";
 "findings.filter.allRules" = "All Rule IDs";
 "findings.remediation" = "Suggested remediation";
+"conflicts.currentAgentOnly" = "Current agent only. Cross-agent duplicates are omitted from conflicts.";
 "findings.remediation.frontmatterRequired" = "Add the required frontmatter fields in SKILL.md, then rescan.";
 "findings.remediation.toolsNotEmpty" = "Declare the allowed tools the skill needs, or remove tool-dependent instructions.";
 "findings.remediation.pathExists" = "Restore the source file or remove the stale catalog entry, then scan again.";
@@ -223,7 +224,9 @@
 "sidebar.enabledSummary" = "%d of %d enabled";
 "sidebar.visibleSummary" = "%d visible";
 "findings.visibleSummary" = "%d of %d findings";
-"findings.groupCount" = "%d findings";
+"findings.visibleGroupSummary" = "%d of %d issue groups · %d scan entries";
+"findings.severityGroupCount" = "%d issue groups";
+"findings.issueImpact" = "Impacted instances: %d · Scan entries: %d";
 "findings.scopeSummary" = "%@ · %@";
 "findings.remediation.fallback" = "Review rule %@, update the skill source, then rescan to confirm the finding is resolved.";
 "permissions.unknownValue" = "Unknown (%@)";

@@ -40,9 +40,14 @@ struct DetailView: View {
                 }
 
                 if let skill {
+                    let selectedFindingGroups = FindingDisplayModel.issueGroups(
+                        findings: store.selectedFindings,
+                        severityFilter: FindingDisplayModel.allFilterValue,
+                        ruleFilter: FindingDisplayModel.allFilterValue
+                    )
                     HeaderView(
                         skill: skill,
-                        findingCount: store.selectedFindings.count,
+                        findingCount: selectedFindingGroups.count,
                         conflictCount: store.selectedConflicts.count,
                         isWriting: store.isWriting,
                         adapterCapability: store.adapterCapabilities.first { $0.agent == skill.agent },
@@ -120,7 +125,11 @@ struct DetailView: View {
                     case .findings:
                         FindingsSection(skill: skill, findings: store.selectedFindings)
                     case .conflicts:
-                        ConflictsSection(conflicts: store.selectedConflicts, selectedSkillID: skill.id)
+                        ConflictsSection(
+                            conflicts: store.selectedConflicts,
+                            selectedSkillID: skill.id,
+                            currentAgentSkillIDs: Set(store.skills.filter { $0.agent == skill.agent }.map(\.id))
+                        )
                     }
                 } else {
                     EmptyDetailView()
@@ -1093,13 +1102,45 @@ private struct ToolGlobalInstallPreviewSheet: View {
 
 struct FindingSeverityGroup: Identifiable, Equatable {
     let severityKey: String
-    let findings: [RuleFindingRecord]
+    let issues: [FindingIssueGroup]
 
     var id: String { severityKey }
 
     var title: String {
         FindingDisplayModel.severityTitle(severityKey)
     }
+}
+
+struct FindingIssueGroup: Identifiable, Equatable {
+    let severityKey: String
+    let ruleId: String
+    let message: String
+    let remediation: String
+    let findings: [RuleFindingRecord]
+
+    var id: String {
+        [severityKey, ruleId, message, remediation].joined(separator: "\u{1F}")
+    }
+
+    var representative: RuleFindingRecord {
+        findings[0]
+    }
+
+    var impactedInstanceCount: Int {
+        let ids = Set(findings.compactMap(\.instanceId))
+        return max(ids.count, findings.isEmpty ? 0 : 1)
+    }
+
+    var entryCount: Int {
+        findings.count
+    }
+}
+
+private struct FindingIssueKey: Hashable {
+    let severityKey: String
+    let ruleId: String
+    let message: String
+    let remediation: String
 }
 
 enum FindingDisplayModel {
@@ -1133,15 +1174,45 @@ enum FindingDisplayModel {
         severityFilter: String,
         ruleFilter: String
     ) -> [FindingSeverityGroup] {
-        let visibleFindings = filtered(findings: findings, severityFilter: severityFilter, ruleFilter: ruleFilter)
-        let grouped = Dictionary(grouping: visibleFindings) { severityKey($0.severity) }
+        let visibleIssues = issueGroups(
+            findings: findings,
+            severityFilter: severityFilter,
+            ruleFilter: ruleFilter
+        )
+        let grouped = Dictionary(grouping: visibleIssues, by: \.severityKey)
 
         return sortedSeverities(Set(grouped.keys)).map { severityKey in
             FindingSeverityGroup(
                 severityKey: severityKey,
-                findings: sortedFindings(grouped[severityKey] ?? [])
+                issues: grouped[severityKey] ?? []
             )
         }
+    }
+
+    static func issueGroups(
+        findings: [RuleFindingRecord],
+        severityFilter: String,
+        ruleFilter: String
+    ) -> [FindingIssueGroup] {
+        let visibleFindings = filtered(findings: findings, severityFilter: severityFilter, ruleFilter: ruleFilter)
+        let grouped = Dictionary(grouping: visibleFindings) { finding in
+            FindingIssueKey(
+                severityKey: severityKey(finding.severity),
+                ruleId: normalizedText(finding.ruleId),
+                message: normalizedText(finding.message),
+                remediation: normalizedText(remediationText(for: finding))
+            )
+        }
+        return grouped.map { key, findings in
+            FindingIssueGroup(
+                severityKey: key.severityKey,
+                ruleId: key.ruleId,
+                message: key.message,
+                remediation: key.remediation,
+                findings: sortedFindings(findings)
+            )
+        }
+        .sorted(by: compareIssueGroups)
     }
 
     static func remediationText(for finding: RuleFindingRecord) -> String {
@@ -1203,6 +1274,32 @@ enum FindingDisplayModel {
             }
             return lhs.id.localizedStandardCompare(rhs.id) == .orderedAscending
         }
+    }
+
+    private static func compareIssueGroups(_ lhs: FindingIssueGroup, _ rhs: FindingIssueGroup) -> Bool {
+        let lhsRank = severityRank(lhs.severityKey)
+        let rhsRank = severityRank(rhs.severityKey)
+        if lhsRank != rhsRank {
+            return lhsRank < rhsRank
+        }
+        if lhs.ruleId != rhs.ruleId {
+            return lhs.ruleId.localizedStandardCompare(rhs.ruleId) == .orderedAscending
+        }
+        let lhsCreatedAt = lhs.representative.createdAt
+        let rhsCreatedAt = rhs.representative.createdAt
+        if lhsCreatedAt != rhsCreatedAt {
+            return lhsCreatedAt > rhsCreatedAt
+        }
+        return lhs.id.localizedStandardCompare(rhs.id) == .orderedAscending
+    }
+
+    private static func normalizedText(_ text: String) -> String {
+        let collapsed = text
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        return collapsed.isEmpty ? UIStrings.emptyPlaceholder : collapsed
     }
 
     private static func severityRank(_ severityKey: String) -> Int {
@@ -1362,8 +1459,22 @@ private struct FindingsSection: View {
         )
     }
 
-    private var visibleCount: Int {
-        visibleGroups.reduce(0) { $0 + $1.findings.count }
+    private var visibleIssueCount: Int {
+        visibleGroups.reduce(0) { $0 + $1.issues.count }
+    }
+
+    private var visibleEntryCount: Int {
+        visibleGroups.reduce(0) { total, severityGroup in
+            total + severityGroup.issues.reduce(0) { $0 + $1.entryCount }
+        }
+    }
+
+    private var totalIssueCount: Int {
+        FindingDisplayModel.issueGroups(
+            findings: findings,
+            severityFilter: FindingDisplayModel.allFilterValue,
+            ruleFilter: FindingDisplayModel.allFilterValue
+        ).count
     }
 
     var body: some View {
@@ -1388,8 +1499,8 @@ private struct FindingsSection: View {
                         VStack(alignment: .leading, spacing: 10) {
                             FindingSeverityHeader(group: group)
 
-                            ForEach(group.findings) { finding in
-                                FindingCard(finding: finding, severityTitle: group.title)
+                            ForEach(group.issues) { issue in
+                                FindingIssueCard(issue: issue, severityTitle: group.title)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1427,7 +1538,7 @@ private struct FindingsSection: View {
             Spacer(minLength: 0)
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text(UIStrings.visibleFindingsSummary(visibleCount, findings.count))
+                Text(UIStrings.visibleFindingGroupsSummary(visibleIssueCount, totalIssueCount, visibleEntryCount))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Text(UIStrings.findingScopeSummary(skill.name, DisplayText.agent(skill.agent)))
@@ -1449,14 +1560,14 @@ private struct FindingsSection: View {
     }
 }
 
-private struct FindingCard: View {
-    let finding: RuleFindingRecord
+private struct FindingIssueCard: View {
+    let issue: FindingIssueGroup
     let severityTitle: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label(finding.ruleId, systemImage: "exclamationmark.triangle")
+                Label(issue.ruleId, systemImage: "exclamationmark.triangle")
                     .font(.headline)
                 Spacer()
                 Text(severityTitle)
@@ -1464,13 +1575,17 @@ private struct FindingCard: View {
                     .foregroundStyle(.secondary)
             }
 
-            Text(finding.message)
+            Text(issue.message)
+
+            Text(UIStrings.findingIssueImpact(issue.impactedInstanceCount, issue.entryCount))
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 5) {
                 Label(UIStrings.findingRemediation, systemImage: "wrench.and.screwdriver")
                     .font(.caption.bold())
                     .foregroundStyle(.secondary)
-                Text(FindingDisplayModel.remediationText(for: finding))
+                Text(issue.remediation)
                     .foregroundStyle(.secondary)
             }
             .padding(10)
@@ -1491,7 +1606,7 @@ private struct FindingSeverityHeader: View {
             Label(group.title, systemImage: systemImage)
                 .font(.subheadline.bold())
                 .foregroundStyle(tint)
-            Text(UIStrings.findingGroupCount(group.findings.count))
+            Text(UIStrings.findingSeverityGroupCount(group.issues.count))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer(minLength: 0)
@@ -1564,13 +1679,19 @@ private struct PermissionSummaryCard: View {
 private struct ConflictsSection: View {
     let conflicts: [ConflictGroupRecord]
     let selectedSkillID: String
+    let currentAgentSkillIDs: Set<String>
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            Label(UIStrings.currentAgentConflictsOnly, systemImage: "person.crop.circle.badge.exclamationmark")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
             if conflicts.isEmpty {
                 EmptyState(title: UIStrings.noConflicts, systemImage: "checkmark.circle", message: UIStrings.noConflictsMessage)
             } else {
                 ForEach(conflicts) { conflict in
+                    let currentAgentInstanceIDs = conflict.instanceIds.filter { currentAgentSkillIDs.contains($0) }
                     VStack(alignment: .leading, spacing: 10) {
                         Text(conflict.reason)
                             .font(.headline)
@@ -1579,7 +1700,7 @@ private struct ConflictsSection: View {
                         Text(UIStrings.instances)
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        ForEach(conflict.instanceIds, id: \.self) { instanceID in
+                        ForEach(currentAgentInstanceIDs, id: \.self) { instanceID in
                             Label(
                                 instanceID == selectedSkillID ? "\(instanceID) · selected" : instanceID,
                                 systemImage: instanceID == selectedSkillID ? "target" : "circle"
