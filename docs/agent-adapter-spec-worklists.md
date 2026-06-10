@@ -1,7 +1,7 @@
 # Agent Adapter Spec Worklists
 
-> Status: Codex first implementation, V2.1 dual adapter experience, V2.2 project context implementation, V2.3 Codex adapter hardening, V2.4 opencode read-only adapter, V2.5 audit hardening, V2.6 adapter changelog tracking, V2.7 LLM gate safety notes, V2.8-V2.10 safety/docs closeout, V2.11 Adapter Capability Matrix, V2.12 opencode writable, V2.13 Pi read-only scanner/parser, V2.14 Hermes evidence-gate closeout, and V2.15 OpenClaw evidence-gate closeout are integrated. V2.36 Pi writable evidence harness and V2.37 guarded Pi writable toggle slice are complete; V2.38 Hermes external roots is active.
-> Real local UI validation passed for the previous mainline app on 2026-06-10. V2.37 completed real app smoke/window capture and direct CG/AX window checks, while Computer Use returned `cgWindowNotFound`; future user-visible, UI, or service-protocol candidates still require a fresh real local pass or explicit tool/session blocker. opencode writable, Pi read-only scan, Pi guarded native toggle, OpenClaw read-only scan, and Hermes read-only scan are implemented; Pi install and Hermes/OpenClaw writable support remain blocked.
+> Status: Codex first implementation, V2.1 dual adapter experience, V2.2 project context implementation, V2.3 Codex adapter hardening, V2.4 opencode read-only adapter, V2.5 audit hardening, V2.6 adapter changelog tracking, V2.7 LLM gate safety notes, V2.8-V2.10 safety/docs closeout, V2.11 Adapter Capability Matrix, V2.12 opencode writable, V2.13 Pi read-only scanner/parser, V2.14 Hermes evidence-gate closeout, and V2.15 OpenClaw evidence-gate closeout are integrated. V2.36 Pi writable evidence harness, V2.37 guarded Pi writable toggle slice, and V2.38 Hermes external roots are complete; V2.39 OpenClaw workspace deepening is active.
+> Real local UI validation passed for the previous mainline app on 2026-06-10. V2.38 completed real app smoke launch/window id checks, while Computer Use/AX/capture returned `cgWindowNotFound` / no visible window; future user-visible, UI, or service-protocol candidates still require a fresh real local pass or explicit tool/session blocker. opencode writable, Pi read-only scan, Pi guarded native toggle, OpenClaw read-only scan, Hermes read-only scan, and Hermes explicit external-root scan are implemented; Pi install and Hermes/OpenClaw writable support remain blocked.
 > This document records what is verified enough to use for project instructions, and what is still missing before an adapter can be built.
 
 ## Current Rule
@@ -103,7 +103,7 @@ Project scope decision: Hermes has no confirmed generic project-level skills. Th
 V2.17 verifier checklist for this read-only phase:
 - Scan only active/profile Hermes home `skills/**/SKILL.md`.
 - No generic project scans.
-- `skills.external_dirs` stays a future explicit external-root feature, not an auto scan root.
+- `skills.external_dirs` is modeled as explicit external roots, not auto scan roots.
 - Exclude `.env`, `auth.json`, `logs`, `cron/jobs.json`, and cron task entries from `SkillInstance` mapping.
 - No `hermes` CLI calls in read-only catalog scanning.
 - Writable toggles/install remain blocked.

@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-**当前阶段**：V2.37 Pi writable guarded slice 已完成并通过 focused Rust/Swift/protocol gates、`pnpm check:macos`、真实本机 App smoke/window capture、bundled `service.status` capability check、`pnpm check:privacy` 与截图人工检查；V2.38 Hermes external roots 已启动。V2.37 只开放 evidence-backed Pi native global/project/package guarded toggle；install 继续 blocked。该切片不做脚本执行、不会触发 AI 自动写回、不写 credentials、且不放开任意兼容根可写路径。继续围绕 skills 管理、检查、分析和配置审计推进。
+**当前阶段**：V2.38 Hermes external roots 已完成并通过 focused Hermes Rust tests、Swift tests 与 `pnpm check:macos`；V2.39 OpenClaw workspace 深化已启动。V2.38 只把 Hermes `skills.external_dirs` 建模为 explicit external roots，不推断 generic project roots；Hermes writable/install 继续 blocked。继续围绕 skills 管理、检查、分析和配置审计推进。
 
-**近期主线**：继续围绕 skills 管理、检查、分析和配置审计打磨体验。短期不做全平台 UI 适配、正式签名 release、notarization、DMG/ZIP 或 public distribution。OpenClaw/Hermes writable/install 与 Pi install 仍保持 blocked；Pi production toggle 仅限 V2.37 evidence-backed guarded native scope，不自动开放兼容根写入。
+**近期主线**：继续围绕 skills 管理、检查、分析和配置审计打磨体验。短期不做全平台 UI 适配、正式签名 release、notarization、DMG/ZIP 或 public distribution。OpenClaw/Hermes writable/install 与 Pi install 仍保持 blocked；Pi production toggle 仅限 V2.37 evidence-backed guarded native scope，不自动开放兼容根写入。V2.39 阶段深化 OpenClaw workspace scope，不推断任意 repo，不新增写入能力。
 
 **已集成能力**：
 
@@ -22,8 +22,8 @@
 - V2.13 Pi read-only scanner/parser：支持 Pi-native global/project roots，Pi writes 继续 blocked。
 - V2.14 Hermes evidence-gate closeout 与 V2.17 Hermes read-only scanner：active/profile Hermes home `skills/**/SKILL.md` 只读进入 catalog。
 - V2.15 OpenClaw evidence-gate closeout 与 V2.16 OpenClaw read-only scanner：workspace/global documented filesystem roots 只读进入 catalog。
-- V2.18-V2.37：cross-agent analysis、skill health dashboard、read-only AI skill analysis、scan accuracy/dedupe、finding/conflict 语义、Health/Adapter Capability UX、Detail 诊断口径、Agent-config timeline、Finding explainability、skill identity/provenance dedupe、conflict semantic closeout、finding triage persistence、AI skill analysis workflow、Cleanup Queue、Rule tuning / suppression、Safe batch actions、Cross-agent comparison view、Local report export、Pi writable evidence harness、Pi guarded writable toggle 已收口；V2.38 Hermes external roots 正在进行。
-- 2026-06-10 真实本机 app Computer Use validation 曾对之前 mainline baseline 通过；V2.37 slice 已完成真实 app smoke/window capture，但 Computer Use 工具本轮返回 `cgWindowNotFound`，后续 UI/service/protocol 变更仍需重跑并记录 blocker。
+- V2.18-V2.38：cross-agent analysis、skill health dashboard、read-only AI skill analysis、scan accuracy/dedupe、finding/conflict 语义、Health/Adapter Capability UX、Detail 诊断口径、Agent-config timeline、Finding explainability、skill identity/provenance dedupe、conflict semantic closeout、finding triage persistence、AI skill analysis workflow、Cleanup Queue、Rule tuning / suppression、Safe batch actions、Cross-agent comparison view、Local report export、Pi writable evidence harness、Pi guarded writable toggle、Hermes external roots 已收口；V2.39 OpenClaw workspace 深化正在进行。
+- 2026-06-10 真实本机 app Computer Use validation 曾对之前 mainline baseline 通过；V2.38 slice 已完成真实 app smoke launch/window id 检查，但 Computer Use/AX/capture 本轮返回 `cgWindowNotFound` / 无可见窗口，后续 UI/service/protocol 变更仍需重跑并记录 blocker。
 
 **当前产品 UI**：SwiftUI/AppKit macOS 原生壳 + Rust service protocol。
 
@@ -37,7 +37,7 @@
 | Codex | 已支持已验证范围 | 支持 verified user/project roots、cwd→repo-root discovery、`catalog.scanAll`、agent filter、project context 归属和用户级 `config.toml` toggle。 |
 | opencode | 已支持已验证范围 | 支持 native roots：`~/.config/opencode/skills` 和当前项目 `.opencode/skills`；支持 guarded writable toggle/install，写入 exact `permission.skill.<name> = "deny"` 并保留 snapshot/rollback。 |
 | Pi | guarded toggle + install blocked | V2.13 已实现 Pi-native global/project scanner/parser；V2.36 disposable evidence harness 已验证 global/project/package toggle、rollback、trust gate、invalid JSON/config 处理、re-enable；V2.37 已实现最小 guarded native global/project/package toggle，project/package 需要 trusted project settings，compatibility roots 不可写，install 仍 blocked。 |
-| Hermes | read-only | V2.17 已实现 active/profile Hermes home `skills/**/SKILL.md` 只读扫描；不做 generic project scan；显式 `skills.external_dirs` 另行设计为 external roots；writable toggle/install 仍 blocked。 |
+| Hermes | read-only | V2.17 已实现 active/profile Hermes home `skills/**/SKILL.md` 只读扫描；V2.38 已支持显式 `skills.external_dirs` 作为 read-only external roots；不做 generic project scan；writable toggle/install 仍 blocked。 |
 | OpenClaw | read-only | V2.16 已实现文档化 filesystem roots 只读扫描；project scope 仅限 OpenClaw workspace roots，不按任意 repo root 推断；writable toggle/install 仍 blocked。 |
 
 ## 近期版本规划
@@ -51,7 +51,8 @@
 | V2.35 | Local report export（脱敏 Markdown/JSON 本地审计报告） | 已完成：本地 app-data 导出、递归路径脱敏、无 public distribution/provider/credential/script/自动写回路径 |
 | V2.36 | Pi writable evidence harness | 已完成：临时 agentDir/fixture project evidence-only 验证通过（global/project/package toggle 语义、rollback、trust gate、invalid JSON/config 处理、re-enable）；生产 writable 仍 blocked |
 | V2.37 | Pi writable guarded slice | 已完成：Pi native global/project/package guarded toggle、preview/snapshot/rollback、disabled-state rescan；Pi install/兼容根写入/脚本执行/AI 自动写回/credentials 仍 blocked |
-| V2.38 | Hermes external roots | 进行中：将明确配置的 `skills.external_dirs` 建模为 external roots，不推断 generic project roots；writable/install 继续 blocked |
+| V2.38 | Hermes external roots | 已完成：将配置 `skills.external_dirs` 作为 explicit external roots 进入只读扫描与 UI provenance，不推断 generic project roots；writable/install 继续 blocked |
+| V2.39 | OpenClaw workspace 深化 | 进行中：精准识别 OpenClaw workspace scope，只扫描 confirmed workspace roots，不推断任意 repo；writable/install 继续 blocked |
 | V2.30 | AI skill analysis workflow（selected/batch read-only 预览，默认禁用，非凭证/非写入） | Completed |
 | V2.29 | Finding triage persistence（Open / Reviewed / Ignored / Needs follow-up；仅 app-local） | Completed |
 | V2.28 | Conflict semantic closeout（验收：Conflicts=当前 agent runtime/name collision；Analysis=cross-agent duplicate/source overlap/enabled mismatch；health conflict_count 不含 cross-agent analysis） | 已完成 |

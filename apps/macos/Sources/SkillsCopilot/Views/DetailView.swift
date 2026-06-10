@@ -579,8 +579,14 @@ private enum SkillProvenanceDisplay {
             }
             return skill.provenance.label
         case .external:
+            if skill.agent == "hermes" {
+                return UIStrings.provenanceHermesExternalRoot
+            }
             return UIStrings.provenanceExternalRoot
         case .readOnly:
+            if skill.agent == "hermes" {
+                return UIStrings.provenanceHermesHomeProfileRoot
+            }
             return "\(DisplayText.agent(skill.agent)) \(UIStrings.provenanceReadOnlyRoot)"
         case .unknown:
             return UIStrings.provenanceUnclassifiedRoot
@@ -1788,6 +1794,12 @@ private struct SkillDetailCard: View {
     private var adapterAccessStatus: String {
         if skill.agent == "pi" && adapterCapability?.configToggle.supported == true {
             return UIStrings.piGuardedToggleBoundary
+        }
+        if skill.agent == "hermes" {
+            if skill.provenance.rootKind == .external || skill.provenance.scopeKind == .external {
+                return UIStrings.hermesExternalAccess
+            }
+            return UIStrings.hermesHomeProfileAccess
         }
         return UIStrings.readOnlyAdapterStatus(DisplayText.agent(skill.agent))
     }

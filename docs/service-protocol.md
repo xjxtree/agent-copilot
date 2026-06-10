@@ -1,6 +1,6 @@
 # skills-copilot Service Protocol
 
-> Status: V2.36 Pi writable evidence harness and V2.37 Pi writable guarded slice are integrated; V2.38 Hermes external roots is active. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, V2.19 health dashboard, V2.20 read-only AI skill analysis assist, V2.21 scan accuracy/dedupe alignment, V2.22 finding/conflict semantics, V2.23 Health Dashboard / Adapter Capability UX, V2.24 Skill Detail diagnostics, V2.25 Agent-config timeline, V2.26 Finding explainability, V2.27 Skill identity/provenance dedupe, V2.28 Conflict semantic closeout, V2.29 Finding triage persistence, V2.30 AI skill analysis workflow, V2.31 Cleanup Queue, V2.32 Rule tuning / suppression, V2.33 Safe batch actions, V2.34 Cross-agent comparison view, V2.35 Local report export, V2.36 Pi writable evidence harness, and V2.37 Pi guarded toggle are implemented or synchronized. V2.33 adds `batch.previewSkillToggles` and `batch.applySkillToggles` for preview-first verified writable toggles with explicit confirmation and matching preview id before apply; V2.34 adds read-only `comparison.listCrossAgent`; V2.35 adds user-triggered local/redacted `report.exportLocal`; V2.36 adds evidence-only `evidence.piWritableHarness`. V2.37 adds a guarded minimal Pi native toggle slice (global/project/package), and Pi install stays blocked.
+> Status: V2.36 Pi writable evidence harness, V2.37 Pi writable guarded slice, and V2.38 Hermes external roots are integrated; V2.39 OpenClaw workspace deepening is active. V2.38 models `skills.external_dirs` as explicit read-only external roots, not generic project roots, and Hermes writable/install remains blocked. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, V2.19 health dashboard, V2.20 read-only AI skill analysis assist, V2.21 scan accuracy/dedupe alignment, V2.22 finding/conflict semantics, V2.23 Health Dashboard / Adapter Capability UX, V2.24 Skill Detail diagnostics, V2.25 Agent-config timeline, V2.26 Finding explainability, V2.27 Skill identity/provenance dedupe, V2.28 Conflict semantic closeout, V2.29 Finding triage persistence, V2.30 AI skill analysis workflow, V2.31 Cleanup Queue, V2.32 Rule tuning / suppression, V2.33 Safe batch actions, V2.34 Cross-agent comparison view, V2.35 Local report export, V2.36 Pi writable evidence harness, V2.37 Pi guarded toggle, and V2.38 Hermes external roots are implemented or synchronized. V2.33 adds `batch.previewSkillToggles` and `batch.applySkillToggles` for preview-first verified writable toggles with explicit confirmation and matching preview id before apply; V2.34 adds read-only `comparison.listCrossAgent`; V2.35 adds user-triggered local/redacted `report.exportLocal`; V2.36 adds evidence-only `evidence.piWritableHarness`; V2.37 adds a guarded minimal Pi native toggle slice (global/project/package), and Pi install stays blocked.
 
 ## V2.36 Pi writable evidence harness（完成）
 
@@ -75,7 +75,7 @@ This stdio shape can later move behind a local socket without changing method pa
 | `skill.exportBundle` | Yes, writes app-controlled export files | V2.9 local tool-global/staging export | manifest path, bundle path, fingerprint, and reproducible metadata |
 | `skill.install` | Yes, after confirmation | V2.9 install/copy from tool-global to target agent | preview or completed install record with target path, files, risks, confirmation, and optional snapshot id for future config-backed installs |
 | `skill.listEvents` | No | Native macOS skill detail Recent Activity | recent local `skill_event` records for `{ "instance_id": "...", "limit"?: 12 }` |
-| `config.toggleSkill` | Yes, writes agent config | Native macOS Enable / Disable action; batch apply must stay preview-confirmed and call this per-skills path. Pi write scope for V2.37 is limited to native/global/project/package with no compatibility-root writes | updated `SkillRecord` |
+| `config.toggleSkill` | Yes, writes agent config | Native macOS Enable / Disable action; batch apply must stay preview-confirmed and call this per-skills path. Pi write scope for V2.37 is limited to native/global/project/package with no compatibility-root writes; Hermes remains read-only until explicit write evidence is in scope | updated `SkillRecord` |
 | `config.readClaudeSettings` | No | Native macOS Settings editor load action | `ConfigDocumentRecord` |
 | `config.saveClaudeSettings` | Yes, writes Claude settings and rescans | Native macOS Settings editor Save action | saved `ConfigDocumentRecord` |
 | `snapshot.list` | No | Compatibility / diagnostics | global `ConfigSnapshotRecord[]` (app-level, not skill-content snapshots) |
@@ -92,7 +92,7 @@ It currently scans:
 - opencode (verified writable through managed permission overrides; scans native plus official compatibility roots)
 - Pi (read-only native roots)
 - OpenClaw (read-only filesystem roots)
-- Hermes (read-only active/profile home skills)
+- Hermes (read-only active/profile home skills; V2.38 models `skills.external_dirs` as explicit external roots only, not generic project roots)
 
 It resolves the effective `ProjectContext` before adapter scanning.
 

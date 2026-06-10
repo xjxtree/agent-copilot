@@ -1056,7 +1056,7 @@ mod tests {
     }
 
     #[test]
-    fn hermes_scans_active_home_skills_only_and_ignores_service_files() {
+    fn hermes_scans_active_home_and_explicit_external_dirs_only() {
         let temp_root =
             std::env::temp_dir().join(format!("skills-copilot-hermes-scan-{}", std::process::id()));
         let home = temp_root.join("home");
@@ -1064,10 +1064,22 @@ mod tests {
             &home.join(".hermes/skills/nested/research"),
             "hermes-research",
         );
+        let external_skill_path = write_hermes_skill(
+            &temp_root.join("configured-external/analysis"),
+            "external-analysis",
+        );
         write_hermes_skill(
             &temp_root.join("repo/skills/project-skill"),
             "project-skill",
         );
+        std::fs::write(
+            home.join(".hermes/config.yaml"),
+            format!(
+                "skills:\n  external_dirs:\n    - {}\n",
+                temp_root.join("configured-external").display()
+            ),
+        )
+        .expect("write Hermes config");
         std::fs::create_dir_all(home.join(".hermes/cron")).expect("create hermes cron dir");
         std::fs::create_dir_all(home.join(".hermes/logs")).expect("create hermes logs dir");
         std::fs::write(home.join(".hermes/.env"), "HERMES_TOKEN=<redacted>\n")
@@ -1098,11 +1110,23 @@ mod tests {
 
         let report = scan_agent(&HermesAdapter, &ctx).expect("scan succeeds");
 
-        assert_eq!(report.instances.len(), 1);
-        assert_eq!(report.instances[0].agent, AgentId::Hermes);
-        assert_eq!(report.instances[0].scope, Scope::AgentGlobal);
-        assert_eq!(report.instances[0].name, "hermes-research");
-        assert_eq!(report.instances[0].path, hermes_skill_path);
+        assert_eq!(report.instances.len(), 2);
+        assert!(report.instances.iter().any(|instance| {
+            instance.agent == AgentId::Hermes
+                && instance.scope == Scope::AgentGlobal
+                && instance.name == "hermes-research"
+                && instance.path == hermes_skill_path
+        }));
+        assert!(report.instances.iter().any(|instance| {
+            instance.agent == AgentId::Hermes
+                && instance.scope == Scope::AgentGlobal
+                && instance.name == "external-analysis"
+                && instance.path == external_skill_path
+        }));
+        assert!(report
+            .instances
+            .iter()
+            .all(|instance| instance.name != "project-skill"));
 
         let _ = std::fs::remove_dir_all(&temp_root);
     }

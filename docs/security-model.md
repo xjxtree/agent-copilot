@@ -143,6 +143,10 @@ V2.4 把 opencode 作为第三个 adapter 接入 catalog；当前实现按官方
 - Smoke fixture 只能使用临时 `HOME` 和临时 project roots 创建 opencode native/compatibility roots；不得读取、创建或修改真实用户 opencode config。
 - Writable opencode 行为（`permission.skill` exact patch、wildcard precedence、managed config、re-enable semantics）必须等 disposable local round-trip 或 maintainer spec 验证后才能进入实现。
 
+### 2.2.4 Hermes external roots（V2.38 completed）
+
+V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit external roots，不推断为 generic project roots；实现与安全边界继续保持 Hermes 只读扫描。Hermes writable/install 及写回路径（包含脚本执行、AI 自动写回、credentials 持久化、public distribution）均保持 blocked。
+
 ### 2.3 监听事件的拒绝服务
 
 > MVP 曾在 Tauri 层监听 Claude Code 已存在的 `.claude` 根目录。当前 native macOS 路线下，监听属于 Rust service，而不是 UI shell。当前只响应 `SKILL.md`、`settings.json`、`settings.local.json` 变更；不存在的根不会被主动创建。

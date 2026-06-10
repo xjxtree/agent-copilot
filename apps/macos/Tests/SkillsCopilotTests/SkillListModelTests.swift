@@ -195,6 +195,11 @@ struct SkillListModelTests {
             scope: "agent-global",
             path: "$HOME/.hermes/skills/foo/SKILL.md"
         )
+        let hermesExternalSkill = Self.identityRecord(
+            agent: "hermes",
+            scope: "agent-external",
+            path: "/mnt/shared/hermes-skills/foo/SKILL.md"
+        )
         let openClawSkill = Self.identityRecord(
             agent: "openclaw",
             scope: "agent-project",
@@ -218,7 +223,10 @@ struct SkillListModelTests {
         try expectEqual(piDirectorySkill.catalogIdentityPath, "$HOME/.pi/skills/foo", "Pi directory SKILL.md identity should use its containing directory.")
         try expectEqual(piDirectDocument.isCatalogedSkillIdentity, false, "Pi direct .md files should not be treated as cataloged skills.")
         try expectEqual(piDirectDocument.provenance.label, "Pi document (not cataloged)", "Pi direct .md label")
-        try expectEqual(hermesSkill.provenance.label, "Hermes read-only global", "Hermes should retain read-only provenance.")
+        try expectEqual(hermesSkill.provenance.label, "Hermes home/profile read-only", "Hermes home/profile roots should be explicit.")
+        try expectEqual(hermesExternalSkill.provenance.rootKind, .external, "Hermes external dirs should be modeled as external roots.")
+        try expectEqual(hermesExternalSkill.provenance.scopeKind, .external, "Hermes external dirs should not be treated as project scope.")
+        try expectEqual(hermesExternalSkill.provenance.label, "Hermes explicit external read-only", "Hermes external dirs should retain read-only provenance.")
         try expectEqual(openClawSkill.provenance.label, "OpenClaw read-only project", "OpenClaw should retain read-only provenance.")
     }
 

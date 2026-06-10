@@ -18,11 +18,14 @@ impl AgentAdapter for HermesAdapter {
     }
 
     fn roots(&self, ctx: &AdapterContext) -> Vec<AdapterRoot> {
-        vec![AdapterRoot {
+        let hermes_home = hermes_home(ctx);
+        let mut roots = vec![AdapterRoot {
             scope: Scope::AgentGlobal,
-            path: ctx.user_home.join(".hermes/skills"),
+            path: hermes_home.join("skills"),
             source: RootSource::UserHome,
-        }]
+        }];
+        roots.extend(hermes_external_skill_roots(&hermes_home, &ctx.user_home));
+        roots
     }
 
     fn parse(&self, path: &Path) -> Result<SkillInstance, AdapterError> {
@@ -83,6 +86,95 @@ impl AgentAdapter for HermesAdapter {
     fn config_paths(&self, _ctx: &AdapterContext) -> Vec<PathBuf> {
         Vec::new()
     }
+}
+
+fn hermes_home(ctx: &AdapterContext) -> PathBuf {
+    ctx.user_home.join(".hermes")
+}
+
+fn hermes_external_skill_roots(hermes_home: &Path, user_home: &Path) -> Vec<AdapterRoot> {
+    let config_path = hermes_home.join("config.yaml");
+    let Ok(config_text) = std::fs::read_to_string(&config_path) else {
+        return Vec::new();
+    };
+    let config_dir = config_path.parent().unwrap_or(hermes_home);
+    parse_external_dirs(&config_text, config_dir, user_home)
+        .into_iter()
+        .map(|path| AdapterRoot {
+            scope: Scope::AgentGlobal,
+            path,
+            source: RootSource::Extra,
+        })
+        .collect()
+}
+
+fn parse_external_dirs(config_text: &str, config_dir: &Path, user_home: &Path) -> Vec<PathBuf> {
+    let Ok(config) = serde_yaml::from_str::<serde_yaml::Value>(config_text) else {
+        return Vec::new();
+    };
+    let Some(external_dirs) = config
+        .get("skills")
+        .and_then(|skills| skills.get("external_dirs"))
+        .and_then(serde_yaml::Value::as_sequence)
+    else {
+        return Vec::new();
+    };
+
+    let mut dirs = Vec::new();
+    for entry in external_dirs {
+        let Some(raw_dir) = entry.as_str() else {
+            continue;
+        };
+        let Some(path) = external_dir_path(raw_dir, config_dir, user_home) else {
+            continue;
+        };
+        if !dirs.contains(&path) {
+            dirs.push(path);
+        }
+    }
+    dirs
+}
+
+fn external_dir_path(raw_dir: &str, config_dir: &Path, user_home: &Path) -> Option<PathBuf> {
+    let raw_dir = raw_dir.trim();
+    if raw_dir.is_empty() {
+        return None;
+    }
+
+    let path = if raw_dir == "~" {
+        user_home.to_path_buf()
+    } else if let Some(stripped) = raw_dir.strip_prefix("~/") {
+        user_home.join(stripped)
+    } else {
+        let path = PathBuf::from(raw_dir);
+        if path.is_absolute() {
+            path
+        } else {
+            config_dir.join(path)
+        }
+    };
+
+    Some(normalize_path_lexically(&path))
+}
+
+fn normalize_path_lexically(path: &Path) -> PathBuf {
+    use std::path::Component;
+
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if !normalized.pop() {
+                    normalized.push(component.as_os_str());
+                }
+            }
+            Component::Prefix(_) | Component::RootDir | Component::Normal(_) => {
+                normalized.push(component.as_os_str());
+            }
+        }
+    }
+    normalized
 }
 
 struct ParsedSkill {
@@ -161,7 +253,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn exposes_active_hermes_home_only() {
+    fn exposes_active_hermes_home_without_inferred_project_or_extra_roots() {
         let adapter = HermesAdapter;
         let ctx = AdapterContext {
             user_home: PathBuf::from("/tmp/home"),
@@ -180,6 +272,64 @@ mod tests {
         assert_eq!(roots[0].scope, Scope::AgentGlobal);
         assert_eq!(roots[0].source, RootSource::UserHome);
         assert_eq!(roots[0].path, PathBuf::from("/tmp/home/.hermes/skills"));
+    }
+
+    #[test]
+    fn exposes_explicit_external_dirs_from_hermes_config_as_read_only_extra_roots() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "skills-copilot-hermes-external-roots-{}",
+            std::process::id()
+        ));
+        let home = temp_root.join("home");
+        let external_one = temp_root.join("external-one");
+        std::fs::create_dir_all(home.join(".hermes")).expect("create Hermes home");
+        std::fs::write(
+            home.join(".hermes/config.yaml"),
+            format!(
+                "skills:\n  external_dirs:\n    - {}\n    - ~/shared-hermes\n    - ../relative-external\n    - {}\n    - 42\n",
+                external_one.display(),
+                external_one.display()
+            ),
+        )
+        .expect("write Hermes config");
+        let adapter = HermesAdapter;
+        let ctx = AdapterContext {
+            user_home: home.clone(),
+            project_root: Some(temp_root.join("project")),
+            project_cwd: Some(temp_root.join("project/nested")),
+            extra_roots: vec![AdapterRoot {
+                scope: Scope::AgentGlobal,
+                path: temp_root.join("unverified"),
+                source: RootSource::Extra,
+            }],
+        };
+
+        let roots = adapter.roots(&ctx);
+
+        assert_eq!(roots.len(), 4);
+        assert_eq!(roots[0].path, home.join(".hermes/skills"));
+        assert_eq!(roots[0].source, RootSource::UserHome);
+        assert_eq!(roots[1].path, external_one);
+        assert_eq!(roots[1].scope, Scope::AgentGlobal);
+        assert_eq!(roots[1].source, RootSource::Extra);
+        assert_eq!(roots[2].path, home.join("shared-hermes"));
+        assert_eq!(roots[2].source, RootSource::Extra);
+        assert_eq!(roots[3].path, home.join("relative-external"));
+        assert_eq!(roots[3].source, RootSource::Extra);
+        assert!(
+            roots
+                .iter()
+                .all(|root| root.path != temp_root.join("project")),
+            "Hermes must not infer generic project roots"
+        );
+        assert!(
+            roots
+                .iter()
+                .all(|root| root.path != temp_root.join("unverified")),
+            "Hermes must not consume AdapterContext extra_roots as external_dirs"
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_root);
     }
 
     #[test]

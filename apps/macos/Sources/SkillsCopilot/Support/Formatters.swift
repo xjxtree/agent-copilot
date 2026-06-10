@@ -24,9 +24,14 @@ enum DisplayText {
             return UIStrings.text("scope.agentGlobal", "Agent Global")
         case "agent-project":
             return UIStrings.text("scope.project", "Project")
+        case "agent-external":
+            return UIStrings.text("scope.agentExternal", "External")
         case "tool-global":
             return UIStrings.text("scope.toolGlobal", "Tool Global")
         default:
+            if value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().contains("external") {
+                return UIStrings.text("scope.external", "External")
+            }
             return value
         }
     }

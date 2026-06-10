@@ -2,7 +2,7 @@
 
 > skills-copilot 支持的 6 个 agent 的适配要点。
 >
-> 当前版本线：V2.11 Adapter Capability Matrix、V2.12 opencode writable、V2.13 Pi read-only scanner/parser、V2.14 Hermes evidence-gate closeout、V2.15 OpenClaw evidence-gate closeout、V2.16 OpenClaw read-only scanner、V2.17 Hermes read-only scanner、V2.18 cross-agent analysis、V2.19 skill health dashboard、V2.20 read-only AI skill analysis assist、V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout 均已完成。V2.29 Finding triage persistence、V2.30 read-only AI analysis workflow、V2.31 Cleanup Queue、V2.32 Rule tuning / suppression、V2.33 Safe batch actions、V2.34 Cross-agent comparison view、V2.35 Local report export、V2.36 Pi writable evidence harness 均已收口。V2.37 Pi writable guarded slice 已启动；V2.28 验收关键已收口：同 agent 的 runtime/name collision 进入 `Conflicts`；跨 agent duplicate/source overlap/enabled mismatch 进入 `Analysis`；health 冲突计数不包含 cross-agent analysis 分组。
+> 当前版本线：V2.11 Adapter Capability Matrix、V2.12 opencode writable、V2.13 Pi read-only scanner/parser、V2.14 Hermes evidence-gate closeout、V2.15 OpenClaw evidence-gate closeout、V2.16 OpenClaw read-only scanner、V2.17 Hermes read-only scanner、V2.18 cross-agent analysis、V2.19 skill health dashboard、V2.20 read-only AI skill analysis assist、V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout 均已完成。V2.29 Finding triage persistence、V2.30 read-only AI analysis workflow、V2.31 Cleanup Queue、V2.32 Rule tuning / suppression、V2.33 Safe batch actions、V2.34 Cross-agent comparison view、V2.35 Local report export、V2.36 Pi writable evidence harness、V2.37 Pi writable guarded slice、V2.38 Hermes external roots 均已收口。V2.39 OpenClaw workspace 深化正在进行；V2.28 验收关键已收口：同 agent 的 runtime/name collision 进入 `Conflicts`；跨 agent duplicate/source overlap/enabled mismatch 进入 `Analysis`；health 冲突计数不包含 cross-agent analysis 分组。
 >
 > 扫描适配器实现 `AgentAdapter`。
 >
@@ -87,7 +87,7 @@ pub struct AdapterFeatureCapability {
 | Codex | `verified` | 支持（user + verified project roots） | 支持（仅用户 `config.toml`） | 支持（tool-global install） | 支持（verified） | 项目级 `.codex/config.toml`、plugin/admin/system roots blocked |
 | opencode | `verified` | 支持 native roots + 官方 `.claude` / `.agents` compatibility roots | 支持（exact `permission.skill` deny/re-enable） | 支持（native-root 安装） | 支持（managed permission overrides） | 自定义 `skills.paths` / `skills.urls` 暂停 |
 | Pi | `guarded` | 支持 Pi-native roots | 支持 guarded native toggle（仅 global/project/package，基于证据） | blocked | limited | V2.37 已实现 preview/snapshot/rollback 与 disabled-state rescan；install、兼容 root 写入、脚本执行、AI 自动写回、credentials 仍 blocked |
-| Hermes | `read-only` | 支持 active/profile Hermes home | blocked（read-only 扫描） | blocked | blocked | generic project scan / toggle / install / writable blocked，外部目录 policy 待证据 |
+| Hermes | `read-only` | 支持 active/profile Hermes home | blocked（read-only 扫描） | blocked | blocked | 外部目录仅按 `skills.external_dirs` 显式 external roots 处理；generic project scan / toggle / install / writable blocked |
 | OpenClaw | `read-only` | 支持文档化 filesystem roots | blocked（read-only scan only） | blocked | blocked | project scope 仅 workspace，toggle/install/writable blocked |
 
 > **实现要求**：所有适配器**无状态**。
@@ -183,9 +183,9 @@ Codex 当前实现边界：
 | Spec 工作单 | [`docs/hermes-adapter-spec.md`](./hermes-adapter-spec.md) |
 | 统一工作单 | [`docs/agent-adapter-spec-worklists.md`](./agent-adapter-spec-worklists.md#hermes) |
 | Evidence fixture | `fixtures/hermes/` 只保存 service evidence 样例，不是 parser contract |
-| 只读范围 | 只扫描 active Hermes home 的 `skills/**/SKILL.md`；不做 generic project scan；`skills.external_dirs` 未来按 explicit external roots 处理；不把 cron jobs 映射为 `SkillInstance` |
+| 只读范围 | 扫描 active Hermes home 的 `skills/**/SKILL.md` 和 V2.38 explicit `skills.external_dirs`；不做 generic project scan；不把 cron jobs 映射为 `SkillInstance` |
 | 写入范围 | 禁止写 Hermes 配置；individual skill disable schema 和 rollback-safe writes 未验证 |
-| 行动项 | ① 保持 scoped read-only scanner；② 继续确认 profile/external_dirs 语义；③ 确认 individual skill disable/re-enable schema |
+| 行动项 | ① 保持 scoped read-only scanner；② `skills.external_dirs` 在实现中只作为 explicit external roots，不推断为 project scope；③ 继续确认 individual skill disable/re-enable schema |
 
 Hermes P0 evidence 已确认它是 Nous Research Hermes Agent，且有 first-class skills 和 active Hermes home `skills/**/SKILL.md`。
 

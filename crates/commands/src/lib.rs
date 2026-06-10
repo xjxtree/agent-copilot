@@ -761,11 +761,11 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
             status: "read-only",
             scan: AdapterFeatureCapability::supported_with_reason(
                 "verified-read-only",
-                "V2.17 scans active Hermes home ~/.hermes/skills/**/SKILL.md without reading Hermes secrets, cron content, logs, or config files.",
+                "V2.38 scans active Hermes home ~/.hermes/skills/**/SKILL.md plus explicit skills.external_dirs as read-only external roots without reading Hermes secrets, cron content, or logs.",
             ),
             project_scan: AdapterFeatureCapability::blocked(
                 "blocked",
-                "Hermes has no generic project-local skill discovery; project scan remains disabled unless explicit external_dirs policy is implemented.",
+                "Hermes has no generic project-local skill discovery; explicit skills.external_dirs are read-only external roots, not project roots.",
             ),
             config_toggle: AdapterFeatureCapability::blocked(
                 "blocked",
@@ -785,8 +785,9 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
             ),
             blockers: vec![
                 "Generic Hermes project-local skill discovery is not confirmed and remains disabled.",
+                "Hermes external_dirs are scan-only external roots, not writable or install targets.",
                 "Confirm individual skill disable/re-enable schema and rollback semantics before writable support.",
-                "Do not map Hermes cron jobs to SkillInstance in the first adapter slice.",
+                "Do not map Hermes cron jobs to SkillInstance.",
             ],
         },
         AdapterCapabilityRecord {

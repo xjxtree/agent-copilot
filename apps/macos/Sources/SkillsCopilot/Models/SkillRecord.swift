@@ -309,12 +309,18 @@ extension SkillRecord {
             scopeLabel = "scope"
         }
         if rootKind == .readOnly {
+            if normalizedAgent == "hermes" && scopeKind == .global {
+                return "\(agentLabel) home/profile read-only"
+            }
             return "\(agentLabel) read-only \(scopeLabel)"
         }
         if rootKind == .toolGlobal || scopeKind == .toolGlobal {
             return "\(agentLabel) tool-global"
         }
         if rootKind == .external || scopeKind == .external {
+            if normalizedAgent == "hermes" {
+                return "\(agentLabel) explicit external read-only"
+            }
             return "\(agentLabel) external"
         }
         return "\(agentLabel) \(rootLabel) \(scopeLabel)"

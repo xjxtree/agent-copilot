@@ -1567,6 +1567,9 @@ private struct SkillRow: View {
         if DisplayText.isToolGlobal(skill) {
             return "\(DisplayText.scope(skill.scope)) · \(UIStrings.readOnlyPreview)"
         }
+        if skill.agent == "hermes", DisplayText.isReadOnlyPreview(skill) {
+            return "\(DisplayText.scope(skill.scope)) · \(skill.provenance.label)"
+        }
         if DisplayText.isReadOnlyPreview(skill) {
             return "\(DisplayText.scope(skill.scope)) · \(UIStrings.readOnly)"
         }
