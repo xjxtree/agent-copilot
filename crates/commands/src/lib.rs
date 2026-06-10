@@ -22,7 +22,7 @@ use skills_copilot_catalog::{
 };
 use skills_copilot_core::{
     AdapterContext, AgentAdapter, AgentConfigAdapter, AgentConfigDocument, AgentId, ConfigFormat,
-    NetworkAccess, PermissionRequest, Scope, SkillInstance, SkillState,
+    NetworkAccess, PermissionRequest, RootSource, Scope, SkillInstance, SkillState,
 };
 use skills_copilot_scanner::{scan_agent, ScannerError};
 use thiserror::Error;
@@ -117,6 +117,63 @@ pub struct AdapterCapabilityRecord {
     pub install: AdapterFeatureCapability,
     pub writable: AdapterFeatureCapability,
     pub blockers: Vec<&'static str>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AdapterDiagnosticsRecord {
+    pub agent: &'static str,
+    pub display_name: &'static str,
+    pub status: &'static str,
+    pub roots: Vec<AdapterDiagnosticRootRecord>,
+    pub config: AdapterDiagnosticConfigSummary,
+    pub access: AdapterDiagnosticAccessSummary,
+    pub last_scan: AdapterDiagnosticLastScan,
+    pub blockers: Vec<&'static str>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AdapterDiagnosticRootRecord {
+    pub path: String,
+    pub scope: &'static str,
+    pub source: &'static str,
+    pub exists: bool,
+    pub status: &'static str,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AdapterDiagnosticConfigSummary {
+    pub status: &'static str,
+    pub detected_count: usize,
+    pub paths: Vec<AdapterDiagnosticConfigPath>,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AdapterDiagnosticConfigPath {
+    pub path: String,
+    pub detected: bool,
+    pub status: &'static str,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AdapterDiagnosticAccessSummary {
+    pub read_only: bool,
+    pub writable_supported: bool,
+    pub writable_status: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub writable_reason: Option<&'static str>,
+    pub install_supported: bool,
+    pub install_status: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub install_reason: Option<&'static str>,
+    pub read_only_reason: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AdapterDiagnosticLastScan {
+    pub status: &'static str,
+    pub reason: &'static str,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -824,6 +881,163 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
             ],
         },
     ]
+}
+
+pub fn list_adapter_diagnostics(ctx: &AdapterContext) -> Vec<AdapterDiagnosticsRecord> {
+    let capabilities = list_adapter_capabilities(ctx);
+    supported_scan_adapters()
+        .into_iter()
+        .filter_map(|adapter| {
+            let capability = capabilities
+                .iter()
+                .find(|capability| capability.agent == adapter.id().as_str())?;
+            let roots = adapter
+                .roots(ctx)
+                .into_iter()
+                .map(|root| adapter_diagnostic_root(adapter.id(), root))
+                .collect();
+            let config_paths: Vec<AdapterDiagnosticConfigPath> = adapter
+                .config_paths(ctx)
+                .into_iter()
+                .map(|path| {
+                    let detected = path.exists();
+                    AdapterDiagnosticConfigPath {
+                        path: path.to_string_lossy().to_string(),
+                        detected,
+                        status: if detected { "detected" } else { "missing" },
+                    }
+                })
+                .collect();
+            let detected_count = config_paths.iter().filter(|path| path.detected).count();
+            let config = adapter_diagnostic_config(adapter.id(), config_paths, detected_count);
+            let read_only = !capability.writable.supported;
+            let access = AdapterDiagnosticAccessSummary {
+                read_only,
+                writable_supported: capability.writable.supported,
+                writable_status: capability.writable.status,
+                writable_reason: capability.writable.reason,
+                install_supported: capability.install.supported,
+                install_status: capability.install.status,
+                install_reason: capability.install.reason,
+                read_only_reason: adapter_read_only_reason(capability),
+            };
+            Some(AdapterDiagnosticsRecord {
+                agent: capability.agent,
+                display_name: capability.display_name,
+                status: capability.status,
+                roots,
+                config,
+                access,
+                last_scan: AdapterDiagnosticLastScan {
+                    status: "not-run",
+                    reason: "No scan activity is persisted in adapter diagnostics; catalog.scanAll returns per-agent activity for the current refresh.",
+                },
+                blockers: capability.blockers.clone(),
+            })
+        })
+        .collect()
+}
+
+fn adapter_diagnostic_root(
+    agent: AgentId,
+    root: skills_copilot_core::AdapterRoot,
+) -> AdapterDiagnosticRootRecord {
+    let exists = root.path.exists();
+    let status = if exists {
+        "discovered"
+    } else {
+        "skipped-missing"
+    };
+    AdapterDiagnosticRootRecord {
+        path: root.path.to_string_lossy().to_string(),
+        scope: root.scope.as_str(),
+        source: root_source_label(&root.source),
+        exists,
+        status,
+        reason: adapter_root_reason(agent, &root, exists),
+    }
+}
+
+fn adapter_diagnostic_config(
+    agent: AgentId,
+    paths: Vec<AdapterDiagnosticConfigPath>,
+    detected_count: usize,
+) -> AdapterDiagnosticConfigSummary {
+    if paths.is_empty() {
+        return AdapterDiagnosticConfigSummary {
+            status: "blocked",
+            detected_count: 0,
+            paths,
+            reason: match agent {
+                AgentId::Hermes => "Hermes config mutation and rollback-safe skill toggle targets are unverified; diagnostics do not read Hermes secrets or cron content.".to_string(),
+                AgentId::Openclaw => "OpenClaw plugin config is not a verified skill toggle contract; writable/install remains blocked.".to_string(),
+                _ => "No verified adapter config path is declared for this agent.".to_string(),
+            },
+        };
+    }
+
+    AdapterDiagnosticConfigSummary {
+        status: if detected_count > 0 {
+            "detected"
+        } else {
+            "not-detected"
+        },
+        detected_count,
+        paths,
+        reason: if detected_count > 0 {
+            "One or more declared adapter config paths exist; contents were not returned."
+                .to_string()
+        } else {
+            "Declared adapter config paths were not present; no config contents were read."
+                .to_string()
+        },
+    }
+}
+
+fn adapter_read_only_reason(capability: &AdapterCapabilityRecord) -> String {
+    if capability.writable.supported {
+        capability
+            .writable
+            .reason
+            .unwrap_or("Writable support is verified for the bounded adapter operations listed in capabilities.")
+            .to_string()
+    } else {
+        capability
+            .writable
+            .reason
+            .unwrap_or("Writable support is blocked for this adapter.")
+            .to_string()
+    }
+}
+
+fn adapter_root_reason(
+    agent: AgentId,
+    root: &skills_copilot_core::AdapterRoot,
+    exists: bool,
+) -> String {
+    if !exists {
+        return "Root is declared by the adapter but does not exist, so scans skip it.".to_string();
+    }
+    match (agent, &root.source) {
+        (AgentId::Hermes, RootSource::Extra) => {
+            "Explicit Hermes skills.external_dirs root; read-only scan source, not a project root, writable target, or install target.".to_string()
+        }
+        (AgentId::Openclaw, RootSource::Project) => {
+            "Confirmed OpenClaw workspace root; arbitrary repository roots are not inferred or scanned.".to_string()
+        }
+        (AgentId::Pi, RootSource::Project) => {
+            "Pi project/package root is scan-capable; writable toggles remain guarded by trusted project settings and install remains blocked.".to_string()
+        }
+        _ => "Root is declared by the adapter and exists for read scanning.".to_string(),
+    }
+}
+
+fn root_source_label(source: &RootSource) -> &'static str {
+    match source {
+        RootSource::UserHome => "user-home",
+        RootSource::Project => "project",
+        RootSource::Extra => "extra",
+    }
 }
 
 pub fn get_skill(catalog: &Catalog, instance_id: &str) -> Result<SkillDetailRecord, CommandError> {

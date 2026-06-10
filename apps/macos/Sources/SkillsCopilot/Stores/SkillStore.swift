@@ -41,6 +41,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var refreshStatusMessage = UIStrings.refreshIdle
     @Published private(set) var watcherStatusMessage = UIStrings.refreshWatcherManual
     @Published private(set) var refreshLogEntries: [RefreshLogEntry] = []
+    @Published private(set) var lastScanActivity: RefreshActivity?
     @Published private(set) var canRetryLastRefresh = false
     @Published private(set) var claudeSettings: ConfigDocumentRecord?
     @Published private(set) var settingsMessage: String?
@@ -130,6 +131,10 @@ final class SkillStore: ObservableObject {
 
     var selectedAdapterCapability: AdapterCapabilityRecord? {
         adapterCapabilities.first { $0.agent == agentFilter.rawValue }
+    }
+
+    var selectedAgentRefreshSummary: AgentRefreshSummary? {
+        lastScanActivity?.agentSummaries?.first { $0.agent == agentFilter.rawValue }
     }
 
     var selectedAgentHealthSummary: AgentSkillHealthSummary? {
@@ -1103,6 +1108,7 @@ final class SkillStore: ObservableObject {
 
     private func applyRefreshActivity(_ activity: RefreshActivity?) {
         if let activity {
+            lastScanActivity = activity
             refreshStatusMessage = UIStrings.refreshScanComplete(
                 activity.scannedCount,
                 activity.skillCount,

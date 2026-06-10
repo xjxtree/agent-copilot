@@ -1242,6 +1242,7 @@ struct RefreshActivity: Codable, Hashable {
     let roots: [String]
     let logEntries: [RefreshLogEntry]
     let recoveryActions: [String]
+    let agentSummaries: [AgentRefreshSummary]?
 
     enum CodingKeys: String, CodingKey {
         case operation
@@ -1256,6 +1257,7 @@ struct RefreshActivity: Codable, Hashable {
         case roots
         case logEntries = "log_entries"
         case recoveryActions = "recovery_actions"
+        case agentSummaries = "agent_summaries"
     }
 }
 
@@ -1264,6 +1266,34 @@ struct RefreshLogEntry: Codable, Hashable, Identifiable {
     let message: String
 
     var id: String { "\(level):\(message)" }
+}
+
+struct AgentRefreshSummary: Codable, Hashable, Identifiable {
+    let agent: String
+    let displayLabel: String
+    let status: String
+    let scannedCount: Int
+    let catalogCount: Int
+    let brokenCount: Int
+    let rootsConsidered: [String]
+    let rootsScanned: [String]
+    let rootsSkipped: [String]
+    let recoveryActions: [String]
+
+    var id: String { agent }
+
+    enum CodingKeys: String, CodingKey {
+        case agent
+        case displayLabel = "display_label"
+        case status
+        case scannedCount = "scanned_count"
+        case catalogCount = "catalog_count"
+        case brokenCount = "broken_count"
+        case rootsConsidered = "roots_considered"
+        case rootsScanned = "roots_scanned"
+        case rootsSkipped = "roots_skipped"
+        case recoveryActions = "recovery_actions"
+    }
 }
 
 struct SnapshotRollbackPreviewRecord: Codable, Identifiable, Hashable {

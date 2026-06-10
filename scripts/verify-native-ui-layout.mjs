@@ -45,7 +45,7 @@ const checks = [
   {
     label: "sidebar exposes adapter capability status",
     text: files.sidebar,
-    pattern: /AdapterCapabilityCard\(capability:\s*capability\)/,
+    pattern: /AdapterCapabilityCard\(\s*capability:\s*capability,\s*scanSummary:/,
   },
   {
     label: "sidebar exposes state filter",

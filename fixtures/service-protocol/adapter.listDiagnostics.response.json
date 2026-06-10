@@ -1,0 +1,44 @@
+{
+  "id": "fixture-adapter-list-diagnostics",
+  "ok": true,
+  "result": [
+    {
+      "agent": "hermes",
+      "display_name": "Hermes",
+      "status": "read-only",
+      "roots": [
+        {
+          "path": "/tmp/skills-copilot-home/.hermes/skills",
+          "scope": "agent-global",
+          "source": "user-home",
+          "exists": false,
+          "status": "skipped-missing",
+          "reason": "Root is declared by the adapter but does not exist, so scans skip it."
+        }
+      ],
+      "config": {
+        "status": "blocked",
+        "detected_count": 0,
+        "paths": [],
+        "reason": "Hermes config mutation and rollback-safe skill toggle targets are unverified; diagnostics do not read Hermes secrets or cron content."
+      },
+      "access": {
+        "read_only": true,
+        "writable_supported": false,
+        "writable_status": "blocked",
+        "writable_reason": "Hermes writable toggle/install remains blocked until individual skill disable schema and rollback-safe writes are verified.",
+        "install_supported": false,
+        "install_status": "blocked",
+        "install_reason": "Hermes install semantics are not confirmed.",
+        "read_only_reason": "Hermes writable toggle/install remains blocked until individual skill disable schema and rollback-safe writes are verified."
+      },
+      "last_scan": {
+        "status": "not-run",
+        "reason": "No scan activity is persisted in adapter diagnostics; catalog.scanAll returns per-agent activity for the current refresh."
+      },
+      "blockers": [
+        "Hermes external_dirs are scan-only external roots, not writable or install targets."
+      ]
+    }
+  ]
+}

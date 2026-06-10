@@ -4,15 +4,15 @@
 >
 > 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.40 Adapter diagnostics（进行中）**。V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout、V2.29 Finding triage persistence、V2.30 AI skill analysis workflow、V2.31 Cleanup Queue、V2.32 Rule tuning / suppression、V2.33 Safe batch actions、V2.34 Cross-agent comparison view、V2.35 Local report export、V2.36 Pi writable evidence harness、V2.37 Pi writable guarded slice、V2.38 Hermes external roots、V2.39 OpenClaw workspace 深化 均已收口。V2.39 只扫描 confirmed OpenClaw workspace roots，不推断任意 repo；OpenClaw writable/install 继续 blocked。
+> 当前阶段：**V2.40 Adapter diagnostics 已完成**。V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout、V2.29 Finding triage persistence、V2.30 AI skill analysis workflow、V2.31 Cleanup Queue、V2.32 Rule tuning / suppression、V2.33 Safe batch actions、V2.34 Cross-agent comparison view、V2.35 Local report export、V2.36 Pi writable evidence harness、V2.37 Pi writable guarded slice、V2.38 Hermes external roots、V2.39 OpenClaw workspace 深化、V2.40 Adapter diagnostics 均已收口。V2.40 只新增 read-only diagnostics；OpenClaw/Hermes writable/install 与 Pi install 继续 blocked。
 >
-> 近期主线：继续围绕 skills 管理、检查、分析和配置审计打磨体验。下一段版本线聚焦 Adapter trust and diagnostics：V2.40 adapter diagnostics。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
+> 近期主线：继续围绕 skills 管理、检查、分析和配置审计打磨体验。V2.40 Adapter trust and diagnostics 已完成，下一段版本线可从 V2.41-V2.45 长期治理能力中择优推进。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
 >
 > 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.25 各阶段能力、V2.9 Tool-global skill pool、V2.11 Adapter capability matrix、V2.16-V2.25 management/analysis/history line。后续候选变更仍需重新验证。
 >
 > V2.10 安全边界：默认不真实执行 skill 脚本；任何未来执行请求必须逐次人工确认，并先展示 cwd/env/network/files preview；blocked/cancelled/failure attempts 必须审计；LLM 不能触发执行。
 >
-> 真实本机 app 的 Computer Use 操作验证已在 2026-06-10 对之前 mainline app 通过，验证时显式选择当前 `dist/SkillsCopilot.app` bundle 以避开同 bundle id 的旧 worktree 注册路径。V2.39 已通过 focused checks 与 `pnpm check:macos`；真实 app smoke launcher 能启动当前 bundle 并取得窗口 id，但 Computer Use/AX/capture 本轮返回 `cgWindowNotFound` / 无可见窗口，该项作为工具/窗口层 blocker 保留。后续用户可见、UI 或 service protocol 变更仍需重跑，且不能用 smoke 截图替代真实交互验证。
+> 真实本机 app 的 Computer Use 操作验证已在 2026-06-10 对之前 mainline app 通过，验证时显式选择当前 `dist/SkillsCopilot.app` bundle 以避开同 bundle id 的旧 worktree 注册路径。V2.40 已通过 focused checks、`pnpm check:macos`、真实 app smoke launch/window id、`pnpm check:privacy` 与截图人工检查；Computer Use/AX/capture 本轮仍返回 `cgWindowNotFound` / 0 visible windows / 无可见窗口，该项作为工具/窗口层 blocker 保留。后续用户可见、UI 或 service protocol 变更仍需重跑，且不能用 smoke 截图替代真实交互验证。
 
 ## 0. 设计阶段（已完成）
 
@@ -972,13 +972,15 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 
 ## 4.36-V2.40 Adapter 可信度与真实环境诊断
 
+该阶段已完成 read-only 诊断字段：为每个 agent 显式对齐 `roots discovered / skipped / blocked`、`config detected`、`read-only / writable` 原因、以及 `catalog.scanAll` 最近 activity 时间与状态。V2.40 不新增写入、install、script execution、AI 自动写回、credentials 或 telemetry。
+
 | Version | Goal | Completion signal |
 | --- | --- | --- |
 | V2.36 | Pi writable evidence harness | 已完成：用临时 agentDir / fixture project 验证 Pi global/project/package toggle、rollback、trust gate、invalid JSON 与 re-enable；生产 writable 保持 blocked。 |
 | V2.37 | Pi writable guarded slice | 已完成：启用最小 Pi native global/project/package toggle；不做 install；不做脚本执行、不做 AI 自动写回、不做 credentials 持久化；兼容根不作为可写入口；UI 标明 evidence-backed/experimental 状态。 |
 | V2.38 | Hermes external roots | 已完成：仅把 `skills.external_dirs` 建模为 explicit external roots，不当作 project roots；保持 read-only，writable/install blocked。 |
 | V2.39 | OpenClaw workspace 深化 | 已完成：精准识别 OpenClaw workspace scope，只扫描 confirmed workspace roots，不推断任意 repo。 |
-| V2.40 | Adapter diagnostics | 进行中：为每个 agent 展示 roots discovered/skipped/blocked、config detected、read-only/writable reason 与 last scan activity。 |
+| V2.40 | Adapter diagnostics | 已完成：新增 read-only adapter diagnostics protocol/status/state fields、scan activity summary 与 sidebar Adapter Capabilities 诊断展示；保持无新增写入/执行/provider/credential/telemetry 路径。 |
 
 ## 4.41-V2.45 长期治理能力
 

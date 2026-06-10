@@ -1,0 +1,5 @@
+{
+  "id": "fixture-adapter-list-diagnostics",
+  "method": "adapter.listDiagnostics",
+  "params": {}
+}

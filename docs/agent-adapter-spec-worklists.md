@@ -1,6 +1,6 @@
 # Agent Adapter Spec Worklists
 
-> Status: Codex first implementation, V2.1 dual adapter experience, V2.2 project context implementation, V2.3 Codex adapter hardening, V2.4 opencode read-only adapter, V2.5 audit hardening, V2.6 adapter changelog tracking, V2.7 LLM gate safety notes, V2.8-V2.10 safety/docs closeout, V2.11 Adapter Capability Matrix, V2.12 opencode writable, V2.13 Pi read-only scanner/parser, V2.14 Hermes evidence-gate closeout, and V2.15 OpenClaw evidence-gate closeout are integrated. V2.36 Pi writable evidence harness, V2.37 guarded Pi writable toggle slice, V2.38 Hermes external roots, and V2.39 OpenClaw workspace deepening are complete; V2.40 Adapter diagnostics is active.
+> Status: Codex first implementation, V2.1 dual adapter experience, V2.2 project context implementation, V2.3 Codex adapter hardening, V2.4 opencode read-only adapter, V2.5 audit hardening, V2.6 adapter changelog tracking, V2.7 LLM gate safety notes, V2.8-V2.10 safety/docs closeout, V2.11 Adapter Capability Matrix, V2.12 opencode writable, V2.13 Pi read-only scanner/parser, V2.14 Hermes evidence-gate closeout, and V2.15 OpenClaw evidence-gate closeout are integrated. V2.36 Pi writable evidence harness, V2.37 guarded Pi writable toggle slice, V2.38 Hermes external roots, V2.39 OpenClaw workspace deepening, and V2.40 Adapter diagnostics are complete.
 > Real local UI validation passed for the previous mainline app on 2026-06-10. V2.38 completed real app smoke launch/window id checks, while Computer Use/AX/capture returned `cgWindowNotFound` / no visible window; future user-visible, UI, or service-protocol candidates still require a fresh real local pass or explicit tool/session blocker. opencode writable, Pi read-only scan, Pi guarded native toggle, OpenClaw read-only scan, Hermes read-only scan, and Hermes explicit external-root scan are implemented; Pi install and Hermes/OpenClaw writable support remain blocked.
 > This document records what is verified enough to use for project instructions, and what is still missing before an adapter can be built.
 
@@ -184,3 +184,14 @@ Before any non-Claude adapter PR:
 - No inference of arbitrary repo roots or additional workspace roots should be used.
 - OpenClaw remains read-only: no writable/install actions, no script execution, no AI auto-write, and no credential writes.
 - This scope is the completed V2.39 implementation boundary.
+
+## 2.5 V2.40 Adapter diagnostics
+
+- **状态**：完成；已作为 read-only protocol/status/state/UI 诊断能力集成。
+- **目标**：为每个适配器补齐可执行诊断视图，支持只读核验：
+  - `discovered / skipped / blocked` 根目录分类与来源；
+  - 适配器配置是否检测到（来源、命名路径、有效性）；
+  - 逐根目录读写能力说明（只读或可写）与阻断原因；
+  - 每次扫描的活动信息（上次扫描时间、状态、耗时、失败原因）。
+- **验证结果**：focused Rust/Swift checks、`pnpm check:macos`、真实 app smoke launch/window id、`pnpm check:privacy` 与截图人工检查通过；Computer Use/AX/capture 仍返回 `cgWindowNotFound` / 0 visible windows，作为工具/窗口 blocker 记录。
+- **边界**：仅读取型诊断，不产生写入、不执行脚本、不发起 AI 自动写回，不涉及凭据读取/保存。

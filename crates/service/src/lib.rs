@@ -16,18 +16,19 @@ use skills_copilot_commands::{
     clear_rule_suppression, empty_cross_agent_comparison, export_skill_bundle,
     export_staging_skill_bundle, get_skill, import_github_skill_to_tool_global_deferred,
     import_local_skill_to_tool_global, install_skill_from_tool_global, list_adapter_capabilities,
-    list_agent_config_snapshots, list_conflicts, list_cross_agent_comparisons, list_finding_triage,
-    list_findings, list_rule_tuning, list_skill_events, list_snapshots, preview_script_execution,
-    preview_skill_toggles, preview_snapshot_rollback, read_claude_settings,
-    record_blocked_script_execution, rollback_snapshot, run_pi_writable_evidence_harness,
-    save_claude_settings, scan_all_catalog_report, scan_claude_to_catalog, set_finding_triage,
+    list_adapter_diagnostics, list_agent_config_snapshots, list_conflicts,
+    list_cross_agent_comparisons, list_finding_triage, list_findings, list_rule_tuning,
+    list_skill_events, list_snapshots, preview_script_execution, preview_skill_toggles,
+    preview_snapshot_rollback, read_claude_settings, record_blocked_script_execution,
+    rollback_snapshot, run_pi_writable_evidence_harness, save_claude_settings,
+    scan_all_catalog_report, scan_claude_to_catalog, set_finding_triage,
     set_rule_severity_override, set_rule_suppression, skill_health_summary, toggle_skill,
-    AdapterCapabilityRecord, AgentCatalogScanReport, BatchToggleApplyRecord,
-    BatchTogglePreviewRecord, ConfigDocumentRecord, CrossAgentAnalysisRecord,
-    CrossAgentComparisonRecord, ExportedSkillBundle, PiWritableHarnessReport,
-    ScriptExecutionAttemptRecord, ScriptExecutionPreviewRecord, ScriptExecutionRequest,
-    SkillHealthSummary, SkillInstallPreviewRecord, SnapshotRollbackPreviewRecord,
-    ToolGlobalImportResult, SCRIPT_EXECUTION_DISABLED_REASON,
+    AdapterCapabilityRecord, AdapterDiagnosticsRecord, AgentCatalogScanReport,
+    BatchToggleApplyRecord, BatchTogglePreviewRecord, ConfigDocumentRecord,
+    CrossAgentAnalysisRecord, CrossAgentComparisonRecord, ExportedSkillBundle,
+    PiWritableHarnessReport, ScriptExecutionAttemptRecord, ScriptExecutionPreviewRecord,
+    ScriptExecutionRequest, SkillHealthSummary, SkillInstallPreviewRecord,
+    SnapshotRollbackPreviewRecord, ToolGlobalImportResult, SCRIPT_EXECUTION_DISABLED_REASON,
 };
 use skills_copilot_core::{AdapterContext, AdapterRoot, AgentId, RootSource, Scope};
 use thiserror::Error;
@@ -47,6 +48,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "app.stateSnapshot",
     "service.status",
     "adapter.listCapabilities",
+    "adapter.listDiagnostics",
     "evidence.piWritableHarness",
     "llm.status",
     "llm.prepareAction",
@@ -125,6 +127,7 @@ pub struct ServiceStatus {
     pub refresh: RefreshStatus,
     pub project_context: ProjectContextSummary,
     pub adapter_capabilities: Vec<AdapterCapabilityRecord>,
+    pub adapter_diagnostics: Vec<AdapterDiagnosticsRecord>,
     pub llm: LlmStatus,
     pub script_execution: ScriptExecutionStatus,
 }
@@ -196,6 +199,13 @@ pub struct AgentRefreshSummary {
     pub roots_considered: Vec<String>,
     pub roots_scanned: Vec<String>,
     pub roots_skipped: Vec<String>,
+    pub config_detected: bool,
+    pub config_paths: Vec<String>,
+    pub writable_status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub writable_reason: Option<String>,
+    pub read_only_reason: String,
+    pub blockers: Vec<String>,
     pub recovery_actions: Vec<String>,
 }
 
@@ -790,6 +800,10 @@ impl ServiceHost {
                 let adapter_ctx = self.effective_adapter_ctx()?;
                 serde_json::to_value(list_adapter_capabilities(&adapter_ctx)).map_err(Into::into)
             }
+            "adapter.listDiagnostics" => {
+                let adapter_ctx = self.effective_adapter_ctx()?;
+                serde_json::to_value(list_adapter_diagnostics(&adapter_ctx)).map_err(Into::into)
+            }
             "evidence.piWritableHarness" => {
                 let params: PiWritableHarnessParams = if request.params.is_null() {
                     PiWritableHarnessParams::default()
@@ -1081,7 +1095,12 @@ impl ServiceHost {
                 let findings: Vec<RuleFindingRecord> = list_findings(&catalog)?;
                 let conflicts: Vec<ConflictGroupRecord> = list_conflicts(&catalog)?;
                 let snapshots: Vec<ConfigSnapshotRecord> = list_snapshots(&catalog)?;
-                let agent_summaries = self.agent_refresh_summaries(&scan_report.agents, &skills);
+                let adapter_diagnostics = list_adapter_diagnostics(&adapter_ctx);
+                let agent_summaries = self.agent_refresh_summaries(
+                    &scan_report.agents,
+                    &skills,
+                    &adapter_diagnostics,
+                );
                 let roots = scan_report
                     .agents
                     .iter()
@@ -1553,12 +1572,13 @@ impl ServiceHost {
     }
 
     pub fn status(&self) -> ServiceStatus {
+        let adapter_ctx = self.status_adapter_ctx();
         ServiceStatus {
             protocol_version: SERVICE_PROTOCOL_VERSION,
             version: skills_copilot_commands::app_version(),
             app_data_dir: display_path(&self.app_data_dir),
             catalog_path: display_path(&self.catalog_path()),
-            user_home: display_path(&self.adapter_ctx.user_home),
+            user_home: display_path(&adapter_ctx.user_home),
             supported_methods: supported_methods(),
             refresh: RefreshStatus {
                 scan_progress: "summary-only",
@@ -1567,7 +1587,8 @@ impl ServiceHost {
                 recovery_actions: vec!["Retry the last refresh", "Run Scan to rebuild the agent catalog"],
             },
             project_context: project_context_summary(&self.app_data_dir, self.env_project_context()),
-            adapter_capabilities: list_adapter_capabilities(&self.adapter_ctx),
+            adapter_capabilities: list_adapter_capabilities(&adapter_ctx),
+            adapter_diagnostics: list_adapter_diagnostics(&adapter_ctx),
             llm: self.llm_status(),
             script_execution: self.script_execution_status(),
         }
@@ -2113,6 +2134,11 @@ impl ServiceHost {
         Some(context_from_paths(root, cwd, true))
     }
 
+    fn status_adapter_ctx(&self) -> AdapterContext {
+        self.effective_adapter_ctx()
+            .unwrap_or_else(|_| self.adapter_ctx.clone())
+    }
+
     fn scan_activity(
         &self,
         operation: &'static str,
@@ -2193,11 +2219,15 @@ impl ServiceHost {
         &self,
         agent_reports: &[AgentCatalogScanReport],
         skills: &[SkillRecord],
+        adapter_diagnostics: &[AdapterDiagnosticsRecord],
     ) -> Vec<AgentRefreshSummary> {
         agent_reports
             .iter()
             .map(|agent_report| {
                 let agent = agent_report.agent.as_str();
+                let diagnostics = adapter_diagnostics
+                    .iter()
+                    .find(|diagnostics| diagnostics.agent == agent);
                 let catalog_count = skills.iter().filter(|skill| skill.agent == agent).count();
                 let broken_count = skills
                     .iter()
@@ -2237,6 +2267,36 @@ impl ServiceHost {
                         .iter()
                         .map(|path| display_path(path))
                         .collect(),
+                    config_detected: diagnostics
+                        .is_some_and(|diagnostics| diagnostics.config.detected_count > 0),
+                    config_paths: diagnostics
+                        .map(|diagnostics| {
+                            diagnostics
+                                .config
+                                .paths
+                                .iter()
+                                .map(|path| path.path.clone())
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                    writable_status: diagnostics
+                        .map(|diagnostics| diagnostics.access.writable_status.to_string())
+                        .unwrap_or_else(|| "unknown".to_string()),
+                    writable_reason: diagnostics
+                        .and_then(|diagnostics| diagnostics.access.writable_reason)
+                        .map(str::to_string),
+                    read_only_reason: diagnostics
+                        .map(|diagnostics| diagnostics.access.read_only_reason.clone())
+                        .unwrap_or_else(|| "Adapter diagnostics were unavailable.".to_string()),
+                    blockers: diagnostics
+                        .map(|diagnostics| {
+                            diagnostics
+                                .blockers
+                                .iter()
+                                .map(|blocker| (*blocker).to_string())
+                                .collect()
+                        })
+                        .unwrap_or_default(),
                     recovery_actions,
                 }
             })
@@ -2954,6 +3014,7 @@ mod tests {
             .expect("methods");
         assert!(methods.contains(&Value::String("app.version".to_string())));
         assert!(methods.contains(&Value::String("app.stateSnapshot".to_string())));
+        assert!(methods.contains(&Value::String("adapter.listDiagnostics".to_string())));
         assert!(methods.contains(&Value::String("llm.status".to_string())));
         assert!(methods.contains(&Value::String("llm.prepareAction".to_string())));
         assert!(methods.contains(&Value::String("llm.prepareSkillAnalysis".to_string())));
@@ -2981,6 +3042,17 @@ mod tests {
         assert!(methods.contains(&Value::String("config.saveClaudeSettings".to_string())));
         assert!(methods.contains(&Value::String("snapshot.list".to_string())));
         assert!(methods.contains(&Value::String("snapshot.rollback".to_string())));
+        let diagnostics = result
+            .get("adapter_diagnostics")
+            .and_then(Value::as_array)
+            .expect("adapter diagnostics");
+        assert!(diagnostics.iter().any(|diagnostic| {
+            diagnostic.get("agent").and_then(Value::as_str) == Some("hermes")
+                && diagnostic
+                    .pointer("/access/writable_status")
+                    .and_then(Value::as_str)
+                    == Some("blocked")
+        }));
         let project_context = result
             .get("project_context")
             .and_then(Value::as_object)
@@ -4753,6 +4825,20 @@ mod tests {
             .and_then(Value::as_array)
             .expect("agent summaries");
         assert_eq!(summaries.len(), 6);
+        let hermes = summaries
+            .iter()
+            .find(|summary| summary.get("agent").and_then(Value::as_str) == Some("hermes"))
+            .expect("Hermes summary");
+        assert_eq!(
+            hermes.get("writable_status").and_then(Value::as_str),
+            Some("blocked")
+        );
+        assert!(hermes
+            .get("read_only_reason")
+            .and_then(Value::as_str)
+            .is_some_and(
+                |reason| reason.contains("Hermes writable toggle/install remains blocked")
+            ));
         let log_messages: Vec<&str> = activity
             .get("log_entries")
             .and_then(Value::as_array)
@@ -4791,6 +4877,80 @@ mod tests {
         assert_eq!(codex.get("catalog_count").and_then(Value::as_u64), Some(1));
 
         let _ = fs::remove_dir_all(&host.app_data_dir);
+    }
+
+    #[test]
+    fn adapter_list_diagnostics_reports_roots_config_and_blockers() {
+        let unique = unique_suffix();
+        let temp_root = env::temp_dir().join(format!(
+            "skills-copilot-adapter-diagnostics-test-{}-{unique}",
+            std::process::id(),
+        ));
+        let home = temp_root.join("home");
+        let project = temp_root.join("project");
+        fs::create_dir_all(home.join(".pi/agent/skills")).expect("create Pi skills root");
+        fs::create_dir_all(home.join(".codex")).expect("create Codex config parent");
+        fs::write(home.join(".codex/config.toml"), "[skills]\n").expect("write Codex config");
+
+        let host = ServiceHost {
+            app_data_dir: temp_root.join("app-data"),
+            adapter_ctx: AdapterContext {
+                user_home: home,
+                project_root: Some(project),
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+
+        let response = host.handle(ServiceRequest {
+            id: Some("diagnostics".to_string()),
+            method: "adapter.listDiagnostics".to_string(),
+            params: Value::Null,
+        });
+
+        assert!(response.ok);
+        let diagnostics = response.result.expect("diagnostics result");
+        let records = diagnostics.as_array().expect("diagnostic records");
+        let codex = records
+            .iter()
+            .find(|record| record.get("agent").and_then(Value::as_str) == Some("codex"))
+            .expect("Codex diagnostics");
+        assert_eq!(
+            codex.pointer("/config/status").and_then(Value::as_str),
+            Some("detected")
+        );
+        assert_eq!(
+            codex
+                .pointer("/access/writable_status")
+                .and_then(Value::as_str),
+            Some("verified-user-config")
+        );
+        let pi = records
+            .iter()
+            .find(|record| record.get("agent").and_then(Value::as_str) == Some("pi"))
+            .expect("Pi diagnostics");
+        assert!(pi
+            .get("blockers")
+            .and_then(Value::as_array)
+            .is_some_and(|blockers| blockers
+                .iter()
+                .any(|blocker| { blocker.as_str() == Some("Pi install remains blocked.") })));
+        let hermes = records
+            .iter()
+            .find(|record| record.get("agent").and_then(Value::as_str) == Some("hermes"))
+            .expect("Hermes diagnostics");
+        assert_eq!(
+            hermes.pointer("/config/status").and_then(Value::as_str),
+            Some("blocked")
+        );
+        assert_eq!(
+            hermes
+                .pointer("/access/writable_status")
+                .and_then(Value::as_str),
+            Some("blocked")
+        );
+
+        let _ = fs::remove_dir_all(temp_root);
     }
 
     #[test]
@@ -5236,6 +5396,13 @@ mod tests {
             "adapter.listCapabilities" => {
                 let _: Vec<WireAdapterCapabilityRecord> =
                     decode_fixture_result(method, result, path);
+            }
+            "adapter.listDiagnostics" => {
+                let diagnostics: Vec<WireAdapterDiagnosticsRecord> =
+                    decode_fixture_result(method, result, path);
+                assert!(diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.access.writable_status == "blocked"));
             }
             "evidence.piWritableHarness" => {
                 let report: WirePiWritableHarnessReport =
@@ -5731,6 +5898,8 @@ mod tests {
         llm: WireLlmStatus,
         script_execution: WireScriptExecutionStatus,
         adapter_capabilities: Vec<WireAdapterCapabilityRecord>,
+        #[serde(default)]
+        adapter_diagnostics: Option<Vec<WireAdapterDiagnosticsRecord>>,
     }
 
     #[allow(dead_code)]
@@ -5808,6 +5977,73 @@ mod tests {
         supported: bool,
         status: String,
         reason: Option<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAdapterDiagnosticsRecord {
+        agent: String,
+        display_name: String,
+        status: String,
+        roots: Vec<WireAdapterDiagnosticRootRecord>,
+        config: WireAdapterDiagnosticConfigSummary,
+        access: WireAdapterDiagnosticAccessSummary,
+        last_scan: WireAdapterDiagnosticLastScan,
+        blockers: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAdapterDiagnosticRootRecord {
+        path: String,
+        scope: String,
+        source: String,
+        exists: bool,
+        status: String,
+        reason: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAdapterDiagnosticConfigSummary {
+        status: String,
+        detected_count: usize,
+        paths: Vec<WireAdapterDiagnosticConfigPath>,
+        reason: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAdapterDiagnosticConfigPath {
+        path: String,
+        detected: bool,
+        status: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAdapterDiagnosticAccessSummary {
+        read_only: bool,
+        writable_supported: bool,
+        writable_status: String,
+        writable_reason: Option<String>,
+        install_supported: bool,
+        install_status: String,
+        install_reason: Option<String>,
+        read_only_reason: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAdapterDiagnosticLastScan {
+        status: String,
+        reason: String,
     }
 
     #[allow(dead_code)]
@@ -6285,6 +6521,18 @@ mod tests {
         roots_considered: Vec<String>,
         roots_scanned: Vec<String>,
         roots_skipped: Vec<String>,
+        #[serde(default)]
+        config_detected: bool,
+        #[serde(default)]
+        config_paths: Vec<String>,
+        #[serde(default)]
+        writable_status: String,
+        #[serde(default)]
+        writable_reason: Option<String>,
+        #[serde(default)]
+        read_only_reason: String,
+        #[serde(default)]
+        blockers: Vec<String>,
         recovery_actions: Vec<String>,
     }
 

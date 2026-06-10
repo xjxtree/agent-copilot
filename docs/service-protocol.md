@@ -1,6 +1,6 @@
 # skills-copilot Service Protocol
 
-> Status: V2.36 Pi writable evidence harness, V2.37 Pi writable guarded slice, V2.38 Hermes external roots, and V2.39 OpenClaw workspace deepening are integrated; V2.40 Adapter diagnostics is active. V2.38 models `skills.external_dirs` as explicit read-only external roots, not generic project roots, and Hermes writable/install remains blocked. V2.39 limits OpenClaw project scope to confirmed workspace roots, not arbitrary repo roots, and OpenClaw writable/install remains blocked. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, V2.19 health dashboard, V2.20 read-only AI skill analysis assist, V2.21 scan accuracy/dedupe alignment, V2.22 finding/conflict semantics, V2.23 Health Dashboard / Adapter Capability UX, V2.24 Skill Detail diagnostics, V2.25 Agent-config timeline, V2.26 Finding explainability, V2.27 Skill identity/provenance dedupe, V2.28 Conflict semantic closeout, V2.29 Finding triage persistence, V2.30 AI skill analysis workflow, V2.31 Cleanup Queue, V2.32 Rule tuning / suppression, V2.33 Safe batch actions, V2.34 Cross-agent comparison view, V2.35 Local report export, V2.36 Pi writable evidence harness, V2.37 Pi guarded toggle, V2.38 Hermes external roots, and V2.39 OpenClaw workspace deepening are implemented or synchronized. V2.33 adds `batch.previewSkillToggles` and `batch.applySkillToggles` for preview-first verified writable toggles with explicit confirmation and matching preview id before apply; V2.34 adds read-only `comparison.listCrossAgent`; V2.35 adds user-triggered local/redacted `report.exportLocal`; V2.36 adds evidence-only `evidence.piWritableHarness`; V2.37 adds a guarded minimal Pi native toggle slice (global/project/package), and Pi install stays blocked.
+> Status: V2.36 Pi writable evidence harness, V2.37 Pi writable guarded slice, V2.38 Hermes external roots, V2.39 OpenClaw workspace deepening, and V2.40 Adapter diagnostics are integrated. V2.38 models `skills.external_dirs` as explicit read-only external roots, not generic project roots, and Hermes writable/install remains blocked. V2.39 limits OpenClaw project scope to confirmed workspace roots, not arbitrary repo roots, and OpenClaw writable/install remains blocked. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, V2.19 health dashboard, V2.20 read-only AI skill analysis assist, V2.21 scan accuracy/dedupe alignment, V2.22 finding/conflict semantics, V2.23 Health Dashboard / Adapter Capability UX, V2.24 Skill Detail diagnostics, V2.25 Agent-config timeline, V2.26 Finding explainability, V2.27 Skill identity/provenance dedupe, V2.28 Conflict semantic closeout, V2.29 Finding triage persistence, V2.30 AI skill analysis workflow, V2.31 Cleanup Queue, V2.32 Rule tuning / suppression, V2.33 Safe batch actions, V2.34 Cross-agent comparison view, V2.35 Local report export, V2.36 Pi writable evidence harness, V2.37 Pi guarded toggle, V2.38 Hermes external roots, V2.39 OpenClaw workspace deepening, and V2.40 Adapter diagnostics are implemented or synchronized. V2.33 adds `batch.previewSkillToggles` and `batch.applySkillToggles` for preview-first verified writable toggles with explicit confirmation and matching preview id before apply; V2.34 adds read-only `comparison.listCrossAgent`; V2.35 adds user-triggered local/redacted `report.exportLocal`; V2.36 adds evidence-only `evidence.piWritableHarness`; V2.37 adds a guarded minimal Pi native toggle slice (global/project/package), and Pi install stays blocked; V2.40 adds read-only `adapter.listDiagnostics` plus `service.status.adapter_diagnostics` / `app.stateSnapshot.status.adapter_diagnostics`.
 
 ## V2.36 Pi writable evidence harness（完成）
 
@@ -684,3 +684,27 @@ Shared request/response examples live in [`../fixtures/service-protocol`](../fix
 - `scanAgent`/`scanSkillRoots` support for OpenClaw is limited to explicit workspace roots `<workspace>/skills` and `<workspace>/.agents/skills`.
 - OpenClaw should not infer arbitrary repository or generic project roots.
 - OpenClaw write/install/scripting/AI write-back paths remain unsupported in this milestone; protocol behavior remains read-only and workspace-scoped.
+
+## 4.x V2.40 Adapter diagnostics
+
+V2.40 records read-only adapter diagnostics in the service protocol and state/status payloads.
+
+The diagnostic outputs include read-only observability for each adapter. The service contract exposes the following fields after scan, either directly through `adapter.listDiagnostics` or via derived status models:
+
+- Root lifecycle buckets:
+  - `discovered`：有效扫描到、可用于后续操作的根路径。
+  - `skipped`：非当前会话/权限范围外或不满足发现策略的根路径（含跳过原因）。
+  - `blocked`：因权限、环境、解析失败等原因被阻断的根路径（含错误码或原因文本）。
+- Config detection:
+  - Adapter/agent config detection result per scan, including source path and whether parse/resolve succeeded.
+  - Normalized config fingerprint summary for read-only visibility.
+- Capability reason:
+  - Read-only / writable classification per adapter root with explicit reason text from the existing capability matrix.
+  - No implicit assumptions for writable capability.
+- Last scan activity:
+  - Last successful/failed scan timestamp per agent and elapsed time from the most recent run.
+  - Count or status of blocking items in the same refresh cycle (for display only).
+
+Notes:
+- The protocol remains read-only-only and does not add write or script-execution fields.
+- All fields are for diagnostics and visibility. V2.40 validation covered focused Rust/Swift checks, `pnpm check:macos`, real app smoke launch/window id, `pnpm check:privacy`, and screenshot inspection; Computer Use/AX/capture still reports `cgWindowNotFound` / 0 visible windows and is tracked as a tooling/window blocker.

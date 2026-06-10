@@ -2,13 +2,24 @@
 
 > skills-copilot 支持的 6 个 agent 的适配要点。
 >
-> 当前版本线：V2.11 Adapter Capability Matrix、V2.12 opencode writable、V2.13 Pi read-only scanner/parser、V2.14 Hermes evidence-gate closeout、V2.15 OpenClaw evidence-gate closeout、V2.16 OpenClaw read-only scanner、V2.17 Hermes read-only scanner、V2.18 cross-agent analysis、V2.19 skill health dashboard、V2.20 read-only AI skill analysis assist、V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout 均已完成。V2.29 Finding triage persistence、V2.30 read-only AI analysis workflow、V2.31 Cleanup Queue、V2.32 Rule tuning / suppression、V2.33 Safe batch actions、V2.34 Cross-agent comparison view、V2.35 Local report export、V2.36 Pi writable evidence harness、V2.37 Pi writable guarded slice、V2.38 Hermes external roots、V2.39 OpenClaw workspace 深化均已收口。V2.40 Adapter diagnostics 正在进行；V2.28 验收关键已收口：同 agent 的 runtime/name collision 进入 `Conflicts`；跨 agent duplicate/source overlap/enabled mismatch 进入 `Analysis`；health 冲突计数不包含 cross-agent analysis 分组。
+> 当前版本线：V2.11 Adapter Capability Matrix、V2.12 opencode writable、V2.13 Pi read-only scanner/parser、V2.14 Hermes evidence-gate closeout、V2.15 OpenClaw evidence-gate closeout、V2.16 OpenClaw read-only scanner、V2.17 Hermes read-only scanner、V2.18 cross-agent analysis、V2.19 skill health dashboard、V2.20 read-only AI skill analysis assist、V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout 均已完成。V2.29 Finding triage persistence、V2.30 read-only AI analysis workflow、V2.31 Cleanup Queue、V2.32 Rule tuning / suppression、V2.33 Safe batch actions、V2.34 Cross-agent comparison view、V2.35 Local report export、V2.36 Pi writable evidence harness、V2.37 Pi writable guarded slice、V2.38 Hermes external roots、V2.39 OpenClaw workspace 深化、V2.40 Adapter diagnostics 均已收口；V2.28 验收关键已收口：同 agent 的 runtime/name collision 进入 `Conflicts`；跨 agent duplicate/source overlap/enabled mismatch 进入 `Analysis`；health 冲突计数不包含 cross-agent analysis 分组。
 >
 > 扫描适配器实现 `AgentAdapter`。
 >
 > 配置变更适配器实现 `AgentConfigAdapter`。
 >
 > 上层 scanner / catalog / UI 不直接处理 agent 特有配置语义。
+
+## V2.40 Adapter diagnostics
+
+为每个 agent，V2.40 提供统一的诊断字段（read-only 聚合）：
+
+- `roots discovered` / `roots skipped` / `roots blocked`：扫描根发现、跳过、阻塞列表与原因；
+- `config detected`：可见的可读/可写配置来源（用户级/项目级/兼容源）；
+- `read-only` / `writable` 原因：来自能力矩阵 blocker/reason 与 scan 能力状态；
+- `last scan activity`：每次扫描的最近一次摘要（状态、时间、计数、建议）。
+
+这类字段不引入新的写行为，仅用于能力透明化与用户诊断判断。V2.40 已通过 focused Rust/Swift checks、`pnpm check:macos`、真实 app smoke launch/window id、`pnpm check:privacy` 与截图人工检查；Computer Use/AX/capture 的 `cgWindowNotFound` / 0 visible windows 仍作为工具/窗口 blocker 记录。
 
 ## 1. 统一接口
 

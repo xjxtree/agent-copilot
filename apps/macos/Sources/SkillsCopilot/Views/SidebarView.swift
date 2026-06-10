@@ -444,7 +444,10 @@ private struct AgentWorkspaceHeader: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if let capability = store.selectedAdapterCapability {
-                AdapterCapabilityCard(capability: capability)
+                AdapterCapabilityCard(
+                    capability: capability,
+                    scanSummary: store.selectedAgentRefreshSummary
+                )
             }
 
             SkillHealthDashboardCard(
@@ -819,6 +822,8 @@ private struct HealthActionRow: View {
 
 private struct AdapterCapabilityCard: View {
     let capability: AdapterCapabilityRecord
+    let scanSummary: AgentRefreshSummary?
+    @State private var diagnosticsExpanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -841,6 +846,74 @@ private struct AdapterCapabilityCard: View {
                 CapabilityPill(title: UIStrings.adapterInstall, feature: capability.install)
             }
 
+            Text(UIStrings.text("adapter.diagnostics.readOnlyBoundary", "Diagnostics are read-only: roots, config capability, writable reason, and scan activity are shown without changing agent config or executing scripts."))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+
+            DisclosureGroup(isExpanded: $diagnosticsExpanded) {
+                VStack(alignment: .leading, spacing: 8) {
+                    AdapterDiagnosticsRow(
+                        label: UIStrings.text("adapter.diagnostics.config", "Config detected"),
+                        value: configDiagnostics
+                    )
+                    AdapterDiagnosticsRow(
+                        label: UIStrings.text("adapter.diagnostics.writable", "Writable reason"),
+                        value: writableDiagnostics
+                    )
+
+                    if let scanSummary {
+                        AdapterDiagnosticsRow(
+                            label: UIStrings.text("adapter.diagnostics.lastScan", "Last scan"),
+                            value: scanActivitySummary(scanSummary)
+                        )
+                        HStack(spacing: 6) {
+                            AdapterDiagnosticCount(
+                                title: UIStrings.text("adapter.diagnostics.roots.discovered", "Discovered"),
+                                count: scanSummary.rootsScanned.count,
+                                systemImage: "folder.badge.gearshape"
+                            )
+                            AdapterDiagnosticCount(
+                                title: UIStrings.text("adapter.diagnostics.roots.skipped", "Skipped"),
+                                count: scanSummary.rootsSkipped.count,
+                                systemImage: "folder.badge.questionmark"
+                            )
+                            AdapterDiagnosticCount(
+                                title: UIStrings.text("adapter.diagnostics.roots.blocked", "Blocked"),
+                                count: blockedReasonCount,
+                                systemImage: "lock.trianglebadge.exclamationmark"
+                            )
+                        }
+                        AdapterPathList(
+                            title: UIStrings.text("adapter.diagnostics.roots.considered", "Roots considered"),
+                            values: scanSummary.rootsConsidered
+                        )
+                        AdapterPathList(
+                            title: UIStrings.text("adapter.diagnostics.roots.scanned", "Roots scanned"),
+                            values: scanSummary.rootsScanned
+                        )
+                        AdapterPathList(
+                            title: UIStrings.text("adapter.diagnostics.roots.skippedList", "Roots skipped"),
+                            values: scanSummary.rootsSkipped
+                        )
+                    } else {
+                        AdapterDiagnosticsRow(
+                            label: UIStrings.text("adapter.diagnostics.lastScan", "Last scan"),
+                            value: UIStrings.text("adapter.diagnostics.noScanActivity", "No per-agent scan activity is available yet. Run Scan Skills to populate root diagnostics.")
+                        )
+                    }
+
+                    AdapterPathList(
+                        title: UIStrings.text("adapter.diagnostics.blockers", "Blocked reasons"),
+                        values: blockedReasons
+                    )
+                }
+                .padding(.top, 5)
+            } label: {
+                Label(UIStrings.text("adapter.diagnostics.title", "Adapter Diagnostics"), systemImage: "stethoscope")
+                    .font(.caption.bold())
+            }
+
             if let primaryBlocker = capability.blockers.first {
                 Text(primaryBlocker)
                     .font(.caption2)
@@ -857,6 +930,60 @@ private struct AdapterCapabilityCard: View {
         }
         .padding(10)
         .background(statusColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private var configDiagnostics: String {
+        let toggle = featureStatusSummary(capability.configToggle)
+        let snapshot = featureStatusSummary(capability.configSnapshot)
+        return UIStrings.text(
+            "adapter.diagnostics.config.summary",
+            "Toggle: \(toggle); snapshots: \(snapshot)"
+        )
+    }
+
+    private var writableDiagnostics: String {
+        if capability.writable.supported {
+            return capability.writable.reason ?? UIStrings.text("adapter.diagnostics.writable.verified", "Writable capability is verified for this adapter scope.")
+        }
+        return capability.writable.reason ?? UIStrings.readOnlyAdapterStatus(capability.displayName)
+    }
+
+    private var blockedReasons: [String] {
+        var reasons = capability.blockers
+        if let scanSummary {
+            reasons.append(contentsOf: scanSummary.recoveryActions)
+        }
+        return Array(Set(reasons.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })).sorted()
+    }
+
+    private var blockedReasonCount: Int {
+        blockedReasons.count + (scanSummary?.rootsSkipped.count ?? 0)
+    }
+
+    private func featureStatusSummary(_ feature: AdapterFeatureCapability) -> String {
+        if feature.supported {
+            return feature.reason ?? UIStrings.text("adapter.feature.verified", "Verified")
+        }
+        let reason = feature.reason ?? feature.status
+        return "\(featureTitle(for: feature)): \(reason)"
+    }
+
+    private func featureTitle(for feature: AdapterFeatureCapability) -> String {
+        switch feature.status {
+        case "read-only":
+            return UIStrings.text("adapter.feature.readOnly", "Read-only")
+        case "planned":
+            return UIStrings.text("adapter.feature.planned", "Planned")
+        default:
+            return UIStrings.text("adapter.feature.blocked", "Blocked")
+        }
+    }
+
+    private func scanActivitySummary(_ summary: AgentRefreshSummary) -> String {
+        UIStrings.text(
+            "adapter.diagnostics.lastScan.summary",
+            "\(summary.status): \(summary.scannedCount) discovered, \(summary.catalogCount) cataloged, \(summary.brokenCount) broken."
+        )
     }
 
     private var statusTitle: String {
@@ -894,6 +1021,77 @@ private struct AdapterCapabilityCard: View {
         default:
             return .red
         }
+    }
+}
+
+private struct AdapterDiagnosticsRow: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption2.bold())
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.caption2)
+                .foregroundStyle(.primary)
+                .lineLimit(4)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct AdapterDiagnosticCount: View {
+    let title: String
+    let count: Int
+    let systemImage: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Image(systemName: systemImage)
+            Text("\(count)")
+                .font(.caption.bold())
+            Text(title)
+                .lineLimit(1)
+        }
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct AdapterPathList: View {
+    let title: String
+    let values: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.caption2.bold())
+                .foregroundStyle(.secondary)
+            if values.isEmpty {
+                Text(UIStrings.text("adapter.diagnostics.roots.none", "None reported."))
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            } else {
+                ForEach(Array(values.prefix(3)), id: \.self) { value in
+                    Label(value, systemImage: "folder")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                if values.count > 3 {
+                    Text(UIStrings.text("adapter.diagnostics.roots.more", "+\(values.count - 3) more"))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

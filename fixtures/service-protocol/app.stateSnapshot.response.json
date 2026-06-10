@@ -13,6 +13,7 @@
         "app.stateSnapshot",
         "service.status",
         "adapter.listCapabilities",
+        "adapter.listDiagnostics",
         "evidence.piWritableHarness",
         "llm.status",
         "llm.prepareAction",
