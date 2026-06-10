@@ -18,6 +18,7 @@
         "llm.prepareSkillAnalysis",
         "cleanup.listQueue",
         "comparison.listCrossAgent",
+        "report.exportLocal",
         "rules.listTuning",
         "rules.setSeverityOverride",
         "rules.clearSeverityOverride",

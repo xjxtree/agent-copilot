@@ -27,6 +27,8 @@ struct SkillStoreTests {
         try await batchTogglePreviewFiltersReadOnlyAndNoopSkills()
         try await batchToggleApplyUsesBatchServiceAndRefreshes()
         try await batchToggleApplyRequiresCurrentPreviewConfirmation()
+        try await localReportExportUsesUserTriggeredServiceContract()
+        try await localReportExportUnavailableDoesNotPretendFileWasWritten()
         try await reloadLoadsProjectContext()
         try await setProjectStoresContextAndScans()
         try await clearProjectClearsContextAndScans()
@@ -570,6 +572,55 @@ struct SkillStoreTests {
         try expectFalse(fake.calls().contains("batch.applySkillToggles"), "Stale confirmation must not call the batch apply service.")
     }
 
+    private func localReportExportUsesUserTriggeredServiceContract() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "report-export")
+
+        let store = SkillStore(service: ServiceClient())
+        store.agentFilter = .all
+        store.localReportFormat = .json
+        await store.reload()
+        await store.exportLocalReport()
+
+        guard let result = store.localReportExportResult else {
+            throw NativeModelTestFailure(description: "Local report export should store the service result.")
+        }
+        try expectFalse(result.isUnavailable, "Successful export should not use the unavailable fallback.")
+        try expectEqual(result.format, .json, "Export result should preserve the selected JSON format.")
+        try expectEqual(result.filename, "report.json", "Export should expose the local filename from the exported files list.")
+        try expectEqual(result.path, "<app-data-dir>/report-exports/local-report-test/report.json", "Export should expose the redacted local path.")
+        try expectEqual(result.redacted, true, "Local report export should surface the redaction flag.")
+        try expectEqual(result.sections.map(\.name), ["cleanup_item_count", "comparison_group_count", "finding_count", "open_finding_count", "skill_count", "triage_count"], "Export should derive section counts from the service summary object.")
+        try expectContains(result.summary, "redacted", "Export summary should be user-visible and redaction-explicit.")
+        try expectContains(store.lastMutationMessage, "report.json", "Successful export should show the filename.")
+        try expectContains(fake.calls(), "report.exportLocal", "Export must use the V2.35 report.exportLocal service method.")
+        try expectContains(fake.calls(), #""formats":["json"]"#, "Export must send the selected format using the service formats array.")
+        try expectFalse(fake.calls().contains("llm.prepare"), "Export must not trigger AI provider preparation.")
+        try expectFalse(fake.calls().contains("script.previewExecution"), "Export must not trigger script execution preview.")
+        try expectFalse(fake.calls().contains("config.toggleSkill"), "Export must not mutate agent config.")
+    }
+
+    private func localReportExportUnavailableDoesNotPretendFileWasWritten() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "normal")
+
+        let store = SkillStore(service: ServiceClient())
+        store.localReportFormat = .markdown
+        await store.reload()
+        await store.exportLocalReport()
+
+        guard let result = store.localReportExportResult else {
+            throw NativeModelTestFailure(description: "Unavailable export should store a visible fallback result.")
+        }
+        try expectEqual(result.isUnavailable, true, "Unknown report method should expose an unavailable result.")
+        try expectNil(result.path, "Unavailable export must not fake a local file path.")
+        try expectNil(store.lastMutationMessage, "Unavailable export must not show a success mutation message.")
+        try expectContains(result.summary, "unavailable", "Unavailable result should explain that no file was written.")
+        try expectContains(fake.calls(), "report.exportLocal", "Unavailable path should still attempt the explicit user-triggered export method.")
+    }
+
     private func reloadLoadsProjectContext() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -1040,6 +1091,12 @@ private final class FakeServiceScript {
               respond '{"id":"test","ok":true,"result":{"updated_count":2,"skipped_count":2,"snapshot_ids":["snap-claude-new","snap-codex"]}}'
             fi
             respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: batch.applySkillToggles"}}'
+            ;;
+          *\\"report.exportLocal\\"*)
+            if [ "$scenario" = "report-export" ]; then
+              respond '{"id":"test","ok":true,"result":{"export_id":"local-report-test","generated_at":1780590000000,"output_dir":"<app-data-dir>/report-exports/local-report-test","files":[{"format":"json","path":"<app-data-dir>/report-exports/local-report-test/report.json"}],"catalog_available":true,"summary":{"skill_count":2,"finding_count":1,"open_finding_count":1,"triage_count":0,"cleanup_item_count":1,"comparison_group_count":0},"redaction":{"enabled":true,"placeholders":["$HOME","<project-root>","<project-cwd>","<app-data-dir>"],"path_policy":"Local paths are redacted."},"read_only":true,"writes_allowed":false,"provider_request_sent":false,"script_execution_allowed":false,"credential_accessed":false}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: report.exportLocal"}}'
             ;;
           *\\"catalog.listSkills\\"*)
             if [ "$scenario" = "empty" ]; then

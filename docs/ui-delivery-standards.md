@@ -192,3 +192,16 @@ For UI changes:
 - comparison card 与 detail / health / analysis 的口径必须一致：same-agent 冲突仍走 `Conflicts`，跨 agent 重名/路径重叠仍走 `Analysis`，comparison 不混合两者口径。
 - comparison 结果必须标注 capability 读写差异与来源 provenance（含 opencode native/compatibility），并保持可跳转到已有安全动作入口。
 - 交付记录：2026-06-10 真实本机 App 的 Analysis 面板已验证 `Cross-agent Comparison` 只读展示；卡片标注 `Read-only preview`，并声明不写 config、不改 skills、不创建 snapshots、不执行 scripts、不调用 AI provider、不读取 credentials。任何后续 UI 改动仍必须有 app-window-only 完整窗口截图、最小窗口、键盘流与 accessibility 检查记录。
+
+## V2.35 Local report export (completed)
+
+- Report export UI is a user-triggered action with explicit intent and local/redacted boundary copy.
+- Export output must be local-only and redacted (path placeholders) and remain non-distributive.
+- Include visibility for:
+  - agent coverage/status
+  - health summary
+  - open findings with triage states
+  - cleanup queue items
+  - cross-agent comparison insights
+- Ensure export screens and confirmations preserve existing V2.33 safe-batch explicit preview/confirm flow and V2.34 read-only comparison semantics.
+- 2026-06-10 real local App validation confirmed Markdown export result UI (`report.md`, `<app-data-dir>/report-exports/...`, section counts, `Redacted`) without config mutation, provider calls, credentials, script execution, or public distribution.

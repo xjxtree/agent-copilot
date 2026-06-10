@@ -52,6 +52,7 @@ struct SidebarView: View {
             } else {
                 Section {
                     SafeBatchTogglePanel()
+                    LocalReportExportPanel()
                 }
 
                 Section(skillListSectionTitle) {
@@ -103,6 +104,100 @@ struct SidebarView: View {
             return UIStrings.noCodexSkillsMessage
         }
         return UIStrings.noSkillsMatchSearch
+    }
+}
+
+private struct LocalReportExportPanel: View {
+    @EnvironmentObject private var store: SkillStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Label(UIStrings.localReportTitle, systemImage: "square.and.arrow.down")
+                    .font(.caption.bold())
+                    .foregroundStyle(.green)
+                Spacer()
+                if let result = store.localReportExportResult, !result.isUnavailable {
+                    Text(result.format.title)
+                        .font(.caption2.bold())
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Text(UIStrings.localReportBoundary)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(4)
+
+            Picker(UIStrings.localReportFormat, selection: $store.localReportFormat) {
+                ForEach(LocalReportFormat.allCases) { format in
+                    Label(format.title, systemImage: format.systemImage).tag(format)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            Button {
+                Task { await store.exportLocalReport() }
+            } label: {
+                Label(UIStrings.localReportExport, systemImage: "square.and.arrow.down")
+                    .frame(maxWidth: .infinity)
+            }
+            .controlSize(.small)
+            .disabled(store.isRefreshBusy)
+
+            if store.isExportingLocalReport {
+                Label(UIStrings.localReportExporting, systemImage: "hourglass")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let result = store.localReportExportResult {
+                LocalReportExportResultView(result: result)
+            }
+        }
+        .padding(10)
+        .background(.green.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+private struct LocalReportExportResultView: View {
+    let result: LocalReportExportResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Label(result.isUnavailable ? UIStrings.localReportUnavailableFallback : result.displayName, systemImage: result.isUnavailable ? "lock.fill" : "doc.text")
+                .font(.caption.bold())
+                .foregroundStyle(result.isUnavailable ? .secondary : .primary)
+                .lineLimit(2)
+
+            if !result.isUnavailable {
+                Text(result.displayPath)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .lineLimit(2)
+            }
+
+            Text(result.summary)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+
+            if !result.sections.isEmpty {
+                Text("\(UIStrings.localReportSections): \(result.sectionSummary)")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(2)
+            }
+
+            Label(result.redacted ? UIStrings.localReportRedacted : UIStrings.localReportNotRedactedWarning, systemImage: result.redacted ? "eye.slash" : "exclamationmark.triangle")
+                .font(.caption2.bold())
+                .foregroundStyle(result.redacted ? Color.secondary : Color.orange)
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 

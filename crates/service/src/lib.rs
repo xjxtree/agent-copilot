@@ -52,6 +52,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "llm.prepareSkillAnalysis",
     "cleanup.listQueue",
     "comparison.listCrossAgent",
+    "report.exportLocal",
     "rules.listTuning",
     "rules.setSeverityOverride",
     "rules.clearSeverityOverride",
@@ -274,6 +275,74 @@ pub struct ListCrossAgentComparisonParams {
     pub query: Option<String>,
     #[serde(default)]
     pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct ReportExportLocalParams {
+    #[serde(default)]
+    pub formats: Vec<ReportExportFormat>,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReportExportFormat {
+    Json,
+    Markdown,
+}
+
+impl ReportExportFormat {
+    fn extension(self) -> &'static str {
+        match self {
+            Self::Json => "json",
+            Self::Markdown => "md",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Json => "json",
+            Self::Markdown => "markdown",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ReportExportLocalResult {
+    pub export_id: String,
+    pub generated_at: i64,
+    pub output_dir: String,
+    pub files: Vec<ReportExportedFile>,
+    pub catalog_available: bool,
+    pub summary: ReportExportSummary,
+    pub redaction: ReportExportRedaction,
+    pub read_only: bool,
+    pub writes_allowed: bool,
+    pub provider_request_sent: bool,
+    pub script_execution_allowed: bool,
+    pub credential_accessed: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ReportExportedFile {
+    pub format: &'static str,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ReportExportSummary {
+    pub skill_count: usize,
+    pub finding_count: usize,
+    pub open_finding_count: usize,
+    pub triage_count: usize,
+    pub cleanup_item_count: usize,
+    pub comparison_group_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ReportExportRedaction {
+    pub enabled: bool,
+    pub placeholders: Vec<&'static str>,
+    pub path_policy: &'static str,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -753,6 +822,14 @@ impl ServiceHost {
                     params.limit,
                 )?;
                 serde_json::to_value(comparisons).map_err(Into::into)
+            }
+            "report.exportLocal" => {
+                let params: ReportExportLocalParams = if request.params.is_null() {
+                    ReportExportLocalParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.export_local_report(params)?).map_err(Into::into)
             }
             "rules.listTuning" => {
                 let catalog = self.open_catalog()?;
@@ -1323,6 +1400,128 @@ impl ServiceHost {
         Ok(cleanup_queue_response(items, params.limit))
     }
 
+    pub fn export_local_report(
+        &self,
+        params: ReportExportLocalParams,
+    ) -> Result<ReportExportLocalResult, ServiceError> {
+        let generated_at = unix_timestamp_millis();
+        let export_id = format!("local-report-{generated_at}");
+        let output_dir = self.app_data_dir.join("report-exports").join(&export_id);
+        fs::create_dir_all(&output_dir)?;
+
+        let formats = report_export_formats(params.formats);
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let catalog = self.open_existing_catalog_read_only()?;
+        let catalog_available = catalog.is_some();
+
+        let (skills, findings, triage, conflicts, health, analysis, cleanup, comparison) =
+            if let Some(catalog) = catalog.as_ref() {
+                let skills = self.list_visible_skill_records(catalog)?;
+                let findings = list_findings(catalog)?;
+                let triage = list_finding_triage(catalog)?;
+                let conflicts = list_conflicts(catalog)?;
+                let health = serde_json::to_value(skill_health_summary(catalog, &adapter_ctx)?)?;
+                let analysis = serde_json::to_value(analyze_catalog(catalog, &adapter_ctx)?)?;
+                let cleanup = self.cleanup_list_queue(CleanupListQueueParams::default())?;
+                let comparison = list_cross_agent_comparisons(
+                    catalog,
+                    &adapter_ctx,
+                    None,
+                    None,
+                    None,
+                    Some(50),
+                )?;
+                (
+                    serde_json::to_value(skills)?,
+                    serde_json::to_value(findings)?,
+                    serde_json::to_value(triage)?,
+                    serde_json::to_value(conflicts)?,
+                    health,
+                    analysis,
+                    serde_json::to_value(cleanup)?,
+                    serde_json::to_value(comparison)?,
+                )
+            } else {
+                (
+                    Value::Array(Vec::new()),
+                    Value::Array(Vec::new()),
+                    Value::Array(Vec::new()),
+                    Value::Array(Vec::new()),
+                    empty_health_summary_json(),
+                    serde_json::to_value(empty_cross_agent_analysis_json())?,
+                    serde_json::to_value(cleanup_queue_response(Vec::new(), None))?,
+                    serde_json::to_value(empty_cross_agent_comparison(None))?,
+                )
+            };
+
+        let summary = report_export_summary(&skills, &findings, &triage, &cleanup, &comparison);
+        let mut report = json!({
+            "schema_version": 1,
+            "export_id": export_id,
+            "generated_at": generated_at,
+            "catalog_available": catalog_available,
+            "safety": {
+                "read_only": true,
+                "writes_allowed": false,
+                "provider_request_sent": false,
+                "script_execution_allowed": false,
+                "credential_accessed": false,
+                "scope": "local-redacted-report-export"
+            },
+            "redaction": report_export_redaction(),
+            "summary": summary.clone(),
+            "agent_coverage": {
+                "status": self.status(),
+                "skills": skills
+            },
+            "health": health,
+            "findings": {
+                "open_groups": findings,
+                "triage": triage,
+                "conflicts": conflicts
+            },
+            "cleanup_queue": cleanup,
+            "cross_agent": {
+                "analysis": analysis,
+                "comparison": comparison
+            }
+        });
+        redact_report_value(&mut report, &self.redaction_roots(&adapter_ctx));
+
+        let mut files = Vec::new();
+        for format in formats {
+            let path = output_dir.join(format!("report.{}", format.extension()));
+            match format {
+                ReportExportFormat::Json => {
+                    let content = serde_json::to_string_pretty(&report)?;
+                    fs::write(&path, content)?;
+                }
+                ReportExportFormat::Markdown => {
+                    fs::write(&path, render_report_markdown(&report))?;
+                }
+            }
+            files.push(ReportExportedFile {
+                format: format.label(),
+                path: redact_path_string(&path, &self.redaction_roots(&adapter_ctx)),
+            });
+        }
+
+        Ok(ReportExportLocalResult {
+            export_id,
+            generated_at,
+            output_dir: redact_path_string(&output_dir, &self.redaction_roots(&adapter_ctx)),
+            files,
+            catalog_available,
+            summary,
+            redaction: report_export_redaction(),
+            read_only: true,
+            writes_allowed: false,
+            provider_request_sent: false,
+            script_execution_allowed: false,
+            credential_accessed: false,
+        })
+    }
+
     fn list_visible_skill_records(
         &self,
         catalog: &Catalog,
@@ -1839,6 +2038,25 @@ impl ServiceHost {
         self.app_data_dir.join("tool-global")
     }
 
+    fn redaction_roots(&self, adapter_ctx: &AdapterContext) -> Vec<(String, &'static str)> {
+        let mut roots = vec![
+            (
+                self.app_data_dir.to_string_lossy().to_string(),
+                "<app-data-dir>",
+            ),
+            (adapter_ctx.user_home.to_string_lossy().to_string(), "$HOME"),
+        ];
+        if let Some(project_root) = adapter_ctx.project_root.as_ref() {
+            roots.push((project_root.to_string_lossy().to_string(), "<project-root>"));
+        }
+        if let Some(project_cwd) = adapter_ctx.project_cwd.as_ref() {
+            roots.push((project_cwd.to_string_lossy().to_string(), "<project-cwd>"));
+        }
+        roots.sort_by_key(|right| std::cmp::Reverse(right.0.len()));
+        roots.dedup_by(|left, right| left.0 == right.0);
+        roots
+    }
+
     fn effective_adapter_ctx(&self) -> Result<AdapterContext, ServiceError> {
         if self.has_env_project_context() {
             return Ok(self.adapter_ctx.clone());
@@ -2114,6 +2332,256 @@ fn extra_claude_roots_from_env() -> Vec<AdapterRoot> {
 
 fn display_path(path: &Path) -> String {
     path.to_string_lossy().to_string()
+}
+
+fn report_export_formats(mut formats: Vec<ReportExportFormat>) -> Vec<ReportExportFormat> {
+    if formats.is_empty() {
+        formats = vec![ReportExportFormat::Json, ReportExportFormat::Markdown];
+    }
+    let mut seen = Vec::new();
+    formats
+        .into_iter()
+        .filter(|format| {
+            if seen.contains(format) {
+                false
+            } else {
+                seen.push(*format);
+                true
+            }
+        })
+        .collect()
+}
+
+fn report_export_redaction() -> ReportExportRedaction {
+    ReportExportRedaction {
+        enabled: true,
+        placeholders: vec!["$HOME", "<project-root>", "<project-cwd>", "<app-data-dir>"],
+        path_policy:
+            "Local home, app data, and active project path prefixes are replaced before writing report files.",
+    }
+}
+
+fn report_export_summary(
+    skills: &Value,
+    findings: &Value,
+    triage: &Value,
+    cleanup: &Value,
+    comparison: &Value,
+) -> ReportExportSummary {
+    let finding_items = findings.as_array().map(Vec::len).unwrap_or_default();
+    ReportExportSummary {
+        skill_count: skills.as_array().map(Vec::len).unwrap_or_default(),
+        finding_count: finding_items,
+        open_finding_count: findings
+            .as_array()
+            .map(|items| {
+                items
+                    .iter()
+                    .filter(|finding| {
+                        finding
+                            .get("triage_status")
+                            .and_then(Value::as_str)
+                            .is_none_or(|status| status == "open")
+                            && !finding
+                                .get("suppressed")
+                                .and_then(Value::as_bool)
+                                .unwrap_or(false)
+                    })
+                    .count()
+            })
+            .unwrap_or_default(),
+        triage_count: triage.as_array().map(Vec::len).unwrap_or_default(),
+        cleanup_item_count: cleanup
+            .get("items")
+            .and_then(Value::as_array)
+            .map(Vec::len)
+            .unwrap_or_default(),
+        comparison_group_count: comparison
+            .get("groups")
+            .and_then(Value::as_array)
+            .map(Vec::len)
+            .unwrap_or_default(),
+    }
+}
+
+fn empty_health_summary_json() -> Value {
+    json!({
+        "total_count": 0,
+        "enabled_count": 0,
+        "disabled_count": 0,
+        "broken_count": 0,
+        "missing_count": 0,
+        "malformed_count": 0,
+        "finding_count": 0,
+        "conflict_count": 0,
+        "risky_script_count": 0,
+        "risky_permission_count": 0,
+        "findings_by_severity": {
+            "error_count": 0,
+            "warning_count": 0,
+            "info_count": 0
+        },
+        "analysis_groups": {
+            "total_count": 0,
+            "error_count": 0,
+            "warning_count": 0,
+            "info_count": 0,
+            "duplicate_name_count": 0,
+            "canonical_name_count": 0,
+            "path_overlap_count": 0,
+            "enabled_mismatch_count": 0,
+            "malformed_count": 0,
+            "precedence_count": 0
+        },
+        "agent_summaries": []
+    })
+}
+
+fn empty_cross_agent_analysis_json() -> Value {
+    json!({
+        "summary": {
+            "total_groups": 0,
+            "duplicate_name_groups": 0,
+            "canonical_name_groups": 0,
+            "path_overlap_groups": 0,
+            "enabled_mismatch_groups": 0,
+            "malformed_groups": 0,
+            "precedence_groups": 0,
+            "affected_skill_count": 0
+        },
+        "groups": []
+    })
+}
+
+fn redact_report_value(value: &mut Value, roots: &[(String, &'static str)]) {
+    match value {
+        Value::String(text) => {
+            *text = redact_string(text, roots);
+        }
+        Value::Array(items) => {
+            for item in items {
+                redact_report_value(item, roots);
+            }
+        }
+        Value::Object(object) => {
+            for item in object.values_mut() {
+                redact_report_value(item, roots);
+            }
+        }
+        Value::Null | Value::Bool(_) | Value::Number(_) => {}
+    }
+}
+
+fn redact_path_string(path: &Path, roots: &[(String, &'static str)]) -> String {
+    redact_string(&path.to_string_lossy(), roots)
+}
+
+fn redact_string(value: &str, roots: &[(String, &'static str)]) -> String {
+    let mut redacted = value.to_string();
+    for (root, placeholder) in roots {
+        if !root.is_empty() {
+            redacted = redacted.replace(root, placeholder);
+        }
+    }
+    redacted
+}
+
+fn render_report_markdown(report: &Value) -> String {
+    let summary = report.get("summary").unwrap_or(&Value::Null);
+    let safety = report.get("safety").unwrap_or(&Value::Null);
+    let health = report.get("health").unwrap_or(&Value::Null);
+    let cleanup = report.get("cleanup_queue").unwrap_or(&Value::Null);
+    let comparison = report
+        .pointer("/cross_agent/comparison/summary")
+        .unwrap_or(&Value::Null);
+    let mut markdown = String::new();
+    markdown.push_str("# Skills Copilot Local Report\n\n");
+    markdown.push_str(&format!(
+        "- Export ID: {}\n",
+        report_string(report, "/export_id")
+    ));
+    markdown.push_str(&format!(
+        "- Generated at: {}\n",
+        report_string(report, "/generated_at")
+    ));
+    markdown.push_str(&format!(
+        "- Catalog available: {}\n\n",
+        report_string(report, "/catalog_available")
+    ));
+    markdown.push_str("## Safety\n\n");
+    markdown.push_str(&format!(
+        "- Read-only: {}\n- Writes allowed: {}\n- Provider request sent: {}\n- Script execution allowed: {}\n- Credential accessed: {}\n\n",
+        json_field_string(safety, "read_only"),
+        json_field_string(safety, "writes_allowed"),
+        json_field_string(safety, "provider_request_sent"),
+        json_field_string(safety, "script_execution_allowed"),
+        json_field_string(safety, "credential_accessed")
+    ));
+    markdown.push_str("## Summary\n\n");
+    for key in [
+        "skill_count",
+        "finding_count",
+        "open_finding_count",
+        "triage_count",
+        "cleanup_item_count",
+        "comparison_group_count",
+    ] {
+        markdown.push_str(&format!("- {}: {}\n", key, json_field_string(summary, key)));
+    }
+    markdown.push_str("\n## Health\n\n");
+    for key in [
+        "total_count",
+        "enabled_count",
+        "disabled_count",
+        "broken_count",
+        "missing_count",
+        "finding_count",
+        "conflict_count",
+    ] {
+        markdown.push_str(&format!("- {}: {}\n", key, json_field_string(health, key)));
+    }
+    markdown.push_str("\n## Cleanup Queue\n\n");
+    markdown.push_str(&format!(
+        "- Total items: {}\n- Read-only: {}\n- Writes allowed: {}\n\n",
+        report_string(cleanup, "/summary/total_count"),
+        report_string(cleanup, "/summary/read_only"),
+        report_string(cleanup, "/summary/writes_allowed")
+    ));
+    markdown.push_str("## Cross-agent Comparison\n\n");
+    markdown.push_str(&format!(
+        "- Total groups: {}\n- Returned groups: {}\n- Compared skill count: {}\n\n",
+        json_field_string(comparison, "total_groups"),
+        json_field_string(comparison, "returned_groups"),
+        json_field_string(comparison, "compared_skill_count")
+    ));
+    markdown.push_str("## Redaction\n\n");
+    markdown.push_str("- Path prefixes are replaced with `$HOME`, `<project-root>`, `<project-cwd>`, or `<app-data-dir>` before report files are written.\n");
+    markdown
+}
+
+fn report_string(value: &Value, pointer: &str) -> String {
+    value
+        .pointer(pointer)
+        .map(value_to_markdown_string)
+        .unwrap_or_else(|| "n/a".to_string())
+}
+
+fn json_field_string(value: &Value, field: &str) -> String {
+    value
+        .get(field)
+        .map(value_to_markdown_string)
+        .unwrap_or_else(|| "n/a".to_string())
+}
+
+fn value_to_markdown_string(value: &Value) -> String {
+    match value {
+        Value::String(text) => text.clone(),
+        Value::Number(number) => number.to_string(),
+        Value::Bool(flag) => flag.to_string(),
+        Value::Null => "null".to_string(),
+        Value::Array(items) => format!("{} item(s)", items.len()),
+        Value::Object(object) => format!("{} field(s)", object.len()),
+    }
 }
 
 fn is_pi_plain_markdown_catalog_noise(skill: &SkillRecord) -> bool {
@@ -4475,6 +4943,164 @@ mod tests {
     }
 
     #[test]
+    fn report_export_local_writes_redacted_reports_and_keeps_catalog_read_only() {
+        let unique = unique_suffix();
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-report-export-test-{}-{unique}",
+            std::process::id()
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-report-home-{}-{unique}",
+            std::process::id()
+        ));
+        let project_root = env::temp_dir().join(format!(
+            "skills-copilot-report-project-{}-{unique}",
+            std::process::id()
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: Some(project_root.clone()),
+                project_cwd: Some(project_root.join("nested")),
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_cleanup_queue_fixture(&host);
+        seed_catalog_with_llm_skill(&host, &user_home.join(".claude/skills/redacted/SKILL.md"));
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_visible_records = host
+            .list_visible_skill_records(&before_catalog)
+            .expect("visible records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("report-export".to_string()),
+            method: "report.exportLocal".to_string(),
+            params: json!({ "formats": ["json", "markdown"] }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("report export result");
+        let export: WireReportExportLocalResult =
+            serde_json::from_value(result).expect("decode report export");
+        assert!(export.catalog_available);
+        assert!(export.read_only);
+        assert!(!export.writes_allowed);
+        assert!(!export.provider_request_sent);
+        assert!(!export.script_execution_allowed);
+        assert!(!export.credential_accessed);
+        assert_eq!(export.files.len(), 2);
+        assert_eq!(export.summary.skill_count, before_visible_records.len());
+        assert_eq!(export.summary.finding_count, before_findings.len());
+        assert!(export
+            .output_dir
+            .starts_with("<app-data-dir>/report-exports/"));
+        assert!(export
+            .files
+            .iter()
+            .all(|file| file.path.starts_with("<app-data-dir>/report-exports/")));
+
+        let json_path = app_data_dir
+            .join("report-exports")
+            .join(&export.export_id)
+            .join("report.json");
+        let markdown_path = app_data_dir
+            .join("report-exports")
+            .join(&export.export_id)
+            .join("report.md");
+        let json_content = fs::read_to_string(json_path).expect("read json report");
+        let markdown_content = fs::read_to_string(markdown_path).expect("read markdown report");
+        for raw_path in [
+            app_data_dir.to_string_lossy().to_string(),
+            user_home.to_string_lossy().to_string(),
+            project_root.to_string_lossy().to_string(),
+        ] {
+            assert!(
+                !json_content.contains(&raw_path),
+                "json report leaked raw path {raw_path}"
+            );
+            assert!(
+                !markdown_content.contains(&raw_path),
+                "markdown report leaked raw path {raw_path}"
+            );
+        }
+        assert!(json_content.contains("<app-data-dir>"));
+        assert!(json_content.contains("$HOME"));
+        assert!(json_content.contains("<project-root>"));
+        assert!(markdown_content.contains("Skills Copilot Local Report"));
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+        let _ = fs::remove_dir_all(project_root);
+    }
+
+    #[test]
+    fn report_export_local_missing_catalog_writes_empty_report_without_catalog_init() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-report-empty-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("report-empty".to_string()),
+            method: "report.exportLocal".to_string(),
+            params: json!({ "formats": ["json"] }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let export: WireReportExportLocalResult =
+            serde_json::from_value(response.result.expect("report result"))
+                .expect("decode report result");
+        assert!(!export.catalog_available);
+        assert_eq!(export.summary.skill_count, 0);
+        assert_eq!(export.summary.finding_count, 0);
+        assert_eq!(export.summary.cleanup_item_count, 0);
+        assert_eq!(export.files.len(), 1);
+        assert!(
+            !host.catalog_path().exists(),
+            "missing-catalog export must not initialize catalog.sqlite"
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        let json_path = app_data_dir
+            .join("report-exports")
+            .join(&export.export_id)
+            .join("report.json");
+        let json_content = fs::read_to_string(json_path).expect("read empty report");
+        assert!(json_content.contains("\"catalog_available\": false"));
+        assert!(json_content.contains("\"writes_allowed\": false"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
     fn service_protocol_fixtures_decode() {
         let fixtures_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../..")
@@ -4713,6 +5339,21 @@ mod tests {
                     decode_fixture_result(method, result, path);
                 assert_eq!(comparison.summary.total_groups, comparison.groups.len());
                 assert!(!comparison.suggested_next_steps.is_empty());
+            }
+            "report.exportLocal" => {
+                let export: WireReportExportLocalResult =
+                    decode_fixture_result(method, result, path);
+                assert!(export.redaction.enabled);
+                assert!(export.read_only);
+                assert!(!export.writes_allowed);
+                assert!(!export.provider_request_sent);
+                assert!(!export.script_execution_allowed);
+                assert!(!export.credential_accessed);
+                assert!(!export.files.is_empty());
+                assert!(export
+                    .files
+                    .iter()
+                    .all(|file| file.path.starts_with("<app-data-dir>/")));
             }
             "catalog.listFindings" => {
                 let findings: Vec<WireRuleFindingRecord> =
@@ -4972,6 +5613,7 @@ mod tests {
             "llm.prepareSkillAnalysis" => {
                 json!({ "instance_ids": ["missing-skill"], "analysis_kind": "overview" })
             }
+            "report.exportLocal" => json!({ "formats": ["json"] }),
             "script.previewExecution" => json!({
                 "command": ["echo", "preview-only"],
                 "initiated_by": "user"
@@ -5264,6 +5906,53 @@ mod tests {
         read_only: bool,
         writes_allowed: bool,
         provider_request_sent: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireReportExportLocalResult {
+        export_id: String,
+        generated_at: i64,
+        output_dir: String,
+        files: Vec<WireReportExportedFile>,
+        catalog_available: bool,
+        summary: WireReportExportSummary,
+        redaction: WireReportExportRedaction,
+        read_only: bool,
+        writes_allowed: bool,
+        provider_request_sent: bool,
+        script_execution_allowed: bool,
+        credential_accessed: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireReportExportedFile {
+        format: String,
+        path: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireReportExportSummary {
+        skill_count: usize,
+        finding_count: usize,
+        open_finding_count: usize,
+        triage_count: usize,
+        cleanup_item_count: usize,
+        comparison_group_count: usize,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireReportExportRedaction {
+        enabled: bool,
+        placeholders: Vec<String>,
+        path_policy: String,
     }
 
     #[allow(dead_code)]

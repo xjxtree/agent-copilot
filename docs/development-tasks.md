@@ -1,13 +1,13 @@
 # Development Tasks
 
-> Status: current planning and execution queue as of 2026-06-10. V2.1 through V2.34 are synchronized baseline, and V2.35 is active/in-progress.
+> Status: current planning and execution queue as of 2026-06-10. V2.1 through V2.35 are synchronized baseline, and V2.36 is active/in-progress.
 
 ## Current Baseline
 
 - Current branch baseline: `main` after V2.16-V2.28 management/analysis/history/explainability/provenance/conflict-semantics line and 2026-06-10 real local Computer Use validation; V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout 均已收口。
 - Product boundary: native macOS SwiftUI/AppKit shell plus Rust service protocol.
 - Completed V2 milestones: first Codex slice, V2.1 through V2.28.
-- Current priority: V2.35 Local report export is active after V2.34 Cross-agent comparison view completed. Keep V2.26 finding explainability, V2.27 identity/provenance, V2.28 conflict semantics, V2.29 finding triage persistence, V2.30 read-only AI analysis, V2.31 read-only cleanup queue, V2.32 app-local rule tuning, V2.33 preview-first + explicit-confirm batch actions, and V2.34 read-only comparison stable. Report export must stay local, redacted, user-triggered, and separate from public distribution, provider calls, credentials, scripts, or automatic writes.
+- Current priority: V2.36 Pi writable evidence harness is active after V2.35 Local report export completed. Keep V2.26 finding explainability, V2.27 identity/provenance, V2.28 conflict semantics, V2.29 finding triage persistence, V2.30 read-only AI analysis, V2.31 read-only cleanup queue, V2.32 app-local rule tuning, V2.33 preview-first + explicit-confirm batch actions, V2.34 read-only comparison, and V2.35 local redacted export stable. V2.36 must use disposable/fixture Pi roots only and must not enable production Pi writable support without rollback-safe evidence.
 - Real local Computer Use baseline: passed on 2026-06-10 for the current mainline app against real local HOME/app data/Claude/Codex/opencode roots; validation explicitly targeted the current `dist/SkillsCopilot.app` bundle after detecting a stale same-bundle-id worktree app. Future user-visible, UI, or service protocol changes must rerun it.
 - Quality gate for code/UI/protocol work: `pnpm check:macos`; add focused Rust/Swift tests when touching shared behavior.
 
@@ -40,8 +40,9 @@
 | V2.32 | Rule tuning / suppression | Completed | Add app-local rule severity overrides and suppression with audit/revert semantics; no skill-file/agent-config writes, snapshots, provider calls, or credential side effects |
 | V2.33 | Safe batch actions | Completed | Preview-first batch enable/disable for verified writable agents/roots only; show skipped items + reasons and explicit snapshot/rollback planning; Apply requires explicit confirmation and matching preview id |
 | V2.34 | Cross-agent comparison view | Completed | Compare same-name/similar skills across agents by state, source, risk, writable capability, and differences; read-only by default |
-| V2.35 | Local report export | In Progress | Export redacted Markdown/JSON local audit reports for agent coverage, health summary, open findings, triage state, cleanup queue, and comparison insights |
-| V2.36-V2.40 | Adapter trust and diagnostics | Planned | Pi writable evidence harness, guarded Pi slice if proven, Hermes external roots, OpenClaw workspace deepening, adapter diagnostics |
+| V2.35 | Local report export | Completed | Export redacted Markdown/JSON local audit reports for agent coverage, health summary, open findings, triage state, cleanup queue, and comparison insights |
+| V2.36 | Pi writable evidence harness | In Progress | Use disposable agentDir/fixture project to validate Pi global/project/package toggle, rollback, trust gate, invalid JSON, and re-enable semantics; production writable remains blocked |
+| V2.37-V2.40 | Adapter trust and diagnostics | Planned | Guarded Pi slice if proven, Hermes external roots, OpenClaw workspace deepening, adapter diagnostics |
 | V2.41-V2.45 | Long-term governance | Planned | Quality score, stale/drift detection, local knowledge index, policy packs, review session mode |
 
 ## Near-Term Priority: V2.26-V2.35 可解释、可追踪、可整理
@@ -58,8 +59,8 @@
 6. V2.32 Rule tuning / suppression: completed; local rule severity overrides and suppressions are auditable, reversible, and isolated from skill files, agent config, snapshots, provider calls, and credentials.
 7. V2.33 Safe batch actions: completed; added preview-first batch enable/disable for verified writable agents/roots only, with explicit capability filtering, skipped item + reason reporting, rollback planning, and explicit confirmation before apply.
 8. V2.34 Cross-agent comparison view: completed; compare same-name/similar skills across agents by state, source, risk, writable capability, and differences without adding write paths.
-9. V2.35 Local report export: in progress; generate redacted local Markdown/JSON audit reports from existing read models without distribution, provider calls, credentials, scripts, or automatic writes.
-10. V2.36-V2.40 Adapter trust and diagnostics: only after the management workflow is stable, run Pi writable evidence harness and deepen Hermes/OpenClaw diagnostics without guessing write semantics.
+9. V2.35 Local report export: completed; generate redacted local Markdown/JSON audit reports from existing read models without distribution, provider calls, credentials, scripts, or automatic writes.
+10. V2.36-V2.40 Adapter trust and diagnostics: active; run Pi writable evidence harness first, then deepen Hermes/OpenClaw diagnostics without guessing write semantics.
 11. V2.41-V2.45 Long-term governance: quality score, stale/drift detection, local knowledge index, policy packs, and review sessions.
 
 **Tasks**
@@ -108,7 +109,8 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 | P0 | V2.32 Rule tuning / suppression | Completed | Add app-local rule severity overrides and suppression records with audit/revert semantics, without touching skill files/agent config/snapshots or provider/credential paths | Users can quiet intentional findings and tune priority while preserving reviewability |
 | P0 | V2.33 Safe batch actions | Completed | Add preview-first batch enable/disable for verified writable agents/roots only, with skipped-item reasons for read-only scope, snapshot/rollback plans, explicit confirmation, and matching preview id before any write | Users can safely act on multiple selected skills without hidden writes |
 | P0 | V2.34 Cross-agent comparison view | Completed | Add read-only comparison for same-name/similar skills across agents, including state/source/risk/capability/diff summaries | Users can understand cross-agent drift before cleanup/export |
-| P0 | V2.35 Local report export | In Progress | Add user-triggered redacted Markdown/JSON local audit export from existing read models; no public distribution, provider calls, credentials, scripts, or automatic writes | Users can share/review skill inventory and risk state without leaking local paths or widening write scope |
+| P0 | V2.35 Local report export | Completed | Add user-triggered redacted Markdown/JSON local audit export from existing read models; no public distribution, provider calls, credentials, scripts, or automatic writes | Users can share/review skill inventory and risk state without leaking local paths or widening write scope |
+| P0 | V2.36 Pi writable evidence harness | In Progress | Validate Pi writable semantics only in disposable roots with rollback proof before any production toggle/install surface is enabled | Pi writable can advance only with evidence instead of assumptions |
 | P1 | Finding triage usability and grouping | Planned | Add grouping and shortcut filters for reviewed/ignored/needs follow-up findings (by rule / severity / agent / source) without writing agent config, script execution, AI write-back, or credentials | Users can act on persistent triage faster without widening state persistence scope |
 | P1 | Agent-config timeline | Completed | Keep per-agent config snapshots and activity history only for config/toggle events; enforce preview diff and second-step confirmation for rollback; do not add skill-content snapshot or skill-toggle snapshot | Users can understand config changes and rollback points |
 | P1 | Read-only AI skill analysis assist | Implemented offline preview | Keep V2.7 disabled-by-default gate and V2.20 offline purpose/risk/finding summaries free of provider/client/storage/write/execution paths | Users get human-readable analysis without any write, execution, or credential risk |
@@ -122,3 +124,11 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 - If the task is Pi writable evidence, Hermes external roots, OpenClaw workspace deepening, or adapter diagnostics, use V2.36-V2.40.
 - If the task is quality scoring, stale/drift detection, local knowledge index, policy packs, or review session mode, use V2.41-V2.45.
 - Do not create versions for script execution, GitHub clone import, script-file install, signing, notarization, DMG/ZIP, public distribution, or full-platform UI adaptation unless the product direction changes explicitly.
+
+## V2.35 Local report export — completed
+- [x] Document local export intent and completed status in user-facing docs (README + roadmap + AGENTS).
+- [x] Record report scope: agent coverage/status, health summary, open findings/triage state, cleanup queue, cross-agent comparison insights.
+- [x] Document redaction requirements for exported data: local paths and environment roots must be replaced with placeholders.
+- [x] Document explicit non-goals: public distribution, DMG/ZIP/signing/notarization, cloud sync, telemetry, provider calls, credential storage, script execution, automatic write-back.
+- [x] Confirm V2.33/V2.34 semantics are preserved in updated docs.
+- [x] Validate with `pnpm check:macos`, real local App export, and generated report path-redaction check.

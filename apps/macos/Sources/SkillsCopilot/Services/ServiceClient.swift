@@ -68,6 +68,22 @@ private struct CrossAgentComparisonParams: Encodable {
     }
 }
 
+private struct LocalReportExportParams: Encodable {
+    let formats: [LocalReportFormat]
+    let agent: String?
+    let instanceId: String?
+    let stateFilter: String?
+    let search: String?
+
+    enum CodingKeys: String, CodingKey {
+        case formats
+        case agent
+        case instanceId = "instance_id"
+        case stateFilter = "state_filter"
+        case search
+    }
+}
+
 private struct GetSkillParams: Encodable {
     let instanceId: String
 
@@ -318,6 +334,29 @@ final class ServiceClient {
             return try await call(method: "comparison.listCrossAgent", params: params)
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return try await call(method: "analysis.listComparisons", params: params)
+        }
+    }
+
+    func exportLocalReport(
+        format: LocalReportFormat,
+        agent: String? = nil,
+        instanceID: String? = nil,
+        stateFilter: String? = nil,
+        search: String? = nil
+    ) async throws -> LocalReportExportResult {
+        do {
+            return try await call(
+                method: "report.exportLocal",
+                params: LocalReportExportParams(
+                    formats: [format],
+                    agent: agent,
+                    instanceId: instanceID,
+                    stateFilter: stateFilter,
+                    search: search
+                )
+            )
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable(format: format)
         }
     }
 

@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-**当前阶段**：V2.34 Cross-agent comparison view 已完成并通过真实本机 App Analysis 验证，V2.35 Local report export 已启动。V2.33 的验收口径为：对 verified writable agent/roots 提供批量 enable/disable preview-first 工作流，必须展示受影响技能、不可写跳过项及原因、snapshot/rollback 计划，并在 Apply 前要求显式确认且确认 preview id 仍匹配当前 preview；Pi/Hermes/OpenClaw 继续 read-only。V2.34 对同名/相似 skills 只做跨 agent 只读对比（state/source/risk/capability/diff），不新增写入、执行、AI provider、credential 或快照路径。继续围绕 skills 管理、检查、分析和配置审计推进。
+**当前阶段**：V2.35 Local report export 已完成并通过真实本机 App 导出与报告脱敏验证，V2.36 Pi writable evidence harness 已启动。V2.35 支持用户显式触发的本地 Markdown/JSON 审计报告导出，覆盖 agent coverage、health summary、open findings/triage、cleanup queue 和 cross-agent comparison insights；报告写入 app data 并使用 `$HOME`、`<project-root>`、`<project-cwd>`、`<app-data-dir>` 等占位符脱敏。继续围绕 skills 管理、检查、分析和配置审计推进。
 
-**近期主线**：继续围绕 skills 管理、检查、分析和配置审计打磨体验。短期不做全平台 UI 适配、正式签名 release、notarization、DMG/ZIP 或 public distribution。OpenClaw/Hermes writable/install 与 Pi production writable 仍保持 blocked，直到 disposable rollback 证据通过。V2.35 本地报告导出保持脱敏、本地、用户触发，不作为 public distribution 或自动同步入口。
+**近期主线**：继续围绕 skills 管理、检查、分析和配置审计打磨体验。短期不做全平台 UI 适配、正式签名 release、notarization、DMG/ZIP 或 public distribution。OpenClaw/Hermes writable/install 与 Pi production writable 仍保持 blocked，V2.36 只做 Pi disposable rollback-safe evidence harness，不直接打开生产写入。
 
 **已集成能力**：
 
@@ -22,7 +22,7 @@
 - V2.13 Pi read-only scanner/parser：支持 Pi-native global/project roots，Pi writes 继续 blocked。
 - V2.14 Hermes evidence-gate closeout 与 V2.17 Hermes read-only scanner：active/profile Hermes home `skills/**/SKILL.md` 只读进入 catalog。
 - V2.15 OpenClaw evidence-gate closeout 与 V2.16 OpenClaw read-only scanner：workspace/global documented filesystem roots 只读进入 catalog。
-- V2.18-V2.34：cross-agent analysis、skill health dashboard、read-only AI skill analysis、scan accuracy/dedupe、finding/conflict 语义、Health/Adapter Capability UX、Detail 诊断口径、Agent-config timeline、Finding explainability、skill identity/provenance dedupe、conflict semantic closeout、finding triage persistence、AI skill analysis workflow、Cleanup Queue、Rule tuning / suppression、Safe batch actions、Cross-agent comparison view 已收口；V2.35 Local report export 正在进行。
+- V2.18-V2.35：cross-agent analysis、skill health dashboard、read-only AI skill analysis、scan accuracy/dedupe、finding/conflict 语义、Health/Adapter Capability UX、Detail 诊断口径、Agent-config timeline、Finding explainability、skill identity/provenance dedupe、conflict semantic closeout、finding triage persistence、AI skill analysis workflow、Cleanup Queue、Rule tuning / suppression、Safe batch actions、Cross-agent comparison view、Local report export 已收口；V2.36 Pi writable evidence harness 正在进行。
 - 2026-06-10 真实本机 app Computer Use validation 已通过；后续 UI/service/protocol 变更仍需重跑。
 
 **当前产品 UI**：SwiftUI/AppKit macOS 原生壳 + Rust service protocol。
@@ -48,7 +48,8 @@
 | V2.32 | Rule tuning / suppression（本地 rule override / suppression，可审计可撤销） | 已完成：仅 app-local 元数据，默认不改写 skill 文件/agent config，不新增快照，且无脚本执行/AI provider/凭据/telemetry 路径 |
 | V2.33 | Safe batch actions（verified writable agents 的 preview-first 批量 enable/disable） | 已完成：Apply 前必须显式确认，且确认 preview id 必须仍匹配当前 preview |
 | V2.34 | Cross-agent comparison view（跨 agent 同名/相似 skill 差异对比） | 已完成：Analysis 中只读展示，不新增写入/执行/provider/credential/snapshot 路径 |
-| V2.35 | Local report export（脱敏 Markdown/JSON 本地审计报告） | 进行中 |
+| V2.35 | Local report export（脱敏 Markdown/JSON 本地审计报告） | 已完成：本地 app-data 导出、递归路径脱敏、无 public distribution/provider/credential/script/自动写回路径 |
+| V2.36 | Pi writable evidence harness | 进行中：临时 agentDir/fixture project 证据验证；生产 writable 仍 blocked |
 | V2.30 | AI skill analysis workflow（selected/batch read-only 预览，默认禁用，非凭证/非写入） | Completed |
 | V2.29 | Finding triage persistence（Open / Reviewed / Ignored / Needs follow-up；仅 app-local） | Completed |
 | V2.28 | Conflict semantic closeout（验收：Conflicts=当前 agent runtime/name collision；Analysis=cross-agent duplicate/source overlap/enabled mismatch；health conflict_count 不含 cross-agent analysis） | 已完成 |
@@ -184,3 +185,18 @@ AI coding agents should use [`AGENTS.md`](./AGENTS.md) as the shared instruction
 ## 许可证
 
 MIT — 详见 [`LICENSE`](./LICENSE)。
+
+## V2.35 Local report export (completed)
+Skills-copilot V2.35 covers local report export as a user-triggered, redacted audit artifact flow. It is completed after `pnpm check:macos`, real local App export validation, and generated report redaction verification.
+
+- Exports are local-only, written under app data, and require explicit user action.
+- Export formats: Markdown and JSON.
+- Contents include:
+  - Agent coverage and agent status snapshot
+  - Health summary
+  - Open findings and triage state (`Open`, `Reviewed`, `Ignored`, `Needs follow-up`)
+  - Cleanup Queue state
+  - Cross-agent comparison insights
+- Sensitive local paths and roots are replaced with placeholders (`$HOME`, `<project-root>`, `<project-cwd>`, `<app-data-dir>`, `<redacted>`).
+- V2.35 does not add public distribution, DMG/ZIP/signing/notarization, cloud sync, telemetry, provider/AI execution, credential persistence, script execution, or automatic write-back.
+- Preserve existing V2.33 Safe Batch explicit-confirm behavior and V2.34 completed read-only comparison status.

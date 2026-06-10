@@ -1,0 +1,10 @@
+{
+  "id": "fixture-report-export-local",
+  "method": "report.exportLocal",
+  "params": {
+    "formats": [
+      "json",
+      "markdown"
+    ]
+  }
+}

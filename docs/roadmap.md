@@ -4,9 +4,9 @@
 >
 > 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.35 Local report export（进行中）**。V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout、V2.29 Finding triage persistence、V2.30 AI skill analysis workflow、V2.31 Cleanup Queue、V2.32 Rule tuning / suppression、V2.33 Safe batch actions、V2.34 Cross-agent comparison view 均已收口。V2.35 聚焦脱敏 Markdown/JSON 本地审计报告导出；默认 local/user-triggered，不新增 public distribution、写入、执行、AI provider、credential 或自动同步路径。
+> 当前阶段：**V2.36 Pi writable evidence harness（进行中）**。V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout、V2.29 Finding triage persistence、V2.30 AI skill analysis workflow、V2.31 Cleanup Queue、V2.32 Rule tuning / suppression、V2.33 Safe batch actions、V2.34 Cross-agent comparison view、V2.35 Local report export 均已收口。V2.36 聚焦 disposable Pi writable evidence harness；Pi production writable/toggle/install 仍 blocked，直到 rollback-safe evidence 通过。
 >
-> 近期主线：继续围绕 skills 管理、检查、分析和配置审计打磨体验。下一段版本线聚焦 Cleanup workflow 的 rule tuning、suppression、safe batch actions、comparison 和 report export；Pi writable evidence 作为后续 harness 候选，不进入生产写入。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
+> 近期主线：继续围绕 skills 管理、检查、分析和配置审计打磨体验。下一段版本线聚焦 Adapter trust and diagnostics：Pi writable evidence harness、guarded Pi slice（仅证据通过后）、Hermes external roots、OpenClaw workspace deepening 和 adapter diagnostics。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
 >
 > 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.25 各阶段能力、V2.9 Tool-global skill pool、V2.11 Adapter capability matrix、V2.16-V2.25 management/analysis/history line。后续候选变更仍需重新验证。
 >
@@ -968,13 +968,13 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 | V2.32 | Rule tuning / suppression | 已完成：支持本地 rule severity override 与 suppression，所有操作可审计、可撤销；仅 app-local 元数据持久化，不改 skill 或 agent config，不新增 snapshot，不调用 AI provider，不读写凭据，且无 telemetry 与 release 自动化耦合。 |
 | V2.33 | Safe batch actions | 已完成：仅对 verified writable agent/roots 支持 preview-first 批量 enable/disable；预览返回受影响技能、不可写跳过项与原因、snapshot/rollback 计划；Apply 必须显式确认且确认 preview id 必须仍匹配当前 preview；Pi/Hermes/OpenClaw 保持 read-only。 |
 | V2.34 | Cross-agent comparison view | 已完成：横向比较同名/相似 skills 在 Claude/Codex/opencode/Pi/Hermes/OpenClaw 中的状态、来源、风险、可写能力与差异。Read-only，默认不新增写入/执行/AI/provider/credential/snapshot 路径。 |
-| V2.35 | Local report export | 进行中：导出脱敏 Markdown/JSON 本地审计报告，覆盖 agent coverage、health summary、open findings、triage 状态、cleanup queue 和 comparison insights。 |
+| V2.35 | Local report export | 已完成：导出脱敏 Markdown/JSON 本地审计报告，覆盖 agent coverage、health summary、open findings、triage 状态、cleanup queue 和 comparison insights；输出位于 app data，且不新增 public distribution/provider/credential/script/自动写回路径。 |
 
 ## 4.36-V2.40 Adapter 可信度与真实环境诊断
 
 | Version | Goal | Completion signal |
 | --- | --- | --- |
-| V2.36 | Pi writable evidence harness | 用临时 agentDir / fixture project 验证 Pi global/project/package toggle、rollback、trust gate、invalid JSON 与 re-enable。 |
+| V2.36 | Pi writable evidence harness | 进行中：用临时 agentDir / fixture project 验证 Pi global/project/package toggle、rollback、trust gate、invalid JSON 与 re-enable；生产 writable 保持 blocked。 |
 | V2.37 | Pi writable guarded slice | 仅在 V2.36 通过后启用最小 Pi native toggle；不做 install；UI 标明 evidence-backed/experimental 状态。 |
 | V2.38 | Hermes external roots | 仅在 evidence 明确时把 `skills.external_dirs` 建模为 explicit external roots，不当作 project roots。 |
 | V2.39 | OpenClaw workspace 深化 | 精准识别 OpenClaw workspace scope，只扫描 confirmed workspace roots，不推断任意 repo。 |
@@ -989,3 +989,26 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 | V2.43 | Local knowledge index | 建立本地只读搜索/分析索引，支持目的、工具、关键词、规则、来源快速检索；默认不联网。 |
 | V2.44 | Policy packs | 支持 personal/team/agent-specific policy pack 的本地导入导出，继续不做云同步。 |
 | V2.45 | Review session mode | 将一次 skills 整理过程组织成 review session，输出本地 summary report 与处理历史。 |
+
+## V2.35 Local report export (completed)
+
+- Scope: add local audit report generation (Markdown/JSON) from existing catalog/health/finding/cleanup/cross-agent data.
+- Boundary:
+  - User-triggered and local only.
+  - Redacted output path placeholders: `$HOME`, `<project-root>`, `<project-cwd>`, `<app-data-dir>`, `<redacted>`.
+  - Coverage targets in report:
+    - agent coverage/status
+    - health summary
+    - open findings + triage state
+    - cleanup queue
+    - cross-agent comparison insights
+  - Explicitly out-of-scope:
+    - public distribution
+    - DMG/ZIP packaging, signing, notarization
+    - cloud sync / telemetry
+    - provider/AI calls / credential storage
+    - script execution
+    - automatic write-back
+- Keep V2.33 Safe Batch explicit-confirm guardrails unchanged.
+- Keep V2.34 cross-agent comparison completed read-only semantics unchanged.
+- Completed after coordinator confirmed `pnpm check:macos`, real local App export behavior, and generated report redaction correctness on 2026-06-10.

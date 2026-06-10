@@ -10,6 +10,8 @@ final class SkillStore: ObservableObject {
     @Published private(set) var isLoadingCleanupQueue = false
     @Published private(set) var crossAgentComparisons = CrossAgentComparisonResult.emptyFallback()
     @Published private(set) var isLoadingCrossAgentComparisons = false
+    @Published private(set) var localReportExportResult: LocalReportExportResult?
+    @Published private(set) var isExportingLocalReport = false
     @Published private(set) var healthSummary = SkillHealthSummary.empty
     @Published private(set) var agentConfigSnapshots: [ConfigSnapshotRecord] = []
     @Published private(set) var isLoadingAgentConfigSnapshots = false
@@ -64,6 +66,7 @@ final class SkillStore: ObservableObject {
     @Published var batchToggleAction: BatchToggleAction = .disable {
         didSet { batchTogglePreview = nil }
     }
+    @Published var localReportFormat: LocalReportFormat = .markdown
     @Published var sortOrder: SkillSortOrder = .name {
         didSet { handleListCriteriaChanged() }
     }
@@ -79,7 +82,7 @@ final class SkillStore: ObservableObject {
     }
 
     var isRefreshBusy: Bool {
-        isLoading || isScanning || isWriting || isProjectUpdating || isSavingSettings || isApplyingBatchToggle
+        isLoading || isScanning || isWriting || isProjectUpdating || isSavingSettings || isApplyingBatchToggle || isExportingLocalReport
     }
 
     private func toggleDisabledReason(for skill: SkillRecord) -> String? {
@@ -508,6 +511,42 @@ final class SkillStore: ObservableObject {
             batchTogglePreview = nil
             await loadSelectedDetail()
         } catch {
+            errorMessage = error.localizedDescription
+            lastMutationMessage = nil
+        }
+    }
+
+    func exportLocalReport() async {
+        guard !isRefreshBusy else {
+            errorMessage = UIStrings.operationUnavailableBusy
+            lastMutationMessage = nil
+            return
+        }
+
+        isExportingLocalReport = true
+        errorMessage = nil
+        lastMutationMessage = nil
+        defer { isExportingLocalReport = false }
+
+        let agent = agentFilter == .all ? nil : agentFilter.rawValue
+        let state = stateFilter == .all ? nil : stateFilter.rawValue
+        let trimmedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            let result = try await service.exportLocalReport(
+                format: localReportFormat,
+                agent: agent,
+                instanceID: selectedSkill?.id,
+                stateFilter: state,
+                search: trimmedSearch.isEmpty ? nil : trimmedSearch
+            )
+            localReportExportResult = result
+            if result.isUnavailable {
+                lastMutationMessage = nil
+            } else {
+                lastMutationMessage = UIStrings.localReportExported(result.displayName)
+            }
+        } catch {
+            localReportExportResult = .unavailable(reason: UIStrings.localReportUnavailableFallback, format: localReportFormat)
             errorMessage = error.localizedDescription
             lastMutationMessage = nil
         }

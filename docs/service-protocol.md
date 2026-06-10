@@ -1,6 +1,6 @@
 # skills-copilot Service Protocol
 
-> Status: V2.34 Cross-agent comparison view is integrated; V2.35 Local report export is active. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, V2.19 health dashboard, V2.20 read-only AI skill analysis assist, V2.21 scan accuracy/dedupe alignment, V2.22 finding/conflict semantics, V2.23 Health Dashboard / Adapter Capability UX, V2.24 Skill Detail diagnostics, V2.25 Agent-config timeline, V2.26 Finding explainability, V2.27 Skill identity/provenance dedupe, V2.28 Conflict semantic closeout, V2.29 Finding triage persistence, V2.30 AI skill analysis workflow, V2.31 Cleanup Queue, V2.32 Rule tuning / suppression, V2.33 Safe batch actions, and V2.34 Cross-agent comparison view are implemented or synchronized. V2.33 adds `batch.previewSkillToggles` and `batch.applySkillToggles` for preview-first verified writable toggles with explicit confirmation and matching preview id before apply; V2.34 adds read-only `comparison.listCrossAgent`. Both keep Pi/Hermes/OpenClaw read-only where applicable and do not write skill content, execute scripts, call providers, store credentials, or create public distribution artifacts.
+> Status: V2.35 Local report export is integrated; V2.36 Pi writable evidence harness is active. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, V2.19 health dashboard, V2.20 read-only AI skill analysis assist, V2.21 scan accuracy/dedupe alignment, V2.22 finding/conflict semantics, V2.23 Health Dashboard / Adapter Capability UX, V2.24 Skill Detail diagnostics, V2.25 Agent-config timeline, V2.26 Finding explainability, V2.27 Skill identity/provenance dedupe, V2.28 Conflict semantic closeout, V2.29 Finding triage persistence, V2.30 AI skill analysis workflow, V2.31 Cleanup Queue, V2.32 Rule tuning / suppression, V2.33 Safe batch actions, V2.34 Cross-agent comparison view, and V2.35 Local report export are implemented or synchronized. V2.33 adds `batch.previewSkillToggles` and `batch.applySkillToggles` for preview-first verified writable toggles with explicit confirmation and matching preview id before apply; V2.34 adds read-only `comparison.listCrossAgent`; V2.35 adds user-triggered local/redacted `report.exportLocal`. These keep Pi/Hermes/OpenClaw read-only where applicable and do not write skill content, execute scripts, call providers, store credentials, or create public distribution artifacts.
 >
 > Integrated: V2.9 Tool-global import/export/install, V2.10 skill execution safety boundary, and 2026-06-10 real local Computer Use validation for the current mainline app. V2.11 added adapter capability status to the service protocol and macOS UI. V2.12 marks opencode writable through exact permission.skill deny/re-enable after snapshot/rollback, install, and fixture smoke validation pass; current opencode scan follows native plus official compatibility roots while install targets remain native roots.
 >
@@ -654,3 +654,16 @@ No-project behavior:
 ## Contract Fixtures
 
 Shared request/response examples live in [`../fixtures/service-protocol`](../fixtures/service-protocol). The service crate has a fixture decoding test so schema drift is caught during `cargo test --workspace`.
+
+## V2.35 Local report export (completed)
+
+- `report.exportLocal` is a local, user-triggered action that writes redacted Markdown/JSON audit reports under app data `report-exports`.
+- Exported payload includes:
+  - agent coverage/status
+  - health summary
+  - open findings with persisted triage state
+  - cleanup queue entries
+  - cross-agent comparison insights
+- Export generation redacts local environment values using placeholders such as `$HOME`, `<project-root>`, `<project-cwd>`, `<app-data-dir>`, and `<redacted>`.
+- Explicit out-of-scope boundaries for V2.35 protocol behavior: no public distribution artifacts, no DMG/ZIP/signing/notarization, no provider/AI call pathway, no credential writes, no script execution, no automatic write-back path.
+- Preserve V2.33 safe-batch semantics and V2.34 cross-agent completed read-only semantics in any related protocol or UX flow.

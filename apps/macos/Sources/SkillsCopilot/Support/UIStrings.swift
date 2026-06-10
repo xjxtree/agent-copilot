@@ -101,6 +101,20 @@ enum UIStrings {
     static let batchToggleNoAffectedSkills = text("batchToggle.noAffectedSkills", "No writable affected skills in this preview.")
     static let batchToggleNoSkippedSkills = text("batchToggle.noSkippedSkills", "No skipped skills in this preview.")
     static let batchTogglePreviewChanged = text("batchToggle.previewChanged", "Batch preview changed before confirmation. Preview again before applying.")
+    static let localReportTitle = text("localReport.title", "Local Report Export")
+    static let localReportBoundary = text("localReport.boundary", "User-triggered local redacted audit export only. No public distribution, provider calls, credentials, script execution, config mutation, or background sync.")
+    static let localReportFormat = text("localReport.format", "Format")
+    static let localReportFormatMarkdown = text("localReport.format.markdown", "Markdown")
+    static let localReportFormatJSON = text("localReport.format.json", "JSON")
+    static let localReportExport = text("localReport.export", "Export")
+    static let localReportExporting = text("localReport.exporting", "Exporting local report...")
+    static let localReportUnavailableFallback = text("localReport.unavailableFallback", "Local report export is unavailable in this service build. No file was written.")
+    static let localReportNoFile = text("localReport.noFile", "No local file")
+    static let localReportNoSections = text("localReport.noSections", "No section list returned")
+    static let localReportExportedSummary = text("localReport.exportedSummary", "Local redacted report exported.")
+    static let localReportSections = text("localReport.sections", "Sections")
+    static let localReportRedacted = text("localReport.redacted", "Redacted")
+    static let localReportNotRedactedWarning = text("localReport.notRedactedWarning", "Service did not mark this report as redacted. Review before sharing.")
     static let noSkillsInCatalog = text("empty.noSkillsInCatalog", "No skills in catalog")
     static let noSkillsMatchSearch = text("empty.noSkillsMatchSearch", "No skills match this search")
     static let noProjectSelected = text("project.none", "No Project")
@@ -555,6 +569,10 @@ enum UIStrings {
 
     static func batchToggleApplied(action: String, count: Int) -> String {
         format("batchToggle.applied", "%@ batch applied to %d writable skills after preview confirmation.", action, count)
+    }
+
+    static func localReportExported(_ filename: String) -> String {
+        format("localReport.exported", "Exported local redacted report: %@.", filename)
     }
 
     static func toggledSkill(on: Bool, name: String) -> String {

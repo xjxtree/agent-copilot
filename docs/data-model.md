@@ -455,3 +455,18 @@ CREATE TABLE config_snapshot (
 - **导出**：导出 `settings.json` / `config.toml` 不在本模型范围，那是各 agent 配置层的职责；当前 Claude `settings.json` 读写通过 service protocol 的 `config.readClaudeSettings` / `config.saveClaudeSettings` 完成
 - **执行**：当前模型不包含成功执行输出、session log 或 sandbox runtime。V2.10 只定义 blocked/cancelled/failure attempt 审计边界；真实执行模型必须先补安全模型、service protocol 和持久化策略
 - **迁移**：catalog schema 升级走 `migrations/` 目录，每个 migration 一个 SQL 文件，编号顺序
+
+## V2.35 Local report export (completed)
+
+- Report payload (for local Markdown/JSON export):
+  - `report_version`: versioned report schema
+  - `generated_at`: timestamp
+  - `agent_coverage_status`: per-agent coverage and read/write capability snapshot
+  - `health_summary`: health counts, blockers, and conflict/analysis totals
+  - `open_findings`: findings plus triage state and fingerprint provenance
+  - `cleanup_queue`: queued items and review metadata
+  - `cross_agent_comparison`: normalized cross-agent insight rows
+- Export redaction policy:
+  - Normalize/replace local paths, home paths, app-data roots, project roots, and project cwd with placeholders (`$HOME`, `<project-root>`, `<project-cwd>`, `<app-data-dir>`, `<redacted>`).
+- Explicitly excluded from report data model: provider/AI outputs, credentials, signed package metadata, distribution targets, telemetry records, and script execution traces.
+- Completed without adding persistent catalog schema; exports are generated from existing read models and written as redacted local artifacts.
