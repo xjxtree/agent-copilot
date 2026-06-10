@@ -50,6 +50,7 @@ func runAsyncTest(_ body: @escaping () async throws -> Void) throws {
 public func runNativeModelTests() {
     do {
         try FindingDisplayModelTests().run()
+        try RuleTuningModelTests().run()
         try CleanupQueueModelTests().run()
         try LLMModelTests().run()
         try ScriptExecutionModelTests().run()

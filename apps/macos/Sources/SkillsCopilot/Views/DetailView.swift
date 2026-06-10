@@ -2235,8 +2235,23 @@ private struct FindingsSection: View {
                                     issue: issue,
                                     severityTitle: group.title,
                                     triageStatus: issue.triageStatus,
+                                    ruleTuning: store.ruleTuningRecord(ruleId: issue.ruleId),
+                                    groupTuning: store.ruleTuningRecord(ruleId: issue.ruleId, findingGroupID: issue.id),
+                                    isUpdatingRuleTuning: store.isWriting,
                                     onSetTriageStatus: { status in
                                         store.setFindingTriageStatus(status, for: issue.triageKeys)
+                                    },
+                                    onSetSeverityOverride: { severity in
+                                        store.setRuleSeverityOverride(severity, for: issue.ruleId)
+                                    },
+                                    onClearSeverityOverride: {
+                                        store.clearRuleSeverityOverride(for: issue.ruleId)
+                                    },
+                                    onSetSuppression: { scope in
+                                        store.setRuleSuppression(ruleId: issue.ruleId, findingGroupID: issue.id, scope: scope)
+                                    },
+                                    onClearSuppression: { scope in
+                                        store.clearRuleSuppression(ruleId: issue.ruleId, findingGroupID: issue.id, scope: scope)
                                     }
                                 )
                             }
@@ -2347,7 +2362,14 @@ private struct FindingIssueCard: View {
     let issue: FindingIssueGroup
     let severityTitle: String
     let triageStatus: FindingTriageStatus
+    let ruleTuning: RuleTuningRecord?
+    let groupTuning: RuleTuningRecord?
+    let isUpdatingRuleTuning: Bool
     let onSetTriageStatus: (FindingTriageStatus) -> Void
+    let onSetSeverityOverride: (String) -> Void
+    let onClearSeverityOverride: () -> Void
+    let onSetSuppression: (RuleTuningScope) -> Void
+    let onClearSuppression: (RuleTuningScope) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2410,11 +2432,132 @@ private struct FindingIssueCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
 
+            RuleTuningActionPanel(
+                issue: issue,
+                ruleTuning: ruleTuning,
+                groupTuning: groupTuning,
+                isUpdating: isUpdatingRuleTuning,
+                onSetSeverityOverride: onSetSeverityOverride,
+                onClearSeverityOverride: onClearSeverityOverride,
+                onSetSuppression: onSetSuppression,
+                onClearSuppression: onClearSuppression
+            )
+
             FindingTriageActionBar(status: triageStatus, onSet: onSetTriageStatus)
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
         .adaptiveMaterialSurface()
+    }
+}
+
+private struct RuleTuningActionPanel: View {
+    let issue: FindingIssueGroup
+    let ruleTuning: RuleTuningRecord?
+    let groupTuning: RuleTuningRecord?
+    let isUpdating: Bool
+    let onSetSeverityOverride: (String) -> Void
+    let onClearSeverityOverride: () -> Void
+    let onSetSuppression: (RuleTuningScope) -> Void
+    let onClearSuppression: (RuleTuningScope) -> Void
+
+    private var effectiveSeverity: String {
+        groupTuning?.effectiveSeverity ?? ruleTuning?.effectiveSeverity ?? issue.severityKey
+    }
+
+    private var ruleSuppressed: Bool {
+        ruleTuning?.suppressed == true
+    }
+
+    private var groupSuppressed: Bool {
+        groupTuning?.suppressed == true
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Label(UIStrings.ruleTuningTitle, systemImage: "slider.horizontal.3")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                Spacer()
+                RuleTuningStateChip(
+                    title: UIStrings.ruleTuningEffectiveState,
+                    value: FindingDisplayModel.severityTitle(effectiveSeverity),
+                    systemImage: "gauge.with.dots.needle.67percent"
+                )
+                if ruleTuning?.severityOverride != nil {
+                    RuleTuningStateChip(
+                        title: UIStrings.ruleTuningSeverityOverride,
+                        value: FindingDisplayModel.severityTitle(ruleTuning?.severityOverride ?? effectiveSeverity),
+                        systemImage: "arrow.up.arrow.down.circle"
+                    )
+                }
+                if ruleSuppressed || groupSuppressed {
+                    RuleTuningStateChip(
+                        title: groupSuppressed ? UIStrings.ruleTuningFindingGroup : UIStrings.ruleTuningRuleWide,
+                        value: UIStrings.ruleTuningSuppressed,
+                        systemImage: "eye.slash"
+                    )
+                }
+            }
+
+            Text(UIStrings.ruleTuningBoundary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 8) {
+                Menu(UIStrings.ruleTuningSeverityOverride) {
+                    ForEach(RuleTuningModel.overrideSeverities, id: \.self) { severity in
+                        Button(UIStrings.ruleTuningSetSeverity(FindingDisplayModel.severityTitle(severity))) {
+                            onSetSeverityOverride(severity)
+                        }
+                    }
+                    if ruleTuning?.severityOverride != nil {
+                        Divider()
+                        Button(UIStrings.ruleTuningClearSeverity) {
+                            onClearSeverityOverride()
+                        }
+                    }
+                }
+
+                Button(groupSuppressed ? UIStrings.ruleTuningUnsuppressGroup : UIStrings.ruleTuningSuppressGroup) {
+                    groupSuppressed ? onClearSuppression(.findingGroup) : onSetSuppression(.findingGroup)
+                }
+
+                Button(ruleSuppressed ? UIStrings.ruleTuningUnsuppressRule : UIStrings.ruleTuningSuppressRule) {
+                    ruleSuppressed ? onClearSuppression(.rule) : onSetSuppression(.rule)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(isUpdating)
+            .help(UIStrings.ruleTuningBoundary)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.22), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct RuleTuningStateChip: View {
+    let title: String
+    let value: String
+    let systemImage: String
+
+    var body: some View {
+        Label {
+            Text("\(title): \(value)")
+        } icon: {
+            Image(systemName: systemImage)
+        }
+        .font(.caption2.bold())
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
+        .background(.quaternary.opacity(0.35), in: Capsule())
     }
 }
 

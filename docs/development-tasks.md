@@ -1,13 +1,13 @@
 # Development Tasks
 
-> Status: current planning and execution queue as of 2026-06-10. V2.1 through V2.31 are synchronized baseline, and V2.32 is active/in-progress.
+> Status: current planning and execution queue as of 2026-06-10. V2.1 through V2.32 are synchronized baseline, and V2.33 is active/in-progress.
 
 ## Current Baseline
 
 - Current branch baseline: `main` after V2.16-V2.28 management/analysis/history/explainability/provenance/conflict-semantics line and 2026-06-10 real local Computer Use validation; V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout 均已收口。
 - Product boundary: native macOS SwiftUI/AppKit shell plus Rust service protocol.
 - Completed V2 milestones: first Codex slice, V2.1 through V2.28.
-- Current priority: V2.32 Rule tuning / suppression is active after V2.31 Cleanup Queue completed. Keep V2.26 finding explainability, V2.27 identity/provenance, V2.28 conflict semantics, V2.29 finding triage persistence, V2.30 read-only AI analysis, and V2.31 read-only cleanup queue stable. Rule tuning work must be app-local, auditable, reversible, and must not write skill files or agent config.
+- Current priority: V2.33 Safe batch actions is active after V2.32 Rule tuning / suppression completed. Keep V2.26 finding explainability, V2.27 identity/provenance, V2.28 conflict semantics, V2.29 finding triage persistence, V2.30 read-only AI analysis, V2.31 read-only cleanup queue, and V2.32 app-local rule tuning stable. Batch work must be preview-first, limited to verified writable agents/roots, and backed by explicit snapshot/rollback planning.
 - Real local Computer Use baseline: passed on 2026-06-10 for the current mainline app against real local HOME/app data/Claude/Codex/opencode roots; validation explicitly targeted the current `dist/SkillsCopilot.app` bundle after detecting a stale same-bundle-id worktree app. Future user-visible, UI, or service protocol changes must rerun it.
 - Quality gate for code/UI/protocol work: `pnpm check:macos`; add focused Rust/Swift tests when touching shared behavior.
 
@@ -37,8 +37,9 @@
 | V2.29 | Finding triage persistence | Completed | reviewed/ignored/needs-follow-up are persisted in app-local catalog/app data; no agent-config writes, no skill-toggle snapshot, no skill-content snapshot; no script execution / AI write-back / credential persistence; findings reopen when fingerprint or affected-instance set changes |
 | V2.30 | AI skill analysis workflow | Completed | User-triggered selected/batch read-only previews with summary + risk explanation + cleanup draft. Default local prepare/preview only; no background analysis; no writes, agent-config writes, snapshots, execution, or credential persistence |
 | V2.31 | Cleanup Queue | Completed | Aggregate open findings, integrity issues, same-agent conflicts, and analysis insights into a read-only review queue; next actions map to existing safe affordances; no new automatic write/execute path |
-| V2.32 | Rule tuning / suppression | In Progress | Add app-local rule severity overrides and suppression with audit/revert semantics; do not write skill files or agent config |
-| V2.33-V2.35 | Cleanup workflow | Planned | Safe batch actions, cross-agent comparison, local report export |
+| V2.32 | Rule tuning / suppression | Completed | Add app-local rule severity overrides and suppression with audit/revert semantics; no skill-file/agent-config writes, snapshots, provider calls, or credential side effects |
+| V2.33 | Safe batch actions | In Progress | Preview-first batch enable/disable for verified writable agents only, with capability filtering and snapshot/rollback planning |
+| V2.34-V2.35 | Cleanup workflow | Planned | Cross-agent comparison, local report export |
 | V2.36-V2.40 | Adapter trust and diagnostics | Planned | Pi writable evidence harness, guarded Pi slice if proven, Hermes external roots, OpenClaw workspace deepening, adapter diagnostics |
 | V2.41-V2.45 | Long-term governance | Planned | Quality score, stale/drift detection, local knowledge index, policy packs, review session mode |
 
@@ -53,7 +54,8 @@
 3. V2.29 Finding triage persistence: completed; add reviewed/ignored/needs-follow-up state in app-local catalog/app data; do not write agent config, skill-toggle snapshot, or skill-content snapshot; no script execution / AI write-back / credential persistence; reopen when finding fingerprint or affected-instance set changes.
 4. V2.30 AI skill analysis workflow: completed; disabled-by-default read-only AI summaries and suggestion drafts are prepared without provider calls by default, writes, execution, or credential storage.
 5. V2.31 Cleanup Queue: completed; app-local review queue now aggregates open findings, integrity issues, same-agent conflicts, and analysis insights before later tuning/suppression/reporting work.
-6. V2.32 Rule tuning / suppression: in progress; add local rule severity overrides and suppressions that are auditable, reversible, and isolated from skill files and agent config.
+6. V2.32 Rule tuning / suppression: completed; local rule severity overrides and suppressions are auditable, reversible, and isolated from skill files, agent config, snapshots, provider calls, and credentials.
+7. V2.33 Safe batch actions: in progress; add preview-first batch enable/disable for verified writable agents only, with explicit capability filtering and rollback planning.
 7. V2.36-V2.40 Adapter trust and diagnostics: only after the management workflow is stable, run Pi writable evidence harness and deepen Hermes/OpenClaw diagnostics without guessing write semantics.
 8. V2.41-V2.45 Long-term governance: quality score, stale/drift detection, local knowledge index, policy packs, and review sessions.
 
@@ -100,7 +102,8 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 | P0 | V2.29 Finding triage persistence | Completed | Add app-local reviewed/ignored/needs-follow-up state in catalog/app data with automatic reopen on changed finding fingerprint or affected-instance set; no agent-config writes, no skill-toggle snapshot, no skill-content snapshot; no script execution / AI write-back / credential persistence | Users can separate known issues from new actionable findings without write-path side effects |
 | P0 | V2.30 AI skill analysis workflow | Completed | Extend disabled-by-default read-only AI analysis to batch summaries and suggestion drafts | Users get readable skill analysis with no writes, no script execution, no provider calls by default, and no credential storage |
 | P0 | V2.31 Cleanup Queue | Completed | Turn open findings, integrity issues, and analysis insights into an app-local read-only queue with clear next actions that only point to existing safe action paths | Users can work down skill cleanup items without introducing new automatic write/execute paths |
-| P0 | V2.32 Rule tuning / suppression | In Progress | Add app-local rule severity overrides and suppression records with audit/revert semantics, without touching skill files or agent config | Users can quiet intentional findings and tune priority while preserving reviewability |
+| P0 | V2.32 Rule tuning / suppression | Completed | Add app-local rule severity overrides and suppression records with audit/revert semantics, without touching skill files/agent config/snapshots or provider/credential paths | Users can quiet intentional findings and tune priority while preserving reviewability |
+| P0 | V2.33 Safe batch actions | In Progress | Add preview-first batch enable/disable for verified writable agents only, filtering read-only agents and showing snapshot/rollback plans before any write | Users can safely act on multiple selected skills without hidden writes |
 | P1 | Finding triage usability and grouping | Planned | Add grouping and shortcut filters for reviewed/ignored/needs follow-up findings (by rule / severity / agent / source) without writing agent config, script execution, AI write-back, or credentials | Users can act on persistent triage faster without widening state persistence scope |
 | P1 | Agent-config timeline | Completed | Keep per-agent config snapshots and activity history only for config/toggle events; enforce preview diff and second-step confirmation for rollback; do not add skill-content snapshot or skill-toggle snapshot | Users can understand config changes and rollback points |
 | P1 | Read-only AI skill analysis assist | Implemented offline preview | Keep V2.7 disabled-by-default gate and V2.20 offline purpose/risk/finding summaries free of provider/client/storage/write/execution paths | Users get human-readable analysis without any write, execution, or credential risk |

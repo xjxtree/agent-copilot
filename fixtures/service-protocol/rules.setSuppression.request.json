@@ -1,0 +1,9 @@
+{
+  "id": "fixture-rules-set-suppression",
+  "method": "rules.setSuppression",
+  "params": {
+    "rule_id": "dependency.unknown",
+    "reason": "Local policy accepts this fixture dependency after review.",
+    "note": "App-local V2.32 suppression only."
+  }
+}

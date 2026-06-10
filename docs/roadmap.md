@@ -4,7 +4,7 @@
 >
 > 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.32 Rule tuning / suppression（进行中）**。V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout、V2.29 Finding triage persistence、V2.30 AI skill analysis workflow、V2.31 Cleanup Queue 均已收口。V2.32 聚焦 app-local rule severity override 与 suppression，必须可审计、可撤销，不写 skill 文件或 agent config。
+> 当前阶段：**V2.33 Safe batch actions（进行中）**。V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout、V2.29 Finding triage persistence、V2.30 AI skill analysis workflow、V2.31 Cleanup Queue、V2.32 Rule tuning / suppression 均已收口。V2.33 聚焦 verified writable agent 的 preview-first batch enable/disable，必须显示 capability 过滤、受影响 skill、snapshot/rollback 计划，不扩大只读 agent 的写入范围。
 >
 > 近期主线：继续围绕 skills 管理、检查、分析和配置审计打磨体验。下一段版本线聚焦 Cleanup workflow 的 rule tuning、suppression、safe batch actions、comparison 和 report export；Pi writable evidence 作为后续 harness 候选，不进入生产写入。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
 >
@@ -965,8 +965,8 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 | Version | Goal | Completion signal |
 | --- | --- | --- |
 | V2.31 | Cleanup Queue | 将 open findings、integrity issues、analysis insights 汇总成默认 read-only 的可处理队列；提供可复核的查看、跳转、清理建议和现有安全动作入口；不新增自动清理、脚本执行、provider 调用或 agent-config/snapshot 写入。 |
-| V2.32 | Rule tuning / suppression | 进行中：支持本地 rule severity override 与 suppression，所有 suppression 可审计、可撤销，不改 skill 或 agent config。 |
-| V2.33 | Safe batch actions | 仅对 verified writable agent 支持 preview + snapshot + rollback 的批量 enable/disable；Pi/Hermes/OpenClaw 保持 read-only。 |
+| V2.32 | Rule tuning / suppression | 已完成：支持本地 rule severity override 与 suppression，所有操作可审计、可撤销；仅 app-local 元数据持久化，不改 skill 或 agent config，不新增 snapshot，不调用 AI provider，不读写凭据，且无 telemetry 与 release 自动化耦合。 |
+| V2.33 | Safe batch actions | 进行中：仅对 verified writable agent 支持 preview + snapshot + rollback 的批量 enable/disable；Pi/Hermes/OpenClaw 保持 read-only。 |
 | V2.34 | Cross-agent comparison view | 横向比较同名/相似 skills 在 Claude/Codex/opencode/Pi/Hermes/OpenClaw 中的状态、来源、风险和差异。 |
 | V2.35 | Local report export | 导出脱敏 Markdown/JSON 本地审计报告，覆盖 agent coverage、health summary、open findings 与 triage 状态。 |
 

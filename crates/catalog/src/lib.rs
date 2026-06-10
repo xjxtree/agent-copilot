@@ -16,6 +16,7 @@ pub const INITIAL_SCHEMA: &str = include_str!("migrations/0001_initial.sql");
 pub const MIGRATION_0002: &str = include_str!("migrations/0002_add_display_path.sql");
 pub const MIGRATION_0003: &str = include_str!("migrations/0003_add_rule_findings.sql");
 pub const MIGRATION_0004: &str = include_str!("migrations/0004_add_finding_triage.sql");
+pub const MIGRATION_0005: &str = include_str!("migrations/0005_add_rule_tuning.sql");
 
 #[derive(Debug)]
 pub struct Catalog {
@@ -62,9 +63,15 @@ pub struct RuleFindingRecord {
     pub definition_id: Option<String>,
     pub rule_id: String,
     pub severity: String,
+    pub effective_severity: String,
+    pub severity_override: Option<String>,
     pub message: String,
     pub suggestion: Option<String>,
     pub created_at: i64,
+    pub suppressed: bool,
+    pub suppression_reason: Option<String>,
+    pub suppression_note: Option<String>,
+    pub rule_tuning_updated_at: Option<i64>,
     pub triage_status: String,
     pub triage_note: Option<String>,
     pub triage_updated_at: Option<i64>,
@@ -77,6 +84,27 @@ pub struct FindingTriageRecord {
     pub status: String,
     pub note: Option<String>,
     pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+pub struct RuleTuningRecord {
+    pub rule_id: String,
+    pub agent: Option<String>,
+    pub scope: Option<String>,
+    pub severity_override: Option<String>,
+    pub suppression_reason: Option<String>,
+    pub suppression_note: Option<String>,
+    pub updated_at: i64,
+}
+
+struct RuleTuningUpdate<'a> {
+    rule_id: &'a str,
+    agent: Option<&'a str>,
+    scope: Option<&'a str>,
+    severity_override: Option<&'a str>,
+    suppression_reason: Option<&'a str>,
+    suppression_note: Option<&'a str>,
+    updated_at: i64,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize)]
@@ -153,6 +181,7 @@ impl Catalog {
         self.conn.execute_batch(MIGRATION_0003)?;
         self.ensure_rule_finding_triage_columns()?;
         self.conn.execute_batch(MIGRATION_0004)?;
+        self.conn.execute_batch(MIGRATION_0005)?;
         self.canonicalize_legacy_paths()?;
         Ok(())
     }
@@ -690,18 +719,159 @@ impl Catalog {
 
     pub fn list_rule_findings(&self) -> Result<Vec<RuleFindingRecord>, CatalogError> {
         let mut stmt = self.conn.prepare(
-            "SELECT
+            "WITH finding_targets AS (
+                SELECT
+                    f.*,
+                    COALESCE(i.agent, di.agent, '') AS target_agent,
+                    COALESCE(i.scope, di.scope, '') AS target_scope
+                FROM rule_finding f
+                LEFT JOIN skill_instance i ON i.id = f.instance_id
+                LEFT JOIN skill_instance di ON di.id = (
+                    SELECT si.id
+                    FROM skill_instance si
+                    WHERE si.definition_id = f.definition_id
+                    ORDER BY si.id
+                    LIMIT 1
+                )
+             )
+             SELECT
                 f.id, f.triage_key, f.triage_context, f.instance_id, f.definition_id,
-                f.rule_id, f.severity, f.message, f.suggestion, f.created_at,
+                f.rule_id, f.severity,
+                COALESCE((
+                    SELECT t.severity_override
+                    FROM rule_tuning t
+                    WHERE t.rule_id = f.rule_id
+                      AND t.agent = f.target_agent
+                      AND t.scope = f.target_scope
+                      AND t.severity_override IS NOT NULL
+                    LIMIT 1
+                ), (
+                    SELECT t.severity_override
+                    FROM rule_tuning t
+                    WHERE t.rule_id = f.rule_id
+                      AND t.agent = f.target_agent
+                      AND t.scope = ''
+                      AND t.severity_override IS NOT NULL
+                    LIMIT 1
+                ), (
+                    SELECT t.severity_override
+                    FROM rule_tuning t
+                    WHERE t.rule_id = f.rule_id
+                      AND t.agent = ''
+                      AND t.scope = ''
+                      AND t.severity_override IS NOT NULL
+                    LIMIT 1
+                ), f.severity) AS effective_severity,
+                COALESCE((
+                    SELECT t.severity_override
+                    FROM rule_tuning t
+                    WHERE t.rule_id = f.rule_id
+                      AND t.agent = f.target_agent
+                      AND t.scope = f.target_scope
+                      AND t.severity_override IS NOT NULL
+                    LIMIT 1
+                ), (
+                    SELECT t.severity_override
+                    FROM rule_tuning t
+                    WHERE t.rule_id = f.rule_id
+                      AND t.agent = f.target_agent
+                      AND t.scope = ''
+                      AND t.severity_override IS NOT NULL
+                    LIMIT 1
+                ), (
+                    SELECT t.severity_override
+                    FROM rule_tuning t
+                    WHERE t.rule_id = f.rule_id
+                      AND t.agent = ''
+                      AND t.scope = ''
+                      AND t.severity_override IS NOT NULL
+                    LIMIT 1
+                )) AS severity_override,
+                f.message, f.suggestion, f.created_at,
+                COALESCE((
+                    SELECT t.suppression_reason
+                    FROM rule_tuning t
+                    WHERE t.rule_id = f.rule_id
+                      AND t.agent = f.target_agent
+                      AND t.scope = f.target_scope
+                      AND t.suppression_reason IS NOT NULL
+                    LIMIT 1
+                ), (
+                    SELECT t.suppression_reason
+                    FROM rule_tuning t
+                    WHERE t.rule_id = f.rule_id
+                      AND t.agent = f.target_agent
+                      AND t.scope = ''
+                      AND t.suppression_reason IS NOT NULL
+                    LIMIT 1
+                ), (
+                    SELECT t.suppression_reason
+                    FROM rule_tuning t
+                    WHERE t.rule_id = f.rule_id
+                      AND t.agent = ''
+                      AND t.scope = ''
+                      AND t.suppression_reason IS NOT NULL
+                    LIMIT 1
+                )) AS suppression_reason,
+                COALESCE((
+                    SELECT t.suppression_note
+                    FROM rule_tuning t
+                    WHERE t.rule_id = f.rule_id
+                      AND t.agent = f.target_agent
+                      AND t.scope = f.target_scope
+                      AND t.suppression_reason IS NOT NULL
+                    LIMIT 1
+                ), (
+                    SELECT t.suppression_note
+                    FROM rule_tuning t
+                    WHERE t.rule_id = f.rule_id
+                      AND t.agent = f.target_agent
+                      AND t.scope = ''
+                      AND t.suppression_reason IS NOT NULL
+                    LIMIT 1
+                ), (
+                    SELECT t.suppression_note
+                    FROM rule_tuning t
+                    WHERE t.rule_id = f.rule_id
+                      AND t.agent = ''
+                      AND t.scope = ''
+                      AND t.suppression_reason IS NOT NULL
+                    LIMIT 1
+                )) AS suppression_note,
+                COALESCE((
+                    SELECT t.updated_at
+                    FROM rule_tuning t
+                    WHERE t.rule_id = f.rule_id
+                      AND t.agent = f.target_agent
+                      AND t.scope = f.target_scope
+                      AND (t.severity_override IS NOT NULL OR t.suppression_reason IS NOT NULL)
+                    LIMIT 1
+                ), (
+                    SELECT t.updated_at
+                    FROM rule_tuning t
+                    WHERE t.rule_id = f.rule_id
+                      AND t.agent = f.target_agent
+                      AND t.scope = ''
+                      AND (t.severity_override IS NOT NULL OR t.suppression_reason IS NOT NULL)
+                    LIMIT 1
+                ), (
+                    SELECT t.updated_at
+                    FROM rule_tuning t
+                    WHERE t.rule_id = f.rule_id
+                      AND t.agent = ''
+                      AND t.scope = ''
+                      AND (t.severity_override IS NOT NULL OR t.suppression_reason IS NOT NULL)
+                    LIMIT 1
+                )) AS rule_tuning_updated_at,
                 COALESCE(t.status, 'open') AS triage_status,
                 t.note,
                 t.updated_at
-             FROM rule_finding f
+             FROM finding_targets f
              LEFT JOIN finding_triage t
                 ON t.triage_key = f.triage_key
                AND t.triage_context = f.triage_context
              ORDER BY
-                CASE f.severity
+                CASE effective_severity
                     WHEN 'error' THEN 0
                     WHEN 'warn' THEN 1
                     WHEN 'warning' THEN 1
@@ -712,6 +882,7 @@ impl Catalog {
                 instance_id",
         )?;
         let rows = stmt.query_map([], |row| {
+            let suppression_reason: Option<String> = row.get(12)?;
             Ok(RuleFindingRecord {
                 id: row.get(0)?,
                 triage_key: row.get(1)?,
@@ -720,12 +891,18 @@ impl Catalog {
                 definition_id: row.get(4)?,
                 rule_id: row.get(5)?,
                 severity: row.get(6)?,
-                message: row.get(7)?,
-                suggestion: row.get(8)?,
-                created_at: row.get(9)?,
-                triage_status: row.get(10)?,
-                triage_note: row.get(11)?,
-                triage_updated_at: row.get(12)?,
+                effective_severity: row.get(7)?,
+                severity_override: row.get(8)?,
+                message: row.get(9)?,
+                suggestion: row.get(10)?,
+                created_at: row.get(11)?,
+                suppressed: suppression_reason.is_some(),
+                suppression_reason,
+                suppression_note: row.get(13)?,
+                rule_tuning_updated_at: row.get(14)?,
+                triage_status: row.get(15)?,
+                triage_note: row.get(16)?,
+                triage_updated_at: row.get(17)?,
             })
         })?;
         let mut findings = Vec::new();
@@ -789,6 +966,159 @@ impl Catalog {
             triage.push(row?);
         }
         Ok(triage)
+    }
+
+    pub fn list_rule_tuning(&self) -> Result<Vec<RuleTuningRecord>, CatalogError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT rule_id, agent, scope, severity_override, suppression_reason, suppression_note, updated_at
+             FROM rule_tuning
+             ORDER BY rule_id, agent, scope",
+        )?;
+        let rows = stmt.query_map([], rule_tuning_from_row)?;
+        let mut tuning = Vec::new();
+        for row in rows {
+            tuning.push(row?);
+        }
+        Ok(tuning)
+    }
+
+    pub fn set_rule_severity_override(
+        &self,
+        rule_id: &str,
+        agent: Option<&str>,
+        scope: Option<&str>,
+        severity: &str,
+        updated_at: i64,
+    ) -> Result<RuleTuningRecord, CatalogError> {
+        self.upsert_rule_tuning(RuleTuningUpdate {
+            rule_id,
+            agent,
+            scope,
+            severity_override: Some(severity),
+            suppression_reason: None,
+            suppression_note: None,
+            updated_at,
+        })?;
+        self.get_rule_tuning(rule_id, agent, scope)
+    }
+
+    pub fn clear_rule_severity_override(
+        &self,
+        rule_id: &str,
+        agent: Option<&str>,
+        scope: Option<&str>,
+        updated_at: i64,
+    ) -> Result<bool, CatalogError> {
+        let key = rule_tuning_key(agent, scope);
+        if self.conn.execute(
+            "DELETE FROM rule_tuning
+             WHERE rule_id = ?1 AND agent = ?2 AND scope = ?3
+               AND severity_override IS NOT NULL
+               AND suppression_reason IS NULL",
+            params![rule_id, key.0, key.1],
+        )? > 0
+        {
+            return Ok(true);
+        }
+        Ok(self.conn.execute(
+            "UPDATE rule_tuning
+             SET severity_override = NULL, updated_at = ?4
+             WHERE rule_id = ?1 AND agent = ?2 AND scope = ?3
+               AND severity_override IS NOT NULL",
+            params![rule_id, key.0, key.1, updated_at],
+        )? > 0)
+    }
+
+    pub fn set_rule_suppression(
+        &self,
+        rule_id: &str,
+        agent: Option<&str>,
+        scope: Option<&str>,
+        reason: &str,
+        note: Option<&str>,
+        updated_at: i64,
+    ) -> Result<RuleTuningRecord, CatalogError> {
+        self.upsert_rule_tuning(RuleTuningUpdate {
+            rule_id,
+            agent,
+            scope,
+            severity_override: None,
+            suppression_reason: Some(reason),
+            suppression_note: note,
+            updated_at,
+        })?;
+        self.get_rule_tuning(rule_id, agent, scope)
+    }
+
+    pub fn clear_rule_suppression(
+        &self,
+        rule_id: &str,
+        agent: Option<&str>,
+        scope: Option<&str>,
+        updated_at: i64,
+    ) -> Result<bool, CatalogError> {
+        let key = rule_tuning_key(agent, scope);
+        if self.conn.execute(
+            "DELETE FROM rule_tuning
+             WHERE rule_id = ?1 AND agent = ?2 AND scope = ?3
+               AND severity_override IS NULL
+               AND suppression_reason IS NOT NULL",
+            params![rule_id, key.0, key.1],
+        )? > 0
+        {
+            return Ok(true);
+        }
+        Ok(self.conn.execute(
+            "UPDATE rule_tuning
+             SET suppression_reason = NULL, suppression_note = NULL, updated_at = ?4
+             WHERE rule_id = ?1 AND agent = ?2 AND scope = ?3
+               AND suppression_reason IS NOT NULL",
+            params![rule_id, key.0, key.1, updated_at],
+        )? > 0)
+    }
+
+    fn upsert_rule_tuning(&self, update: RuleTuningUpdate<'_>) -> Result<(), CatalogError> {
+        let key = rule_tuning_key(update.agent, update.scope);
+        self.conn.execute(
+            "INSERT INTO rule_tuning (
+                rule_id, agent, scope, severity_override, suppression_reason, suppression_note, updated_at
+             )
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+             ON CONFLICT(rule_id, agent, scope) DO UPDATE SET
+                severity_override = COALESCE(excluded.severity_override, rule_tuning.severity_override),
+                suppression_reason = COALESCE(excluded.suppression_reason, rule_tuning.suppression_reason),
+                suppression_note = CASE
+                    WHEN excluded.suppression_reason IS NOT NULL THEN excluded.suppression_note
+                    ELSE rule_tuning.suppression_note
+                END,
+                updated_at = excluded.updated_at",
+            params![
+                update.rule_id,
+                key.0,
+                key.1,
+                update.severity_override,
+                update.suppression_reason,
+                update.suppression_note,
+                update.updated_at
+            ],
+        )?;
+        Ok(())
+    }
+
+    fn get_rule_tuning(
+        &self,
+        rule_id: &str,
+        agent: Option<&str>,
+        scope: Option<&str>,
+    ) -> Result<RuleTuningRecord, CatalogError> {
+        let key = rule_tuning_key(agent, scope);
+        self.conn.query_row(
+            "SELECT rule_id, agent, scope, severity_override, suppression_reason, suppression_note, updated_at
+             FROM rule_tuning
+             WHERE rule_id = ?1 AND agent = ?2 AND scope = ?3",
+            params![rule_id, key.0, key.1],
+            rule_tuning_from_row,
+        ).map_err(Into::into)
     }
 
     fn current_finding_triage_context(
@@ -1376,8 +1706,37 @@ fn finding_triage_from_row(row: &Row<'_>) -> rusqlite::Result<FindingTriageRecor
     })
 }
 
+fn rule_tuning_from_row(row: &Row<'_>) -> rusqlite::Result<RuleTuningRecord> {
+    let agent: String = row.get(1)?;
+    let scope: String = row.get(2)?;
+    Ok(RuleTuningRecord {
+        rule_id: row.get(0)?,
+        agent: empty_string_as_none(agent),
+        scope: empty_string_as_none(scope),
+        severity_override: row.get(3)?,
+        suppression_reason: row.get(4)?,
+        suppression_note: row.get(5)?,
+        updated_at: row.get(6)?,
+    })
+}
+
+fn rule_tuning_key(agent: Option<&str>, scope: Option<&str>) -> (String, String) {
+    (
+        agent.unwrap_or_default().trim().to_string(),
+        scope.unwrap_or_default().trim().to_string(),
+    )
+}
+
+fn empty_string_as_none(value: String) -> Option<String> {
+    if value.is_empty() {
+        None
+    } else {
+        Some(value)
+    }
+}
+
 pub fn migration_count() -> usize {
-    4
+    5
 }
 
 fn finding_triage_key(finding: &RuleFindingDraft, triage_context: &str) -> String {
@@ -2057,6 +2416,79 @@ mod tests {
                 "finding-info",
             ]
         );
+    }
+
+    #[test]
+    fn rule_tuning_applies_effective_severity_and_suppression_locally() {
+        let catalog = Catalog::in_memory().expect("catalog opens");
+        catalog.init().expect("schema initializes");
+        let skill = catalog_test_instance(
+            AgentId::Codex,
+            Scope::AgentGlobal,
+            "/tmp/home/.codex/skills/review/SKILL.md",
+            "review",
+            SkillState::Loaded,
+        );
+        catalog
+            .upsert_skill_instance(&skill)
+            .expect("skill upserts");
+        catalog
+            .refresh_rule_findings(&[RuleFindingDraft {
+                id: "finding-1".to_string(),
+                instance_id: Some(skill.id.clone()),
+                definition_id: Some(skill.definition_id.clone()),
+                rule_id: "body.too-long".to_string(),
+                severity: "warn".to_string(),
+                message: "long body".to_string(),
+                suggestion: Some("split references".to_string()),
+                created_at: 1,
+            }])
+            .expect("findings refresh");
+
+        catalog
+            .set_rule_severity_override("body.too-long", Some("codex"), None, "info", 10)
+            .expect("severity override");
+        catalog
+            .set_rule_suppression(
+                "body.too-long",
+                Some("codex"),
+                None,
+                "accepted local policy",
+                Some("fixture note"),
+                11,
+            )
+            .expect("suppression");
+
+        let finding = catalog
+            .list_rule_findings()
+            .expect("findings list")
+            .pop()
+            .expect("finding exists");
+        assert_eq!(finding.severity, "warn");
+        assert_eq!(finding.effective_severity, "info");
+        assert_eq!(finding.severity_override.as_deref(), Some("info"));
+        assert!(finding.suppressed);
+        assert_eq!(
+            finding.suppression_reason.as_deref(),
+            Some("accepted local policy")
+        );
+        assert_eq!(finding.suppression_note.as_deref(), Some("fixture note"));
+        assert_eq!(finding.rule_tuning_updated_at, Some(11));
+
+        assert!(catalog
+            .clear_rule_suppression("body.too-long", Some("codex"), None, 12)
+            .expect("clear suppression"));
+        let unsuppressed = catalog
+            .list_rule_findings()
+            .expect("findings list")
+            .pop()
+            .expect("finding exists");
+        assert!(!unsuppressed.suppressed);
+        assert_eq!(unsuppressed.effective_severity, "info");
+        assert!(catalog
+            .clear_rule_severity_override("body.too-long", Some("codex"), None, 13)
+            .expect("clear severity"));
+        assert!(catalog.list_rule_tuning().expect("tuning list").is_empty());
     }
 
     #[test]

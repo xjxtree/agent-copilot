@@ -17,6 +17,11 @@
         "llm.prepareAction",
         "llm.prepareSkillAnalysis",
         "cleanup.listQueue",
+        "rules.listTuning",
+        "rules.setSeverityOverride",
+        "rules.clearSeverityOverride",
+        "rules.setSuppression",
+        "rules.clearSuppression",
         "script.previewExecution",
         "script.execute",
         "project.getContext",
@@ -334,7 +339,13 @@
         "triage_context": "fixture-context",
         "triage_status": "open",
         "triage_note": null,
-        "triage_updated_at": null
+        "triage_updated_at": null,
+        "effective_severity": "error",
+        "severity_override": null,
+        "suppressed": false,
+        "suppression_reason": null,
+        "suppression_note": null,
+        "rule_tuning_updated_at": null
       }
     ],
     "conflicts": [],

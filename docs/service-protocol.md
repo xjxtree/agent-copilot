@@ -1,6 +1,6 @@
 # skills-copilot Service Protocol
 
-> Status: V2.31 Cleanup Queue is integrated; V2.32 Rule tuning / suppression is active. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, V2.19 health dashboard, V2.20 read-only AI skill analysis assist, V2.21 scan accuracy/dedupe alignment, V2.22 finding/conflict semantics, V2.23 Health Dashboard / Adapter Capability UX, V2.24 Skill Detail diagnostics, V2.25 Agent-config timeline, V2.26 Finding explainability, V2.27 Skill identity/provenance dedupe, V2.28 Conflict semantic closeout, V2.29 Finding triage persistence, V2.30 AI skill analysis workflow, and V2.31 Cleanup Queue are implemented or synchronized. V2.30 adds `llm.prepareSkillAnalysis` for user-triggered selected/batch read-only previews; it does not call providers by default, write files/config, create snapshots, execute scripts, save credentials, or mutate triage state. V2.31 adds `cleanup.listQueue` as a read-only aggregation method; it does not add write, execution, provider, credential, or snapshot methods.
+> Status: V2.32 Rule tuning / suppression is integrated; V2.33 Safe batch actions is active. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, V2.19 health dashboard, V2.20 read-only AI skill analysis assist, V2.21 scan accuracy/dedupe alignment, V2.22 finding/conflict semantics, V2.23 Health Dashboard / Adapter Capability UX, V2.24 Skill Detail diagnostics, V2.25 Agent-config timeline, V2.26 Finding explainability, V2.27 Skill identity/provenance dedupe, V2.28 Conflict semantic closeout, V2.29 Finding triage persistence, V2.30 AI skill analysis workflow, V2.31 Cleanup Queue, and V2.32 Rule tuning / suppression are implemented or synchronized. V2.31 adds `cleanup.listQueue` as a read-only aggregation method; it does not add write, execution, provider, credential, or snapshot methods. V2.32 adds app-local `rules.*` methods for severity overrides and suppressions; they do not write skill files, agent configs, snapshots, scripts, provider state, or credentials.
 >
 > Integrated: V2.9 Tool-global import/export/install, V2.10 skill execution safety boundary, and 2026-06-10 real local Computer Use validation for the current mainline app. V2.11 added adapter capability status to the service protocol and macOS UI. V2.12 marks opencode writable through exact permission.skill deny/re-enable after snapshot/rollback, install, and fixture smoke validation pass; current opencode scan follows native plus official compatibility roots while install targets remain native roots.
 >
@@ -186,6 +186,14 @@ V2.25 聚焦 agent-config snapshot timeline 收敛，仍不新增 protocol metho
   - queue entries are actionable only through existing safe action surfaces (open detail, apply existing filters, `catalog.scanAll`/refresh, existing toggle/rollback path, etc.);
   - queue itself does not trigger scans, config writes, installs, script execution, provider calls, credential writes, snapshot creation, or other automatic remediation actions.
 - Data model boundary: no new persistence entity is introduced for queue rows. Existing V2.29 triage persistence state is reused, and queue render state can be recomputed on each relevant read request.
+
+## V2.32 Rule tuning / suppression（completed）
+
+- Scope: rule severity overrides and suppressions are app-local review metadata only, persisted in catalog/app-data style state.
+- Mutations must be explicit, auditable, and reversible (reason + actor + timestamp), and should not mutate skill files or agent config.
+- This path must not create or consume any new snapshot entity for rule tuning records.
+- Rule-tuning actions must not execute scripts, call LLM providers, perform network I/O, or read/write credentials.
+- Data exposure for existing UI/protocol read flows should remain through existing payloads (`catalog.listFindings`, `app.stateSnapshot.health`, `catalog.getSkill`) without adding new write-heavy method dependencies.
 
 ## V2.18 Cross-Agent Analysis Payload
 

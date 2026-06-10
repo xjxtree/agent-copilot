@@ -9,17 +9,19 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use skills_copilot_catalog::{
     Catalog, ConfigSnapshotRecord, ConflictGroupRecord, FindingTriageRecord, RuleFindingRecord,
-    SkillDetailRecord, SkillEventRecord, SkillRecord,
+    RuleTuningRecord, SkillDetailRecord, SkillEventRecord, SkillRecord,
 };
 use skills_copilot_commands::{
-    analyze_catalog, clear_finding_triage, export_skill_bundle, export_staging_skill_bundle,
-    get_skill, import_github_skill_to_tool_global_deferred, import_local_skill_to_tool_global,
+    analyze_catalog, clear_finding_triage, clear_rule_severity_override, clear_rule_suppression,
+    export_skill_bundle, export_staging_skill_bundle, get_skill,
+    import_github_skill_to_tool_global_deferred, import_local_skill_to_tool_global,
     install_skill_from_tool_global, list_adapter_capabilities, list_agent_config_snapshots,
-    list_conflicts, list_finding_triage, list_findings, list_skill_events, list_snapshots,
-    preview_script_execution, preview_snapshot_rollback, read_claude_settings,
+    list_conflicts, list_finding_triage, list_findings, list_rule_tuning, list_skill_events,
+    list_snapshots, preview_script_execution, preview_snapshot_rollback, read_claude_settings,
     record_blocked_script_execution, rollback_snapshot, save_claude_settings,
-    scan_all_catalog_report, scan_claude_to_catalog, set_finding_triage, skill_health_summary,
-    toggle_skill, AdapterCapabilityRecord, AgentCatalogScanReport, ConfigDocumentRecord,
+    scan_all_catalog_report, scan_claude_to_catalog, set_finding_triage,
+    set_rule_severity_override, set_rule_suppression, skill_health_summary, toggle_skill,
+    AdapterCapabilityRecord, AgentCatalogScanReport, ConfigDocumentRecord,
     CrossAgentAnalysisRecord, ExportedSkillBundle, ScriptExecutionAttemptRecord,
     ScriptExecutionPreviewRecord, ScriptExecutionRequest, SkillHealthSummary,
     SkillInstallPreviewRecord, SnapshotRollbackPreviewRecord, ToolGlobalImportResult,
@@ -47,6 +49,11 @@ const SUPPORTED_METHODS: &[&str] = &[
     "llm.prepareAction",
     "llm.prepareSkillAnalysis",
     "cleanup.listQueue",
+    "rules.listTuning",
+    "rules.setSeverityOverride",
+    "rules.clearSeverityOverride",
+    "rules.setSuppression",
+    "rules.clearSuppression",
     "script.previewExecution",
     "script.execute",
     "project.getContext",
@@ -494,6 +501,37 @@ pub struct ClearFindingTriageParams {
     pub triage_key: String,
 }
 
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct RuleTuningScopeParams {
+    pub rule_id: String,
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default)]
+    pub scope: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SetSeverityOverrideParams {
+    pub rule_id: String,
+    pub severity: String,
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default)]
+    pub scope: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SetSuppressionParams {
+    pub rule_id: String,
+    pub reason: String,
+    #[serde(default)]
+    pub note: Option<String>,
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default)]
+    pub scope: Option<String>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct ToggleSkillParams {
     pub instance_id: String,
@@ -660,6 +698,58 @@ impl ServiceHost {
                     serde_json::from_value(request.params)?
                 };
                 serde_json::to_value(self.cleanup_list_queue(params)?).map_err(Into::into)
+            }
+            "rules.listTuning" => {
+                let catalog = self.open_catalog()?;
+                let tuning: Vec<RuleTuningRecord> = list_rule_tuning(&catalog)?;
+                serde_json::to_value(tuning).map_err(Into::into)
+            }
+            "rules.setSeverityOverride" => {
+                let params: SetSeverityOverrideParams = serde_json::from_value(request.params)?;
+                let catalog = self.open_catalog()?;
+                let tuning: RuleTuningRecord = set_rule_severity_override(
+                    &catalog,
+                    &params.rule_id,
+                    params.agent.as_deref(),
+                    params.scope.as_deref(),
+                    &params.severity,
+                )?;
+                serde_json::to_value(tuning).map_err(Into::into)
+            }
+            "rules.clearSeverityOverride" => {
+                let params: RuleTuningScopeParams = serde_json::from_value(request.params)?;
+                let catalog = self.open_catalog()?;
+                let cleared: bool = clear_rule_severity_override(
+                    &catalog,
+                    &params.rule_id,
+                    params.agent.as_deref(),
+                    params.scope.as_deref(),
+                )?;
+                serde_json::to_value(cleared).map_err(Into::into)
+            }
+            "rules.setSuppression" => {
+                let params: SetSuppressionParams = serde_json::from_value(request.params)?;
+                let catalog = self.open_catalog()?;
+                let tuning: RuleTuningRecord = set_rule_suppression(
+                    &catalog,
+                    &params.rule_id,
+                    params.agent.as_deref(),
+                    params.scope.as_deref(),
+                    &params.reason,
+                    params.note.as_deref(),
+                )?;
+                serde_json::to_value(tuning).map_err(Into::into)
+            }
+            "rules.clearSuppression" => {
+                let params: RuleTuningScopeParams = serde_json::from_value(request.params)?;
+                let catalog = self.open_catalog()?;
+                let cleared: bool = clear_rule_suppression(
+                    &catalog,
+                    &params.rule_id,
+                    params.agent.as_deref(),
+                    params.scope.as_deref(),
+                )?;
+                serde_json::to_value(cleared).map_err(Into::into)
             }
             "script.previewExecution" => {
                 let params: ScriptExecutionRequest = serde_json::from_value(request.params)?;
@@ -1066,7 +1156,7 @@ impl ServiceHost {
         }
 
         for finding in &findings {
-            if finding.triage_status == "ignored" {
+            if finding.triage_status == "ignored" || finding.suppressed {
                 continue;
             }
             let skill = finding
@@ -1086,8 +1176,8 @@ impl ServiceHost {
             items.push(CleanupQueueItem {
                 id: format!("cleanup:finding:{}", finding.id),
                 kind: "finding".to_string(),
-                severity: finding.severity.clone(),
-                priority: priority_for(&finding.severity).to_string(),
+                severity: finding.effective_severity.clone(),
+                priority: priority_for(&finding.effective_severity).to_string(),
                 agent: skill.map(|skill| skill.agent.clone()),
                 scope: skill.map(|skill| skill.scope.clone()),
                 skill_id: finding
@@ -2281,6 +2371,11 @@ mod tests {
         assert!(methods.contains(&Value::String("llm.prepareAction".to_string())));
         assert!(methods.contains(&Value::String("llm.prepareSkillAnalysis".to_string())));
         assert!(methods.contains(&Value::String("cleanup.listQueue".to_string())));
+        assert!(methods.contains(&Value::String("rules.listTuning".to_string())));
+        assert!(methods.contains(&Value::String("rules.setSeverityOverride".to_string())));
+        assert!(methods.contains(&Value::String("rules.clearSeverityOverride".to_string())));
+        assert!(methods.contains(&Value::String("rules.setSuppression".to_string())));
+        assert!(methods.contains(&Value::String("rules.clearSuppression".to_string())));
         assert!(methods.contains(&Value::String("script.previewExecution".to_string())));
         assert!(methods.contains(&Value::String("script.execute".to_string())));
         assert!(methods.contains(&Value::String("project.getContext".to_string())));
@@ -3205,6 +3300,155 @@ mod tests {
             result.get("version").and_then(Value::as_str),
             Some(skills_copilot_commands::app_version())
         );
+    }
+
+    #[test]
+    fn rules_tuning_methods_store_app_local_state_and_affect_findings() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-rule-tuning-service-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+        fs::create_dir_all(&host.app_data_dir).expect("create app data");
+        let catalog = Catalog::open(&host.catalog_path()).expect("open catalog");
+        catalog.init().expect("init catalog");
+        let skill_path = app_data_dir.join("skills/review/SKILL.md");
+        let instance = SkillInstance {
+            id: "rule-tuning-skill-id".to_string(),
+            agent: AgentId::Codex,
+            scope: Scope::AgentGlobal,
+            project_root: None,
+            path: skill_path.clone(),
+            display_path: skill_path,
+            definition_id: "rule-tuning-definition-id".to_string(),
+            name: "rule-tuning-fixture".to_string(),
+            display_name: "rule-tuning-fixture".to_string(),
+            description: "Rule tuning fixture.".to_string(),
+            version: None,
+            state: SkillState::Loaded,
+            enabled: true,
+            frontmatter_raw: "name: rule-tuning-fixture\ndescription: Rule tuning fixture\n"
+                .to_string(),
+            body: "Fixture body.".to_string(),
+            scripts: Vec::new(),
+            permissions: PermissionRequest::default(),
+            fingerprint: "rule-tuning-fingerprint".to_string(),
+            mtime: 1,
+            first_seen: 1,
+            last_seen: 1,
+        };
+        catalog
+            .upsert_skill_instance(&instance)
+            .expect("upsert skill");
+        catalog
+            .refresh_rule_findings(&[RuleFindingDraft {
+                id: "rule-tuning-finding-id".to_string(),
+                instance_id: Some(instance.id.clone()),
+                definition_id: Some(instance.definition_id.clone()),
+                rule_id: "body.too-long".to_string(),
+                severity: "warn".to_string(),
+                message: "Skill body is longer than the local review threshold.".to_string(),
+                suggestion: Some("Move long reference material into references/.".to_string()),
+                created_at: 1,
+            }])
+            .expect("seed finding");
+        drop(catalog);
+
+        let override_response = host.handle(ServiceRequest {
+            id: Some("set-override".to_string()),
+            method: "rules.setSeverityOverride".to_string(),
+            params: json!({
+                "rule_id": "body.too-long",
+                "agent": "codex",
+                "severity": "info"
+            }),
+        });
+        assert!(override_response.ok);
+
+        let suppression_response = host.handle(ServiceRequest {
+            id: Some("set-suppression".to_string()),
+            method: "rules.setSuppression".to_string(),
+            params: json!({
+                "rule_id": "body.too-long",
+                "agent": "codex",
+                "reason": "Accepted locally after review.",
+                "note": "V2.32 app-local suppression."
+            }),
+        });
+        assert!(suppression_response.ok);
+
+        let findings_response = host.handle(ServiceRequest {
+            id: Some("list-findings".to_string()),
+            method: "catalog.listFindings".to_string(),
+            params: Value::Null,
+        });
+        assert!(findings_response.ok);
+        let findings = findings_response
+            .result
+            .expect("findings result")
+            .as_array()
+            .expect("findings array")
+            .clone();
+        let finding = findings.first().expect("finding exists");
+        assert_eq!(
+            finding.get("effective_severity").and_then(Value::as_str),
+            Some("info")
+        );
+        assert_eq!(
+            finding.get("suppressed").and_then(Value::as_bool),
+            Some(true)
+        );
+
+        let queue_response = host.handle(ServiceRequest {
+            id: Some("cleanup".to_string()),
+            method: "cleanup.listQueue".to_string(),
+            params: Value::Null,
+        });
+        assert!(queue_response.ok);
+        assert_eq!(
+            queue_response
+                .result
+                .as_ref()
+                .and_then(|value| value.pointer("/summary/total_count"))
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+
+        let clear_suppression_response = host.handle(ServiceRequest {
+            id: Some("clear-suppression".to_string()),
+            method: "rules.clearSuppression".to_string(),
+            params: json!({
+                "rule_id": "body.too-long",
+                "agent": "codex"
+            }),
+        });
+        assert!(clear_suppression_response.ok);
+        let clear_override_response = host.handle(ServiceRequest {
+            id: Some("clear-override".to_string()),
+            method: "rules.clearSeverityOverride".to_string(),
+            params: json!({
+                "rule_id": "body.too-long",
+                "agent": "codex"
+            }),
+        });
+        assert!(clear_override_response.ok);
+
+        let tuning_response = host.handle(ServiceRequest {
+            id: Some("list-tuning".to_string()),
+            method: "rules.listTuning".to_string(),
+            params: Value::Null,
+        });
+        assert!(tuning_response.ok);
+        assert_eq!(
+            tuning_response
+                .result
+                .and_then(|value| value.as_array().cloned())
+                .map(|rows| rows.len()),
+            Some(0)
+        );
+
+        let _ = fs::remove_dir_all(app_data_dir);
     }
 
     #[test]
@@ -4192,6 +4436,17 @@ mod tests {
                 assert!(queue.items.iter().all(|item| !item.writes_allowed));
                 assert!(queue.items.iter().all(|item| !item.provider_request_sent));
             }
+            "rules.listTuning" => {
+                let _: Vec<WireRuleTuningRecord> = decode_fixture_result(method, result, path);
+            }
+            "rules.setSeverityOverride" | "rules.setSuppression" => {
+                let tuning: WireRuleTuningRecord = decode_fixture_result(method, result, path);
+                assert!(!tuning.rule_id.is_empty());
+                assert!(tuning.severity_override.is_some() || tuning.suppression_reason.is_some());
+            }
+            "rules.clearSeverityOverride" | "rules.clearSuppression" => {
+                let _: bool = decode_fixture_result(method, result, path);
+            }
             "script.previewExecution" => {
                 let preview: WireScriptExecutionPreviewRecord =
                     decode_fixture_result(method, result, path);
@@ -4531,6 +4786,16 @@ mod tests {
                 "status": "reviewed"
             }),
             "catalog.clearFindingTriage" => json!({ "triage_key": "missing-finding-key" }),
+            "rules.setSeverityOverride" => json!({
+                "rule_id": "body.too-long",
+                "severity": "info"
+            }),
+            "rules.clearSeverityOverride" => json!({ "rule_id": "body.too-long" }),
+            "rules.setSuppression" => json!({
+                "rule_id": "body.too-long",
+                "reason": "local false positive"
+            }),
+            "rules.clearSuppression" => json!({ "rule_id": "body.too-long" }),
             _ => Value::Null,
         }
     }
@@ -5092,9 +5357,15 @@ mod tests {
         definition_id: Option<String>,
         rule_id: String,
         severity: String,
+        effective_severity: String,
+        severity_override: Option<String>,
         message: String,
         suggestion: Option<String>,
         created_at: i64,
+        suppressed: bool,
+        suppression_reason: Option<String>,
+        suppression_note: Option<String>,
+        rule_tuning_updated_at: Option<i64>,
         triage_status: String,
         triage_note: Option<String>,
         triage_updated_at: Option<i64>,
@@ -5108,6 +5379,19 @@ mod tests {
         triage_context: String,
         status: String,
         note: Option<String>,
+        updated_at: i64,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRuleTuningRecord {
+        rule_id: String,
+        agent: Option<String>,
+        scope: Option<String>,
+        severity_override: Option<String>,
+        suppression_reason: Option<String>,
+        suppression_note: Option<String>,
         updated_at: i64,
     }
 

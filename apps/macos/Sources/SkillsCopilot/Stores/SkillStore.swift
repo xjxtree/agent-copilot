@@ -4,6 +4,7 @@ import Foundation
 final class SkillStore: ObservableObject {
     @Published private(set) var skills: [SkillRecord] = []
     @Published private(set) var findings: [RuleFindingRecord] = []
+    @Published private(set) var ruleTuning: [RuleTuningRecord] = []
     @Published private(set) var conflicts: [ConflictGroupRecord] = []
     @Published private(set) var cleanupQueue = CleanupQueueResult.emptyFallback()
     @Published private(set) var isLoadingCleanupQueue = false
@@ -168,11 +169,39 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func ruleTuningRecord(ruleId: String, findingGroupID: String? = nil) -> RuleTuningRecord? {
+        RuleTuningModel.record(in: ruleTuning, ruleId: ruleId, findingGroupId: findingGroupID)
+    }
+
     func setFindingTriageStatus(_ status: FindingTriageStatus, for triageKeys: [String]) {
         let keys = Array(Set(triageKeys.filter { !$0.isEmpty })).sorted()
         guard !keys.isEmpty else { return }
         Task {
             await setFindingTriageStatus(status, triageKeys: keys)
+        }
+    }
+
+    func setRuleSeverityOverride(_ severity: String, for ruleId: String) {
+        Task {
+            await setRuleSeverityOverride(severity, ruleId: ruleId)
+        }
+    }
+
+    func clearRuleSeverityOverride(for ruleId: String) {
+        Task {
+            await clearRuleSeverityOverride(ruleId: ruleId)
+        }
+    }
+
+    func setRuleSuppression(ruleId: String, findingGroupID: String?, scope: RuleTuningScope) {
+        Task {
+            await setRuleSuppression(ruleId: ruleId, findingGroupID: findingGroupID, scope: scope)
+        }
+    }
+
+    func clearRuleSuppression(ruleId: String, findingGroupID: String?, scope: RuleTuningScope) {
+        Task {
+            await clearRuleSuppression(ruleId: ruleId, findingGroupID: findingGroupID, scope: scope)
         }
     }
 
@@ -462,6 +491,94 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    private func setRuleSeverityOverride(_ severity: String, ruleId: String) async {
+        guard !isRefreshBusy else {
+            errorMessage = UIStrings.operationUnavailableBusy
+            lastMutationMessage = nil
+            return
+        }
+
+        isWriting = true
+        errorMessage = nil
+        lastMutationMessage = nil
+        defer { isWriting = false }
+
+        do {
+            _ = try await service.setSeverityOverride(ruleId: ruleId, severity: severity)
+            ruleTuning = try await service.listRuleTuning()
+            lastMutationMessage = UIStrings.ruleTuningSeverityUpdated(FindingDisplayModel.severityTitle(severity))
+        } catch {
+            errorMessage = error.localizedDescription
+            lastMutationMessage = nil
+        }
+    }
+
+    private func clearRuleSeverityOverride(ruleId: String) async {
+        guard !isRefreshBusy else {
+            errorMessage = UIStrings.operationUnavailableBusy
+            lastMutationMessage = nil
+            return
+        }
+
+        isWriting = true
+        errorMessage = nil
+        lastMutationMessage = nil
+        defer { isWriting = false }
+
+        do {
+            _ = try await service.clearSeverityOverride(ruleId: ruleId)
+            ruleTuning = try await service.listRuleTuning()
+            lastMutationMessage = UIStrings.ruleTuningSeverityCleared
+        } catch {
+            errorMessage = error.localizedDescription
+            lastMutationMessage = nil
+        }
+    }
+
+    private func setRuleSuppression(ruleId: String, findingGroupID: String?, scope: RuleTuningScope) async {
+        guard !isRefreshBusy else {
+            errorMessage = UIStrings.operationUnavailableBusy
+            lastMutationMessage = nil
+            return
+        }
+
+        isWriting = true
+        errorMessage = nil
+        lastMutationMessage = nil
+        defer { isWriting = false }
+
+        do {
+            _ = try await service.setSuppression(ruleId: ruleId, scope: scope, findingGroupId: findingGroupID)
+            ruleTuning = try await service.listRuleTuning()
+            lastMutationMessage = UIStrings.ruleTuningSuppressionUpdated
+        } catch {
+            errorMessage = error.localizedDescription
+            lastMutationMessage = nil
+        }
+    }
+
+    private func clearRuleSuppression(ruleId: String, findingGroupID: String?, scope: RuleTuningScope) async {
+        guard !isRefreshBusy else {
+            errorMessage = UIStrings.operationUnavailableBusy
+            lastMutationMessage = nil
+            return
+        }
+
+        isWriting = true
+        errorMessage = nil
+        lastMutationMessage = nil
+        defer { isWriting = false }
+
+        do {
+            _ = try await service.clearSuppression(ruleId: ruleId, scope: scope, findingGroupId: findingGroupID)
+            ruleTuning = try await service.listRuleTuning()
+            lastMutationMessage = UIStrings.ruleTuningSuppressionCleared
+        } catch {
+            errorMessage = error.localizedDescription
+            lastMutationMessage = nil
+        }
+    }
+
     func prepareAnalyzeLLM() async {
         await prepareLLMAction(.analyze)
     }
@@ -639,12 +756,14 @@ final class SkillStore: ObservableObject {
         async let llmStatus = service.llmStatus()
         async let projectContextState = service.getProjectContext()
         async let agentConfigSnapshots = fetchAgentConfigSnapshots()
+        async let ruleTuning = service.listRuleTuning()
         let snapshot = try await appStateSnapshot
         self.status = snapshot.status
         self.llmStatus = try await llmStatus
         self.projectContextState = try await projectContextState
         self.skills = snapshot.skills
         self.findings = snapshot.findings
+        self.ruleTuning = try await ruleTuning
         self.conflicts = snapshot.conflicts
         self.healthSummary = snapshot.health
         self.agentConfigSnapshots = try await agentConfigSnapshots

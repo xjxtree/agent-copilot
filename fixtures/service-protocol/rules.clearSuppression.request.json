@@ -1,0 +1,7 @@
+{
+  "id": "fixture-rules-clear-suppression",
+  "method": "rules.clearSuppression",
+  "params": {
+    "rule_id": "dependency.unknown"
+  }
+}

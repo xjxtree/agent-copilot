@@ -185,6 +185,14 @@ V2.4 把 opencode 作为第三个 adapter 接入 catalog；当前实现按官方
 - queue 不新增持久化实体；其持久状态只复用 V2.29 的 finding triage 状态（Open / Reviewed / Ignored / Needs follow-up），并保持与现有 health/list/detail 口径一致。
 - queue 阶段不得增加 credential 持久化、agent-config 写入、snapshot 写入、AI write-back 或 skill-content/safety toggle snapshot 等新路径；建议动作仅可指向现有 guard 流程（toggle/save/rollback）或只读查看路径。
 
+### 2.4.5 Rule tuning / suppression（V2.32）
+
+- 规则调优与 suppression 仅作为本地 review 风险控制，默认不写文件，仅改写 app-local metadata。
+- 变更必须可审计且可撤销，并需记录谁/何时/为何进行的上下文信息。
+- 该路径不应改写 skill 文件、不改写 agent config、也不创建任何 snapshot。
+- 不能触发脚本执行，不可发起 provider 调用，不得读取/写入 LLM credentials。
+- 不应产生额外 telemetry、cloud 同步或 release automation 的 side effects。
+
 ### 2.5 LLM 凭据泄露
 
 **风险**：用户配的 API key 落到 git 仓库或同步盘。

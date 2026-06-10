@@ -166,6 +166,19 @@ enum UIStrings {
     static let findingTriageActionIgnored = text("findings.triage.action.ignored", "Ignore")
     static let findingTriageActionFollowUp = text("findings.triage.action.followUp", "Needs follow-up")
     static let findingTriageActionReopen = text("findings.triage.action.reopen", "Reopen")
+    static let ruleTuningTitle = text("rules.tuning.title", "Rule Tuning / Suppression")
+    static let ruleTuningBoundary = text("rules.tuning.boundary", "App-local review state only. These controls never edit skill files, write agent config, create snapshots, execute scripts, call an AI provider, or store credentials.")
+    static let ruleTuningEffectiveState = text("rules.tuning.effectiveState", "Effective rule state")
+    static let ruleTuningSeverityOverride = text("rules.tuning.severityOverride", "Severity override")
+    static let ruleTuningClearSeverity = text("rules.tuning.clearSeverity", "Clear override")
+    static let ruleTuningSuppressGroup = text("rules.tuning.suppressGroup", "Suppress group")
+    static let ruleTuningUnsuppressGroup = text("rules.tuning.unsuppressGroup", "Unsuppress group")
+    static let ruleTuningSuppressRule = text("rules.tuning.suppressRule", "Suppress rule")
+    static let ruleTuningUnsuppressRule = text("rules.tuning.unsuppressRule", "Unsuppress rule")
+    static let ruleTuningSuppressed = text("rules.tuning.suppressed", "Suppressed locally")
+    static let ruleTuningRuleWide = text("rules.tuning.ruleWide", "Rule-wide")
+    static let ruleTuningFindingGroup = text("rules.tuning.findingGroup", "Finding group")
+    static let ruleTuningNoOverride = text("rules.tuning.noOverride", "No local override")
     static let findingExplanation = text("findings.explanation", "Why this appears")
     static let findingRuleID = text("findings.ruleId", "Rule ID")
     static let findingRuleSource = text("findings.ruleSource", "Rule source")
@@ -360,6 +373,18 @@ enum UIStrings {
     }
 
     static let findingTriageReopened = text("findings.triage.reopened", "Reopened finding locally. No agent config or skill files were changed.")
+
+    static func ruleTuningSetSeverity(_ severity: String) -> String {
+        format("rules.tuning.setSeverity", "Set %@", severity)
+    }
+
+    static func ruleTuningSeverityUpdated(_ severity: String) -> String {
+        format("rules.tuning.updated.severity", "Set app-local rule severity override to %@. No skill files, agent config, snapshots, scripts, AI provider calls, or credentials were touched.", severity)
+    }
+
+    static let ruleTuningSeverityCleared = text("rules.tuning.cleared.severity", "Cleared app-local rule severity override. No skill files or agent config were changed.")
+    static let ruleTuningSuppressionUpdated = text("rules.tuning.updated.suppression", "Updated app-local rule suppression. No skill files, agent config, snapshots, scripts, AI provider calls, or credentials were touched.")
+    static let ruleTuningSuppressionCleared = text("rules.tuning.cleared.suppression", "Cleared app-local rule suppression. No skill files or agent config were changed.")
 
     static func noFindingsForSkillMessage(_ agent: String) -> String {
         format("empty.noFindingsForSkill.message", "No rule findings are associated with this %@ skill.", agent)

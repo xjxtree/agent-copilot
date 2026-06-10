@@ -223,6 +223,13 @@ pub enum ExecutionAttemptStatus {
 - queue 的动作状态不写入独立队列实体；任何状态回写仍由现有 V2.29 triage 持久化链路处理。
 - 本阶段不得把清理队列设计为新的 data mutation actor；任何写入动作仍需走现有的受控 service method（toggle/save/rollback/scan），并受现有安全边界约束。
 
+### 1.13 V2.32 Rule tuning / suppression（已完成）
+
+- V2.32 的规则调优与抑制是本地 review 元数据，不属于 skill 内容或 agent 配置模型。
+- 调优记录应保存在 app-local 持久层（catalog/app data），以实例级/规则级标识可追溯并可回滚。
+- 记录需支持审计字段（谁在何时为何进行该变更）与可撤销状态，方便用户恢复原始 finding 行为。
+- 该机制不创建快照，不触发脚本执行，不发起 provider 调用，不读写凭据，不改写 skill 文件或 agent config。
+
 审计记录不得保存 secret env value、任意文件内容、LLM prompt/response，或未实现 runner 的 stdout/stderr。LLM 不能成为 `ExecutionRequester`，也不能代替用户确认。
 
 ## 2. 目录层级与项目根识别

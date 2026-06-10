@@ -896,6 +896,9 @@ private final class FakeServiceScript {
             if [ "$scenario" = "error" ]; then service_error; fi
             status_response
             ;;
+          *\\"rules.listTuning\\"*)
+            respond '{"id":"test","ok":true,"result":[]}'
+            ;;
           *\\"llm.status\\"*)
             if [ "$scenario" = "old-service" ]; then
               respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: llm.status"}}'

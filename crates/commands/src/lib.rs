@@ -17,8 +17,8 @@ use skills_copilot_ai_core::{evaluate_mvp_rules, Finding, RuleContext, RuleRepor
 use skills_copilot_catalog::{
     Catalog, CatalogError, ConfigSnapshotDraft, ConfigSnapshotRecord, ConflictGroupDraft,
     ConflictGroupRecord, FindingTriageRecord, RuleFindingDraft, RuleFindingRecord,
-    SkillDefinitionDraft, SkillDetailRecord, SkillEventDraft, SkillEventRecord, SkillInstanceMeta,
-    SkillRecord,
+    RuleTuningRecord, SkillDefinitionDraft, SkillDetailRecord, SkillEventDraft, SkillEventRecord,
+    SkillInstanceMeta, SkillRecord,
 };
 use skills_copilot_core::{
     AdapterContext, AgentAdapter, AgentConfigAdapter, AgentConfigDocument, AgentId, ConfigFormat,
@@ -74,6 +74,10 @@ pub enum CommandError {
     InvalidScriptExecutionRequest(String),
     #[error("invalid finding triage status: {0}")]
     InvalidFindingTriageStatus(String),
+    #[error("invalid rule severity override: {0}")]
+    InvalidRuleSeverityOverride(String),
+    #[error("invalid rule tuning request: {0}")]
+    InvalidRuleTuningRequest(String),
 }
 
 pub fn scan_claude_to_catalog(
@@ -821,6 +825,66 @@ pub fn clear_finding_triage(catalog: &Catalog, triage_key: &str) -> Result<bool,
     Ok(catalog.clear_finding_triage(triage_key)?)
 }
 
+pub fn list_rule_tuning(catalog: &Catalog) -> Result<Vec<RuleTuningRecord>, CommandError> {
+    Ok(catalog.list_rule_tuning()?)
+}
+
+pub fn set_rule_severity_override(
+    catalog: &Catalog,
+    rule_id: &str,
+    agent: Option<&str>,
+    scope: Option<&str>,
+    severity: &str,
+) -> Result<RuleTuningRecord, CommandError> {
+    validate_rule_tuning_key(rule_id)?;
+    validate_rule_scope(agent, scope)?;
+    validate_rule_severity_override(severity)?;
+    Ok(catalog.set_rule_severity_override(rule_id, agent, scope, severity, current_time_ms())?)
+}
+
+pub fn clear_rule_severity_override(
+    catalog: &Catalog,
+    rule_id: &str,
+    agent: Option<&str>,
+    scope: Option<&str>,
+) -> Result<bool, CommandError> {
+    validate_rule_tuning_key(rule_id)?;
+    validate_rule_scope(agent, scope)?;
+    Ok(catalog.clear_rule_severity_override(rule_id, agent, scope, current_time_ms())?)
+}
+
+pub fn set_rule_suppression(
+    catalog: &Catalog,
+    rule_id: &str,
+    agent: Option<&str>,
+    scope: Option<&str>,
+    reason: &str,
+    note: Option<&str>,
+) -> Result<RuleTuningRecord, CommandError> {
+    validate_rule_tuning_key(rule_id)?;
+    validate_rule_scope(agent, scope)?;
+    validate_rule_suppression_reason(reason)?;
+    Ok(catalog.set_rule_suppression(
+        rule_id,
+        agent,
+        scope,
+        reason.trim(),
+        note.map(str::trim).filter(|value| !value.is_empty()),
+        current_time_ms(),
+    )?)
+}
+
+pub fn clear_rule_suppression(
+    catalog: &Catalog,
+    rule_id: &str,
+    agent: Option<&str>,
+    scope: Option<&str>,
+) -> Result<bool, CommandError> {
+    validate_rule_tuning_key(rule_id)?;
+    validate_rule_scope(agent, scope)?;
+    Ok(catalog.clear_rule_suppression(rule_id, agent, scope, current_time_ms())?)
+}
+
 pub fn list_conflicts(catalog: &Catalog) -> Result<Vec<ConflictGroupRecord>, CommandError> {
     let records = catalog.list_skill_records()?;
     let agent_by_instance_id = records
@@ -959,7 +1023,10 @@ pub fn build_skill_health_summary(
     conflicts: &[ConflictGroupRecord],
     analysis: &CrossAgentAnalysisRecord,
 ) -> SkillHealthSummary {
-    let findings = dedupe_rule_finding_records(findings);
+    let findings = dedupe_rule_finding_records(findings)
+        .into_iter()
+        .filter(|finding| !finding.suppressed)
+        .collect::<Vec<_>>();
     let agent_by_instance_id = instances
         .iter()
         .map(|inst| (inst.id.as_str(), inst.agent.as_str()))
@@ -967,8 +1034,11 @@ pub fn build_skill_health_summary(
     let malformed_instance_ids = malformed_instance_ids(instances, &findings);
     let risky_script_instance_ids = risky_script_instance_ids(instances, &findings);
     let risky_permission_instance_ids = risky_permission_instance_ids(instances, &findings);
-    let findings_by_severity =
-        severity_counts(findings.iter().map(|finding| finding.severity.as_str()));
+    let findings_by_severity = severity_counts(
+        findings
+            .iter()
+            .map(|finding| finding.effective_severity.as_str()),
+    );
     let analysis_groups = health_analysis_group_counts(analysis);
 
     let mut agent_summaries = Vec::new();
@@ -1281,6 +1351,42 @@ fn validate_finding_triage_status(status: &str) -> Result<(), CommandError> {
         "reviewed" | "ignored" | "needs-follow-up" => Ok(()),
         _ => Err(CommandError::InvalidFindingTriageStatus(status.to_string())),
     }
+}
+
+fn validate_rule_tuning_key(rule_id: &str) -> Result<(), CommandError> {
+    if rule_id.trim().is_empty() {
+        return Err(CommandError::InvalidRuleTuningRequest(
+            "rule_id is required".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_rule_scope(agent: Option<&str>, scope: Option<&str>) -> Result<(), CommandError> {
+    if agent.is_none() && scope.is_some() {
+        return Err(CommandError::InvalidRuleTuningRequest(
+            "scope-specific tuning requires agent".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_rule_severity_override(severity: &str) -> Result<(), CommandError> {
+    match severity.trim() {
+        "critical" | "error" | "warn" | "warning" | "info" => Ok(()),
+        _ => Err(CommandError::InvalidRuleSeverityOverride(
+            severity.to_string(),
+        )),
+    }
+}
+
+fn validate_rule_suppression_reason(reason: &str) -> Result<(), CommandError> {
+    if reason.trim().is_empty() {
+        return Err(CommandError::InvalidRuleTuningRequest(
+            "suppression reason is required".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 fn health_analysis_group_counts(analysis: &CrossAgentAnalysisRecord) -> HealthAnalysisGroupCounts {
@@ -7886,9 +7992,15 @@ mod v219_skill_health_tests {
             definition_id: definition_id.map(str::to_string),
             rule_id: rule_id.to_string(),
             severity: severity.to_string(),
+            effective_severity: severity.to_string(),
+            severity_override: None,
             message: format!("{rule_id} fixture"),
             suggestion: None,
             created_at: 0,
+            suppressed: false,
+            suppression_reason: None,
+            suppression_note: None,
+            rule_tuning_updated_at: None,
             triage_status: "open".to_string(),
             triage_note: None,
             triage_updated_at: None,

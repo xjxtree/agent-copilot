@@ -170,3 +170,11 @@ For UI changes:
 - 验收证据要求：
   - 文档与 roadmap/status 文案保持一致：V2.31 为清理队列聚合阶段，仍是 review-first 且默认安全。
   - UI 验证若出现 queue 相关新视图，按现有规则补全完整 app-window 截图和变更记录；无代码改动则记录为文档更新，不新增 smoke。
+
+## 16. V2.32: Rule tuning / suppression（已完成）
+
+- 目标：为 finding 的 severity override / suppression 提供本地可审计、可撤销的 review 调整入口。
+- 调整动作默认仅改 app-local 元数据，不写 skill 文件、不写 agent config，不创建 snapshot。
+- 调整动作不得触发脚本执行、provider 调用、凭据保存或 telemetry 路径。
+- UI/文案需显示变更原因、操作者（当前用户）、变更时间，并提供一键恢复到默认状态。
+- 若出现 rule tuning 的新界面或过滤入口，完成后必须补齐 app-window 完整截图与最小窗口/键盘/可访问性自检记录。

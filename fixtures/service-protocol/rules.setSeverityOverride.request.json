@@ -1,0 +1,9 @@
+{
+  "id": "fixture-rules-set-severity-override",
+  "method": "rules.setSeverityOverride",
+  "params": {
+    "rule_id": "body.too-long",
+    "agent": "codex",
+    "severity": "info"
+  }
+}

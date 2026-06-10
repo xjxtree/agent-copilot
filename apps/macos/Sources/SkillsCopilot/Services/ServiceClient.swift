@@ -167,6 +167,52 @@ private struct ClearFindingTriageParams: Encodable {
     }
 }
 
+private struct SetRuleSeverityOverrideParams: Encodable {
+    let ruleId: String
+    let severity: String
+
+    enum CodingKeys: String, CodingKey {
+        case ruleId = "rule_id"
+        case severity
+    }
+}
+
+private struct ClearRuleSeverityOverrideParams: Encodable {
+    let ruleId: String
+
+    enum CodingKeys: String, CodingKey {
+        case ruleId = "rule_id"
+    }
+}
+
+private struct SetRuleSuppressionParams: Encodable {
+    let ruleId: String
+    let scope: String
+    let findingGroupId: String?
+    let suppressed: Bool
+    let note: String?
+
+    enum CodingKeys: String, CodingKey {
+        case ruleId = "rule_id"
+        case scope
+        case findingGroupId = "finding_group_id"
+        case suppressed
+        case note
+    }
+}
+
+private struct ClearRuleSuppressionParams: Encodable {
+    let ruleId: String
+    let scope: String
+    let findingGroupId: String?
+
+    enum CodingKeys: String, CodingKey {
+        case ruleId = "rule_id"
+        case scope
+        case findingGroupId = "finding_group_id"
+    }
+}
+
 private struct SaveClaudeSettingsParams: Encodable {
     let content: String
 }
@@ -368,6 +414,57 @@ final class ServiceClient {
             method: "catalog.clearFindingTriage",
             params: ClearFindingTriageParams(triageKey: triageKey)
         )
+    }
+
+    func listRuleTuning() async throws -> [RuleTuningRecord] {
+        do {
+            let list: RuleTuningList = try await call(method: "rules.listTuning", params: EmptyParams())
+            return list.records
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return []
+        }
+    }
+
+    func setSeverityOverride(ruleId: String, severity: String) async throws -> RuleTuningRecord? {
+        let result: RuleTuningMutationResult = try await call(
+            method: "rules.setSeverityOverride",
+            params: SetRuleSeverityOverrideParams(ruleId: ruleId, severity: severity)
+        )
+        return result.record
+    }
+
+    func clearSeverityOverride(ruleId: String) async throws -> RuleTuningRecord? {
+        let result: RuleTuningMutationResult = try await call(
+            method: "rules.clearSeverityOverride",
+            params: ClearRuleSeverityOverrideParams(ruleId: ruleId)
+        )
+        return result.record
+    }
+
+    func setSuppression(ruleId: String, scope: RuleTuningScope, findingGroupId: String?, note: String? = nil) async throws -> RuleTuningRecord? {
+        let result: RuleTuningMutationResult = try await call(
+            method: "rules.setSuppression",
+            params: SetRuleSuppressionParams(
+                ruleId: ruleId,
+                scope: scope.rawValue,
+                findingGroupId: scope == .findingGroup ? findingGroupId : nil,
+                suppressed: true,
+                note: note
+            )
+        )
+        return result.record
+    }
+
+    func clearSuppression(ruleId: String, scope: RuleTuningScope, findingGroupId: String?) async throws -> RuleTuningRecord? {
+        let result: RuleTuningMutationResult = try await call(
+            method: "rules.clearSuppression",
+            params: ClearRuleSuppressionParams(
+                ruleId: ruleId,
+                scope: scope.rawValue,
+                findingGroupId: scope == .findingGroup ? findingGroupId : nil
+            )
+        )
+        return result.record
     }
 
     func listConflicts() async throws -> [ConflictGroupRecord] {

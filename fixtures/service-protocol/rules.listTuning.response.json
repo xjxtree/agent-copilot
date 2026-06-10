@@ -1,0 +1,24 @@
+{
+  "id": "fixture-rules-list-tuning",
+  "ok": true,
+  "result": [
+    {
+      "rule_id": "body.too-long",
+      "agent": "codex",
+      "scope": null,
+      "severity_override": "info",
+      "suppression_reason": null,
+      "suppression_note": null,
+      "updated_at": 1780590002000
+    },
+    {
+      "rule_id": "dependency.unknown",
+      "agent": null,
+      "scope": null,
+      "severity_override": null,
+      "suppression_reason": "Local policy accepts this fixture dependency after review.",
+      "suppression_note": "App-local V2.32 suppression only.",
+      "updated_at": 1780590003000
+    }
+  ]
+}
