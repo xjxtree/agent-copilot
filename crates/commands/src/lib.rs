@@ -793,7 +793,7 @@ fn display_argv(argv: &[String]) -> String {
 }
 
 pub fn list_findings(catalog: &Catalog) -> Result<Vec<RuleFindingRecord>, CommandError> {
-    Ok(catalog.list_rule_findings()?)
+    Ok(dedupe_rule_finding_records(&catalog.list_rule_findings()?))
 }
 
 pub fn list_conflicts(catalog: &Catalog) -> Result<Vec<ConflictGroupRecord>, CommandError> {
@@ -926,9 +926,10 @@ pub fn build_skill_health_summary(
     conflicts: &[ConflictGroupRecord],
     analysis: &CrossAgentAnalysisRecord,
 ) -> SkillHealthSummary {
-    let malformed_instance_ids = malformed_instance_ids(instances, findings);
-    let risky_script_instance_ids = risky_script_instance_ids(instances, findings);
-    let risky_permission_instance_ids = risky_permission_instance_ids(instances, findings);
+    let findings = dedupe_rule_finding_records(findings);
+    let malformed_instance_ids = malformed_instance_ids(instances, &findings);
+    let risky_script_instance_ids = risky_script_instance_ids(instances, &findings);
+    let risky_permission_instance_ids = risky_permission_instance_ids(instances, &findings);
     let findings_by_severity =
         severity_counts(findings.iter().map(|finding| finding.severity.as_str()));
     let analysis_groups = health_analysis_group_counts(analysis);
@@ -1171,6 +1172,65 @@ fn severity_counts<'a>(severities: impl Iterator<Item = &'a str>) -> HealthSever
         }
     }
     counts
+}
+
+fn dedupe_rule_finding_records(findings: &[RuleFindingRecord]) -> Vec<RuleFindingRecord> {
+    let mut seen = BTreeSet::new();
+    let mut deduped = Vec::new();
+    for finding in findings {
+        if seen.insert(rule_finding_record_key(finding)) {
+            deduped.push(finding.clone());
+        }
+    }
+    deduped
+}
+
+fn rule_finding_record_key(finding: &RuleFindingRecord) -> String {
+    stable_finding_key(
+        finding.instance_id.as_deref(),
+        finding.definition_id.as_deref(),
+        &finding.rule_id,
+        &finding.message,
+        finding.suggestion.as_deref(),
+    )
+}
+
+fn dedupe_rule_findings(findings: Vec<Finding>) -> Vec<Finding> {
+    let mut seen = BTreeSet::new();
+    let mut deduped = Vec::new();
+    for finding in findings {
+        if seen.insert(finding_key(&finding)) {
+            deduped.push(finding);
+        }
+    }
+    deduped
+}
+
+fn finding_key(finding: &Finding) -> String {
+    stable_finding_key(
+        finding.instance_id.as_deref(),
+        finding.definition_id.as_deref(),
+        &finding.rule_id,
+        &finding.message,
+        finding.suggestion.as_deref(),
+    )
+}
+
+fn stable_finding_key(
+    instance_id: Option<&str>,
+    definition_id: Option<&str>,
+    rule_id: &str,
+    message: &str,
+    suggestion: Option<&str>,
+) -> String {
+    format!(
+        "{}\x1f{}\x1f{}\x1f{}\x1f{}",
+        instance_id.unwrap_or(""),
+        definition_id.unwrap_or(""),
+        rule_id,
+        message,
+        suggestion.unwrap_or("")
+    )
 }
 
 fn health_analysis_group_counts(analysis: &CrossAgentAnalysisRecord) -> HealthAnalysisGroupCounts {
@@ -3146,8 +3206,8 @@ fn canonical_skill_name_suggestion(name: &str) -> String {
 
 fn refresh_rule_outputs(catalog: &Catalog, report: RuleReport) -> Result<(), CommandError> {
     let now_ms = current_time_ms();
-    let findings: Vec<RuleFindingDraft> = report
-        .findings
+    let report_findings = dedupe_rule_findings(report.findings);
+    let findings: Vec<RuleFindingDraft> = report_findings
         .into_iter()
         .enumerate()
         .map(|(idx, finding)| RuleFindingDraft {
@@ -5127,7 +5187,7 @@ mod tests {
     }
 
     #[test]
-    fn tool_global_and_agent_global_same_name_conflict_without_row_confusion() {
+    fn tool_global_and_agent_global_same_name_overlap_without_runtime_conflict() {
         let temp_root = std::env::temp_dir().join(format!(
             "skills-copilot-tool-global-conflict-{}",
             std::process::id()
@@ -5170,10 +5230,13 @@ mod tests {
         );
 
         let conflicts = list_conflicts(&catalog).expect("conflicts list");
-        assert_eq!(conflicts.len(), 1);
-        assert_eq!(conflicts[0].reason, "content-drift");
-        assert!(conflicts[0].instance_ids.contains(&agent_global.id));
-        assert!(conflicts[0].instance_ids.contains(&tool_global.id));
+        assert!(
+            conflicts.iter().all(|conflict| {
+                !(conflict.instance_ids.contains(&agent_global.id)
+                    && conflict.instance_ids.contains(&tool_global.id))
+            }),
+            "tool-global and agent runtime rows overlap in analysis, not conflict tab"
+        );
         assert!(records
             .iter()
             .any(|record| record.agent == "opencode" && record.name == "shared-alpha"));
@@ -6070,7 +6133,7 @@ mod tests {
     }
 
     #[test]
-    fn single_agent_scan_preserves_other_agent_findings_and_conflicts() {
+    fn single_agent_scan_preserves_other_agent_findings_without_cross_agent_conflict() {
         let temp_root = std::env::temp_dir().join(format!(
             "skills-copilot-single-scan-rules-{}",
             std::process::id()
@@ -6141,20 +6204,21 @@ mod tests {
             .expect("opencode shared record")
             .id
             .clone();
-        let shared_conflict = conflicts
-            .iter()
-            .find(|conflict| {
-                conflict.instance_ids.contains(&codex_shared_id)
-                    && conflict.instance_ids.contains(&opencode_shared_id)
-            })
-            .expect("shared conflict remains after scanClaude");
         assert!(
-            shared_conflict.instance_ids.contains(&codex_shared_id),
-            "scanClaude must not drop Codex conflict members"
+            conflicts.iter().all(|conflict| {
+                !(conflict.instance_ids.contains(&codex_shared_id)
+                    && conflict.instance_ids.contains(&opencode_shared_id))
+            }),
+            "cross-agent duplicate names must not be runtime conflict groups"
         );
+        let analysis = analyze_catalog(&catalog, &ctx).expect("analysis after scanClaude");
         assert!(
-            shared_conflict.instance_ids.contains(&opencode_shared_id),
-            "scanClaude must not drop opencode conflict members"
+            analysis.groups.iter().any(|group| {
+                group.kind == "duplicate_name"
+                    && group.instance_ids.contains(&codex_shared_id)
+                    && group.instance_ids.contains(&opencode_shared_id)
+            }),
+            "cross-agent duplicate names remain visible through analysis"
         );
 
         let _ = std::fs::remove_dir_all(&temp_root);
@@ -7140,6 +7204,14 @@ mod v219_skill_health_tests {
             description: None,
             fingerprint: "script-fp".to_string(),
         });
+        let scripted_project = health_skill(
+            "scripted-project",
+            AgentId::ClaudeCode,
+            Scope::AgentProject,
+            "review-diff",
+            true,
+            SkillState::Loaded,
+        );
 
         let mut permissioned = health_skill(
             "permissioned",
@@ -7169,7 +7241,7 @@ mod v219_skill_health_tests {
             SkillState::Missing,
         );
 
-        let instances = vec![scripted, permissioned, broken, missing];
+        let instances = vec![scripted, scripted_project, permissioned, broken, missing];
         let findings = vec![
             health_finding(
                 "finding-script",
@@ -7180,6 +7252,13 @@ mod v219_skill_health_tests {
             ),
             health_finding(
                 "finding-permission",
+                Some("permissioned"),
+                None,
+                "permissions.exec-needs-human",
+                "warning",
+            ),
+            health_finding(
+                "finding-permission-duplicate",
                 Some("permissioned"),
                 None,
                 "permissions.exec-needs-human",
@@ -7198,14 +7277,14 @@ mod v219_skill_health_tests {
             definition_id: "def.review-diff".to_string(),
             reason: "content-drift".to_string(),
             winner_id: Some("scripted".to_string()),
-            instance_ids: vec!["scripted".to_string(), "permissioned".to_string()],
+            instance_ids: vec!["scripted".to_string(), "scripted-project".to_string()],
         }];
         let analysis = analyze_skill_instances(&instances);
 
         let health = build_skill_health_summary(&instances, &findings, &conflicts, &analysis);
 
-        assert_eq!(health.total_count, 4);
-        assert_eq!(health.enabled_count, 1);
+        assert_eq!(health.total_count, 5);
+        assert_eq!(health.enabled_count, 2);
         assert_eq!(health.disabled_count, 3);
         assert_eq!(health.broken_count, 1);
         assert_eq!(health.missing_count, 1);
@@ -7213,6 +7292,7 @@ mod v219_skill_health_tests {
         assert_eq!(health.findings_by_severity.error_count, 1);
         assert_eq!(health.findings_by_severity.warning_count, 1);
         assert_eq!(health.findings_by_severity.info_count, 1);
+        assert_eq!(health.finding_count, 3);
         assert_eq!(health.conflict_count, 1);
         assert_eq!(health.risky_script_count, 1);
         assert_eq!(health.risky_permission_count, 1);
@@ -7231,6 +7311,37 @@ mod v219_skill_health_tests {
         assert_eq!(codex.conflict_count, 0);
         assert_eq!(codex.risky_permission_count, 1);
         assert!(codex.analysis_group_count >= 1);
+    }
+
+    #[test]
+    fn refresh_rule_outputs_dedupes_same_skill_rule_message_and_remediation() {
+        let catalog = Catalog::in_memory().expect("catalog opens");
+        catalog.init().expect("catalog initializes");
+        let duplicate = Finding {
+            instance_id: Some("skill-1".to_string()),
+            definition_id: Some("def.skill-1".to_string()),
+            rule_id: "body.too-long".to_string(),
+            severity: Severity::Warn,
+            message: "Skill body is longer than the local review threshold.".to_string(),
+            suggestion: Some("Split long reference material into references/.".to_string()),
+        };
+        let mut second = duplicate.clone();
+        second.severity = Severity::Error;
+        let report = RuleReport {
+            findings: vec![duplicate, second],
+            definitions: Vec::new(),
+            conflicts: Vec::new(),
+        };
+
+        refresh_rule_outputs(&catalog, report).expect("refresh rule outputs");
+
+        let findings = list_findings(&catalog).expect("findings");
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule_id, "body.too-long");
+        assert_eq!(
+            findings[0].suggestion.as_deref(),
+            Some("Split long reference material into references/.")
+        );
     }
 
     fn health_skill(

@@ -1,6 +1,6 @@
 # skills-copilot Service Protocol
 
-> Status: V2.20 read-only AI skill analysis assist integrated. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, and V2.19 health dashboard are implemented; writable/install support remains blocked. V2.21 alignment for scan accuracy, dedupe behavior, and agent-level metrics is implemented.
+> Status: V2.20 read-only AI skill analysis assist integrated. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, and V2.19 health dashboard are implemented; writable/install support remains blocked. V2.21 alignment for scan accuracy, dedupe behavior, and agent-level metrics is complete; V2.22 finding/conflict语义与验收同步进行中。
 >
 > Integrated: V2.9 Tool-global import/export/install, V2.10 skill execution safety boundary, and 2026-06-10 real local Computer Use validation for the current mainline app. V2.11 added adapter capability status to the service protocol and macOS UI. V2.12 marks opencode writable through exact permission.skill deny/re-enable after snapshot/rollback, install, and fixture smoke validation pass; current opencode scan follows native plus official compatibility roots while install targets remain native roots.
 >
@@ -56,7 +56,7 @@ This stdio shape can later move behind a local socket without changing method pa
 | `catalog.getSkill` | No | Native macOS Overview detail | `SkillDetailRecord` for `{ "instance_id": "..." }` |
 | `catalog.analysis` | No | Native macOS analysis/read flow | `CrossAgentAnalysisRecord` grouping duplicate names, canonical-name overlap, shared source paths, enabled-state mismatches, broken/missing rows, and supported precedence/shadowing explanations |
 | `catalog.listFindings` | No | Native macOS Findings segment | `RuleFindingRecord[]` |
-| `catalog.listConflicts` | No | Native macOS Conflicts segment | `ConflictGroupRecord[]` |
+| `catalog.listConflicts` | No | Native macOS Conflicts segment（同一 selected/current agent） | `ConflictGroupRecord[]` |
 | `catalog.importSkill` | Yes, writes app-controlled staging/catalog only | V2.9 tool-global import | imported read-only `SkillRecord`, staging path, filtered findings, and audit summary |
 | `catalog.scanAll` | Yes, refreshes catalog | Native macOS toolbar Scan action | scanned count, refreshed `SkillRecord[]`, and refresh activity summary for supported adapters |
 | `catalog.scanClaude` | Yes, refreshes catalog | Compatibility / Claude-only diagnostics | scanned count, refreshed `SkillRecord[]`, and refresh activity summary |
@@ -87,6 +87,8 @@ It resolves the effective `ProjectContext` before adapter scanning.
 ## V2.18 Cross-Agent Analysis Payload
 
 `catalog.analysis` and `app.stateSnapshot.analysis` return the same read-only, computed-on-demand payload. The service derives it from visible catalog rows after applying the effective project context; it does not read agent config, write files, execute scripts, call agent CLIs, or infer unsupported adapter roots.
+
+V2.22 对齐说明：该 API 仅用于 **cross-agent** 分析洞察（duplicate name、canonical overlap、source path overlap、enabled mismatch、malformed、precedence）。同-agent 的 runtime/name 冲突不在此聚合；同-agent 冲突只在 `catalog.listConflicts` 中体现。
 
 This API is read-only by contract: `mutated` behavior is always false even though the payload does not carry a `mutated` flag. It must not trigger writes, config changes, installs, CLI actions, script execution, or unsupported-root inference.
 
@@ -134,7 +136,9 @@ Precedence notes are intentionally conservative. The service may choose a `winne
 
 `app.stateSnapshot.health` returns an additive, read-only summary derived from the same visible catalog rows, findings, conflicts, and cross-agent analysis groups. It does not write agent configs, import skills, execute scripts, call provider APIs, or infer unsupported roots.
 
-The summary includes total/enabled/disabled counts, broken/missing/malformed counts, finding counts by severity, conflict counts, risky script and permission counts, cross-agent analysis group counts, and per-agent summaries for native dashboard and read-only triage filters. Per-agent finding and risk counts are instance-scoped by `instance_id`; definition-only findings are not expanded across same-name skills. Per-agent conflict counts only include conflicts where at least two instances from that same agent participate; cross-agent duplicate names, path overlap, or enabled-state mismatch remain in `catalog.analysis`, not in a selected agent's skill conflict detail. V2.19 does not persist reviewed/ignored finding state.
+The summary includes total/enabled/disabled counts, broken/missing/malformed counts, finding counts by severity, conflict counts, risky script and permission counts, cross-agent analysis group counts, and per-agent summaries for native dashboard and read-only triage filters. Per-agent finding and risk counts are instance-scoped by `instance_id`; definition-only findings are not expanded across same-name skills. Per-agent conflict counts only include conflicts where at least two instances from that same agent participate; cross-agent duplicate names, source overlap, or enabled-state mismatch remain in `catalog.analysis`, not in a selected agent's skill conflict detail. V2.19 does not persist reviewed/ignored finding state.
+
+健康口径（health）与 detail/list 过滤必须使用同一实例可见性定义；`conflict_count` 不从 cross-agent duplicate/source overlap 口径叠加，且应可与 `catalog.analysis` 分组数量在同一扫描上下文下对齐。 
 
 Example shape:
 

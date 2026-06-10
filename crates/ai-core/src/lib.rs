@@ -242,9 +242,9 @@ fn append_name_collision_results(instances: &[SkillInstance], report: &mut RuleR
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect();
+        let runtime_conflicts = runtime_name_collision_groups(&group);
         let has_multiple_instances = instances.len() > 1;
-        let has_content_drift = fingerprint_set.len() > 1;
-        let has_conflict = has_multiple_instances;
+        let has_conflict = !runtime_conflicts.is_empty();
 
         report.definitions.push(DefinitionSummary {
             id: definition_id.to_string(),
@@ -261,50 +261,86 @@ fn append_name_collision_results(instances: &[SkillInstance], report: &mut RuleR
             fingerprint_set: fingerprint_set.clone(),
         });
 
-        if !has_multiple_instances {
-            continue;
-        }
-
-        let reason = if has_content_drift {
-            "content-drift"
-        } else {
-            "name-collision"
-        };
-        report.conflicts.push(ConflictSummary {
-            id: format!("{definition_id}:{reason}"),
-            definition_id: definition_id.to_string(),
-            reason: reason.to_string(),
-            winner_id: None,
-            instances: instances.clone(),
-        });
-
-        let severity = if has_content_drift {
-            Severity::Warn
-        } else {
-            Severity::Info
-        };
-        for inst in group {
-            report.findings.push(Finding {
-                instance_id: Some(inst.id.clone()),
-                definition_id: Some(definition_id.to_string()),
-                rule_id: "name.collision".to_string(),
-                severity: severity.clone(),
-                message: format!(
-                    "Skill name '{}' appears in {} locations.",
-                    canonical_name,
-                    instances.len()
-                ),
-                suggestion: Some(
-                    if has_content_drift {
-                        "Compare the conflicting skill bodies and choose the intended version."
-                    } else {
-                        "Confirm that duplicate skill locations are intentional."
-                    }
-                    .to_string(),
-                ),
+        for (agent, collision_group) in runtime_conflicts {
+            let collision_instances: Vec<String> =
+                collision_group.iter().map(|inst| inst.id.clone()).collect();
+            let collision_fingerprints: Vec<String> = collision_group
+                .iter()
+                .map(|inst| inst.fingerprint.clone())
+                .filter(|fp| !fp.is_empty())
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect();
+            let has_content_drift = collision_fingerprints.len() > 1;
+            let reason = if has_content_drift {
+                "content-drift"
+            } else {
+                "name-collision"
+            };
+            report.conflicts.push(ConflictSummary {
+                id: format!("{definition_id}:{agent}:{reason}"),
+                definition_id: definition_id.to_string(),
+                reason: reason.to_string(),
+                winner_id: None,
+                instances: collision_instances.clone(),
             });
+
+            let severity = if has_content_drift {
+                Severity::Warn
+            } else {
+                Severity::Info
+            };
+            for inst in collision_group {
+                report.findings.push(Finding {
+                    instance_id: Some(inst.id.clone()),
+                    definition_id: Some(definition_id.to_string()),
+                    rule_id: "name.collision".to_string(),
+                    severity: severity.clone(),
+                    message: format!(
+                        "{} runtime sees skill name '{}' in {} locations.",
+                        inst.agent.as_str(),
+                        canonical_name,
+                        collision_instances.len()
+                    ),
+                    suggestion: Some(
+                        if has_content_drift {
+                            "Compare the conflicting skill bodies and choose the intended version."
+                        } else {
+                            "Confirm that duplicate skill locations are intentional."
+                        }
+                        .to_string(),
+                    ),
+                });
+            }
         }
     }
+}
+
+fn runtime_name_collision_groups<'a>(
+    group: &[&'a SkillInstance],
+) -> Vec<(String, Vec<&'a SkillInstance>)> {
+    let mut by_agent: BTreeMap<String, Vec<&SkillInstance>> = BTreeMap::new();
+    for inst in group {
+        by_agent
+            .entry(inst.agent.as_str().to_string())
+            .or_default()
+            .push(*inst);
+    }
+
+    by_agent
+        .into_iter()
+        .filter_map(|(agent, members)| {
+            let distinct_paths = members
+                .iter()
+                .map(|inst| inst.path.to_string_lossy().to_string())
+                .collect::<BTreeSet<_>>();
+            if members.len() > 1 && distinct_paths.len() > 1 {
+                Some((agent, members))
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -329,7 +365,7 @@ mod tests {
     }
 
     #[test]
-    fn name_collision_creates_conflict_and_findings() {
+    fn same_agent_name_collision_creates_conflict_and_findings() {
         let first = skill(
             "a",
             "same",
@@ -356,6 +392,63 @@ mod tests {
                 .count(),
             2
         );
+    }
+
+    #[test]
+    fn cross_agent_duplicate_does_not_create_runtime_conflict() {
+        let first = skill(
+            "claude",
+            "same",
+            "same",
+            "---\nname: same\ndescription: A\n---\n",
+            "body a",
+        );
+        let mut second = skill(
+            "codex",
+            "same",
+            "same",
+            "---\nname: same\ndescription: B\n---\n",
+            "body b",
+        );
+        second.agent = AgentId::Codex;
+
+        let report = evaluate_mvp_rules(&[first, second], &RuleContext::default());
+        let definition = report
+            .definitions
+            .iter()
+            .find(|definition| definition.id == "same")
+            .expect("definition");
+
+        assert!(definition.has_multiple_instances);
+        assert!(!definition.has_conflict);
+        assert!(report.conflicts.is_empty());
+        assert!(report
+            .findings
+            .iter()
+            .all(|finding| finding.rule_id != "name.collision"));
+    }
+
+    #[test]
+    fn same_agent_same_path_duplicate_does_not_create_runtime_conflict() {
+        let first = skill(
+            "a",
+            "same",
+            "same",
+            "---\nname: same\ndescription: A\n---\n",
+            "body a",
+        );
+        let mut second = skill(
+            "b",
+            "same",
+            "same",
+            "---\nname: same\ndescription: B\n---\n",
+            "body b",
+        );
+        second.path = first.path.clone();
+        second.display_path = first.display_path.clone();
+
+        let report = evaluate_mvp_rules(&[first, second], &RuleContext::default());
+        assert!(report.conflicts.is_empty());
     }
 
     #[test]
@@ -412,8 +505,8 @@ mod tests {
             agent: AgentId::ClaudeCode,
             scope: Scope::AgentGlobal,
             project_root: None,
-            path: PathBuf::from(format!("/tmp/{name}/SKILL.md")),
-            display_path: PathBuf::from(format!("/tmp/{name}/SKILL.md")),
+            path: PathBuf::from(format!("/tmp/{id}/{name}/SKILL.md")),
+            display_path: PathBuf::from(format!("/tmp/{id}/{name}/SKILL.md")),
             definition_id: definition_id.to_string(),
             name: name.to_string(),
             display_name: name.to_string(),
@@ -428,7 +521,7 @@ mod tests {
                 network: NetworkAccess::None,
                 ..PermissionRequest::default()
             },
-            fingerprint: format!("{id}-fingerprint"),
+            fingerprint: format!("{body}-fingerprint"),
             mtime: 0,
             first_seen: 0,
             last_seen: 0,

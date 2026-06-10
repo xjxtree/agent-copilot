@@ -1,13 +1,13 @@
 # Development Tasks
 
-> Status: current planning and execution queue as of 2026-06-10. V2.1 through V2.20 are closed on the main line. V2.21 scan accuracy, dedupe behavior, and agent-dimension metrics is complete.
+> Status: current planning and execution queue as of 2026-06-10. V2.1 through V2.21 are closed on the main line. V2.22 finding/conflict 语义与验收同步正在进行中。
 
 ## Current Baseline
 
-- Current branch baseline: `main` after V2.16-V2.20 management/analysis line and 2026-06-10 real local Computer Use validation; V2.21 scan accuracy + dedupe + per-agent metric alignment is complete.
+- Current branch baseline: `main` after V2.16-V2.21 management/analysis line and 2026-06-10 real local Computer Use validation; V2.22 finding/conflict 语义同步正在推进。
 - Product boundary: native macOS SwiftUI/AppKit shell plus Rust service protocol.
 - Completed V2 milestones: first Codex slice, V2.1 through V2.20.
-- Current priority: keep read-only management and analysis stable while preparing Pi writable evidence, finding triage persistence, and agent-config timeline follow-ups. V2.21 completed explicit scan accuracy, dedupe, and per-agent statistic requirements.
+- Current priority: keep read-only management and analysis stable while completing V2.22 finding/conflict semantics sync, preparing Pi writable evidence, finding triage persistence, and agent-config timeline follow-ups. V2.21 completed explicit scan accuracy, dedupe, and per-agent statistic requirements.
 - Real local Computer Use baseline: passed on 2026-06-10 for the current mainline app against real local HOME/app data/Claude/Codex/opencode roots; validation explicitly targeted the current `dist/SkillsCopilot.app` bundle after detecting a stale same-bundle-id worktree app. Future user-visible, UI, or service protocol changes must rerun it.
 - Quality gate for code/UI/protocol work: `pnpm check:macos`; add focused Rust/Swift tests when touching shared behavior.
 
@@ -27,6 +27,7 @@
 | V2.19 | Skill health dashboard and triage UX | Completed | `app.stateSnapshot.health` and native sidebar dashboard summarize health, findings, conflicts, risky scripts/permissions, and provide read-only triage filters |
 | V2.20 | Read-only AI skill analysis assist | Completed | Disabled-by-default offline review preview summarizes skill purpose/risk/findings without provider calls, network, credentials, writes, configs, prompts, or script execution |
 | V2.21 | Scan accuracy, dedupe behavior, and agent metric alignment | Completed | Normalize scan roots/path IDs, define deterministic duplicate handling across adapters, and align cross-agent visibility with catalog analysis + per-agent scan/activity and health metrics |
+| V2.22 | finding/conflict 语义与验收同步 | In progress | Unify conflict definition as same-agent runtime/name collision; move cross-agent duplicate/source-overlap to analysis insights; align default finding groups and count semantics |
 
 ## Near-Term Priority: Comprehensive Agent Adapter Support
 
@@ -41,6 +42,7 @@
 5. V2.20 Read-only AI skill analysis assist: completed disabled-by-default, offline read-only summaries and finding explanations.
 6. Pi writable evidence harness: keep planned, but schedule after read-only management and analysis improvements unless user explicitly prioritizes Pi writes.
 7. V2.21 scan accuracy / dedupe / stats pass: completed doc/spec/test coverage for deterministic duplicate handling and agent-scoped counting before downstream triage rules depend on the data.
+8. V2.22 finding/conflict semantics sync: align same-agent conflict definition and cross-agent analysis separation before triage persistence.
 
 **Tasks**
 
@@ -79,6 +81,7 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 | P0 | Cross-agent skill analysis | Implemented read-only | Keep catalog summaries for duplicate/conflict/precedence/source-overlap groups aligned with fixtures and UI needs | Users can identify conflicting or duplicated skills across agents without manually comparing lists |
 | P0 | Skill health dashboard | Implemented read-only | Keep dashboard summary cards and actionable filters for findings, conflicts, disabled skills, malformed metadata, risky scripts, and permission issues aligned with service health payload | Users can prioritize cleanup from a single management view |
 | P0 | V2.21 scan accuracy / dedupe / agent metrics | Completed | Add scan contract coverage for canonical path/id collision handling, source overlap handling, and per-agent stats consistency checks across scan activity + health payloads | Duplicate and overlap records are deterministic; per-agent counts in scan/activity and health payloads are documented and testable |
+| P0 | V2.22 finding/conflict semantics sync | In progress | Finalize conflict definition / cross-agent analysis separation; align default finding groups + instance/entry count retention; keep health and detail/list filter statistics consistent | Conflict/finding behavior is uniform across roadmap/tasks/service-protocol/data-model/adapter docs and can be traced in same scan context |
 | P1 | Finding triage persistence | Planned | Add reviewed/ignored state and grouping by rule, severity, agent, and source without writing agent config or hiding unresolved high-risk findings | Users can separate known issues from new actionable findings |
 | P1 | Agent-config timeline | Planned | Show agent-config snapshots and activity history per agent without adding skill-content snapshots | Users can understand config changes and rollback points |
 | P1 | Read-only AI skill analysis assist | Implemented offline preview | Keep V2.7 disabled-by-default gate and V2.20 offline purpose/risk/finding summaries free of provider/client/storage/write/execution paths | Users get human-readable analysis without any write, execution, or credential risk |
@@ -86,5 +89,5 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 ## Version Selection Rule
 
 - If the task is OpenClaw/Hermes scanner work, use V2.16/V2.17.
-- If the task is cross-agent analysis, dashboard, scan accuracy, dedupe, or triage, use V2.18-V2.21.
+- If the task is cross-agent analysis, dashboard, scan accuracy, dedupe, finding/conflict semantics, or triage, use V2.18-V2.22.
 - Do not create versions for script execution, GitHub clone import, script-file install, signing, notarization, DMG/ZIP, public distribution, or full-platform UI adaptation unless the product direction changes explicitly.

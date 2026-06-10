@@ -4,7 +4,7 @@
 >
 > 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.21 规划同步启动：扫描准确性、去重边界、agent 维度统计**。Pi writable evidence、finding triage persistence 和 agent-config timeline 仍为后续候选跟进项。
+> 当前阶段：**V2.22 finding/conflict 语义与验收同步（进行中）**；V2.21 扫描准确性、去重边界、agent 维度统计已完成。Pi writable evidence、finding triage persistence 和 agent-config timeline 仍为后续候选跟进项。
 >
 > 近期主线：在 macOS app 中补齐多 agent skills 管理、检查和分析能力，V2.16-V2.20 已完成 OpenClaw read-only scanner、Hermes read-only scanner、cross-agent skill analysis、skill health dashboard 和 read-only AI skill analysis assist。V2.21 负责扫描准确性、去重边界和 agent 维度统计口径同步；Pi writable 仍保持 evidence harness candidate，生产写入需等 rollback-safe evidence 通过。
 >
@@ -777,6 +777,34 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 - `cargo test -p skills-copilot-scanner` 通过，覆盖 root canonicalization、Pi 噪声过滤、opencode compatibility roots、Hermes/OpenClaw documented roots。
 - `cargo test -p skills-copilot-catalog` 通过，覆盖 catalog 输出层 historical noise filter 与 same-agent same-name preservation。
 - same-agent 同名不同路径不在 scanner/catalog 静默吞并，继续作为 conflict/analysis 输入。
+
+### 4.22 V2.22 finding/conflict 语义与验收同步（进行中）
+
+**目标**
+
+- 统一 `conflict` 定义：同一 selected/current agent 内的 runtime/name collision（同名、同 agent 的覆盖/竞争关系）。
+- 将 cross-agent 重复与重叠（duplicate name、source overlap、enabled mismatch）作为 analysis insight，不纳入 `conflict` 计数语义。
+- finding 视图默认按问题组去重展示，保留受影响实例数与受影响条目数，避免实例级重复刷屏。
+- 对齐 health 与 detail/list 过滤统计：同一扫描可见实例集下的冲突 / finding / 风险计数定义一致。
+
+**范围**
+
+- 更新 `docs/roadmap.md`、`docs/development-tasks.md`、`docs/service-protocol.md`、`docs/data-model.md`、`docs/agent-adapters.md` 与 AGENTS 的冲突与统计口径定义。
+- 明确 `catalog.listConflicts` 只返回 selected/current agent 内的 runtime/name collision，`catalog.analysis` 负责 cross-agent duplicate/source overlap。
+- 统一 `catalog.scanAll.result.activity.agent_summaries`、`catalog.analysis`、`app.stateSnapshot.health` 与 finding 过滤统计口径。
+
+**退出条件（不提前宣称完成）**
+
+- V2.22 文档口径同步完成，且定义不再将 cross-agent duplicate/source overlap 错误归入 conflict。
+- finding UI 默认聚合展示问题组并保留受影响实例/条目计数字段（或相应 UI 展示项）。
+- health 与 detail/list 的冲突、finding、风险过滤能在同一扫描上下文下互相解释。
+- 未确认代码验证结果前，不将该版本状态更新为 closed。
+
+**验证项（代码侧待补充）**
+
+- `catalog.listConflicts` 只报告同一 agent runtime/name 冲突；`catalog.analysis` 只报告 cross-agent duplicate/source overlap 类问题。
+- `app.stateSnapshot.health` 与 finding/detail/list 过滤采用统一实例计数定义。
+- find/list 页面默认显示去重后的 issue group，并显示受影响实例和条目数。
 
 ## 5. 风险与未决项
 

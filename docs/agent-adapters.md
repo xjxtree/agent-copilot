@@ -2,7 +2,7 @@
 
 > skills-copilot 支持的 6 个 agent 的适配要点。
 >
-> 当前版本线：V2.11 Adapter Capability Matrix、V2.12 opencode writable、V2.13 Pi read-only scanner/parser、V2.14 Hermes evidence-gate closeout、V2.15 OpenClaw evidence-gate closeout、V2.16 OpenClaw read-only scanner、V2.17 Hermes read-only scanner、V2.18 cross-agent analysis、V2.19 skill health dashboard、V2.20 read-only AI skill analysis assist 已完成；V2.21 扫描准确性、去重与 agent 维度统计同步已完成。
+> 当前版本线：V2.11 Adapter Capability Matrix、V2.12 opencode writable、V2.13 Pi read-only scanner/parser、V2.14 Hermes evidence-gate closeout、V2.15 OpenClaw evidence-gate closeout、V2.16 OpenClaw read-only scanner、V2.17 Hermes read-only scanner、V2.18 cross-agent analysis、V2.19 skill health dashboard、V2.20 read-only AI skill analysis assist 已完成；V2.21 扫描准确性、去重与 agent 维度统计同步已完成；V2.22 finding/conflict 语义与验收同步进行中。
 >
 > 扫描适配器实现 `AgentAdapter`。
 >
@@ -231,6 +231,7 @@ opencode roots 口径：
 - 去重策略原则：`id = hash(agent, scope, path)` 保留 adapter 内同物理源的唯一实例；不同 agent 的同名或同物理文件保留可见但不混淆为同一运行时状态。
 - 统计口径要求：跨 agent 的重复（同名、同路径、enabled mismatch）由 `catalog.analysis` 的 group 视图承载；`app.stateSnapshot.health` 提供 per-agent 汇总并保留实例维度计数，UI 过滤不改变总量定义。
 - 交叉验证要求：`catalog.scanAll.result.activity.agent_summaries`、`catalog.analysis`、`app.stateSnapshot.health` 对同一扫描上下文应可对齐（无新增或遗漏的可见实例）。
+- V2.22 进行时：冲突（conflict）与 cross-agent 重复需清晰分离，前者仅用于同一 selected/current agent runtime/name collision。
 
 ## 3. 跨 agent 公共问题
 
@@ -238,7 +239,7 @@ opencode roots 口径：
 
 ### 3.1 路径冲突
 
-同一物理文件可能被多个 agent 识别为 skill（例如 symlink）。catalog 用 `id = hash(agent, scope, path)` 去重，跨 agent 走"冲突分组"展示（参见 [data-model.md](./data-model.md)）。
+同一物理文件可能被多个 agent 识别为 skill（例如 symlink）。catalog 用 `id = hash(agent, scope, path)` 去重，跨 agent 仅作为 analysis group 观察；同-agent runtime/name 冲突仍由冲突分组展示（参见 [data-model.md](./data-model.md)）。
 
 ### 3.2 启用优先级（当同一名字出现在多 scope）
 

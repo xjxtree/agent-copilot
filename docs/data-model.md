@@ -1,6 +1,6 @@
 # 数据模型
 
-> skills-copilot 内部所有数据围绕 `SkillInstance`（一份具体文件）+ `SkillDefinition`（按名字聚合的逻辑技能）+ `ConflictGroup`（跨 agent/scope 的同名实例）三个核心类型。其它结构都是它们的视图或衍生。
+> skills-copilot 内部所有数据围绕 `SkillInstance`（一份具体文件）+ `SkillDefinition`（按名字聚合的逻辑技能）+ `ConflictGroup`（同一 selected/current agent 的 runtime/name 冲突实例）三个核心类型。其它结构都是它们的视图或衍生。
 
 ## 1. 核心类型
 
@@ -103,7 +103,7 @@ pub struct SkillDefinition {
 
 ### 1.5 `ConflictGroup`
 
-记录"该让用户看到的同名分组"。其中 `NameCollision` 是 info 级提示；当 ≥ 2 个 instance 的 **fingerprint 不同** 时使用 `ContentDrift`，UI 必须提示"内容不一致"。
+记录该让用户看到的同一 selected/current agent 的 runtime/name 冲突分组。`NameCollision` 是 info 级提示；当 ≥ 2 个 instance 的 **fingerprint 不同** 时使用 `ContentDrift`，UI 必须提示"内容不一致"。
 
 ```rust
 pub struct ConflictGroup {
@@ -121,7 +121,7 @@ pub enum ConflictReason {
 }
 ```
 
-> 当前 `ai-core` / catalog DTO 使用字符串 reason（如 `content-drift`、`name-collision`）和 `instance_ids` 字段暴露给 UI；`ConflictReason` enum 是核心模型语义说明，后续可以收敛成 typed record。
+> 当前 `ai-core` / catalog DTO 使用字符串 reason（如 `content-drift`、`name-collision`）和 `instance_ids` 字段暴露给 UI；`ConflictReason` enum 是核心模型语义说明，后续可以收敛成 typed record。Cross-agent duplicate/source-overlap 与 enabled-state mismatch 通过 `CrossAgentAnalysisRecord` 作为 analysis insights 表达，不作为 `ConflictGroup`。
 
 ### 1.6 `PermissionRequest`
 
@@ -184,6 +184,13 @@ pub enum ExecutionAttemptStatus {
     Cancelled,
     Failed,
 }
+
+### 1.9 V2.22 finding/conflict 语义对齐（进行中）
+
+- conflict 的定义收敛为 `ConflictGroup`：同一 selected/current agent 内的 runtime/name 冲突或 shadowing，不跨 agent。
+- cross-agent duplicate / source overlap / enabled mismatch 仅作为 analysis group，不进入 `ConflictGroup`。
+- finding 默认展示采用去重后的问题组（issue key 级别）并保留受影响实例数与受影响条目数，避免同一问题在实例列表重复呈现。
+- health 与 detail/list 统计口径共享同一可见实例定义：同一扫描上下文下，`ConflictGroup`（同 agent）计数与 analysis groups（跨 agent）计数可互斥解释。
 ```
 
 审计记录不得保存 secret env value、任意文件内容、LLM prompt/response，或未实现 runner 的 stdout/stderr。LLM 不能成为 `ExecutionRequester`，也不能代替用户确认。
