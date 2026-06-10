@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use skills_copilot_core::{
-    AdapterContext, AdapterError, AdapterRoot, AgentAdapter, AgentId, PermissionRequest,
-    RootSource, Scope, SkillInstance, SkillState,
+    AdapterContext, AdapterError, AdapterRoot, AgentAdapter, AgentConfigAdapter,
+    AgentConfigDocument, AgentId, PermissionRequest, RootSource, Scope, SkillInstance, SkillState,
 };
 
 #[derive(Debug, Default)]
@@ -87,8 +87,24 @@ impl AgentAdapter for PiAdapter {
         instance.enabled
     }
 
-    fn config_paths(&self, _ctx: &AdapterContext) -> Vec<PathBuf> {
-        Vec::new()
+    fn config_paths(&self, ctx: &AdapterContext) -> Vec<PathBuf> {
+        let mut paths = vec![ctx.user_home.join(".pi/settings.json")];
+        if let Some(project_root) = &ctx.project_root {
+            paths.push(project_root.join(".pi/settings.json"));
+        }
+        paths
+    }
+}
+
+impl AgentConfigAdapter for PiAdapter {
+    fn patch_enabled(
+        &self,
+        doc: &mut AgentConfigDocument,
+        instance: &SkillInstance,
+        on: bool,
+    ) -> Result<(), AdapterError> {
+        doc.text = patch_pi_config(&doc.text, &instance.name, on, instance.scope)?;
+        Ok(())
     }
 }
 
@@ -208,6 +224,107 @@ fn fallback_skill_name(path: &Path) -> String {
 
 fn stable_path_id(path: &Path) -> String {
     format!("pi:{}", path.display())
+}
+
+fn patch_pi_config(
+    content: &str,
+    skill_name: &str,
+    enabled: bool,
+    scope: Scope,
+) -> Result<String, AdapterError> {
+    let mut value = if content.trim().is_empty() {
+        serde_json::json!({
+            "project": {
+                "trusted": scope == Scope::AgentGlobal
+            },
+            "skills": {
+                "disabled": []
+            }
+        })
+    } else {
+        serde_json::from_str(content)
+            .map_err(|err| AdapterError::new(format!("invalid Pi settings JSON: {err}")))?
+    };
+
+    if scope == Scope::AgentProject && !pi_project_trusted(&value) {
+        return Err(AdapterError::new(
+            "Pi project settings must explicitly set project.trusted or trust.projectRootTrusted before project/package toggles are allowed",
+        ));
+    }
+
+    let disabled = pi_disabled_array_mut(&mut value)?;
+    if enabled {
+        disabled.retain(|value| value.as_str() != Some(skill_name));
+    } else if !disabled
+        .iter()
+        .any(|value| value.as_str() == Some(skill_name))
+    {
+        disabled.push(serde_json::Value::String(skill_name.to_string()));
+    }
+
+    let mut text = serde_json::to_string_pretty(&value)
+        .map_err(|err| AdapterError::new(format!("failed to serialize Pi settings: {err}")))?;
+    text.push('\n');
+    Ok(text)
+}
+
+fn pi_project_trusted(value: &serde_json::Value) -> bool {
+    value
+        .get("project")
+        .and_then(|project| project.get("trusted"))
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+        || value
+            .get("trust")
+            .and_then(|trust| trust.get("projectRootTrusted"))
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+}
+
+fn pi_disabled_array_mut(
+    value: &mut serde_json::Value,
+) -> Result<&mut Vec<serde_json::Value>, AdapterError> {
+    let object = value
+        .as_object_mut()
+        .ok_or_else(|| AdapterError::new("Pi settings must be a JSON object"))?;
+    if object.contains_key("disabledSkills") {
+        return object
+            .get_mut("disabledSkills")
+            .and_then(serde_json::Value::as_array_mut)
+            .ok_or_else(|| AdapterError::new("Pi disabledSkills must be an array"));
+    }
+    let skills = object
+        .entry("skills")
+        .or_insert_with(|| serde_json::json!({}));
+    let skills_obj = skills
+        .as_object_mut()
+        .ok_or_else(|| AdapterError::new("Pi skills settings must be a JSON object"))?;
+    let disabled = skills_obj
+        .entry("disabled")
+        .or_insert_with(|| serde_json::json!([]));
+    disabled
+        .as_array_mut()
+        .ok_or_else(|| AdapterError::new("Pi skills.disabled must be an array"))
+}
+
+pub fn pi_disabled_skill_names(content: &str) -> Result<Vec<String>, AdapterError> {
+    let value: serde_json::Value = serde_json::from_str(content)
+        .map_err(|err| AdapterError::new(format!("invalid Pi settings JSON: {err}")))?;
+    let disabled = value
+        .get("disabledSkills")
+        .and_then(serde_json::Value::as_array)
+        .or_else(|| {
+            value
+                .get("skills")
+                .and_then(|skills| skills.get("disabled"))
+                .and_then(serde_json::Value::as_array)
+        });
+    Ok(disabled
+        .into_iter()
+        .flatten()
+        .filter_map(serde_json::Value::as_str)
+        .map(str::to_string)
+        .collect())
 }
 
 #[cfg(test)]

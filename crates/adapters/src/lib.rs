@@ -10,4 +10,4 @@ pub use codex::{parse_codex_skill_config_entries, CodexAdapter, CodexSkillConfig
 pub use hermes::HermesAdapter;
 pub use openclaw::OpenclawAdapter;
 pub use opencode::OpencodeAdapter;
-pub use pi::PiAdapter;
+pub use pi::{pi_disabled_skill_names, PiAdapter};

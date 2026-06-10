@@ -14,7 +14,7 @@ struct SkillsCopilotApp: App {
     @StateObject private var store = SkillStore(service: ServiceClient())
 
     var body: some Scene {
-        WindowGroup(UIStrings.appTitle) {
+        WindowGroup(UIStrings.appWindowTitle) {
             ContentView()
                 .environmentObject(store)
                 .frame(minWidth: 920, minHeight: 600)

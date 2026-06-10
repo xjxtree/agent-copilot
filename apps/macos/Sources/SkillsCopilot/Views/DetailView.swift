@@ -83,12 +83,13 @@ struct DetailView: View {
                             )
 
                             DisclosureGroup {
-                                SkillDetailCard(
-                                    skill: skill,
-                                    detail: store.selectedSkillDetail,
-                                    isLoading: store.isLoadingDetail
-                                )
-                                .padding(.top, 12)
+                            SkillDetailCard(
+                                skill: skill,
+                                detail: store.selectedSkillDetail,
+                                adapterCapability: store.adapterCapabilities.first { $0.agent == skill.agent },
+                                isLoading: store.isLoadingDetail
+                            )
+                            .padding(.top, 12)
                             } label: {
                                 Label(UIStrings.text("detail.rawDetails", "Raw Catalog Details"), systemImage: "doc.text.magnifyingglass")
                                     .font(.headline)
@@ -178,7 +179,7 @@ struct DetailView: View {
             .padding(28)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .navigationTitle(skill?.name ?? UIStrings.appTitle)
+        .navigationTitle(UIStrings.appWindowTitle)
         .transaction { transaction in
             if reduceMotion {
                 transaction.animation = nil
@@ -1471,11 +1472,18 @@ private struct HeaderView: View {
                     .labelStyle(.titleAndIcon)
                     .foregroundStyle(DisplayText.isToolGlobal(skill) ? .secondary : DisplayText.stateColor(skill.state, enabled: skill.enabled))
 
-                    if DisplayText.isReadOnlyPreview(skill) {
+                    if showsReadOnlyPreviewBadge {
                         Label(DisplayText.isToolGlobal(skill) ? UIStrings.readOnlyPreview : UIStrings.readOnly, systemImage: "lock.fill")
                             .font(.caption.bold())
                             .foregroundStyle(.secondary)
                             .help(disabledReason ?? UIStrings.readOnly)
+                    }
+
+                    if isPiGuardedToggleAvailable {
+                        Label(UIStrings.piGuardedToggle, systemImage: "shield.lefthalf.filled")
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+                            .help(UIStrings.piGuardedToggleBoundary)
                     }
 
                     Button {
@@ -1495,6 +1503,10 @@ private struct HeaderView: View {
 
             if let disabledReason {
                 Label(disabledReason, systemImage: "lock.fill")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else if isPiGuardedToggleAvailable {
+                Label(UIStrings.piGuardedToggleBoundary, systemImage: "shield")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -1526,11 +1538,25 @@ private struct HeaderView: View {
     }
 
     private var toggleDisabledReason: String? {
-        let catalogReason = DisplayText.toggleDisabledReason(for: skill, isWriting: isWriting)
-        guard !isWriting, let adapterCapability, !adapterCapability.configToggle.supported else {
+        if let catalogReason = DisplayText.catalogToggleDisabledReason(for: skill, isWriting: isWriting) {
             return catalogReason
         }
-        return adapterCapability.configToggle.reason ?? catalogReason ?? UIStrings.readOnlyAdapterStatus(adapterCapability.displayName)
+        guard !isWriting else {
+            return UIStrings.toggleUnavailableBusy
+        }
+        guard let adapterCapability else {
+            return DisplayText.isReadOnlyAdapter(skill.agent) ? UIStrings.toggleUnavailableReadOnlyAdapter(DisplayText.agent(skill.agent)) : nil
+        }
+        guard !adapterCapability.configToggle.supported else { return nil }
+        return adapterCapability.configToggle.reason ?? UIStrings.readOnlyAdapterStatus(adapterCapability.displayName)
+    }
+
+    private var isPiGuardedToggleAvailable: Bool {
+        skill.agent == "pi" && adapterCapability?.configToggle.supported == true
+    }
+
+    private var showsReadOnlyPreviewBadge: Bool {
+        DisplayText.isReadOnlyPreview(skill) && !isPiGuardedToggleAvailable
     }
 
     private var riskAnalysisStatus: String {
@@ -1709,6 +1735,7 @@ private struct EmptyDetailView: View {
 private struct SkillDetailCard: View {
     let skill: SkillRecord
     let detail: SkillDetailRecord?
+    let adapterCapability: AdapterCapabilityRecord?
     let isLoading: Bool
 
     var body: some View {
@@ -1725,7 +1752,7 @@ private struct SkillDetailCard: View {
                     MetadataRow(label: UIStrings.access, value: UIStrings.toolGlobalAccessStatus(DisplayText.agent(skill.agent)))
                 }
                 if DisplayText.isReadOnlyAdapter(skill.agent) {
-                    MetadataRow(label: UIStrings.access, value: UIStrings.readOnlyAdapterStatus(DisplayText.agent(skill.agent)))
+                    MetadataRow(label: UIStrings.access, value: adapterAccessStatus)
                 }
                 if let detail {
                     MetadataRow(label: UIStrings.fingerprint, value: detail.fingerprint)
@@ -1756,6 +1783,13 @@ private struct SkillDetailCard: View {
                 .adaptiveMaterialSurface()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var adapterAccessStatus: String {
+        if skill.agent == "pi" && adapterCapability?.configToggle.supported == true {
+            return UIStrings.piGuardedToggleBoundary
+        }
+        return UIStrings.readOnlyAdapterStatus(DisplayText.agent(skill.agent))
     }
 }
 

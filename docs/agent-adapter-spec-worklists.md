@@ -1,16 +1,17 @@
 # Agent Adapter Spec Worklists
 
-> Status: Codex first implementation, V2.1 dual adapter experience, V2.2 project context implementation, V2.3 Codex adapter hardening, V2.4 opencode read-only adapter, V2.5 audit hardening, V2.6 adapter changelog tracking, V2.7 LLM gate safety notes, V2.8-V2.10 safety/docs closeout, V2.11 Adapter Capability Matrix, V2.12 opencode writable, V2.13 Pi read-only scanner/parser, V2.14 Hermes evidence-gate closeout, and V2.15 OpenClaw evidence-gate closeout are integrated. V2.36 Pi writable evidence harness is complete and evidence-only; V2.37 guarded Pi toggle is active.
-> Real local UI validation passed for the current mainline app on 2026-06-10. Future user-visible, UI, or service-protocol candidates still require a fresh real local pass. opencode writable, Pi read-only scan, OpenClaw read-only scan, and Hermes read-only scan are implemented; Pi/Hermes/OpenClaw writable support remains blocked.
+> Status: Codex first implementation, V2.1 dual adapter experience, V2.2 project context implementation, V2.3 Codex adapter hardening, V2.4 opencode read-only adapter, V2.5 audit hardening, V2.6 adapter changelog tracking, V2.7 LLM gate safety notes, V2.8-V2.10 safety/docs closeout, V2.11 Adapter Capability Matrix, V2.12 opencode writable, V2.13 Pi read-only scanner/parser, V2.14 Hermes evidence-gate closeout, and V2.15 OpenClaw evidence-gate closeout are integrated. V2.36 Pi writable evidence harness and V2.37 guarded Pi writable toggle slice are complete; V2.38 Hermes external roots is active.
+> Real local UI validation passed for the previous mainline app on 2026-06-10. V2.37 completed real app smoke/window capture and direct CG/AX window checks, while Computer Use returned `cgWindowNotFound`; future user-visible, UI, or service-protocol candidates still require a fresh real local pass or explicit tool/session blocker. opencode writable, Pi read-only scan, Pi guarded native toggle, OpenClaw read-only scan, and Hermes read-only scan are implemented; Pi install and Hermes/OpenClaw writable support remain blocked.
 > This document records what is verified enough to use for project instructions, and what is still missing before an adapter can be built.
 
 ## Current Rule
 
 Claude Code remains the mature baseline adapter. Codex has verified user/project roots, cwd-to-repo-root discovery, project-context-scoped scanning, and user-config writable toggles. V2.3 hardening added config patch robustness, explicit adapter states, root/config security regressions, and smoke/docs coverage. V2.4 added opencode as a read-only adapter for native roots; current opencode scan also follows official `.claude` / `.agents` compatibility roots.
 
-Pi production install remains blocked; production toggle is only entering V2.37 as an evidence-backed guarded slice after V2.36 disposable evidence passed. Opencode writable is enabled through managed `permission.skill` overrides after V2.12 validation; opencode install targets remain native roots. Pi read-only scan is enabled for native roots after V2.13 validation. P0 evidence on 2026-06-10 promoted Hermes and OpenClaw from fully blocked to read-only scanner scope; OpenClaw read-only scan is enabled after V2.16 and Hermes read-only scan is enabled after V2.17, while writable/install stay blocked.
+Pi production install remains blocked; production toggle is limited to the V2.37 evidence-backed guarded native global/project/package slice after V2.36 disposable evidence passed. Opencode writable is enabled through managed `permission.skill` overrides after V2.12 validation; opencode install targets remain native roots. Pi read-only scan is enabled for native roots after V2.13 validation. P0 evidence on 2026-06-10 promoted Hermes and OpenClaw from fully blocked to read-only scanner scope; OpenClaw read-only scan is enabled after V2.16 and Hermes read-only scan is enabled after V2.17, while writable/install stay blocked.
 
 The macOS app now uses the service/UI adapter capability matrix as the front-door status surface for all six agents. The matrix must make read-only, planned, and blocked states explicit before any future write affordance is exposed.
+V2.37 的 Pi 写入约束：仅启用 minimal native global/project/package 切换；install 仍 blocked，不执行脚本，不进行 AI 自动写回，不保存 credentials，不将兼容根（如 `.agents/skills`）纳入可写 scope。
 
 Codex, Pi, Hermes, OpenClaw, and opencode must not be implemented from guessed paths or inferred config semantics. A new adapter needs verified evidence for:
 
@@ -52,18 +53,18 @@ Required next evidence:
 | Extension discovery | Verified as a separate Pi concept: global `~/.pi/agent/extensions/`, project `.pi/extensions/`, and settings/package extension paths. Extensions are not skills and must not be mapped into `SkillInstance` without a product decision. |
 | Skill discovery roots | Verified from official Pi docs for read-only planning: global `~/.pi/agent/skills/` and `~/.agents/skills/`; project `.pi/skills/` and `.agents/skills/` from `cwd`/ancestors. Pi also supports settings/package skill paths. |
 | Skill file/directory format | Verified: directories with `SKILL.md` are discovered recursively. Direct root `.md` files may be agent-visible in Pi-native roots, but Skills Copilot intentionally does not catalog them after real local validation showed they include many ordinary resource documents. Required frontmatter for cataloged `SKILL.md`: `name`, `description`. |
-| Config path/schema | Partially verified from official docs and local path existence: global `~/.pi/agent/settings.json`, project `.pi/settings.json`; resource arrays include `packages`, `extensions`, `skills`, `prompts`, `themes`, and `enableSkillCommands`. |
-| Enable/disable semantics | Partially documented but not writable-verified: `pi config` is the official enable/disable surface for package/local resources, and settings arrays/package filters support exclusions. Exact JSON mutation for direct local skill toggles is not verified. |
+| Config path/schema | Partially verified from official docs, local path existence, and V2.36 disposable evidence: global Pi settings and project `.pi/settings.json`; resource arrays include `packages`, `extensions`, `skills`, `prompts`, `themes`, and `enableSkillCommands`. V2.37 product writes use the guarded service-selected global/project settings target only. |
+| Enable/disable semantics | V2.37 verified guarded slice: local disable writes only the supported disabled-skill collection shape (`skills.disabled` / `disabledSkills`) and re-enable removes the disabled entry. Project/package writes require trusted project settings; install remains blocked. |
 | Fixture requirement | Minimal evidence fixtures added under `fixtures/pi/`. They are evidence samples, not parser contract fixtures. |
-| Implementation decision | Writable adapter remains blocked. Read-only scanner/parser is implemented for Pi-native directory skills under `SKILL.md`; direct root `.md` cataloging is intentionally excluded after real local validation showed ordinary resource noise. |
+| Implementation decision | Read-only scanner/parser is implemented for Pi-native directory skills under `SKILL.md`; V2.37 implements minimal guarded toggle for global/project/package with install blocked. V2.37 写路径保持 no compatibility-root writable scope，禁 script 执行、AI write-back、和 credentials 存储；direct root `.md` cataloging remains intentionally excluded after real local validation showed ordinary resource noise. |
 
 Required next evidence:
 
-- Run disposable local verification with a temporary `agentDir` / fixture project to confirm scan and write behavior for `~/.pi/agent/skills`, project `.pi/skills`、project `.agents/skills` in trusted/untrusted contexts.
-- Capture exact `pi config` JSON mutations for direct local skills and package skills, and validate:
-  - global/project/package toggle semantics
-  - rollback proof
-  - trust gate behavior (`pi config -l` 及 project trust state) before writing `.pi/settings.json`
+- Keep V2.37 product behavior inside the verified guarded scope and add new evidence before expanding beyond global/project/package toggles.
+- Before any Pi install, compatibility-root write, or broader package mutation is enabled, capture separate evidence for:
+  - install target semantics
+  - rollback proof for installed files
+  - trust gate behavior before writing `.pi/settings.json`
   - invalid JSON / malformed settings handling（必须失败并保留文件完整性）
   - re-enable 行为（移除禁用 entry/恢复默认发现）
 - Decide whether `.agents/skills` compatibility roots belong to the Pi adapter or to a shared/Codex-compatible adapter to avoid duplicate catalog entries.

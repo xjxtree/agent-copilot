@@ -86,7 +86,7 @@ pub struct AdapterFeatureCapability {
 | Claude Code | `verified` | 支持（settings、project roots） | 支持（verified） | 支持（tool-global install） | 支持（verified） | `project-local` settings 与非 verified 目标 blocked |
 | Codex | `verified` | 支持（user + verified project roots） | 支持（仅用户 `config.toml`） | 支持（tool-global install） | 支持（verified） | 项目级 `.codex/config.toml`、plugin/admin/system roots blocked |
 | opencode | `verified` | 支持 native roots + 官方 `.claude` / `.agents` compatibility roots | 支持（exact `permission.skill` deny/re-enable） | 支持（native-root 安装） | 支持（managed permission overrides） | 自定义 `skills.paths` / `skills.urls` 暂停 |
-| Pi | `read-only` + V2.36 evidence passed | 支持 Pi-native roots | V2.37 guarded toggle candidate | blocked | blocked | V2.36 evidence passed: global/project/package toggle、rollback、trust gate、invalid JSON/config、re-enable；install 仍 blocked |
+| Pi | `guarded` | 支持 Pi-native roots | 支持 guarded native toggle（仅 global/project/package，基于证据） | blocked | limited | V2.37 已实现 preview/snapshot/rollback 与 disabled-state rescan；install、兼容 root 写入、脚本执行、AI 自动写回、credentials 仍 blocked |
 | Hermes | `read-only` | 支持 active/profile Hermes home | blocked（read-only 扫描） | blocked | blocked | generic project scan / toggle / install / writable blocked，外部目录 policy 待证据 |
 | OpenClaw | `read-only` | 支持文档化 filesystem roots | blocked（read-only scan only） | blocked | blocked | project scope 仅 workspace，toggle/install/writable blocked |
 
@@ -155,18 +155,18 @@ Codex 当前实现边界：
 | 项 | 值 |
 | --- | --- |
 | AgentId | `pi` |
-| 状态 | **Read-only implemented; writable harness candidate** —— P0 evidence 证据正在补齐：global/project/package toggle、rollback、trust gate、invalid JSON/config、re-enable；生产写入仍 blocked |
+| 状态 | **Read-only implemented; guarded toggle complete** —— P0 evidence 证据已完成：global/project/package toggle、rollback、trust gate、invalid JSON/config、re-enable；V2.37 最小写入切片已完成，Pi install 与兼容根写入仍 blocked |
 | Spec 工作单 | [`docs/pi-adapter-spec.md`](./pi-adapter-spec.md) |
 | 统一工作单 | [`docs/agent-adapter-spec-worklists.md`](./agent-adapter-spec-worklists.md#pi-coding-agent) |
 | 本地观测 | 2026-06-08 本机 `pi --version` 为 `0.78.1`；`~/.pi/agent/skills/` 和 `~/.pi/agent/settings.json` 存在；未读取或修改真实 settings 内容 |
-| Skill roots | 官方 Pi docs：全局 `~/.pi/agent/skills/`、`~/.agents/skills/`；项目 `.pi/skills/`、从 `cwd`/父级到 repo root 的 `.agents/skills/`；settings/package 也可添加 skill paths |
+| Skill roots | 官方 Pi docs：全局 `~/.pi/agent/skills/`、`~/.agents/skills/`；项目 `.pi/skills/`、从 `cwd`/父级到 repo root 的 `.agents/skills/`；settings/package 也可添加 skill paths。V2.37 writable 切片只走 native/global-project-package 最小写入，不对 `.agents/skills` 等兼容根提供可写能力。 |
 | Skill 格式 | Skills Copilot 当前只 catalog 目录型 `SKILL.md`；Pi-native root `.md` 可能被 Pi agent 识别，但真实本机验证显示会混入大量普通资源文档，暂不展示；frontmatter `name`/`description` 必填 |
-| 配置文件 | 全局 `~/.pi/agent/settings.json`；项目 `.pi/settings.json`；project settings override/merge global settings |
-| 启用控制 | `pi config` 是官方资源启停界面；settings/package filters 支持排除资源。但 direct local skill toggle 的 exact JSON mutation、re-enable、project trust 行为未验证 |
+| 配置文件 | 全局 Pi settings 与项目 `.pi/settings.json`；project settings override/merge global settings。V2.37 产品写入只使用服务验证后的 global/project settings target，不写兼容 roots。 |
+| 启用控制 | V2.37 guarded toggle 支持 local disabled-skill collection（`skills.disabled` / `disabledSkills`）的 disable/re-enable；project/package toggle 需要 trusted project settings；install 仍 blocked。 |
 | Fixture | 最小 evidence fixtures 位于 `fixtures/pi/` |
-| 行动项 | 先做 disposable `agentDir`/fixture project round-trip（global/project/package）；先补全扫描准确性与去重约束；再完成 Pi writable 证据（toggle、rollback、trust gate、invalid JSON/config、re-enable）；未通过前 V2.37 writable slice 继续 blocked |
+| 行动项 | 保持 V2.37 切片严格限制为 global/project/package minimal toggle 且无 install、无脚本执行、无 AI 自动写回、无凭据持久化、无任意兼容根写入；任何 Pi install、兼容根写入或更广 package mutation 都必须重新走 evidence gate。 |
 
-> 目前只允许基于该 spec 做 read-only scanner/parser 设计；不要写可修改 Pi settings 的 adapter，直到 `pi config` 的 exact JSON mutation 和回滚语义完成本地验证。
+> V2.37 只允许基于已验证证据写 Pi guarded native toggle；不要扩展到 Pi install、兼容 root 写入或未验证 package mutation，直到 exact mutation 和回滚语义另行完成本地验证。
 
 ### 2.3.1 Pi `.md` 去噪与可解释性边界（V2.27）
 

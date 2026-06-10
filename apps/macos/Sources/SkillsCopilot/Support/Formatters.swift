@@ -126,7 +126,7 @@ enum DisplayText {
         }
     }
 
-    static func toggleDisabledReason(for skill: SkillRecord, isWriting: Bool) -> String? {
+    static func catalogToggleDisabledReason(for skill: SkillRecord, isWriting: Bool) -> String? {
         if isWriting {
             return UIStrings.toggleUnavailableBusy
         }
@@ -146,6 +146,14 @@ enum DisplayText {
 
         if isToolGlobal(skill) {
             return UIStrings.toggleUnavailableToolGlobal
+        }
+
+        return nil
+    }
+
+    static func toggleDisabledReason(for skill: SkillRecord, isWriting: Bool) -> String? {
+        if let catalogReason = catalogToggleDisabledReason(for: skill, isWriting: isWriting) {
+            return catalogReason
         }
 
         if isReadOnlyAdapter(skill.agent) {

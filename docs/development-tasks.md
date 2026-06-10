@@ -1,14 +1,14 @@
 # Development Tasks
 
-> Status: current planning and execution queue as of 2026-06-10. V2.1 through V2.36 are synchronized baseline, and V2.37 is active/in-progress.
+> Status: current planning and execution queue as of 2026-06-10. V2.1 through V2.37 are synchronized baseline, and V2.38 is active/in-progress.
 
 ## Current Baseline
 
 - Current branch baseline: `main` after V2.16-V2.28 management/analysis/history/explainability/provenance/conflict-semantics line and 2026-06-10 real local Computer Use validation; V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout 均已收口。
 - Product boundary: native macOS SwiftUI/AppKit shell plus Rust service protocol.
-- Completed V2 milestones: first Codex slice, V2.1 through V2.28.
-- Current priority: V2.37 Pi writable guarded slice is active after V2.36 Pi writable evidence harness completed. Keep V2.26 finding explainability, V2.27 identity/provenance, V2.28 conflict semantics, V2.29 finding triage persistence, V2.30 read-only AI analysis, V2.31 read-only cleanup queue, V2.32 app-local rule tuning, V2.33 preview-first + explicit-confirm batch actions, V2.34 read-only comparison, V2.35 local redacted export, and V2.36 disposable evidence stable. V2.37 may implement only the evidence-backed minimal Pi native toggle; Pi install remains blocked.
-- Real local Computer Use baseline: passed on 2026-06-10 for the current mainline app against real local HOME/app data/Claude/Codex/opencode roots; validation explicitly targeted the current `dist/SkillsCopilot.app` bundle after detecting a stale same-bundle-id worktree app. Future user-visible, UI, or service protocol changes must rerun it.
+- Completed V2 milestones: first Codex slice, V2.1 through V2.37.
+- Current priority: V2.38 Hermes external roots is active after V2.37 Pi writable guarded slice completed. Keep V2.26 finding explainability, V2.27 identity/provenance, V2.28 conflict semantics, V2.29 finding triage persistence, V2.30 read-only AI analysis, V2.31 read-only cleanup queue, V2.32 app-local rule tuning, V2.33 preview-first + explicit-confirm batch actions, V2.34 read-only comparison, V2.35 local redacted export, V2.36 disposable evidence, and V2.37 guarded Pi toggle stable. V2.38 may model only explicit Hermes external roots; Hermes writable/install remain blocked, no script execution, no AI automatic writes, no credential persistence, and no generic project-root inference.
+- Real local Computer Use baseline: passed on 2026-06-10 for the previous mainline app against real local HOME/app data/Claude/Codex/opencode roots; validation explicitly targeted the current `dist/SkillsCopilot.app` bundle after detecting a stale same-bundle-id worktree app. V2.37 completed non-fixture real app smoke/window capture and direct CG/AX window checks, but Computer Use returned `cgWindowNotFound`; future user-visible, UI, or service protocol changes must rerun Computer Use and keep any blocker explicit.
 - Quality gate for code/UI/protocol work: `pnpm check:macos`; add focused Rust/Swift tests when touching shared behavior.
 
 ## Versioned Adapter Plan
@@ -42,8 +42,10 @@
 | V2.34 | Cross-agent comparison view | Completed | Compare same-name/similar skills across agents by state, source, risk, writable capability, and differences; read-only by default |
 | V2.35 | Local report export | Completed | Export redacted Markdown/JSON local audit reports for agent coverage, health summary, open findings, triage state, cleanup queue, and comparison insights |
 | V2.36 | Pi writable evidence harness | Complete | Disposable agentDir/fixture project validates Pi global/project/package toggle, rollback, trust gate, invalid JSON/config handling, and re-enable behavior; production writable remains blocked |
-| V2.37 | Pi writable guarded slice | In Progress | Implement only evidence-backed minimal Pi native toggle with preview/rollback/disabled-state rescan; Pi install remains blocked |
-| V2.38-V2.40 | Adapter trust and diagnostics | Planned | Hermes external roots, OpenClaw workspace deepening, adapter diagnostics |
+| V2.37 | Pi writable guarded slice | Completed | Evidence-backed minimal Pi native toggle (global / project / package) with preview/snapshot/rollback/disabled-state rescan; Pi install remains blocked, no script execution, no AI automatic writes, no credential persistence, and no arbitrary compatibility write roots |
+| V2.38 | Hermes external roots | In Progress | Model explicit `skills.external_dirs` as external roots only when evidence is present; no generic project scan, writable toggle, install, scripts, AI write-back, or credentials |
+| V2.39 | OpenClaw workspace deepening | Planned | Tighten workspace-scope detection and skipped/blocked root explanations without arbitrary repo inference or writes |
+| V2.40 | Adapter diagnostics | Planned | Surface discovered/skipped/blocked roots, config detected, read-only/writable reason, and last scan activity per agent |
 | V2.41-V2.45 | Long-term governance | Planned | Quality score, stale/drift detection, local knowledge index, policy packs, review session mode |
 
 ## Near-Term Priority: V2.26-V2.35 可解释、可追踪、可整理
@@ -61,7 +63,7 @@
 7. V2.33 Safe batch actions: completed; added preview-first batch enable/disable for verified writable agents/roots only, with explicit capability filtering, skipped item + reason reporting, rollback planning, and explicit confirmation before apply.
 8. V2.34 Cross-agent comparison view: completed; compare same-name/similar skills across agents by state, source, risk, writable capability, and differences without adding write paths.
 9. V2.35 Local report export: completed; generate redacted local Markdown/JSON audit reports from existing read models without distribution, provider calls, credentials, scripts, or automatic writes.
-10. V2.36-V2.40 Adapter trust and diagnostics: active; V2.36 Pi writable evidence harness passed (global/project/package toggle, rollback, trust gate, invalid JSON/config handling, re-enable). V2.37 may now implement a minimal guarded Pi native toggle; then deepen Hermes/OpenClaw diagnostics without guessing write semantics.
+10. V2.36-V2.40 Adapter trust and diagnostics: active; V2.36 Pi writable evidence harness passed and V2.37 minimal guarded Pi native toggle is complete. Next deepen Hermes external roots, OpenClaw workspace scope, and adapter diagnostics without guessing write semantics.
 11. V2.41-V2.45 Long-term governance: quality score, stale/drift detection, local knowledge index, policy packs, and review sessions.
 
 **Tasks**
@@ -71,7 +73,7 @@
 - Keep triage state in app-local storage only; never hide unresolved high-risk findings by default.
 - Keep optional AI analysis read-only, disabled by default, and separate from all write/config/script paths. It must remain explicit user-triggered, support selected/batch preview only, and must not perform provider calls or triage state changes by default.
 - Keep Hermes/OpenClaw writable/install blocked until individual skill disable schema, credential preservation, and rollback-safe writes are verified.
-- Keep Pi writable support blocked until the disposable evidence harness proves exact mutation and rollback semantics.
+- Keep Pi install and compatibility-root writes blocked; Pi toggle support is limited to the V2.37 guarded native global/project/package scope with snapshot/rollback.
 - Keep every new write path behind service protocol, snapshot, audit, permission, and privacy boundaries.
 - Update native macOS UI only as needed to expose clearer explanations, statuses, filters, finding groups, and guarded writable actions.
 
@@ -89,9 +91,9 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 
 | Priority | Work item | Current status | Next concrete task | Completion signal |
 | --- | --- | --- | --- | --- |
-| P0 | Real local Computer Use rerun gate | Completed for the current mainline app on 2026-06-10; recurring for future user-visible changes | Rerun the real app against local HOME after UI/service/protocol changes, explicitly targeting the current `dist/SkillsCopilot.app` bundle when stale same-bundle-id worktree apps exist, covering project context, scan-all, agent filter, findings filtering/grouping, health dashboard, AI review preview, and script safety preview | App-window-only evidence and runbook notes updated for the new candidate |
+| P0 | Real local Computer Use rerun gate | Previous mainline pass completed on 2026-06-10; V2.37 slice hit Computer Use `cgWindowNotFound` despite direct CG/AX window evidence | Rerun the real app against local HOME after UI/service/protocol changes, explicitly targeting the current `dist/SkillsCopilot.app` bundle when stale same-bundle-id worktree apps exist, covering project context, scan-all, agent filter, findings filtering/grouping, health dashboard, AI review preview, and script safety preview | App-window-only evidence and runbook notes updated for the new slice, or an explicit tool/session blocker is recorded |
 | P0 | V2.11 Adapter Capability Matrix | Completed and in use | Run focused protocol/UI checks when needed, then use the matrix as the gate for future Pi/opencode/Hermes/OpenClaw work | macOS UI shows precise scan/toggle/install status and blockers for all six agents |
-| P0 | Pi comprehensive adapter support | Read-only scanner complete; writable evidence supports a harness but not production writes | Implement disposable writable evidence harness for Pi-native roots and package filters; exclude `.agents/skills` compatibility roots from first writable slice | Harness proves native/global/project/package toggle, rollback、trust gate、invalid JSON/config handling、re-enable behavior；未通过前不进入 V2.37 guarded write slice |
+| P0 | Pi comprehensive adapter support | Read-only scanner complete; V2.37 guarded native toggle complete; install and compatibility-root writes blocked | Keep Pi toggle limited to global/project/package write scope and keep install/AI auto-write/script execution credentials-unsafe paths blocked; exclude arbitrary compatibility roots from write path | Guarded native toggle preserves preview/snapshot/rollback, trust gate, invalid JSON/config handling, re-enable behavior, and disabled-state rescan |
 | P0 | opencode support | Native and official compatibility roots are scanned; guarded `permission.skill` writes are implemented; install targets remain native roots | Keep compatibility-root scan coverage and managed permission/write tests current; custom `skills.paths` / `skills.urls` remain deferred pending evidence | opencode-visible skills match current official discovery roots without enabling unverified custom paths or unsafe file writes |
 | P0 | Hermes adapter support | Read-only scanner implemented; writable/install blocked | Keep scoped read-only scan of active Hermes home `skills/**/SKILL.md`; skip generic project roots, `.env`/`auth.json`/`logs`/cron content, and read-only scan CLI calls | Hermes skills appear in catalog read-only; generic project scan and writes remain blocked |
 | P0 | OpenClaw adapter support | Read-only scanner implemented; writable/install blocked | Keep scoped read-only filesystem scan over documented roots; project scan only for confirmed OpenClaw workspace roots; no OpenClaw CLI calls during ordinary scan | OpenClaw skills appear in catalog read-only; arbitrary repo roots and writes/install remain blocked |

@@ -10,8 +10,8 @@ use fs4::FileExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use skills_copilot_adapters::{
-    parse_codex_skill_config_entries, ClaudeCodeAdapter, CodexAdapter, HermesAdapter,
-    OpenclawAdapter, OpencodeAdapter, PiAdapter,
+    parse_codex_skill_config_entries, pi_disabled_skill_names, ClaudeCodeAdapter, CodexAdapter,
+    HermesAdapter, OpenclawAdapter, OpencodeAdapter, PiAdapter,
 };
 use skills_copilot_ai_core::{evaluate_mvp_rules, Finding, RuleContext, RuleReport, Severity};
 use skills_copilot_catalog::{
@@ -649,6 +649,8 @@ fn scan_agent_for_catalog(
     let mut report = scan_agent(adapter, ctx)?;
     if adapter.id() == AgentId::Codex {
         apply_codex_config_overrides(ctx, &mut report.instances)?;
+    } else if adapter.id() == AgentId::Pi {
+        apply_pi_config_overrides(ctx, &mut report.instances)?;
     }
     Ok(report)
 }
@@ -723,34 +725,34 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
         AdapterCapabilityRecord {
             agent: AgentId::Pi.as_str(),
             display_name: "Pi",
-            status: "read-only",
+            status: "guarded",
             scan: AdapterFeatureCapability::supported_with_reason(
-                "verified-read-only",
+                "verified",
                 "V2.13 scans Pi-native global ~/.pi/agent/skills and project .pi/skills roots without reading or writing Pi settings.",
             ),
             project_scan: AdapterFeatureCapability::supported_with_reason(
-                "verified-read-only",
+                "verified",
                 "Project scan walks .pi/skills from cwd up to the selected project root; .agents compatibility roots remain out of scope to avoid duplicate records.",
             ),
-            config_toggle: AdapterFeatureCapability::blocked(
-                "blocked",
-                "Pi enable/disable JSON mutation and rollback semantics are not verified.",
+            config_toggle: AdapterFeatureCapability::supported_with_reason(
+                "guarded-v2.37",
+                "V2.37 enables minimal Pi native toggles through settings JSON, pre-toggle snapshots, atomic write verification, and rollback; project/package toggles require explicit project trust.",
             ),
-            config_snapshot: AdapterFeatureCapability::blocked(
-                "blocked",
-                "No verified Pi config write target is available yet.",
+            config_snapshot: AdapterFeatureCapability::supported_with_reason(
+                "guarded-v2.37",
+                "Pi toggle snapshots use the existing config snapshot and rollback path; redacted snapshots are not directly rollbackable.",
             ),
             install: AdapterFeatureCapability::blocked(
                 "blocked",
-                "Pi install target roots are not enabled until writable evidence is complete.",
+                "Pi install target roots remain blocked; V2.37 only enables guarded config toggles.",
             ),
-            writable: AdapterFeatureCapability::blocked(
-                "blocked",
-                "Pi writes are blocked until the disposable local round-trip is complete.",
+            writable: AdapterFeatureCapability::supported_with_reason(
+                "guarded-toggle-only",
+                "Writable support is limited to enable/disable settings updates for Pi-native roots; installs, script execution, AI writes, credentials, and compatibility-root writes remain blocked.",
             ),
             blockers: vec![
-                "Verify Pi settings schema and enable/disable semantics.",
-                "Verify rollback-safe global/project config writes.",
+                "Pi install remains blocked.",
+                "Project/package toggles require trusted Pi project settings.",
             ],
         },
         AdapterCapabilityRecord {
@@ -3816,7 +3818,7 @@ pub fn rollback_snapshot(
     let agent = agent_from_snapshot(&snapshot.agent)?;
     if !matches!(
         agent,
-        AgentId::ClaudeCode | AgentId::Codex | AgentId::Opencode
+        AgentId::ClaudeCode | AgentId::Codex | AgentId::Opencode | AgentId::Pi
     ) {
         return Err(CommandError::UnsafeConfigPath(format!(
             "snapshot agent {} is not writable by config rollback commands",
@@ -4411,6 +4413,7 @@ pub fn toggle_skill(
     } else {
         String::new()
     };
+    let original_text = normalize_initial_config_text(&config_target, original_text);
 
     // 2. Take a pre-toggle snapshot.
     let snapshot_id = generate_snapshot_id();
@@ -4691,6 +4694,7 @@ fn apply_skill_toggle_group(
     } else {
         String::new()
     };
+    let original_text = normalize_initial_config_text(config_target, original_text);
 
     let snapshot_id = generate_snapshot_id();
     let now_ms = current_time_ms();
@@ -4795,6 +4799,28 @@ fn batch_preview_token(
     ))
 }
 
+fn normalize_initial_config_text(config_target: &ConfigTarget, text: String) -> String {
+    if config_target.agent == AgentId::Pi && text.trim().is_empty() {
+        return pi_default_settings_text(config_target.scope);
+    }
+    text
+}
+
+fn pi_default_settings_text(scope: Scope) -> String {
+    let trusted = scope == Scope::AgentGlobal;
+    let mut text = serde_json::json!({
+        "project": {
+            "trusted": trusted
+        },
+        "skills": {
+            "disabled": []
+        }
+    })
+    .to_string();
+    text.push('\n');
+    text
+}
+
 fn batch_capability_labels(
     affected_items: &[BatchToggleAffectedItem],
     skipped_items: &[BatchToggleSkippedItem],
@@ -4836,7 +4862,7 @@ fn batch_capability_label(agent: AgentId) -> &'static str {
         AgentId::ClaudeCode => "Claude Code verified config toggle",
         AgentId::Codex => "Codex verified user-config toggle",
         AgentId::Opencode => "opencode verified exact permission.skill toggle",
-        AgentId::Pi => "Pi read-only scanner; writable blocked",
+        AgentId::Pi => "Pi guarded config toggle",
         AgentId::Hermes => "Hermes read-only scanner; writable blocked",
         AgentId::Openclaw => "OpenClaw read-only scanner; writable blocked",
         AgentId::ToolGlobal => "Tool-global preview; direct toggle blocked",
@@ -4845,7 +4871,7 @@ fn batch_capability_label(agent: AgentId) -> &'static str {
 
 fn batch_skip_reason(agent: AgentId, error: &CommandError) -> String {
     match agent {
-        AgentId::Pi => "Pi is read-only in V2.33; enable/disable mutation and rollback semantics are not verified.".to_string(),
+        AgentId::Pi => error.to_string(),
         AgentId::Hermes => "Hermes is read-only in V2.33; individual skill toggle semantics and rollback-safe config writes are not confirmed.".to_string(),
         AgentId::Openclaw => "OpenClaw is read-only in V2.33; plugin config evidence is not a verified skill toggle contract.".to_string(),
         AgentId::ToolGlobal => "Tool-global staging records are preview/import sources and do not have agent config toggles.".to_string(),
@@ -4893,6 +4919,16 @@ fn config_target_for_instance(
                 agent: AgentId::Opencode,
                 scope: meta.scope,
                 path: opencode_config_path(ctx, meta.scope)?,
+                format: ConfigFormat::Json,
+            }),
+            Scope::ToolGlobal => Err(CommandError::UnsupportedScope(meta.scope)),
+            _ => Err(CommandError::UnsupportedScope(meta.scope)),
+        },
+        AgentId::Pi => match meta.scope {
+            Scope::AgentGlobal | Scope::AgentProject => Ok(ConfigTarget {
+                agent: AgentId::Pi,
+                scope: meta.scope,
+                path: pi_config_path_for_instance(ctx, meta)?,
                 format: ConfigFormat::Json,
             }),
             Scope::ToolGlobal => Err(CommandError::UnsupportedScope(meta.scope)),
@@ -5111,6 +5147,116 @@ fn opencode_config_path(ctx: &AdapterContext, scope: Scope) -> Result<PathBuf, C
     }
 }
 
+fn pi_expected_config_path(ctx: &AdapterContext, scope: Scope) -> Result<PathBuf, CommandError> {
+    match scope {
+        Scope::AgentGlobal => Ok(ctx.user_home.join(".pi/settings.json")),
+        Scope::AgentProject => ctx
+            .project_root
+            .as_ref()
+            .map(|root| root.join(".pi/settings.json"))
+            .ok_or(CommandError::UnsupportedScope(scope)),
+        Scope::ToolGlobal => Err(CommandError::UnsupportedScope(scope)),
+        _ => Err(CommandError::UnsupportedScope(scope)),
+    }
+}
+
+fn pi_config_path_for_instance(
+    ctx: &AdapterContext,
+    meta: &SkillInstanceMeta,
+) -> Result<PathBuf, CommandError> {
+    match meta.scope {
+        Scope::AgentGlobal => Ok(ctx.user_home.join(".pi/settings.json")),
+        Scope::AgentProject => {
+            let skill_root = meta
+                .path
+                .ancestors()
+                .find(|ancestor| {
+                    ancestor.file_name().and_then(|name| name.to_str()) == Some("skills")
+                        && ancestor
+                            .parent()
+                            .and_then(Path::file_name)
+                            .and_then(|name| name.to_str())
+                            == Some(".pi")
+                })
+                .ok_or_else(|| {
+                    CommandError::UnsafeConfigPath(format!(
+                        "Pi project skill {} is not under a .pi/skills root",
+                        meta.path.display()
+                    ))
+                })?;
+            let pi_dir = skill_root.parent().ok_or_else(|| {
+                CommandError::UnsafeConfigPath("Pi skill root has no .pi parent".to_string())
+            })?;
+            Ok(pi_dir.join("settings.json"))
+        }
+        Scope::ToolGlobal => Err(CommandError::UnsupportedScope(meta.scope)),
+        _ => Err(CommandError::UnsupportedScope(meta.scope)),
+    }
+}
+
+fn validate_pi_config_write_target(
+    ctx: &AdapterContext,
+    scope: Scope,
+    path: &Path,
+) -> Result<(), CommandError> {
+    match scope {
+        Scope::AgentGlobal => {
+            let expected = ctx.user_home.join(".pi/settings.json");
+            if path != expected.as_path() {
+                return Err(CommandError::UnsafeConfigPath(format!(
+                    "{} does not match expected Pi global config path {}",
+                    path.display(),
+                    expected.display()
+                )));
+            }
+        }
+        Scope::AgentProject => {
+            if path.file_name().and_then(|name| name.to_str()) != Some("settings.json")
+                || path
+                    .parent()
+                    .and_then(Path::file_name)
+                    .and_then(|name| name.to_str())
+                    != Some(".pi")
+            {
+                return Err(CommandError::UnsafeConfigPath(format!(
+                    "{} is not a Pi project/package settings path",
+                    path.display()
+                )));
+            }
+        }
+        Scope::ToolGlobal => return Err(CommandError::UnsupportedScope(scope)),
+        _ => return Err(CommandError::UnsupportedScope(scope)),
+    }
+
+    let allowed_root = match scope {
+        Scope::AgentGlobal => &ctx.user_home,
+        Scope::AgentProject => ctx
+            .project_root
+            .as_ref()
+            .ok_or(CommandError::UnsupportedScope(scope))?,
+        Scope::ToolGlobal => return Err(CommandError::UnsupportedScope(scope)),
+        _ => return Err(CommandError::UnsupportedScope(scope)),
+    };
+    let parent = path.parent().ok_or_else(|| {
+        CommandError::UnsafeConfigPath("Pi config path has no parent".to_string())
+    })?;
+    fs::create_dir_all(parent)?;
+
+    reject_symlink(parent, "Pi config directory")?;
+    reject_symlink(path, "Pi config file")?;
+
+    let canonical_root = allowed_root.canonicalize()?;
+    let canonical_parent = parent.canonicalize()?;
+    if !canonical_parent.starts_with(&canonical_root) {
+        return Err(CommandError::UnsafeConfigPath(format!(
+            "Pi config directory {} resolves outside allowed root {}",
+            canonical_parent.display(),
+            canonical_root.display()
+        )));
+    }
+    Ok(())
+}
+
 fn should_honor_codex_home(ctx: &AdapterContext, codex_home: &Path) -> bool {
     codex_home.is_absolute()
         && normalize_path_lexically(codex_home)
@@ -5170,6 +5316,9 @@ fn patch_enabled_for_agent(
             .patch_enabled(doc, instance, on)
             .map_err(|err| CommandError::Adapter(err.message)),
         AgentId::Opencode => OpencodeAdapter
+            .patch_enabled(doc, instance, on)
+            .map_err(|err| CommandError::Adapter(err.message)),
+        AgentId::Pi => PiAdapter
             .patch_enabled(doc, instance, on)
             .map_err(|err| CommandError::Adapter(err.message)),
         agent => Err(CommandError::UnsafeConfigPath(format!(
@@ -5337,6 +5486,54 @@ fn preview_context_from_snapshot(
                 extra_roots: vec![],
             })
         }
+        (AgentId::Pi, Scope::AgentGlobal) => {
+            if target.file_name().and_then(|name| name.to_str()) != Some("settings.json")
+                || parent.file_name().and_then(|name| name.to_str()) != Some(".pi")
+            {
+                return Err(CommandError::UnsafeConfigPath(format!(
+                    "snapshot target {} is not a Pi global settings path",
+                    target.display()
+                )));
+            }
+            let user_home = parent
+                .parent()
+                .ok_or_else(|| {
+                    CommandError::UnsafeConfigPath(
+                        "Pi global settings target has no user home".to_string(),
+                    )
+                })?
+                .to_path_buf();
+            Ok(AdapterContext {
+                user_home,
+                project_root: None,
+                project_cwd: None,
+                extra_roots: vec![],
+            })
+        }
+        (AgentId::Pi, Scope::AgentProject) => {
+            if target.file_name().and_then(|name| name.to_str()) != Some("settings.json")
+                || parent.file_name().and_then(|name| name.to_str()) != Some(".pi")
+            {
+                return Err(CommandError::UnsafeConfigPath(format!(
+                    "snapshot target {} is not a Pi project/package settings path",
+                    target.display()
+                )));
+            }
+            let project_root = parent
+                .parent()
+                .ok_or_else(|| {
+                    CommandError::UnsafeConfigPath(
+                        "Pi project settings target has no project root".to_string(),
+                    )
+                })?
+                .to_path_buf();
+            Ok(AdapterContext {
+                user_home: project_root.clone(),
+                project_root: Some(project_root.clone()),
+                project_cwd: Some(project_root),
+                extra_roots: vec![],
+            })
+        }
         _ => Err(CommandError::UnsafeConfigPath(format!(
             "snapshot agent {} scope {} is not previewable",
             snapshot.agent, snapshot.scope
@@ -5361,6 +5558,7 @@ fn agent_from_snapshot(agent: &str) -> Result<AgentId, CommandError> {
         "claude-code" => Ok(AgentId::ClaudeCode),
         "codex" => Ok(AgentId::Codex),
         "opencode" => Ok(AgentId::Opencode),
+        "pi" => Ok(AgentId::Pi),
         other => Err(CommandError::UnsafeConfigPath(format!(
             "snapshot agent {other} is not writable by config rollback commands"
         ))),
@@ -5394,6 +5592,12 @@ fn expected_config_target(
             path: opencode_config_path(ctx, scope)?,
             format: ConfigFormat::Json,
         }),
+        AgentId::Pi => Ok(ConfigTarget {
+            agent,
+            scope,
+            path: pi_expected_config_path(ctx, scope)?,
+            format: ConfigFormat::Json,
+        }),
         agent => Err(CommandError::UnsafeConfigPath(format!(
             "{} config writes are not supported",
             agent.as_str()
@@ -5407,6 +5611,9 @@ fn validate_config_write_target(
     scope: Scope,
     path: &Path,
 ) -> Result<(), CommandError> {
+    if agent == AgentId::Pi {
+        return validate_pi_config_write_target(ctx, scope, path);
+    }
     let expected = expected_config_target(ctx, agent, scope)?;
     if path != expected.path.as_path() {
         return Err(CommandError::UnsafeConfigPath(format!(
@@ -5767,6 +5974,84 @@ fn apply_codex_config_overrides(
         }
     }
     Ok(())
+}
+
+fn apply_pi_config_overrides(
+    ctx: &AdapterContext,
+    instances: &mut [SkillInstance],
+) -> Result<(), CommandError> {
+    let mut disabled_by_config = BTreeMap::<PathBuf, BTreeSet<String>>::new();
+    for instance in instances.iter() {
+        let config_path = match pi_config_path_for_skill_instance(ctx, instance) {
+            Ok(path) => path,
+            Err(_) => continue,
+        };
+        if disabled_by_config.contains_key(&config_path) {
+            continue;
+        }
+        let content = match fs::read_to_string(&config_path) {
+            Ok(content) => content,
+            Err(err) if err.kind() == io::ErrorKind::NotFound => {
+                disabled_by_config.insert(config_path, BTreeSet::new());
+                continue;
+            }
+            Err(err) => return Err(err.into()),
+        };
+        let disabled = pi_disabled_skill_names(&content)
+            .map_err(|err| CommandError::Adapter(err.message))?
+            .into_iter()
+            .collect::<BTreeSet<_>>();
+        disabled_by_config.insert(config_path, disabled);
+    }
+
+    for instance in instances.iter_mut() {
+        let config_path = match pi_config_path_for_skill_instance(ctx, instance) {
+            Ok(path) => path,
+            Err(_) => continue,
+        };
+        if disabled_by_config
+            .get(&config_path)
+            .is_some_and(|disabled| disabled.contains(&instance.name))
+        {
+            instance.enabled = false;
+            instance.state = SkillState::Disabled;
+        }
+    }
+    Ok(())
+}
+
+fn pi_config_path_for_skill_instance(
+    ctx: &AdapterContext,
+    instance: &SkillInstance,
+) -> Result<PathBuf, CommandError> {
+    match instance.scope {
+        Scope::AgentGlobal => Ok(ctx.user_home.join(".pi/settings.json")),
+        Scope::AgentProject => {
+            let skill_root = instance
+                .path
+                .ancestors()
+                .find(|ancestor| {
+                    ancestor.file_name().and_then(|name| name.to_str()) == Some("skills")
+                        && ancestor
+                            .parent()
+                            .and_then(Path::file_name)
+                            .and_then(|name| name.to_str())
+                            == Some(".pi")
+                })
+                .ok_or_else(|| {
+                    CommandError::UnsafeConfigPath(format!(
+                        "Pi project skill {} is not under a .pi/skills root",
+                        instance.path.display()
+                    ))
+                })?;
+            let pi_dir = skill_root.parent().ok_or_else(|| {
+                CommandError::UnsafeConfigPath("Pi skill root has no .pi parent".to_string())
+            })?;
+            Ok(pi_dir.join("settings.json"))
+        }
+        Scope::ToolGlobal => Err(CommandError::UnsupportedScope(instance.scope)),
+        _ => Err(CommandError::UnsupportedScope(instance.scope)),
+    }
 }
 
 fn codex_disabled_skill_paths(path: &Path) -> Result<Vec<PathBuf>, CommandError> {
@@ -7281,14 +7566,14 @@ mod tests {
         let preview =
             preview_skill_toggles(&catalog, &ctx, &selection, false).expect("batch preview");
         assert_eq!(preview.requested_count, 3);
-        assert_eq!(preview.writable_count, 1);
-        assert_eq!(preview.skipped_count, 2);
+        assert_eq!(preview.writable_count, 2);
+        assert_eq!(preview.skipped_count, 1);
         assert!(preview.writes_allowed);
         assert_eq!(preview.affected_items[0].instance_id, claude_id);
         assert!(preview
-            .skipped_items
+            .affected_items
             .iter()
-            .any(|item| item.instance_id == pi_id && item.reason.contains("Pi is read-only")));
+            .any(|item| item.instance_id == pi_id && item.capability_label.contains("Pi guarded")));
         assert!(preview
             .skipped_items
             .iter()
@@ -7305,30 +7590,35 @@ mod tests {
         let applied =
             apply_skill_toggles(&catalog, &ctx, &selection, false, &preview.preview_token)
                 .expect("batch apply");
-        assert_eq!(applied.applied_count, 1);
-        assert_eq!(applied.updated_records.len(), 1);
-        assert!(!applied.updated_records[0].enabled);
+        assert_eq!(applied.applied_count, 2);
+        assert_eq!(applied.updated_records.len(), 2);
+        assert!(applied.updated_records.iter().all(|record| !record.enabled));
 
         let settings_path = home.join(".claude/settings.json");
         let content = std::fs::read_to_string(&settings_path).expect("read settings");
         assert!(content.contains("\"batch-claude\""));
         assert!(content.contains("\"off\""));
-        assert!(
-            !home.join(".pi/settings.json").exists(),
-            "read-only Pi must not get a config write"
-        );
+        let pi_settings_path = home.join(".pi/settings.json");
+        let pi_content = std::fs::read_to_string(&pi_settings_path).expect("read Pi settings");
+        assert!(pi_content.contains("\"batch-pi\""));
 
         let snapshots = catalog
             .list_config_snapshots("claude-code", &settings_path.to_string_lossy())
             .expect("list snapshots");
         assert_eq!(snapshots.len(), 1);
         assert_eq!(snapshots[0].reason, "pre-batch-toggle");
+        let pi_snapshots = catalog
+            .list_config_snapshots("pi", &pi_settings_path.to_string_lossy())
+            .expect("list Pi snapshots");
+        assert_eq!(pi_snapshots.len(), 1);
+        assert_eq!(pi_snapshots[0].reason, "pre-batch-toggle");
 
-        let events = list_skill_events(&catalog, &applied.updated_records[0].id, Some(10))
-            .expect("list events");
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].payload["batch"], serde_json::json!(true));
-        assert!(events[0].payload.get("snapshot_id").is_some());
+        for record in &applied.updated_records {
+            let events = list_skill_events(&catalog, &record.id, Some(10)).expect("list events");
+            assert_eq!(events.len(), 1);
+            assert_eq!(events[0].payload["batch"], serde_json::json!(true));
+            assert!(events[0].payload.get("snapshot_id").is_some());
+        }
 
         let _ = std::fs::remove_dir_all(&temp_root);
     }
@@ -7383,10 +7673,118 @@ mod tests {
     }
 
     #[test]
+    fn toggle_pi_global_skill_writes_settings_rescans_and_rolls_back() {
+        let temp_root = temp_test_dir("pi-toggle-global");
+        let home = temp_root.join("home");
+        write_pi_global_skill(&home, "pi-toggle");
+
+        let catalog = Catalog::in_memory().expect("catalog opens");
+        catalog.init().expect("catalog initializes");
+        let ctx = AdapterContext {
+            user_home: home.clone(),
+            project_root: None,
+            project_cwd: None,
+            extra_roots: vec![],
+        };
+        scan_all_to_catalog(&ctx, &catalog).expect("scan all");
+        let pi_id = catalog
+            .list_skill_records()
+            .expect("records")
+            .into_iter()
+            .find(|record| record.agent == "pi" && record.name == "pi-toggle")
+            .expect("pi record")
+            .id;
+
+        let record = toggle_skill(&catalog, &ctx, &pi_id, false).expect("toggle Pi off");
+        assert!(!record.enabled);
+        assert_eq!(record.state, "disabled");
+
+        let settings_path = home.join(".pi/settings.json");
+        let content = std::fs::read_to_string(&settings_path).expect("read Pi settings");
+        assert!(content.contains("\"pi-toggle\""));
+
+        scan_all_to_catalog(&ctx, &catalog).expect("rescan all");
+        let rescanned = catalog
+            .get_skill_record(&pi_id)
+            .expect("catalog lookup")
+            .expect("Pi record remains");
+        assert!(!rescanned.enabled);
+        assert_eq!(rescanned.state, "disabled");
+
+        let snapshots = catalog
+            .list_config_snapshots("pi", &settings_path.to_string_lossy())
+            .expect("list Pi snapshots");
+        assert_eq!(snapshots.len(), 1);
+        assert_eq!(snapshots[0].reason, "pre-toggle");
+        rollback_snapshot(&catalog, &ctx, &snapshots[0].id).expect("Pi rollback succeeds");
+        let rolled_back = std::fs::read_to_string(&settings_path).unwrap_or_default();
+        assert!(
+            !rolled_back.contains("pi-toggle"),
+            "rollback restores pre-toggle Pi settings"
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn toggle_pi_project_skill_requires_trusted_project_settings() {
+        let temp_root = temp_test_dir("pi-toggle-project");
+        let home = temp_root.join("home");
+        let project = temp_root.join("project");
+        let skill_dir = project.join(".pi/skills/pi-project-toggle");
+        std::fs::create_dir_all(&skill_dir).expect("create Pi project skill dir");
+        std::fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: pi-project-toggle\ndescription: Project Pi toggle fixture\n---\nbody",
+        )
+        .expect("write Pi project skill");
+        let settings_path = project.join(".pi/settings.json");
+        std::fs::write(
+            &settings_path,
+            "{\n  \"project\": { \"trusted\": false },\n  \"skills\": { \"disabled\": [] }\n}\n",
+        )
+        .expect("write untrusted Pi settings");
+
+        let catalog = Catalog::in_memory().expect("catalog opens");
+        catalog.init().expect("catalog initializes");
+        let ctx = AdapterContext {
+            user_home: home,
+            project_root: Some(project.clone()),
+            project_cwd: Some(project.clone()),
+            extra_roots: vec![],
+        };
+        scan_all_to_catalog(&ctx, &catalog).expect("scan all");
+        let pi_id = catalog
+            .list_skill_records()
+            .expect("records")
+            .into_iter()
+            .find(|record| record.agent == "pi" && record.name == "pi-project-toggle")
+            .expect("Pi project record")
+            .id;
+
+        let blocked = toggle_skill(&catalog, &ctx, &pi_id, false)
+            .expect_err("untrusted Pi project writes are blocked");
+        assert!(matches!(blocked, CommandError::Adapter(_)));
+
+        std::fs::write(
+            &settings_path,
+            "{\n  \"project\": { \"trusted\": true },\n  \"skills\": { \"disabled\": [] }\n}\n",
+        )
+        .expect("write trusted Pi settings");
+        let record = toggle_skill(&catalog, &ctx, &pi_id, false)
+            .expect("trusted Pi project toggle succeeds");
+        assert!(!record.enabled);
+        let content = std::fs::read_to_string(&settings_path).expect("read Pi settings");
+        assert!(content.contains("\"pi-project-toggle\""));
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
     fn batch_toggle_preview_blocks_apply_when_selection_has_no_writable_items() {
         let temp_root = temp_test_dir("batch-toggle-read-only");
         let home = temp_root.join("home");
-        write_pi_global_skill(&home, "batch-pi-only");
+        write_hermes_global_skill(&home, "batch-hermes-only");
 
         let catalog = Catalog::in_memory().expect("catalog opens");
         catalog.init().expect("catalog initializes");
@@ -7397,15 +7795,15 @@ mod tests {
             extra_roots: vec![],
         };
         scan_all_to_catalog(&ctx, &catalog).expect("scan all");
-        let pi_id = catalog
+        let hermes_id = catalog
             .list_skill_records()
             .expect("records")
             .into_iter()
-            .find(|record| record.agent == "pi" && record.name == "batch-pi-only")
-            .expect("pi record")
+            .find(|record| record.agent == "hermes" && record.name == "batch-hermes-only")
+            .expect("hermes record")
             .id;
 
-        let selection = vec![pi_id];
+        let selection = vec![hermes_id];
         let preview =
             preview_skill_toggles(&catalog, &ctx, &selection, false).expect("batch preview");
         assert_eq!(preview.writable_count, 0);

@@ -4,6 +4,8 @@ import Foundation
 struct ToolGlobalModelTests {
     func run() throws {
         try toolGlobalScopeDisplaysAsReadOnlyPreview()
+        try piNativeSkillsStayReadOnlyWithoutServiceCapabilityButCatalogStateDoesNotBlockGuardedToggle()
+        try piInstallTargetRemainsBlockedEvenIfCapabilityPayloadClaimsSupport()
         try installPreviewRequiresConfirmationWithoutWriteBack()
         try backendInstallPreviewDecodesAsConfirmable()
     }
@@ -29,6 +31,55 @@ struct ToolGlobalModelTests {
         try expectEqual(preview.writeBackEnabled, false, "Local fallback preview should not enable writes without backend install support.")
         try expectContains(preview.summary, record.name, "Install preview summary should name the skill.")
         try expectContains(preview.confirmationMessage, UIStrings.claudeCode, "Install preview confirmation should name the target agent.")
+    }
+
+    private func piNativeSkillsStayReadOnlyWithoutServiceCapabilityButCatalogStateDoesNotBlockGuardedToggle() throws {
+        let record = skill(
+            id: "pi-one",
+            agent: "pi",
+            scope: "agent-global",
+            path: "$HOME/.pi/skills/pi-one/SKILL.md",
+            definitionId: "pi:one",
+            name: "Pi One",
+            state: "loaded",
+            enabled: true
+        )
+
+        try expectNil(
+            DisplayText.catalogToggleDisabledReason(for: record, isWriting: false),
+            "Loaded Pi catalog state should not block the guarded toggle when service capability allows it."
+        )
+        try expectEqual(
+            DisplayText.toggleDisabledReason(for: record, isWriting: false),
+            UIStrings.toggleUnavailableReadOnlyAdapter(UIStrings.pi),
+            "Pi should still be read-only without explicit service config-toggle capability."
+        )
+    }
+
+    private func piInstallTargetRemainsBlockedEvenIfCapabilityPayloadClaimsSupport() throws {
+        let payload = """
+        [
+          {
+            "agent": "pi",
+            "display_name": "Pi",
+            "status": "experimental",
+            "scan": {"supported": true, "status": "verified", "reason": null},
+            "project_scan": {"supported": true, "status": "verified", "reason": null},
+            "config_toggle": {"supported": true, "status": "guarded", "reason": null},
+            "config_snapshot": {"supported": true, "status": "guarded", "reason": null},
+            "install": {"supported": true, "status": "blocked", "reason": "Pi install remains blocked."},
+            "writable": {"supported": true, "status": "guarded", "reason": null},
+            "blockers": []
+          }
+        ]
+        """.data(using: .utf8)!
+        let capabilities = try JSONDecoder().decode([AdapterCapabilityRecord].self, from: payload)
+
+        try expectEqual(
+            ToolInstallTarget.supportedTargets(from: capabilities),
+            [],
+            "Pi install must not become selectable from adapter capability payloads."
+        )
     }
 
     private func backendInstallPreviewDecodesAsConfirmable() throws {

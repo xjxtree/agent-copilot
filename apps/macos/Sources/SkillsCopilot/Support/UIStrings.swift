@@ -2,6 +2,7 @@ import Foundation
 
 enum UIStrings {
     static let appTitle = text("app.title", "Skills Copilot")
+    static let appWindowTitle = text("app.windowTitle", "SkillsCopilot")
     static let searchPrompt = text("search.prompt", "Search")
     static let scan = text("action.scan", "Scan")
     static let reload = text("action.reload", "Reload")
@@ -366,6 +367,8 @@ enum UIStrings {
     static let toggleUnavailableShadowed = text("detail.toggleUnavailable.shadowed", "Shadowed skills are read-only here; resolve the active copy before toggling.")
     static let toggleUnavailableUnknown = text("detail.toggleUnavailable.unknown", "This skill has an unknown catalog state and is read-only in this build.")
     static let toggleUnavailableToolGlobal = text("detail.toggleUnavailable.toolGlobal", "Tool-global skills are read-only previews. Install or copy to an agent requires a separate confirmed action.")
+    static let piGuardedToggle = text("detail.pi.guardedToggle", "Guarded toggle")
+    static let piGuardedToggleBoundary = text("detail.pi.guardedToggle.boundary", "Pi toggle is experimental and guarded by preview, config snapshot, and rollback. Install stays blocked; no AI, scripts, or credentials are used.")
     static let operationUnavailableBusy = text("detail.operationUnavailable.busy", "Another catalog operation is already in progress.")
     static let readOnly = text("detail.readOnly", "Read-only")
     static let currentMatchesSnapshot = text("snapshot.matches", "Current agent config already matches this snapshot.")

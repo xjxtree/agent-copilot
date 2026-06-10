@@ -86,14 +86,17 @@ final class SkillStore: ObservableObject {
     }
 
     private func toggleDisabledReason(for skill: SkillRecord) -> String? {
-        let catalogReason = DisplayText.toggleDisabledReason(for: skill, isWriting: isWriting)
-        guard !isWriting,
-              let capability = adapterCapabilities.first(where: { $0.agent == skill.agent }),
-              !capability.configToggle.supported
-        else {
+        if let catalogReason = DisplayText.catalogToggleDisabledReason(for: skill, isWriting: isWriting) {
             return catalogReason
         }
-        return capability.configToggle.reason ?? catalogReason ?? UIStrings.readOnlyAdapterStatus(capability.displayName)
+        guard !isWriting else {
+            return UIStrings.toggleUnavailableBusy
+        }
+        guard let capability = adapterCapabilities.first(where: { $0.agent == skill.agent }) else {
+            return DisplayText.isReadOnlyAdapter(skill.agent) ? UIStrings.toggleUnavailableReadOnlyAdapter(DisplayText.agent(skill.agent)) : nil
+        }
+        guard !capability.configToggle.supported else { return nil }
+        return capability.configToggle.reason ?? UIStrings.readOnlyAdapterStatus(capability.displayName)
     }
 
     var selectedSkill: SkillRecord? {
@@ -1076,7 +1079,7 @@ final class SkillStore: ObservableObject {
     }
 
     private func batchToggleSkipReason(for skill: SkillRecord) -> String? {
-        if let catalogReason = DisplayText.toggleDisabledReason(for: skill, isWriting: false) {
+        if let catalogReason = DisplayText.catalogToggleDisabledReason(for: skill, isWriting: false) {
             return catalogReason
         }
         guard let capability = adapterCapabilities.first(where: { $0.agent == skill.agent }) else {

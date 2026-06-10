@@ -13,7 +13,7 @@
         "app.stateSnapshot",
         "service.status",
         "adapter.listCapabilities",
-    "evidence.piWritableHarness",
+        "evidence.piWritableHarness",
         "llm.status",
         "llm.prepareAction",
         "llm.prepareSkillAnalysis",
@@ -180,40 +180,40 @@
         {
           "agent": "pi",
           "display_name": "Pi",
-          "status": "read-only",
+          "status": "guarded",
           "scan": {
             "supported": true,
-            "status": "verified-read-only",
+            "status": "verified",
             "reason": "V2.13 scans Pi-native global ~/.pi/agent/skills and project .pi/skills roots without reading or writing Pi settings."
           },
           "project_scan": {
             "supported": true,
-            "status": "verified-read-only",
+            "status": "verified",
             "reason": "Project scan walks .pi/skills from cwd up to the selected project root; .agents compatibility roots remain out of scope to avoid duplicate records."
           },
           "config_toggle": {
-            "supported": false,
-            "status": "blocked",
-            "reason": "Pi enable/disable JSON mutation and rollback semantics are not verified."
+            "supported": true,
+            "status": "guarded-v2.37",
+            "reason": "V2.37 enables minimal Pi native toggles through settings JSON, pre-toggle snapshots, atomic write verification, and rollback; project/package toggles require explicit project trust."
           },
           "config_snapshot": {
-            "supported": false,
-            "status": "blocked",
-            "reason": "No verified Pi config write target is available yet."
+            "supported": true,
+            "status": "guarded-v2.37",
+            "reason": "Pi toggle snapshots use the existing config snapshot and rollback path; redacted snapshots are not directly rollbackable."
           },
           "install": {
             "supported": false,
             "status": "blocked",
-            "reason": "Pi install target roots are not enabled until writable evidence is complete."
+            "reason": "Pi install target roots remain blocked; V2.37 only enables guarded config toggles."
           },
           "writable": {
-            "supported": false,
-            "status": "blocked",
-            "reason": "Pi writes are blocked until the disposable local round-trip is complete."
+            "supported": true,
+            "status": "guarded-toggle-only",
+            "reason": "Writable support is limited to enable/disable settings updates for Pi-native roots; installs, script execution, AI writes, credentials, and compatibility-root writes remain blocked."
           },
           "blockers": [
-            "Verify Pi settings schema and enable/disable semantics.",
-            "Verify rollback-safe global/project config writes."
+            "Pi install remains blocked.",
+            "Project/package toggles require trusted Pi project settings."
           ]
         },
         {
