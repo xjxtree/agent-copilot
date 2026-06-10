@@ -13,19 +13,21 @@ use skills_copilot_catalog::{
 };
 use skills_copilot_commands::{
     analyze_catalog, apply_skill_toggles, clear_finding_triage, clear_rule_severity_override,
-    clear_rule_suppression, export_skill_bundle, export_staging_skill_bundle, get_skill,
-    import_github_skill_to_tool_global_deferred, import_local_skill_to_tool_global,
-    install_skill_from_tool_global, list_adapter_capabilities, list_agent_config_snapshots,
-    list_conflicts, list_finding_triage, list_findings, list_rule_tuning, list_skill_events,
-    list_snapshots, preview_script_execution, preview_skill_toggles, preview_snapshot_rollback,
-    read_claude_settings, record_blocked_script_execution, rollback_snapshot, save_claude_settings,
+    clear_rule_suppression, empty_cross_agent_comparison, export_skill_bundle,
+    export_staging_skill_bundle, get_skill, import_github_skill_to_tool_global_deferred,
+    import_local_skill_to_tool_global, install_skill_from_tool_global, list_adapter_capabilities,
+    list_agent_config_snapshots, list_conflicts, list_cross_agent_comparisons, list_finding_triage,
+    list_findings, list_rule_tuning, list_skill_events, list_snapshots, preview_script_execution,
+    preview_skill_toggles, preview_snapshot_rollback, read_claude_settings,
+    record_blocked_script_execution, rollback_snapshot, save_claude_settings,
     scan_all_catalog_report, scan_claude_to_catalog, set_finding_triage,
     set_rule_severity_override, set_rule_suppression, skill_health_summary, toggle_skill,
     AdapterCapabilityRecord, AgentCatalogScanReport, BatchToggleApplyRecord,
-    BatchTogglePreviewRecord, ConfigDocumentRecord, CrossAgentAnalysisRecord, ExportedSkillBundle,
-    ScriptExecutionAttemptRecord, ScriptExecutionPreviewRecord, ScriptExecutionRequest,
-    SkillHealthSummary, SkillInstallPreviewRecord, SnapshotRollbackPreviewRecord,
-    ToolGlobalImportResult, SCRIPT_EXECUTION_DISABLED_REASON,
+    BatchTogglePreviewRecord, ConfigDocumentRecord, CrossAgentAnalysisRecord,
+    CrossAgentComparisonRecord, ExportedSkillBundle, ScriptExecutionAttemptRecord,
+    ScriptExecutionPreviewRecord, ScriptExecutionRequest, SkillHealthSummary,
+    SkillInstallPreviewRecord, SnapshotRollbackPreviewRecord, ToolGlobalImportResult,
+    SCRIPT_EXECUTION_DISABLED_REASON,
 };
 use skills_copilot_core::{AdapterContext, AdapterRoot, AgentId, RootSource, Scope};
 use thiserror::Error;
@@ -49,6 +51,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "llm.prepareAction",
     "llm.prepareSkillAnalysis",
     "cleanup.listQueue",
+    "comparison.listCrossAgent",
     "rules.listTuning",
     "rules.setSeverityOverride",
     "rules.clearSeverityOverride",
@@ -259,6 +262,18 @@ pub struct CleanupQueueItem {
     pub read_only: bool,
     pub writes_allowed: bool,
     pub provider_request_sent: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct ListCrossAgentComparisonParams {
+    #[serde(default)]
+    pub selected_instance_id: Option<String>,
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default)]
+    pub query: Option<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -715,6 +730,29 @@ impl ServiceHost {
                     serde_json::from_value(request.params)?
                 };
                 serde_json::to_value(self.cleanup_list_queue(params)?).map_err(Into::into)
+            }
+            "comparison.listCrossAgent" => {
+                let params: ListCrossAgentComparisonParams = if request.params.is_null() {
+                    ListCrossAgentComparisonParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                let Some(catalog) = self.open_existing_catalog_read_only()? else {
+                    return serde_json::to_value(empty_cross_agent_comparison(
+                        params.selected_instance_id.as_deref(),
+                    ))
+                    .map_err(Into::into);
+                };
+                let adapter_ctx = self.effective_adapter_ctx()?;
+                let comparisons: CrossAgentComparisonRecord = list_cross_agent_comparisons(
+                    &catalog,
+                    &adapter_ctx,
+                    params.selected_instance_id.as_deref(),
+                    params.agent.as_deref(),
+                    params.query.as_deref(),
+                    params.limit,
+                )?;
+                serde_json::to_value(comparisons).map_err(Into::into)
             }
             "rules.listTuning" => {
                 let catalog = self.open_catalog()?;
@@ -2414,6 +2452,7 @@ mod tests {
         assert!(methods.contains(&Value::String("llm.prepareAction".to_string())));
         assert!(methods.contains(&Value::String("llm.prepareSkillAnalysis".to_string())));
         assert!(methods.contains(&Value::String("cleanup.listQueue".to_string())));
+        assert!(methods.contains(&Value::String("comparison.listCrossAgent".to_string())));
         assert!(methods.contains(&Value::String("rules.listTuning".to_string())));
         assert!(methods.contains(&Value::String("rules.setSeverityOverride".to_string())));
         assert!(methods.contains(&Value::String("rules.clearSeverityOverride".to_string())));
@@ -2731,6 +2770,98 @@ mod tests {
         assert!(!host.script_execution_audit_path().exists());
 
         let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn comparison_list_cross_agent_returns_read_only_payload() {
+        let unique = unique_suffix();
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-comparison-test-{}-{unique}",
+            std::process::id()
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_cleanup_queue_fixture(&host);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("comparison".to_string()),
+            method: "comparison.listCrossAgent".to_string(),
+            params: json!({
+                "selected_instance_id": "codex-alpha",
+                "agent": "codex",
+                "query": "shared",
+                "limit": 5
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("comparison result");
+        assert_eq!(result.get("read_only").and_then(Value::as_bool), Some(true));
+        assert_eq!(
+            result.get("writes_allowed").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("provider_request_sent").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/selected_instance_id")
+                .and_then(Value::as_str),
+            Some("codex-alpha")
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/returned_groups")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            result
+                .pointer("/groups/0/canonical_name")
+                .and_then(Value::as_str),
+            Some("shared-fixture")
+        );
+        assert!(result
+            .pointer("/groups/0/risk_summary/finding_count")
+            .and_then(Value::as_u64)
+            .is_some_and(|count| count >= 1));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn comparison_list_cross_agent_missing_catalog_is_read_only_empty() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-comparison-empty-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("comparison-empty".to_string()),
+            method: "comparison.listCrossAgent".to_string(),
+            params: Value::Null,
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("comparison empty result");
+        assert_eq!(
+            result
+                .pointer("/summary/returned_groups")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(result.get("read_only").and_then(Value::as_bool), Some(true));
+        assert_eq!(
+            result.get("writes_allowed").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert!(
+            !app_data_dir.exists(),
+            "comparison.listCrossAgent must not initialize app data when there is no catalog"
+        );
     }
 
     #[test]
@@ -4576,6 +4707,12 @@ mod tests {
                 let analysis: WireCrossAgentAnalysisRecord =
                     decode_fixture_result(method, result, path);
                 assert_eq!(analysis.summary.total_groups, analysis.groups.len());
+            }
+            "comparison.listCrossAgent" => {
+                let comparison: CrossAgentComparisonRecord =
+                    decode_fixture_result(method, result, path);
+                assert_eq!(comparison.summary.total_groups, comparison.groups.len());
+                assert!(!comparison.suggested_next_steps.is_empty());
             }
             "catalog.listFindings" => {
                 let findings: Vec<WireRuleFindingRecord> =

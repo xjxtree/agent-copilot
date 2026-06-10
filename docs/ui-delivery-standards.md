@@ -185,3 +185,10 @@ For UI changes:
 - 仅展示已验证可写 adapter 的实例可进入“可执行”集合；Pi/Hermes/OpenClaw 以及 capability 为 blocked/read-only 的实例必须在列表和计数中明确标注为 skipped。
 - 执行入口仍走已有安全链路（`config.toggleSkill` + snapshot/rollback），不得新增自动清理、自动执行或新凭据/telemetry 路径。
 - 完成 UI 改动时应补齐 app-window-only 完整窗口截图与最小窗口/键盘/可访问性自检记录；纯文档更新可免此项。
+
+## 18. V2.34: Cross-agent comparison view（已完成）
+
+- Comparison 入口默认 `read-only`：横向显示同名/相似 skills 在 Claude/Codex/opencode/Pi/Hermes/OpenClaw 中的 `state/source/risk` 与可写能力差异；仅输出洞察，不直接触发写动作。
+- comparison card 与 detail / health / analysis 的口径必须一致：same-agent 冲突仍走 `Conflicts`，跨 agent 重名/路径重叠仍走 `Analysis`，comparison 不混合两者口径。
+- comparison 结果必须标注 capability 读写差异与来源 provenance（含 opencode native/compatibility），并保持可跳转到已有安全动作入口。
+- 交付记录：2026-06-10 真实本机 App 的 Analysis 面板已验证 `Cross-agent Comparison` 只读展示；卡片标注 `Read-only preview`，并声明不写 config、不改 skills、不创建 snapshots、不执行 scripts、不调用 AI provider、不读取 credentials。任何后续 UI 改动仍必须有 app-window-only 完整窗口截图、最小窗口、键盘流与 accessibility 检查记录。

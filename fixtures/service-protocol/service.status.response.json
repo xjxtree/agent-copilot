@@ -16,6 +16,7 @@
       "llm.prepareAction",
       "llm.prepareSkillAnalysis",
       "cleanup.listQueue",
+      "comparison.listCrossAgent",
       "rules.listTuning",
       "rules.setSeverityOverride",
       "rules.clearSeverityOverride",

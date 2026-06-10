@@ -1,0 +1,10 @@
+{
+  "id": "fixture-comparison-list-cross-agent",
+  "method": "comparison.listCrossAgent",
+  "params": {
+    "selected_instance_id": "codex-review",
+    "agent": "codex",
+    "query": "review",
+    "limit": 20
+  }
+}

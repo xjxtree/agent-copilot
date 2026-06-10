@@ -243,6 +243,22 @@ pub enum ExecutionAttemptStatus {
 - 当前阶段不新增数据库 schema；批量预览/计划为执行前计算出的临时结果，不持久化到现有 catalog/app data 结构外。
 - 批量写入仍不涉及 skill-content snapshot，不执行脚本，不写凭据/telemetry，不调用 AI provider。
 
+### 1.15 V2.34 Cross-agent comparison view（已完成）
+
+V2.34 对比面是派生视图，仍不引入新持久化实体。它复用 `SkillInstance` / `SkillDefinition` / `Catalog` 与 `CrossAgentAnalysisRecord`，通过只读 `CrossAgentComparisonRecord` service DTO 和 UI 层按以下维度表达：
+
+- `comparison_key`：`canonical_name` 或配置化的相似性归一键（如同名/规范名归一名）
+- `participants`：跨 agent 的 `instance_id` 参与集，保留 `agent / scope / path / state / root / provenance`
+- `diff_axes`：状态差异、来源差异、risk 标记差异、可写能力差异
+- `source`：opencode provenance 区分（`native` / `compatibility`）与其他 adapter 的来源标签
+- `decision_context`：用于入口导航（detail/health/analysis）的稳定标识（如 `definition_id`、`finding_group_id`）
+
+边界要求：
+
+- 不新增 `skill_group`、`comparison`、`snapshot` 的 app-local schema。
+- 不改变 `SkillInstance`/`ConflictGroup` 的持久主键定义；仅增加只读展示层映射。
+- 对比视图只能读不写：任何写动作仍走现有已审计的 `config.toggleSkill` / `snapshot.*` / `skill.install` 服务路径。
+
 ## 2. 目录层级与项目根识别
 
 `Scope::AgentProject` 需要知道"项目根"。识别规则（按顺序，命中即用）：

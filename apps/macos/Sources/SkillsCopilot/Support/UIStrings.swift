@@ -65,6 +65,25 @@ enum UIStrings {
     static let cleanupAIBlocked = text("cleanup.safety.aiBlocked", "AI blocked")
     static let cleanupCredentialsBlocked = text("cleanup.safety.credentialsBlocked", "Credentials blocked")
     static let cleanupOpenExistingDetailHelp = text("cleanup.action.openExistingDetail.help", "Open the existing read-only detail section for this item.")
+    static let crossAgentComparisonTitle = text("comparison.crossAgent.title", "Cross-agent Comparison")
+    static let crossAgentComparisonBoundary = text("comparison.crossAgent.boundary", "Compare same-name or similar skills across Claude Code, Codex, opencode, Pi, Hermes, and OpenClaw by state, source, scope/root, findings, writable capability, and differences. This view is read-only: it cannot write config, edit skills, create snapshots, execute scripts, call an AI provider, or read credentials.")
+    static let crossAgentComparisonGroups = text("comparison.crossAgent.groups", "Groups")
+    static let crossAgentComparisonAgents = text("comparison.crossAgent.agents", "Agents")
+    static let crossAgentComparisonRiskGroups = text("comparison.crossAgent.riskGroups", "Risk groups")
+    static let crossAgentComparisonWritableMismatch = text("comparison.crossAgent.writableMismatch", "Writable mismatch")
+    static let crossAgentComparisonDifferences = text("comparison.crossAgent.differences", "Differences")
+    static let crossAgentComparisonWritable = text("comparison.crossAgent.writable", "Writable verified")
+    static let crossAgentComparisonUntitled = text("comparison.crossAgent.untitled", "Comparison group")
+    static let crossAgentComparisonMatchName = text("comparison.crossAgent.match.name", "Same or similar name")
+    static let crossAgentComparisonMatchSimilarName = text("comparison.crossAgent.match.similarName", "Similar name with definition differences")
+    static let crossAgentComparisonNoSelectedGroup = text("comparison.crossAgent.empty.selected", "No selected-skill comparison group")
+    static let crossAgentComparisonNoSelectedGroupMessage = text("comparison.crossAgent.empty.selected.message", "The selected skill does not currently share a same-name or similar cross-agent group in this catalog/filter context.")
+    static let crossAgentComparisonLocalFallback = text("comparison.crossAgent.localFallback", "Comparison service is unavailable in this build. Showing a local read-only catalog comparison fallback.")
+    static let crossAgentComparisonDifferenceEnabled = text("comparison.crossAgent.difference.enabled", "Enabled state differs")
+    static let crossAgentComparisonDifferenceWritable = text("comparison.crossAgent.difference.writable", "Writable capability differs")
+    static let crossAgentComparisonDifferenceSource = text("comparison.crossAgent.difference.source", "Source/root differs")
+    static let crossAgentComparisonDifferenceFindings = text("comparison.crossAgent.difference.findings", "Finding counts differ")
+    static let crossAgentComparisonDifferenceDefinition = text("comparison.crossAgent.difference.definition", "Definition IDs differ")
     static let batchToggleTitle = text("batchToggle.title", "Safe Batch")
     static let batchToggleBoundary = text("batchToggle.boundary", "Preview-first enable/disable for visible skills only. Read-only adapters and unverified writable roots are skipped; no scripts, AI provider calls, credentials, skill-content writes, or public release actions are available.")
     static let batchToggleTarget = text("batchToggle.target", "Batch target")
@@ -81,6 +100,7 @@ enum UIStrings {
     static let batchToggleNoWritableChanges = text("batchToggle.noWritableChanges", "No writable skill changes are available in this preview.")
     static let batchToggleNoAffectedSkills = text("batchToggle.noAffectedSkills", "No writable affected skills in this preview.")
     static let batchToggleNoSkippedSkills = text("batchToggle.noSkippedSkills", "No skipped skills in this preview.")
+    static let batchTogglePreviewChanged = text("batchToggle.previewChanged", "Batch preview changed before confirmation. Preview again before applying.")
     static let noSkillsInCatalog = text("empty.noSkillsInCatalog", "No skills in catalog")
     static let noSkillsMatchSearch = text("empty.noSkillsMatchSearch", "No skills match this search")
     static let noProjectSelected = text("project.none", "No Project")
@@ -352,6 +372,10 @@ enum UIStrings {
         format("sidebar.visibleSummary", "%d visible", count)
     }
 
+    static func crossAgentComparisonFilterContext(_ agent: String) -> String {
+        format("comparison.crossAgent.filterContext", "Context: %@ filter. Service data is preferred when available; otherwise this panel uses local catalog-only comparison.", agent)
+    }
+
     static func agentConfigTimelineSummary(_ agent: String, _ count: Int) -> String {
         format("sidebar.agentConfigTimeline.summary", "%@ config snapshots · %d rollback points", agent, count)
     }
@@ -492,6 +516,25 @@ enum UIStrings {
 
     static func batchToggleSkippedSkills(_ count: Int) -> String {
         format("batchToggle.skippedSkills", "Skipped read-only / ineligible (%d)", count)
+    }
+
+    static func batchToggleConfirmTitle(action: String, count: Int) -> String {
+        format("batchToggle.confirm.title", "Apply %@ to %d writable skills?", action, count)
+    }
+
+    static func batchToggleConfirmApply(action: String, count: Int) -> String {
+        format("batchToggle.confirm.apply", "Apply %@ to %d skills", action, count)
+    }
+
+    static func batchToggleConfirmMessage(action: String, affected: Int, skipped: Int, snapshot: String) -> String {
+        format(
+            "batchToggle.confirm.message",
+            "This will %@ %d writable skills and skip %d read-only, ineligible, or no-op skills. %@",
+            action,
+            affected,
+            skipped,
+            snapshot
+        )
     }
 
     static func batchToggleMoreItems(_ count: Int) -> String {

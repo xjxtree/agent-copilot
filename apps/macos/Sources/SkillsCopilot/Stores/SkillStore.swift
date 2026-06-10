@@ -8,6 +8,8 @@ final class SkillStore: ObservableObject {
     @Published private(set) var conflicts: [ConflictGroupRecord] = []
     @Published private(set) var cleanupQueue = CleanupQueueResult.emptyFallback()
     @Published private(set) var isLoadingCleanupQueue = false
+    @Published private(set) var crossAgentComparisons = CrossAgentComparisonResult.emptyFallback()
+    @Published private(set) var isLoadingCrossAgentComparisons = false
     @Published private(set) var healthSummary = SkillHealthSummary.empty
     @Published private(set) var agentConfigSnapshots: [ConfigSnapshotRecord] = []
     @Published private(set) var isLoadingAgentConfigSnapshots = false
@@ -51,6 +53,7 @@ final class SkillStore: ObservableObject {
             handleListCriteriaChanged()
             Task { await loadAgentConfigSnapshots() }
             Task { await loadCleanupQueue() }
+            Task { await loadCrossAgentComparisons() }
         }
     }
     @Published var stateFilter: SkillStateFilter = .all {
@@ -184,6 +187,11 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    var selectedCrossAgentComparisonGroup: CrossAgentComparisonGroup? {
+        guard let skill = selectedSkill else { return nil }
+        return crossAgentComparisons.group(for: skill)
+    }
+
     func ruleTuningRecord(ruleId: String, findingGroupID: String? = nil) -> RuleTuningRecord? {
         RuleTuningModel.record(in: ruleTuning, ruleId: ruleId, findingGroupId: findingGroupID)
     }
@@ -294,6 +302,7 @@ final class SkillStore: ObservableObject {
         do {
             try await refreshCollections()
             await loadCleanupQueue()
+            await loadCrossAgentComparisons()
             refreshStatusMessage = UIStrings.refreshReloaded(skills.count, findings.count, sameAgentRuntimeConflictCount)
             appendRefreshLog(level: "info", message: refreshStatusMessage)
             canRetryLastRefresh = false
@@ -320,6 +329,7 @@ final class SkillStore: ObservableObject {
             detailsByID.removeAll()
             try await refreshCollections()
             await loadCleanupQueue()
+            await loadCrossAgentComparisons()
             lastMutationMessage = UIStrings.scannedSkills(result.scannedCount)
             applyRefreshActivity(result.activity)
             await loadSelectedDetail()
@@ -449,8 +459,13 @@ final class SkillStore: ObservableObject {
         }
     }
 
-    func applyVisibleBatchTogglePreview() async {
+    func applyVisibleBatchTogglePreview(confirmingPreviewID: String? = nil) async {
         guard let preview = batchTogglePreview else { return }
+        if let confirmingPreviewID, confirmingPreviewID != preview.id {
+            errorMessage = UIStrings.batchTogglePreviewChanged
+            lastMutationMessage = nil
+            return
+        }
         guard preview.applySupported else {
             errorMessage = UIStrings.batchToggleApplyUnavailable
             lastMutationMessage = nil
@@ -484,6 +499,7 @@ final class SkillStore: ObservableObject {
             }
             try await refreshCollections()
             await loadCleanupQueue()
+            await loadCrossAgentComparisons()
             lastMutationMessage = UIStrings.batchToggleApplied(
                 action: preview.action.title,
                 count: result.updatedCount == 0 ? preview.writableCount : result.updatedCount
@@ -824,6 +840,29 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func loadCrossAgentComparisons() async {
+        guard !isLoadingCrossAgentComparisons else { return }
+        isLoadingCrossAgentComparisons = true
+        defer { isLoadingCrossAgentComparisons = false }
+
+        let agent = agentFilter == .all ? nil : agentFilter.rawValue
+        do {
+            crossAgentComparisons = try await service.listCrossAgentComparisons(
+                agent: agent,
+                instanceID: selectedSkill?.id,
+                limit: 100
+            )
+        } catch {
+            crossAgentComparisons = CrossAgentComparisonResult.local(
+                skills: skills,
+                findings: findings,
+                capabilities: adapterCapabilities,
+                agentFilter: agentFilter,
+                reason: UIStrings.crossAgentComparisonLocalFallback
+            )
+        }
+    }
+
     func loadAgentConfigSnapshots() async {
         agentConfigSnapshotLoadGeneration += 1
         let generation = agentConfigSnapshotLoadGeneration
@@ -867,6 +906,13 @@ final class SkillStore: ObservableObject {
         batchTogglePreview = nil
         refreshWatcherMessage(from: self.status)
         normalizeSelectionToVisibleSkills()
+        crossAgentComparisons = CrossAgentComparisonResult.local(
+            skills: skills,
+            findings: findings,
+            capabilities: adapterCapabilities,
+            agentFilter: agentFilter,
+            reason: UIStrings.crossAgentComparisonLocalFallback
+        )
     }
 
     private func fetchAgentConfigSnapshots() async throws -> [ConfigSnapshotRecord] {
@@ -947,6 +993,7 @@ final class SkillStore: ObservableObject {
         guard previousID != selectedSkillID else { return }
         Task { @MainActor [weak self] in
             await self?.loadSelectedDetail()
+            await self?.loadCrossAgentComparisons()
         }
     }
 

@@ -1,6 +1,6 @@
 # skills-copilot Service Protocol
 
-> Status: V2.33 Safe batch actions is integrated; V2.34 Cross-agent comparison view is active. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, V2.19 health dashboard, V2.20 read-only AI skill analysis assist, V2.21 scan accuracy/dedupe alignment, V2.22 finding/conflict semantics, V2.23 Health Dashboard / Adapter Capability UX, V2.24 Skill Detail diagnostics, V2.25 Agent-config timeline, V2.26 Finding explainability, V2.27 Skill identity/provenance dedupe, V2.28 Conflict semantic closeout, V2.29 Finding triage persistence, V2.30 AI skill analysis workflow, V2.31 Cleanup Queue, V2.32 Rule tuning / suppression, and V2.33 Safe batch actions are implemented or synchronized. V2.33 adds `batch.previewSkillToggles` and `batch.applySkillToggles` for preview-first verified writable toggles; it keeps Pi/Hermes/OpenClaw read-only and does not write skill content, execute scripts, call providers, store credentials, or create public distribution artifacts.
+> Status: V2.34 Cross-agent comparison view is integrated; V2.35 Local report export is active. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, V2.19 health dashboard, V2.20 read-only AI skill analysis assist, V2.21 scan accuracy/dedupe alignment, V2.22 finding/conflict semantics, V2.23 Health Dashboard / Adapter Capability UX, V2.24 Skill Detail diagnostics, V2.25 Agent-config timeline, V2.26 Finding explainability, V2.27 Skill identity/provenance dedupe, V2.28 Conflict semantic closeout, V2.29 Finding triage persistence, V2.30 AI skill analysis workflow, V2.31 Cleanup Queue, V2.32 Rule tuning / suppression, V2.33 Safe batch actions, and V2.34 Cross-agent comparison view are implemented or synchronized. V2.33 adds `batch.previewSkillToggles` and `batch.applySkillToggles` for preview-first verified writable toggles with explicit confirmation and matching preview id before apply; V2.34 adds read-only `comparison.listCrossAgent`. Both keep Pi/Hermes/OpenClaw read-only where applicable and do not write skill content, execute scripts, call providers, store credentials, or create public distribution artifacts.
 >
 > Integrated: V2.9 Tool-global import/export/install, V2.10 skill execution safety boundary, and 2026-06-10 real local Computer Use validation for the current mainline app. V2.11 added adapter capability status to the service protocol and macOS UI. V2.12 marks opencode writable through exact permission.skill deny/re-enable after snapshot/rollback, install, and fixture smoke validation pass; current opencode scan follows native plus official compatibility roots while install targets remain native roots.
 >
@@ -205,8 +205,25 @@ V2.25 聚焦 agent-config snapshot timeline 收敛，仍不新增 protocol metho
   - `included_instance_ids`（可写）
   - `skipped_instance_ids` 与 `skipped_reason`
 - 每次预览必须包含该次批量变更的 `snapshot_plan` 与 `rollback_plan`（按 agent / scope 维度），并明确列出执行顺序。
-- 应用路径必须是“预览先行 + 显式确认 + 逐项执行（可复用 `config.toggleSkill`）”；任何变更必须生成对应 agent-config 快照以便回滚。
+- 应用路径必须是“预览先行 + 显式确认 + 当前确认 preview id 匹配 + 逐项执行”；任何变更必须生成对应 agent-config 快照以便回滚。
 - 本阶段不新增 skill-content 写入路径，不触发脚本执行，不发起 provider 调用，不读写 credentials，不引入 telemetry。
+
+## V2.34 Cross-agent comparison view（已完成）
+
+V2.34 主要交付是“只读对比”体验，而不是新写链路。对比视图新增只读 method `comparison.listCrossAgent`，并继续复用现有 `catalog.analysis`/`app.stateSnapshot.analysis` 的语义边界；UI 优先使用 service payload，不可用时只能退回本地 catalog-only 只读对比：
+
+- 同名/相似 skill 在 Claude/Codex/opencode/Pi/Hermes/OpenClaw 间的可见实例对齐（`definition_id`/`instance_id`）
+- `state`（enabled/disabled/shadowed/broken/missing）、`source provenance`（canonical name / path / scope / root）
+- `risk`（finding/risky script / risky permission）与分析级别解释
+- 可写能力对比（adapter capability + 根级可写能力）
+- 差异摘要（仅供决策）：谁启用、谁不可写、谁来源于 native / compatibility
+
+边界要求：
+
+- 比较接口保持 read-only：不得新增 `catalog`/`snapshot`/`config` 的 mutate path。
+- 不在 comparison 入口发起 `catalog.scanAll` 之外的新扫描；依赖已完成 scan/activity 的现有上下文快照。
+- 不新增 skill 内容读写、脚本执行、provider 调用、凭据读取/持久化、snapshot 创建路径。
+- 不在 comparison 面直接提供 apply/rollback/enable/disable；只读入口必须回到现有受控动作（`catalog.scanAll`、`config.toggleSkill`、`snapshot.previewRollback`、`snapshot.rollback`）的 preview-confirm 流程。
 
 ## V2.18 Cross-Agent Analysis Payload
 

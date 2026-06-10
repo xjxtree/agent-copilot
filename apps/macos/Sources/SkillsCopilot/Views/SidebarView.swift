@@ -110,6 +110,8 @@ private struct SafeBatchTogglePanel: View {
     @EnvironmentObject private var store: SkillStore
     @State private var showAffected = false
     @State private var showSkipped = false
+    @State private var pendingApplyPreview: BatchTogglePreview?
+    @State private var showApplyConfirmation = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -147,7 +149,8 @@ private struct SafeBatchTogglePanel: View {
                 .disabled(store.isRefreshBusy || store.isPreviewingBatchToggle || store.batchToggleSelectedSkills.isEmpty)
 
                 Button {
-                    Task { await store.applyVisibleBatchTogglePreview() }
+                    pendingApplyPreview = store.batchTogglePreview
+                    showApplyConfirmation = true
                 } label: {
                     Label(UIStrings.batchToggleApply, systemImage: "checkmark.circle")
                         .frame(maxWidth: .infinity)
@@ -173,6 +176,28 @@ private struct SafeBatchTogglePanel: View {
         }
         .padding(10)
         .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+        .alert(
+            pendingApplyPreview.map { UIStrings.batchToggleConfirmTitle(action: $0.action.title, count: $0.writableCount) }
+                ?? UIStrings.batchToggleConfirmTitle(action: store.batchToggleAction.title, count: 0),
+            isPresented: $showApplyConfirmation,
+            presenting: pendingApplyPreview
+        ) { preview in
+            Button(UIStrings.cancel, role: .cancel) {
+                pendingApplyPreview = nil
+            }
+            Button(UIStrings.batchToggleConfirmApply(action: preview.action.title, count: preview.writableCount), role: .destructive) {
+                let previewID = preview.id
+                pendingApplyPreview = nil
+                Task { await store.applyVisibleBatchTogglePreview(confirmingPreviewID: previewID) }
+            }
+        } message: { preview in
+            Text(UIStrings.batchToggleConfirmMessage(
+                action: preview.action.title.lowercased(),
+                affected: preview.writableCount,
+                skipped: preview.skippedCount,
+                snapshot: preview.snapshotPlan.summary
+            ))
+        }
     }
 }
 

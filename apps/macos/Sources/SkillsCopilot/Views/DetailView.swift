@@ -129,6 +129,10 @@ struct DetailView: View {
                     case .analysis:
                         AnalysisSection(
                             skill: skill,
+                            comparisonResult: store.crossAgentComparisons,
+                            selectedComparisonGroup: store.selectedCrossAgentComparisonGroup,
+                            isLoadingComparisons: store.isLoadingCrossAgentComparisons,
+                            agentTitle: store.agentFilter.title,
                             llmStatus: store.llmStatus,
                             isPreparing: { action in store.isPreparingLLMAction(action) },
                             result: { action in store.llmPrepareResult(for: action) },
@@ -619,6 +623,10 @@ private enum SkillProvenanceDisplay {
 
 private struct AnalysisSection: View {
     let skill: SkillRecord
+    let comparisonResult: CrossAgentComparisonResult
+    let selectedComparisonGroup: CrossAgentComparisonGroup?
+    let isLoadingComparisons: Bool
+    let agentTitle: String
     let llmStatus: LLMStatus
     let isPreparing: (LLMAction) -> Bool
     let result: (LLMAction) -> LLMPrepareResult?
@@ -646,6 +654,14 @@ private struct AnalysisSection: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .adaptiveMaterialSurface()
 
+            CrossAgentComparisonPanel(
+                skill: skill,
+                result: comparisonResult,
+                selectedGroup: selectedComparisonGroup,
+                isLoading: isLoadingComparisons,
+                agentTitle: agentTitle
+            )
+
             SkillAnalysisPreparePanel(
                 result: skillAnalysisResult,
                 isPreparing: isPreparingSkillAnalysis,
@@ -668,6 +684,188 @@ private struct AnalysisSection: View {
         }
     }
 
+}
+
+
+private struct CrossAgentComparisonPanel: View {
+    let skill: SkillRecord
+    let result: CrossAgentComparisonResult
+    let selectedGroup: CrossAgentComparisonGroup?
+    let isLoading: Bool
+    let agentTitle: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.crossAgentComparisonTitle, systemImage: "rectangle.3.group")
+                    .font(.headline)
+                Spacer()
+                Label(UIStrings.readOnlyPreview, systemImage: "lock.shield")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(UIStrings.crossAgentComparisonBoundary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], alignment: .leading, spacing: 10) {
+                SummaryChip(title: UIStrings.crossAgentComparisonGroups, value: "\(result.summary.totalCount)", systemImage: "rectangle.stack")
+                SummaryChip(title: UIStrings.crossAgentComparisonAgents, value: "\(result.summary.agentCount)", systemImage: "person.3")
+                SummaryChip(title: UIStrings.crossAgentComparisonRiskGroups, value: "\(result.summary.riskCount)", systemImage: "exclamationmark.triangle")
+                SummaryChip(title: UIStrings.crossAgentComparisonWritableMismatch, value: "\(result.summary.writableMismatchCount)", systemImage: "lock.trianglebadge.exclamationmark")
+            }
+
+            if isLoading {
+                Label(UIStrings.loading, systemImage: "hourglass")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let fallbackReason = result.fallbackReason, !fallbackReason.isEmpty {
+                Label(fallbackReason, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(UIStrings.crossAgentComparisonFilterContext(agentTitle))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if let selectedGroup {
+                CrossAgentComparisonGroupCard(group: selectedGroup, selectedSkillID: skill.id)
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(UIStrings.crossAgentComparisonNoSelectedGroup, systemImage: "checkmark.seal")
+                        .font(.subheadline.bold())
+                    Text(UIStrings.crossAgentComparisonNoSelectedGroupMessage)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct CrossAgentComparisonGroupCard: View {
+    let group: CrossAgentComparisonGroup
+    let selectedSkillID: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(group.title)
+                        .font(.subheadline.bold())
+                    Text("\(group.matchKind) · \(group.members.count) \(UIStrings.skills.lowercased())")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text(group.riskLevel.capitalized)
+                    .font(.caption.bold())
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(riskTint.opacity(0.16), in: Capsule())
+                    .foregroundStyle(riskTint)
+            }
+
+            if !group.differences.isEmpty {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(UIStrings.crossAgentComparisonDifferences)
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
+                    ForEach(group.differences, id: \.self) { difference in
+                        Label(difference, systemImage: "arrow.left.arrow.right")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(group.members) { member in
+                    CrossAgentComparisonMemberRow(
+                        member: member,
+                        isSelected: member.instanceID == selectedSkillID
+                    )
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var riskTint: Color {
+        switch group.riskLevel.lowercased() {
+        case "critical", "high", "error":
+            return .red
+        case "warning", "medium":
+            return .orange
+        default:
+            return .secondary
+        }
+    }
+}
+
+private struct CrossAgentComparisonMemberRow: View {
+    let member: CrossAgentComparisonMember
+    let isSelected: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Label(DisplayText.agent(member.agent), systemImage: isSelected ? "target" : "person.crop.circle")
+                    .font(.callout.bold())
+                Text(DisplayText.state(member.state, enabled: member.enabled))
+                    .font(.caption.bold())
+                    .foregroundStyle(DisplayText.stateColor(member.state, enabled: member.enabled))
+                Spacer()
+                SafetyPill(
+                    label: member.writableCapability ? UIStrings.crossAgentComparisonWritable : UIStrings.readOnly,
+                    isBlocked: !member.writableCapability
+                )
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 5) {
+                MetadataRow(label: UIStrings.scope, value: DisplayText.scope(member.scope))
+                MetadataRow(label: UIStrings.provenanceRoot, value: member.sourceRoot)
+                MetadataRow(label: UIStrings.findings, value: "\(member.findingCount)")
+                MetadataRow(label: UIStrings.definition, value: member.definitionID.nonEmpty ?? UIStrings.emptyPlaceholder)
+            }
+
+            if let reason = member.writableReason, !reason.isEmpty {
+                Label(reason, systemImage: "lock")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if !member.displayPath.isEmpty {
+                Text(member.displayPath)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+            }
+
+            if !member.differences.isEmpty {
+                Text(member.differences.joined(separator: ", "))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(10)
+        .background(isSelected ? Color.accentColor.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+    }
 }
 
 

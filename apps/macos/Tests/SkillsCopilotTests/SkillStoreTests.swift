@@ -26,6 +26,7 @@ struct SkillStoreTests {
         try await toolGlobalToggleIsPreviewOnlyAndDoesNotCallService()
         try await batchTogglePreviewFiltersReadOnlyAndNoopSkills()
         try await batchToggleApplyUsesBatchServiceAndRefreshes()
+        try await batchToggleApplyRequiresCurrentPreviewConfirmation()
         try await reloadLoadsProjectContext()
         try await setProjectStoresContextAndScans()
         try await clearProjectClearsContextAndScans()
@@ -543,6 +544,30 @@ struct SkillStoreTests {
         try expectEqual(store.skills.first { $0.id == "alpha" }?.enabled, false, "Batch apply refresh should pick up changed alpha state.")
         try expectEqual(store.skills.first { $0.id == "gamma" }?.enabled, false, "Batch apply refresh should pick up changed gamma state.")
         try expectEqual(store.skills.first { $0.id == "pi-one" }?.enabled, true, "Batch apply should not mutate read-only Pi skills.")
+    }
+
+    private func batchToggleApplyRequiresCurrentPreviewConfirmation() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "batch-mixed")
+
+        let store = SkillStore(service: ServiceClient())
+        store.agentFilter = .all
+        store.batchToggleAction = .disable
+        await store.reload()
+        await store.previewVisibleBatchToggle()
+
+        guard store.batchTogglePreview != nil else {
+            throw NativeModelTestFailure(description: "Batch preview should be stored before confirmation.")
+        }
+
+        await store.applyVisibleBatchTogglePreview(confirmingPreviewID: "stale-preview-token")
+
+        guard store.batchTogglePreview != nil else {
+            throw NativeModelTestFailure(description: "Stale confirmation must not clear the active preview.")
+        }
+        try expectContains(store.errorMessage, "Preview again", "Stale confirmation should explain that a fresh preview is required.")
+        try expectFalse(fake.calls().contains("batch.applySkillToggles"), "Stale confirmation must not call the batch apply service.")
     }
 
     private func reloadLoadsProjectContext() async throws {

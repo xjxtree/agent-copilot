@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-**当前阶段**：V2.33 Safe batch actions 已完成并通过真实本机 App Preview 验证，V2.34 Cross-agent comparison view 已启动。V2.33 的验收口径为：对 verified writable agent/roots 提供批量 enable/disable preview-first 工作流，必须展示受影响技能、不可写跳过项及原因、snapshot/rollback 计划；Pi/Hermes/OpenClaw 继续 read-only。V2.32 验收口径为：仅 app-local rule severity override 与 suppression，可审计可撤销；不影响 skill 文件/agent config，不新增 snapshot，不执行脚本，不调用 AI provider，不保存 credentials。继续围绕 skills 管理、检查、分析和配置审计推进。
+**当前阶段**：V2.34 Cross-agent comparison view 已完成并通过真实本机 App Analysis 验证，V2.35 Local report export 已启动。V2.33 的验收口径为：对 verified writable agent/roots 提供批量 enable/disable preview-first 工作流，必须展示受影响技能、不可写跳过项及原因、snapshot/rollback 计划，并在 Apply 前要求显式确认且确认 preview id 仍匹配当前 preview；Pi/Hermes/OpenClaw 继续 read-only。V2.34 对同名/相似 skills 只做跨 agent 只读对比（state/source/risk/capability/diff），不新增写入、执行、AI provider、credential 或快照路径。继续围绕 skills 管理、检查、分析和配置审计推进。
 
-**近期主线**：继续围绕 skills 管理、检查、分析和配置审计打磨体验。短期不做全平台 UI 适配、正式签名 release、notarization、DMG/ZIP 或 public distribution。OpenClaw/Hermes writable/install 与 Pi production writable 仍保持 blocked，直到 disposable rollback 证据通过。
+**近期主线**：继续围绕 skills 管理、检查、分析和配置审计打磨体验。短期不做全平台 UI 适配、正式签名 release、notarization、DMG/ZIP 或 public distribution。OpenClaw/Hermes writable/install 与 Pi production writable 仍保持 blocked，直到 disposable rollback 证据通过。V2.35 本地报告导出保持脱敏、本地、用户触发，不作为 public distribution 或自动同步入口。
 
 **已集成能力**：
 
@@ -22,7 +22,7 @@
 - V2.13 Pi read-only scanner/parser：支持 Pi-native global/project roots，Pi writes 继续 blocked。
 - V2.14 Hermes evidence-gate closeout 与 V2.17 Hermes read-only scanner：active/profile Hermes home `skills/**/SKILL.md` 只读进入 catalog。
 - V2.15 OpenClaw evidence-gate closeout 与 V2.16 OpenClaw read-only scanner：workspace/global documented filesystem roots 只读进入 catalog。
-- V2.18-V2.33：cross-agent analysis、skill health dashboard、read-only AI skill analysis、scan accuracy/dedupe、finding/conflict 语义、Health/Adapter Capability UX、Detail 诊断口径、Agent-config timeline、Finding explainability、skill identity/provenance dedupe、conflict semantic closeout、finding triage persistence、AI skill analysis workflow、Cleanup Queue、Rule tuning / suppression、Safe batch actions 已收口；V2.34 Cross-agent comparison view 正在进行。
+- V2.18-V2.34：cross-agent analysis、skill health dashboard、read-only AI skill analysis、scan accuracy/dedupe、finding/conflict 语义、Health/Adapter Capability UX、Detail 诊断口径、Agent-config timeline、Finding explainability、skill identity/provenance dedupe、conflict semantic closeout、finding triage persistence、AI skill analysis workflow、Cleanup Queue、Rule tuning / suppression、Safe batch actions、Cross-agent comparison view 已收口；V2.35 Local report export 正在进行。
 - 2026-06-10 真实本机 app Computer Use validation 已通过；后续 UI/service/protocol 变更仍需重跑。
 
 **当前产品 UI**：SwiftUI/AppKit macOS 原生壳 + Rust service protocol。
@@ -46,8 +46,9 @@
 | --- | --- | --- |
 | V2.31 | Cleanup Queue（默认 read-only 列表 + 现有安全动作入口） | 已完成 |
 | V2.32 | Rule tuning / suppression（本地 rule override / suppression，可审计可撤销） | 已完成：仅 app-local 元数据，默认不改写 skill 文件/agent config，不新增快照，且无脚本执行/AI provider/凭据/telemetry 路径 |
-| V2.33 | Safe batch actions（verified writable agents 的 preview-first 批量 enable/disable） | 已完成 |
-| V2.34 | Cross-agent comparison view（跨 agent 同名/相似 skill 差异对比） | 进行中 |
+| V2.33 | Safe batch actions（verified writable agents 的 preview-first 批量 enable/disable） | 已完成：Apply 前必须显式确认，且确认 preview id 必须仍匹配当前 preview |
+| V2.34 | Cross-agent comparison view（跨 agent 同名/相似 skill 差异对比） | 已完成：Analysis 中只读展示，不新增写入/执行/provider/credential/snapshot 路径 |
+| V2.35 | Local report export（脱敏 Markdown/JSON 本地审计报告） | 进行中 |
 | V2.30 | AI skill analysis workflow（selected/batch read-only 预览，默认禁用，非凭证/非写入） | Completed |
 | V2.29 | Finding triage persistence（Open / Reviewed / Ignored / Needs follow-up；仅 app-local） | Completed |
 | V2.28 | Conflict semantic closeout（验收：Conflicts=当前 agent runtime/name collision；Analysis=cross-agent duplicate/source overlap/enabled mismatch；health conflict_count 不含 cross-agent analysis） | 已完成 |
@@ -63,6 +64,7 @@
 ## 它做什么
 
 - **统一视图**：按 agent × scope 扫描、聚合、对比 skills。
+- **跨 agent 对比**：同名/相似 skills 在 Claude/Codex/opencode/Pi/Hermes/OpenClaw 的状态、来源、风险、可写能力与差异支持只读对比。
 - **配置管理**：启用 / 禁用、读写 agent 配置文件，支持原子写、快照和回滚。
 - **冲突与权限**：检测同名 skill 冲突，展示权限声明和规则 findings。
 - **Tool-global skill 池**：本地目录导入到 app-controlled staging，审计后 read-only preview，并可经确认安装到 Claude/Codex verified skill root。

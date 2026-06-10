@@ -311,3 +311,7 @@
 "adapter.capability.toggle" = "Toggle";
 "adapter.capability.install" = "Install";
 "empty.adapterNotImplemented.message" = "%@ adapter is not implemented yet. Check the capability status above for the current blocker.";
+"batchToggle.previewChanged" = "Batch preview changed before confirmation. Preview again before applying.";
+"batchToggle.confirm.title" = "Apply %@ to %d writable skills?";
+"batchToggle.confirm.apply" = "Apply %@ to %d skills";
+"batchToggle.confirm.message" = "This will %@ %d writable skills and skip %d read-only, ineligible, or no-op skills. %@";

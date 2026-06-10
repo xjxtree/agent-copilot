@@ -243,6 +243,17 @@ V2.4 把 opencode 作为第三个 adapter 接入 catalog；当前实现按官方
 - future distribution binary 由 maintainer 本机构建，签名上传
 - 不引入大依赖：评估每个新 crate 的下载量、维护活跃度、是否已被广泛使用
 
+### 2.4.7 V2.34 Cross-agent comparison view（已完成）
+
+风险：comparison 可见性叠加多个 agent 信息时，容易误解为可执行权限变化。
+
+缓解：
+
+- comparison 视图仅做 read-only 说明；不触发新的写路径，不发起 `catalog.scanAll` 之外扫描，不执行脚本、provider 请求、credential I/O、快照创建。
+- 对比字段仅来自现有读模型（`catalog.analysis`、`app.stateSnapshot.analysis`、adapter capability），并保留 `Cross-agent` 与 `selected-agent conflict` 的口径隔离。
+- comparison 面只提供决策导航（Detail、Health、findings/filter、scan、现有 confirm flow）；禁止直接挂接 apply/toggle/install/rollback 动作。
+- 对比输出不新增审计记录；不改变 triage/snapshot/agent-config 持久化边界。
+
 ## 3. 权限系统
 
 ### 3.1 应用自身（向 OS 申请）

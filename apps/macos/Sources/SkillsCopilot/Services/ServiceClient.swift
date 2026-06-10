@@ -56,6 +56,18 @@ private struct CleanupListQueueParams: Encodable {
     let limit: Int?
 }
 
+private struct CrossAgentComparisonParams: Encodable {
+    let agent: String?
+    let instanceId: String?
+    let limit: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case agent
+        case instanceId = "instance_id"
+        case limit
+    }
+}
+
 private struct GetSkillParams: Encodable {
     let instanceId: String
 
@@ -297,6 +309,15 @@ final class ServiceClient {
             )
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .emptyFallback(reason: UIStrings.cleanupUnavailableFallback)
+        }
+    }
+
+    func listCrossAgentComparisons(agent: String? = nil, instanceID: String? = nil, limit: Int? = nil) async throws -> CrossAgentComparisonResult {
+        let params = CrossAgentComparisonParams(agent: agent, instanceId: instanceID, limit: limit)
+        do {
+            return try await call(method: "comparison.listCrossAgent", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return try await call(method: "analysis.listComparisons", params: params)
         }
     }
 
