@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-**当前阶段**：V2.26 Finding explainability 已完成。下一步进入 V2.27 skill identity/provenance dedupe，继续围绕 skills 管理、检查、分析和配置审计推进 V2.27-V2.30。
+**当前阶段**：V2.27 Skill identity/provenance dedupe 已完成。V2.28 Conflict semantic closeout 已启动。继续围绕 skills 管理、检查、分析和配置审计推进。
 
 **近期主线**：继续围绕 skills 管理、检查、分析和配置审计打磨体验。短期不做全平台 UI 适配、正式签名 release、notarization、DMG/ZIP 或 public distribution。OpenClaw/Hermes writable/install 与 Pi production writable 仍保持 blocked，直到 disposable rollback 证据通过。
 
@@ -22,7 +22,7 @@
 - V2.13 Pi read-only scanner/parser：支持 Pi-native global/project roots，Pi writes 继续 blocked。
 - V2.14 Hermes evidence-gate closeout 与 V2.17 Hermes read-only scanner：active/profile Hermes home `skills/**/SKILL.md` 只读进入 catalog。
 - V2.15 OpenClaw evidence-gate closeout 与 V2.16 OpenClaw read-only scanner：workspace/global documented filesystem roots 只读进入 catalog。
-- V2.18-V2.25：cross-agent analysis、skill health dashboard、read-only AI skill analysis、scan accuracy/dedupe、finding/conflict 语义、Health/Adapter Capability UX、Detail 诊断口径、Agent-config timeline 已集成。
+- V2.18-V2.27：cross-agent analysis、skill health dashboard、read-only AI skill analysis、scan accuracy/dedupe、finding/conflict 语义、Health/Adapter Capability UX、Detail 诊断口径、Agent-config timeline、Finding explainability、skill identity/provenance dedupe 已收口；V2.28 conflict semantic closeout 正在进行。
 - 2026-06-10 真实本机 app Computer Use validation 已通过；后续 UI/service/protocol 变更仍需重跑。
 
 **当前产品 UI**：SwiftUI/AppKit macOS 原生壳 + Rust service protocol。
@@ -44,6 +44,8 @@
 
 | 版本 | 目标 | 状态 |
 | --- | --- | --- |
+| V2.28 | Conflict semantic closeout | 进行中 |
+| V2.27 | Skill identity/provenance dedupe | 已完成 |
 | V2.26 | Finding explainability | 已完成 |
 | V2.10 | Skill execution safety boundary / docs consistency | 已关闭 |
 | V2.11 | Adapter Capability Matrix：服务协议和 macOS UI 展示六个 agent 的能力状态与 blocker | 已完成 |

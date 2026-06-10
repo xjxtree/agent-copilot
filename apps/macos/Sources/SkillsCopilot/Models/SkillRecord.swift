@@ -24,6 +24,347 @@ struct SkillRecord: Codable, Identifiable, Hashable {
     }
 }
 
+enum SkillProvenanceRootKind: String, Hashable {
+    case native
+    case compatibility
+    case external
+    case toolGlobal
+    case readOnly
+    case unknown
+}
+
+enum SkillProvenanceScopeKind: String, Hashable {
+    case project
+    case global
+    case external
+    case toolGlobal
+    case unknown
+}
+
+struct SkillProvenance: Hashable {
+    let rootKind: SkillProvenanceRootKind
+    let scopeKind: SkillProvenanceScopeKind
+    let label: String
+    let isReadOnly: Bool
+    let isCatalogedSkill: Bool
+}
+
+struct SkillIdentitySummary: Hashable {
+    let title: String
+    let definitionId: String
+    let identityKey: String
+    let sourceKey: String
+    let catalogPath: String
+    let provenanceLabel: String
+    let state: String
+    let isCatalogedSkill: Bool
+}
+
+enum SkillDedupeReason: String, Hashable {
+    case definitionId
+    case name
+    case catalogPath
+    case distinct
+}
+
+struct SkillDedupeExplanation: Hashable {
+    let reason: SkillDedupeReason
+    let summary: String
+    let participantSummaries: [String]
+}
+
+extension SkillRecord {
+    var provenance: SkillProvenance {
+        let rootKind = inferredRootKind
+        let scopeKind = inferredScopeKind
+        let cataloged = isCatalogedSkillIdentity
+        return SkillProvenance(
+            rootKind: rootKind,
+            scopeKind: scopeKind,
+            label: provenanceLabel(rootKind: rootKind, scopeKind: scopeKind, isCatalogedSkill: cataloged),
+            isReadOnly: isReadOnlyProvenance,
+            isCatalogedSkill: cataloged
+        )
+    }
+
+    var identitySummary: SkillIdentitySummary {
+        let provenance = provenance
+        return SkillIdentitySummary(
+            title: stableDisplayName,
+            definitionId: definitionId,
+            identityKey: identityKey,
+            sourceKey: sourceKey,
+            catalogPath: catalogIdentityPath,
+            provenanceLabel: provenance.label,
+            state: state,
+            isCatalogedSkill: provenance.isCatalogedSkill
+        )
+    }
+
+    func dedupeExplanation(comparedWith other: SkillRecord) -> SkillDedupeExplanation {
+        let reason: SkillDedupeReason
+        let summary: String
+        if hasMatchingDefinitionId(with: other) {
+            reason = .definitionId
+            summary = "Same definition ID: \(definitionId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())"
+        } else if hasMatchingName(with: other) {
+            reason = .name
+            summary = "Same skill name: \(stableDisplayName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())"
+        } else if hasMatchingCatalogPath(with: other) {
+            reason = .catalogPath
+            summary = "Same catalog path: \(catalogIdentityPath.lowercased())"
+        } else {
+            reason = .distinct
+            summary = "No shared identity signal"
+        }
+        return SkillDedupeExplanation(
+            reason: reason,
+            summary: summary,
+            participantSummaries: [participantSummary, other.participantSummary].sorted()
+        )
+    }
+
+    var isCatalogedSkillIdentity: Bool {
+        if normalizedAgent == "pi" {
+            return pathComponents.last?.caseInsensitiveCompare("SKILL.md") == .orderedSame
+        }
+        return true
+    }
+
+    var catalogIdentityPath: String {
+        let components = pathComponents
+        guard components.last?.caseInsensitiveCompare("SKILL.md") == .orderedSame else {
+            return normalizedPath
+        }
+        let directoryComponents = components.dropLast()
+        return SkillIdentityPath.join(directoryComponents, absolute: normalizedPath.hasPrefix("/"))
+    }
+
+    var identityKey: String {
+        let cleanDefinitionId = definitionId.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cleanDefinitionId.isEmpty {
+            return "definition:\(cleanDefinitionId.lowercased())"
+        }
+        let cleanName = stableDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cleanName.isEmpty {
+            return "name:\(cleanName.lowercased())"
+        }
+        return "path:\(catalogIdentityPath.lowercased())"
+    }
+
+    var sourceKey: String {
+        [
+            normalizedAgent,
+            scope.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+            catalogIdentityPath.lowercased()
+        ].joined(separator: "|")
+    }
+
+    private var inferredRootKind: SkillProvenanceRootKind {
+        if normalizedScopeContains("tool") || normalizedPathContains("/tool-global/") || normalizedPathContains("/skill-pool/") {
+            return .toolGlobal
+        }
+        if normalizedScopeContains("external") || normalizedPathContains("/external/") {
+            return .external
+        }
+        switch normalizedAgent {
+        case "opencode":
+            if normalizedPathContains(".claude/skills/") || normalizedPathContains(".agents/skills/") {
+                return .compatibility
+            }
+            if normalizedPathContains(".opencode/skills/") || normalizedPathContains(".config/opencode/skills/") {
+                return .native
+            }
+        case "claude-code":
+            if normalizedPathContains(".claude/skills/") {
+                return .native
+            }
+        case "codex":
+            if normalizedPathContains(".agents/skills/") || normalizedPathContains(".codex/skills/") {
+                return .native
+            }
+        case "pi":
+            return isCatalogedSkillIdentity ? .native : .unknown
+        case "hermes", "openclaw":
+            return .readOnly
+        default:
+            break
+        }
+        return .unknown
+    }
+
+    private var inferredScopeKind: SkillProvenanceScopeKind {
+        if normalizedScopeContains("tool") || normalizedPathContains("/tool-global/") || normalizedPathContains("/skill-pool/") {
+            return .toolGlobal
+        }
+        if normalizedScopeContains("external") || normalizedPathContains("/external/") {
+            return .external
+        }
+        if normalizedScopeContains("project") || normalizedPathContains(".opencode/skills/") {
+            return .project
+        }
+        if normalizedScopeContains("global") || normalizedScopeContains("user") || normalizedPathContains(".config/opencode/skills/") {
+            return .global
+        }
+        return .unknown
+    }
+
+    private var isReadOnlyProvenance: Bool {
+        normalizedAgent == "pi" || normalizedAgent == "hermes" || normalizedAgent == "openclaw"
+    }
+
+    private var stableDisplayName: String {
+        let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleanName.isEmpty ? definitionId.trimmingCharacters(in: .whitespacesAndNewlines) : cleanName
+    }
+
+    private var participantSummary: String {
+        "\(stableDisplayName) [\(provenance.label)] \(sourceKey)"
+    }
+
+    private var normalizedAgent: String {
+        let normalized = agent
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "_", with: "-")
+            .replacingOccurrences(of: " ", with: "-")
+        return normalized == "claude" ? "claude-code" : normalized
+    }
+
+    private var normalizedPath: String {
+        SkillIdentityPath.normalize(path)
+    }
+
+    private var normalizedPathLowercased: String {
+        normalizedPath.lowercased()
+    }
+
+    private var normalizedDisplayPathLowercased: String {
+        SkillIdentityPath.normalize(displayPath).lowercased()
+    }
+
+    private var pathComponents: [String] {
+        SkillIdentityPath.components(normalizedPath)
+    }
+
+    private func normalizedPathContains(_ needle: String) -> Bool {
+        normalizedPathLowercased.contains(needle) || normalizedDisplayPathLowercased.contains(needle)
+    }
+
+    private func normalizedScopeContains(_ needle: String) -> Bool {
+        scope.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().contains(needle)
+    }
+
+    private func hasMatchingDefinitionId(with other: SkillRecord) -> Bool {
+        let lhs = definitionId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let rhs = other.definitionId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return !lhs.isEmpty && lhs == rhs
+    }
+
+    private func hasMatchingName(with other: SkillRecord) -> Bool {
+        let lhs = stableDisplayName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let rhs = other.stableDisplayName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return !lhs.isEmpty && lhs == rhs
+    }
+
+    private func hasMatchingCatalogPath(with other: SkillRecord) -> Bool {
+        catalogIdentityPath.caseInsensitiveCompare(other.catalogIdentityPath) == .orderedSame
+    }
+
+    private func provenanceLabel(
+        rootKind: SkillProvenanceRootKind,
+        scopeKind: SkillProvenanceScopeKind,
+        isCatalogedSkill: Bool
+    ) -> String {
+        if normalizedAgent == "pi" && !isCatalogedSkill {
+            return "Pi document (not cataloged)"
+        }
+        let agentLabel = SkillIdentityText.agentLabel(normalizedAgent)
+        let rootLabel: String
+        switch rootKind {
+        case .native:
+            rootLabel = "native"
+        case .compatibility:
+            rootLabel = "compatibility"
+        case .external:
+            rootLabel = "external"
+        case .toolGlobal:
+            rootLabel = "tool-global"
+        case .readOnly:
+            rootLabel = "read-only"
+        case .unknown:
+            rootLabel = "unknown"
+        }
+        let scopeLabel: String
+        switch scopeKind {
+        case .project:
+            scopeLabel = "project"
+        case .global:
+            scopeLabel = "global"
+        case .external:
+            scopeLabel = "external"
+        case .toolGlobal:
+            scopeLabel = "tool-global"
+        case .unknown:
+            scopeLabel = "scope"
+        }
+        if rootKind == .readOnly {
+            return "\(agentLabel) read-only \(scopeLabel)"
+        }
+        if rootKind == .toolGlobal || scopeKind == .toolGlobal {
+            return "\(agentLabel) tool-global"
+        }
+        if rootKind == .external || scopeKind == .external {
+            return "\(agentLabel) external"
+        }
+        return "\(agentLabel) \(rootLabel) \(scopeLabel)"
+    }
+}
+
+private enum SkillIdentityPath {
+    static func normalize(_ path: String) -> String {
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        let slashPath = trimmed.replacingOccurrences(of: "\\", with: "/")
+        let absolute = slashPath.hasPrefix("/")
+        return join(components(slashPath), absolute: absolute)
+    }
+
+    static func components(_ path: String) -> [String] {
+        path
+            .split(separator: "/", omittingEmptySubsequences: true)
+            .map(String.init)
+    }
+
+    static func join<S: Sequence>(_ components: S, absolute: Bool) -> String where S.Element == String {
+        let joined = components.joined(separator: "/")
+        if absolute {
+            return joined.isEmpty ? "/" : "/\(joined)"
+        }
+        return joined
+    }
+}
+
+private enum SkillIdentityText {
+    static func agentLabel(_ agent: String) -> String {
+        switch agent {
+        case "claude-code":
+            return "Claude Code"
+        case "codex":
+            return "Codex"
+        case "opencode":
+            return "opencode"
+        case "pi":
+            return "Pi"
+        case "hermes":
+            return "Hermes"
+        case "openclaw":
+            return "OpenClaw"
+        default:
+            return agent.isEmpty ? "Unknown agent" : agent
+        }
+    }
+}
+
 struct SkillDetailRecord: Codable, Identifiable, Hashable {
     let id: String
     let agent: String

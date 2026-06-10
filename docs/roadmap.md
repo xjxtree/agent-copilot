@@ -4,9 +4,9 @@
 >
 > 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.27 skill identity/provenance dedupe planning**。V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability 均已收口。
+> 当前阶段：**V2.28 conflict semantic closeout（进行中）**。V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe 均已收口。
 >
-> 近期主线：继续围绕 skills 管理、检查、分析和配置审计打磨体验。下一段版本线先做 finding 可解释性、skill identity/provenance 去重、selected-agent conflict 语义稳定、finding triage persistence 与 read-only AI skill analysis workflow；Pi writable evidence 作为后续 harness 候选，不进入生产写入。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
+> 近期主线：继续围绕 skills 管理、检查、分析和配置审计打磨体验。下一段版本线聚焦 selected-agent conflict 语义稳定、finding triage persistence 与 read-only AI skill analysis workflow；Pi writable evidence 作为后续 harness 候选，不进入生产写入。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
 >
 > 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.25 各阶段能力、V2.9 Tool-global skill pool、V2.11 Adapter capability matrix、V2.16-V2.25 management/analysis/history line。后续候选变更仍需重新验证。
 >
@@ -912,11 +912,18 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 
 | Version | Goal | Completion signal |
 | --- | --- | --- |
-| V2.26 | Finding 可解释性 | 已完成：每个 finding group 都明确规则来源、触发条件、影响实例、扫描项、risk 子集关系；用户可从 Health/Detail drill-down 到具体 skill。 |
-| V2.27 | Skill 身份、来源与去重治理 | 统一 agent/path/root/provenance identity；Pi 普通 `.md` 噪声继续排除；opencode compatibility roots 与 native roots 可解释。 |
-| V2.28 | Conflict 语义彻底收口 | Same-agent conflict 只代表当前 agent runtime/name collision；cross-agent duplicate/source overlap 只进入 Analysis。 |
-| V2.29 | Finding triage persistence | 支持 reviewed / ignored / needs-follow-up，本地 catalog 持久化，不写 agent config；finding fingerprint 变化后重新打开。 |
-| V2.30 | AI Skill Analysis 工作流增强 | disabled-by-default read-only AI 分析支持批量摘要、风险解释、修复建议草稿；不写文件、不执行脚本、不保存 credentials。 |
+| V2.26 | Finding 可解释性（完成） | 已完成：每个 finding group 都明确规则来源、触发条件、影响实例、扫描项、risk 子集关系；用户可从 Health/Detail drill-down 到具体 skill/rule/path。 |
+| V2.27 | Skill 身份、来源与去重治理（完成） | 已完成：统一 agent/scope/definition/path identity；opencode native 与 compatibility provenance 可见；Pi `.md` 资源噪声继续排除；跨 agent duplicate/source overlap 保持在 Analysis。 |
+| V2.28 | Conflict 语义彻底收口（进行中） | Same-agent conflict 只代表当前 agent runtime/name collision；cross-agent duplicate/source overlap 只进入 Analysis。 |
+| V2.29 | Finding triage persistence（计划） | 支持 reviewed / ignored / needs-follow-up，本地 catalog 持久化，不写 agent config；finding fingerprint 变化后重新打开。 |
+| V2.30 | AI Skill Analysis 工作流增强（计划） | disabled-by-default read-only AI 分析支持批量摘要、风险解释、修复建议草稿；不写文件、不执行脚本、不保存 credentials。 |
+
+### 4.27-V2.27 Skill 身份 / 来源 / 去重（完成）
+
+- 身份口径：deterministic identity 使用 `agent / scope / definition_id / path` 元组；`definition_id` 来源于 canonical name hash，`path` 使用 canonicalized 绝对路径，`scope` 覆盖 global/project。
+- 来源标签：对每个 skill 行展示 provenance 标签，至少包括 `native` 与 `compatibility`；用户可在 catalog/detail/analysis/health 看到一致的来源说明。
+- Pi 规则：仍只识别目录型 `SKILL.md`（如 `.../<skill-name>/SKILL.md`）；直接 `*.md` 根文件、`references/SKILL.md`、资源目录中的 `SKILL.md` 不作为 skill 实例纳入可见行。
+- 语义边界：V2.27 不改 Conflict 定义，cross-agent duplicate、source overlap、enabled 状态不一致仍归 `catalog.analysis`（Analysis）而非 `catalog.listConflicts`/Health conflict count。
 
 ## 4.31-V2.35 整理工作流
 

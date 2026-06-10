@@ -182,10 +182,12 @@ private struct SkillSummaryCard: View {
                 .textSelection(.enabled)
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 10)], alignment: .leading, spacing: 10) {
-                SummaryChip(title: UIStrings.source, value: skill.displayPath, systemImage: "doc")
+                SummaryChip(title: UIStrings.agent, value: DisplayText.agent(skill.agent), systemImage: "person.crop.circle")
                 SummaryChip(title: UIStrings.scope, value: DisplayText.scope(skill.scope), systemImage: "folder")
-                SummaryChip(title: UIStrings.state, value: DisplayText.state(skill.state, enabled: skill.enabled), systemImage: DisplayText.stateSystemImage(skill.state, enabled: skill.enabled))
-                SummaryChip(title: UIStrings.text("detail.enabled", "Enabled"), value: skill.enabled ? UIStrings.stateEnabled : UIStrings.stateDisabled, systemImage: skill.enabled ? "checkmark.circle" : "pause.circle")
+                SummaryChip(title: UIStrings.provenanceRoot, value: SkillProvenanceDisplay.rootClass(for: skill), systemImage: "externaldrive")
+                SummaryChip(title: UIStrings.provenanceKind, value: SkillProvenanceDisplay.kind(for: skill), systemImage: "tag")
+                SummaryChip(title: UIStrings.definition, value: skill.definitionId, systemImage: "number")
+                SummaryChip(title: UIStrings.source, value: skill.displayPath, systemImage: "doc")
             }
 
             OverviewRiskPanel(
@@ -293,6 +295,7 @@ private struct SummaryChip: View {
                 Text(value)
                     .font(.caption.bold())
                     .lineLimit(1)
+                    .truncationMode(.middle)
             }
         } icon: {
             Image(systemName: systemImage)
@@ -301,6 +304,68 @@ private struct SummaryChip: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private enum SkillProvenanceDisplay {
+    static func rootClass(for skill: SkillRecord) -> String {
+        switch skill.provenance.rootKind {
+        case .toolGlobal:
+            return UIStrings.provenanceToolGlobalRoot
+        case .native:
+            if isNativeOpencodeRoot(skill) {
+                return UIStrings.provenanceNativeOpencodeRoot
+            }
+            return "\(DisplayText.agent(skill.agent)) \(UIStrings.provenanceNativeRoot)"
+        case .compatibility:
+            if isClaudeCompatibilityRoot(skill) {
+                return UIStrings.provenanceClaudeCompatibilityRoot
+            }
+            if isAgentsCompatibilityRoot(skill) {
+                return UIStrings.provenanceAgentsCompatibilityRoot
+            }
+            return skill.provenance.label
+        case .external:
+            return UIStrings.provenanceExternalRoot
+        case .readOnly:
+            return "\(DisplayText.agent(skill.agent)) \(UIStrings.provenanceReadOnlyRoot)"
+        case .unknown:
+            return UIStrings.provenanceUnclassifiedRoot
+        }
+    }
+
+    static func kind(for skill: SkillRecord) -> String {
+        switch skill.provenance.rootKind {
+        case .toolGlobal:
+            return UIStrings.provenanceToolGlobalKind
+        case .native:
+            return UIStrings.provenanceNativeKind
+        case .compatibility:
+            return UIStrings.provenanceCompatibilityKind
+        case .external:
+            return UIStrings.provenanceExternalKind
+        case .readOnly:
+            return UIStrings.provenanceReadOnlyKind
+        case .unknown:
+            return UIStrings.provenanceInferredKind
+        }
+    }
+
+    private static func isClaudeCompatibilityRoot(_ skill: SkillRecord) -> Bool {
+        pathText(for: skill).contains(".claude/skills")
+    }
+
+    private static func isAgentsCompatibilityRoot(_ skill: SkillRecord) -> Bool {
+        pathText(for: skill).contains(".agents/skills")
+    }
+
+    private static func isNativeOpencodeRoot(_ skill: SkillRecord) -> Bool {
+        let path = pathText(for: skill)
+        return path.contains(".config/opencode/skills") || path.contains(".opencode/skills")
+    }
+
+    private static func pathText(for skill: SkillRecord) -> String {
+        "\(skill.path)\n\(skill.displayPath)".lowercased()
     }
 }
 
@@ -1025,6 +1090,10 @@ private struct SkillDetailCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 12) {
+                MetadataRow(label: UIStrings.agent, value: DisplayText.agent(skill.agent))
+                MetadataRow(label: UIStrings.scope, value: DisplayText.scope(skill.scope))
+                MetadataRow(label: UIStrings.provenanceRoot, value: SkillProvenanceDisplay.rootClass(for: skill))
+                MetadataRow(label: UIStrings.provenanceKind, value: SkillProvenanceDisplay.kind(for: skill))
                 MetadataRow(label: UIStrings.definition, value: skill.definitionId)
                 MetadataRow(label: UIStrings.catalogID, value: skill.id)
                 MetadataRow(label: UIStrings.source, value: skill.displayPath)

@@ -131,3 +131,10 @@ For UI changes:
 - Health 卡片与 Detail 的 drill-down 需形成闭环：从统计入口可直接跳转到对应 finding group 的实例集合、规则、scope 与 scan entry，再到单 skill 细览。
 - 风险口径约束：Risk 仅是 finding 的可解释子集；Health 与 Findings 计数、Filtering 不能出现互斥定义。
 - 行为空间约束：finding explainability 仅提供说明/筛选/跳转；不提供执行、自动写入、自动 apply；AI 建议仍为只读预览，且不涉及凭据持久化。
+
+## 11. V2.27: Skill identity/provenance dedupe（完成）
+
+- Catalog/analysis 视图必须展示一致的来源标签（provenance）：`native` 与 `compatibility` 应在 opencode 条目中可见，用于区分为何同名技能可重复出现但不构成同一运行时。
+- 重复展示行为在文案上应可追踪：当同一 skill 名称/路径跨 agent 出现时，UI 说明应导向 Analysis，而非把其计入 Conflict 卡片。
+- 入口筛选与列表/详情中的身份字段需支持 `agent / scope / definition / path` 维度解释；`Pi` 列表应不显示资源噪声 `.md`。
+- 保持现有边界：不变更 writable/write/blocker 状态、不新增脚本执行链路、不展示 credentials。

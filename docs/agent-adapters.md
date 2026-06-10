@@ -2,7 +2,7 @@
 
 > skills-copilot 支持的 6 个 agent 的适配要点。
 >
-> 当前版本线：V2.11 Adapter Capability Matrix、V2.12 opencode writable、V2.13 Pi read-only scanner/parser、V2.14 Hermes evidence-gate closeout、V2.15 OpenClaw evidence-gate closeout、V2.16 OpenClaw read-only scanner、V2.17 Hermes read-only scanner、V2.18 cross-agent analysis、V2.19 skill health dashboard、V2.20 read-only AI skill analysis assist、V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 诊断口径、V2.25 Agent-config timeline 均已完成。下一阶段 V2.26-V2.30 聚焦 finding 可解释性、skill identity/provenance、conflict 语义稳定、triage persistence 与 read-only AI analysis workflow。
+> 当前版本线：V2.11 Adapter Capability Matrix、V2.12 opencode writable、V2.13 Pi read-only scanner/parser、V2.14 Hermes evidence-gate closeout、V2.15 OpenClaw evidence-gate closeout、V2.16 OpenClaw read-only scanner、V2.17 Hermes read-only scanner、V2.18 cross-agent analysis、V2.19 skill health dashboard、V2.20 read-only AI skill analysis assist、V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe 均已完成。下一阶段 V2.28-V2.30 聚焦 conflict 语义稳定、triage persistence 与 read-only AI analysis workflow。
 >
 > 扫描适配器实现 `AgentAdapter`。
 >
@@ -168,6 +168,12 @@ Codex 当前实现边界：
 
 > 目前只允许基于该 spec 做 read-only scanner/parser 设计；不要写可修改 Pi settings 的 adapter，直到 `pi config` 的 exact JSON mutation 和回滚语义完成本地验证。
 
+### 2.3.1 Pi `.md` 去噪与可解释性边界（V2.27）
+
+- Pi 扫描仅保留目录型 skill（`<root>/<skill-name>/SKILL.md`）与项目同构路径；不以 `.md` 文件作为 skill 实例。
+- 过滤 `~/.pi/agent/skills/SKILL.md`、`.pi/skills/SKILL.md`、`references/SKILL.md`、或其他资源目录中的 direct `.md` 以减少伪阳性。
+- 与其它 agent 的重名/共享路径关系由 cross-agent analysis 表达，不进入 `catalog.listConflicts`。
+
 ### 2.4 hermes
 
 | 项 | 值 |
@@ -203,6 +209,12 @@ OpenClaw P0 evidence 已确认官方 `SKILL.md` roots、frontmatter schema、loa
 V2.16 第一版只做 read-only filesystem scanner；toggle/install/writable 继续 blocked，直到 disposable config mutation 证明 credential-safe rollback。
 
 ### 2.6 opencode
+### 2.6.1 opencode provenance 口径（V2.27）
+
+- 在 catalog 和 analysis 视图中，opencode 条目需展示 provenance label：`native`（`~/.config/opencode/skills`、`project/.opencode/skills`）与 `compatibility`（`~/.claude/skills`、`~/.agents/skills` 等官方兼容目录）。
+- 身份口径由 `(agent, scope, definition_id, path)` 决定；跨 root 的同名条目作为可解释重叠，保留于 Analysis，不直接变更 conflict 口径。
+- `id` 规则仍以实例主键为准，provenance 仅用于用户可解释展示与分析分组。
+
 
 | 项 | 值 |
 | --- | --- |
@@ -211,7 +223,7 @@ V2.16 第一版只做 read-only filesystem scanner；toggle/install/writable 继
 | Spec 工作单 | [`docs/opencode-adapter-spec.md`](./opencode-adapter-spec.md) |
 | 统一工作单 | [`docs/agent-adapter-spec-worklists.md`](./agent-adapter-spec-worklists.md#opencode) |
 | 本地观测 | 2026-06-08 本机 `opencode --version` 为 `1.16.2`；`~/.config/opencode/skills/` 和 `~/.config/opencode/opencode.json` 存在；未读取或修改真实 config 内容 |
-| Skill roots | 扫描 `~/.config/opencode/skills`、项目 `.opencode/skills`、`~/.claude/skills`、项目 `.claude/skills`、`~/.agents/skills`、项目 `.agents/skills` |
+| Skill roots | 扫描 `~/.config/opencode/skills`、项目 `.opencode/skills`（native）以及 `~/.claude/skills` / `.claude/skills` / `~/.agents/skills` / `.agents/skills`（compatibility） |
 | Skill 格式 | 每个 skill 一个目录加 `SKILL.md`；frontmatter `name`/`description` 必填；`name` 必须匹配目录名；unknown fields ignored |
 | 配置文件 | 全局 `~/.config/opencode/opencode.json`；项目根 `opencode.json`；`.opencode` 目录；`OPENCODE_CONFIG` / `OPENCODE_CONFIG_DIR`；managed config 只读 |
 | 启用控制 | `permission.skill` 支持 `allow` / `deny` / `ask`；V2.12 只写 exact `permission.skill.<name> = "deny"`，re-enable 只移除同名 exact deny，不改 wildcard rules |
@@ -239,7 +251,7 @@ opencode roots 口径：
 
 ### 3.1 路径冲突
 
-同一物理文件可能被多个 agent 识别为 skill（例如 symlink）。catalog 用 `id = hash(agent, scope, path)` 去重，跨 agent 仅作为 analysis group 观察；同-agent runtime/name 冲突仍由冲突分组展示（参见 [data-model.md](./data-model.md)）。
+同一物理文件可能被多个 agent 识别为 skill（例如 symlink）。catalog 用 `id = hash(agent, scope, path)` 去重，跨 agent 仅作为 analysis group 观察；同-agent runtime/name 冲突仍由冲突分组展示（参见 [data-model.md](./data-model.md)）。V2.27 追加 provenance 标注：同一物理路径在不同 provenance source 下的重复展示，仍走 Analysis 而不影响 conflict 计数。
 
 ### 3.2 启用优先级（当同一名字出现在多 scope）
 

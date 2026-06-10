@@ -82,6 +82,13 @@ pub enum SkillState {
 - id 一旦生成就**永不复用**：如果原文件被删，instance 进入 `Missing` 状态保留 N 天再清理
 - 用户重命名 skill 目录 → 新 id，旧 id 走 `Missing` 流程
 
+V2.27 口径补充：`definition` 维度参与去重解释（非存储主键变更）：
+
+- 用于可解释显示与 cross-agent 对齐的 `skill_group_key` 采用 `(agent, scope, definition_id, path)`。
+- `definition_id` 为 canonical name hash；定义与实例共享时可稳定解释“为何一份 physical file 在不同 agent 下重复显示”。
+- 来自 opencode 的同名扫描条目要在 DTO 中携带 provenance 标签（`native` / `compatibility`）与 source root 说明。
+- Pi `.md` 噪声继续排除：目录型 `SKILL.md` 外的直接 `.md`、root `SKILL.md`、`references/SKILL.md` 不进入 `SkillInstance` 列表。
+
 ### 1.4 `SkillDefinition`
 
 按 `name` 聚合的逻辑技能。**跨 agent / 跨 scope 的同名 instance 都挂在同一个 `SkillDefinition` 下**。

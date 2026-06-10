@@ -9,6 +9,8 @@ struct SkillListModelTests {
         try stateFiltersUseEffectiveStatusFindingsAndConflicts()
         try conflictFiltersUseCurrentAgentRuntimeSemantics()
         try sortOrdersAreStableForCoreListColumns()
+        try skillProvenanceClassifiesAgentRootsDeterministically()
+        try skillIdentitySummaryAndDedupeExplanationAreStable()
     }
 
     private func detailWorkbenchSectionsExposeDiagnostics() throws {
@@ -128,6 +130,145 @@ struct SkillListModelTests {
         try expectEqual(filtered(sortOrder: .scope).map(\.id), ["alpha", "delta", "epsilon", "gamma", "omega", "theta", "zeta", "beta"], "Scope sort")
         try expectEqual(filtered(sortOrder: .state).map(\.id), ["delta", "epsilon", "beta", "alpha", "gamma", "omega", "zeta", "theta"], "State sort")
         try expectEqual(filtered(sortOrder: .path).map(\.id), ["epsilon", "gamma", "alpha", "zeta", "omega", "beta", "delta", "theta"], "Path sort")
+    }
+
+    private func skillProvenanceClassifiesAgentRootsDeterministically() throws {
+        let opencodeProject = Self.identityRecord(
+            agent: "opencode",
+            scope: "agent-project",
+            path: "/repo/.opencode/skills/foo/SKILL.md"
+        )
+        let opencodeGlobal = Self.identityRecord(
+            agent: "opencode",
+            scope: "agent-global",
+            path: "$HOME/.config/opencode/skills/foo/SKILL.md"
+        )
+        let opencodeClaudeCompatibility = Self.identityRecord(
+            agent: "opencode",
+            scope: "agent-project",
+            path: "/repo/.claude/skills/foo/SKILL.md"
+        )
+        let opencodeAgentsCompatibility = Self.identityRecord(
+            agent: "opencode",
+            scope: "agent-project",
+            path: "/repo/.agents/skills/foo/SKILL.md"
+        )
+        let codexAgentsNative = Self.identityRecord(
+            agent: "codex",
+            scope: "agent-project",
+            path: "/repo/.agents/skills/foo/SKILL.md"
+        )
+        let claudeAgentsCompatibility = Self.identityRecord(
+            agent: "claude-code",
+            scope: "agent-project",
+            path: "/repo/.agents/skills/foo/SKILL.md"
+        )
+        let claudeGlobalDisplayAgent = Self.identityRecord(
+            agent: "Claude Code",
+            scope: "Agent Global",
+            path: "~/.claude/skills/foo/SKILL.md"
+        )
+        let claudeDisplayPathOnly = Self.identityRecord(
+            agent: "Claude Code",
+            scope: "Agent Global",
+            path: "stable-instance-id",
+            displayPath: "$HOME/.claude/skills/foo/SKILL.md"
+        )
+        let piDirectorySkill = Self.identityRecord(
+            agent: "pi",
+            scope: "agent-global",
+            path: "$HOME/.pi/skills/foo/SKILL.md"
+        )
+        let piDirectDocument = Self.identityRecord(
+            agent: "pi",
+            scope: "agent-global",
+            path: "$HOME/.pi/skills/foo.md"
+        )
+        let hermesSkill = Self.identityRecord(
+            agent: "hermes",
+            scope: "agent-global",
+            path: "$HOME/.hermes/skills/foo/SKILL.md"
+        )
+        let openClawSkill = Self.identityRecord(
+            agent: "openclaw",
+            scope: "agent-project",
+            path: "/repo/skills/foo/SKILL.md"
+        )
+
+        try expectEqual(opencodeProject.provenance.rootKind, .native, "opencode project .opencode roots should be native.")
+        try expectEqual(opencodeProject.provenance.scopeKind, .project, "opencode project .opencode roots should remain project scoped.")
+        try expectEqual(opencodeProject.provenance.label, "opencode native project", "opencode project native label")
+        try expectEqual(opencodeGlobal.provenance.rootKind, .native, "opencode ~/.config/opencode roots should be native.")
+        try expectEqual(opencodeGlobal.provenance.scopeKind, .global, "opencode ~/.config/opencode roots should be global scoped.")
+        try expectEqual(opencodeGlobal.provenance.label, "opencode native global", "opencode global native label")
+        try expectEqual(opencodeClaudeCompatibility.provenance.rootKind, .compatibility, "opencode .claude roots should be compatibility roots.")
+        try expectEqual(opencodeAgentsCompatibility.provenance.rootKind, .compatibility, "opencode .agents roots should be compatibility roots.")
+        try expectEqual(codexAgentsNative.provenance.rootKind, .native, "Codex .agents roots should be native roots.")
+        try expectEqual(claudeAgentsCompatibility.provenance.rootKind, .unknown, "Claude Code should not treat .agents roots as native Claude roots.")
+        try expectEqual(claudeGlobalDisplayAgent.provenance.rootKind, .native, "Claude Code display agent and tilde .claude roots should be native.")
+        try expectEqual(claudeGlobalDisplayAgent.provenance.label, "Claude Code native global", "Claude Code display agent label")
+        try expectEqual(claudeDisplayPathOnly.provenance.rootKind, .native, "Display path should classify provenance when path is a stable record ID.")
+        try expectEqual(piDirectorySkill.isCatalogedSkillIdentity, true, "Pi directory SKILL.md records should remain cataloged skills.")
+        try expectEqual(piDirectorySkill.catalogIdentityPath, "$HOME/.pi/skills/foo", "Pi directory SKILL.md identity should use its containing directory.")
+        try expectEqual(piDirectDocument.isCatalogedSkillIdentity, false, "Pi direct .md files should not be treated as cataloged skills.")
+        try expectEqual(piDirectDocument.provenance.label, "Pi document (not cataloged)", "Pi direct .md label")
+        try expectEqual(hermesSkill.provenance.label, "Hermes read-only global", "Hermes should retain read-only provenance.")
+        try expectEqual(openClawSkill.provenance.label, "OpenClaw read-only project", "OpenClaw should retain read-only provenance.")
+    }
+
+    private func skillIdentitySummaryAndDedupeExplanationAreStable() throws {
+        let native = Self.identityRecord(
+            id: "native",
+            agent: "opencode",
+            scope: "agent-project",
+            path: "/repo//.opencode/skills/Foo/SKILL.md",
+            definitionId: "Shared.Skill",
+            name: "Foo"
+        )
+        let compatibility = Self.identityRecord(
+            id: "compatibility",
+            agent: "opencode",
+            scope: "agent-project",
+            path: "/repo/.claude/skills/foo/SKILL.md",
+            definitionId: "shared.skill",
+            name: "Foo"
+        )
+        let summary = native.identitySummary
+        try expectEqual(summary.title, "Foo", "Identity summary should expose a stable display title.")
+        try expectEqual(summary.identityKey, "definition:shared.skill", "Identity key should prefer canonical definition ID.")
+        try expectEqual(summary.sourceKey, "opencode|agent-project|/repo/.opencode/skills/foo", "Source key should be canonical and deterministic.")
+        try expectEqual(summary.catalogPath, "/repo/.opencode/skills/Foo", "Directory SKILL.md identity should use the containing directory.")
+        try expectEqual(summary.provenanceLabel, "opencode native project", "Identity summary should carry provenance label.")
+
+        let forward = native.dedupeExplanation(comparedWith: compatibility)
+        let reverse = compatibility.dedupeExplanation(comparedWith: native)
+        try expectEqual(forward.reason, .definitionId, "Dedupe should prefer definition ID matches.")
+        try expectEqual(forward.summary, "Same definition ID: shared.skill", "Dedupe explanation should use canonical definition ID.")
+        try expectEqual(forward, reverse, "Pairwise dedupe explanation should not depend on call order.")
+    }
+
+    private static func identityRecord(
+        id: String = "identity",
+        agent: String,
+        scope: String,
+        path: String,
+        displayPath: String? = nil,
+        definitionId: String = "identity.definition",
+        name: String = "Identity",
+        state: String = "loaded",
+        enabled: Bool = true
+    ) -> SkillRecord {
+        SkillRecord(
+            id: id,
+            agent: agent,
+            scope: scope,
+            path: path,
+            displayPath: displayPath ?? path,
+            definitionId: definitionId,
+            name: name,
+            state: state,
+            enabled: enabled
+        )
     }
 
     private func filtered(
