@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-**当前阶段**：V2.25 Agent-config timeline 与 V2.21-V2.25 scan/finding/conflict/health/detail/history 口径已收口。下一阶段聚焦 V2.26-V2.30：finding 可解释性、skill 身份与去重、conflict 语义稳定、triage 持久化，以及 read-only AI skill analysis 工作流增强。
+**当前阶段**：V2.26 Finding explainability 已完成。下一步进入 V2.27 skill identity/provenance dedupe，继续围绕 skills 管理、检查、分析和配置审计推进 V2.27-V2.30。
 
 **近期主线**：继续围绕 skills 管理、检查、分析和配置审计打磨体验。短期不做全平台 UI 适配、正式签名 release、notarization、DMG/ZIP 或 public distribution。OpenClaw/Hermes writable/install 与 Pi production writable 仍保持 blocked，直到 disposable rollback 证据通过。
 
@@ -44,6 +44,7 @@
 
 | 版本 | 目标 | 状态 |
 | --- | --- | --- |
+| V2.26 | Finding explainability | 已完成 |
 | V2.10 | Skill execution safety boundary / docs consistency | 已关闭 |
 | V2.11 | Adapter Capability Matrix：服务协议和 macOS UI 展示六个 agent 的能力状态与 blocker | 已完成 |
 | V2.12 | opencode writable evidence + guarded toggle/install | 已完成 |

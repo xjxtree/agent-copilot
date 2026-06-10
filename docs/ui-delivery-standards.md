@@ -124,3 +124,10 @@ For UI changes:
 - 仅展示 toggle/config 相关快照事件，不展示 skill-content snapshot 或 skill-toggle snapshot。
 - rollback 流必须是 preview diff + 明确二次确认：先 `snapshot.previewRollback` 再独立确认 `snapshot.rollback`。
 - 当前口径已完成；未来涉及 rollback 或 timeline 的 UI/service/protocol 变更仍需 evidence 记录，且多 agent 视图必须保持各自独立。
+
+## 10. V2.26: Finding explainability（完成口径）
+
+- Findings 显示必须可解释：每条 finding issue group 需展示 rule source、触发原因（reason/message）、受影响实例数与实例列表、扫描条目（agent/scope/definition/path/root）、severity 与 risk 子集关系。
+- Health 卡片与 Detail 的 drill-down 需形成闭环：从统计入口可直接跳转到对应 finding group 的实例集合、规则、scope 与 scan entry，再到单 skill 细览。
+- 风险口径约束：Risk 仅是 finding 的可解释子集；Health 与 Findings 计数、Filtering 不能出现互斥定义。
+- 行为空间约束：finding explainability 仅提供说明/筛选/跳转；不提供执行、自动写入、自动 apply；AI 建议仍为只读预览，且不涉及凭据持久化。

@@ -4,7 +4,7 @@
 >
 > 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.26-V2.30 skill management semantics and explainability planning**。V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 诊断口径、V2.25 Agent-config timeline 均已收口。
+> 当前阶段：**V2.27 skill identity/provenance dedupe planning**。V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability 均已收口。
 >
 > 近期主线：继续围绕 skills 管理、检查、分析和配置审计打磨体验。下一段版本线先做 finding 可解释性、skill identity/provenance 去重、selected-agent conflict 语义稳定、finding triage persistence 与 read-only AI skill analysis workflow；Pi writable evidence 作为后续 harness 候选，不进入生产写入。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
 >
@@ -901,9 +901,18 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 
 **产品目标**：让 Skills Copilot 从“能列出问题”推进到“用户能理解问题、定位来源、决定怎么处理”。这段版本线不新增执行器、不新增云服务、不新增未验证写入路径。
 
+### 4.26-V2.26 Finding 可解释性（完成）
+
+- 目标：把每个 finding issue group 从“数字”升级为可审计解释对象，覆盖规则来源、触发原因、受影响实例和扫描项，并保持与 Health/Detail 的直达链路。
+- 规则解释：每个 finding 组必须展示 `rule_id` + `rule_source`（scanner、rule 集、引擎分层）和 trigger 说明（触发原因/触发消息）。
+- 受影响范围：每个 finding 组必须给出 `affected_instances` 与 `scan_entries`（agent/scope/definition/path/root），以及该组对应的实例总数和实例变更历史可见性。
+- 风险映射：每个 finding 组必须说明 severity（error/warn/info）与风险子集关系（是否计入 health 的 `risky_*` 计数、何种 risk subset）。
+- Drill-down：从 Health 卡片、Findings 列表、single-skill Detail 均应可直接跳转到相同过滤条件（rule + severity + 实例 + scope），并可定位到具体 skill / definition / scan entry。
+- 边界：本阶段仅增强可解释展示，不新增写路径、不新增脚本执行，不新增凭据存储；AI 仍保持只读辅助预览。
+
 | Version | Goal | Completion signal |
 | --- | --- | --- |
-| V2.26 | Finding 可解释性 | 每个 finding group 都能解释规则来源、触发条件、影响实例、risk 子集关系，并能从 Health/Detail drill down 到具体 skill。 |
+| V2.26 | Finding 可解释性 | 已完成：每个 finding group 都明确规则来源、触发条件、影响实例、扫描项、risk 子集关系；用户可从 Health/Detail drill-down 到具体 skill。 |
 | V2.27 | Skill 身份、来源与去重治理 | 统一 agent/path/root/provenance identity；Pi 普通 `.md` 噪声继续排除；opencode compatibility roots 与 native roots 可解释。 |
 | V2.28 | Conflict 语义彻底收口 | Same-agent conflict 只代表当前 agent runtime/name collision；cross-agent duplicate/source overlap 只进入 Analysis。 |
 | V2.29 | Finding triage persistence | 支持 reviewed / ignored / needs-follow-up，本地 catalog 持久化，不写 agent config；finding fingerprint 变化后重新打开。 |

@@ -5,6 +5,9 @@ struct FindingDisplayModelTests {
         try groupsSortBySeverityThenRule()
         try filtersBySeverityAndRule()
         try issueGroupsDeduplicateRepeatedScanEntries()
+        try issueGroupsExposeExplanationPayload()
+        try ruleClassificationIsDeterministic()
+        try riskSubsetClassificationMatchesFindingFilters()
         try remediationUsesSuggestionThenRuleFallback()
         try permissionSummaryLabelsUnknownAndUndeclaredValues()
     }
@@ -84,6 +87,87 @@ struct FindingDisplayModelTests {
         try expectEqual(duplicateGroup?.entryCount, 2, "Issue groups should keep the raw scan entry count for impact context.")
         try expectEqual(duplicateGroup?.impactedInstanceCount, 2, "Issue groups should count impacted skill instances separately from scan entries.")
         try expectEqual(duplicateGroup?.representative.id, "duplicate-newer", "The newest finding should be the representative entry for a deduped issue group.")
+    }
+
+    private func issueGroupsExposeExplanationPayload() throws {
+        let groups = FindingDisplayModel.issueGroups(
+            findings: [
+                Self.finding(
+                    id: "risk-alpha",
+                    instanceId: "alpha",
+                    ruleId: "permissions.network-declared",
+                    severity: "warning",
+                    message: "Network permission missing",
+                    createdAt: 10,
+                    suggestion: "Declare network access."
+                ),
+                Self.finding(
+                    id: "risk-beta",
+                    instanceId: "beta",
+                    ruleId: "permissions.network-declared",
+                    severity: "warning",
+                    message: "Network permission missing",
+                    createdAt: 20,
+                    suggestion: "Declare network access."
+                ),
+            ],
+            severityFilter: FindingDisplayModel.allFilterValue,
+            ruleFilter: FindingDisplayModel.allFilterValue
+        )
+
+        let explanation = groups[0].explanation
+        try expectEqual(explanation.ruleId, "permissions.network-declared", "Explanation should expose the rule ID.")
+        try expectEqual(explanation.severity, "warning", "Explanation should expose normalized severity.")
+        try expectEqual(explanation.trigger, "Network permission missing", "Explanation should expose the trigger message.")
+        try expectEqual(explanation.remediation, "Declare network access.", "Explanation should expose remediation text.")
+        try expectEqual(explanation.affectedInstanceCount, 2, "Explanation should expose impacted instance count.")
+        try expectEqual(explanation.scanEntryCount, 2, "Explanation should expose scan entry count.")
+        try expectEqual(explanation.ruleSource, .permissions, "Explanation should expose deterministic rule source.")
+        try expectEqual(explanation.ruleCategory, .permissions, "Explanation should expose deterministic rule category.")
+        try expectEqual(explanation.isRiskCategoryFinding, true, "Explanation should expose risk-category classification.")
+    }
+
+    private func ruleClassificationIsDeterministic() throws {
+        try expectEqual(FindingDisplayModel.ruleSource(for: "frontmatter.required-fields"), .frontmatter, "Frontmatter rule source")
+        try expectEqual(FindingDisplayModel.ruleCategory(for: "frontmatter.required-fields"), .metadata, "Frontmatter rule category")
+        try expectEqual(FindingDisplayModel.ruleSource(for: " permissions.exec-needs-human "), .permissions, "Permission rule source should trim whitespace.")
+        try expectEqual(FindingDisplayModel.ruleCategory(for: "script.no-shebang"), .script, "Script rule category")
+        try expectEqual(FindingDisplayModel.ruleCategory(for: "path.exists"), .filesystem, "Path rule category")
+        try expectEqual(FindingDisplayModel.ruleCategory(for: "fingerprint.changed"), .provenance, "Fingerprint rule category")
+        try expectEqual(FindingDisplayModel.ruleCategory(for: "name.canonical-case"), .identity, "Name rule category")
+        try expectEqual(FindingDisplayModel.ruleCategory(for: "body.too-long"), .content, "Body rule category")
+        try expectEqual(FindingDisplayModel.ruleSource(for: "custom.rule"), .custom, "Unknown rule source should be custom.")
+        try expectEqual(FindingDisplayModel.ruleCategory(for: "custom.rule"), .custom, "Unknown rule category should be custom.")
+    }
+
+    private func riskSubsetClassificationMatchesFindingFilters() throws {
+        let riskRuleIDs = [
+            "frontmatter.tools-not-empty",
+            "permissions.network-declared",
+            "permissions.exec-needs-human",
+            "script.no-shebang",
+            "script.custom-risk",
+            "dependency.unknown",
+        ]
+        try expectEqual(
+            riskRuleIDs.map { FindingDisplayModel.isRiskCategoryRuleID($0) },
+            Array(repeating: true, count: riskRuleIDs.count),
+            "Risk subset should include the existing risky finding filter rules."
+        )
+
+        let nonRiskRuleIDs = [
+            "frontmatter.required-fields",
+            "path.exists",
+            "fingerprint.changed",
+            "name.canonical-case",
+            "body.too-long",
+            "custom.rule",
+        ]
+        try expectEqual(
+            nonRiskRuleIDs.map { FindingDisplayModel.isRiskCategoryRuleID($0) },
+            Array(repeating: false, count: nonRiskRuleIDs.count),
+            "Risk subset should not classify every finding source as a risk."
+        )
     }
 
     private func remediationUsesSuggestionThenRuleFallback() throws {

@@ -4,7 +4,7 @@ This file is the shared project instruction entrypoint for coding agents such as
 
 ## Project State
 
-- Current phase: **V2.26-V2.30 skill management semantics and explainability planning**。V2.21-V2.25 已收口：scan accuracy/dedupe、finding/conflict 语义、Health/Adapter Capability UX、single-skill Detail 诊断口径、Agent-config timeline 均已同步到主线。
+- Current phase: **V2.27 skill identity/provenance dedupe planning**。V2.21-V2.26 已收口：scan accuracy/dedupe、finding/conflict 语义、Health/Adapter Capability UX、single-skill Detail 诊断口径、Agent-config timeline、Finding explainability 均已同步到主线。
 - Near-term priority: keep the product focused on skills management, inspection, analysis, and configuration audit. Next work should prioritize finding explainability, skill identity/provenance dedupe, selected-agent conflict semantics, finding triage persistence, and read-only AI skill analysis workflow. Do not reintroduce full-platform UI adaptation, formal signed release/notarization/DMG/ZIP/public distribution, script execution, cloud sync, telemetry, or automatic write paths.
 - V2.11 scope: service/UI adapter capability matrix for Claude Code, Codex, opencode, Pi, Hermes, and OpenClaw, exposing scan/toggle/install status and blockers before new write affordances are enabled.
 - Versioned adapter plan: V2.12 opencode writable evidence and guarded implementation complete; V2.13 Pi read-only scanner/parser complete with writable still blocked and direct root `.md` cataloging disabled due to real local noise; V2.14 Hermes and V2.15 OpenClaw evidence gates closed without implementation because maintainer-confirmed specs are missing.

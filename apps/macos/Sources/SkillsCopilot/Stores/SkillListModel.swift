@@ -268,16 +268,7 @@ enum SkillListModel {
     }
 
     private static func isRiskFinding(_ finding: RuleFindingRecord) -> Bool {
-        switch finding.ruleId {
-        case "frontmatter.tools-not-empty",
-             "permissions.network-declared",
-             "permissions.exec-needs-human",
-             "script.no-shebang",
-             "dependency.unknown":
-            return true
-        default:
-            return finding.ruleId.hasPrefix("script.")
-        }
+        finding.isRiskCategoryFinding
     }
 
     private static func sameAgentConflictInstanceIDs(

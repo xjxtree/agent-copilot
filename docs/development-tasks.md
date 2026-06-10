@@ -1,13 +1,13 @@
 # Development Tasks
 
-> Status: current planning and execution queue as of 2026-06-10. V2.1 through V2.25 are synchronized baseline. The next execution line is V2.26-V2.30 skill management semantics and explainability.
+> Status: current planning and execution queue as of 2026-06-10. V2.1 through V2.26 are synchronized baseline. The next execution line is V2.27-V2.30, with V2.27 next.
 
 ## Current Baseline
 
-- Current branch baseline: `main` after V2.16-V2.25 management/analysis/history line and 2026-06-10 real local Computer Use validation; V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 诊断口径、V2.25 Agent-config timeline 均已收口。
+- Current branch baseline: `main` after V2.16-V2.26 management/analysis/history/explainability line and 2026-06-10 real local Computer Use validation; V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability 均已收口。
 - Product boundary: native macOS SwiftUI/AppKit shell plus Rust service protocol.
 - Completed V2 milestones: first Codex slice, V2.1 through V2.20.
-- Current priority: plan and implement V2.26-V2.30. Focus on finding explainability, skill identity/provenance dedupe, selected-agent conflict semantics, finding triage persistence, and read-only AI skill analysis workflow. Keep V2.24/V2.25 boundaries: Findings=issue groups, Conflicts=current-agent only, Analysis=read-only/offline, History=toggle/config events, no skill-toggle snapshot, no skill-content snapshot, and rollback remains preview+confirm.
+- Current priority: V2.27 skill identity/provenance dedupe, then V2.28-V2.30. Keep V2.26 finding explainability stable: rule source + trigger reason/message + affected instances + scan entries + severity/risk relation must remain visible. Keep V2.24/V2.25 boundaries: Findings=issue groups, Conflicts=current-agent only, Analysis=read-only/offline, History=toggle/config events, no skill-content snapshot, and rollback remains preview+confirm.
 - Real local Computer Use baseline: passed on 2026-06-10 for the current mainline app against real local HOME/app data/Claude/Codex/opencode roots; validation explicitly targeted the current `dist/SkillsCopilot.app` bundle after detecting a stale same-bundle-id worktree app. Future user-visible, UI, or service protocol changes must rerun it.
 - Quality gate for code/UI/protocol work: `pnpm check:macos`; add focused Rust/Swift tests when touching shared behavior.
 
@@ -31,7 +31,7 @@
 | V2.23 | Health Dashboard / Adapter Capability UX | Completed | Health card action summaries, selected-agent filtering, and scan/toggle/install/read-only/blocked capability status are aligned |
 | V2.24 | Skill Detail 诊断工作台口径 | Completed | Detail=single skill workbench；Findings=issue groups；Conflicts=current-agent only；Analysis=read-only offline；History=toggle/config events only |
 | V2.25 | Agent-config timeline | Completed | Per-agent config timeline, preview diff + confirm rollback, no skill-toggle snapshot, no skill-content snapshot |
-| V2.26 | Finding explainability | Planned | Rule source, trigger reason, affected instances, risk subset relationship, and drill-down from Health/Detail are visible |
+| V2.26 | Finding explainability | Completed | Rule source, trigger reason/message, affected instances, scan entries, severity/risk mapping, and Health/Detail drill-down to concrete skill/rule/path are visible |
 | V2.27 | Skill identity/provenance dedupe | Planned | Agent/path/root/provenance identity is deterministic; Pi `.md` noise stays excluded; opencode compatibility roots are explainable |
 | V2.28 | Conflict semantic closeout | Planned | Same-agent conflicts and cross-agent analysis are separated in every UI/protocol surface |
 | V2.29 | Finding triage persistence | Planned | reviewed/ignored/needs-follow-up are persisted locally without writing agent config; changed fingerprints reopen findings |
@@ -46,7 +46,7 @@
 
 **Priority order**
 
-1. V2.26 Finding explainability: make every finding group explain rule source, trigger reason, affected instances, severity/risk mapping, and next action.
+1. V2.26 Finding explainability: make every finding group explain rule source, trigger reason/message, affected instances, scan entries, severity/risk mapping, and next action.
 2. V2.27 Skill identity/provenance dedupe: make agent/root/path/provenance deterministic; keep Pi `.md` resource noise excluded; label opencode native vs compatibility roots clearly.
 3. V2.28 Conflict semantic closeout: keep same-agent runtime/name collisions in Conflicts and move cross-agent duplicate/source overlap to Analysis only.
 4. V2.29 Finding triage persistence: add reviewed/ignored/needs-follow-up state in app-local catalog; do not write agent config; reopen changed fingerprints.
@@ -92,7 +92,7 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 | P0 | V2.22 finding/conflict semantics sync | Completed | Keep conflict definition / cross-agent analysis separation stable when adding new UI | Conflict/finding behavior is uniform across roadmap/tasks/service-protocol/data-model/adapter docs and can be traced in same scan context |
 | P0 | V2.23 Health Dashboard / Adapter Capability UX 同步 | Completed | Keep selected-agent health card and capability matrix semantics stable when adding triage/explainability | 核心工作流（侧栏、adapter matrix、findings 过滤）口径一致 |
 | P0 | V2.24 Skill Detail 诊断口径 | Completed | Keep Detail=single skill workbench; Findings=issue groups; Conflicts=current-agent; Analysis read-only/offline; History=toggle/config events | catalog.detail（single skill）与 list/health/analysis 数字口径一致 |
-| P0 | V2.26 Finding explainability | Planned | Explain rule source, trigger reason, affected instances, severity/risk mapping, and next action in finding/detail surfaces | Users can understand every finding count and drill down from Health to concrete skill/rule/path context |
+| P0 | V2.26 Finding explainability | Completed | Keep rule source, trigger reason/message, affected instances, severity/risk mapping, and next action visible in finding/detail surfaces | Users can understand every finding count and drill down from Health to concrete skill/rule/path context |
 | P0 | V2.27 Skill identity/provenance dedupe | Planned | Normalize and label agent/root/path/provenance; keep Pi `.md` noise excluded; clarify opencode native vs compatibility roots | Users can explain why each skill appears once, appears under multiple agents, or is intentionally excluded |
 | P0 | V2.28 Conflict semantic closeout | Planned | Audit remaining UI/protocol wording so same-agent conflicts and cross-agent analysis never share the same counter | Conflict tabs only show current-agent collisions; Analysis owns cross-agent duplicate/source-overlap |
 | P0 | V2.29 Finding triage persistence | Planned | Add app-local reviewed/ignored/needs-follow-up state with changed-fingerprint reopening | Users can separate known issues from new actionable findings without writing agent config |

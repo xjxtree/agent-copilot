@@ -111,8 +111,24 @@ enum UIStrings {
     static let findingRuleFilter = text("findings.filter.rule", "Rule ID")
     static let allSeverities = text("findings.filter.allSeverities", "All Severities")
     static let allRuleIDs = text("findings.filter.allRules", "All Rule IDs")
+    static let findingExplanation = text("findings.explanation", "Why this appears")
+    static let findingRuleID = text("findings.ruleId", "Rule ID")
+    static let findingRuleSource = text("findings.ruleSource", "Rule source")
+    static let findingCatalogTarget = text("findings.catalogTarget", "Catalog target")
+    static let findingTrigger = text("findings.trigger", "Trigger")
+    static let findingImpact = text("findings.impact", "Impact")
+    static let findingRiskRelated = text("findings.riskRelated", "Risk-related")
+    static let findingRiskRelatedHelp = text("findings.riskRelated.help", "This rule is part of the permission, script, dependency, or tool-risk subset.")
     static let findingRemediation = text("findings.remediation", "Suggested remediation")
     static let currentAgentConflictsOnly = text("conflicts.currentAgentOnly", "Current agent only. Cross-agent duplicates are omitted from conflicts.")
+    static let findingSourceFrontmatter = text("findings.source.frontmatter", "Frontmatter validation")
+    static let findingSourcePermission = text("findings.source.permission", "Permission analysis")
+    static let findingSourceScript = text("findings.source.script", "Script safety analysis")
+    static let findingSourceDependency = text("findings.source.dependency", "Dependency analysis")
+    static let findingSourcePath = text("findings.source.path", "Catalog path check")
+    static let findingSourceFingerprint = text("findings.source.fingerprint", "Catalog fingerprint check")
+    static let findingSourceCatalog = text("findings.source.catalog", "Catalog rule")
+    static let findingNoCatalogTarget = text("findings.catalogTarget.none", "No definition or instance ID reported")
     static let remediationFrontmatterRequired = text("findings.remediation.frontmatterRequired", "Add the required frontmatter fields in SKILL.md, then rescan.")
     static let remediationToolsNotEmpty = text("findings.remediation.toolsNotEmpty", "Declare the allowed tools the skill needs, or remove tool-dependent instructions.")
     static let remediationPathExists = text("findings.remediation.pathExists", "Restore the source file or remove the stale catalog entry, then scan again.")
@@ -267,6 +283,18 @@ enum UIStrings {
 
     static func findingScopeSummary(_ skill: String, _ agent: String) -> String {
         format("findings.scopeSummary", "%@ · %@", skill, agent)
+    }
+
+    static func findingCatalogTarget(definition: String, instance: String) -> String {
+        format("findings.catalogTarget.definitionInstance", "Definition %@ · Instance %@", definition, instance)
+    }
+
+    static func findingCatalogDefinition(_ definition: String) -> String {
+        format("findings.catalogTarget.definition", "Definition %@", definition)
+    }
+
+    static func findingCatalogInstance(_ instance: String) -> String {
+        format("findings.catalogTarget.instance", "Instance %@", instance)
     }
 
     static func findingRemediationFallback(_ ruleID: String) -> String {

@@ -1,6 +1,6 @@
 # skills-copilot Service Protocol
 
-> Status: V2.25 Agent-config timeline integrated. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, V2.19 health dashboard, V2.20 read-only AI skill analysis assist, V2.21 scan accuracy/dedupe alignment, V2.22 finding/conflict semantics, V2.23 Health Dashboard / Adapter Capability UX, V2.24 Skill Detail diagnostics, and V2.25 Agent-config timeline are implemented or synchronized. Writable/install support for Pi/Hermes/OpenClaw remains blocked.
+> Status: V2.26 Finding explainability integrated. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, V2.19 health dashboard, V2.20 read-only AI skill analysis assist, V2.21 scan accuracy/dedupe alignment, V2.22 finding/conflict semantics, V2.23 Health Dashboard / Adapter Capability UX, V2.24 Skill Detail diagnostics, V2.25 Agent-config timeline, and V2.26 Finding explainability are implemented or synchronized. No new write/execute or credential-storage behavior is introduced.
 >
 > Integrated: V2.9 Tool-global import/export/install, V2.10 skill execution safety boundary, and 2026-06-10 real local Computer Use validation for the current mainline app. V2.11 added adapter capability status to the service protocol and macOS UI. V2.12 marks opencode writable through exact permission.skill deny/re-enable after snapshot/rollback, install, and fixture smoke validation pass; current opencode scan follows native plus official compatibility roots while install targets remain native roots.
 >
@@ -108,6 +108,44 @@ V2.25 聚焦 agent-config snapshot timeline 收敛，仍不新增 protocol metho
 - **只读边界**：本阶段不做 skill-content snapshot，不做 skill-toggle snapshot，不把 detail 的 finding/conflict 历史与 agent-config timeline 混在一个视图中。
 
 该 section 是当前完成口径；当前实现仍以现有 method 与现有 payload 执行，未来 rollback 相关 UI/service 变更仍需重新验证。
+
+## V2.26 Finding explainability（完成）
+
+本阶段要求现有 `catalog.listFindings` 与 `app.stateSnapshot.health` 产生可解释、可追溯、可 drill-down 的 finding issue group：
+
+- `catalog.listFindings` 仍为 read-only。
+- 一个 finding group 必须暴露下列解释元数据：
+  - `finding_group_id`：用于 Health/Detail/Detail drill-down 的稳定分组 ID。
+  - `rule_id` + `rule_source`：规则来源（rule 集、扫描器、版本）。
+  - `trigger`：`trigger_reason` 与 `trigger_message`，说明为什么当前上下文出现该 finding。
+  - `affected_instances`：受影响 `instance_id[]` 列表。
+  - `scan_entries`：至少一个扫描证据 tuple（`agent`、`scope`、`definition_id`、`path`、`root`）。
+  - `severity`：error/warn/info。
+  - `risk_subset`：是否属于 health 风险子集（例如 `is_risky`、`risk_reason`、`risk_kind`）。
+  - `next_action`：建议的下一步动作（例如 open detail、open health card、refresh scan）。
+- `app.stateSnapshot.health` 的 finding 计数与 `catalog.listFindings` 的 issue group 数必须同口径。
+- Health 卡片到 Detail 的 drill-down 必须按 `{ finding_group_id, rule_id, severity, affected_instance_ids, scan_entries }` 回到同一可见实例集，不新增协议口径也不改变 payload。
+- 本阶段不新增 protocol method；仅通过现有查询字段与 payload 展示字段增强解释性。
+- 所有解释信息必须保持既有边界：`script.execute` 不在本阶段执行；no automatic writes；`llm.prepareAction` 仍是 read-only preview；不读取/保存 credentials。
+
+示意返回片段：
+
+```json
+{
+  "finding_group_id": "fg::permission.unknown::claude-code::abc123",
+  "rule_id": "permissions.unknown",
+  "rule_source": "core.rules@V2.26",
+  "trigger_reason": "missing-explicit-permission",
+  "trigger_message": "Permission block not declared as explicit grant/deny pair.",
+  "severity": "warning",
+  "affected_instances": ["instance-001", "instance-009"],
+  "scan_entries": [
+    { "agent": "claude-code", "scope": "agent-global", "definition_id": "def-abc", "path": "/repo/skills/A/SKILL.md", "root": "/repo/skills" }
+  ],
+  "risk_subset": { "is_risky": true, "risk_kind": "permission", "risk_reason": "Missing permissions field requires safe default handling." },
+  "next_action": "open_skill_detail"
+}
+```
 
 ## V2.18 Cross-Agent Analysis Payload
 

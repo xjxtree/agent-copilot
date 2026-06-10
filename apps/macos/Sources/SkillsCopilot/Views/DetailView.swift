@@ -1242,6 +1242,32 @@ struct FindingIssueGroup: Identifiable, Equatable {
     var entryCount: Int {
         findings.count
     }
+
+    var explanation: FindingExplanation {
+        FindingExplanation(
+            ruleId: ruleId,
+            severity: severityKey,
+            trigger: message,
+            remediation: remediation,
+            affectedInstanceCount: impactedInstanceCount,
+            scanEntryCount: entryCount,
+            ruleSource: FindingRuleSource.classify(ruleId: ruleId),
+            ruleCategory: FindingRuleCategory.classify(ruleId: ruleId),
+            isRiskCategoryFinding: FindingExplainabilityModel.isRiskCategoryRuleID(ruleId)
+        )
+    }
+
+    var ruleSource: String {
+        FindingDisplayModel.ruleSourceTitle(for: explanation.ruleSource)
+    }
+
+    var catalogTarget: String {
+        FindingDisplayModel.catalogTargetSummary(for: representative)
+    }
+
+    var isRiskRelated: Bool {
+        explanation.isRiskCategoryFinding
+    }
 }
 
 private struct FindingIssueKey: Hashable {
@@ -1349,6 +1375,53 @@ enum FindingDisplayModel {
         }
     }
 
+    static func ruleSource(for ruleId: String) -> FindingRuleSource {
+        FindingRuleSource.classify(ruleId: ruleId)
+    }
+
+    static func ruleCategory(for ruleId: String) -> FindingRuleCategory {
+        FindingRuleCategory.classify(ruleId: ruleId)
+    }
+
+    static func isRiskCategoryRuleID(_ ruleId: String) -> Bool {
+        FindingExplainabilityModel.isRiskCategoryRuleID(ruleId)
+    }
+
+    static func ruleSourceTitle(for source: FindingRuleSource) -> String {
+        switch source {
+        case .frontmatter:
+            return UIStrings.findingSourceFrontmatter
+        case .permissions:
+            return UIStrings.findingSourcePermission
+        case .script:
+            return UIStrings.findingSourceScript
+        case .dependency:
+            return UIStrings.findingSourceDependency
+        case .path:
+            return UIStrings.findingSourcePath
+        case .fingerprint:
+            return UIStrings.findingSourceFingerprint
+        case .name, .body, .custom:
+            return UIStrings.findingSourceCatalog
+        }
+    }
+
+    static func catalogTargetSummary(for finding: RuleFindingRecord) -> String {
+        let definition = normalizedOptional(finding.definitionId)
+        let instance = normalizedOptional(finding.instanceId)
+
+        switch (definition, instance) {
+        case (.some(let definition), .some(let instance)):
+            return UIStrings.findingCatalogTarget(definition: definition, instance: instance)
+        case (.some(let definition), .none):
+            return UIStrings.findingCatalogDefinition(definition)
+        case (.none, .some(let instance)):
+            return UIStrings.findingCatalogInstance(instance)
+        case (.none, .none):
+            return UIStrings.findingNoCatalogTarget
+        }
+    }
+
     static func severityTitle(_ severityKey: String) -> String {
         if severityKey == "unknown" {
             return UIStrings.unknown.uppercased()
@@ -1408,6 +1481,14 @@ enum FindingDisplayModel {
             .filter { !$0.isEmpty }
             .joined(separator: " ")
         return collapsed.isEmpty ? UIStrings.emptyPlaceholder : collapsed
+    }
+
+    private static func normalizedOptional(_ text: String?) -> String? {
+        guard let text else {
+            return nil
+        }
+        let normalized = normalizedText(text)
+        return normalized == UIStrings.emptyPlaceholder ? nil : normalized
     }
 
     private static func severityRank(_ severityKey: String) -> Int {
@@ -1708,23 +1789,48 @@ private struct FindingIssueCard: View {
     let severityTitle: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Label(issue.ruleId, systemImage: "exclamationmark.triangle")
-                    .font(.headline)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Label(UIStrings.findingTrigger, systemImage: "exclamationmark.bubble")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
                 Spacer()
-                Text(UIStrings.findingIssueImpact(issue.impactedInstanceCount, issue.entryCount))
+                if issue.isRiskRelated {
+                    Label(UIStrings.findingRiskRelated, systemImage: "shield.lefthalf.filled")
+                        .font(.caption.bold())
+                        .foregroundStyle(.orange)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.orange.opacity(0.14), in: Capsule())
+                        .help(UIStrings.findingRiskRelatedHelp)
+                }
+                Text(severityTitle)
                     .font(.caption.bold())
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(.quaternary.opacity(0.35), in: Capsule())
-                Text(severityTitle)
-                    .font(.caption.bold())
-                    .foregroundStyle(.secondary)
             }
 
             Text(issue.message)
+                .font(.headline)
+                .textSelection(.enabled)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Label(UIStrings.findingExplanation, systemImage: "list.bullet.clipboard")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 8)], alignment: .leading, spacing: 8) {
+                    FindingExplanationField(title: UIStrings.findingRuleID, value: issue.ruleId, systemImage: "number")
+                    FindingExplanationField(title: UIStrings.findingRuleSource, value: issue.ruleSource, systemImage: "scope")
+                    FindingExplanationField(title: UIStrings.findingCatalogTarget, value: issue.catalogTarget, systemImage: "shippingbox")
+                    FindingExplanationField(title: UIStrings.findingImpact, value: UIStrings.findingIssueImpact(issue.impactedInstanceCount, issue.entryCount), systemImage: "target")
+                }
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
 
             VStack(alignment: .leading, spacing: 5) {
                 Label(UIStrings.findingRemediation, systemImage: "wrench.and.screwdriver")
@@ -1740,6 +1846,36 @@ private struct FindingIssueCard: View {
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
         .adaptiveMaterialSurface()
+    }
+}
+
+private struct FindingExplanationField: View {
+    let title: String
+    let value: String
+    let systemImage: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 7) {
+            Image(systemName: systemImage)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(width: 14)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(value)
+                    .font(.caption)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+            }
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 7))
     }
 }
 
