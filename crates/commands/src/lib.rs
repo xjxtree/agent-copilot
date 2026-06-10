@@ -796,11 +796,11 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
             status: "read-only",
             scan: AdapterFeatureCapability::supported_with_reason(
                 "verified-read-only",
-                "V2.16 scans documented OpenClaw filesystem roots without calling the OpenClaw CLI.",
+                "V2.39 scans documented OpenClaw filesystem roots without calling the OpenClaw CLI; workspace project roots are read-only and scoped to confirmed OpenClaw workspaces.",
             ),
             project_scan: AdapterFeatureCapability::supported_with_reason(
                 "verified-read-only",
-                "Project scan is limited to confirmed OpenClaw home workspace roots and only reads <workspace>/skills plus <workspace>/.agents/skills.",
+                "Project scan is limited to confirmed OpenClaw home workspace roots, including selected paths inside those workspaces, and only reads <workspace>/skills plus <workspace>/.agents/skills; arbitrary repo roots are skipped.",
             ),
             config_toggle: AdapterFeatureCapability::blocked(
                 "blocked",
@@ -4874,7 +4874,7 @@ fn batch_skip_reason(agent: AgentId, error: &CommandError) -> String {
     match agent {
         AgentId::Pi => error.to_string(),
         AgentId::Hermes => "Hermes is read-only in V2.33; individual skill toggle semantics and rollback-safe config writes are not confirmed.".to_string(),
-        AgentId::Openclaw => "OpenClaw is read-only in V2.33; plugin config evidence is not a verified skill toggle contract.".to_string(),
+        AgentId::Openclaw => "OpenClaw is read-only in V2.39; workspace scanning is filesystem-only and plugin config evidence is not a verified skill toggle contract.".to_string(),
         AgentId::ToolGlobal => "Tool-global staging records are preview/import sources and do not have agent config toggles.".to_string(),
         _ => error.to_string(),
     }

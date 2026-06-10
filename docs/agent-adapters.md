@@ -2,7 +2,7 @@
 
 > skills-copilot 支持的 6 个 agent 的适配要点。
 >
-> 当前版本线：V2.11 Adapter Capability Matrix、V2.12 opencode writable、V2.13 Pi read-only scanner/parser、V2.14 Hermes evidence-gate closeout、V2.15 OpenClaw evidence-gate closeout、V2.16 OpenClaw read-only scanner、V2.17 Hermes read-only scanner、V2.18 cross-agent analysis、V2.19 skill health dashboard、V2.20 read-only AI skill analysis assist、V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout 均已完成。V2.29 Finding triage persistence、V2.30 read-only AI analysis workflow、V2.31 Cleanup Queue、V2.32 Rule tuning / suppression、V2.33 Safe batch actions、V2.34 Cross-agent comparison view、V2.35 Local report export、V2.36 Pi writable evidence harness、V2.37 Pi writable guarded slice、V2.38 Hermes external roots 均已收口。V2.39 OpenClaw workspace 深化正在进行；V2.28 验收关键已收口：同 agent 的 runtime/name collision 进入 `Conflicts`；跨 agent duplicate/source overlap/enabled mismatch 进入 `Analysis`；health 冲突计数不包含 cross-agent analysis 分组。
+> 当前版本线：V2.11 Adapter Capability Matrix、V2.12 opencode writable、V2.13 Pi read-only scanner/parser、V2.14 Hermes evidence-gate closeout、V2.15 OpenClaw evidence-gate closeout、V2.16 OpenClaw read-only scanner、V2.17 Hermes read-only scanner、V2.18 cross-agent analysis、V2.19 skill health dashboard、V2.20 read-only AI skill analysis assist、V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout 均已完成。V2.29 Finding triage persistence、V2.30 read-only AI analysis workflow、V2.31 Cleanup Queue、V2.32 Rule tuning / suppression、V2.33 Safe batch actions、V2.34 Cross-agent comparison view、V2.35 Local report export、V2.36 Pi writable evidence harness、V2.37 Pi writable guarded slice、V2.38 Hermes external roots、V2.39 OpenClaw workspace 深化均已收口。V2.40 Adapter diagnostics 正在进行；V2.28 验收关键已收口：同 agent 的 runtime/name collision 进入 `Conflicts`；跨 agent duplicate/source overlap/enabled mismatch 进入 `Analysis`；health 冲突计数不包含 cross-agent analysis 分组。
 >
 > 扫描适配器实现 `AgentAdapter`。
 >
@@ -296,3 +296,11 @@ Claude Code MVP 的 toggle 写 `skillOverrides`：项目 skill 写 `<project>/.c
 填齐后再写 `crates/adapters/src/<id>/` 与对应 fixture 测试。
 
 非 Claude adapter 的详细证据清单维护在 [`agent-adapter-spec-worklists.md`](./agent-adapter-spec-worklists.md)。
+
+## OpenClaw scope note (V2.39, completed)
+
+- OpenClaw support is workspace-scoped and read-only.
+- Confirmed roots: `<workspace>/skills` and `<workspace>/.agents/skills`.
+- Do not infer arbitrary repository/project roots for OpenClaw scanning.
+- OpenClaw writable/install features remain blocked; no script execution, AI auto-write, credential persistence, or public distribution for this milestone.
+- This section reflects the completed V2.39 implementation and validation boundary.

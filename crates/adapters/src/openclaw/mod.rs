@@ -33,7 +33,7 @@ impl AgentAdapter for OpenclawAdapter {
 
         roots.extend(openclaw_bundled_skill_roots());
 
-        if let Some(workspace_root) = openclaw_home_workspace_root(ctx) {
+        if let Some(workspace_root) = openclaw_selected_workspace_root(ctx) {
             roots.push(AdapterRoot {
                 scope: Scope::AgentProject,
                 path: workspace_root.join("skills"),
@@ -163,14 +163,23 @@ fn optional_string(frontmatter: &serde_yaml::Value, key: &str) -> Option<String>
         .map(ToString::to_string)
 }
 
-fn openclaw_home_workspace_root(ctx: &AdapterContext) -> Option<PathBuf> {
-    let project_root = ctx.project_root.as_ref()?;
+fn openclaw_selected_workspace_root(ctx: &AdapterContext) -> Option<PathBuf> {
+    let selected_paths = [ctx.project_root.as_ref(), ctx.project_cwd.as_ref()];
+    openclaw_home_workspace_candidates(ctx)
+        .into_iter()
+        .find(|candidate| {
+            selected_paths
+                .iter()
+                .flatten()
+                .any(|selected| selected == &candidate || selected.starts_with(candidate))
+        })
+}
+
+fn openclaw_home_workspace_candidates(ctx: &AdapterContext) -> [PathBuf; 2] {
     [
         ctx.user_home.join(".openclaw/workspace"),
         ctx.user_home.join("openclaw/workspace"),
     ]
-    .into_iter()
-    .find(|candidate| project_root == candidate)
 }
 
 fn openclaw_bundled_skill_roots() -> Vec<AdapterRoot> {
@@ -262,6 +271,36 @@ mod tests {
                 && root.source == RootSource::Project
                 && root.path == Path::new("/tmp/home/.openclaw/workspace/.agents/skills")
         }));
+    }
+
+    #[test]
+    fn exposes_home_openclaw_workspace_roots_when_selection_is_inside_workspace() {
+        let adapter = OpenclawAdapter;
+        let ctx = AdapterContext {
+            user_home: PathBuf::from("/tmp/home"),
+            project_root: Some(PathBuf::from("/tmp/home/.openclaw/workspace/repo")),
+            project_cwd: Some(PathBuf::from("/tmp/home/.openclaw/workspace/repo/nested")),
+            extra_roots: vec![],
+        };
+
+        let roots = adapter.roots(&ctx);
+
+        assert!(roots.iter().any(|root| {
+            root.scope == Scope::AgentProject
+                && root.source == RootSource::Project
+                && root.path == Path::new("/tmp/home/.openclaw/workspace/skills")
+        }));
+        assert!(roots.iter().any(|root| {
+            root.scope == Scope::AgentProject
+                && root.source == RootSource::Project
+                && root.path == Path::new("/tmp/home/.openclaw/workspace/.agents/skills")
+        }));
+        assert!(
+            roots
+                .iter()
+                .all(|root| !root.path.starts_with("/tmp/home/.openclaw/workspace/repo")),
+            "OpenClaw must scan the confirmed workspace roots, not infer nested repo roots"
+        );
     }
 
     #[test]

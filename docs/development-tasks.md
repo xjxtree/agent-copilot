@@ -1,14 +1,14 @@
 # Development Tasks
 
-> Status: current planning and execution queue as of 2026-06-10. V2.1 through V2.38 are synchronized baseline, and V2.39 is active/in-progress.
+> Status: current planning and execution queue as of 2026-06-10. V2.1 through V2.39 are synchronized baseline, and V2.40 is active/in-progress.
 
 ## Current Baseline
 
 - Current branch baseline: `main` after V2.16-V2.28 management/analysis/history/explainability/provenance/conflict-semantics line and 2026-06-10 real local Computer Use validation; V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout 均已收口。
 - Product boundary: native macOS SwiftUI/AppKit shell plus Rust service protocol.
-- Completed V2 milestones: first Codex slice, V2.1 through V2.38.
-- Current priority: V2.39 OpenClaw workspace deepening is active after V2.38 Hermes external roots completed. Keep V2.26 finding explainability, V2.27 identity/provenance, V2.28 conflict semantics, V2.29 finding triage persistence, V2.30 read-only AI analysis, V2.31 read-only cleanup queue, V2.32 app-local rule tuning, V2.33 preview-first + explicit-confirm batch actions, V2.34 read-only comparison, V2.35 local redacted export, V2.36 disposable evidence, V2.37 guarded Pi toggle, and V2.38 Hermes external roots stable. V2.39 must tighten OpenClaw workspace scope without generic repo inference; writable/install remain blocked, no script execution, no AI automatic writes, no credential persistence.
-- Real local Computer Use baseline: passed on 2026-06-10 for the previous mainline app against real local HOME/app data/Claude/Codex/opencode roots; validation explicitly targeted the current `dist/SkillsCopilot.app` bundle after detecting a stale same-bundle-id worktree app. V2.38 completed real app smoke launch/window id check, but Computer Use/AX/capture returned `cgWindowNotFound` / no visible window; future user-visible, UI, or service protocol changes must rerun Computer Use and keep any blocker explicit.
+- Completed V2 milestones: first Codex slice, V2.1 through V2.39.
+- Current priority: V2.40 Adapter diagnostics is active after V2.39 OpenClaw workspace deepening completed. Keep V2.26 finding explainability, V2.27 identity/provenance, V2.28 conflict semantics, V2.29 finding triage persistence, V2.30 read-only AI analysis, V2.31 read-only cleanup queue, V2.32 app-local rule tuning, V2.33 preview-first + explicit-confirm batch actions, V2.34 read-only comparison, V2.35 local redacted export, V2.36 disposable evidence, V2.37 guarded Pi toggle, V2.38 Hermes external roots, and V2.39 OpenClaw workspace scope stable. V2.40 should surface adapter diagnostics without adding writes, script execution, AI automatic writes, or credential persistence.
+- Real local Computer Use baseline: passed on 2026-06-10 for the previous mainline app against real local HOME/app data/Claude/Codex/opencode roots; validation explicitly targeted the current `dist/SkillsCopilot.app` bundle after detecting a stale same-bundle-id worktree app. V2.39 completed real app smoke launch/window id check, but Computer Use/AX/capture returned `cgWindowNotFound` / no visible window; future user-visible, UI, or service protocol changes must rerun Computer Use and keep any blocker explicit.
 - Quality gate for code/UI/protocol work: `pnpm check:macos`; add focused Rust/Swift tests when touching shared behavior.
 
 ## Versioned Adapter Plan
@@ -44,8 +44,8 @@
 | V2.36 | Pi writable evidence harness | Complete | Disposable agentDir/fixture project validates Pi global/project/package toggle, rollback, trust gate, invalid JSON/config handling, and re-enable behavior; production writable remains blocked |
 | V2.37 | Pi writable guarded slice | Completed | Evidence-backed minimal Pi native toggle (global / project / package) with preview/snapshot/rollback/disabled-state rescan; Pi install remains blocked, no script execution, no AI automatic writes, no credential persistence, and no arbitrary compatibility write roots |
 | V2.38 | Hermes external roots | Completed | Explicit `skills.external_dirs` are modeled as read-only external roots in adapter/scanner/UI provenance; no generic project scan, writable toggle, install, scripts, AI write-back, or credentials |
-| V2.39 | OpenClaw workspace deepening | In Progress | Tighten workspace-scope detection and skipped/blocked root explanations without arbitrary repo inference or writes |
-| V2.40 | Adapter diagnostics | Planned | Surface discovered/skipped/blocked roots, config detected, read-only/writable reason, and last scan activity per agent |
+| V2.39 | OpenClaw workspace deepening | Completed | Tightened workspace-scope detection and skipped/blocked root explanations without arbitrary repo inference or writes |
+| V2.40 | Adapter diagnostics | In Progress | Surface discovered/skipped/blocked roots, config detected, read-only/writable reason, and last scan activity per agent |
 | V2.41-V2.45 | Long-term governance | Planned | Quality score, stale/drift detection, local knowledge index, policy packs, review session mode |
 
 ## Near-Term Priority: V2.26-V2.35 可解释、可追踪、可整理
@@ -63,7 +63,7 @@
 7. V2.33 Safe batch actions: completed; added preview-first batch enable/disable for verified writable agents/roots only, with explicit capability filtering, skipped item + reason reporting, rollback planning, and explicit confirmation before apply.
 8. V2.34 Cross-agent comparison view: completed; compare same-name/similar skills across agents by state, source, risk, writable capability, and differences without adding write paths.
 9. V2.35 Local report export: completed; generate redacted local Markdown/JSON audit reports from existing read models without distribution, provider calls, credentials, scripts, or automatic writes.
-10. V2.36-V2.40 Adapter trust and diagnostics: active; V2.36 Pi writable evidence harness, V2.37 minimal guarded Pi native toggle, and V2.38 Hermes external roots are complete. Next deepen OpenClaw workspace scope and adapter diagnostics without guessing write semantics.
+10. V2.36-V2.40 Adapter trust and diagnostics: active; V2.36 Pi writable evidence harness, V2.37 minimal guarded Pi native toggle, V2.38 Hermes external roots, and V2.39 OpenClaw workspace scope are complete. Next add adapter diagnostics without guessing write semantics.
 11. V2.41-V2.45 Long-term governance: quality score, stale/drift detection, local knowledge index, policy packs, and review sessions.
 
 **Tasks**
@@ -135,3 +135,10 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 - [x] Document explicit non-goals: public distribution, DMG/ZIP/signing/notarization, cloud sync, telemetry, provider calls, credential storage, script execution, automatic write-back.
 - [x] Confirm V2.33/V2.34 semantics are preserved in updated docs.
 - [x] Validate with `pnpm check:macos`, real local App export, and generated report path-redaction check.
+
+## V2.39 OpenClaw workspace deepening (completed)
+
+- Task definition: perform OpenClaw workspace-scoped deepening, constrained to `<workspace>/skills` and `<workspace>/.agents/skills`.
+- Explicitly avoid arbitrary repo-root inference.
+- Keep capabilities read-only; writable/install, scripts, AI auto-write, and credentials remain blocked.
+- Completed after implementation, focused checks, `pnpm check:macos`, and explicit real-app Computer Use/window blocker documentation.

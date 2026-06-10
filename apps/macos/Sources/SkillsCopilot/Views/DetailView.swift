@@ -215,7 +215,7 @@ private struct SkillSummaryCard: View {
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 10)], alignment: .leading, spacing: 10) {
                 SummaryChip(title: UIStrings.agent, value: DisplayText.agent(skill.agent), systemImage: "person.crop.circle")
-                SummaryChip(title: UIStrings.scope, value: DisplayText.scope(skill.scope), systemImage: "folder")
+                SummaryChip(title: UIStrings.scope, value: DisplayText.scope(for: skill), systemImage: "folder")
                 SummaryChip(title: UIStrings.provenanceRoot, value: SkillProvenanceDisplay.rootClass(for: skill), systemImage: "externaldrive")
                 SummaryChip(title: UIStrings.provenanceKind, value: SkillProvenanceDisplay.kind(for: skill), systemImage: "tag")
                 SummaryChip(title: UIStrings.definition, value: skill.definitionId, systemImage: "number")
@@ -587,6 +587,12 @@ private enum SkillProvenanceDisplay {
             if skill.agent == "hermes" {
                 return UIStrings.provenanceHermesHomeProfileRoot
             }
+            if skill.agent == "openclaw" {
+                if skill.provenance.scopeKind == .project {
+                    return UIStrings.provenanceOpenClawWorkspaceRoot
+                }
+                return UIStrings.provenanceOpenClawReadOnlyRoot
+            }
             return "\(DisplayText.agent(skill.agent)) \(UIStrings.provenanceReadOnlyRoot)"
         case .unknown:
             return UIStrings.provenanceUnclassifiedRoot
@@ -843,7 +849,7 @@ private struct CrossAgentComparisonMemberRow: View {
             }
 
             Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 5) {
-                MetadataRow(label: UIStrings.scope, value: DisplayText.scope(member.scope))
+                MetadataRow(label: UIStrings.scope, value: DisplayText.scope(member.scope, agent: member.agent))
                 MetadataRow(label: UIStrings.provenanceRoot, value: member.sourceRoot)
                 MetadataRow(label: UIStrings.findings, value: "\(member.findingCount)")
                 MetadataRow(label: UIStrings.definition, value: member.definitionID.nonEmpty ?? UIStrings.emptyPlaceholder)
@@ -1519,7 +1525,7 @@ private struct HeaderView: View {
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 155), spacing: 10)], alignment: .leading, spacing: 10) {
                 SummaryChip(title: UIStrings.agent, value: DisplayText.agent(skill.agent), systemImage: "person.crop.circle")
-                SummaryChip(title: UIStrings.scope, value: DisplayText.scope(skill.scope), systemImage: "folder")
+                SummaryChip(title: UIStrings.scope, value: DisplayText.scope(for: skill), systemImage: "folder")
                 SummaryChip(title: UIStrings.state, value: DisplayText.state(skill.state, enabled: skill.enabled), systemImage: DisplayText.stateSystemImage(skill.state, enabled: skill.enabled))
                 CountBadge(
                     label: UIStrings.text("detail.issueGroups", "Issue groups"),
@@ -1554,7 +1560,10 @@ private struct HeaderView: View {
             return DisplayText.isReadOnlyAdapter(skill.agent) ? UIStrings.toggleUnavailableReadOnlyAdapter(DisplayText.agent(skill.agent)) : nil
         }
         guard !adapterCapability.configToggle.supported else { return nil }
-        return adapterCapability.configToggle.reason ?? UIStrings.readOnlyAdapterStatus(adapterCapability.displayName)
+            if skill.agent == "openclaw" {
+                return UIStrings.openClawToggleBlocked
+            }
+            return adapterCapability.configToggle.reason ?? UIStrings.readOnlyAdapterStatus(adapterCapability.displayName)
     }
 
     private var isPiGuardedToggleAvailable: Bool {
@@ -1748,7 +1757,7 @@ private struct SkillDetailCard: View {
         VStack(alignment: .leading, spacing: 18) {
             Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 12) {
                 MetadataRow(label: UIStrings.agent, value: DisplayText.agent(skill.agent))
-                MetadataRow(label: UIStrings.scope, value: DisplayText.scope(skill.scope))
+                MetadataRow(label: UIStrings.scope, value: DisplayText.scope(for: skill))
                 MetadataRow(label: UIStrings.provenanceRoot, value: SkillProvenanceDisplay.rootClass(for: skill))
                 MetadataRow(label: UIStrings.provenanceKind, value: SkillProvenanceDisplay.kind(for: skill))
                 MetadataRow(label: UIStrings.definition, value: skill.definitionId)
@@ -1800,6 +1809,9 @@ private struct SkillDetailCard: View {
                 return UIStrings.hermesExternalAccess
             }
             return UIStrings.hermesHomeProfileAccess
+        }
+        if skill.agent == "openclaw" {
+            return UIStrings.openClawReadOnlyAccess
         }
         return UIStrings.readOnlyAdapterStatus(DisplayText.agent(skill.agent))
     }

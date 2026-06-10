@@ -103,6 +103,9 @@ struct SidebarView: View {
         if store.agentFilter == .codex {
             return UIStrings.noCodexSkillsMessage
         }
+        if store.agentFilter == .openclaw {
+            return UIStrings.noOpenClawWorkspaceSkillsMessage
+        }
         return UIStrings.noSkillsMatchSearch
     }
 }
@@ -408,7 +411,7 @@ private struct BatchToggleItemList: View {
     }
 
     private func itemSubtitle(_ item: BatchToggleSkillItem) -> String {
-        let base = [DisplayText.agent(item.agent), DisplayText.scope(item.scope)].filter { !$0.isEmpty }.joined(separator: " · ")
+        let base = [DisplayText.agent(item.agent), DisplayText.scope(item.scope, agent: item.agent)].filter { !$0.isEmpty }.joined(separator: " · ")
         guard let reason = item.reason, !reason.isEmpty else { return base }
         return base.isEmpty ? reason : "\(base) · \(reason)"
     }
@@ -843,6 +846,13 @@ private struct AdapterCapabilityCard: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+            }
+
+            if capability.agent == "openclaw" {
+                Label(UIStrings.openClawWorkspaceBoundary, systemImage: "folder.badge.questionmark")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
             }
         }
         .padding(10)
@@ -1340,6 +1350,13 @@ private struct ProjectContextControls: View {
                     .lineLimit(3)
             }
 
+            if store.agentFilter == .openclaw {
+                Label(UIStrings.openClawWorkspaceBoundary, systemImage: "folder.badge.questionmark")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+            }
+
             HStack(spacing: 8) {
                 Button {
                     chooseProject()
@@ -1565,14 +1582,14 @@ private struct SkillRow: View {
 
     private var secondaryText: String {
         if DisplayText.isToolGlobal(skill) {
-            return "\(DisplayText.scope(skill.scope)) · \(UIStrings.readOnlyPreview)"
+            return "\(DisplayText.scope(for: skill)) · \(UIStrings.readOnlyPreview)"
         }
         if skill.agent == "hermes", DisplayText.isReadOnlyPreview(skill) {
-            return "\(DisplayText.scope(skill.scope)) · \(skill.provenance.label)"
+            return "\(DisplayText.scope(for: skill)) · \(skill.provenance.label)"
         }
         if DisplayText.isReadOnlyPreview(skill) {
-            return "\(DisplayText.scope(skill.scope)) · \(UIStrings.readOnly)"
+            return "\(DisplayText.scope(for: skill)) · \(UIStrings.readOnly)"
         }
-        return "\(DisplayText.scope(skill.scope)) · \(DisplayText.state(skill.state, enabled: skill.enabled))"
+        return "\(DisplayText.scope(for: skill)) · \(DisplayText.state(skill.state, enabled: skill.enabled))"
     }
 }

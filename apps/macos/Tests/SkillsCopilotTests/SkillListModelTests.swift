@@ -227,7 +227,8 @@ struct SkillListModelTests {
         try expectEqual(hermesExternalSkill.provenance.rootKind, .external, "Hermes external dirs should be modeled as external roots.")
         try expectEqual(hermesExternalSkill.provenance.scopeKind, .external, "Hermes external dirs should not be treated as project scope.")
         try expectEqual(hermesExternalSkill.provenance.label, "Hermes explicit external read-only", "Hermes external dirs should retain read-only provenance.")
-        try expectEqual(openClawSkill.provenance.label, "OpenClaw read-only project", "OpenClaw should retain read-only provenance.")
+        try expectEqual(openClawSkill.provenance.label, "OpenClaw workspace read-only", "OpenClaw should present project rows as workspace read-only provenance.")
+        try expectEqual(DisplayText.scope(for: openClawSkill), UIStrings.openClawWorkspaceScope, "OpenClaw project rows should display as workspace scope.")
     }
 
     private func skillIdentitySummaryAndDedupeExplanationAreStable() throws {

@@ -36,6 +36,25 @@ enum DisplayText {
         }
     }
 
+    static func scope(_ value: String, agent: String) -> String {
+        let normalizedAgent = agent
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "_", with: "-")
+        let normalizedScope = value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "_", with: "-")
+        if normalizedAgent == "openclaw", normalizedScope.contains("project") {
+            return UIStrings.openClawWorkspaceScope
+        }
+        return scope(value)
+    }
+
+    static func scope(for skill: SkillRecord) -> String {
+        scope(skill.scope, agent: skill.agent)
+    }
+
     static func agent(_ value: String) -> String {
         switch value {
         case "claude-code":

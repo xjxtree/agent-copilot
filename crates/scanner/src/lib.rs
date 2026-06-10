@@ -58,7 +58,7 @@ pub fn scan_agent(
                     path: root.path.clone(),
                     source,
                 })?;
-        if !is_allowed_canonical_root(ctx, &root, &canonical_root) {
+        if !is_allowed_canonical_root(adapter.id(), ctx, &root, &canonical_root) {
             report.skipped_roots.push(root.path);
             continue;
         }
@@ -71,7 +71,7 @@ pub fn scan_agent(
             continue;
         }
         report.scanned_roots.push(canonical_root.clone());
-        let allowed_target_base = allowed_target_base(ctx, &root, &canonical_root);
+        let allowed_target_base = allowed_target_base(adapter.id(), ctx, &root, &canonical_root);
         visit_root(
             adapter,
             ctx,
@@ -87,6 +87,7 @@ pub fn scan_agent(
 }
 
 fn is_allowed_canonical_root(
+    agent: AgentId,
     ctx: &AdapterContext,
     root: &AdapterRoot,
     canonical_root: &Path,
@@ -95,6 +96,10 @@ fn is_allowed_canonical_root(
 
     let allowed_base = match root.source {
         RootSource::UserHome => ctx.user_home.canonicalize().ok(),
+        RootSource::Project if agent == AgentId::Openclaw => {
+            openclaw_workspace_base_for_root_path(&root.path)
+                .and_then(|workspace_root| workspace_root.canonicalize().ok())
+        }
         RootSource::Project => ctx
             .project_root
             .as_ref()
@@ -226,7 +231,12 @@ fn dedup_instances(instances: Vec<SkillInstance>) -> Vec<SkillInstance> {
     deduped
 }
 
-fn allowed_target_base(ctx: &AdapterContext, root: &AdapterRoot, canonical_root: &Path) -> PathBuf {
+fn allowed_target_base(
+    agent: AgentId,
+    ctx: &AdapterContext,
+    root: &AdapterRoot,
+    canonical_root: &Path,
+) -> PathBuf {
     use skills_copilot_core::RootSource;
 
     match root.source {
@@ -234,6 +244,11 @@ fn allowed_target_base(ctx: &AdapterContext, root: &AdapterRoot, canonical_root:
             .user_home
             .canonicalize()
             .unwrap_or_else(|_| canonical_root.to_path_buf()),
+        RootSource::Project if agent == AgentId::Openclaw => {
+            openclaw_workspace_base_for_root_path(&root.path)
+                .and_then(|workspace_root| workspace_root.canonicalize().ok())
+                .unwrap_or_else(|| canonical_root.to_path_buf())
+        }
         RootSource::Project => ctx
             .project_root
             .as_ref()
@@ -247,6 +262,17 @@ fn is_allowed_scan_target(path: &Path, canonical_root: &Path, allowed_target_bas
     path.starts_with(canonical_root) || path.starts_with(allowed_target_base)
 }
 
+fn openclaw_workspace_base_for_root_path(root_path: &Path) -> Option<PathBuf> {
+    if root_path.file_name().and_then(|name| name.to_str()) != Some("skills") {
+        return None;
+    }
+    let parent = root_path.parent()?;
+    if parent.file_name().and_then(|name| name.to_str()) == Some(".agents") {
+        return parent.parent().map(Path::to_path_buf);
+    }
+    Some(parent.to_path_buf())
+}
+
 fn normalize_instance(
     ctx: &AdapterContext,
     root: &AdapterRoot,
@@ -257,6 +283,9 @@ fn normalize_instance(
     instance.scope = root.scope;
     instance.path = canonical_path.clone();
     instance.project_root = match root.scope {
+        Scope::AgentProject if instance.agent == AgentId::Openclaw => {
+            openclaw_workspace_base_for_root_path(&root.path).or_else(|| ctx.project_root.clone())
+        }
         Scope::AgentProject => ctx.project_root.clone(),
         _ => None,
     };
@@ -980,7 +1009,7 @@ mod tests {
     }
 
     #[test]
-    fn openclaw_scans_documented_global_and_home_workspace_roots() {
+    fn openclaw_scans_documented_global_and_selected_home_workspace_roots() {
         let temp_root = std::env::temp_dir().join(format!(
             "skills-copilot-openclaw-scan-{}",
             std::process::id()
@@ -1023,6 +1052,49 @@ mod tests {
             managed_global_path,
             "OpenClaw native global root wins over shared compatibility root"
         );
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn openclaw_scans_home_workspace_roots_when_selected_project_is_inside_workspace() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "skills-copilot-openclaw-nested-workspace-{}",
+            std::process::id()
+        ));
+        let home = temp_root.join("home");
+        let workspace = home.join(".openclaw/workspace");
+        let nested_project = workspace.join("repo");
+        let workspace_skill = write_openclaw_skill(&workspace.join("skills"), "workspace-local");
+        let workspace_agents_skill =
+            write_openclaw_skill(&workspace.join(".agents/skills"), "workspace-agents");
+
+        let ctx = AdapterContext {
+            user_home: home,
+            project_root: Some(nested_project.clone()),
+            project_cwd: Some(nested_project.join("nested")),
+            extra_roots: vec![],
+        };
+
+        let report = scan_agent(&OpenclawAdapter, &ctx).expect("scan succeeds");
+        let by_name: HashMap<_, _> = report
+            .instances
+            .iter()
+            .map(|skill| (skill.name.as_str(), skill))
+            .collect();
+
+        assert_eq!(report.instances.len(), 2);
+        assert_eq!(
+            by_name.get("workspace-local").map(|skill| &skill.path),
+            Some(&workspace_skill)
+        );
+        assert_eq!(
+            by_name.get("workspace-agents").map(|skill| &skill.path),
+            Some(&workspace_agents_skill)
+        );
+        assert!(report.instances.iter().all(|skill| {
+            skill.scope == Scope::AgentProject && skill.project_root == Some(workspace.clone())
+        }));
 
         let _ = std::fs::remove_dir_all(&temp_root);
     }

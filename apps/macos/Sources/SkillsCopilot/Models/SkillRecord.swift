@@ -312,6 +312,9 @@ extension SkillRecord {
             if normalizedAgent == "hermes" && scopeKind == .global {
                 return "\(agentLabel) home/profile read-only"
             }
+            if normalizedAgent == "openclaw" && scopeKind == .project {
+                return "\(agentLabel) workspace read-only"
+            }
             return "\(agentLabel) read-only \(scopeLabel)"
         }
         if rootKind == .toolGlobal || scopeKind == .toolGlobal {

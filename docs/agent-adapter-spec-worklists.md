@@ -1,6 +1,6 @@
 # Agent Adapter Spec Worklists
 
-> Status: Codex first implementation, V2.1 dual adapter experience, V2.2 project context implementation, V2.3 Codex adapter hardening, V2.4 opencode read-only adapter, V2.5 audit hardening, V2.6 adapter changelog tracking, V2.7 LLM gate safety notes, V2.8-V2.10 safety/docs closeout, V2.11 Adapter Capability Matrix, V2.12 opencode writable, V2.13 Pi read-only scanner/parser, V2.14 Hermes evidence-gate closeout, and V2.15 OpenClaw evidence-gate closeout are integrated. V2.36 Pi writable evidence harness, V2.37 guarded Pi writable toggle slice, and V2.38 Hermes external roots are complete; V2.39 OpenClaw workspace deepening is active.
+> Status: Codex first implementation, V2.1 dual adapter experience, V2.2 project context implementation, V2.3 Codex adapter hardening, V2.4 opencode read-only adapter, V2.5 audit hardening, V2.6 adapter changelog tracking, V2.7 LLM gate safety notes, V2.8-V2.10 safety/docs closeout, V2.11 Adapter Capability Matrix, V2.12 opencode writable, V2.13 Pi read-only scanner/parser, V2.14 Hermes evidence-gate closeout, and V2.15 OpenClaw evidence-gate closeout are integrated. V2.36 Pi writable evidence harness, V2.37 guarded Pi writable toggle slice, V2.38 Hermes external roots, and V2.39 OpenClaw workspace deepening are complete; V2.40 Adapter diagnostics is active.
 > Real local UI validation passed for the previous mainline app on 2026-06-10. V2.38 completed real app smoke launch/window id checks, while Computer Use/AX/capture returned `cgWindowNotFound` / no visible window; future user-visible, UI, or service-protocol candidates still require a fresh real local pass or explicit tool/session blocker. opencode writable, Pi read-only scan, Pi guarded native toggle, OpenClaw read-only scan, Hermes read-only scan, and Hermes explicit external-root scan are implemented; Pi install and Hermes/OpenClaw writable support remain blocked.
 > This document records what is verified enough to use for project instructions, and what is still missing before an adapter can be built.
 
@@ -132,7 +132,7 @@ Project scope decision: OpenClaw project semantics are workspace-scoped only. Tr
 | Area | Status |
 | --- | --- |
 | Public product identity | Partially observed from local OpenClaw-related skill docs: OpenClaw is described as an AI assistant and automation platform with plugins, gateway restart, and skill/package scanning workflows. |
-| Skill discovery roots | Confirmed read-only scope from official docs and read-only macmini evidence: workspace roots `<workspace>/skills` and `<workspace>/.agents/skills`, global/shared roots, bundled roots, and configured extra dirs. Project scope is workspace-scoped only. |
+| Skill discovery roots | Confirmed read-only scope from official docs and read-only macmini evidence: workspace roots `<workspace>/skills` and `<workspace>/.agents/skills` only, with no arbitrary repository/global/shared inference. Project scope is workspace-scoped only. |
 | Skill file/directory format | Partial read-only evidence: the local security-scan skill expects skill directories containing `SKILL.md`, extracts `name:` from YAML frontmatter, and falls back to the directory basename. This is script input evidence, not a full product spec. |
 | Config path/schema | Partial evidence only: local plugin docs use `openclaw config file` to locate `openclaw.json`; a user-local `~/.openclaw/openclaw.json` exists on this machine but is JSONC/non-strict JSON and was not copied because it may contain credentials. |
 | Enable/disable semantics | Plugin evidence only: local Tablestore Mem0 docs patch `.plugins.entries["openclaw-mem0"].enabled = true`, `.plugins.slots.memory`, and `.plugins.allow`. This does not verify skill enable/disable semantics. |
@@ -177,3 +177,10 @@ Before any non-Claude adapter PR:
 - opencode config: <https://opencode.ai/docs/config>
 - opencode agents: <https://opencode.ai/docs/agents/>
 - opencode commands: <https://opencode.ai/docs/commands/>
+
+## OpenClaw Workspace-Scoped Scope Clarification (V2.39 completed)
+
+- V2.39 OpenClaw deepening is limited to confirmed workspace roots only: `<workspace>/skills` and `<workspace>/.agents/skills`.
+- No inference of arbitrary repo roots or additional workspace roots should be used.
+- OpenClaw remains read-only: no writable/install actions, no script execution, no AI auto-write, and no credential writes.
+- This scope is the completed V2.39 implementation boundary.
