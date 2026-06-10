@@ -1,0 +1,46 @@
+{
+  "id": "fixture-batch-preview-skill-toggles",
+  "ok": true,
+  "result": {
+    "preview_token": "fixture-preview-token-v233",
+    "target_enabled": false,
+    "requested_count": 2,
+    "writable_count": 1,
+    "skipped_count": 1,
+    "writes_allowed": true,
+    "affected_items": [
+      {
+        "instance_id": "claude-global-fixture",
+        "name": "fixture-claude",
+        "agent": "claude-code",
+        "scope": "agent-global",
+        "current_enabled": true,
+        "target_enabled": false,
+        "config_scope": "agent-global",
+        "config_target": "/tmp/skills-copilot-home/.claude/settings.json",
+        "capability_label": "Claude Code verified config toggle",
+        "snapshot_plan": "Create a pre-batch-toggle agent config snapshot before writing.",
+        "rollback_plan": "Rollback remains available through snapshot.previewRollback and snapshot.rollback."
+      }
+    ],
+    "skipped_items": [
+      {
+        "instance_id": "pi-global-fixture",
+        "name": "fixture-pi",
+        "agent": "pi",
+        "scope": "agent-global",
+        "reason": "Pi is read-only in V2.33; enable/disable mutation and rollback semantics are not verified.",
+        "capability_label": "Pi read-only scanner; writable blocked"
+      }
+    ],
+    "capability_labels": [
+      "Claude Code verified config toggle",
+      "Pi read-only scanner; writable blocked"
+    ],
+    "snapshot_rollback_notes": [
+      "Will create one pre-batch-toggle config snapshot for each affected config target (1 target(s)).",
+      "Each write uses the existing config lock, atomic write, readback verification, and rollback-safe snapshot path.",
+      "No skill files, scripts, credentials, AI providers, cloud sync, telemetry, or release artifacts are touched."
+    ]
+  }
+}

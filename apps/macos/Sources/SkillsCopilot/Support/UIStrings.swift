@@ -65,6 +65,22 @@ enum UIStrings {
     static let cleanupAIBlocked = text("cleanup.safety.aiBlocked", "AI blocked")
     static let cleanupCredentialsBlocked = text("cleanup.safety.credentialsBlocked", "Credentials blocked")
     static let cleanupOpenExistingDetailHelp = text("cleanup.action.openExistingDetail.help", "Open the existing read-only detail section for this item.")
+    static let batchToggleTitle = text("batchToggle.title", "Safe Batch")
+    static let batchToggleBoundary = text("batchToggle.boundary", "Preview-first enable/disable for visible skills only. Read-only adapters and unverified writable roots are skipped; no scripts, AI provider calls, credentials, skill-content writes, or public release actions are available.")
+    static let batchToggleTarget = text("batchToggle.target", "Batch target")
+    static let batchToggleSelected = text("batchToggle.selected", "Selected")
+    static let batchToggleWritable = text("batchToggle.writable", "Writable")
+    static let batchToggleSkipped = text("batchToggle.skipped", "Skipped")
+    static let batchToggleApply = text("batchToggle.apply", "Apply")
+    static let batchTogglePreviewing = text("batchToggle.previewing", "Preparing batch preview...")
+    static let batchToggleSnapshotPlan = text("batchToggle.snapshotPlan", "Snapshot / rollback plan")
+    static let batchToggleSnapshotPlanDefault = text("batchToggle.snapshotPlan.default", "Service will create agent-config snapshots for writable adapter targets before applying, then use existing rollback support for those config files.")
+    static let batchToggleSnapshotPlanUnavailable = text("batchToggle.snapshotPlan.unavailable", "Service batch preview is unavailable, so apply is disabled. No files were written.")
+    static let batchToggleServicePreviewUnavailable = text("batchToggle.servicePreviewUnavailable", "Service batch preview method is unavailable. This is a local read-only eligibility estimate; apply is disabled until batch.applySkillToggles or batch.applyToggle is available.")
+    static let batchToggleApplyUnavailable = text("batchToggle.applyUnavailable", "Batch apply is unavailable until a service preview/apply pair confirms the snapshot plan.")
+    static let batchToggleNoWritableChanges = text("batchToggle.noWritableChanges", "No writable skill changes are available in this preview.")
+    static let batchToggleNoAffectedSkills = text("batchToggle.noAffectedSkills", "No writable affected skills in this preview.")
+    static let batchToggleNoSkippedSkills = text("batchToggle.noSkippedSkills", "No skipped skills in this preview.")
     static let noSkillsInCatalog = text("empty.noSkillsInCatalog", "No skills in catalog")
     static let noSkillsMatchSearch = text("empty.noSkillsMatchSearch", "No skills match this search")
     static let noProjectSelected = text("project.none", "No Project")
@@ -460,6 +476,42 @@ enum UIStrings {
 
     static func toolGlobalInstalled(_ skill: String, _ agent: String) -> String {
         format("message.toolGlobalInstalled", "Installed %@ into %@.", skill, agent)
+    }
+
+    static func batchToggleSelectedCount(_ count: Int) -> String {
+        format("batchToggle.selectedCount", "%d visible", count)
+    }
+
+    static func batchToggleActionTarget(_ action: String) -> String {
+        format("batchToggle.actionTarget", "Target: %@", action)
+    }
+
+    static func batchToggleAffectedSkills(_ count: Int) -> String {
+        format("batchToggle.affectedSkills", "Affected skills (%d)", count)
+    }
+
+    static func batchToggleSkippedSkills(_ count: Int) -> String {
+        format("batchToggle.skippedSkills", "Skipped read-only / ineligible (%d)", count)
+    }
+
+    static func batchToggleMoreItems(_ count: Int) -> String {
+        format("batchToggle.moreItems", "%d more hidden to keep the sidebar compact.", count)
+    }
+
+    static func batchToggleAlreadyInTargetState(_ action: String) -> String {
+        format("batchToggle.alreadyTarget", "Already %@", action)
+    }
+
+    static func batchToggleCapabilityMissing(_ agent: String) -> String {
+        format("batchToggle.capabilityMissing", "%@ writable capability is not verified in this service response.", agent)
+    }
+
+    static func batchToggleWritableMissing(_ agent: String) -> String {
+        format("batchToggle.writableMissing", "%@ root is not verified writable.", agent)
+    }
+
+    static func batchToggleApplied(action: String, count: Int) -> String {
+        format("batchToggle.applied", "%@ batch applied to %d writable skills after preview confirmation.", action, count)
     }
 
     static func toggledSkill(on: Bool, name: String) -> String {

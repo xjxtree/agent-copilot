@@ -1,0 +1,11 @@
+{
+  "id": "fixture-batch-preview-skill-toggles",
+  "method": "batch.previewSkillToggles",
+  "params": {
+    "instance_ids": [
+      "claude-global-fixture",
+      "pi-global-fixture"
+    ],
+    "target_enabled": false
+  }
+}

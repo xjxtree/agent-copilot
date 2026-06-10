@@ -74,6 +74,22 @@ private struct ToggleSkillParams: Encodable {
     }
 }
 
+private struct BatchToggleParams: Encodable {
+    let instanceIDs: [String]
+    let targetEnabled: Bool
+    let action: String
+    let previewToken: String?
+    let confirmed: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case instanceIDs = "instance_ids"
+        case targetEnabled = "target_enabled"
+        case action
+        case previewToken = "preview_token"
+        case confirmed
+    }
+}
+
 private struct ToolInstallPreviewParams: Encodable {
     let instanceId: String
     let targetAgent: String
@@ -494,6 +510,36 @@ final class ServiceClient {
             method: "config.toggleSkill",
             params: ToggleSkillParams(instanceId: instanceID, on: on)
         )
+    }
+
+    func previewBatchSkillToggles(instanceIDs: [String], on: Bool) async throws -> BatchTogglePreview {
+        let params = BatchToggleParams(
+            instanceIDs: instanceIDs,
+            targetEnabled: on,
+            action: BatchToggleAction.from(targetEnabled: on).rawValue,
+            previewToken: nil,
+            confirmed: false
+        )
+        do {
+            return try await call(method: "batch.previewSkillToggles", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return try await call(method: "batch.previewToggle", params: params)
+        }
+    }
+
+    func applyBatchSkillToggles(preview: BatchTogglePreview) async throws -> BatchToggleApplyResult {
+        let params = BatchToggleParams(
+            instanceIDs: preview.affectedSkills.map(\.instanceID),
+            targetEnabled: preview.targetEnabled,
+            action: preview.action.rawValue,
+            previewToken: preview.id,
+            confirmed: true
+        )
+        do {
+            return try await call(method: "batch.applySkillToggles", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return try await call(method: "batch.applyToggle", params: params)
+        }
     }
 
     func previewToolInstall(skill: SkillRecord, target: ToolInstallTarget) async throws -> ToolGlobalInstallPreview {

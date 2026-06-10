@@ -193,6 +193,12 @@ V2.4 把 opencode 作为第三个 adapter 接入 catalog；当前实现按官方
 - 不能触发脚本执行，不可发起 provider 调用，不得读取/写入 LLM credentials。
 - 不应产生额外 telemetry、cloud 同步或 release automation 的 side effects。
 
+### 2.4.6 V2.33 Safe batch actions（已完成）
+
+- V2.33 批量 enable/disable 为 preview-first：必须先返回受影响项、跳过项、snapshot/rollback 计划，再由用户二次确认后执行。
+- 仅对 verified writable agent/roots 执行；Pi/Hermes/OpenClaw、blocked、或能力不满足项归入跳过集合并给出具体跳过原因。
+- 执行仍通过现有 config 写安全链路逐项落盘，不新增 skill-content 写入口径，不触发 `script.execute`，不发起 provider 调用，不写入 credentials，不引入 telemetry。
+
 ### 2.5 LLM 凭据泄露
 
 **风险**：用户配的 API key 落到 git 仓库或同步盘。

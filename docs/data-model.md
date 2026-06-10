@@ -232,6 +232,17 @@ pub enum ExecutionAttemptStatus {
 
 审计记录不得保存 secret env value、任意文件内容、LLM prompt/response，或未实现 runner 的 stdout/stderr。LLM 不能成为 `ExecutionRequester`，也不能代替用户确认。
 
+### 1.14 V2.33 Safe batch actions（已完成）
+
+- V2.33 的批量写作业围绕 `SkillInstance`（`instance_id`）与 `agent/root` 维度进行；每次预览应包含：
+  - `requested_instance_ids`
+  - `writable_targets`
+  - `skipped_targets`（含 `skip_reason`）
+  - `preview_plan`（预期变更与 snapshot/rollback 条件）
+- read-only adapter 与不可写 root（Pi/Hermes/OpenClaw，及 capability 限制实例）必须进入 `skipped_targets`，并保留可解释跳过原因用于 UI 展示。
+- 当前阶段不新增数据库 schema；批量预览/计划为执行前计算出的临时结果，不持久化到现有 catalog/app data 结构外。
+- 批量写入仍不涉及 skill-content snapshot，不执行脚本，不写凭据/telemetry，不调用 AI provider。
+
 ## 2. 目录层级与项目根识别
 
 `Scope::AgentProject` 需要知道"项目根"。识别规则（按顺序，命中即用）：

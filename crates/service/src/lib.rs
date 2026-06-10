@@ -12,20 +12,20 @@ use skills_copilot_catalog::{
     RuleTuningRecord, SkillDetailRecord, SkillEventRecord, SkillRecord,
 };
 use skills_copilot_commands::{
-    analyze_catalog, clear_finding_triage, clear_rule_severity_override, clear_rule_suppression,
-    export_skill_bundle, export_staging_skill_bundle, get_skill,
+    analyze_catalog, apply_skill_toggles, clear_finding_triage, clear_rule_severity_override,
+    clear_rule_suppression, export_skill_bundle, export_staging_skill_bundle, get_skill,
     import_github_skill_to_tool_global_deferred, import_local_skill_to_tool_global,
     install_skill_from_tool_global, list_adapter_capabilities, list_agent_config_snapshots,
     list_conflicts, list_finding_triage, list_findings, list_rule_tuning, list_skill_events,
-    list_snapshots, preview_script_execution, preview_snapshot_rollback, read_claude_settings,
-    record_blocked_script_execution, rollback_snapshot, save_claude_settings,
+    list_snapshots, preview_script_execution, preview_skill_toggles, preview_snapshot_rollback,
+    read_claude_settings, record_blocked_script_execution, rollback_snapshot, save_claude_settings,
     scan_all_catalog_report, scan_claude_to_catalog, set_finding_triage,
     set_rule_severity_override, set_rule_suppression, skill_health_summary, toggle_skill,
-    AdapterCapabilityRecord, AgentCatalogScanReport, ConfigDocumentRecord,
-    CrossAgentAnalysisRecord, ExportedSkillBundle, ScriptExecutionAttemptRecord,
-    ScriptExecutionPreviewRecord, ScriptExecutionRequest, SkillHealthSummary,
-    SkillInstallPreviewRecord, SnapshotRollbackPreviewRecord, ToolGlobalImportResult,
-    SCRIPT_EXECUTION_DISABLED_REASON,
+    AdapterCapabilityRecord, AgentCatalogScanReport, BatchToggleApplyRecord,
+    BatchTogglePreviewRecord, ConfigDocumentRecord, CrossAgentAnalysisRecord, ExportedSkillBundle,
+    ScriptExecutionAttemptRecord, ScriptExecutionPreviewRecord, ScriptExecutionRequest,
+    SkillHealthSummary, SkillInstallPreviewRecord, SnapshotRollbackPreviewRecord,
+    ToolGlobalImportResult, SCRIPT_EXECUTION_DISABLED_REASON,
 };
 use skills_copilot_core::{AdapterContext, AdapterRoot, AgentId, RootSource, Scope};
 use thiserror::Error;
@@ -54,6 +54,8 @@ const SUPPORTED_METHODS: &[&str] = &[
     "rules.clearSeverityOverride",
     "rules.setSuppression",
     "rules.clearSuppression",
+    "batch.previewSkillToggles",
+    "batch.applySkillToggles",
     "script.previewExecution",
     "script.execute",
     "project.getContext",
@@ -539,6 +541,21 @@ pub struct ToggleSkillParams {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct BatchPreviewSkillTogglesParams {
+    pub instance_ids: Vec<String>,
+    #[serde(alias = "on", alias = "enabled")]
+    pub target_enabled: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct BatchApplySkillTogglesParams {
+    pub instance_ids: Vec<String>,
+    #[serde(alias = "on", alias = "enabled")]
+    pub target_enabled: bool,
+    pub preview_token: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct InstallSkillParams {
     pub instance_id: String,
     pub target_agent: String,
@@ -750,6 +767,32 @@ impl ServiceHost {
                     params.scope.as_deref(),
                 )?;
                 serde_json::to_value(cleared).map_err(Into::into)
+            }
+            "batch.previewSkillToggles" => {
+                let params: BatchPreviewSkillTogglesParams =
+                    serde_json::from_value(request.params)?;
+                let catalog = self.open_catalog()?;
+                let adapter_ctx = self.effective_adapter_ctx()?;
+                let preview: BatchTogglePreviewRecord = preview_skill_toggles(
+                    &catalog,
+                    &adapter_ctx,
+                    &params.instance_ids,
+                    params.target_enabled,
+                )?;
+                serde_json::to_value(preview).map_err(Into::into)
+            }
+            "batch.applySkillToggles" => {
+                let params: BatchApplySkillTogglesParams = serde_json::from_value(request.params)?;
+                let catalog = self.open_catalog()?;
+                let adapter_ctx = self.effective_adapter_ctx()?;
+                let applied: BatchToggleApplyRecord = apply_skill_toggles(
+                    &catalog,
+                    &adapter_ctx,
+                    &params.instance_ids,
+                    params.target_enabled,
+                    &params.preview_token,
+                )?;
+                serde_json::to_value(applied).map_err(Into::into)
             }
             "script.previewExecution" => {
                 let params: ScriptExecutionRequest = serde_json::from_value(request.params)?;
@@ -4447,6 +4490,32 @@ mod tests {
             "rules.clearSeverityOverride" | "rules.clearSuppression" => {
                 let _: bool = decode_fixture_result(method, result, path);
             }
+            "batch.previewSkillToggles" => {
+                let preview: WireBatchTogglePreviewRecord =
+                    decode_fixture_result(method, result, path);
+                assert_eq!(
+                    preview.requested_count,
+                    preview.writable_count + preview.skipped_count
+                );
+                assert_eq!(preview.writable_count, preview.affected_items.len());
+                assert_eq!(preview.skipped_count, preview.skipped_items.len());
+                assert_eq!(preview.writes_allowed, preview.writable_count > 0);
+                assert!(!preview.preview_token.is_empty());
+                assert!(!preview.capability_labels.is_empty());
+                assert!(!preview.snapshot_rollback_notes.is_empty());
+            }
+            "batch.applySkillToggles" => {
+                let applied: WireBatchToggleApplyRecord =
+                    decode_fixture_result(method, result, path);
+                assert_eq!(
+                    applied.requested_count,
+                    applied.writable_count + applied.skipped_count
+                );
+                assert_eq!(applied.applied_count, applied.updated_records.len());
+                assert!(applied.writes_allowed);
+                assert!(!applied.preview_token.is_empty());
+                assert!(!applied.snapshot_rollback_notes.is_empty());
+            }
             "script.previewExecution" => {
                 let preview: WireScriptExecutionPreviewRecord =
                     decode_fixture_result(method, result, path);
@@ -5302,6 +5371,69 @@ mod tests {
         name: String,
         state: String,
         enabled: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireBatchTogglePreviewRecord {
+        preview_token: String,
+        target_enabled: bool,
+        requested_count: usize,
+        writable_count: usize,
+        skipped_count: usize,
+        writes_allowed: bool,
+        affected_items: Vec<WireBatchToggleAffectedItem>,
+        skipped_items: Vec<WireBatchToggleSkippedItem>,
+        capability_labels: Vec<String>,
+        snapshot_rollback_notes: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireBatchToggleApplyRecord {
+        preview_token: String,
+        target_enabled: bool,
+        requested_count: usize,
+        writable_count: usize,
+        skipped_count: usize,
+        applied_count: usize,
+        writes_allowed: bool,
+        affected_items: Vec<WireBatchToggleAffectedItem>,
+        skipped_items: Vec<WireBatchToggleSkippedItem>,
+        capability_labels: Vec<String>,
+        snapshot_rollback_notes: Vec<String>,
+        updated_records: Vec<WireSkillRecord>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireBatchToggleAffectedItem {
+        instance_id: String,
+        name: String,
+        agent: String,
+        scope: String,
+        current_enabled: bool,
+        target_enabled: bool,
+        config_scope: String,
+        config_target: String,
+        capability_label: String,
+        snapshot_plan: String,
+        rollback_plan: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireBatchToggleSkippedItem {
+        instance_id: String,
+        name: Option<String>,
+        agent: Option<String>,
+        scope: Option<String>,
+        reason: String,
+        capability_label: Option<String>,
     }
 
     #[allow(dead_code)]

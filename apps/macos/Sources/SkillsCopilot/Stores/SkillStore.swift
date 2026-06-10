@@ -22,6 +22,9 @@ final class SkillStore: ObservableObject {
     @Published private(set) var preparingSkillAnalysisKeys: Set<String> = []
     @Published private(set) var scriptExecutionPreviews: [SkillRecord.ID: ScriptExecutionPreview] = [:]
     @Published private(set) var previewingScriptExecutionSkillIDs: Set<SkillRecord.ID> = []
+    @Published private(set) var batchTogglePreview: BatchTogglePreview?
+    @Published private(set) var isPreviewingBatchToggle = false
+    @Published private(set) var isApplyingBatchToggle = false
     @Published private(set) var projectContextState: ProjectContextState?
     @Published private(set) var isLoading = false
     @Published private(set) var isLoadingDetail = false
@@ -55,6 +58,9 @@ final class SkillStore: ObservableObject {
     }
     @Published var cleanupKindFilter: CleanupQueueKindFilter = .all
     @Published var cleanupPriorityFilter: CleanupQueuePriorityFilter = .all
+    @Published var batchToggleAction: BatchToggleAction = .disable {
+        didSet { batchTogglePreview = nil }
+    }
     @Published var sortOrder: SkillSortOrder = .name {
         didSet { handleListCriteriaChanged() }
     }
@@ -70,7 +76,7 @@ final class SkillStore: ObservableObject {
     }
 
     var isRefreshBusy: Bool {
-        isLoading || isScanning || isWriting || isProjectUpdating || isSavingSettings
+        isLoading || isScanning || isWriting || isProjectUpdating || isSavingSettings || isApplyingBatchToggle
     }
 
     private func toggleDisabledReason(for skill: SkillRecord) -> String? {
@@ -151,6 +157,15 @@ final class SkillStore: ObservableObject {
 
     var filteredSkillGroups: [SkillAgentGroup] {
         SkillListModel.groupedByAgent(filteredSkills)
+    }
+
+    var batchToggleSelectedSkills: [SkillRecord] {
+        filteredSkills
+    }
+
+    var canApplyBatchTogglePreview: Bool {
+        guard let preview = batchTogglePreview else { return false }
+        return !isRefreshBusy && preview.applySupported && preview.hasWritableChanges
     }
 
     var filteredCleanupQueueItems: [CleanupQueueItem] {
@@ -402,6 +417,83 @@ final class SkillStore: ObservableObject {
             await loadSelectedDetail()
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    func previewVisibleBatchToggle() async {
+        let selectedSkills = batchToggleSelectedSkills
+        guard !selectedSkills.isEmpty else {
+            batchTogglePreview = nil
+            return
+        }
+        guard !isRefreshBusy else {
+            errorMessage = UIStrings.operationUnavailableBusy
+            return
+        }
+
+        isPreviewingBatchToggle = true
+        errorMessage = nil
+        lastMutationMessage = nil
+        defer { isPreviewingBatchToggle = false }
+
+        do {
+            batchTogglePreview = try await service.previewBatchSkillToggles(
+                instanceIDs: selectedSkills.map(\.id),
+                on: batchToggleAction.targetEnabled
+            )
+        } catch ServiceClient.ClientError.service(let error) where error.code == "unknown_method" {
+            batchTogglePreview = localBatchTogglePreview(selectedSkills: selectedSkills, reason: UIStrings.batchToggleServicePreviewUnavailable)
+        } catch {
+            errorMessage = error.localizedDescription
+            batchTogglePreview = nil
+        }
+    }
+
+    func applyVisibleBatchTogglePreview() async {
+        guard let preview = batchTogglePreview else { return }
+        guard preview.applySupported else {
+            errorMessage = UIStrings.batchToggleApplyUnavailable
+            lastMutationMessage = nil
+            return
+        }
+        guard preview.hasWritableChanges else {
+            errorMessage = UIStrings.batchToggleNoWritableChanges
+            lastMutationMessage = nil
+            return
+        }
+        guard !isLoading, !isScanning, !isProjectUpdating, !isSavingSettings, !isWriting else {
+            errorMessage = UIStrings.operationUnavailableBusy
+            lastMutationMessage = nil
+            return
+        }
+
+        isApplyingBatchToggle = true
+        isWriting = true
+        errorMessage = nil
+        lastMutationMessage = nil
+        defer {
+            isWriting = false
+            isApplyingBatchToggle = false
+        }
+
+        do {
+            let result = try await service.applyBatchSkillToggles(preview: preview)
+            for item in preview.affectedSkills {
+                detailsByID.removeValue(forKey: item.instanceID)
+                skillEventsByID.removeValue(forKey: item.instanceID)
+            }
+            try await refreshCollections()
+            await loadCleanupQueue()
+            lastMutationMessage = UIStrings.batchToggleApplied(
+                action: preview.action.title,
+                count: result.updatedCount == 0 ? preview.writableCount : result.updatedCount
+            )
+            recordLocalRefresh(message: UIStrings.refreshAfterWrite)
+            batchTogglePreview = nil
+            await loadSelectedDetail()
+        } catch {
+            errorMessage = error.localizedDescription
+            lastMutationMessage = nil
         }
     }
 
@@ -772,6 +864,7 @@ final class SkillStore: ObservableObject {
         skillEventsByID = skillEventsByID.filter { currentSkillIDs.contains($0.key) }
         skillAnalysisPrepareResults.removeAll()
         preparingSkillAnalysisKeys.removeAll()
+        batchTogglePreview = nil
         refreshWatcherMessage(from: self.status)
         normalizeSelectionToVisibleSkills()
     }
@@ -849,6 +942,7 @@ final class SkillStore: ObservableObject {
 
     private func handleListCriteriaChanged() {
         let previousID = selectedSkillID
+        batchTogglePreview = nil
         normalizeSelectionToVisibleSkills()
         guard previousID != selectedSkillID else { return }
         Task { @MainActor [weak self] in
@@ -865,13 +959,50 @@ final class SkillStore: ObservableObject {
     }
 
     private func canStartScan(allowDuringProjectUpdate: Bool) -> Bool {
-        if isLoading || isScanning || isWriting || isSavingSettings {
+        if isLoading || isScanning || isWriting || isSavingSettings || isApplyingBatchToggle {
             return false
         }
         if isProjectUpdating, !allowDuringProjectUpdate {
             return false
         }
         return true
+    }
+
+    private func localBatchTogglePreview(selectedSkills: [SkillRecord], reason: String) -> BatchTogglePreview {
+        var affected: [BatchToggleSkillItem] = []
+        var skipped: [BatchToggleSkillItem] = []
+        for skill in selectedSkills {
+            if let skipReason = batchToggleSkipReason(for: skill) {
+                skipped.append(BatchToggleSkillItem(skill: skill, targetEnabled: batchToggleAction.targetEnabled, reason: skipReason))
+            } else if DisplayText.statusKind(skill.state, enabled: skill.enabled) == (batchToggleAction.targetEnabled ? .enabled : .disabled) {
+                skipped.append(BatchToggleSkillItem(skill: skill, targetEnabled: batchToggleAction.targetEnabled, reason: UIStrings.batchToggleAlreadyInTargetState(batchToggleAction.title.lowercased())))
+            } else {
+                affected.append(BatchToggleSkillItem(skill: skill, targetEnabled: batchToggleAction.targetEnabled))
+            }
+        }
+        return .local(
+            action: batchToggleAction,
+            selectedSkills: selectedSkills,
+            affectedSkills: affected,
+            skippedItems: skipped,
+            reason: reason
+        )
+    }
+
+    private func batchToggleSkipReason(for skill: SkillRecord) -> String? {
+        if let catalogReason = DisplayText.toggleDisabledReason(for: skill, isWriting: false) {
+            return catalogReason
+        }
+        guard let capability = adapterCapabilities.first(where: { $0.agent == skill.agent }) else {
+            return UIStrings.batchToggleCapabilityMissing(DisplayText.agent(skill.agent))
+        }
+        if !capability.configToggle.supported {
+            return capability.configToggle.reason ?? UIStrings.readOnlyAdapterStatus(capability.displayName)
+        }
+        if !capability.writable.supported {
+            return capability.writable.reason ?? UIStrings.batchToggleWritableMissing(capability.displayName)
+        }
+        return nil
     }
 
     private func beginRefresh(_ action: RefreshAction, message: String) {

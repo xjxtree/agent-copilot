@@ -1293,7 +1293,7 @@ impl Catalog {
             "SELECT id, agent, scope, target, content, reason, created_at
              FROM config_snapshot
              WHERE agent = ?1 AND target = ?2
-               AND reason IN ('pre-toggle', 'pre-config-edit')
+               AND reason IN ('pre-toggle', 'pre-batch-toggle', 'pre-config-edit')
              ORDER BY created_at DESC, id DESC",
         )?;
         let rows = stmt.query_map(params![agent, target], |row| {
@@ -1324,7 +1324,7 @@ impl Catalog {
                 "SELECT id, agent, scope, target, content, reason, created_at
                  FROM config_snapshot
                  WHERE agent = ?1 AND scope = ?2
-                   AND reason IN ('pre-toggle', 'pre-config-edit')
+                   AND reason IN ('pre-toggle', 'pre-batch-toggle', 'pre-config-edit')
                  ORDER BY created_at DESC, id DESC",
             )?;
             let rows = stmt.query_map(params![agent, scope], |row| {
@@ -1348,7 +1348,7 @@ impl Catalog {
                 "SELECT id, agent, scope, target, content, reason, created_at
                  FROM config_snapshot
                  WHERE agent = ?1
-                   AND reason IN ('pre-toggle', 'pre-config-edit')
+                   AND reason IN ('pre-toggle', 'pre-batch-toggle', 'pre-config-edit')
                  ORDER BY created_at DESC, id DESC",
             )?;
             let rows = stmt.query_map(params![agent], |row| {
@@ -1374,7 +1374,7 @@ impl Catalog {
         let mut stmt = self.conn.prepare(
             "SELECT id, agent, scope, target, content, reason, created_at
              FROM config_snapshot
-             WHERE reason IN ('pre-toggle', 'pre-config-edit')
+             WHERE reason IN ('pre-toggle', 'pre-batch-toggle', 'pre-config-edit')
              ORDER BY created_at DESC, id DESC",
         )?;
         let rows = stmt.query_map([], |row| {

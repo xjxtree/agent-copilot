@@ -50,6 +50,10 @@ struct SidebarView: View {
                     SidebarEmptyMessage(message: emptyFilteredMessage)
                 }
             } else {
+                Section {
+                    SafeBatchTogglePanel()
+                }
+
                 Section(skillListSectionTitle) {
                     ForEach(store.filteredSkills) { skill in
                         SkillRow(skill: skill)
@@ -99,6 +103,194 @@ struct SidebarView: View {
             return UIStrings.noCodexSkillsMessage
         }
         return UIStrings.noSkillsMatchSearch
+    }
+}
+
+private struct SafeBatchTogglePanel: View {
+    @EnvironmentObject private var store: SkillStore
+    @State private var showAffected = false
+    @State private var showSkipped = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Label(UIStrings.batchToggleTitle, systemImage: "checklist.checked")
+                    .font(.caption.bold())
+                    .foregroundStyle(.blue)
+                Spacer()
+                Text(UIStrings.batchToggleSelectedCount(store.batchToggleSelectedSkills.count))
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(UIStrings.batchToggleBoundary)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+
+            Picker(UIStrings.batchToggleTarget, selection: $store.batchToggleAction) {
+                ForEach(BatchToggleAction.allCases) { action in
+                    Label(action.title, systemImage: action.systemImage).tag(action)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            HStack(spacing: 8) {
+                Button {
+                    Task { await store.previewVisibleBatchToggle() }
+                } label: {
+                    Label(UIStrings.preview, systemImage: "eye")
+                        .frame(maxWidth: .infinity)
+                }
+                .controlSize(.small)
+                .disabled(store.isRefreshBusy || store.isPreviewingBatchToggle || store.batchToggleSelectedSkills.isEmpty)
+
+                Button {
+                    Task { await store.applyVisibleBatchTogglePreview() }
+                } label: {
+                    Label(UIStrings.batchToggleApply, systemImage: "checkmark.circle")
+                        .frame(maxWidth: .infinity)
+                }
+                .controlSize(.small)
+                .disabled(!store.canApplyBatchTogglePreview || store.isPreviewingBatchToggle)
+                .help(store.batchTogglePreview?.applySupported == false ? UIStrings.batchToggleApplyUnavailable : "")
+            }
+
+            if store.isPreviewingBatchToggle {
+                Label(UIStrings.batchTogglePreviewing, systemImage: "hourglass")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let preview = store.batchTogglePreview {
+                BatchTogglePreviewSummary(
+                    preview: preview,
+                    showAffected: $showAffected,
+                    showSkipped: $showSkipped
+                )
+            }
+        }
+        .padding(10)
+        .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+private struct BatchTogglePreviewSummary: View {
+    let preview: BatchTogglePreview
+    @Binding var showAffected: Bool
+    @Binding var showSkipped: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 6) {
+                BatchToggleCountPill(title: UIStrings.batchToggleSelected, value: preview.selectedCount)
+                BatchToggleCountPill(title: UIStrings.batchToggleWritable, value: preview.writableCount)
+                BatchToggleCountPill(title: UIStrings.batchToggleSkipped, value: preview.skippedCount)
+            }
+
+            Label(UIStrings.batchToggleActionTarget(preview.action.title), systemImage: preview.action.systemImage)
+                .font(.caption.bold())
+                .foregroundStyle(.primary)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Label(UIStrings.batchToggleSnapshotPlan, systemImage: "clock.arrow.circlepath")
+                    .font(.caption.bold())
+                Text(preview.snapshotPlan.summary)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+                if !preview.snapshotPlan.targets.isEmpty {
+                    Text(preview.snapshotPlan.targets.prefix(2).joined(separator: ", "))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
+
+            DisclosureGroup(isExpanded: $showAffected) {
+                BatchToggleItemList(items: preview.affectedSkills, emptyMessage: UIStrings.batchToggleNoAffectedSkills)
+            } label: {
+                Text(UIStrings.batchToggleAffectedSkills(preview.affectedSkills.count))
+                    .font(.caption.bold())
+            }
+
+            DisclosureGroup(isExpanded: $showSkipped) {
+                BatchToggleItemList(items: preview.skippedItems, emptyMessage: UIStrings.batchToggleNoSkippedSkills)
+            } label: {
+                Text(UIStrings.batchToggleSkippedSkills(preview.skippedItems.count))
+                    .font(.caption.bold())
+            }
+
+            if !preview.applySupported {
+                Label(UIStrings.batchToggleApplyUnavailable, systemImage: "lock.fill")
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+private struct BatchToggleCountPill: View {
+    let title: String
+    let value: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(title)
+                .foregroundStyle(.secondary)
+            Text("\(value)")
+                .fontWeight(.bold)
+                .monospacedDigit()
+        }
+        .font(.caption2)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct BatchToggleItemList: View {
+    let items: [BatchToggleSkillItem]
+    let emptyMessage: String
+
+    var body: some View {
+        if items.isEmpty {
+            Text(emptyMessage)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .padding(.vertical, 3)
+        } else {
+            VStack(alignment: .leading, spacing: 5) {
+                ForEach(items.prefix(6)) { item in
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(item.name)
+                            .font(.caption.bold())
+                            .lineLimit(1)
+                        Text(itemSubtitle(item))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                    .padding(.vertical, 2)
+                }
+                if items.count > 6 {
+                    Text(UIStrings.batchToggleMoreItems(items.count - 6))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+    }
+
+    private func itemSubtitle(_ item: BatchToggleSkillItem) -> String {
+        let base = [DisplayText.agent(item.agent), DisplayText.scope(item.scope)].filter { !$0.isEmpty }.joined(separator: " · ")
+        guard let reason = item.reason, !reason.isEmpty else { return base }
+        return base.isEmpty ? reason : "\(base) · \(reason)"
     }
 }
 

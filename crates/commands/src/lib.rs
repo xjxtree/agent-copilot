@@ -78,6 +78,8 @@ pub enum CommandError {
     InvalidRuleSeverityOverride(String),
     #[error("invalid rule tuning request: {0}")]
     InvalidRuleTuningRequest(String),
+    #[error("invalid batch action: {0}")]
+    InvalidBatchAction(String),
 }
 
 pub fn scan_claude_to_catalog(
@@ -149,6 +151,61 @@ impl AdapterFeatureCapability {
             reason: Some(reason),
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct BatchTogglePreviewRecord {
+    pub preview_token: String,
+    pub target_enabled: bool,
+    pub requested_count: usize,
+    pub writable_count: usize,
+    pub skipped_count: usize,
+    pub writes_allowed: bool,
+    pub affected_items: Vec<BatchToggleAffectedItem>,
+    pub skipped_items: Vec<BatchToggleSkippedItem>,
+    pub capability_labels: Vec<String>,
+    pub snapshot_rollback_notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct BatchToggleApplyRecord {
+    pub preview_token: String,
+    pub target_enabled: bool,
+    pub requested_count: usize,
+    pub writable_count: usize,
+    pub skipped_count: usize,
+    pub applied_count: usize,
+    pub writes_allowed: bool,
+    pub affected_items: Vec<BatchToggleAffectedItem>,
+    pub skipped_items: Vec<BatchToggleSkippedItem>,
+    pub capability_labels: Vec<String>,
+    pub snapshot_rollback_notes: Vec<String>,
+    pub updated_records: Vec<SkillRecord>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct BatchToggleAffectedItem {
+    pub instance_id: String,
+    pub name: String,
+    pub agent: String,
+    pub scope: String,
+    pub current_enabled: bool,
+    pub target_enabled: bool,
+    pub config_scope: String,
+    pub config_target: String,
+    pub capability_label: String,
+    pub snapshot_plan: String,
+    pub rollback_plan: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct BatchToggleSkippedItem {
+    pub instance_id: String,
+    pub name: Option<String>,
+    pub agent: Option<String>,
+    pub scope: Option<String>,
+    pub reason: String,
+    pub capability_label: Option<String>,
 }
 
 pub fn scan_all_to_catalog(ctx: &AdapterContext, catalog: &Catalog) -> Result<usize, CommandError> {
@@ -3574,6 +3631,368 @@ pub fn toggle_skill(
         .ok_or_else(|| CommandError::InstanceNotFound(instance_id.to_string()))
 }
 
+pub fn preview_skill_toggles(
+    catalog: &Catalog,
+    ctx: &AdapterContext,
+    instance_ids: &[String],
+    target_enabled: bool,
+) -> Result<BatchTogglePreviewRecord, CommandError> {
+    let requested_count = instance_ids.len();
+    let mut seen = BTreeSet::new();
+    let mut affected_items = Vec::new();
+    let mut skipped_items = Vec::new();
+
+    for instance_id in instance_ids {
+        if !seen.insert(instance_id.clone()) {
+            skipped_items.push(BatchToggleSkippedItem {
+                instance_id: instance_id.clone(),
+                name: None,
+                agent: None,
+                scope: None,
+                reason: "Duplicate selection entry; each skill is toggled at most once per batch."
+                    .to_string(),
+                capability_label: None,
+            });
+            continue;
+        }
+
+        let Some(meta) = catalog.get_skill_instance_meta(instance_id)? else {
+            skipped_items.push(BatchToggleSkippedItem {
+                instance_id: instance_id.clone(),
+                name: None,
+                agent: None,
+                scope: None,
+                reason: "Skill instance was not found in the current catalog.".to_string(),
+                capability_label: None,
+            });
+            continue;
+        };
+
+        let capability_label = batch_capability_label(meta.agent).to_string();
+        if meta.enabled == target_enabled {
+            skipped_items.push(BatchToggleSkippedItem {
+                instance_id: instance_id.clone(),
+                name: Some(meta.name.clone()),
+                agent: Some(meta.agent.as_str().to_string()),
+                scope: Some(meta.scope.as_str().to_string()),
+                reason: "Skill already matches the requested enabled state.".to_string(),
+                capability_label: Some(capability_label),
+            });
+            continue;
+        }
+
+        let config_target = match config_target_for_instance(ctx, &meta) {
+            Ok(config_target) => config_target,
+            Err(error) => {
+                skipped_items.push(BatchToggleSkippedItem {
+                    instance_id: instance_id.clone(),
+                    name: Some(meta.name.clone()),
+                    agent: Some(meta.agent.as_str().to_string()),
+                    scope: Some(meta.scope.as_str().to_string()),
+                    reason: batch_skip_reason(meta.agent, &error),
+                    capability_label: Some(capability_label),
+                });
+                continue;
+            }
+        };
+
+        affected_items.push(BatchToggleAffectedItem {
+            instance_id: instance_id.clone(),
+            name: meta.name.clone(),
+            agent: meta.agent.as_str().to_string(),
+            scope: meta.scope.as_str().to_string(),
+            current_enabled: meta.enabled,
+            target_enabled,
+            config_scope: config_target.scope.as_str().to_string(),
+            config_target: config_target.path.to_string_lossy().to_string(),
+            capability_label,
+            snapshot_plan: "Create a pre-batch-toggle agent config snapshot before writing."
+                .to_string(),
+            rollback_plan:
+                "Rollback remains available through snapshot.previewRollback and snapshot.rollback."
+                    .to_string(),
+        });
+    }
+
+    let writable_count = affected_items.len();
+    let skipped_count = skipped_items.len();
+    let writes_allowed = writable_count > 0;
+    let capability_labels = batch_capability_labels(&affected_items, &skipped_items);
+    let snapshot_rollback_notes = batch_snapshot_rollback_notes(&affected_items);
+    let preview_token = batch_preview_token(
+        target_enabled,
+        requested_count,
+        &affected_items,
+        &skipped_items,
+    );
+
+    Ok(BatchTogglePreviewRecord {
+        preview_token,
+        target_enabled,
+        requested_count,
+        writable_count,
+        skipped_count,
+        writes_allowed,
+        affected_items,
+        skipped_items,
+        capability_labels,
+        snapshot_rollback_notes,
+    })
+}
+
+pub fn apply_skill_toggles(
+    catalog: &Catalog,
+    ctx: &AdapterContext,
+    instance_ids: &[String],
+    target_enabled: bool,
+    preview_token: &str,
+) -> Result<BatchToggleApplyRecord, CommandError> {
+    let preview = preview_skill_toggles(catalog, ctx, instance_ids, target_enabled)?;
+    if preview.preview_token != preview_token {
+        return Err(CommandError::InvalidBatchAction(
+            "batch apply requires a fresh preview token for the same selection and target enabled state".to_string(),
+        ));
+    }
+    if !preview.writes_allowed {
+        return Err(CommandError::InvalidBatchAction(
+            "batch apply has no writable items after read-only and no-op filtering".to_string(),
+        ));
+    }
+
+    let mut groups: BTreeMap<(String, String, String), Vec<SkillInstanceMeta>> = BTreeMap::new();
+    for item in &preview.affected_items {
+        let meta = catalog
+            .get_skill_instance_meta(&item.instance_id)?
+            .ok_or_else(|| CommandError::InstanceNotFound(item.instance_id.clone()))?;
+        let config_target = config_target_for_instance(ctx, &meta)?;
+        groups
+            .entry((
+                config_target.agent.as_str().to_string(),
+                config_target.scope.as_str().to_string(),
+                config_target.path.to_string_lossy().to_string(),
+            ))
+            .or_default()
+            .push(meta);
+    }
+
+    let mut updated_records = Vec::new();
+    for metas in groups.values() {
+        let Some(first_meta) = metas.first() else {
+            continue;
+        };
+        let config_target = config_target_for_instance(ctx, first_meta)?;
+        apply_skill_toggle_group(catalog, ctx, &config_target, metas, target_enabled)?;
+        for meta in metas {
+            let record = catalog
+                .get_skill_record(&meta.id)?
+                .ok_or_else(|| CommandError::InstanceNotFound(meta.id.clone()))?;
+            updated_records.push(record);
+        }
+    }
+
+    Ok(BatchToggleApplyRecord {
+        preview_token: preview.preview_token,
+        target_enabled: preview.target_enabled,
+        requested_count: preview.requested_count,
+        writable_count: preview.writable_count,
+        skipped_count: preview.skipped_count,
+        applied_count: updated_records.len(),
+        writes_allowed: preview.writes_allowed,
+        affected_items: preview.affected_items,
+        skipped_items: preview.skipped_items,
+        capability_labels: preview.capability_labels,
+        snapshot_rollback_notes: preview.snapshot_rollback_notes,
+        updated_records,
+    })
+}
+
+fn apply_skill_toggle_group(
+    catalog: &Catalog,
+    ctx: &AdapterContext,
+    config_target: &ConfigTarget,
+    metas: &[SkillInstanceMeta],
+    target_enabled: bool,
+) -> Result<(), CommandError> {
+    validate_config_write_target(
+        ctx,
+        config_target.agent,
+        config_target.scope,
+        &config_target.path,
+    )?;
+    let lock_file = lock_config(
+        ctx,
+        config_target.agent,
+        config_target.scope,
+        &config_target.path,
+    )?;
+
+    let original_text = if config_target.path.exists() {
+        fs::read_to_string(&config_target.path)?
+    } else {
+        String::new()
+    };
+
+    let snapshot_id = generate_snapshot_id();
+    let now_ms = current_time_ms();
+    let snapshot_content = redact_snapshot_content(&original_text);
+    catalog.create_config_snapshot(ConfigSnapshotDraft {
+        id: &snapshot_id,
+        agent: config_target.agent.as_str(),
+        scope: config_target.scope.as_str(),
+        target: &config_target.path.to_string_lossy(),
+        content: &snapshot_content,
+        reason: "pre-batch-toggle",
+        created_at_ms: now_ms,
+    })?;
+
+    let mut doc = AgentConfigDocument {
+        path: config_target.path.clone(),
+        format: config_target.format,
+        text: original_text.clone(),
+    };
+    for meta in metas {
+        let instance_for_patch = minimal_skill_instance(meta);
+        patch_enabled_for_agent(meta.agent, &mut doc, &instance_for_patch, target_enabled)?;
+    }
+
+    write_config_atomic(
+        ctx,
+        config_target.agent,
+        config_target.scope,
+        &config_target.path,
+        &doc.text,
+    )?;
+
+    let written = fs::read_to_string(&config_target.path)?;
+    if written != doc.text {
+        let _ = write_config_atomic(
+            ctx,
+            config_target.agent,
+            config_target.scope,
+            &config_target.path,
+            &original_text,
+        );
+        lock_file.unlock()?;
+        return Err(CommandError::VerificationFailed);
+    }
+    lock_file.unlock()?;
+
+    let new_state = if target_enabled { "loaded" } else { "disabled" };
+    let target = config_target.path.to_string_lossy().to_string();
+    for meta in metas {
+        catalog.set_skill_toggle(&meta.id, target_enabled, new_state)?;
+        let event_payload = serde_json::json!({
+            "enabled": target_enabled,
+            "agent": meta.agent.as_str(),
+            "scope": meta.scope.as_str(),
+            "target": target,
+            "skill_name": meta.name.clone(),
+            "config_scope": config_target.scope.as_str(),
+            "previous_enabled": meta.enabled,
+            "batch": true,
+            "snapshot_id": snapshot_id,
+        });
+        let event_payload = serde_json::to_string(&event_payload)?;
+        catalog.create_skill_event(SkillEventDraft {
+            instance_id: &meta.id,
+            kind: "toggle",
+            payload: &event_payload,
+            occurred_at_ms: now_ms,
+        })?;
+    }
+
+    Ok(())
+}
+
+fn batch_preview_token(
+    target_enabled: bool,
+    requested_count: usize,
+    affected_items: &[BatchToggleAffectedItem],
+    skipped_items: &[BatchToggleSkippedItem],
+) -> String {
+    let affected = affected_items
+        .iter()
+        .map(|item| {
+            format!(
+                "{}:{}:{}:{}:{}:{}",
+                item.instance_id,
+                item.agent,
+                item.scope,
+                item.current_enabled,
+                item.target_enabled,
+                item.config_target
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("|");
+    let skipped = skipped_items
+        .iter()
+        .map(|item| format!("{}:{}", item.instance_id, item.reason))
+        .collect::<Vec<_>>()
+        .join("|");
+    hash_string(&format!(
+        "v2.33-batch-toggle:{target_enabled}:{requested_count}:{affected}:{skipped}"
+    ))
+}
+
+fn batch_capability_labels(
+    affected_items: &[BatchToggleAffectedItem],
+    skipped_items: &[BatchToggleSkippedItem],
+) -> Vec<String> {
+    let mut labels = BTreeSet::new();
+    for item in affected_items {
+        labels.insert(item.capability_label.clone());
+    }
+    for item in skipped_items {
+        if let Some(label) = &item.capability_label {
+            labels.insert(label.clone());
+        }
+    }
+    labels.into_iter().collect()
+}
+
+fn batch_snapshot_rollback_notes(affected_items: &[BatchToggleAffectedItem]) -> Vec<String> {
+    let targets = affected_items
+        .iter()
+        .map(|item| item.config_target.clone())
+        .collect::<BTreeSet<_>>();
+    if targets.is_empty() {
+        return vec![
+            "No agent config writes are allowed for this selection after filtering.".to_string(),
+        ];
+    }
+    vec![
+        format!(
+            "Will create one pre-batch-toggle config snapshot for each affected config target ({} target(s)).",
+            targets.len()
+        ),
+        "Each write uses the existing config lock, atomic write, readback verification, and rollback-safe snapshot path.".to_string(),
+        "No skill files, scripts, credentials, AI providers, cloud sync, telemetry, or release artifacts are touched.".to_string(),
+    ]
+}
+
+fn batch_capability_label(agent: AgentId) -> &'static str {
+    match agent {
+        AgentId::ClaudeCode => "Claude Code verified config toggle",
+        AgentId::Codex => "Codex verified user-config toggle",
+        AgentId::Opencode => "opencode verified exact permission.skill toggle",
+        AgentId::Pi => "Pi read-only scanner; writable blocked",
+        AgentId::Hermes => "Hermes read-only scanner; writable blocked",
+        AgentId::Openclaw => "OpenClaw read-only scanner; writable blocked",
+        AgentId::ToolGlobal => "Tool-global preview; direct toggle blocked",
+    }
+}
+
+fn batch_skip_reason(agent: AgentId, error: &CommandError) -> String {
+    match agent {
+        AgentId::Pi => "Pi is read-only in V2.33; enable/disable mutation and rollback semantics are not verified.".to_string(),
+        AgentId::Hermes => "Hermes is read-only in V2.33; individual skill toggle semantics and rollback-safe config writes are not confirmed.".to_string(),
+        AgentId::Openclaw => "OpenClaw is read-only in V2.33; plugin config evidence is not a verified skill toggle contract.".to_string(),
+        AgentId::ToolGlobal => "Tool-global staging records are preview/import sources and do not have agent config toggles.".to_string(),
+        _ => error.to_string(),
+    }
+}
+
 #[derive(Debug, Clone)]
 struct ConfigTarget {
     agent: AgentId,
@@ -5964,6 +6383,128 @@ mod tests {
             !content.contains("\"bar\""),
             "skillOverrides entry for bar is removed"
         );
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn batch_toggle_preview_filters_read_only_and_apply_uses_snapshot_path() {
+        let temp_root = temp_test_dir("batch-toggle");
+        let home = temp_root.join("home");
+        write_claude_skill(&home, "batch-claude");
+        write_pi_global_skill(&home, "batch-pi");
+
+        let catalog = Catalog::in_memory().expect("catalog opens");
+        catalog.init().expect("catalog initializes");
+        let ctx = AdapterContext {
+            user_home: home.clone(),
+            project_root: None,
+            project_cwd: None,
+            extra_roots: vec![],
+        };
+        scan_all_to_catalog(&ctx, &catalog).expect("scan all");
+        let records = catalog.list_skill_records().expect("records");
+        let claude_id = records
+            .iter()
+            .find(|record| record.agent == "claude-code" && record.name == "batch-claude")
+            .expect("claude record")
+            .id
+            .clone();
+        let pi_id = records
+            .iter()
+            .find(|record| record.agent == "pi" && record.name == "batch-pi")
+            .expect("pi record")
+            .id
+            .clone();
+
+        let selection = vec![claude_id.clone(), pi_id.clone(), claude_id.clone()];
+        let preview =
+            preview_skill_toggles(&catalog, &ctx, &selection, false).expect("batch preview");
+        assert_eq!(preview.requested_count, 3);
+        assert_eq!(preview.writable_count, 1);
+        assert_eq!(preview.skipped_count, 2);
+        assert!(preview.writes_allowed);
+        assert_eq!(preview.affected_items[0].instance_id, claude_id);
+        assert!(preview
+            .skipped_items
+            .iter()
+            .any(|item| item.instance_id == pi_id && item.reason.contains("Pi is read-only")));
+        assert!(preview
+            .skipped_items
+            .iter()
+            .any(|item| item.instance_id == claude_id && item.reason.contains("Duplicate")));
+        assert!(preview
+            .snapshot_rollback_notes
+            .iter()
+            .any(|note| note.contains("pre-batch-toggle")));
+
+        let stale = apply_skill_toggles(&catalog, &ctx, &selection, false, "stale-token")
+            .expect_err("stale token must be rejected");
+        assert!(matches!(stale, CommandError::InvalidBatchAction(_)));
+
+        let applied =
+            apply_skill_toggles(&catalog, &ctx, &selection, false, &preview.preview_token)
+                .expect("batch apply");
+        assert_eq!(applied.applied_count, 1);
+        assert_eq!(applied.updated_records.len(), 1);
+        assert!(!applied.updated_records[0].enabled);
+
+        let settings_path = home.join(".claude/settings.json");
+        let content = std::fs::read_to_string(&settings_path).expect("read settings");
+        assert!(content.contains("\"batch-claude\""));
+        assert!(content.contains("\"off\""));
+        assert!(
+            !home.join(".pi/settings.json").exists(),
+            "read-only Pi must not get a config write"
+        );
+
+        let snapshots = catalog
+            .list_config_snapshots("claude-code", &settings_path.to_string_lossy())
+            .expect("list snapshots");
+        assert_eq!(snapshots.len(), 1);
+        assert_eq!(snapshots[0].reason, "pre-batch-toggle");
+
+        let events = list_skill_events(&catalog, &applied.updated_records[0].id, Some(10))
+            .expect("list events");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].payload["batch"], serde_json::json!(true));
+        assert!(events[0].payload.get("snapshot_id").is_some());
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn batch_toggle_preview_blocks_apply_when_selection_has_no_writable_items() {
+        let temp_root = temp_test_dir("batch-toggle-read-only");
+        let home = temp_root.join("home");
+        write_pi_global_skill(&home, "batch-pi-only");
+
+        let catalog = Catalog::in_memory().expect("catalog opens");
+        catalog.init().expect("catalog initializes");
+        let ctx = AdapterContext {
+            user_home: home,
+            project_root: None,
+            project_cwd: None,
+            extra_roots: vec![],
+        };
+        scan_all_to_catalog(&ctx, &catalog).expect("scan all");
+        let pi_id = catalog
+            .list_skill_records()
+            .expect("records")
+            .into_iter()
+            .find(|record| record.agent == "pi" && record.name == "batch-pi-only")
+            .expect("pi record")
+            .id;
+
+        let selection = vec![pi_id];
+        let preview =
+            preview_skill_toggles(&catalog, &ctx, &selection, false).expect("batch preview");
+        assert_eq!(preview.writable_count, 0);
+        assert_eq!(preview.skipped_count, 1);
+        assert!(!preview.writes_allowed);
+        let apply = apply_skill_toggles(&catalog, &ctx, &selection, false, &preview.preview_token)
+            .expect_err("read-only-only batch apply must be blocked");
+        assert!(matches!(apply, CommandError::InvalidBatchAction(_)));
 
         let _ = std::fs::remove_dir_all(&temp_root);
     }

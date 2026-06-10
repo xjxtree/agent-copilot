@@ -1,6 +1,6 @@
 # skills-copilot Service Protocol
 
-> Status: V2.32 Rule tuning / suppression is integrated; V2.33 Safe batch actions is active. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, V2.19 health dashboard, V2.20 read-only AI skill analysis assist, V2.21 scan accuracy/dedupe alignment, V2.22 finding/conflict semantics, V2.23 Health Dashboard / Adapter Capability UX, V2.24 Skill Detail diagnostics, V2.25 Agent-config timeline, V2.26 Finding explainability, V2.27 Skill identity/provenance dedupe, V2.28 Conflict semantic closeout, V2.29 Finding triage persistence, V2.30 AI skill analysis workflow, V2.31 Cleanup Queue, and V2.32 Rule tuning / suppression are implemented or synchronized. V2.31 adds `cleanup.listQueue` as a read-only aggregation method; it does not add write, execution, provider, credential, or snapshot methods. V2.32 adds app-local `rules.*` methods for severity overrides and suppressions; they do not write skill files, agent configs, snapshots, scripts, provider state, or credentials.
+> Status: V2.33 Safe batch actions is integrated; V2.34 Cross-agent comparison view is active. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, V2.19 health dashboard, V2.20 read-only AI skill analysis assist, V2.21 scan accuracy/dedupe alignment, V2.22 finding/conflict semantics, V2.23 Health Dashboard / Adapter Capability UX, V2.24 Skill Detail diagnostics, V2.25 Agent-config timeline, V2.26 Finding explainability, V2.27 Skill identity/provenance dedupe, V2.28 Conflict semantic closeout, V2.29 Finding triage persistence, V2.30 AI skill analysis workflow, V2.31 Cleanup Queue, V2.32 Rule tuning / suppression, and V2.33 Safe batch actions are implemented or synchronized. V2.33 adds `batch.previewSkillToggles` and `batch.applySkillToggles` for preview-first verified writable toggles; it keeps Pi/Hermes/OpenClaw read-only and does not write skill content, execute scripts, call providers, store credentials, or create public distribution artifacts.
 >
 > Integrated: V2.9 Tool-global import/export/install, V2.10 skill execution safety boundary, and 2026-06-10 real local Computer Use validation for the current mainline app. V2.11 added adapter capability status to the service protocol and macOS UI. V2.12 marks opencode writable through exact permission.skill deny/re-enable after snapshot/rollback, install, and fixture smoke validation pass; current opencode scan follows native plus official compatibility roots while install targets remain native roots.
 >
@@ -64,7 +64,7 @@ This stdio shape can later move behind a local socket without changing method pa
 | `skill.exportBundle` | Yes, writes app-controlled export files | V2.9 local tool-global/staging export | manifest path, bundle path, fingerprint, and reproducible metadata |
 | `skill.install` | Yes, after confirmation | V2.9 install/copy from tool-global to target agent | preview or completed install record with target path, files, risks, confirmation, and optional snapshot id for future config-backed installs |
 | `skill.listEvents` | No | Native macOS skill detail Recent Activity | recent local `skill_event` records for `{ "instance_id": "...", "limit"?: 12 }` |
-| `config.toggleSkill` | Yes, writes agent config | Native macOS Enable / Disable action | updated `SkillRecord` |
+| `config.toggleSkill` | Yes, writes agent config | Native macOS Enable / Disable action; batch apply must stay preview-confirmed and call this per-skills path | updated `SkillRecord` |
 | `config.readClaudeSettings` | No | Native macOS Settings editor load action | `ConfigDocumentRecord` |
 | `config.saveClaudeSettings` | Yes, writes Claude settings and rescans | Native macOS Settings editor Save action | saved `ConfigDocumentRecord` |
 | `snapshot.list` | No | Compatibility / diagnostics | global `ConfigSnapshotRecord[]` (app-level, not skill-content snapshots) |
@@ -194,6 +194,19 @@ V2.25 聚焦 agent-config snapshot timeline 收敛，仍不新增 protocol metho
 - This path must not create or consume any new snapshot entity for rule tuning records.
 - Rule-tuning actions must not execute scripts, call LLM providers, perform network I/O, or read/write credentials.
 - Data exposure for existing UI/protocol read flows should remain through existing payloads (`catalog.listFindings`, `app.stateSnapshot.health`, `catalog.getSkill`) without adding new write-heavy method dependencies.
+
+## V2.33 Safe batch actions（已完成）
+
+目标：在已验证可写 adapter 的基础上补齐安全批量 enable/disable 预览流程，且保持 read-only agent 的行为隔离。
+
+- 批量预览只处理 `agent/roots` 在 adapter matrix 显式 `writable` 且当前 session 验证为 verified 的候选项；`Pi`、`Hermes`、`OpenClaw` 及配置受阻实例进入 `skipped` 集合并返回明确 `skip_reason`。
+- 预览输出应至少包含：
+  - `requested_instance_ids`
+  - `included_instance_ids`（可写）
+  - `skipped_instance_ids` 与 `skipped_reason`
+- 每次预览必须包含该次批量变更的 `snapshot_plan` 与 `rollback_plan`（按 agent / scope 维度），并明确列出执行顺序。
+- 应用路径必须是“预览先行 + 显式确认 + 逐项执行（可复用 `config.toggleSkill`）”；任何变更必须生成对应 agent-config 快照以便回滚。
+- 本阶段不新增 skill-content 写入路径，不触发脚本执行，不发起 provider 调用，不读写 credentials，不引入 telemetry。
 
 ## V2.18 Cross-Agent Analysis Payload
 

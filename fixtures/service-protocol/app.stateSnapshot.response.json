@@ -22,6 +22,8 @@
         "rules.clearSeverityOverride",
         "rules.setSuppression",
         "rules.clearSuppression",
+        "batch.previewSkillToggles",
+        "batch.applySkillToggles",
         "script.previewExecution",
         "script.execute",
         "project.getContext",

@@ -1,0 +1,12 @@
+{
+  "id": "fixture-batch-apply-skill-toggles",
+  "method": "batch.applySkillToggles",
+  "params": {
+    "instance_ids": [
+      "claude-global-fixture",
+      "pi-global-fixture"
+    ],
+    "target_enabled": false,
+    "preview_token": "fixture-preview-token-v233"
+  }
+}
