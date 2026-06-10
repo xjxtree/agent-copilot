@@ -1,0 +1,7 @@
+{
+  "id": "fixture-catalog-clear-finding-triage",
+  "method": "catalog.clearFindingTriage",
+  "params": {
+    "triage_key": "fixture-triage-rule:skill-instance-id:0"
+  }
+}

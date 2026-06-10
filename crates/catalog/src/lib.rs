@@ -6,6 +6,7 @@ use std::{
 
 use rusqlite::{params, Connection, OpenFlags, Row};
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use skills_copilot_core::{
     AgentId, NetworkAccess, PermissionRequest, Scope, SkillInstance, SkillState,
 };
@@ -14,6 +15,7 @@ use thiserror::Error;
 pub const INITIAL_SCHEMA: &str = include_str!("migrations/0001_initial.sql");
 pub const MIGRATION_0002: &str = include_str!("migrations/0002_add_display_path.sql");
 pub const MIGRATION_0003: &str = include_str!("migrations/0003_add_rule_findings.sql");
+pub const MIGRATION_0004: &str = include_str!("migrations/0004_add_finding_triage.sql");
 
 #[derive(Debug)]
 pub struct Catalog {
@@ -54,6 +56,8 @@ pub struct SkillDetailRecord {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize)]
 pub struct RuleFindingRecord {
     pub id: String,
+    pub triage_key: String,
+    pub triage_context: String,
     pub instance_id: Option<String>,
     pub definition_id: Option<String>,
     pub rule_id: String,
@@ -61,6 +65,18 @@ pub struct RuleFindingRecord {
     pub message: String,
     pub suggestion: Option<String>,
     pub created_at: i64,
+    pub triage_status: String,
+    pub triage_note: Option<String>,
+    pub triage_updated_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+pub struct FindingTriageRecord {
+    pub triage_key: String,
+    pub triage_context: String,
+    pub status: String,
+    pub note: Option<String>,
+    pub updated_at: i64,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize)]
@@ -135,8 +151,37 @@ impl Catalog {
             Err(e) => return Err(CatalogError::Sqlite(e)),
         }
         self.conn.execute_batch(MIGRATION_0003)?;
+        self.ensure_rule_finding_triage_columns()?;
+        self.conn.execute_batch(MIGRATION_0004)?;
         self.canonicalize_legacy_paths()?;
         Ok(())
+    }
+
+    fn ensure_rule_finding_triage_columns(&self) -> Result<(), CatalogError> {
+        if !self.table_has_column("rule_finding", "triage_key")? {
+            self.conn.execute(
+                "ALTER TABLE rule_finding ADD COLUMN triage_key TEXT NOT NULL DEFAULT ''",
+                [],
+            )?;
+        }
+        if !self.table_has_column("rule_finding", "triage_context")? {
+            self.conn.execute(
+                "ALTER TABLE rule_finding ADD COLUMN triage_context TEXT NOT NULL DEFAULT ''",
+                [],
+            )?;
+        }
+        Ok(())
+    }
+
+    fn table_has_column(&self, table: &str, column: &str) -> Result<bool, CatalogError> {
+        let mut stmt = self.conn.prepare(&format!("PRAGMA table_info({table})"))?;
+        let rows = stmt.query_map([], |row| row.get::<_, String>(1))?;
+        for row in rows {
+            if row? == column {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     /// Migrate records whose `path` was stored as a display path (pre-refactor)
@@ -618,13 +663,18 @@ impl Catalog {
     pub fn refresh_rule_findings(&self, findings: &[RuleFindingDraft]) -> Result<(), CatalogError> {
         self.conn.execute("DELETE FROM rule_finding", [])?;
         for finding in findings {
+            let triage_context = self.finding_triage_context(finding)?;
+            let triage_key = finding_triage_key(finding, &triage_context);
             self.conn.execute(
                 "INSERT INTO rule_finding (
-                    id, instance_id, definition_id, rule_id, severity, message, suggestion, created_at
+                    id, triage_key, triage_context, instance_id, definition_id,
+                    rule_id, severity, message, suggestion, created_at
                  )
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                 params![
                     finding.id,
+                    triage_key,
+                    triage_context,
                     finding.instance_id.as_deref(),
                     finding.definition_id.as_deref(),
                     finding.rule_id,
@@ -640,10 +690,18 @@ impl Catalog {
 
     pub fn list_rule_findings(&self) -> Result<Vec<RuleFindingRecord>, CatalogError> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, instance_id, definition_id, rule_id, severity, message, suggestion, created_at
-             FROM rule_finding
+            "SELECT
+                f.id, f.triage_key, f.triage_context, f.instance_id, f.definition_id,
+                f.rule_id, f.severity, f.message, f.suggestion, f.created_at,
+                COALESCE(t.status, 'open') AS triage_status,
+                t.note,
+                t.updated_at
+             FROM rule_finding f
+             LEFT JOIN finding_triage t
+                ON t.triage_key = f.triage_key
+               AND t.triage_context = f.triage_context
              ORDER BY
-                CASE severity
+                CASE f.severity
                     WHEN 'error' THEN 0
                     WHEN 'warn' THEN 1
                     WHEN 'warning' THEN 1
@@ -656,13 +714,18 @@ impl Catalog {
         let rows = stmt.query_map([], |row| {
             Ok(RuleFindingRecord {
                 id: row.get(0)?,
-                instance_id: row.get(1)?,
-                definition_id: row.get(2)?,
-                rule_id: row.get(3)?,
-                severity: row.get(4)?,
-                message: row.get(5)?,
-                suggestion: row.get(6)?,
-                created_at: row.get(7)?,
+                triage_key: row.get(1)?,
+                triage_context: row.get(2)?,
+                instance_id: row.get(3)?,
+                definition_id: row.get(4)?,
+                rule_id: row.get(5)?,
+                severity: row.get(6)?,
+                message: row.get(7)?,
+                suggestion: row.get(8)?,
+                created_at: row.get(9)?,
+                triage_status: row.get(10)?,
+                triage_note: row.get(11)?,
+                triage_updated_at: row.get(12)?,
             })
         })?;
         let mut findings = Vec::new();
@@ -670,6 +733,112 @@ impl Catalog {
             findings.push(row?);
         }
         Ok(findings)
+    }
+
+    pub fn set_finding_triage(
+        &self,
+        triage_key: &str,
+        status: &str,
+        note: Option<&str>,
+        updated_at: i64,
+    ) -> Result<Option<FindingTriageRecord>, CatalogError> {
+        let Some(triage_context) = self.current_finding_triage_context(triage_key)? else {
+            return Ok(None);
+        };
+        self.conn.execute(
+            "INSERT INTO finding_triage (triage_key, triage_context, status, note, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(triage_key) DO UPDATE SET
+                triage_context = excluded.triage_context,
+                status = excluded.status,
+                note = excluded.note,
+                updated_at = excluded.updated_at",
+            params![
+                triage_key,
+                triage_context.as_str(),
+                status,
+                note,
+                updated_at
+            ],
+        )?;
+        Ok(Some(FindingTriageRecord {
+            triage_key: triage_key.to_string(),
+            triage_context,
+            status: status.to_string(),
+            note: note.map(str::to_string),
+            updated_at,
+        }))
+    }
+
+    pub fn clear_finding_triage(&self, triage_key: &str) -> Result<bool, CatalogError> {
+        Ok(self.conn.execute(
+            "DELETE FROM finding_triage WHERE triage_key = ?1",
+            params![triage_key],
+        )? > 0)
+    }
+
+    pub fn list_finding_triage(&self) -> Result<Vec<FindingTriageRecord>, CatalogError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT triage_key, triage_context, status, note, updated_at
+             FROM finding_triage
+             ORDER BY updated_at DESC, triage_key",
+        )?;
+        let rows = stmt.query_map([], finding_triage_from_row)?;
+        let mut triage = Vec::new();
+        for row in rows {
+            triage.push(row?);
+        }
+        Ok(triage)
+    }
+
+    fn current_finding_triage_context(
+        &self,
+        triage_key: &str,
+    ) -> Result<Option<String>, CatalogError> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT triage_context FROM rule_finding WHERE triage_key = ?1 LIMIT 1",
+                params![triage_key],
+                |row| row.get(0),
+            )
+            .ok())
+    }
+
+    fn finding_triage_context(&self, finding: &RuleFindingDraft) -> Result<String, CatalogError> {
+        let mut members = Vec::new();
+        if let Some(definition_id) = finding.definition_id.as_deref() {
+            let mut stmt = self.conn.prepare(
+                "SELECT id, fingerprint FROM skill_instance
+                 WHERE definition_id = ?1
+                 ORDER BY id",
+            )?;
+            let rows = stmt.query_map(params![definition_id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?;
+            for row in rows {
+                members.push(row?);
+            }
+        } else if let Some(instance_id) = finding.instance_id.as_deref() {
+            let mut stmt = self.conn.prepare(
+                "SELECT id, fingerprint FROM skill_instance
+                 WHERE id = ?1
+                 ORDER BY id",
+            )?;
+            let rows = stmt.query_map(params![instance_id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?;
+            for row in rows {
+                members.push(row?);
+            }
+        }
+
+        let raw = members
+            .into_iter()
+            .map(|(id, fingerprint)| format!("{id}\x1f{fingerprint}"))
+            .collect::<Vec<_>>()
+            .join("\x1e");
+        Ok(stable_hash(&raw))
     }
 
     pub fn refresh_definitions_and_conflicts(
@@ -1197,8 +1366,36 @@ fn skill_event_from_row(row: &Row<'_>) -> rusqlite::Result<SkillEventRecord> {
     })
 }
 
+fn finding_triage_from_row(row: &Row<'_>) -> rusqlite::Result<FindingTriageRecord> {
+    Ok(FindingTriageRecord {
+        triage_key: row.get(0)?,
+        triage_context: row.get(1)?,
+        status: row.get(2)?,
+        note: row.get(3)?,
+        updated_at: row.get(4)?,
+    })
+}
+
 pub fn migration_count() -> usize {
-    3
+    4
+}
+
+fn finding_triage_key(finding: &RuleFindingDraft, triage_context: &str) -> String {
+    stable_hash(&format!(
+        "{}\x1f{}\x1f{}\x1f{}\x1f{}\x1f{}",
+        finding.instance_id.as_deref().unwrap_or(""),
+        finding.definition_id.as_deref().unwrap_or(""),
+        finding.rule_id,
+        finding.message,
+        finding.suggestion.as_deref().unwrap_or(""),
+        triage_context
+    ))
+}
+
+fn stable_hash(input: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(input.as_bytes());
+    format!("{:x}", hasher.finalize())
 }
 
 fn permissions_json(inst: &SkillInstance) -> Result<String, serde_json::Error> {
@@ -1756,6 +1953,8 @@ mod tests {
         let findings = catalog.list_rule_findings().expect("findings list");
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].rule_id, "name.collision");
+        assert_eq!(findings[0].triage_status, "open");
+        assert!(!findings[0].triage_key.is_empty());
 
         catalog
             .refresh_definitions_and_conflicts(
@@ -1858,6 +2057,193 @@ mod tests {
                 "finding-info",
             ]
         );
+    }
+
+    #[test]
+    fn finding_triage_persists_for_same_finding_identity() {
+        let path = std::env::temp_dir().join(format!(
+            "skills-copilot-triage-persist-{}-{}.sqlite",
+            std::process::id(),
+            current_time_for_test()
+        ));
+        {
+            let catalog = Catalog::open(&path).expect("catalog opens");
+            catalog.init().expect("schema initializes");
+            let skill = catalog_test_instance(
+                AgentId::ClaudeCode,
+                Scope::AgentGlobal,
+                "/tmp/home/.claude/skills/review/SKILL.md",
+                "review",
+                SkillState::Loaded,
+            );
+            catalog
+                .upsert_skill_instance(&skill)
+                .expect("skill upserts");
+            catalog
+                .refresh_rule_findings(&[RuleFindingDraft {
+                    id: "finding-1".to_string(),
+                    instance_id: Some(skill.id.clone()),
+                    definition_id: Some(skill.definition_id.clone()),
+                    rule_id: "body.too-long".to_string(),
+                    severity: "warn".to_string(),
+                    message: "long body".to_string(),
+                    suggestion: Some("split references".to_string()),
+                    created_at: 1,
+                }])
+                .expect("findings refresh");
+            let finding = catalog
+                .list_rule_findings()
+                .expect("findings list")
+                .pop()
+                .expect("finding exists");
+            catalog
+                .set_finding_triage(&finding.triage_key, "reviewed", Some("checked"), 10)
+                .expect("set triage")
+                .expect("current finding key");
+        }
+        {
+            let catalog = Catalog::open(&path).expect("catalog reopens");
+            catalog.init().expect("schema initializes again");
+            let finding = catalog
+                .list_rule_findings()
+                .expect("findings list")
+                .pop()
+                .expect("finding exists");
+            assert_eq!(finding.triage_status, "reviewed");
+            assert_eq!(finding.triage_note.as_deref(), Some("checked"));
+            assert_eq!(finding.triage_updated_at, Some(10));
+        }
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn finding_triage_reopens_when_instance_fingerprint_changes() {
+        let catalog = Catalog::in_memory().expect("catalog opens");
+        catalog.init().expect("schema initializes");
+        let mut skill = catalog_test_instance(
+            AgentId::ClaudeCode,
+            Scope::AgentGlobal,
+            "/tmp/home/.claude/skills/review/SKILL.md",
+            "review",
+            SkillState::Loaded,
+        );
+        skill.fingerprint = "fingerprint-a".to_string();
+        catalog
+            .upsert_skill_instance(&skill)
+            .expect("skill upserts");
+        let finding = RuleFindingDraft {
+            id: "finding-1".to_string(),
+            instance_id: Some(skill.id.clone()),
+            definition_id: Some(skill.definition_id.clone()),
+            rule_id: "fingerprint.changed".to_string(),
+            severity: "info".to_string(),
+            message: "Skill content fingerprint changed since the previous scan.".to_string(),
+            suggestion: Some(
+                "Review the skill details before relying on this version.".to_string(),
+            ),
+            created_at: 1,
+        };
+        catalog
+            .refresh_rule_findings(std::slice::from_ref(&finding))
+            .expect("findings refresh");
+        let first = catalog
+            .list_rule_findings()
+            .expect("findings list")
+            .pop()
+            .expect("finding exists");
+        catalog
+            .set_finding_triage(&first.triage_key, "ignored", None, 11)
+            .expect("set triage");
+
+        skill.fingerprint = "fingerprint-b".to_string();
+        catalog
+            .upsert_skill_instance(&skill)
+            .expect("skill upserts with new fingerprint");
+        catalog
+            .refresh_rule_findings(&[finding])
+            .expect("findings refresh after fingerprint change");
+        let reopened = catalog
+            .list_rule_findings()
+            .expect("findings list")
+            .pop()
+            .expect("finding exists");
+
+        assert_ne!(reopened.triage_key, first.triage_key);
+        assert_eq!(reopened.triage_status, "open");
+        assert_eq!(catalog.list_finding_triage().expect("triage list").len(), 1);
+    }
+
+    #[test]
+    fn finding_triage_reopens_when_definition_instance_set_changes() {
+        let catalog = Catalog::in_memory().expect("catalog opens");
+        catalog.init().expect("schema initializes");
+        let first = catalog_test_instance(
+            AgentId::ClaudeCode,
+            Scope::AgentGlobal,
+            "/tmp/home/.claude/skills/review-a/SKILL.md",
+            "review",
+            SkillState::Loaded,
+        );
+        let mut second = catalog_test_instance(
+            AgentId::ClaudeCode,
+            Scope::AgentProject,
+            "/tmp/project/.claude/skills/review/SKILL.md",
+            "review",
+            SkillState::Loaded,
+        );
+        second.definition_id = first.definition_id.clone();
+        catalog
+            .upsert_skill_instances(&[first.clone(), second.clone()])
+            .expect("skills upsert");
+        let finding = RuleFindingDraft {
+            id: "finding-1".to_string(),
+            instance_id: None,
+            definition_id: Some(first.definition_id.clone()),
+            rule_id: "name.collision".to_string(),
+            severity: "warn".to_string(),
+            message: "runtime sees skill name in multiple locations".to_string(),
+            suggestion: Some("compare copies".to_string()),
+            created_at: 1,
+        };
+        catalog
+            .refresh_rule_findings(std::slice::from_ref(&finding))
+            .expect("findings refresh");
+        let original = catalog
+            .list_rule_findings()
+            .expect("findings list")
+            .pop()
+            .expect("finding exists");
+        catalog
+            .set_finding_triage(&original.triage_key, "reviewed", None, 12)
+            .expect("set triage");
+
+        let mut third = catalog_test_instance(
+            AgentId::ClaudeCode,
+            Scope::AgentProject,
+            "/tmp/other/.claude/skills/review/SKILL.md",
+            "review",
+            SkillState::Loaded,
+        );
+        third.definition_id = first.definition_id.clone();
+        catalog.upsert_skill_instance(&third).expect("third upsert");
+        catalog
+            .refresh_rule_findings(&[finding])
+            .expect("findings refresh after member change");
+        let reopened = catalog
+            .list_rule_findings()
+            .expect("findings list")
+            .pop()
+            .expect("finding exists");
+
+        assert_ne!(reopened.triage_key, original.triage_key);
+        assert_eq!(reopened.triage_status, "open");
+    }
+
+    fn current_time_for_test() -> u128 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock")
+            .as_nanos()
     }
 
     fn fixture_path(relative: &str) -> PathBuf {

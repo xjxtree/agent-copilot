@@ -146,8 +146,8 @@ For UI changes:
 - 入口筛选与列表/详情中的身份字段需支持 `agent / scope / definition / path` 维度解释；`Pi` 列表应不显示资源噪声 `.md`。
 - 保持现有边界：不变更 writable/write/blocker 状态、不新增脚本执行链路、不展示 credentials。
 
-## 13. V2.29: Finding triage persistence（进行中）
+## 13. V2.29: Finding triage persistence（completed）
 
-- Finding triage 状态只能是 app-local 状态，不写 agent config、不创建 skill-toggle snapshot、不创建 skill-content snapshot。
-- UI 应让用户清楚区分 Open / Reviewed / Ignored / Needs follow-up，并说明 fingerprint 或受影响实例变化会重新打开 triage。
-- Triage 操作不得触发脚本执行、AI 写入、provider 调用或 credentials 保存。
+- Finding triage 状态只能是 app-local 状态（catalog/app data），不写 agent config、不创建 skill-toggle snapshot、不创建 skill-content snapshot。
+- UI 应让用户清楚区分 Open / Reviewed / Ignored / Needs follow-up，并说明 fingerprint 或受影响实例变化会自动将 triage 重置为 Open。
+- Triage 操作不得触发脚本执行、AI 写入、provider 调用或 credentials 保存；不通过 triage 创建任何 skill-toggle / skill-content snapshot。

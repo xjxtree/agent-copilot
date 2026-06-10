@@ -1,0 +1,5 @@
+{
+  "id": "fixture-catalog-list-finding-triage",
+  "method": "catalog.listFindingTriage",
+  "params": {}
+}

@@ -74,7 +74,7 @@ enum UIStrings {
     static let noFindings = text("empty.noFindings", "No Findings")
     static let noFindingsMessage = text("empty.noFindings.message", "No rule findings are associated with this skill.")
     static let noMatchingFindings = text("empty.noMatchingFindings", "No Matching Findings")
-    static let noMatchingFindingsMessage = text("empty.noMatchingFindings.message", "Adjust the severity or rule filter to show findings.")
+    static let noMatchingFindingsMessage = text("empty.noMatchingFindings.message", "Adjust the triage, severity, or rule filter to show findings.")
     static let noConflicts = text("empty.noConflicts", "No Conflicts")
     static let noConflictsMessage = text("empty.noConflicts.message", "No same-agent conflict currently references this skill in the current agent. Cross-agent duplicates are not shown as conflicts.")
     static let noSnapshots = text("empty.noSnapshots", "No Agent Config History")
@@ -125,8 +125,21 @@ enum UIStrings {
     static let none = text("value.none", "None")
     static let findingSeverityFilter = text("findings.filter.severity", "Severity")
     static let findingRuleFilter = text("findings.filter.rule", "Rule ID")
+    static let findingTriageFilter = text("findings.filter.triage", "Triage")
     static let allSeverities = text("findings.filter.allSeverities", "All Severities")
     static let allRuleIDs = text("findings.filter.allRules", "All Rule IDs")
+    static let findingTriageOpen = text("findings.triage.open", "Open")
+    static let findingTriageReviewed = text("findings.triage.reviewed", "Reviewed")
+    static let findingTriageIgnored = text("findings.triage.ignored", "Ignored")
+    static let findingTriageNeedsFollowUp = text("findings.triage.needsFollowUp", "Needs follow-up")
+    static let findingTriageFilterActive = text("findings.triage.filter.active", "Active")
+    static let findingTriageFilterAll = text("findings.triage.filter.all", "All triage")
+    static let findingTriageNoticeTitle = text("findings.triage.notice.title", "Local finding triage")
+    static let findingTriageNoticeBody = text("findings.triage.notice.body", "Triage labels are stored only in SkillsCopilot app data. They do not write agent config, skill content, toggle snapshots, scripts, or AI output. If a finding changes after rescan, it reopens as Open.")
+    static let findingTriageActionReviewed = text("findings.triage.action.reviewed", "Mark reviewed")
+    static let findingTriageActionIgnored = text("findings.triage.action.ignored", "Ignore")
+    static let findingTriageActionFollowUp = text("findings.triage.action.followUp", "Needs follow-up")
+    static let findingTriageActionReopen = text("findings.triage.action.reopen", "Reopen")
     static let findingExplanation = text("findings.explanation", "Why this appears")
     static let findingRuleID = text("findings.ruleId", "Rule ID")
     static let findingRuleSource = text("findings.ruleSource", "Rule source")
@@ -292,6 +305,12 @@ enum UIStrings {
     static func findingIssueImpact(_ instances: Int, _ entries: Int) -> String {
         format("findings.issueImpact", "Impacted instances: %d · Scan entries: %d", instances, entries)
     }
+
+    static func findingTriageUpdated(_ status: String) -> String {
+        format("findings.triage.updated", "Set local finding triage to %@. No agent config or skill files were changed.", status)
+    }
+
+    static let findingTriageReopened = text("findings.triage.reopened", "Reopened finding locally. No agent config or skill files were changed.")
 
     static func noFindingsForSkillMessage(_ agent: String) -> String {
         format("empty.noFindingsForSkill.message", "No rule findings are associated with this %@ skill.", agent)

@@ -7,21 +7,22 @@ use std::{
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use skills_copilot_catalog::{
-    Catalog, ConfigSnapshotRecord, ConflictGroupRecord, RuleFindingRecord, SkillDetailRecord,
-    SkillEventRecord, SkillRecord,
+    Catalog, ConfigSnapshotRecord, ConflictGroupRecord, FindingTriageRecord, RuleFindingRecord,
+    SkillDetailRecord, SkillEventRecord, SkillRecord,
 };
 use skills_copilot_commands::{
-    analyze_catalog, export_skill_bundle, export_staging_skill_bundle, get_skill,
-    import_github_skill_to_tool_global_deferred, import_local_skill_to_tool_global,
+    analyze_catalog, clear_finding_triage, export_skill_bundle, export_staging_skill_bundle,
+    get_skill, import_github_skill_to_tool_global_deferred, import_local_skill_to_tool_global,
     install_skill_from_tool_global, list_adapter_capabilities, list_agent_config_snapshots,
-    list_conflicts, list_findings, list_skill_events, list_snapshots, preview_script_execution,
-    preview_snapshot_rollback, read_claude_settings, record_blocked_script_execution,
-    rollback_snapshot, save_claude_settings, scan_all_catalog_report, scan_claude_to_catalog,
-    skill_health_summary, toggle_skill, AdapterCapabilityRecord, AgentCatalogScanReport,
-    ConfigDocumentRecord, CrossAgentAnalysisRecord, ExportedSkillBundle,
-    ScriptExecutionAttemptRecord, ScriptExecutionPreviewRecord, ScriptExecutionRequest,
-    SkillHealthSummary, SkillInstallPreviewRecord, SnapshotRollbackPreviewRecord,
-    ToolGlobalImportResult, SCRIPT_EXECUTION_DISABLED_REASON,
+    list_conflicts, list_finding_triage, list_findings, list_skill_events, list_snapshots,
+    preview_script_execution, preview_snapshot_rollback, read_claude_settings,
+    record_blocked_script_execution, rollback_snapshot, save_claude_settings,
+    scan_all_catalog_report, scan_claude_to_catalog, set_finding_triage, skill_health_summary,
+    toggle_skill, AdapterCapabilityRecord, AgentCatalogScanReport, ConfigDocumentRecord,
+    CrossAgentAnalysisRecord, ExportedSkillBundle, ScriptExecutionAttemptRecord,
+    ScriptExecutionPreviewRecord, ScriptExecutionRequest, SkillHealthSummary,
+    SkillInstallPreviewRecord, SnapshotRollbackPreviewRecord, ToolGlobalImportResult,
+    SCRIPT_EXECUTION_DISABLED_REASON,
 };
 use skills_copilot_core::{AdapterContext, AdapterRoot, AgentId, RootSource, Scope};
 use thiserror::Error;
@@ -53,6 +54,9 @@ const SUPPORTED_METHODS: &[&str] = &[
     "catalog.getSkill",
     "catalog.analysis",
     "catalog.listFindings",
+    "catalog.listFindingTriage",
+    "catalog.setFindingTriage",
+    "catalog.clearFindingTriage",
     "catalog.listConflicts",
     "catalog.importSkill",
     "catalog.scanClaude",
@@ -361,6 +365,19 @@ pub struct ListSkillEventsParams {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct SetFindingTriageParams {
+    pub triage_key: String,
+    pub status: String,
+    #[serde(default)]
+    pub note: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ClearFindingTriageParams {
+    pub triage_key: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct ToggleSkillParams {
     pub instance_id: String,
     pub on: bool,
@@ -582,6 +599,28 @@ impl ServiceHost {
                 let catalog = self.open_catalog()?;
                 let findings: Vec<RuleFindingRecord> = list_findings(&catalog)?;
                 serde_json::to_value(findings).map_err(Into::into)
+            }
+            "catalog.listFindingTriage" => {
+                let catalog = self.open_catalog()?;
+                let triage: Vec<FindingTriageRecord> = list_finding_triage(&catalog)?;
+                serde_json::to_value(triage).map_err(Into::into)
+            }
+            "catalog.setFindingTriage" => {
+                let params: SetFindingTriageParams = serde_json::from_value(request.params)?;
+                let catalog = self.open_catalog()?;
+                let triage: FindingTriageRecord = set_finding_triage(
+                    &catalog,
+                    &params.triage_key,
+                    &params.status,
+                    params.note.as_deref(),
+                )?;
+                serde_json::to_value(triage).map_err(Into::into)
+            }
+            "catalog.clearFindingTriage" => {
+                let params: ClearFindingTriageParams = serde_json::from_value(request.params)?;
+                let catalog = self.open_catalog()?;
+                let cleared: bool = clear_finding_triage(&catalog, &params.triage_key)?;
+                serde_json::to_value(cleared).map_err(Into::into)
             }
             "catalog.listConflicts" => {
                 let catalog = self.open_catalog()?;
@@ -2368,6 +2407,98 @@ mod tests {
     }
 
     #[test]
+    fn finding_triage_service_writes_only_app_local_catalog() {
+        let unique = unique_suffix();
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-triage-service-test-{}-{unique}",
+            std::process::id()
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-triage-home-test-{}-{unique}",
+            std::process::id()
+        ));
+        let settings_path = user_home.join(".claude/settings.json");
+        fs::create_dir_all(settings_path.parent().expect("settings parent"))
+            .expect("create settings parent");
+        fs::write(&settings_path, "{\"skillOverrides\":{\"keep\":\"on\"}}\n")
+            .expect("write settings");
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        fs::create_dir_all(&host.app_data_dir).expect("create app data");
+        let catalog = Catalog::open(&host.catalog_path()).expect("open catalog");
+        catalog.init().expect("init catalog");
+        catalog
+            .refresh_rule_findings(&[RuleFindingDraft {
+                id: "triage-finding-id".to_string(),
+                instance_id: Some("triage-skill-id".to_string()),
+                definition_id: Some("triage-definition-id".to_string()),
+                rule_id: "body.too-long".to_string(),
+                severity: "warn".to_string(),
+                message: "Skill body is longer than the local review threshold.".to_string(),
+                suggestion: Some("Split long reference material into references/.".to_string()),
+                created_at: 1,
+            }])
+            .expect("seed finding");
+        let triage_key = catalog
+            .list_rule_findings()
+            .expect("list findings")
+            .pop()
+            .expect("finding exists")
+            .triage_key;
+
+        let response = host.handle(ServiceRequest {
+            id: Some("set-triage".to_string()),
+            method: "catalog.setFindingTriage".to_string(),
+            params: json!({
+                "triage_key": triage_key,
+                "status": "ignored",
+                "note": "not actionable locally"
+            }),
+        });
+
+        assert!(
+            response.ok,
+            "triage set should succeed: {:?}",
+            response.error
+        );
+        assert_eq!(
+            fs::read_to_string(&settings_path).expect("read settings"),
+            "{\"skillOverrides\":{\"keep\":\"on\"}}\n",
+            "finding triage must not write agent config"
+        );
+        let catalog = Catalog::open(&host.catalog_path()).expect("reopen catalog");
+        catalog.init().expect("re-init catalog");
+        assert_eq!(
+            catalog
+                .list_all_config_snapshots()
+                .expect("snapshots")
+                .len(),
+            0,
+            "finding triage must not create agent config snapshots"
+        );
+        let finding = catalog
+            .list_rule_findings()
+            .expect("findings")
+            .pop()
+            .expect("finding exists");
+        assert_eq!(finding.triage_status, "ignored");
+        assert_eq!(
+            finding.triage_note.as_deref(),
+            Some("not actionable locally")
+        );
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
     fn unknown_method_returns_stable_error_code() {
         let host = ServiceHost {
             app_data_dir: PathBuf::from("/tmp/skills-copilot-test"),
@@ -3254,6 +3385,18 @@ mod tests {
                     method,
                 );
             }
+            "catalog.listFindingTriage" | "catalog.setFindingTriage" => {
+                let _: serde_json::Value = result.clone();
+                if method == "catalog.listFindingTriage" {
+                    let _: Vec<WireFindingTriageRecord> =
+                        decode_fixture_result(method, result, path);
+                } else {
+                    let _: WireFindingTriageRecord = decode_fixture_result(method, result, path);
+                }
+            }
+            "catalog.clearFindingTriage" => {
+                let _: bool = decode_fixture_result(method, result, path);
+            }
             "catalog.listConflicts" => {
                 let _: Vec<WireConflictGroupRecord> = decode_fixture_result(method, result, path);
             }
@@ -3499,6 +3642,11 @@ mod tests {
             "snapshot.previewRollback" | "snapshot.rollback" => {
                 json!({ "snapshot_id": "missing-snapshot" })
             }
+            "catalog.setFindingTriage" => json!({
+                "triage_key": "missing-finding-key",
+                "status": "reviewed"
+            }),
+            "catalog.clearFindingTriage" => json!({ "triage_key": "missing-finding-key" }),
             _ => Value::Null,
         }
     }
@@ -3969,6 +4117,8 @@ mod tests {
     #[serde(deny_unknown_fields)]
     struct WireRuleFindingRecord {
         id: String,
+        triage_key: String,
+        triage_context: String,
         instance_id: Option<String>,
         definition_id: Option<String>,
         rule_id: String,
@@ -3976,6 +4126,20 @@ mod tests {
         message: String,
         suggestion: Option<String>,
         created_at: i64,
+        triage_status: String,
+        triage_note: Option<String>,
+        triage_updated_at: Option<i64>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireFindingTriageRecord {
+        triage_key: String,
+        triage_context: String,
+        status: String,
+        note: Option<String>,
+        updated_at: i64,
     }
 
     #[allow(dead_code)]

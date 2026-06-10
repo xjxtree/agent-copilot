@@ -1331,6 +1331,18 @@ struct FindingIssueGroup: Identifiable, Equatable {
         )
     }
 
+    var triageKeys: [String] {
+        Array(Set(findings.map(\.triageKey).filter { !$0.isEmpty })).sorted()
+    }
+
+    var triageStatus: FindingTriageStatus {
+        FindingTriageModel.groupStatus(for: findings.map(\.triageState))
+    }
+
+    func matchesTriageFilter(_ filter: FindingTriageFilter) -> Bool {
+        findings.map(\.triageState).contains { filter.includes($0) }
+    }
+
     var ruleSource: String {
         FindingDisplayModel.ruleSourceTitle(for: explanation.ruleSource)
     }
@@ -1701,10 +1713,12 @@ enum PermissionDisplayModel {
 }
 
 private struct FindingsSection: View {
+    @EnvironmentObject private var store: SkillStore
     let skill: SkillRecord
     let findings: [RuleFindingRecord]
     @State private var severityFilter = FindingDisplayModel.allFilterValue
     @State private var ruleFilter = FindingDisplayModel.allFilterValue
+    @State private var triageFilter: FindingTriageFilter = .active
 
     private var severityOptions: [String] {
         FindingDisplayModel.severityOptions(for: findings)
@@ -1719,7 +1733,13 @@ private struct FindingsSection: View {
             findings: findings,
             severityFilter: severityFilter,
             ruleFilter: ruleFilter
-        )
+        ).compactMap { group in
+            let visibleIssues = group.issues.filter { issue in
+                issue.matchesTriageFilter(triageFilter)
+            }
+            guard !visibleIssues.isEmpty else { return nil }
+            return FindingSeverityGroup(severityKey: group.severityKey, issues: visibleIssues)
+        }
     }
 
     private var visibleIssueCount: Int {
@@ -1732,21 +1752,29 @@ private struct FindingsSection: View {
         }
     }
 
-    private var totalIssueCount: Int {
+    private var allIssueGroups: [FindingIssueGroup] {
         FindingDisplayModel.issueGroups(
             findings: findings,
             severityFilter: FindingDisplayModel.allFilterValue,
             ruleFilter: FindingDisplayModel.allFilterValue
-        ).count
+        )
+    }
+
+    private var totalIssueCount: Int {
+        allIssueGroups.count
     }
 
     private var visibleImpactedCount: Int {
-        let ids = Set(FindingDisplayModel.filtered(
-            findings: findings,
-            severityFilter: severityFilter,
-            ruleFilter: ruleFilter
-        ).compactMap(\.instanceId))
+        let ids = Set(visibleGroups.flatMap { group in
+            group.issues.flatMap { issue in
+                issue.findings.compactMap(\.instanceId)
+            }
+        })
         return max(ids.count, visibleEntryCount == 0 ? 0 : 1)
+    }
+
+    private var triageCounts: FindingTriageCounts {
+        FindingTriageModel.counts(for: allIssueGroups.map(\.triageStatus))
     }
 
     var body: some View {
@@ -1758,11 +1786,14 @@ private struct FindingsSection: View {
                     message: UIStrings.noFindingsForSkillMessage(DisplayText.agent(skill.agent))
                 )
             } else {
+                FindingTriageNotice()
+
                 FindingsSummaryStrip(
                     visibleIssueCount: visibleIssueCount,
                     totalIssueCount: totalIssueCount,
                     visibleEntryCount: visibleEntryCount,
-                    visibleImpactedCount: visibleImpactedCount
+                    visibleImpactedCount: visibleImpactedCount,
+                    triageCounts: triageCounts
                 )
 
                 findingFilters
@@ -1779,7 +1810,14 @@ private struct FindingsSection: View {
                             FindingSeverityHeader(group: group)
 
                             ForEach(group.issues) { issue in
-                                FindingIssueCard(issue: issue, severityTitle: group.title)
+                                FindingIssueCard(
+                                    issue: issue,
+                                    severityTitle: group.title,
+                                    triageStatus: issue.triageStatus,
+                                    onSetTriageStatus: { status in
+                                        store.setFindingTriageStatus(status, for: issue.triageKeys)
+                                    }
+                                )
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1794,6 +1832,15 @@ private struct FindingsSection: View {
 
     private var findingFilters: some View {
         HStack(spacing: 10) {
+            Picker(UIStrings.findingTriageFilter, selection: $triageFilter) {
+                ForEach(FindingTriageFilter.allCases) { filter in
+                    Text(filter.title).tag(filter)
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(width: 150)
+            .help(UIStrings.findingTriageFilter)
+
             Picker(UIStrings.findingSeverityFilter, selection: $severityFilter) {
                 Text(UIStrings.allSeverities).tag(FindingDisplayModel.allFilterValue)
                 ForEach(severityOptions, id: \.self) { severity in
@@ -1839,17 +1886,34 @@ private struct FindingsSection: View {
     }
 }
 
+private struct FindingTriageNotice: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(UIStrings.findingTriageNoticeTitle, systemImage: "tray.full")
+                .font(.headline)
+            Text(UIStrings.findingTriageNoticeBody)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
 private struct FindingsSummaryStrip: View {
     let visibleIssueCount: Int
     let totalIssueCount: Int
     let visibleEntryCount: Int
     let visibleImpactedCount: Int
+    let triageCounts: FindingTriageCounts
 
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 10)], alignment: .leading, spacing: 10) {
             SummaryChip(title: UIStrings.text("findings.summary.issueGroups", "Issue groups"), value: "\(visibleIssueCount) / \(totalIssueCount)", systemImage: "rectangle.stack.badge.exclamationmark")
             SummaryChip(title: UIStrings.text("findings.summary.impacted", "Impacted"), value: "\(visibleImpactedCount)", systemImage: "target")
             SummaryChip(title: UIStrings.text("findings.summary.entries", "Scan entries"), value: "\(visibleEntryCount)", systemImage: "list.bullet.rectangle")
+            SummaryChip(title: UIStrings.findingTriageFilter, value: "\(UIStrings.findingTriageOpen) \(triageCounts.open) · \(UIStrings.findingTriageNeedsFollowUp) \(triageCounts.needsFollowUp)", systemImage: "tray.full")
             SummaryChip(title: UIStrings.findingRemediation, value: UIStrings.text("findings.summary.remediation", "Grouped below"), systemImage: "wrench.and.screwdriver")
         }
         .padding()
@@ -1861,6 +1925,8 @@ private struct FindingsSummaryStrip: View {
 private struct FindingIssueCard: View {
     let issue: FindingIssueGroup
     let severityTitle: String
+    let triageStatus: FindingTriageStatus
+    let onSetTriageStatus: (FindingTriageStatus) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1878,6 +1944,12 @@ private struct FindingIssueCard: View {
                         .background(.orange.opacity(0.14), in: Capsule())
                         .help(UIStrings.findingRiskRelatedHelp)
                 }
+                Label(triageStatus.title, systemImage: triageStatus.systemImage)
+                    .font(.caption.bold())
+                    .foregroundStyle(triageStatus.tint)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(triageStatus.tint.opacity(0.14), in: Capsule())
                 Text(severityTitle)
                     .font(.caption.bold())
                     .foregroundStyle(.secondary)
@@ -1916,10 +1988,68 @@ private struct FindingIssueCard: View {
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
+
+            FindingTriageActionBar(status: triageStatus, onSet: onSetTriageStatus)
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
         .adaptiveMaterialSurface()
+    }
+}
+
+private struct FindingTriageActionBar: View {
+    let status: FindingTriageStatus
+    let onSet: (FindingTriageStatus) -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Label(UIStrings.findingTriageFilter, systemImage: "tray.full")
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+
+            if status != .reviewed {
+                Button(UIStrings.findingTriageActionReviewed) {
+                    onSet(.reviewed)
+                }
+            }
+
+            if status != .needsFollowUp {
+                Button(UIStrings.findingTriageActionFollowUp) {
+                    onSet(.needsFollowUp)
+                }
+            }
+
+            if status != .ignored {
+                Button(UIStrings.findingTriageActionIgnored) {
+                    onSet(.ignored)
+                }
+            }
+
+            if status != .open {
+                Button(UIStrings.findingTriageActionReopen) {
+                    onSet(.open)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+    }
+}
+
+private extension FindingTriageStatus {
+    var tint: Color {
+        switch self {
+        case .open:
+            return .blue
+        case .reviewed:
+            return .green
+        case .ignored:
+            return .secondary
+        case .needsFollowUp:
+            return .orange
+        }
     }
 }
 

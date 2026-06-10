@@ -1,0 +1,9 @@
+{
+  "id": "fixture-catalog-set-finding-triage",
+  "method": "catalog.setFindingTriage",
+  "params": {
+    "triage_key": "fixture-triage-rule:skill-instance-id:0",
+    "status": "reviewed",
+    "note": "Reviewed during V2.29 fixture triage."
+  }
+}

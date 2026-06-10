@@ -358,6 +358,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
  "skills-copilot-adapters",
  "skills-copilot-core",
  "thiserror",

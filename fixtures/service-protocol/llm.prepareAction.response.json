@@ -14,9 +14,9 @@
     "estimated_input_tokens": 136,
     "estimated_output_tokens": 500,
     "estimated_total_tokens": 636,
-    "estimated_cost_usd": 0.0,
+    "estimated_cost_usd": 0,
     "single_request_token_limit": 8000,
-    "monthly_budget_usd": 0.0,
+    "monthly_budget_usd": 0,
     "credentials_storage": "none",
     "credential_persistence_allowed": false,
     "prompt_scope": [

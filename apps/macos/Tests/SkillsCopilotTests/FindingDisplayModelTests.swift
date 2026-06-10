@@ -9,6 +9,8 @@ struct FindingDisplayModelTests {
         try ruleClassificationIsDeterministic()
         try riskSubsetClassificationMatchesFindingFilters()
         try remediationUsesSuggestionThenRuleFallback()
+        try triageDefaultsToOpenAndUpdatesFromServiceState()
+        try triageFilterDistinguishesLocalStates()
         try permissionSummaryLabelsUnknownAndUndeclaredValues()
     }
 
@@ -207,6 +209,50 @@ struct FindingDisplayModelTests {
             UIStrings.findingRemediationFallback("custom.rule"),
             "Unknown rule IDs should still produce a concrete remediation prompt."
         )
+    }
+
+    private func triageDefaultsToOpenAndUpdatesFromServiceState() throws {
+        let finding = Self.finding(
+            id: "triage",
+            ruleId: "permissions.network-declared",
+            severity: "warning",
+            message: "Network permission missing",
+            createdAt: 80,
+            suggestion: "Declare network access."
+        )
+
+        try expectEqual(
+            finding.triageState,
+            .open,
+            "Findings without service triage should default to Open."
+        )
+
+        let reviewed = finding.withTriage(status: .reviewed, note: "Checked", updatedAt: 1)
+        try expectEqual(
+            reviewed.triageState,
+            .reviewed,
+            "Service-backed triage status should drive the displayed state."
+        )
+        try expectEqual(reviewed.triageKey, finding.triageKey, "Triage updates should preserve the service triage key.")
+        try expectEqual(reviewed.triageNote, "Checked", "Triage notes should roundtrip when provided by the service.")
+
+        let reopened = reviewed.withTriage(status: .open)
+        try expectEqual(
+            reopened.triageState,
+            .open,
+            "Clearing service triage should display the issue as Open again."
+        )
+        try expectEqual(reopened.triageNote, nil, "Reopened findings should not keep stale triage notes.")
+    }
+
+    private func triageFilterDistinguishesLocalStates() throws {
+        try expectEqual(FindingTriageFilter.active.includes(.open), true, "Active triage should include Open findings.")
+        try expectEqual(FindingTriageFilter.active.includes(.needsFollowUp), true, "Active triage should include follow-up findings.")
+        try expectEqual(FindingTriageFilter.active.includes(.reviewed), false, "Active triage should hide reviewed findings.")
+        try expectEqual(FindingTriageFilter.active.includes(.ignored), false, "Active triage should hide ignored findings.")
+        try expectEqual(FindingTriageFilter.reviewed.includes(.reviewed), true, "Reviewed filter should show reviewed findings.")
+        try expectEqual(FindingTriageFilter.ignored.includes(.ignored), true, "Ignored filter should show ignored findings.")
+        try expectEqual(FindingTriageFilter.all.includes(.ignored), true, "All triage should include ignored findings.")
     }
 
     private func permissionSummaryLabelsUnknownAndUndeclaredValues() throws {

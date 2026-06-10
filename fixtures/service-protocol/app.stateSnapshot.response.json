@@ -25,6 +25,9 @@
         "catalog.getSkill",
         "catalog.analysis",
         "catalog.listFindings",
+        "catalog.listFindingTriage",
+        "catalog.setFindingTriage",
+        "catalog.clearFindingTriage",
         "catalog.listConflicts",
         "catalog.importSkill",
         "catalog.scanClaude",
@@ -324,7 +327,12 @@
         "severity": "error",
         "message": "Missing required frontmatter fields: description",
         "suggestion": "Add name and description to the SKILL.md YAML frontmatter.",
-        "created_at": 1780590000000
+        "created_at": 1780590000000,
+        "triage_key": "fixture-triage-rule:skill-instance-id:0",
+        "triage_context": "fixture-context",
+        "triage_status": "open",
+        "triage_note": null,
+        "triage_updated_at": null
       }
     ],
     "conflicts": [],

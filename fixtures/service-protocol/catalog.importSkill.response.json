@@ -25,7 +25,12 @@
         "severity": "warn",
         "message": "Skill uses network capability without declaring permissions.network.",
         "suggestion": "Declare permissions.network as none, read-only, or full to match the skill's network use.",
-        "created_at": 1780590000000
+        "created_at": 1780590000000,
+        "triage_key": "fixture-triage-permissions.network-declared:fixture-tool-global-instance:0",
+        "triage_context": "fixture-context",
+        "triage_status": "open",
+        "triage_note": null,
+        "triage_updated_at": null
       }
     ],
     "audit": {

@@ -163,7 +163,18 @@ pub struct SkillScript {
 
 `SkillScript` 是 metadata，不是运行队列。V2.10 的安全边界仍是 **默认不真实执行**：扫描、导入、导出、安装、LLM prepare 和详情读取只能展示脚本信息和规则 findings，不能由该结构触发进程。
 
-### 1.8 `SkillExecutionAuditRecord`
+### 1.9 V2.29 Finding triage persistence（completed）
+
+- finding issue group 的持久 triage 状态以 app-local catalog/app data 为准，状态值为：
+  - `Open`（默认）
+  - `Reviewed`
+  - `Ignored`
+  - `Needs follow-up`
+- 只在 app-local 持久层持久化，不写 agent config，不创建 skill-content snapshot 或 skill-toggle snapshot。
+- 当 finding fingerprint 或受影响实例签名变化时，已有 triage 状态回退为 `Open`（重新复核）。
+- 保持与现有口径一致：V2.22 finding/conflict 分离、V2.28 same-agent conflict 口径不变，cross-agent 仍留在 `Analysis`。不得与脚本执行、AI 回写、provider 调用或凭据持久化耦合。
+
+### 1.10 `SkillExecutionAuditRecord`
 
 V2.10 将 execution attempt 当成本地审计事实，而不是成功运行结果。当前安全边界只允许记录 non-success attempt status；真实 sandboxed runner 未实现前不得产生 `Completed` 执行记录。
 
@@ -195,7 +206,7 @@ pub enum ExecutionAttemptStatus {
     Failed,
 }
 
-### 1.9 V2.22 finding/conflict 语义对齐（完成口径）
+### 1.11 V2.22 finding/conflict 语义对齐（完成口径）
 
 - conflict 的定义收敛为 `ConflictGroup`：同一 selected/current agent 内的 runtime/name 冲突或 shadowing，不跨 agent。
 - cross-agent duplicate / source overlap / enabled mismatch 仅作为 analysis group，不进入 `ConflictGroup`；health 冲突计数只消费 same-agent `ConflictGroup`，不消费 cross-agent analysis 计数。

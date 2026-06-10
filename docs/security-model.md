@@ -163,6 +163,13 @@ V2.4 把 opencode 作为第三个 adapter 接入 catalog；当前实现按官方
 - 真实 sandbox runner 未实现前，不得产生 `Completed` execution record，不得保存 stdout/stderr，不得把执行输出写回 skill 文件、catalog frontmatter、LLM prompt/response 或配置文件。
 - public release/signing/notarization/DMG 自动化不因该边界完成而变成当前能力；它们仍按 release checklist deferred。
 
+### 2.4.2 Finding triage persistence 边界（V2.29）
+
+- Finding triage 持久化只发生在 app-local catalog/app data 层，目标是降低重复噪音并提示用户复核；不参与 agent 配置写入，也不改写 skill 内容。
+- triage 状态值限定为 `Open` / `Reviewed` / `Ignored` / `Needs follow-up`。
+- finding fingerprint 或受影响实例变化时，状态必须回退为 `Open`，防止旧结论静默覆盖新风险。
+- triage 操作不能触发脚本执行，不得进行 AI 写回，不得发起 provider 调用，不得写入或读取凭据，也不应触发任何 agent config 快照/回写流程（包括 skill-toggle 或 skill-content snapshot）。
+
 ### 2.5 LLM 凭据泄露
 
 **风险**：用户配的 API key 落到 git 仓库或同步盘。

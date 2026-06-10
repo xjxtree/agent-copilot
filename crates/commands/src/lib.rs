@@ -16,8 +16,9 @@ use skills_copilot_adapters::{
 use skills_copilot_ai_core::{evaluate_mvp_rules, Finding, RuleContext, RuleReport, Severity};
 use skills_copilot_catalog::{
     Catalog, CatalogError, ConfigSnapshotDraft, ConfigSnapshotRecord, ConflictGroupDraft,
-    ConflictGroupRecord, RuleFindingDraft, RuleFindingRecord, SkillDefinitionDraft,
-    SkillDetailRecord, SkillEventDraft, SkillEventRecord, SkillInstanceMeta, SkillRecord,
+    ConflictGroupRecord, FindingTriageRecord, RuleFindingDraft, RuleFindingRecord,
+    SkillDefinitionDraft, SkillDetailRecord, SkillEventDraft, SkillEventRecord, SkillInstanceMeta,
+    SkillRecord,
 };
 use skills_copilot_core::{
     AdapterContext, AgentAdapter, AgentConfigAdapter, AgentConfigDocument, AgentId, ConfigFormat,
@@ -47,6 +48,8 @@ pub enum CommandError {
     Adapter(String),
     #[error("skill instance not found: {0}")]
     InstanceNotFound(String),
+    #[error("finding not found for triage key: {0}")]
+    FindingNotFound(String),
     #[error("config snapshot not found: {0}")]
     SnapshotNotFound(String),
     #[error("scope not supported for toggle: {0:?}")]
@@ -69,6 +72,8 @@ pub enum CommandError {
     InstallUnsupported(String),
     #[error("invalid script execution request: {0}")]
     InvalidScriptExecutionRequest(String),
+    #[error("invalid finding triage status: {0}")]
+    InvalidFindingTriageStatus(String),
 }
 
 pub fn scan_claude_to_catalog(
@@ -796,6 +801,26 @@ pub fn list_findings(catalog: &Catalog) -> Result<Vec<RuleFindingRecord>, Comman
     Ok(dedupe_rule_finding_records(&catalog.list_rule_findings()?))
 }
 
+pub fn list_finding_triage(catalog: &Catalog) -> Result<Vec<FindingTriageRecord>, CommandError> {
+    Ok(catalog.list_finding_triage()?)
+}
+
+pub fn set_finding_triage(
+    catalog: &Catalog,
+    triage_key: &str,
+    status: &str,
+    note: Option<&str>,
+) -> Result<FindingTriageRecord, CommandError> {
+    validate_finding_triage_status(status)?;
+    catalog
+        .set_finding_triage(triage_key, status, note, current_time_ms())?
+        .ok_or_else(|| CommandError::FindingNotFound(triage_key.to_string()))
+}
+
+pub fn clear_finding_triage(catalog: &Catalog, triage_key: &str) -> Result<bool, CommandError> {
+    Ok(catalog.clear_finding_triage(triage_key)?)
+}
+
 pub fn list_conflicts(catalog: &Catalog) -> Result<Vec<ConflictGroupRecord>, CommandError> {
     let records = catalog.list_skill_records()?;
     let agent_by_instance_id = records
@@ -1249,6 +1274,13 @@ fn stable_finding_key(
         message,
         suggestion.unwrap_or("")
     )
+}
+
+fn validate_finding_triage_status(status: &str) -> Result<(), CommandError> {
+    match status {
+        "reviewed" | "ignored" | "needs-follow-up" => Ok(()),
+        _ => Err(CommandError::InvalidFindingTriageStatus(status.to_string())),
+    }
 }
 
 fn health_analysis_group_counts(analysis: &CrossAgentAnalysisRecord) -> HealthAnalysisGroupCounts {
@@ -7660,6 +7692,55 @@ mod v219_skill_health_tests {
         );
     }
 
+    #[test]
+    fn finding_triage_commands_set_clear_and_validate_status() {
+        let catalog = Catalog::in_memory().expect("catalog opens");
+        catalog.init().expect("catalog initializes");
+        catalog
+            .refresh_rule_findings(&[RuleFindingDraft {
+                id: "finding-1".to_string(),
+                instance_id: Some("skill-1".to_string()),
+                definition_id: Some("def.skill-1".to_string()),
+                rule_id: "body.too-long".to_string(),
+                severity: "warn".to_string(),
+                message: "long body".to_string(),
+                suggestion: None,
+                created_at: 1,
+            }])
+            .expect("findings refresh");
+        let finding = list_findings(&catalog)
+            .expect("findings")
+            .pop()
+            .expect("finding exists");
+
+        let triage = set_finding_triage(
+            &catalog,
+            &finding.triage_key,
+            "needs-follow-up",
+            Some("check with owner"),
+        )
+        .expect("set triage");
+        assert_eq!(triage.status, "needs-follow-up");
+        assert_eq!(triage.note.as_deref(), Some("check with owner"));
+        assert_eq!(list_finding_triage(&catalog).expect("triage list").len(), 1);
+
+        let updated = list_findings(&catalog)
+            .expect("findings after triage")
+            .pop()
+            .expect("finding exists");
+        assert_eq!(updated.triage_status, "needs-follow-up");
+        assert!(matches!(
+            set_finding_triage(&catalog, &finding.triage_key, "open", None),
+            Err(CommandError::InvalidFindingTriageStatus(_))
+        ));
+        assert!(clear_finding_triage(&catalog, &finding.triage_key).expect("clear triage"));
+        let cleared = list_findings(&catalog)
+            .expect("findings after clear")
+            .pop()
+            .expect("finding exists");
+        assert_eq!(cleared.triage_status, "open");
+    }
+
     fn runtime_and_analysis_conflict_fixture() -> (Vec<SkillInstance>, Vec<ConflictGroupRecord>) {
         let claude_user = health_skill(
             "claude-user-review",
@@ -7799,6 +7880,8 @@ mod v219_skill_health_tests {
     ) -> RuleFindingRecord {
         RuleFindingRecord {
             id: id.to_string(),
+            triage_key: format!("triage-{id}"),
+            triage_context: "fixture-context".to_string(),
             instance_id: instance_id.map(str::to_string),
             definition_id: definition_id.map(str::to_string),
             rule_id: rule_id.to_string(),
@@ -7806,6 +7889,9 @@ mod v219_skill_health_tests {
             message: format!("{rule_id} fixture"),
             suggestion: None,
             created_at: 0,
+            triage_status: "open".to_string(),
+            triage_note: None,
+            triage_updated_at: None,
         }
     }
 }

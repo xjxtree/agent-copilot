@@ -152,6 +152,14 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func setFindingTriageStatus(_ status: FindingTriageStatus, for triageKeys: [String]) {
+        let keys = Array(Set(triageKeys.filter { !$0.isEmpty })).sorted()
+        guard !keys.isEmpty else { return }
+        Task {
+            await setFindingTriageStatus(status, triageKeys: keys)
+        }
+    }
+
     var selectedConflicts: [ConflictGroupRecord] {
         guard let skill = selectedSkill else { return [] }
         let sameAgentSkillIDs = Set(skills.filter { $0.agent == skill.agent }.map(\.id))
@@ -361,6 +369,54 @@ final class SkillStore: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
             return nil
+        }
+    }
+
+    private func setFindingTriageStatus(_ status: FindingTriageStatus, triageKeys: [String]) async {
+        guard !isRefreshBusy else {
+            errorMessage = UIStrings.operationUnavailableBusy
+            lastMutationMessage = nil
+            return
+        }
+
+        isWriting = true
+        errorMessage = nil
+        lastMutationMessage = nil
+        defer { isWriting = false }
+
+        do {
+            for triageKey in triageKeys {
+                if status == .open {
+                    _ = try await service.clearFindingTriage(triageKey: triageKey)
+                    applyFindingTriage(status: .open, triageKeys: [triageKey], note: nil, updatedAt: nil)
+                } else {
+                    let record = try await service.setFindingTriage(triageKey: triageKey, status: status)
+                    applyFindingTriage(record)
+                }
+            }
+            lastMutationMessage = status == .open
+                ? UIStrings.findingTriageReopened
+                : UIStrings.findingTriageUpdated(status.title)
+        } catch {
+            errorMessage = error.localizedDescription
+            lastMutationMessage = nil
+        }
+    }
+
+    private func applyFindingTriage(_ record: FindingTriageRecord) {
+        applyFindingTriage(
+            status: record.triageStatus,
+            triageKeys: [record.triageKey],
+            note: record.note,
+            updatedAt: record.updatedAt
+        )
+    }
+
+    private func applyFindingTriage(status: FindingTriageStatus, triageKeys: [String], note: String?, updatedAt: Int64?) {
+        let keys = Set(triageKeys)
+        findings = findings.map { finding in
+            guard keys.contains(finding.triageKey) else { return finding }
+            return finding.withTriage(status: status, note: note, updatedAt: updatedAt)
         }
     }
 

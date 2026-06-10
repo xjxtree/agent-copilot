@@ -1,6 +1,6 @@
 # skills-copilot Service Protocol
 
-> Status: V2.28 Conflict semantic closeout integrated; V2.29 Finding triage persistence is active. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, V2.19 health dashboard, V2.20 read-only AI skill analysis assist, V2.21 scan accuracy/dedupe alignment, V2.22 finding/conflict semantics, V2.23 Health Dashboard / Adapter Capability UX, V2.24 Skill Detail diagnostics, V2.25 Agent-config timeline, V2.26 Finding explainability, V2.27 Skill identity/provenance dedupe, and V2.28 Conflict semantic closeout are implemented or synchronized. V2.28 acceptance is now complete: `Conflicts` = selected/current agent runtime/name collisions; cross-agent duplicate/source-overlap/enabled mismatch stays in `Analysis` only; `health.conflict_count` only reflects same-agent conflict groups. No new write/execute or credential-storage behavior is introduced.
+> Status: V2.29 Finding triage persistence integrated; V2.30 AI skill analysis workflow is active. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, V2.19 health dashboard, V2.20 read-only AI skill analysis assist, V2.21 scan accuracy/dedupe alignment, V2.22 finding/conflict semantics, V2.23 Health Dashboard / Adapter Capability UX, V2.24 Skill Detail diagnostics, V2.25 Agent-config timeline, V2.26 Finding explainability, V2.27 Skill identity/provenance dedupe, and V2.28 Conflict semantic closeout are implemented or synchronized. V2.28 acceptance is now complete: `Conflicts` = selected/current agent runtime/name collisions; cross-agent duplicate/source-overlap/enabled mismatch stays in `Analysis` only; `health.conflict_count` only reflects same-agent conflict groups. V2.29 在协议口径上仅新增 app-local finding triage persistence（Open / Reviewed / Ignored / Needs follow-up），不改动 agent-config 写入面、skill-content 快照、skill-toggle snapshot、脚本执行边界或凭据存储面。
 >
 > Integrated: V2.9 Tool-global import/export/install, V2.10 skill execution safety boundary, and 2026-06-10 real local Computer Use validation for the current mainline app. V2.11 added adapter capability status to the service protocol and macOS UI. V2.12 marks opencode writable through exact permission.skill deny/re-enable after snapshot/rollback, install, and fixture smoke validation pass; current opencode scan follows native plus official compatibility roots while install targets remain native roots.
 >
@@ -154,6 +154,13 @@ V2.25 聚焦 agent-config snapshot timeline 收敛，仍不新增 protocol metho
 - Pi scans remain directory-rooted; only directory `SKILL.md` instances are cataloged. Standalone `.md` files at `pi-root/SKILL.md`、`*.md` direct files、以及 `references/SKILL.md` 噪声应被过滤，避免伪阳性。
 - Conflict semantics unchanged from V2.22: cross-agent duplicate names、source-overlap、enabled-state mismatch remain analysis groups; `catalog.listConflicts` keeps selected-agent runtime/name collision only.
 
+## V2.29 Finding triage persistence（completed）
+
+- Finding triage state is persisted only in app-local catalog/app data and exposed on existing finding list/detail payload flows.
+- 每个 finding issue group 采用 `Open / Reviewed / Ignored / Needs follow-up`，初始缺省为 Open。
+- 复查规则：finding fingerprint 或受影响实例集合（instance signature）变化时，已持久化 triage 状态应回到 Open，用于重新提示。
+- 本阶段禁止任何 agent-config 持久化路径参与 triage 存储；不得产生 skill-toggle snapshot 或 skill-content snapshot；不得将 triage 改动与脚本执行、provider 调用、AI 回写、凭据写入耦合。
+
 ## V2.18 Cross-Agent Analysis Payload
 
 
@@ -207,7 +214,7 @@ Precedence notes are intentionally conservative. The service may choose a `winne
 
 `app.stateSnapshot.health` returns an additive, read-only summary derived from the same visible catalog rows, findings, conflicts, and cross-agent analysis groups. It does not write agent configs, import skills, execute scripts, call provider APIs, or infer unsupported roots.
 
-The summary includes total/enabled/disabled counts, broken/missing/malformed counts, finding counts by severity, conflict counts, risky script and permission counts, cross-agent analysis group counts, and per-agent summaries for native dashboard and read-only triage filters. Per-agent finding and risk counts are instance-scoped by `instance_id`; definition-only findings are not expanded across same-name skills. Per-agent conflict counts only include conflicts where at least two instances from that same agent participate; cross-agent duplicate names, source overlap, or enabled-state mismatch remain in `catalog.analysis`, not in a selected agent's skill conflict detail. V2.19 does not persist reviewed/ignored finding state.
+The summary includes total/enabled/disabled counts, broken/missing/malformed counts, finding counts by severity, conflict counts, risky script and permission counts, cross-agent analysis group counts, and per-agent summaries for native dashboard and read-only triage filters. Per-agent finding and risk counts are instance-scoped by `instance_id`; definition-only findings are not expanded across same-name skills. Per-agent conflict counts only include conflicts where at least two instances from that same agent participate; cross-agent duplicate names, source overlap, or enabled-state mismatch remain in `catalog.analysis`, not in a selected agent's skill conflict detail. V2.29 开始支持 finding 状态持久化为 app-local triage（reviewed / ignored / needs follow-up）。该持久化只用于 issue-group 层面的 triage，不写入 agent config，不创建 skill-toggle 或 skill-content snapshot，不触发脚本执行、AI 回写或凭据持久化。finding fingerprint 或受影响实例集合变化时，triage 自动回退到 Open。
 
 健康口径（health）与 detail/list 过滤必须使用同一实例可见性定义；`finding_count` 与 issue group 口径一致，`conflict_count` 不从 cross-agent duplicate/source overlap 口径叠加，且应可与 `catalog.analysis` 分组数量在同一扫描上下文下对齐。V2.23 要求这些数字用于 sidebar 行动摘要卡片，而非重复统计表。
 

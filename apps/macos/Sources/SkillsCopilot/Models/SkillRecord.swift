@@ -679,6 +679,11 @@ struct RuleFindingRecord: Codable, Identifiable, Hashable {
     let message: String
     let suggestion: String?
     let createdAt: Int64
+    let triageKey: String
+    let triageContext: String
+    let triageStatus: String
+    let triageNote: String?
+    let triageUpdatedAt: Int64?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -689,6 +694,58 @@ struct RuleFindingRecord: Codable, Identifiable, Hashable {
         case message
         case suggestion
         case createdAt = "created_at"
+        case triageKey = "triage_key"
+        case triageContext = "triage_context"
+        case triageStatus = "triage_status"
+        case triageNote = "triage_note"
+        case triageUpdatedAt = "triage_updated_at"
+    }
+
+    init(
+        id: String,
+        instanceId: String?,
+        definitionId: String?,
+        ruleId: String,
+        severity: String,
+        message: String,
+        suggestion: String?,
+        createdAt: Int64,
+        triageKey: String? = nil,
+        triageContext: String = "",
+        triageStatus: String = "open",
+        triageNote: String? = nil,
+        triageUpdatedAt: Int64? = nil
+    ) {
+        self.id = id
+        self.instanceId = instanceId
+        self.definitionId = definitionId
+        self.ruleId = ruleId
+        self.severity = severity
+        self.message = message
+        self.suggestion = suggestion
+        self.createdAt = createdAt
+        self.triageKey = triageKey ?? id
+        self.triageContext = triageContext
+        self.triageStatus = triageStatus
+        self.triageNote = triageNote
+        self.triageUpdatedAt = triageUpdatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        instanceId = try container.decodeIfPresent(String.self, forKey: .instanceId)
+        definitionId = try container.decodeIfPresent(String.self, forKey: .definitionId)
+        ruleId = try container.decode(String.self, forKey: .ruleId)
+        severity = try container.decode(String.self, forKey: .severity)
+        message = try container.decode(String.self, forKey: .message)
+        suggestion = try container.decodeIfPresent(String.self, forKey: .suggestion)
+        createdAt = try container.decode(Int64.self, forKey: .createdAt)
+        triageKey = try container.decodeIfPresent(String.self, forKey: .triageKey) ?? id
+        triageContext = try container.decodeIfPresent(String.self, forKey: .triageContext) ?? ""
+        triageStatus = try container.decodeIfPresent(String.self, forKey: .triageStatus) ?? "open"
+        triageNote = try container.decodeIfPresent(String.self, forKey: .triageNote)
+        triageUpdatedAt = try container.decodeIfPresent(Int64.self, forKey: .triageUpdatedAt)
     }
 }
 

@@ -132,6 +132,26 @@ private struct ListSkillEventsParams: Encodable {
     }
 }
 
+private struct SetFindingTriageParams: Encodable {
+    let triageKey: String
+    let status: String
+    let note: String?
+
+    enum CodingKeys: String, CodingKey {
+        case triageKey = "triage_key"
+        case status
+        case note
+    }
+}
+
+private struct ClearFindingTriageParams: Encodable {
+    let triageKey: String
+
+    enum CodingKeys: String, CodingKey {
+        case triageKey = "triage_key"
+    }
+}
+
 private struct SaveClaudeSettingsParams: Encodable {
     let content: String
 }
@@ -293,6 +313,24 @@ final class ServiceClient {
 
     func listFindings() async throws -> [RuleFindingRecord] {
         try await call(method: "catalog.listFindings", params: EmptyParams())
+    }
+
+    func listFindingTriage() async throws -> [FindingTriageRecord] {
+        try await call(method: "catalog.listFindingTriage", params: EmptyParams())
+    }
+
+    func setFindingTriage(triageKey: String, status: FindingTriageStatus, note: String? = nil) async throws -> FindingTriageRecord {
+        try await call(
+            method: "catalog.setFindingTriage",
+            params: SetFindingTriageParams(triageKey: triageKey, status: status.rawValue, note: note)
+        )
+    }
+
+    func clearFindingTriage(triageKey: String) async throws -> Bool {
+        try await call(
+            method: "catalog.clearFindingTriage",
+            params: ClearFindingTriageParams(triageKey: triageKey)
+        )
     }
 
     func listConflicts() async throws -> [ConflictGroupRecord] {

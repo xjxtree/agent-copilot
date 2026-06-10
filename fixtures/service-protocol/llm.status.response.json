@@ -8,7 +8,7 @@
     "model": null,
     "reason": "LLM actions are disabled by default; no local provider is configured.",
     "single_request_token_limit": 8000,
-    "monthly_budget_usd": 0.0,
+    "monthly_budget_usd": 0,
     "credentials_storage": "none",
     "credential_persistence_allowed": false
   }
