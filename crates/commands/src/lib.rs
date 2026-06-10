@@ -2726,7 +2726,10 @@ pub fn rollback_snapshot(
     let target = PathBuf::from(&snapshot.target);
     let scope = scope_from_snapshot(&snapshot.scope)?;
     let agent = agent_from_snapshot(&snapshot.agent)?;
-    if !matches!(agent, AgentId::ClaudeCode | AgentId::Codex) {
+    if !matches!(
+        agent,
+        AgentId::ClaudeCode | AgentId::Codex | AgentId::Opencode
+    ) {
         return Err(CommandError::UnsafeConfigPath(format!(
             "snapshot agent {} is not writable by config rollback commands",
             snapshot.agent
@@ -5269,13 +5272,15 @@ mod tests {
     }
 
     #[test]
-    fn toggle_opencode_skill_writes_permission_skill_deny_and_reenables() {
+    fn toggle_opencode_skill_writes_permission_skill_deny_and_rollback_restores_snapshot() {
         let temp_root = std::env::temp_dir().join(format!(
             "skills-copilot-opencode-toggle-{}",
             std::process::id()
         ));
         let home = temp_root.join("home");
         write_opencode_global_skill(&home, "writable-skill");
+        let config_path = home.join(".config/opencode/opencode.json");
+        std::fs::write(&config_path, "{}\n").expect("write original opencode config");
 
         let catalog = Catalog::in_memory().expect("catalog opens");
         catalog.init().expect("catalog initializes");
@@ -5296,7 +5301,6 @@ mod tests {
         let disabled = toggle_skill(&catalog, &ctx, &opencode_record.id, false)
             .expect("opencode disable succeeds");
 
-        let config_path = ctx.user_home.join(".config/opencode/opencode.json");
         let config: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(&config_path).expect("opencode config"))
                 .expect("config json");
@@ -5310,7 +5314,35 @@ mod tests {
         assert_eq!(snapshots.len(), 1);
         assert_eq!(snapshots[0].scope, "agent-global");
 
-        let enabled = toggle_skill(&catalog, &ctx, &opencode_record.id, true)
+        let preview = preview_snapshot_rollback_with_context(&catalog, &ctx, &snapshots[0].id)
+            .expect("opencode rollback preview");
+        assert_eq!(preview.snapshot.agent, "opencode");
+        let preview_current: serde_json::Value =
+            serde_json::from_str(&preview.current_content).expect("preview current json");
+        assert_eq!(
+            preview_current["permission"]["skill"]["writable-skill"],
+            "deny"
+        );
+        assert!(preview.changed);
+        assert!(preview.rollback_supported);
+
+        rollback_snapshot(&catalog, &ctx, &snapshots[0].id).expect("opencode rollback succeeds");
+        let config_text =
+            std::fs::read_to_string(&config_path).expect("rolled back opencode config");
+        assert_eq!(config_text, "{}\n");
+        let rolled_back_record = catalog
+            .list_skill_records()
+            .expect("records after opencode rollback")
+            .into_iter()
+            .find(|record| record.agent == "opencode" && record.name == "writable-skill")
+            .expect("opencode record after rollback");
+        assert!(rolled_back_record.enabled);
+        assert_eq!(rolled_back_record.state, "loaded");
+
+        let disabled = toggle_skill(&catalog, &ctx, &rolled_back_record.id, false)
+            .expect("opencode disable after rollback succeeds");
+        assert!(!disabled.enabled);
+        let enabled = toggle_skill(&catalog, &ctx, &rolled_back_record.id, true)
             .expect("opencode enable succeeds");
         let config: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(&config_path).expect("opencode config"))

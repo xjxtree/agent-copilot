@@ -62,7 +62,7 @@ This includes:
 - Service protocol changes
 - Native macOS UI changes
 
-Documentation-only changes are exempt. If the app cannot be launched, the macOS session is locked or not clearly interactive, or Computer Use returns `remoteConnection`, `cgWindowNotFound`, or activation errors, record the blocker and do not claim runtime verification.
+Documentation-only changes are exempt. If the app cannot be launched, the macOS session is locked or not clearly interactive, or Computer Use returns `remoteConnection`, `cgWindowNotFound`, or activation errors, record the blocker and keep the candidate pending; do not use smoke screenshots as a substitute for blocked real-local checks.
 
 Minimum verification record:
 
@@ -117,3 +117,10 @@ For UI changes:
 - Analysis 区域仅作只读离线分析预览，不提供执行或写入路径。
 - History 仅展示 toggle/config 相关事件；不展示 skill-content snapshot。
 - 验收前提：在完成截图与窗口级验证前不声明完成；若 detail 仅显示 counts 而未给出 remediation action，则视为未通过该项。
+
+## 9. V2.25: Agent-config timeline（进行中）
+
+- Agent-config History 以 per-agent 时间线展示，不与 selected-skill detail 混用。
+- 仅展示 toggle/config 相关快照事件，不展示 skill-content snapshot 或 skill-toggle snapshot。
+- rollback 流必须是 preview diff + 明确二次确认：先 `snapshot.previewRollback` 再独立确认 `snapshot.rollback`。
+- 相关验收需有 evidence 记录：多 agent 视图各自独立，且在未完成时记录待补齐 code-side 验证项。

@@ -53,6 +53,7 @@ public func runNativeModelTests() {
         try LLMModelTests().run()
         try ScriptExecutionModelTests().run()
         try ToolGlobalModelTests().run()
+        try AgentConfigTimelineModelTests().run()
         try SkillListModelTests().run()
         try runAsyncTest {
             try await SkillStoreTests().run()

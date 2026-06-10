@@ -4,9 +4,9 @@
 >
 > 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.24 Skill Detail 诊断工作台规划与验收同步（进行中）**。V2.22 finding/conflict 语义与验收同步作为前置约束已收口；V2.23 Health Dashboard / Adapter Capability UX 口径作为基础完成与稳定；V2.21 扫描准确性、去重边界、agent 维度统计已完成。Pi writable evidence、finding triage persistence 和 agent-config timeline 仍为后续候选跟进项。
+> 当前阶段：**V2.25 Agent-config timeline 规划与验收同步（进行中）**。V2.22 finding/conflict 语义与 V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 口径对齐已收口；V2.21 扫描准确性、去重边界、agent 维度统计已完成。Pi writable evidence 与 finding triage persistence 先不进入本阶段；当前只推进 agent-config snapshot timeline。
 >
-> 近期主线：基于 V2.22 与 V2.23 的收敛前置，优先完成 V2.24 Detail 诊断工作台口径：Detail 是单 skill 工作台；发现与问题分组（issue groups）对齐；冲突仅按 selected/current agent runtime/name collision；Analysis 维持只读离线辅助手段；History 限于 toggle/config 事件（不引入 skill-content snapshot）。随后按需推进 Pi writable / triage 持久化 / agent-config timeline 候选项。V2.16-V2.20 已完成 OpenClaw read-only scanner、Hermes read-only scanner、cross-agent skill analysis、skill health dashboard 和 read-only AI skill analysis assist。V2.21 负责扫描准确性、去重边界和 agent 维度统计口径同步；Pi writable 仍保持 evidence harness candidate，生产写入需等 rollback-safe evidence 通过。
+> 近期主线：基于 V2.22 与 V2.23 的收敛前置，当前仅推进 V2.25 Agent-config timeline。口径为按 agent 维度独立展示配置时间线，不混入 selected-skill detail；History 限 toggle/config 事件；不引入 skill-content snapshot 与 skill-toggle snapshot；rollback 需要 preview + confirm 二段确认。随后再回到 Pi writable / triage 持久化。
 >
 > 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.20 各阶段能力、V2.9 Tool-global skill pool、V2.11 Adapter capability matrix、V2.16-V2.20 management/analysis line。V2.21 扫描准确性与去重口径已完成。后续候选变更仍需重新验证。
 >
@@ -879,3 +879,20 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 - [ ] Analysis 区域仅展示 read-only/offline assist；无脚本执行/写入副作用。
 - [ ] History 区域仅显示 toggle/config event（无 skill-content snapshot）。
 - [ ] Code side 验收结果填充：selected/current agent 健康摘要行为、adapter matrix 与状态说明、真实本机 CU 回归记录待补。
+
+## 4.25 V2.25 Agent-config timeline（完成）（进行中）
+
+**口径（与 V2.25 对齐）**
+
+- 只做 agent-config snapshot timeline，不做 skill-toggle snapshot。
+- 多 agent 各自 timeline 独立展示，不向 selected skill detail 混合透出时间线；detail 只消费与该 skill 相关的 toggle/config 事件。
+- timeline 事件源为 `snapshot.listAgentConfig`（按 agent/scope）与 `skill.listEvents` 的可读轨迹。
+- 历史内容不含 skill-content snapshot。
+- `snapshot.previewRollback` 与 `snapshot.rollback` 采用二次确认路径：先展示变更 diff，再要求明确确认后执行。
+
+**验收（未闭环）**
+
+- [ ] 只在文档/协议/UI 中补齐 V2.25 口径，不对 V2.24 口径主结论做反向扩展。
+- [ ] 文档约束已同步到 AGENTS、service protocol、ui-delivery、development-tasks。
+- [ ] `snapshot.listAgentConfig` 明确以 per-agent 维度分片；`snapshot.list`/`skill-content` 不被用于配置快照展示。
+- [ ] preview diff 与二次确认回滚路径可被 UI/协议文档覆盖并在 code-side 验收补齐。

@@ -76,6 +76,7 @@ It verifies:
 - a visible `SkillsCopilot` app window exists
 - app-window-only screenshot capture works
 - service fixture flow covers Scan, Enable/Disable, Settings save, Snapshot Preview, and Snapshot Rollback
+- V2.25 scope is aligned when available: fixture covers `snapshot.listAgentConfig` per-agent view and preview/rollback path separation (preview then confirm) without adding skill-content snapshot assertions.
 - opencode fixture roots are isolated to temporary roots: native `~/.config/opencode/skills` / project `.opencode/skills` plus official `.claude` / `.agents` compatibility roots when covered by the scenario; smoke must not create or scan real user opencode config
 - when the integrated service reports opencode rows from `catalog.scanAll`, smoke verifies global opencode skills without project context, project opencode skills with project context, and `config.toggleSkill` rejection/read-only behavior
 - V2.9 tool-global validation is covered by Rust service tests, Swift UI/model tests, layout checks, and service fixtures: tool-global rows must display as read-only previews, toggle must remain disabled, import writes only app-controlled staging/catalog, export manifests remain reproducible, and install/copy to Claude/Codex must be confirmation-gated through verified write paths
@@ -102,7 +103,23 @@ Local App Run uses the developer's real environment:
 ./script/build_and_run.sh run
 ```
 
-Use it to inspect actual local behavior and visual quality. Any manual validation for code changes should operate this app with macOS Computer Use when the macOS session is unlocked and Computer Use can resolve the app window. The current mainline app passed this real local pass on 2026-06-09; future user-visible, UI, or service protocol candidates must rerun it.
+Use it to inspect actual local behavior and visual quality. Any manual validation for code changes should operate this app with macOS Computer Use when the macOS session is unlocked and Computer Use can resolve the app window. The current mainline app passed this real local pass on 2026-06-10; future user-visible, UI, or service protocol candidates must rerun it.
+
+If the session is locked or Computer Use/AX cannot resolve the app window (for example `remoteConnection` / `cgWindowNotFound` / activation errors), record the blocker explicitly and keep the candidate pending. This is a valid blocker record, but it is not a substitute for real-local verification.
+
+## V2.25 Agent-config Timeline Validation (进行中)
+
+V2.25 focuses on per-agent config timeline and rollback confirmation flow:
+
+- `snapshot.listAgentConfig` should return agent-scoped config/toggle snapshots and histories; it must not be treated as a skill-content snapshot history.
+- `snapshot.previewRollback` and `snapshot.rollback` must be validated as a two-step user flow: preview diff first, then explicit second confirmation.
+- Do not mix per-agent history into selected-skill detail pages.
+- Smoke mode remains fixture-driven, but final closeout must keep real-local pending when this flow has not passed interactively.
+
+## 2026-06-10 real local validation note
+
+- `pnpm check:macos` passed, including real-local `SkillsCopilot` app-window operation against real local `HOME`, app data, Claude config, Codex roots, and opencode roots.
+- Mainline lockscreen/activation issues were not blocking for this pass; `snapshot.previewRollback` and `snapshot.rollback` interaction paths can be retested on next write-scope change before declaration.
 
 ## V2.2 Project Context Validation
 

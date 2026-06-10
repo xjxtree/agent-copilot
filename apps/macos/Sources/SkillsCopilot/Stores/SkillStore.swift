@@ -111,6 +111,15 @@ final class SkillStore: ObservableObject {
         healthSummary.agentSummaries.first { $0.agent == agentFilter.rawValue }
     }
 
+    var selectedAgentConfigTimelineAgent: String? {
+        switch agentFilter {
+        case .all:
+            return nil
+        default:
+            return agentFilter.rawValue
+        }
+    }
+
     var projectValidationMessage: String? {
         guard let message = activeProjectContext?.validationError, !message.isEmpty else {
             return nil
@@ -383,6 +392,11 @@ final class SkillStore: ObservableObject {
 
     func previewRollback(snapshotID: String) async throws -> SnapshotRollbackPreviewRecord {
         errorMessage = nil
+        guard agentConfigSnapshots.contains(where: { $0.id == snapshotID }) else {
+            let message = "Snapshot is not in the selected agent config timeline."
+            errorMessage = message
+            throw ServiceClient.ClientError.invalidOutput(message)
+        }
         do {
             return try await service.previewSnapshotRollback(snapshotID: snapshotID)
         } catch {
@@ -393,6 +407,11 @@ final class SkillStore: ObservableObject {
 
     func rollbackSnapshot(snapshotID: String) async {
         guard !isRefreshBusy else { return }
+        guard agentConfigSnapshots.contains(where: { $0.id == snapshotID }) else {
+            errorMessage = "Snapshot is not in the selected agent config timeline."
+            lastMutationMessage = nil
+            return
+        }
         isWriting = true
         errorMessage = nil
         lastMutationMessage = nil
@@ -509,38 +528,13 @@ final class SkillStore: ObservableObject {
     }
 
     private func fetchAgentConfigSnapshots() async throws -> [ConfigSnapshotRecord] {
-        var records: [ConfigSnapshotRecord] = []
-        for query in agentConfigSnapshotQueries {
-            let agentRecords = try await service.listAgentConfigSnapshots(agent: query.agent, scope: query.scope)
-            records.append(contentsOf: agentRecords)
+        guard let agent = selectedAgentConfigTimelineAgent else {
+            return []
         }
-        return records.sorted { $0.createdAt > $1.createdAt }
-    }
-
-    private var agentConfigSnapshotQueries: [(agent: String, scope: String?)] {
-        switch agentFilter {
-        case .claudeCode:
-            return [(agent: "claude-code", scope: nil)]
-        case .codex:
-            return [(agent: "codex", scope: nil)]
-        case .opencode:
-            return [(agent: "opencode", scope: nil)]
-        case .pi:
-            return [(agent: "pi", scope: nil)]
-        case .hermes:
-            return [(agent: "hermes", scope: nil)]
-        case .openclaw:
-            return [(agent: "openclaw", scope: nil)]
-        case .all:
-            return [
-                (agent: "claude-code", scope: nil),
-                (agent: "codex", scope: nil),
-                (agent: "opencode", scope: nil),
-                (agent: "pi", scope: nil),
-                (agent: "hermes", scope: nil),
-                (agent: "openclaw", scope: nil)
-            ]
-        }
+        let records = try await service.listAgentConfigSnapshots(agent: agent, scope: nil)
+        return records
+            .filter { $0.agent == agent }
+            .sorted { $0.createdAt > $1.createdAt }
     }
 
     private func loadSkillEventsIfNeeded(instanceID: SkillRecord.ID, force: Bool = false) async {

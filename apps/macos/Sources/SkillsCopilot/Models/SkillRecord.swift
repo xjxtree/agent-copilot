@@ -647,6 +647,8 @@ struct SnapshotRollbackPreviewRecord: Codable, Identifiable, Hashable {
     let currentContent: String
     let currentReadError: String?
     let changed: Bool
+    let redacted: Bool
+    let rollbackSupported: Bool
 
     var id: String { snapshot.id }
 
@@ -655,6 +657,18 @@ struct SnapshotRollbackPreviewRecord: Codable, Identifiable, Hashable {
         case currentContent = "current_content"
         case currentReadError = "current_read_error"
         case changed
+        case redacted
+        case rollbackSupported = "rollback_supported"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        snapshot = try container.decode(ConfigSnapshotRecord.self, forKey: .snapshot)
+        currentContent = try container.decode(String.self, forKey: .currentContent)
+        currentReadError = try container.decodeIfPresent(String.self, forKey: .currentReadError)
+        changed = try container.decode(Bool.self, forKey: .changed)
+        redacted = try container.decodeIfPresent(Bool.self, forKey: .redacted) ?? false
+        rollbackSupported = try container.decodeIfPresent(Bool.self, forKey: .rollbackSupported) ?? !redacted
     }
 }
 

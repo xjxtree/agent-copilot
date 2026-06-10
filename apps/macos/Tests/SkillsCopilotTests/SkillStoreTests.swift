@@ -13,8 +13,12 @@ struct SkillStoreTests {
         try await selectedDetailDataIsScopedToCurrentAgentAndSkill()
         try await scanAllUsesGenericCatalogMethod()
         try await searchAndFilterChangesNormalizeSelectionAndDetail()
+        try await agentConfigTimelineFollowsSelectedAgentFilterOnly()
+        try await previewRollbackShowsDiffWithoutCallingRollback()
+        try await rollbackSnapshotRequiresVisibleAgentTimelineRecord()
         try await refreshOperationsIgnoreReentryWhileBusy()
         try await agentFilterLimitsVisibleSkillsAndSelection()
+        try await allAgentFilterDoesNotFetchMixedConfigHistory()
         try await toggleSelectedSkillExposesWritingStateAndRefreshesSelection()
         try await writeOperationsIgnoreReentryWhileBusy()
         try await codexToggleAddsRestartRequiredNotice()
@@ -262,6 +266,73 @@ struct SkillStoreTests {
         try expectFalse(fake.calls().contains("project.clearContext"), "Busy scan should guard project clear reentry.")
     }
 
+    private func agentConfigTimelineFollowsSelectedAgentFilterOnly() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "timeline")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+
+        try expectEqual(store.selectedAgentConfigTimelineAgent, "claude-code", "Default timeline should use the selected agent filter.")
+        try expectEqual(store.agentConfigSnapshots.map(\.id), ["snap-claude-new", "snap-claude-old"], "Claude filter should show only Claude config snapshots.")
+        try expectEqual(Set(store.agentConfigSnapshots.map(\.agent)), Set(["claude-code"]), "Claude timeline should not include other agents.")
+
+        let callsAfterReload = countMethodCalls("snapshot.listAgentConfig", in: fake.calls())
+        store.selectedSkillID = "alpha"
+        await store.loadSelectedDetail()
+        try expectEqual(store.agentConfigSnapshots.map(\.id), ["snap-claude-new", "snap-claude-old"], "Changing skill selection within an agent must not turn config snapshots into per-skill history.")
+        try expectEqual(countMethodCalls("snapshot.listAgentConfig", in: fake.calls()), callsAfterReload, "Skill detail changes should not reload agent config history.")
+
+        store.agentFilter = .codex
+        try await waitUntil("Codex filter should load only Codex config snapshots.") {
+            store.agentConfigSnapshots.map(\.id) == ["snap-codex"]
+        }
+        try expectEqual(store.selectedAgentConfigTimelineAgent, "codex", "Codex timeline should use the selected agent filter.")
+        try expectEqual(Set(store.agentConfigSnapshots.map(\.agent)), Set(["codex"]), "Codex timeline should not include Claude snapshots.")
+        try expectContains(fake.calls(), "\"agent\":\"codex\"", "Timeline fetch should request the selected Codex agent.")
+
+        store.agentFilter = .all
+        try await waitUntil("All filter should not merge every agent config timeline.") {
+            store.agentConfigSnapshots.isEmpty
+        }
+        try expectNil(store.selectedAgentConfigTimelineAgent, "All filter has no single selected agent timeline.")
+    }
+
+    private func previewRollbackShowsDiffWithoutCallingRollback() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "timeline")
+
+        let store = SkillStore(service: ServiceClient())
+        await store.reload()
+
+        let preview = try await store.previewRollback(snapshotID: "snap-claude-new")
+
+        try expectEqual(preview.snapshot.id, "snap-claude-new", "Preview should return the selected snapshot.")
+        try expectEqual(preview.snapshot.agent, "claude-code", "Preview should keep the snapshot agent.")
+        try expectContains(preview.currentContent, "skillOverrides", "Preview diff should include current config content.")
+        try expectEqual(preview.changed, true, "Preview should report that current config differs from the snapshot.")
+        try expectEqual(preview.rollbackSupported, true, "Preview should expose rollback support without performing it.")
+        try expectContains(fake.calls(), "snapshot.previewRollback", "Preview should call only the preview method.")
+        try expectEqual(countMethodCalls("snapshot.rollback", in: fake.calls()), 0, "Preview must not call rollback or write automatically.")
+    }
+
+    private func rollbackSnapshotRequiresVisibleAgentTimelineRecord() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "timeline")
+
+        let store = SkillStore(service: ServiceClient())
+        await store.reload()
+
+        await store.rollbackSnapshot(snapshotID: "snap-codex")
+
+        try expectContains(store.errorMessage, "selected agent config timeline", "Rollback should reject snapshots outside the selected agent timeline.")
+        try expectEqual(countMethodCalls("snapshot.rollback", in: fake.calls()), 0, "Rollback guard should not call the write API for hidden agent snapshots.")
+    }
+
     private func agentFilterLimitsVisibleSkillsAndSelection() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -277,6 +348,18 @@ struct SkillStoreTests {
         try expectEqual(store.filteredSkillGroups.map(\.title), [UIStrings.codex], "Codex filter should group under the Codex display name.")
         try expectEqual(store.selectedSkillID, "gamma", "Agent filter should move selection to a visible skill.")
         try expectEqual(store.selectedSkill?.agent, "codex", "Selected skill should respect the active agent filter.")
+    }
+
+    private func allAgentFilterDoesNotFetchMixedConfigHistory() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "normal")
+
+        let store = SkillStore(service: ServiceClient())
+        store.agentFilter = .all
+        await store.reload()
+
+        try expectEqual(store.agentConfigSnapshots.count, 0, "All Agents should not expose a mixed agent-config history.")
     }
 
     private func toggleSelectedSkillExposesWritingStateAndRefreshesSelection() async throws {
@@ -682,6 +765,9 @@ private final class FakeServiceScript {
         conflicts_detail_scope='[{"id":"conflict-beta-alpha","definition_id":"def.beta","reason":"content-drift","winner_id":null,"instance_ids":["beta","alpha"]},{"id":"conflict-beta-gamma-cross-agent","definition_id":"def.beta","reason":"source-overlap","winner_id":null,"instance_ids":["beta","gamma"]},{"id":"conflict-alpha-gamma-no-selected","definition_id":"def.shared","reason":"source-overlap","winner_id":null,"instance_ids":["alpha","gamma"]}]'
         events_beta='[{"id":1001,"instance_id":"beta","kind":"toggle","payload":{"enabled":false,"agent":"claude-code","skill_name":"Beta"},"occurred_at":10},{"id":1000,"instance_id":"beta","kind":"scan","payload":{"summary":"rescan"},"occurred_at":9}]'
         events_gamma='[{"id":2001,"instance_id":"gamma","kind":"toggle","payload":{"enabled":true,"agent":"codex","skill_name":"Gamma"},"occurred_at":11}]'
+        snapshots_claude='[{"id":"snap-claude-new","agent":"claude-code","scope":"agent-global","target":"/tmp/home/.claude/settings.json","content":"{}\\n","reason":"pre-toggle","created_at":30},{"id":"snap-claude-old","agent":"claude-code","scope":"agent-project","target":"/tmp/project/.claude/settings.local.json","content":"{}\\n","reason":"pre-config-edit","created_at":20}]'
+        snapshots_codex='[{"id":"snap-codex","agent":"codex","scope":"agent-global","target":"/tmp/home/.codex/config.toml","content":"disable_response_storage = true\\n","reason":"pre-toggle","created_at":40}]'
+        snapshots_opencode='[{"id":"snap-opencode","agent":"opencode","scope":"agent-global","target":"/tmp/home/.config/opencode/opencode.json","content":"{}\\n","reason":"pre-toggle","created_at":50}]'
 
         state_snapshot_response() {
           if [ "$scenario" = "error" ]; then service_error; fi
@@ -907,7 +993,32 @@ private final class FakeServiceScript {
             fi
             respond '{"id":"test","ok":true,"result":[]}'
             ;;
+          *\\"snapshot.previewRollback\\"*)
+            if [ "$scenario" = "timeline" ]; then
+              respond '{"id":"test","ok":true,"result":{"snapshot":{"id":"snap-claude-new","agent":"claude-code","scope":"agent-global","target":"/tmp/home/.claude/settings.json","content":"{}\\n","reason":"pre-toggle","created_at":30},"current_content":"{\\"skillOverrides\\":{\\"beta\\":false}}\\n","current_read_error":null,"changed":true,"redacted":false,"rollback_supported":true}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"test.missing","message":"missing snapshot preview"}}'
+            ;;
+          *\\"snapshot.rollback\\"*)
+            if [ "$scenario" = "timeline" ]; then
+              respond '{"id":"test","ok":true,"result":3}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"test.missing","message":"missing snapshot rollback"}}'
+            ;;
           *\\"snapshot.listAgentConfig\\"*)
+            if [ "$scenario" = "timeline" ]; then
+              case "$input" in
+                *\\"agent\\":\\"claude-code\\"*)
+                  respond '{"id":"test","ok":true,"result":'"$snapshots_claude"'}'
+                  ;;
+                *\\"agent\\":\\"codex\\"*)
+                  respond '{"id":"test","ok":true,"result":'"$snapshots_codex"'}'
+                  ;;
+                *\\"agent\\":\\"opencode\\"*)
+                  respond '{"id":"test","ok":true,"result":'"$snapshots_opencode"'}'
+                  ;;
+              esac
+            fi
             respond '{"id":"test","ok":true,"result":[]}'
             ;;
           *\\"snapshot.list\\"*)

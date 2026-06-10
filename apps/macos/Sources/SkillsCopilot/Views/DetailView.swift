@@ -1979,7 +1979,7 @@ struct AgentConfigHistorySection: View {
     }
 }
 
-private struct SnapshotPreviewSheet: View {
+struct SnapshotPreviewSheet: View {
     let preview: SnapshotRollbackPreviewRecord
     @Environment(\.dismiss) private var dismiss
 

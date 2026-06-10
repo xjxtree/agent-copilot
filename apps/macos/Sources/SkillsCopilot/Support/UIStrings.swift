@@ -85,6 +85,12 @@ enum UIStrings {
     static let snapshot = text("snapshot.snapshot", "Snapshot Agent Config")
     static let agentConfigHistory = text("sidebar.agentConfigHistory", "Agent Config History")
     static let agentConfigHistorySummary = text("sidebar.agentConfigHistory.summary", "Preview or roll back saved configuration snapshots for the selected agent.")
+    static let agentConfigTimeline = text("sidebar.agentConfigTimeline", "Agent Config Timeline")
+    static let agentConfigTimelineBoundary = text("sidebar.agentConfigTimeline.boundary", "Config-level only: these rollback points capture agent configuration files, not SKILL.md content, and they do not mean every skill has its own snapshot.")
+    static let agentConfigTimelineSelectAgent = text("sidebar.agentConfigTimeline.selectAgent", "Choose one agent to view its config timeline. All Agents never mixes rollback points.")
+    static let agentConfigTimelineDefaultAction = text("sidebar.agentConfigTimeline.defaultAction", "Config snapshot")
+    static let agentConfigTimelineStatus = text("sidebar.agentConfigTimeline.status", "Rollback point")
+    static let previewDiff = text("action.previewDiff", "Preview diff")
     static let recentActivity = text("detail.recentActivity", "Recent Activity")
     static let noRecentActivity = text("detail.recentActivity.empty", "No enable or disable activity has been recorded for this skill yet.")
     static let loadingRecentActivity = text("detail.recentActivity.loading", "Loading activity...")
@@ -221,6 +227,22 @@ enum UIStrings {
 
     static func visibleSummary(_ count: Int) -> String {
         format("sidebar.visibleSummary", "%d visible", count)
+    }
+
+    static func agentConfigTimelineSummary(_ agent: String, _ count: Int) -> String {
+        format("sidebar.agentConfigTimeline.summary", "%@ config snapshots · %d rollback points", agent, count)
+    }
+
+    static func agentConfigTimelineEmptySummary(_ agent: String) -> String {
+        format("sidebar.agentConfigTimeline.emptySummary", "No %@ config snapshots yet", agent)
+    }
+
+    static func agentConfigTimelineMore(_ count: Int) -> String {
+        format("sidebar.agentConfigTimeline.more", "%d older rollback points hidden to keep the sidebar quiet.", count)
+    }
+
+    static func agentConfigTimelineRollbackConfirm(_ target: String) -> String {
+        format("sidebar.agentConfigTimeline.rollbackConfirm", "Rollback restores this agent config file only after confirmation. Skill content snapshots are not included. Target: %@", target)
     }
 
     static func visibleFindingsSummary(_ visible: Int, _ total: Int) -> String {

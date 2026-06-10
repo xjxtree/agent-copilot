@@ -1,6 +1,6 @@
 # skills-copilot Service Protocol
 
-> Status: V2.20 read-only AI skill analysis assist integrated. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, and V2.19 health dashboard are implemented; writable/install support remains blocked. V2.21 alignment for scan accuracy, dedupe behavior, and agent-level metrics is complete; V2.22 finding/conflict 语义与验收同步已收口；V2.23 Health Dashboard / Adapter Capability UX 同步作为前置；V2.24 Skill Detail 诊断工作台口径同步进行中。
+> Status: V2.20 read-only AI skill analysis assist integrated. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, and V2.19 health dashboard are implemented; writable/install support remains blocked. V2.21 alignment for scan accuracy, dedupe behavior, and agent-level metrics is complete; V2.22 finding/conflict 语义与验收同步已收口；V2.23 Health Dashboard / Adapter Capability UX 同步作为前置；V2.24 Skill Detail 诊断口径在同步中；V2.25 Agent-config timeline 口径同步进行中。
 >
 > Integrated: V2.9 Tool-global import/export/install, V2.10 skill execution safety boundary, and 2026-06-10 real local Computer Use validation for the current mainline app. V2.11 added adapter capability status to the service protocol and macOS UI. V2.12 marks opencode writable through exact permission.skill deny/re-enable after snapshot/rollback, install, and fixture smoke validation pass; current opencode scan follows native plus official compatibility roots while install targets remain native roots.
 >
@@ -68,8 +68,8 @@ This stdio shape can later move behind a local socket without changing method pa
 | `config.saveClaudeSettings` | Yes, writes Claude settings and rescans | Native macOS Settings editor Save action | saved `ConfigDocumentRecord` |
 | `snapshot.list` | No | Compatibility / diagnostics | global `ConfigSnapshotRecord[]` (app-level, not skill-content snapshots) |
 | `snapshot.listAgentConfig` | No | Native macOS Agent Config History（仅 toggle/config history） | agent-config `ConfigSnapshotRecord[]` filtered by `{ "agent": "...", "scope"?: "agent-global" }` |
-| `snapshot.previewRollback` | No | Native macOS Agent Config History preview action | snapshot, current content, read error, and changed flag |
-| `snapshot.rollback` | Yes, writes agent config snapshot content and rescans | Native macOS Agent Config History rollback action | rescanned skill count |
+| `snapshot.previewRollback` | No | Native macOS Agent Config History preview action | snapshot, current content, read error, changed flag, and diff payload for UI review |
+| `snapshot.rollback` | Yes, writes agent config snapshot content and rescans | Native macOS Agent Config History rollback action | rescanned skill count after confirmation-driven restore |
 
 `catalog.scanAll` is the native UI scan path.
 
@@ -96,6 +96,18 @@ V2.24 将 `catalog.getSkill` 与 detail 视图收敛为单 skill 诊断工作台
 - **边界限制**：本阶段不新增 skill-content snapshot，不新增脚本执行或写入路径，detail 仅消费可读数据并发起已存在的受控 toggle/save/rollback 动作。
 
 该 section 仅用于验收对齐，不代表 V2.24 已完成。
+
+## V2.25 Agent-config timeline（进行中）
+
+V2.25 聚焦 agent-config snapshot timeline 收敛，仍不新增 protocol method：
+
+- **scope 定义**：`snapshot.listAgentConfig` 仅返回 agent-config 层面的快照历史（toggle/config）与可选 scope；不承担 skill-content 快照、skill-toggle 快照或 content snapshot 的历史职责。
+- **按 agent 分片**：时间线按单个 agent 维持独立事件序列；UI 可以按 `agent` 过滤，但不得将多 agent 条目合并为 selected skill 的 detail history。
+- **rollback 前置流程**：`snapshot.previewRollback` 先行返回当前内容、目标快照与 diff，供用户确认是否进行回滚；未经过 preview 的回滚不算通过口径验收。
+- **二次确认**：`snapshot.rollback` 在 preview 核验后仍需用户二次确认，且与现有 `confirmed=true` 机制互斥表达，避免单击误操作即立即回滚。
+- **只读边界**：本阶段不做 skill-content snapshot，不做 skill-toggle snapshot，不把 detail 的 finding/conflict 历史与 agent-config timeline 混在一个视图中。
+
+该 section 为验收对齐用途，当前实现仍以现有 method 与现有 payload 执行。
 
 ## V2.18 Cross-Agent Analysis Payload
 

@@ -1725,6 +1725,100 @@ mod tests {
     }
 
     #[test]
+    fn list_agent_config_snapshots_returns_selected_agent_timeline_only() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "skills-copilot-service-timeline-{}",
+            std::process::id()
+        ));
+        let app_data_dir = temp_root.join("app-data");
+        fs::create_dir_all(&app_data_dir).expect("create app data");
+        let host = test_host(app_data_dir);
+        let catalog = Catalog::open(&host.catalog_path()).expect("open catalog");
+        catalog.init().expect("init catalog");
+
+        for (id, agent, scope, target, content, created_at_ms) in [
+            (
+                "snap-claude",
+                "claude-code",
+                "agent-global",
+                "/tmp/home/.claude/settings.json",
+                "{}\n",
+                10,
+            ),
+            (
+                "snap-codex-new",
+                "codex",
+                "agent-global",
+                "/tmp/home/.codex/config.toml",
+                "disable_response_storage = true\n",
+                30,
+            ),
+            (
+                "snap-codex-old",
+                "codex",
+                "agent-project",
+                "/tmp/project/.codex/config.toml",
+                "approval_policy = \"never\"\n",
+                20,
+            ),
+            (
+                "snap-opencode",
+                "opencode",
+                "agent-global",
+                "/tmp/home/.config/opencode/opencode.json",
+                "{}\n",
+                40,
+            ),
+        ] {
+            catalog
+                .create_config_snapshot(skills_copilot_catalog::ConfigSnapshotDraft {
+                    id,
+                    agent,
+                    scope,
+                    target,
+                    content,
+                    reason: "pre-toggle",
+                    created_at_ms,
+                })
+                .expect("create snapshot");
+        }
+
+        let response = host.handle(ServiceRequest {
+            id: Some("timeline".to_string()),
+            method: "snapshot.listAgentConfig".to_string(),
+            params: json!({ "agent": "codex" }),
+        });
+
+        assert!(response.ok);
+        let result = response.result.expect("timeline result");
+        let snapshots: Vec<WireConfigSnapshotRecord> =
+            serde_json::from_value(result).expect("decode snapshots");
+        assert_eq!(
+            snapshots
+                .iter()
+                .map(|snapshot| snapshot.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["snap-codex-new", "snap-codex-old"]
+        );
+        assert!(snapshots.iter().all(|snapshot| snapshot.agent == "codex"));
+
+        let scoped_response = host.handle(ServiceRequest {
+            id: Some("timeline-scope".to_string()),
+            method: "snapshot.listAgentConfig".to_string(),
+            params: json!({ "agent": "codex", "scope": "agent-project" }),
+        });
+        assert!(scoped_response.ok);
+        let scoped_result = scoped_response.result.expect("scoped timeline result");
+        let scoped_snapshots: Vec<WireConfigSnapshotRecord> =
+            serde_json::from_value(scoped_result).expect("decode scoped snapshots");
+        assert_eq!(scoped_snapshots.len(), 1);
+        assert_eq!(scoped_snapshots[0].id, "snap-codex-old");
+        assert_eq!(scoped_snapshots[0].scope, "agent-project");
+
+        let _ = fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
     fn catalog_analysis_returns_empty_read_only_summary() {
         let app_data_dir = env::temp_dir().join(format!(
             "skills-copilot-analysis-test-{}-{}",
@@ -4001,6 +4095,8 @@ mod tests {
         current_content: String,
         current_read_error: Option<String>,
         changed: bool,
+        redacted: Option<bool>,
+        rollback_supported: Option<bool>,
     }
 
     fn test_host(app_data_dir: PathBuf) -> ServiceHost {

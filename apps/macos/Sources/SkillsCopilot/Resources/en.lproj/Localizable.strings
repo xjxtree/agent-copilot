@@ -84,6 +84,12 @@
 "snapshot.snapshot" = "Snapshot Agent Config";
 "sidebar.agentConfigHistory" = "Agent Config History";
 "sidebar.agentConfigHistory.summary" = "Preview or roll back saved configuration snapshots for the selected agent.";
+"sidebar.agentConfigTimeline" = "Agent Config Timeline";
+"sidebar.agentConfigTimeline.boundary" = "Config-level only: these rollback points capture agent configuration files, not SKILL.md content, and they do not mean every skill has its own snapshot.";
+"sidebar.agentConfigTimeline.selectAgent" = "Choose one agent to view its config timeline. All Agents never mixes rollback points.";
+"sidebar.agentConfigTimeline.defaultAction" = "Config snapshot";
+"sidebar.agentConfigTimeline.status" = "Rollback point";
+"action.previewDiff" = "Preview diff";
 "detail.recentActivity" = "Recent Activity";
 "detail.recentActivity.empty" = "No enable or disable activity has been recorded for this skill yet.";
 "detail.recentActivity.loading" = "Loading activity...";
@@ -223,6 +229,10 @@
 "menu.clearSearch" = "Clear Search";
 "sidebar.enabledSummary" = "%d of %d enabled";
 "sidebar.visibleSummary" = "%d visible";
+"sidebar.agentConfigTimeline.summary" = "%@ config snapshots · %d rollback points";
+"sidebar.agentConfigTimeline.emptySummary" = "No %@ config snapshots yet";
+"sidebar.agentConfigTimeline.more" = "%d older rollback points hidden to keep the sidebar quiet.";
+"sidebar.agentConfigTimeline.rollbackConfirm" = "Rollback restores this agent config file only after confirmation. Skill content snapshots are not included. Target: %@";
 "findings.visibleSummary" = "%d of %d findings";
 "findings.visibleGroupSummary" = "%d of %d issue groups · %d scan entries";
 "findings.severityGroupCount" = "%d issue groups";

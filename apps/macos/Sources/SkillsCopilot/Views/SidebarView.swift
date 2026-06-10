@@ -148,8 +148,11 @@ private struct AgentWorkspaceHeader: View {
                 .help(UIStrings.text("help.reload", "Reload the current catalog without scanning roots."))
             }
 
-            AgentConfigHistoryDisclosure(
-                snapshots: store.agentConfigSnapshots,
+            AgentConfigTimelinePanel(
+                model: AgentConfigTimelineModel.make(
+                    snapshots: store.agentConfigSnapshots,
+                    agentFilter: store.agentFilter
+                ),
                 isLoading: store.isLoadingAgentConfigSnapshots,
                 isWriting: store.isWriting,
                 onPreview: { snapshotID in
@@ -577,14 +580,17 @@ private struct CapabilityPill: View {
     }
 }
 
-private struct AgentConfigHistoryDisclosure: View {
-    let snapshots: [ConfigSnapshotRecord]
+private struct AgentConfigTimelinePanel: View {
+    let model: AgentConfigTimelineModel
     let isLoading: Bool
     let isWriting: Bool
     let onPreview: (String) async throws -> SnapshotRollbackPreviewRecord
     let onRollback: (String) async -> Void
 
     @State private var isExpanded = false
+    @State private var preview: SnapshotRollbackPreviewRecord?
+    @State private var previewError: String?
+    @State private var snapshotToRollback: ConfigSnapshotRecord?
 
     var body: some View {
         DisclosureGroup(isExpanded: $isExpanded) {
@@ -595,12 +601,50 @@ private struct AgentConfigHistoryDisclosure: View {
                         .foregroundStyle(.secondary)
                 }
 
-                AgentConfigHistorySection(
-                    snapshots: snapshots,
-                    isWriting: isWriting,
-                    onPreview: onPreview,
-                    onRollback: onRollback
-                )
+                if let previewError {
+                    Label(previewError, systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                }
+
+                Text(UIStrings.agentConfigTimelineBoundary)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+
+                if !model.isSpecificAgent {
+                    SidebarEmptyMessage(message: UIStrings.agentConfigTimelineSelectAgent)
+                } else if model.items.isEmpty, !isLoading {
+                    SidebarEmptyMessage(message: UIStrings.noSnapshotsMessage)
+                } else {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(model.items) { item in
+                            AgentConfigTimelineRow(
+                                item: item,
+                                isWriting: isWriting,
+                                onPreview: {
+                                    loadPreview(item.id)
+                                },
+                                onRollback: {
+                                    snapshotToRollback = item.snapshot
+                                }
+                            )
+                        }
+
+                        if model.hiddenCount > 0 {
+                            Text(UIStrings.agentConfigTimelineMore(model.hiddenCount))
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                                .padding(.top, 2)
+                        }
+                    }
+                }
             }
             .padding(.top, 8)
         } label: {
@@ -608,15 +652,141 @@ private struct AgentConfigHistoryDisclosure: View {
                 Image(systemName: "clock.arrow.circlepath")
                     .foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(UIStrings.agentConfigHistory)
+                    Text(UIStrings.agentConfigTimeline)
                         .font(.subheadline.bold())
-                    Text(UIStrings.agentConfigHistorySummary)
+                    Text(model.summaryText)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
             }
         }
+        .sheet(item: $preview) { preview in
+            SnapshotPreviewSheet(preview: preview)
+        }
+        .confirmationDialog(
+            UIStrings.rollbackSnapshotQuestion,
+            isPresented: Binding(
+                get: { snapshotToRollback != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        snapshotToRollback = nil
+                    }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(UIStrings.rollback, role: .destructive) {
+                if let snapshotID = snapshotToRollback?.id {
+                    Task { await onRollback(snapshotID) }
+                }
+                snapshotToRollback = nil
+            }
+            Button(UIStrings.cancel, role: .cancel) {
+                snapshotToRollback = nil
+            }
+        } message: {
+            Text(UIStrings.agentConfigTimelineRollbackConfirm(snapshotToRollback?.target ?? ""))
+        }
+    }
+
+    private func loadPreview(_ snapshotID: String) {
+        previewError = nil
+        Task {
+            do {
+                preview = try await onPreview(snapshotID)
+            } catch {
+                previewError = error.localizedDescription
+            }
+        }
+    }
+}
+
+private struct AgentConfigTimelineRow: View {
+    let item: AgentConfigTimelineItem
+    let isWriting: Bool
+    let onPreview: () -> Void
+    let onRollback: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
+                VStack(spacing: 4) {
+                    Circle()
+                        .fill(Color.accentColor)
+                        .frame(width: 8, height: 8)
+                    Rectangle()
+                        .fill(.quaternary)
+                        .frame(width: 1, height: 32)
+                }
+                .padding(.top, 4)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(item.actionText)
+                            .font(.caption.bold())
+                            .lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text(item.timeText)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    Text(item.targetSummary)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .help(item.snapshot.target)
+
+                    HStack(spacing: 6) {
+                        TimelinePill(title: item.scopeText, systemImage: "folder")
+                        TimelinePill(title: item.statusText, systemImage: "checkmark.seal")
+                    }
+
+                    Text(item.capturedText)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+
+            HStack(spacing: 8) {
+                Button {
+                    onPreview()
+                } label: {
+                    Label(UIStrings.previewDiff, systemImage: "doc.text.magnifyingglass")
+                }
+                .controlSize(.small)
+                .disabled(isWriting)
+
+                Button(role: .destructive) {
+                    onRollback()
+                } label: {
+                    Label(UIStrings.rollback, systemImage: "arrow.uturn.backward")
+                }
+                .controlSize(.small)
+                .disabled(isWriting)
+            }
+            .buttonStyle(.borderless)
+        }
+        .padding(9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.18), in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+private struct TimelinePill: View {
+    let title: String
+    let systemImage: String
+
+    var body: some View {
+        Label(title, systemImage: systemImage)
+            .font(.caption2.bold())
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(.quaternary.opacity(0.32), in: Capsule())
     }
 }
 
