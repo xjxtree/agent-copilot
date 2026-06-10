@@ -55,15 +55,15 @@
 | V2.38 | Hermes external roots | 已完成：将配置 `skills.external_dirs` 作为 explicit external roots 进入只读扫描与 UI provenance，不推断 generic project roots；writable/install 继续 blocked |
 | V2.39 | OpenClaw workspace 深化 | 已完成：精准识别 OpenClaw workspace scope，只扫描 confirmed workspace roots，不推断任意 repo；writable/install 继续 blocked |
 | V2.40 | Adapter diagnostics | 已完成：read-only `adapter.listDiagnostics`、`service.status` / `app.stateSnapshot` diagnostics、scan activity summary 与 sidebar Adapter Capabilities 诊断展示已接入；无新增写入、执行、provider、credential 或 telemetry 路径 |
-| V2.41 | AI Provider Foundation | Planned：用户配置 OpenAI-compatible / Claude-compatible endpoint、API key、model；Keychain-first；测试连接、预算和禁用态清晰展示 |
-| V2.42 | Prompt Preview / Redaction | Planned：每次 AI 分析前展示 prompt scope、脱敏摘要、token/cost estimate、发送字段和排除字段 |
+| V2.41 | AI Provider Foundation | Planned：用户配置 OpenAI-compatible / Claude-compatible endpoint、API key、model；Keychain-first；测试连接、预算、禁用态和最小调用审计 metadata |
+| V2.42 | Prompt Preview / Redaction | Planned：每次 AI 分析前展示 prompt scope、脱敏摘要、token/cost estimate、发送字段、排除字段、network destination；确认后记录最小审计 metadata |
 | V2.43 | AI Skill Quality Score | Planned：结合本地 findings/metadata 与模型判断，给出可解释质量分和改进建议 |
 | V2.44 | AI Task Readiness Check | Planned：用户输入真实任务，评估当前 agent/skills 是否准备好、缺什么、风险在哪 |
 | V2.45 | AI Routing Confidence | Planned：解释 task-to-skill 匹配置信度、相似/歧义候选、错选风险 |
 | V2.46-V2.50 | Task benchmark / trace / routing accuracy | Planned：维护任务基准、检测 routing 回归、导入 agent trace、本地分析漏选/错选/命中率 |
 | V2.51-V2.55 | Drift / knowledge / taxonomy / workspace readiness | Planned：发现 stale/drift，建立本地知识索引、相似 skill 分组、能力分类和 workspace readiness |
 | V2.56-V2.60 | AI remediation workflow | Planned：AI 生成处理建议、fix draft、impact preview、batch review 和 remediation history |
-| V2.61-V2.70 | Review / policy / governance | Planned：AI review session、governance report、policy pack、compliance report、local skill map、provider observability、safe write expansion planning |
+| V2.61-V2.70 | Review / policy / governance | Planned：AI review session、governance report、policy pack、compliance report、local skill map、完整 provider observability、safe write expansion planning |
 
 ## 它做什么
 

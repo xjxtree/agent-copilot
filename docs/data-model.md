@@ -478,6 +478,7 @@ The next planning line introduces AI-native analysis models, but schema changes 
 Planned model families:
 
 - `ProviderProfile`（V2.41）：provider type (`openai-compatible` / `claude-compatible`), base URL, model, headers/API version metadata, enabled state, budget settings, and credential storage reference. API keys must not be stored in SQLite; prefer Keychain references.
+- `ProviderCallMetadataMinimal`（V2.41-V2.42）：timestamp, provider type, model, destination host, action type, status/error, duration, token/cost, confirmation id, and redaction status. This is required before full observability and must not include API keys, raw prompts, raw responses, credentials, raw trace excerpts, or unredacted local paths.
 - `PromptPreview`（V2.42）：ephemeral request preview with included/excluded fields, redaction summary, token/cost estimate, destination, and confirmation id. Raw prompt should not be persisted by default.
 - `SkillQualityScore`（V2.43）：derived score from deterministic evidence plus optional AI explanation. Persist only if needed for cache/review; must include source evidence hash and stale invalidation.
 - `TaskReadinessAssessment`（V2.44-V2.45）：task text/normalized intent, candidate skills, agent/scope availability, confidence, match reasons, ambiguity, gaps, and risk notes. Raw user task text may be sensitive; persistence requires explicit design and redaction.
@@ -486,7 +487,7 @@ Planned model families:
 - `KnowledgeIndex` / `SimilarityGroup` / `CapabilityTaxonomy`（V2.51-V2.54）：local-only index and derived groupings; no default network dependency.
 - `ReviewSession` / `RemediationHistory`（V2.56-V2.61）：local review state, actions considered, decisions, reopened issues, and summary. AI suggestions remain untrusted and cannot directly mutate skill files or agent config.
 - `PolicyPack` / `PolicyProfile` / `ComplianceReport`（V2.63-V2.66）：local policy schema, import/export metadata, profile bindings, deterministic evidence, and optional AI explanation.
-- `ProviderCallMetadata`（V2.69）：timestamp, provider type, model, token/cost, status/error, rate-limit state, redaction status. Do not persist API keys, raw prompts, raw responses, credentials, or local paths by default.
+- `ProviderObservabilityView`（V2.69）：derived UI/reporting layer over `ProviderCallMetadataMinimal`, adding call history, cost trends, provider errors, rate limits, availability, cleanup/retention controls, and optional redacted export. Do not persist API keys, raw prompts, raw responses, credentials, or local paths by default.
 
 Cross-cutting constraints:
 

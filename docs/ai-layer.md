@@ -50,19 +50,19 @@ Provider 配置原则：
 - endpoint/API key/model 由用户自己配置。
 - key 不写 SQLite、project directory、logs、prompt artifacts、response artifacts、report exports 或 screenshots。
 - provider call 只在用户发起具体分析动作并确认 prompt preview 后发生。
-- provider request/response 默认不持久化；V2.69 provider observability 只能保存 call metadata、token/cost、错误码、redaction status 等非敏感信息。
+- provider request/response 默认不持久化；V2.41-V2.42 需要保存最小 redacted call metadata（status、duration、error、token/cost、redaction status、confirmation id、destination host），用于审计每次真实请求；V2.69 再在此基础上做完整 observability UI、统计、清理和导出策略。
 - provider 不得成为写入者、执行者或确认者。
 
 ## 1.2 V2.41-V2.70 AI-native 能力线
 
 | Version | AI role | 本地事实来源 |
 | --- | --- | --- |
-| V2.41-V2.42 | Provider config、prompt preview、redaction、token/cost estimate | service status、settings、Keychain/fallback permission checks |
+| V2.41-V2.42 | Provider config、prompt preview、redaction、token/cost estimate、minimal provider call metadata | service status、settings、Keychain/fallback permission checks、confirmation id、redaction status |
 | V2.43-V2.45 | Skill quality、task readiness、routing confidence | metadata、findings、conflicts、analysis、adapter diagnostics |
 | V2.46-V2.50 | benchmark、regression、trace import、routing dashboard、cross-agent task readiness | benchmark set、catalog snapshots、imported trace evidence |
 | V2.51-V2.55 | stale/drift、knowledge index、similar grouping、taxonomy、workspace readiness | fingerprints、mtime、source/root provenance、local index |
 | V2.56-V2.60 | remediation planner、fix drafts、impact preview、batch review、history | findings、triage、policy, snapshots, writable capability matrix |
-| V2.61-V2.70 | review session、governance report、policy packs、skill map、provider observability、safe write planning | local reports, policy profiles, call metadata, evidence gates |
+| V2.61-V2.70 | review session、governance report、policy packs、skill map、full provider observability、safe write planning | local reports, policy profiles, V2.41-V2.42 call metadata, evidence gates |
 
 ## 2. 规则引擎
 

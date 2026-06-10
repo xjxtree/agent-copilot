@@ -570,14 +570,14 @@ V2.20 adds `review_preview` as an offline/read-only assist payload. It may summa
 Current implementation status before V2.41:
 
 - Implemented: disabled-by-default `llm.status`, `llm.prepareAction`, `llm.prepareSkillAnalysis`, provider/model DTOs, token/cost estimates, deterministic `review_preview`, and native read-only preview UI.
-- Not implemented: real provider clients, endpoint/API key/model settings flow, Keychain credential storage, network calls, prompt preview transport, Claude-compatible request execution, OpenAI-compatible request execution, provider call observability, and persistent benchmark/review/policy models.
+- Not implemented: real provider clients, endpoint/API key/model settings flow, Keychain credential storage, network calls, prompt preview transport, Claude-compatible request execution, OpenAI-compatible request execution, provider call metadata, full provider observability, and persistent benchmark/review/policy models.
 
 V2.41-V2.70 should evolve the protocol in this order:
 
 | Version | Planned protocol surface | Boundary |
 | --- | --- | --- |
-| V2.41 | `llm.listProviderProfiles`, `llm.saveProviderProfile`, `llm.testProviderProfile`, `llm.deleteProviderProfile` | User-configured OpenAI-compatible / Claude-compatible profiles; Keychain-first; no automatic analysis |
-| V2.42 | `llm.previewPrompt`, `llm.confirmPromptAndSend` | Redaction summary, included/excluded fields, token/cost estimate, destination preview, explicit confirmation before request |
+| V2.41 | `llm.listProviderProfiles`, `llm.saveProviderProfile`, `llm.testProviderProfile`, `llm.deleteProviderProfile`, `llm.recordProviderCallMetadata` | User-configured OpenAI-compatible / Claude-compatible profiles; Keychain-first; no automatic analysis; establish minimal redacted call metadata schema |
+| V2.42 | `llm.previewPrompt`, `llm.confirmPromptAndSend` | Redaction summary, included/excluded fields, token/cost estimate, destination preview, explicit confirmation before request; confirmed calls record minimal audit metadata |
 | V2.43 | `analysis.scoreSkillQuality` | AI-assisted quality score from local evidence; read-only result |
 | V2.44 | `task.checkReadiness` | Task input to agent/skill readiness candidates; read-only result |
 | V2.45 | `task.rankSkillRoutes` | Candidate ranking, confidence, match reasons, ambiguity and wrong-pick risk |
@@ -586,7 +586,7 @@ V2.41-V2.70 should evolve the protocol in this order:
 | V2.50-V2.55 | `task.compareAgentReadiness`, `knowledge.search`, `knowledge.groupSimilarSkills`, `workspace.checkReadiness` | Local index/readiness views; no default network |
 | V2.56-V2.60 | `remediation.plan`, `remediation.previewDrafts`, `remediation.previewImpact`, `remediation.history` | AI suggestions are draft/read-only unless user enters existing safe write flow |
 | V2.61-V2.68 | `reviewSession.*`, `policyPack.*`, `governance.exportPack` | Local review/policy/governance records and redacted exports |
-| V2.69 | `llm.listProviderCallMetadata` | Metadata only by default: timestamps, model, tokens, cost, status, errors, redaction status; no secrets/raw prompt/response |
+| V2.69 | `llm.listProviderCallMetadata`, `llm.summarizeProviderUsage`, `llm.clearProviderCallMetadata`, `llm.exportProviderUsage` | Full observability UX over V2.41-V2.42 metadata: call history, cost trends, failures, rate limits, availability, cleanup/retention; no secrets/raw prompt/response by default |
 | V2.70 | `writeEvidence.planExpansion` | Evidence-only safe-write planning; no new writes without verified rollback-safe agent/root support |
 
 Protocol invariants:

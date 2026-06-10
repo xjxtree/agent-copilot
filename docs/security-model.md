@@ -210,7 +210,8 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
   - token/cost estimate
   - 是否会发送 skill body、frontmatter、finding summary、trace excerpt 或 policy context
 - Prompt preview 和 redaction 结果可以短暂显示；默认不持久化 raw prompt/response。
-- V2.69 provider observability 只能默认保存非敏感 metadata：timestamp、provider type、model、token/cost、status/error、rate-limit state、redaction status。保存 raw prompt/response 需要单独设计和明确用户 opt-in，且不得进入普通 report export。
+- V2.41-V2.42 必须先保存最小非敏感调用审计 metadata：timestamp、provider type、model、destination host、status/error、duration、token/cost、confirmation id、redaction status。保存 raw prompt/response 需要单独设计和明确用户 opt-in，且不得进入普通 report export。
+- V2.69 provider observability 只能在上述最小 metadata 上做完整 UI、趋势、失败/限流分析、清理/保留策略和可选脱敏导出；不得把 observability 扩展成 secrets/raw prompt/raw response 存储。
 - Imported trace/log 必须本地脱敏后再允许进入 provider prompt；默认不得发送 credentials、tokens、real home paths、temp paths、private URLs 或 raw config secrets。
 - AI 输出永远是 untrusted suggestion；写入仍必须走已有 safe write path：preview-first、explicit confirm、snapshot、atomic write、readback verify、rollback。
 - AI 不能成为 `ExecutionRequester`，不能创建 `Completed` execution record，不能确认脚本执行。

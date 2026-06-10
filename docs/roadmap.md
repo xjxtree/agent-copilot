@@ -990,12 +990,12 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 2. 用户显式配置 OpenAI-compatible 或 Claude-compatible provider 后，AI 参与复杂判断：quality、task readiness、routing confidence、capability gap、trace accuracy、remediation、policy explanation。
 3. 用户围绕真实任务和工作区进行 review session，形成本地治理报告和可追溯处理历史。
 
-当前代码检查结论：主线已有 `llm.status` / `llm.prepareAction` / `llm.prepareSkillAnalysis`、provider/model DTO、token/cost estimate 和 macOS read-only preview UI；尚未实现真实 provider client、endpoint/key 配置、网络调用、Keychain credential storage、prompt preview transport 或 Claude/OpenAI-compatible request execution。因此 V2.41-V2.42 是后续 AI-native 能力的必要基础设施，不应跳过。
+当前代码检查结论：主线已有 `llm.status` / `llm.prepareAction` / `llm.prepareSkillAnalysis`、provider/model DTO、token/cost estimate 和 macOS read-only preview UI；尚未实现真实 provider client、endpoint/key 配置、网络调用、Keychain credential storage、prompt preview transport、Claude/OpenAI-compatible request execution 或 provider call metadata。V2.41-V2.42 是后续 AI-native 能力的必要基础设施，不应跳过；同时需要落地最小调用审计字段，V2.69 再做完整 observability 体验。
 
 | Version | Goal | Completion signal |
 | --- | --- | --- |
-| V2.41 | AI Provider Foundation | 用户可配置 OpenAI-compatible / Claude-compatible endpoint、API key、model、headers/API version；Keychain-first；fallback 文件权限检查；test connection、预算、disabled/unconfigured state 清晰可见；不自动分析、不写入、不执行。 |
-| V2.42 | Prompt Preview / Redaction / Token Estimate | 每次 AI 调用前展示 prompt scope、included/excluded fields、脱敏摘要、token/cost estimate、provider/model、network destination；用户确认后才发送。 |
+| V2.41 | AI Provider Foundation | 用户可配置 OpenAI-compatible / Claude-compatible endpoint、API key、model、headers/API version；Keychain-first；fallback 文件权限检查；test connection、预算、disabled/unconfigured state 清晰可见；不自动分析、不写入、不执行；建立最小 provider call metadata schema（status/duration/error/redaction/token/cost，默认无 raw prompt/response）。 |
+| V2.42 | Prompt Preview / Redaction / Token Estimate | 每次 AI 调用前展示 prompt scope、included/excluded fields、脱敏摘要、token/cost estimate、provider/model、network destination；用户确认后才发送；确认后的调用必须写入最小审计 metadata，证明 redaction、confirmation 与 network destination。 |
 | V2.43 | AI Skill Quality Score | 基于本地 metadata/findings/conflicts/adapter diagnostics 与模型判断，给出 quality score、分项理由、风险说明和改进建议。 |
 | V2.44 | AI Task Readiness Check | 用户输入真实任务，评估当前 agent/skills 是否可用、启用、在正确 scope、风险可控，以及缺少什么。 |
 | V2.45 | AI Routing Confidence | 对 task-to-skill 候选排序，解释匹配证据、置信度、相似/歧义候选、错选/漏选风险。 |
@@ -1022,7 +1022,7 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 | V2.66 | Policy Compliance Report | 基于 deterministic evidence + AI explanation 输出合规报告，并区分 must-fix / should-review / accepted risk。 |
 | V2.67 | Local Skill Map | 本地可视化 skill 关系、来源、能力域、相似组、冲突、任务覆盖和风险。 |
 | V2.68 | Governance Review Pack | 将 review session、routing accuracy、policy compliance、remediation history 和 export artifacts 汇总成完整本地治理包。 |
-| V2.69 | AI Provider Observability | 本地记录调用元数据、token/cost、失败原因、限流状态、redaction status；默认不存 raw prompt/response，不存 secrets。 |
+| V2.69 | AI Provider Observability | 在 V2.41-V2.42 最小审计字段基础上做完整体验：调用历史 UI、成本趋势、失败/限流分析、provider 可用性、清理策略、导出/保留策略；默认不存 raw prompt/response，不存 secrets。 |
 | V2.70 | Safe Write Expansion Planning | 基于现有 governance/evidence 输出后续 writable 扩展计划；没有 rollback-safe evidence 的 agent/root 继续 blocked。 |
 
 ## V2.35 Local report export (completed)
