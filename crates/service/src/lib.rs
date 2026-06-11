@@ -23511,8 +23511,7 @@ mod tests {
                 && !item.safety_flags.write_back_allowed
                 && item
                     .side_effect_flags
-                    .iter()
-                    .any(|flag| *flag == "skill_files_mutated=false")
+                    .contains(&"skill_files_mutated=false")
         }));
 
         let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
