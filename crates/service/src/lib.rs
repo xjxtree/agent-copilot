@@ -71,6 +71,9 @@ const SUPPORTED_METHODS: &[&str] = &[
     "remediation.previewDrafts",
     "remediation.previewImpact",
     "remediation.batchReview",
+    "remediation.listHistory",
+    "remediation.recordHistory",
+    "remediation.deleteHistory",
     "task.checkReadiness",
     "task.rankSkillRoutes",
     "task.compareAgentReadiness",
@@ -2458,6 +2461,238 @@ pub struct TraceDeleteImportResult {
     pub raw_trace_persisted: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemediationHistoryRecord {
+    pub id: String,
+    pub title: String,
+    pub decision: String,
+    pub status: String,
+    pub source_kind: String,
+    pub source_method: Option<String>,
+    pub source_item_refs: Vec<String>,
+    pub batch_review_item_ids: Vec<String>,
+    pub agent: Option<String>,
+    pub workspace: Option<String>,
+    pub task: Option<String>,
+    pub rule_ids: Vec<String>,
+    pub risk_levels: Vec<String>,
+    pub recurrence_key: Option<String>,
+    pub recurrence_count_marker: Option<u32>,
+    pub reopened: bool,
+    pub reopened_from_ids: Vec<String>,
+    pub readiness_improvement_notes: Vec<String>,
+    pub routing_improvement_notes: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub gap_notes: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub notes: Option<String>,
+    #[serde(default = "remediation_history_redaction_summary_default")]
+    pub redaction_summary: RemediationHistoryRedactionSummary,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub safety_flags: RemediationHistorySafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemediationHistoryRedactionSummary {
+    pub status: String,
+    pub redacted_value_count: usize,
+    pub redacted_fields: Vec<String>,
+    pub placeholders: Vec<String>,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_trace_persisted: bool,
+    pub raw_secret_returned: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct RemediationHistorySafetyFlags {
+    pub read_only: bool,
+    pub app_local_only: bool,
+    pub provider_request_sent: bool,
+    pub write_back_allowed: bool,
+    pub write_actions_available: bool,
+    pub skill_files_mutated: bool,
+    pub agent_config_mutated: bool,
+    pub script_execution_allowed: bool,
+    pub execution_actions_available: bool,
+    pub config_mutation_allowed: bool,
+    pub snapshot_created: bool,
+    pub rollback_performed: bool,
+    pub triage_mutation_allowed: bool,
+    pub credential_accessed: bool,
+    pub raw_secret_returned: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_trace_persisted: bool,
+    pub cloud_sync_performed: bool,
+    pub telemetry_emitted: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct RemediationHistoryListParams {
+    #[serde(default, alias = "target_agent")]
+    pub agent: Option<String>,
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub decision: Option<String>,
+    #[serde(default, alias = "batch_item_id")]
+    pub source_item_ref: Option<String>,
+    #[serde(default)]
+    pub recurrence_key: Option<String>,
+    #[serde(default)]
+    pub include_recurrence_rows: bool,
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RemediationHistoryRecordParams {
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(default)]
+    pub title: Option<String>,
+    pub decision: String,
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub source_kind: Option<String>,
+    #[serde(default)]
+    pub source_method: Option<String>,
+    #[serde(default, alias = "source_item_ids")]
+    pub source_item_refs: Vec<String>,
+    #[serde(default, alias = "batch_review_ids")]
+    pub batch_review_item_ids: Vec<String>,
+    #[serde(default, alias = "target_agent")]
+    pub agent: Option<String>,
+    #[serde(default, alias = "project_root", alias = "workspace_root")]
+    pub workspace: Option<String>,
+    #[serde(default, alias = "task_text", alias = "user_intent")]
+    pub task: Option<String>,
+    #[serde(default)]
+    pub rule_ids: Vec<String>,
+    #[serde(default)]
+    pub risk_levels: Vec<String>,
+    #[serde(default)]
+    pub recurrence_key: Option<String>,
+    #[serde(default)]
+    pub recurrence_count_marker: Option<u32>,
+    #[serde(default)]
+    pub reopened: Option<bool>,
+    #[serde(default, alias = "reopened_from")]
+    pub reopened_from_ids: Vec<String>,
+    #[serde(default)]
+    pub readiness_improvement_notes: Vec<String>,
+    #[serde(default)]
+    pub routing_improvement_notes: Vec<String>,
+    #[serde(default)]
+    pub blocker_notes: Vec<String>,
+    #[serde(default)]
+    pub gap_notes: Vec<String>,
+    #[serde(default)]
+    pub evidence_refs: Vec<String>,
+    #[serde(default)]
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RemediationHistoryDeleteParams {
+    #[serde(alias = "history_id")]
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationHistoryListResult {
+    pub generated_by: &'static str,
+    pub filters: RemediationHistoryFilters,
+    pub summary: RemediationHistorySummary,
+    pub records: Vec<RemediationHistoryRecord>,
+    pub recurrence_rows: Vec<RemediationHistoryRecurrenceRow>,
+    pub blocker_notes: Vec<String>,
+    pub app_local_only: bool,
+    pub history_file: &'static str,
+    pub provider_request_sent: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_trace_persisted: bool,
+    pub safety_flags: RemediationHistorySafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationHistoryRecordResult {
+    pub generated_by: &'static str,
+    pub record: RemediationHistoryRecord,
+    pub created: bool,
+    pub count: usize,
+    pub app_local_only: bool,
+    pub history_file: &'static str,
+    pub provider_request_sent: bool,
+    pub skill_files_mutated: bool,
+    pub agent_config_mutated: bool,
+    pub snapshot_created: bool,
+    pub rollback_performed: bool,
+    pub triage_mutated: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_trace_persisted: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationHistoryDeleteResult {
+    pub history_id: String,
+    pub deleted: bool,
+    pub remaining_count: usize,
+    pub app_local_only: bool,
+    pub provider_request_sent: bool,
+    pub skill_files_mutated: bool,
+    pub agent_config_mutated: bool,
+    pub snapshot_created: bool,
+    pub rollback_performed: bool,
+    pub triage_mutated: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_trace_persisted: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationHistoryFilters {
+    pub agent: Option<String>,
+    pub status: Option<String>,
+    pub decision: Option<String>,
+    pub source_item_ref: Option<String>,
+    pub recurrence_key: Option<String>,
+    pub limit: usize,
+    pub include_recurrence_rows: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct RemediationHistorySummary {
+    pub total_count: usize,
+    pub returned_count: usize,
+    pub decision_counts: BTreeMap<String, usize>,
+    pub status_counts: BTreeMap<String, usize>,
+    pub reopened_count: usize,
+    pub recurrence_group_count: usize,
+    pub blocker_count: usize,
+    pub readiness_improvement_count: usize,
+    pub routing_improvement_count: usize,
+    pub latest_recorded_at: Option<i64>,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationHistoryRecurrenceRow {
+    pub recurrence_key: String,
+    pub record_count: usize,
+    pub reopened_count: usize,
+    pub latest_status: String,
+    pub latest_decision: String,
+    pub latest_recorded_at: i64,
+    pub source_item_refs: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct LlmPrepareActionParams {
     pub kind: LlmActionKind,
@@ -3133,6 +3368,24 @@ impl ServiceHost {
                     serde_json::from_value(request.params)?
                 };
                 serde_json::to_value(self.batch_review_remediation(params)?).map_err(Into::into)
+            }
+            "remediation.listHistory" => {
+                let params: RemediationHistoryListParams = if request.params.is_null() {
+                    RemediationHistoryListParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.list_remediation_history(params)?).map_err(Into::into)
+            }
+            "remediation.recordHistory" => {
+                let params: RemediationHistoryRecordParams =
+                    serde_json::from_value(request.params)?;
+                serde_json::to_value(self.record_remediation_history(params)?).map_err(Into::into)
+            }
+            "remediation.deleteHistory" => {
+                let params: RemediationHistoryDeleteParams =
+                    serde_json::from_value(request.params)?;
+                serde_json::to_value(self.delete_remediation_history(params)?).map_err(Into::into)
             }
             "task.checkReadiness" => {
                 let params: TaskReadinessParams = serde_json::from_value(request.params)?;
@@ -7077,6 +7330,298 @@ impl ServiceHost {
         })
     }
 
+    pub fn list_remediation_history(
+        &self,
+        params: RemediationHistoryListParams,
+    ) -> Result<RemediationHistoryListResult, ServiceError> {
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let roots = self.trace_redaction_roots(&adapter_ctx);
+        let limit = params.limit.unwrap_or(50).clamp(1, 500);
+        let filters = RemediationHistoryFilters {
+            agent: params
+                .agent
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(|value| redact_string(&redact_for_llm_preview(value), &roots)),
+            status: params
+                .status
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(normalize_history_token),
+            decision: params
+                .decision
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(normalize_history_token),
+            source_item_ref: params
+                .source_item_ref
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(|value| redact_string(&redact_for_llm_preview(value), &roots)),
+            recurrence_key: params
+                .recurrence_key
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(|value| redact_string(&redact_for_llm_preview(value), &roots)),
+            limit,
+            include_recurrence_rows: params.include_recurrence_rows,
+        };
+        let records = self.load_remediation_history()?;
+        let mut filtered = records
+            .iter()
+            .filter(|record| remediation_history_matches(&filters, record))
+            .cloned()
+            .collect::<Vec<_>>();
+        let total_count = filtered.len();
+        filtered.truncate(limit);
+        let summary = remediation_history_summary(total_count, &filtered);
+        let recurrence_rows = if filters.include_recurrence_rows {
+            remediation_history_recurrence_rows(&filtered)
+        } else {
+            Vec::new()
+        };
+        let mut blocker_notes = Vec::new();
+        if !self.remediation_history_path().exists() {
+            blocker_notes.push("No app-local remediation history records are saved.".to_string());
+        }
+        if filtered.is_empty() {
+            blocker_notes.push(
+                "No remediation history records matched the selected local filters.".to_string(),
+            );
+        }
+        blocker_notes.push(
+            "Remediation history is local metadata only; listHistory does not apply fixes, mutate triage, create snapshots, or send provider requests."
+                .to_string(),
+        );
+
+        Ok(RemediationHistoryListResult {
+            generated_by: "local-v2.60",
+            filters,
+            summary,
+            records: filtered,
+            recurrence_rows,
+            blocker_notes,
+            app_local_only: true,
+            history_file: "remediation-history.json",
+            provider_request_sent: false,
+            raw_prompt_persisted: false,
+            raw_response_persisted: false,
+            raw_trace_persisted: false,
+            safety_flags: remediation_history_safety_flags(),
+        })
+    }
+
+    pub fn record_remediation_history(
+        &self,
+        params: RemediationHistoryRecordParams,
+    ) -> Result<RemediationHistoryRecordResult, ServiceError> {
+        let decision = normalize_history_token(params.decision.trim());
+        if decision.is_empty() {
+            return Err(ServiceError::InvalidRequest(
+                "remediation.recordHistory requires a non-empty decision".to_string(),
+            ));
+        }
+        let status = params
+            .status
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(normalize_history_token)
+            .unwrap_or_else(|| "recorded".to_string());
+        if status.is_empty() {
+            return Err(ServiceError::InvalidRequest(
+                "remediation.recordHistory requires a valid status".to_string(),
+            ));
+        }
+
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let roots = self.trace_redaction_roots(&adapter_ctx);
+        let mut redactor = PromptRedactor::new(&roots);
+        let now = unix_timestamp_millis();
+        let title = params
+            .title
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| truncate_chars(&redactor.redact(value), 180))
+            .unwrap_or_else(|| format!("Remediation decision: {decision}"));
+        let source_kind = params
+            .source_kind
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| truncate_chars(&redactor.redact(value), 80))
+            .unwrap_or_else(|| "local-remediation-review".to_string());
+        let source_method = params
+            .source_method
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| truncate_chars(&redactor.redact(value), 120));
+        let source_item_refs =
+            redact_history_string_list(params.source_item_refs, &mut redactor, 160, 40);
+        let batch_review_item_ids =
+            redact_history_string_list(params.batch_review_item_ids, &mut redactor, 160, 40);
+        let agent = params
+            .agent
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| truncate_chars(&redactor.redact(value), 80));
+        let workspace = params
+            .workspace
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| truncate_chars(&redactor.redact(value), 220));
+        let task = params
+            .task
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| truncate_chars(&redactor.redact(value), 280));
+        let rule_ids = redact_history_string_list(params.rule_ids, &mut redactor, 120, 30);
+        let risk_levels = normalize_string_list(
+            params
+                .risk_levels
+                .into_iter()
+                .map(|value| normalize_history_token(&value))
+                .filter(|value| !value.is_empty())
+                .collect(),
+        );
+        let recurrence_key = params
+            .recurrence_key
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| truncate_chars(&redactor.redact(value), 180));
+        let reopened_from_ids =
+            redact_history_string_list(params.reopened_from_ids, &mut redactor, 120, 40);
+        let readiness_improvement_notes =
+            redact_history_string_list(params.readiness_improvement_notes, &mut redactor, 240, 20);
+        let routing_improvement_notes =
+            redact_history_string_list(params.routing_improvement_notes, &mut redactor, 240, 20);
+        let blocker_notes =
+            redact_history_string_list(params.blocker_notes, &mut redactor, 240, 20);
+        let gap_notes = redact_history_string_list(params.gap_notes, &mut redactor, 240, 20);
+        let evidence_refs =
+            redact_history_string_list(params.evidence_refs, &mut redactor, 180, 80);
+        let notes = params
+            .notes
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| truncate_chars(&redactor.redact(value), 500));
+        let redaction_summary = remediation_history_redaction_summary_from(redactor.summary());
+        let id = params
+            .id
+            .as_deref()
+            .map(sanitize_remediation_history_id)
+            .filter(|id| !id.is_empty())
+            .unwrap_or_else(|| generated_remediation_history_id(&title, &decision, now));
+        let reopened = params.reopened.unwrap_or(false) || !reopened_from_ids.is_empty();
+
+        let mut records = self.load_remediation_history()?;
+        let created = !records.iter().any(|record| record.id == id);
+        let record = RemediationHistoryRecord {
+            id: id.clone(),
+            title,
+            decision,
+            status,
+            source_kind,
+            source_method,
+            source_item_refs,
+            batch_review_item_ids,
+            agent,
+            workspace,
+            task,
+            rule_ids,
+            risk_levels,
+            recurrence_key,
+            recurrence_count_marker: params.recurrence_count_marker,
+            reopened,
+            reopened_from_ids,
+            readiness_improvement_notes,
+            routing_improvement_notes,
+            blocker_notes,
+            gap_notes,
+            evidence_refs,
+            notes,
+            redaction_summary,
+            created_at: if created {
+                now
+            } else {
+                records
+                    .iter()
+                    .find(|record| record.id == id)
+                    .map(|record| record.created_at)
+                    .unwrap_or(now)
+            },
+            updated_at: now,
+            safety_flags: remediation_history_safety_flags(),
+        };
+        records.retain(|existing| existing.id != id);
+        records.push(record.clone());
+        self.save_remediation_history(&records)?;
+
+        Ok(RemediationHistoryRecordResult {
+            generated_by: "local-v2.60",
+            record,
+            created,
+            count: records.len(),
+            app_local_only: true,
+            history_file: "remediation-history.json",
+            provider_request_sent: false,
+            skill_files_mutated: false,
+            agent_config_mutated: false,
+            snapshot_created: false,
+            rollback_performed: false,
+            triage_mutated: false,
+            raw_prompt_persisted: false,
+            raw_response_persisted: false,
+            raw_trace_persisted: false,
+        })
+    }
+
+    pub fn delete_remediation_history(
+        &self,
+        params: RemediationHistoryDeleteParams,
+    ) -> Result<RemediationHistoryDeleteResult, ServiceError> {
+        let id = sanitize_remediation_history_id(params.id.trim());
+        if id.is_empty() {
+            return Err(ServiceError::InvalidRequest(
+                "remediation.deleteHistory requires a history id".to_string(),
+            ));
+        }
+        let mut records = self.load_remediation_history()?;
+        let before = records.len();
+        records.retain(|record| record.id != id);
+        let deleted = records.len() != before;
+        if deleted {
+            self.save_remediation_history(&records)?;
+        }
+        Ok(RemediationHistoryDeleteResult {
+            history_id: id,
+            deleted,
+            remaining_count: records.len(),
+            app_local_only: true,
+            provider_request_sent: false,
+            skill_files_mutated: false,
+            agent_config_mutated: false,
+            snapshot_created: false,
+            rollback_performed: false,
+            triage_mutated: false,
+            raw_prompt_persisted: false,
+            raw_response_persisted: false,
+            raw_trace_persisted: false,
+        })
+    }
+
     pub fn check_task_readiness(
         &self,
         params: TaskReadinessParams,
@@ -9365,6 +9910,10 @@ impl ServiceHost {
         self.app_data_dir.join("trace-imports.json")
     }
 
+    fn remediation_history_path(&self) -> PathBuf {
+        self.app_data_dir.join("remediation-history.json")
+    }
+
     fn load_task_benchmarks(&self) -> Result<Vec<TaskBenchmarkRecord>, ServiceError> {
         let path = self.task_benchmarks_path();
         if !path.exists() {
@@ -9439,6 +9988,30 @@ impl ServiceHost {
                 .then_with(|| left.title.cmp(&right.title))
                 .then_with(|| left.id.cmp(&right.id))
         });
+        let content = serde_json::to_string_pretty(&sorted)?;
+        fs::write(path, content)?;
+        Ok(())
+    }
+
+    fn load_remediation_history(&self) -> Result<Vec<RemediationHistoryRecord>, ServiceError> {
+        let path = self.remediation_history_path();
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        let content = fs::read_to_string(path)?;
+        let mut records: Vec<RemediationHistoryRecord> = serde_json::from_str(&content)?;
+        records.sort_by(remediation_history_record_sort);
+        Ok(records)
+    }
+
+    fn save_remediation_history(
+        &self,
+        records: &[RemediationHistoryRecord],
+    ) -> Result<(), ServiceError> {
+        fs::create_dir_all(&self.app_data_dir)?;
+        let path = self.remediation_history_path();
+        let mut sorted = records.to_vec();
+        sorted.sort_by(remediation_history_record_sort);
         let content = serde_json::to_string_pretty(&sorted)?;
         fs::write(path, content)?;
         Ok(())
@@ -17085,6 +17658,225 @@ fn trace_import_safety_flags() -> TraceImportSafetyFlags {
     }
 }
 
+fn remediation_history_safety_flags() -> RemediationHistorySafetyFlags {
+    RemediationHistorySafetyFlags {
+        read_only: true,
+        app_local_only: true,
+        provider_request_sent: false,
+        write_back_allowed: false,
+        write_actions_available: false,
+        skill_files_mutated: false,
+        agent_config_mutated: false,
+        script_execution_allowed: false,
+        execution_actions_available: false,
+        config_mutation_allowed: false,
+        snapshot_created: false,
+        rollback_performed: false,
+        triage_mutation_allowed: false,
+        credential_accessed: false,
+        raw_secret_returned: false,
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+        raw_trace_persisted: false,
+        cloud_sync_performed: false,
+        telemetry_emitted: false,
+    }
+}
+
+fn remediation_history_redaction_summary_default() -> RemediationHistoryRedactionSummary {
+    RemediationHistoryRedactionSummary {
+        status: "redacted-local-only".to_string(),
+        redacted_value_count: 0,
+        redacted_fields: Vec::new(),
+        placeholders: vec![
+            "$HOME".to_string(),
+            "<project-root>".to_string(),
+            "<project-cwd>".to_string(),
+            "<app-data-dir>".to_string(),
+            "<redacted>".to_string(),
+            "<redacted-url>".to_string(),
+        ],
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+        raw_trace_persisted: false,
+        raw_secret_returned: false,
+    }
+}
+
+fn remediation_history_redaction_summary_from(
+    summary: LlmPromptRedactionSummary,
+) -> RemediationHistoryRedactionSummary {
+    RemediationHistoryRedactionSummary {
+        status: "redacted-local-only".to_string(),
+        redacted_value_count: summary.redacted_value_count,
+        redacted_fields: summary.redacted_fields,
+        placeholders: summary
+            .placeholders
+            .into_iter()
+            .map(str::to_string)
+            .collect(),
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+        raw_trace_persisted: false,
+        raw_secret_returned: summary.raw_secret_returned,
+    }
+}
+
+fn remediation_history_record_sort(
+    left: &RemediationHistoryRecord,
+    right: &RemediationHistoryRecord,
+) -> std::cmp::Ordering {
+    right
+        .updated_at
+        .cmp(&left.updated_at)
+        .then_with(|| right.created_at.cmp(&left.created_at))
+        .then_with(|| left.title.cmp(&right.title))
+        .then_with(|| left.id.cmp(&right.id))
+}
+
+fn remediation_history_matches(
+    filters: &RemediationHistoryFilters,
+    record: &RemediationHistoryRecord,
+) -> bool {
+    if let Some(agent) = filters.agent.as_deref() {
+        if record.agent.as_deref() != Some(agent) {
+            return false;
+        }
+    }
+    if let Some(status) = filters.status.as_deref() {
+        if record.status != status {
+            return false;
+        }
+    }
+    if let Some(decision) = filters.decision.as_deref() {
+        if record.decision != decision {
+            return false;
+        }
+    }
+    if let Some(source_item_ref) = filters.source_item_ref.as_deref() {
+        if !record
+            .source_item_refs
+            .iter()
+            .chain(record.batch_review_item_ids.iter())
+            .any(|item| item == source_item_ref)
+        {
+            return false;
+        }
+    }
+    if let Some(recurrence_key) = filters.recurrence_key.as_deref() {
+        if record.recurrence_key.as_deref() != Some(recurrence_key) {
+            return false;
+        }
+    }
+    true
+}
+
+fn remediation_history_summary(
+    total_count: usize,
+    records: &[RemediationHistoryRecord],
+) -> RemediationHistorySummary {
+    let mut summary = RemediationHistorySummary {
+        total_count,
+        returned_count: records.len(),
+        latest_recorded_at: records.iter().map(|record| record.updated_at).max(),
+        ..Default::default()
+    };
+    let mut recurrence_keys = BTreeSet::new();
+    for record in records {
+        *summary
+            .decision_counts
+            .entry(record.decision.clone())
+            .or_default() += 1;
+        *summary
+            .status_counts
+            .entry(record.status.clone())
+            .or_default() += 1;
+        if record.reopened {
+            summary.reopened_count += 1;
+        }
+        if let Some(key) = record.recurrence_key.as_deref() {
+            recurrence_keys.insert(key.to_string());
+        }
+        if !record.blocker_notes.is_empty() {
+            summary.blocker_count += 1;
+        }
+        if !record.readiness_improvement_notes.is_empty() {
+            summary.readiness_improvement_count += 1;
+        }
+        if !record.routing_improvement_notes.is_empty() {
+            summary.routing_improvement_count += 1;
+        }
+    }
+    summary.recurrence_group_count = recurrence_keys.len();
+    summary.summary = format!(
+        "Returned {} of {} app-local remediation history record(s), including {} reopened record(s), {} recurrence group(s), {} blocker-bearing record(s), {} readiness improvement record(s), and {} routing improvement record(s).",
+        summary.returned_count,
+        summary.total_count,
+        summary.reopened_count,
+        summary.recurrence_group_count,
+        summary.blocker_count,
+        summary.readiness_improvement_count,
+        summary.routing_improvement_count
+    );
+    summary
+}
+
+fn remediation_history_recurrence_rows(
+    records: &[RemediationHistoryRecord],
+) -> Vec<RemediationHistoryRecurrenceRow> {
+    let mut grouped: BTreeMap<String, Vec<&RemediationHistoryRecord>> = BTreeMap::new();
+    for record in records {
+        if let Some(key) = record.recurrence_key.as_deref() {
+            grouped.entry(key.to_string()).or_default().push(record);
+        }
+    }
+    let mut rows = grouped
+        .into_iter()
+        .map(|(recurrence_key, mut members)| {
+            members.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
+            let latest = members[0];
+            let mut source_item_refs = members
+                .iter()
+                .flat_map(|record| {
+                    record
+                        .source_item_refs
+                        .iter()
+                        .chain(record.batch_review_item_ids.iter())
+                        .cloned()
+                })
+                .collect::<Vec<_>>();
+            source_item_refs.sort();
+            source_item_refs.dedup();
+            source_item_refs.truncate(12);
+            let mut evidence_refs = members
+                .iter()
+                .flat_map(|record| record.evidence_refs.iter().cloned())
+                .collect::<Vec<_>>();
+            evidence_refs.sort();
+            evidence_refs.dedup();
+            evidence_refs.truncate(12);
+            RemediationHistoryRecurrenceRow {
+                recurrence_key,
+                record_count: members.len(),
+                reopened_count: members.iter().filter(|record| record.reopened).count(),
+                latest_status: latest.status.clone(),
+                latest_decision: latest.decision.clone(),
+                latest_recorded_at: latest.updated_at,
+                source_item_refs,
+                evidence_refs,
+            }
+        })
+        .collect::<Vec<_>>();
+    rows.sort_by(|left, right| {
+        right
+            .record_count
+            .cmp(&left.record_count)
+            .then_with(|| right.latest_recorded_at.cmp(&left.latest_recorded_at))
+            .then_with(|| left.recurrence_key.cmp(&right.recurrence_key))
+    });
+    rows
+}
+
 #[derive(Debug, Clone, Default)]
 struct RoutingAccuracyAgentAggregate {
     outcomes: RoutingAccuracyOutcomeCounts,
@@ -17479,6 +18271,67 @@ fn sanitize_trace_import_id(id: &str) -> String {
         .filter(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
         .take(96)
         .collect()
+}
+
+fn generated_remediation_history_id(title: &str, decision: &str, recorded_at: i64) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(title.as_bytes());
+    hasher.update(b"\0");
+    hasher.update(decision.as_bytes());
+    hasher.update(b"\0");
+    hasher.update(recorded_at.to_string().as_bytes());
+    let digest = hasher.finalize();
+    format!("rem-history-{}", hex_prefix(&digest, 12))
+}
+
+fn sanitize_remediation_history_id(id: &str) -> String {
+    id.chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
+        .take(96)
+        .collect()
+}
+
+fn normalize_history_token(value: &str) -> String {
+    let token = redact_for_llm_preview(value)
+        .trim()
+        .to_lowercase()
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_') {
+                ch
+            } else if ch.is_whitespace() || matches!(ch, '/' | ':' | '.') {
+                '-'
+            } else {
+                '\0'
+            }
+        })
+        .filter(|ch| *ch != '\0')
+        .collect::<String>();
+    token
+        .split('-')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+        .chars()
+        .take(80)
+        .collect()
+}
+
+fn redact_history_string_list(
+    values: Vec<String>,
+    redactor: &mut PromptRedactor<'_>,
+    max_chars: usize,
+    limit: usize,
+) -> Vec<String> {
+    let mut normalized = values
+        .into_iter()
+        .map(|value| truncate_chars(&redactor.redact(value.trim()), max_chars))
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    normalized.sort();
+    normalized.dedup();
+    normalized.truncate(limit);
+    normalized
 }
 
 fn redact_normalized_string_list(
@@ -20509,6 +21362,9 @@ mod tests {
         assert!(methods.contains(&Value::String("remediation.previewDrafts".to_string())));
         assert!(methods.contains(&Value::String("remediation.previewImpact".to_string())));
         assert!(methods.contains(&Value::String("remediation.batchReview".to_string())));
+        assert!(methods.contains(&Value::String("remediation.listHistory".to_string())));
+        assert!(methods.contains(&Value::String("remediation.recordHistory".to_string())));
+        assert!(methods.contains(&Value::String("remediation.deleteHistory".to_string())));
         assert!(methods.contains(&Value::String("task.checkReadiness".to_string())));
         assert!(methods.contains(&Value::String("task.rankSkillRoutes".to_string())));
         assert!(methods.contains(&Value::String("task.compareAgentReadiness".to_string())));
@@ -24488,6 +25344,294 @@ mod tests {
                 .and_then(Value::as_bool),
             Some(false)
         );
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn remediation_history_rejects_empty_decision_without_writing() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-remediation-history-empty-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("remediation-history-empty".to_string()),
+            method: "remediation.recordHistory".to_string(),
+            params: json!({
+                "decision": "   ",
+                "title": "Empty decision fixture"
+            }),
+        });
+
+        assert!(!response.ok);
+        let error = response.error.expect("empty remediation history error");
+        assert_eq!(error.code, "invalid_request");
+        assert!(error.message.contains("non-empty decision"));
+        assert!(!host.remediation_history_path().exists());
+        assert!(!host.catalog_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn remediation_history_record_persists_redacted_app_local_metadata_only() {
+        let unique = unique_suffix();
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-remediation-history-redaction-test-{}-{unique}",
+            std::process::id(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-remediation-history-home-{}-{unique}",
+            std::process::id(),
+        ));
+        let project_root = app_data_dir.join("project-root");
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: Some(project_root.clone()),
+                project_cwd: Some(project_root.clone()),
+                extra_roots: Vec::new(),
+            },
+        };
+        let raw_secret = "history-secret-value";
+        let key_label = ["API", "_", "KEY"].join("");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("remediation-history-record".to_string()),
+            method: "remediation.recordHistory".to_string(),
+            params: json!({
+                "id": "local-history-redaction",
+                "title": format!("Review blocked fix at {}", user_home.join(".agent/config.toml").display()),
+                "decision": "Needs follow-up",
+                "status": "Reopened",
+                "source_kind": "batch-review",
+                "source_method": "remediation.batchReview",
+                "batch_review_item_ids": ["batch-risk-1"],
+                "source_item_refs": [format!("finding:{}", project_root.join("SKILL.md").display())],
+                "agent": "codex",
+                "workspace": project_root.to_string_lossy(),
+                "task": format!("Repair policy without storing {key_label}={raw_secret}"),
+                "rule_ids": ["permissions.network-declared"],
+                "risk_levels": ["High"],
+                "recurrence_key": format!("permissions.network-declared:{}", project_root.display()),
+                "reopened": true,
+                "readiness_improvement_notes": ["Task readiness should improve after the permission copy is clarified."],
+                "routing_improvement_notes": ["Routing ambiguity should drop for policy review tasks."],
+                "blocker_notes": [format!("Blocked by {key_label}={raw_secret}")],
+                "gap_notes": ["Missing declared network permission."],
+                "evidence_refs": [format!("path:{}", user_home.join(".agent/config.toml").display())],
+                "notes": format!("Do not persist raw {key_label}={raw_secret}.")
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("remediation history record result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("local-v2.60")
+        );
+        assert_eq!(
+            result.pointer("/record/id").and_then(Value::as_str),
+            Some("local-history-redaction")
+        );
+        assert_eq!(
+            result.pointer("/record/decision").and_then(Value::as_str),
+            Some("needs-follow-up")
+        );
+        assert_eq!(
+            result.pointer("/record/status").and_then(Value::as_str),
+            Some("reopened")
+        );
+        assert_eq!(
+            result
+                .pointer("/record/safety_flags/read_only")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result.get("provider_request_sent").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("skill_files_mutated").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("agent_config_mutated").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("snapshot_created").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("rollback_performed").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("triage_mutated").and_then(Value::as_bool),
+            Some(false)
+        );
+
+        assert!(host.remediation_history_path().exists());
+        let persisted =
+            fs::read_to_string(host.remediation_history_path()).expect("read history file");
+        assert!(persisted.contains("$HOME"));
+        assert!(persisted.contains("<project-root>"));
+        assert!(persisted.contains("<redacted>"));
+        assert!(!persisted.contains(raw_secret));
+        assert!(!persisted.contains(&key_label));
+        assert!(!persisted.contains(&user_home.to_string_lossy().to_string()));
+        assert!(!persisted.contains(&project_root.to_string_lossy().to_string()));
+        assert!(!host.catalog_path().exists());
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn remediation_history_list_delete_summarizes_recurrence_read_only() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-remediation-history-roundtrip-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        for (id, decision, status, reopened) in [
+            ("history-first", "reviewed", "recorded", false),
+            ("history-second", "deferred", "reopened", true),
+        ] {
+            let response = host.handle(ServiceRequest {
+                id: Some(format!("record-{id}")),
+                method: "remediation.recordHistory".to_string(),
+                params: json!({
+                    "id": id,
+                    "title": format!("History {id}"),
+                    "decision": decision,
+                    "status": status,
+                    "source_method": "remediation.batchReview",
+                    "batch_review_item_ids": ["batch-risk-1"],
+                    "recurrence_key": "risk:permissions.network-declared",
+                    "agent": "codex",
+                    "readiness_improvement_notes": ["Readiness improved after review."],
+                    "routing_improvement_notes": if reopened { vec!["Routing confidence still needs review."] } else { Vec::<&str>::new() },
+                    "blocker_notes": if reopened { vec!["Writable action remains blocked."] } else { Vec::<&str>::new() },
+                    "evidence_refs": ["finding:permissions.network-declared"],
+                    "reopened": reopened
+                }),
+            });
+            assert!(response.ok, "{:?}", response.error);
+        }
+
+        let list = host.handle(ServiceRequest {
+            id: Some("history-list".to_string()),
+            method: "remediation.listHistory".to_string(),
+            params: json!({
+                "agent": "codex",
+                "include_recurrence_rows": true,
+                "limit": 10
+            }),
+        });
+        assert!(list.ok, "{:?}", list.error);
+        let listed = list.result.expect("history list result");
+        assert_eq!(
+            listed.get("generated_by").and_then(Value::as_str),
+            Some("local-v2.60")
+        );
+        assert_eq!(
+            listed
+                .pointer("/summary/returned_count")
+                .and_then(Value::as_u64),
+            Some(2)
+        );
+        assert_eq!(
+            listed
+                .pointer("/summary/reopened_count")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            listed
+                .pointer("/summary/recurrence_group_count")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            listed
+                .pointer("/summary/readiness_improvement_count")
+                .and_then(Value::as_u64),
+            Some(2)
+        );
+        assert_eq!(
+            listed
+                .pointer("/summary/routing_improvement_count")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            listed
+                .pointer("/summary/blocker_count")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            listed
+                .pointer("/recurrence_rows/0/record_count")
+                .and_then(Value::as_u64),
+            Some(2)
+        );
+        assert_eq!(
+            listed
+                .pointer("/recurrence_rows/0/reopened_count")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            listed
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let delete = host.handle(ServiceRequest {
+            id: Some("history-delete".to_string()),
+            method: "remediation.deleteHistory".to_string(),
+            params: json!({ "id": "history-first" }),
+        });
+        assert!(delete.ok, "{:?}", delete.error);
+        let deleted = delete.result.expect("history delete result");
+        assert_eq!(deleted.get("deleted").and_then(Value::as_bool), Some(true));
+        assert_eq!(
+            deleted.get("remaining_count").and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            deleted
+                .get("provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            deleted.get("skill_files_mutated").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            deleted.get("agent_config_mutated").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert!(!host.catalog_path().exists());
+        assert!(!host.script_execution_audit_path().exists());
         assert!(!provider_call_metadata_path(&app_data_dir).exists());
 
         let _ = fs::remove_dir_all(app_data_dir);
@@ -28535,6 +29679,51 @@ mod tests {
                         .any(|flag| flag == "write_back_allowed=false"));
                 }
             }
+            "remediation.listHistory" => {
+                let history: WireRemediationHistoryListResult =
+                    decode_fixture_result(method, result, path);
+                assert_eq!(history.generated_by, "local-v2.60");
+                assert_eq!(history.summary.returned_count, history.records.len());
+                assert!(history.app_local_only);
+                assert!(!history.provider_request_sent);
+                assert!(!history.raw_prompt_persisted);
+                assert!(!history.raw_response_persisted);
+                assert!(!history.raw_trace_persisted);
+                assert_remediation_history_safety(&history.safety_flags);
+                for record in &history.records {
+                    assert_remediation_history_safety(&record.safety_flags);
+                }
+            }
+            "remediation.recordHistory" => {
+                let result: WireRemediationHistoryRecordResult =
+                    decode_fixture_result(method, result, path);
+                assert_eq!(result.generated_by, "local-v2.60");
+                assert!(result.app_local_only);
+                assert!(!result.provider_request_sent);
+                assert!(!result.skill_files_mutated);
+                assert!(!result.agent_config_mutated);
+                assert!(!result.snapshot_created);
+                assert!(!result.rollback_performed);
+                assert!(!result.triage_mutated);
+                assert!(!result.raw_prompt_persisted);
+                assert!(!result.raw_response_persisted);
+                assert!(!result.raw_trace_persisted);
+                assert_remediation_history_safety(&result.record.safety_flags);
+            }
+            "remediation.deleteHistory" => {
+                let result: WireRemediationHistoryDeleteResult =
+                    decode_fixture_result(method, result, path);
+                assert!(result.app_local_only);
+                assert!(!result.provider_request_sent);
+                assert!(!result.skill_files_mutated);
+                assert!(!result.agent_config_mutated);
+                assert!(!result.snapshot_created);
+                assert!(!result.rollback_performed);
+                assert!(!result.triage_mutated);
+                assert!(!result.raw_prompt_persisted);
+                assert!(!result.raw_response_persisted);
+                assert!(!result.raw_trace_persisted);
+            }
             "task.checkReadiness" => {
                 let readiness: WireTaskReadinessResult =
                     decode_fixture_result(method, result, path);
@@ -29120,6 +30309,29 @@ mod tests {
         assert!(!flags.telemetry_emitted);
     }
 
+    fn assert_remediation_history_safety(flags: &WireRemediationHistorySafetyFlags) {
+        assert!(flags.read_only);
+        assert!(flags.app_local_only);
+        assert!(!flags.provider_request_sent);
+        assert!(!flags.write_back_allowed);
+        assert!(!flags.write_actions_available);
+        assert!(!flags.skill_files_mutated);
+        assert!(!flags.agent_config_mutated);
+        assert!(!flags.script_execution_allowed);
+        assert!(!flags.execution_actions_available);
+        assert!(!flags.config_mutation_allowed);
+        assert!(!flags.snapshot_created);
+        assert!(!flags.rollback_performed);
+        assert!(!flags.triage_mutation_allowed);
+        assert!(!flags.credential_accessed);
+        assert!(!flags.raw_secret_returned);
+        assert!(!flags.raw_prompt_persisted);
+        assert!(!flags.raw_response_persisted);
+        assert!(!flags.raw_trace_persisted);
+        assert!(!flags.cloud_sync_performed);
+        assert!(!flags.telemetry_emitted);
+    }
+
     fn assert_routing_accuracy_dashboard_safety(result: &Value) {
         assert_eq!(
             result
@@ -29438,6 +30650,20 @@ mod tests {
                 "group_by": ["risk", "rule", "agent", "workspace", "task"],
                 "limit": 4
             }),
+            "remediation.listHistory" => json!({
+                "include_recurrence_rows": true,
+                "limit": 4
+            }),
+            "remediation.recordHistory" => json!({
+                "id": "dispatch-remediation-history",
+                "title": "Dispatch remediation history",
+                "decision": "reviewed",
+                "status": "recorded",
+                "source_method": "remediation.batchReview",
+                "batch_review_item_ids": ["batch-risk-1"],
+                "evidence_refs": ["finding:dispatch"]
+            }),
+            "remediation.deleteHistory" => json!({ "id": "dispatch-remediation-history" }),
             "task.checkReadiness" => json!({ "task": "fixture task readiness check" }),
             "task.rankSkillRoutes" => json!({ "task": "fixture routing confidence check" }),
             "task.compareAgentReadiness" => json!({
@@ -31645,6 +32871,182 @@ mod tests {
         app_local_only: bool,
         provider_request_sent: bool,
         raw_trace_persisted: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationHistoryRecord {
+        id: String,
+        title: String,
+        decision: String,
+        status: String,
+        source_kind: String,
+        source_method: Option<String>,
+        source_item_refs: Vec<String>,
+        batch_review_item_ids: Vec<String>,
+        agent: Option<String>,
+        workspace: Option<String>,
+        task: Option<String>,
+        rule_ids: Vec<String>,
+        risk_levels: Vec<String>,
+        recurrence_key: Option<String>,
+        recurrence_count_marker: Option<u32>,
+        reopened: bool,
+        reopened_from_ids: Vec<String>,
+        readiness_improvement_notes: Vec<String>,
+        routing_improvement_notes: Vec<String>,
+        blocker_notes: Vec<String>,
+        gap_notes: Vec<String>,
+        evidence_refs: Vec<String>,
+        notes: Option<String>,
+        redaction_summary: WireRemediationHistoryRedactionSummary,
+        created_at: i64,
+        updated_at: i64,
+        safety_flags: WireRemediationHistorySafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationHistoryRedactionSummary {
+        status: String,
+        redacted_value_count: usize,
+        redacted_fields: Vec<String>,
+        placeholders: Vec<String>,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+        raw_trace_persisted: bool,
+        raw_secret_returned: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationHistorySafetyFlags {
+        read_only: bool,
+        app_local_only: bool,
+        provider_request_sent: bool,
+        write_back_allowed: bool,
+        write_actions_available: bool,
+        skill_files_mutated: bool,
+        agent_config_mutated: bool,
+        script_execution_allowed: bool,
+        execution_actions_available: bool,
+        config_mutation_allowed: bool,
+        snapshot_created: bool,
+        rollback_performed: bool,
+        triage_mutation_allowed: bool,
+        credential_accessed: bool,
+        raw_secret_returned: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+        raw_trace_persisted: bool,
+        cloud_sync_performed: bool,
+        telemetry_emitted: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationHistoryListResult {
+        generated_by: String,
+        filters: WireRemediationHistoryFilters,
+        summary: WireRemediationHistorySummary,
+        records: Vec<WireRemediationHistoryRecord>,
+        recurrence_rows: Vec<WireRemediationHistoryRecurrenceRow>,
+        blocker_notes: Vec<String>,
+        app_local_only: bool,
+        history_file: String,
+        provider_request_sent: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+        raw_trace_persisted: bool,
+        safety_flags: WireRemediationHistorySafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationHistoryRecordResult {
+        generated_by: String,
+        record: WireRemediationHistoryRecord,
+        created: bool,
+        count: usize,
+        app_local_only: bool,
+        history_file: String,
+        provider_request_sent: bool,
+        skill_files_mutated: bool,
+        agent_config_mutated: bool,
+        snapshot_created: bool,
+        rollback_performed: bool,
+        triage_mutated: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+        raw_trace_persisted: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationHistoryDeleteResult {
+        history_id: String,
+        deleted: bool,
+        remaining_count: usize,
+        app_local_only: bool,
+        provider_request_sent: bool,
+        skill_files_mutated: bool,
+        agent_config_mutated: bool,
+        snapshot_created: bool,
+        rollback_performed: bool,
+        triage_mutated: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+        raw_trace_persisted: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationHistoryFilters {
+        agent: Option<String>,
+        status: Option<String>,
+        decision: Option<String>,
+        source_item_ref: Option<String>,
+        recurrence_key: Option<String>,
+        limit: usize,
+        include_recurrence_rows: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationHistorySummary {
+        total_count: usize,
+        returned_count: usize,
+        decision_counts: BTreeMap<String, usize>,
+        status_counts: BTreeMap<String, usize>,
+        reopened_count: usize,
+        recurrence_group_count: usize,
+        blocker_count: usize,
+        readiness_improvement_count: usize,
+        routing_improvement_count: usize,
+        latest_recorded_at: Option<i64>,
+        summary: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationHistoryRecurrenceRow {
+        recurrence_key: String,
+        record_count: usize,
+        reopened_count: usize,
+        latest_status: String,
+        latest_decision: String,
+        latest_recorded_at: i64,
+        source_item_refs: Vec<String>,
+        evidence_refs: Vec<String>,
     }
 
     #[allow(dead_code)]
