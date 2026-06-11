@@ -592,7 +592,7 @@ Current implementation status after V2.50:
 - Implemented in V2.50: `task.compareAgentReadiness`; cross-agent task readiness output is derived read-only from V2.44 readiness, V2.45 routing, V2.46 benchmark evaluation, V2.47 routing regression evidence, V2.48 redacted trace imports, V2.49 routing accuracy, and V2.43 quality signals. It returns summary, per-agent rows, optional recommended agent, gap/issue rows, evidence references, prompt request metadata, and safety flags without writing a comparison artifact or sending provider traffic.
 - Implemented in V2.51: `analysis.detectStaleDrift`; stale/drift output is derived read-only from catalog fingerprints, mtime, findings, same-agent conflicts, cross-agent analysis, source/root provenance, and adapter diagnostics. It returns summary counts, stale/drift rows, readiness impact rows, gap/blocker notes, evidence references, prompt request metadata, and safety flags without writing a stale/drift artifact or sending provider traffic.
 - Implemented in V2.54: `knowledge.buildCapabilityTaxonomy`; capability taxonomy output is derived read-only from catalog evidence, V2.52 knowledge tags, V2.53 similar groups, quality/stale-drift context, findings, conflicts, analysis, adapter diagnostics, source provenance, and agent/workspace coverage. It returns summary counts, domain rows, coverage rows, gap/blocker notes, evidence references, prompt request metadata, and safety flags without writing a taxonomy artifact or sending provider traffic.
-- Not yet integrated in runtime: V2.55 workspace readiness and full V2.69 provider observability UX over call metadata remain future work.
+- Not yet integrated in runtime: V2.55 workspace readiness and full V2.69 provider observability UX over call metadata remain future work. V2.55 is only planned as `workspace.checkReadiness`, and it should stay local-only, deterministic, read-only by default, and free of default provider requests, skill/config/snapshot/triage writes, scripts, credentials, raw prompt/response/trace persistence, cloud sync, or telemetry.
 
 V2.55 planning starts from the V2.54 completed protocol surface below.
 
@@ -612,7 +612,7 @@ V2.55 planning starts from the V2.54 completed protocol surface below.
 | V2.52 | `knowledge.search` | Integrated. Local-only read-only search over existing catalog evidence and derived tags; rows include purpose snippets, tools/keywords/rules, source provenance, risk/capability tags, quality/readiness/stale-drift context, facets, evidence refs, and no-write/no-provider safety flags |
 | V2.53 | `knowledge.groupSimilarSkills` | Integrated. Local-only deterministic grouping over existing catalog evidence, V2.52 tags, source/name/tool/rule/capability/risk overlaps, and quality/readiness/stale-drift context; distinguishes coverage redundancy from routing ambiguity with no provider/write/script/config/snapshot/triage/credential side effects |
 | V2.54 | `knowledge.buildCapabilityTaxonomy` | Integrated. Local-only deterministic capability-domain taxonomy over existing catalog evidence, V2.52 tags, V2.53 similar groups, quality/stale-drift context, and agent/workspace coverage; no provider/write/script/config/snapshot/triage/credential side effects |
-| V2.55 | `(planned) workspace.checkReadiness` | Workspace readiness remains future and must build on local taxonomy/readiness/routing evidence without default provider or writes |
+| V2.55 | `(planned) workspace.checkReadiness` | Workspace readiness remains future and must build on local taxonomy/readiness/routing evidence without default provider or writes; expected outputs are summary, readiness rows, gap/blocker notes, evidence refs, prompt request metadata, and safety flags |
 | V2.56-V2.60 | `(planned) remediation.plan`, `(planned) remediation.previewDrafts`, `(planned) remediation.previewImpact`, `(planned) remediation.history` | AI suggestions are draft/read-only unless user enters existing safe write flow |
 | V2.61-V2.68 | `(planned) reviewSession.*`, `(planned) policyPack.*`, `(planned) governance.exportPack` | Local review/policy/governance records and redacted exports |
 | V2.69 | `(planned) llm.listProviderCallMetadata`, `(planned) llm.summarizeProviderUsage`, `(planned) llm.clearProviderCallMetadata`, `(planned) llm.exportProviderUsage` | Full observability UX over V2.41-V2.42 metadata: call history, cost trends, failures, rate limits, availability, cleanup/retention; no secrets/raw prompt/response by default |
@@ -638,7 +638,7 @@ V2.55 planning starts from the V2.54 completed protocol surface below.
   - `facets`: grouped counts for agents, scopes, states, enabled values, risks, tools, and keywords.
   - `gap_notes` / `blocker_notes`: local evidence caveats and blockers; no index artifact is created.
 - Safety boundary: user-triggered, deterministic, local-only, read-only, no default provider/network, no writes to skill files/agent config/index artifacts/snapshots/triage/scripts/credentials/raw prompt/raw response/cloud sync/telemetry.
-- V2.55+ workspace readiness / remediation remain planned and must not be inferred from V2.52; V2.53 similar grouping and V2.54 taxonomy are completed as separate read-only local slices.
+- V2.55+ workspace readiness / remediation remain planned around `workspace.checkReadiness` and must not be inferred from V2.52; V2.53 similar grouping and V2.54 taxonomy are completed as separate read-only local slices.
 
 ## V2.53 Similar Skill Grouping（completed）
 
@@ -662,7 +662,7 @@ V2.55 planning starts from the V2.54 completed protocol surface below.
   - `group_type`: duplicate, similar, confusable, source-overlap, or coverage-redundancy style values.
 - Safety boundary: user-triggered, deterministic, local-only, read-only, no default provider/network, no writes to skill files/agent config/group artifacts/snapshots/triage/scripts/credentials/raw prompt/raw response/raw trace/cloud sync/telemetry.
 - If a provider explanation ever appears later, it must still follow V2.42 preview/redaction/confirmation and remain copy-only.
-- V2.55+ workspace readiness / remediation remain planned and must not be inferred from V2.53; V2.54 capability taxonomy is completed as a separate read-only local taxonomy slice.
+- V2.55+ workspace readiness / remediation remain planned around `workspace.checkReadiness` and must not be inferred from V2.53; V2.54 capability taxonomy is completed as a separate read-only local taxonomy slice.
 
 ## V2.54 Capability Taxonomy（completed）
 

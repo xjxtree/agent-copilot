@@ -283,7 +283,7 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
 - 输入仅限 `query`、可选 `agent`、可选 `limit`、以及可选 filters；filters 只用于收窄 purpose、tools、keywords、rules、source、risk、task fit、capability tags。
 - 默认不发起 provider / network 调用；若未来存在 provider 说明，仍必须遵守 V2.42 preview/redaction/确认，且只能 copy-only，不得影响 deterministic search 结果。
 - 输出安全标志必须默认 false：`provider_request_sent`、`write_back_allowed`、`config_mutation_allowed`、`index_write_allowed`、`snapshot_created`、`triage_mutation_allowed`、`script_execution_allowed`、`credential_accessed`、`raw_prompt_persisted`、`raw_response_persisted`、`raw_trace_persisted`、`cloud_sync_performed`、`telemetry_emitted`。
-- V2.55+ workspace readiness / remediation remain planned and must not be inferred from V2.52; V2.53 similar grouping and V2.54 taxonomy are documented separately as read-only local slices.
+- V2.55 workspace readiness remains planned as `workspace.checkReadiness` and must not be inferred from V2.52; it should stay local-only, user-triggered, deterministic, and read-only by default, with no provider requests by default, no skill/config/snapshot/triage writes, no scripts, no credentials, no raw prompt/response/trace persistence, and no cloud sync/telemetry. V2.53 similar grouping and V2.54 taxonomy are documented separately as read-only local slices.
 
 ### 2.4.3.1.7 V2.53 Similar Skill Grouping（completed）
 
