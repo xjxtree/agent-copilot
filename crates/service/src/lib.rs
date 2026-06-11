@@ -66,6 +66,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "knowledge.search",
     "knowledge.groupSimilarSkills",
     "knowledge.buildCapabilityTaxonomy",
+    "workspace.checkReadiness",
     "task.checkReadiness",
     "task.rankSkillRoutes",
     "task.compareAgentReadiness",
@@ -1136,6 +1137,118 @@ pub type CapabilityTaxonomyPromptRequest = AgentReadinessPromptRequest;
 pub type CapabilityTaxonomySafetyFlags = AgentReadinessSafetyFlags;
 
 #[derive(Debug, Clone, Default, Deserialize)]
+pub struct WorkspaceReadinessParams {
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default, alias = "task_text", alias = "user_intent")]
+    pub task: Option<String>,
+    #[serde(default, alias = "workspace_path")]
+    pub project_root: Option<String>,
+    #[serde(default)]
+    pub expected_capabilities: Vec<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+    #[serde(default, alias = "instance_ids")]
+    pub candidate_instance_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkspaceReadinessResult {
+    pub generated_by: &'static str,
+    pub catalog_available: bool,
+    pub filters: WorkspaceReadinessFilters,
+    pub summary: WorkspaceReadinessSummary,
+    pub readiness_rows: Vec<WorkspaceReadinessChecklistRow>,
+    pub checklist_rows: Vec<WorkspaceReadinessChecklistRow>,
+    pub agent_rows: Vec<WorkspaceReadinessAgentRow>,
+    pub capability_rows: Vec<WorkspaceReadinessCapabilityRow>,
+    pub gap_notes: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub evidence_references: Vec<TaskReadinessEvidenceReference>,
+    pub prompt_request: WorkspaceReadinessPromptRequest,
+    pub safety_flags: WorkspaceReadinessSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkspaceReadinessFilters {
+    pub agent: Option<String>,
+    pub task: Option<String>,
+    pub project_root: Option<String>,
+    pub expected_capabilities: Vec<String>,
+    pub limit: usize,
+    pub candidate_instance_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkspaceReadinessSummary {
+    pub workspace_available: bool,
+    pub project_available: bool,
+    pub visible_skill_count: usize,
+    pub enabled_skill_count: usize,
+    pub agent_count: usize,
+    pub domain_count: usize,
+    pub capability_count: usize,
+    pub ready_count: usize,
+    pub partial_count: usize,
+    pub blocked_count: usize,
+    pub gap_count: usize,
+    pub blocker_count: usize,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkspaceReadinessChecklistRow {
+    pub id: String,
+    pub category: &'static str,
+    pub status: &'static str,
+    pub score: u8,
+    pub title: String,
+    pub detail: String,
+    pub agent: Option<String>,
+    pub capability: Option<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkspaceReadinessAgentRow {
+    pub agent: String,
+    pub display_name: String,
+    pub status: &'static str,
+    pub score: u8,
+    pub visible_skill_count: usize,
+    pub enabled_skill_count: usize,
+    pub project_skill_count: usize,
+    pub best_candidate: Option<AgentReadinessBestCandidate>,
+    pub adapter_status: Option<String>,
+    pub writable_status: Option<String>,
+    pub install_status: Option<String>,
+    pub gap_count: usize,
+    pub blocker_count: usize,
+    pub notes: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkspaceReadinessCapabilityRow {
+    pub capability: String,
+    pub domain_key: String,
+    pub domain_name: String,
+    pub status: &'static str,
+    pub coverage_level: &'static str,
+    pub coverage_score: u8,
+    pub expected: bool,
+    pub skill_count: usize,
+    pub enabled_skill_count: usize,
+    pub agent_count: usize,
+    pub gap_notes: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+pub type WorkspaceReadinessPromptRequest = AgentReadinessPromptRequest;
+pub type WorkspaceReadinessSafetyFlags = AgentReadinessSafetyFlags;
+
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct DetectStaleDriftParams {
     #[serde(default)]
     pub agent: Option<String>,
@@ -1917,6 +2030,7 @@ pub enum LlmPromptActionKind {
     KnowledgeSearch,
     SimilarSkillGrouping,
     CapabilityTaxonomy,
+    WorkspaceReadiness,
     TaskReadiness,
     RoutingConfidence,
 }
@@ -1934,6 +2048,7 @@ impl LlmPromptActionKind {
             Self::KnowledgeSearch => "knowledge_search",
             Self::SimilarSkillGrouping => "similar_skill_grouping",
             Self::CapabilityTaxonomy => "capability_taxonomy",
+            Self::WorkspaceReadiness => "workspace_readiness",
             Self::TaskReadiness => "task_readiness",
             Self::RoutingConfidence => "routing_confidence",
         }
@@ -2480,6 +2595,14 @@ impl ServiceHost {
                     serde_json::from_value(request.params)?
                 };
                 serde_json::to_value(self.build_capability_taxonomy(params)?).map_err(Into::into)
+            }
+            "workspace.checkReadiness" => {
+                let params: WorkspaceReadinessParams = if request.params.is_null() {
+                    WorkspaceReadinessParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.check_workspace_readiness(params)?).map_err(Into::into)
             }
             "task.checkReadiness" => {
                 let params: TaskReadinessParams = serde_json::from_value(request.params)?;
@@ -4666,6 +4789,283 @@ impl ServiceHost {
         })
     }
 
+    pub fn check_workspace_readiness(
+        &self,
+        params: WorkspaceReadinessParams,
+    ) -> Result<WorkspaceReadinessResult, ServiceError> {
+        if matches!(params.limit, Some(0)) {
+            return Err(ServiceError::InvalidRequest(
+                "workspace.checkReadiness limit must be greater than zero".to_string(),
+            ));
+        }
+
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let roots = self.redaction_roots(&adapter_ctx);
+        let filters = workspace_readiness_filters(&params, &roots);
+        let Some(catalog) = self.open_existing_catalog_read_only()? else {
+            return Ok(empty_workspace_readiness_result(filters, false));
+        };
+
+        let skills = self.list_visible_skill_records(&catalog)?;
+        let findings = list_findings(&catalog)?;
+        let conflicts = list_conflicts(&catalog)?;
+        let analysis = analyze_catalog(&catalog, &adapter_ctx)?;
+        let diagnostics = list_adapter_diagnostics(&adapter_ctx);
+        let requested_ids = filters
+            .candidate_instance_ids
+            .iter()
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        let raw_project_root = params
+            .project_root
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+            .or_else(|| adapter_ctx.project_root.clone());
+
+        let mut visible_details = Vec::new();
+        let mut evidence_by_id = BTreeMap::new();
+        for skill in &skills {
+            if !agent_matches(filters.agent.as_deref(), Some(skill.agent.as_str())) {
+                continue;
+            }
+            if !requested_ids.is_empty() && !requested_ids.contains(&skill.id) {
+                continue;
+            }
+            let Some(detail) = catalog.get_skill_detail(&skill.id)? else {
+                continue;
+            };
+            if !workspace_detail_matches(raw_project_root.as_deref(), &detail) {
+                continue;
+            }
+            visible_details.push(detail);
+        }
+
+        let candidate_instance_ids = if filters.candidate_instance_ids.is_empty() {
+            visible_details
+                .iter()
+                .map(|detail| detail.id.clone())
+                .collect::<Vec<_>>()
+        } else {
+            filters.candidate_instance_ids.clone()
+        };
+
+        let taxonomy = self.build_capability_taxonomy(CapabilityTaxonomyParams {
+            agent: filters.agent.clone(),
+            limit: Some(filters.limit),
+            include_single_skill_domains: true,
+            candidate_instance_ids: candidate_instance_ids.clone(),
+        })?;
+        for evidence in taxonomy.evidence_references.iter().cloned() {
+            evidence_by_id
+                .entry(evidence.id.clone())
+                .or_insert(evidence);
+        }
+
+        let task_readiness = filters
+            .task
+            .as_ref()
+            .map(|task| {
+                self.check_task_readiness(TaskReadinessParams {
+                    task: task.clone(),
+                    agent: filters.agent.clone(),
+                    candidate_instance_ids: candidate_instance_ids.clone(),
+                    limit: Some(filters.limit.min(20)),
+                })
+            })
+            .transpose()?;
+        let route_ranking = filters
+            .task
+            .as_ref()
+            .map(|task| {
+                self.rank_skill_routes(RankSkillRoutesParams {
+                    task: task.clone(),
+                    agent: filters.agent.clone(),
+                    candidate_instance_ids: candidate_instance_ids.clone(),
+                    limit: Some(filters.limit.min(20)),
+                })
+            })
+            .transpose()?;
+        let agent_comparison = filters
+            .task
+            .as_ref()
+            .map(|task| {
+                self.compare_agent_readiness(CompareAgentReadinessParams {
+                    task: task.clone(),
+                    agents: filters.agent.clone().into_iter().collect(),
+                    limit_per_agent: Some(3),
+                    include_routing_accuracy: true,
+                    include_benchmarks: true,
+                })
+            })
+            .transpose()?;
+        for readiness in task_readiness.iter() {
+            for evidence in readiness.evidence_references.iter().cloned() {
+                evidence_by_id
+                    .entry(evidence.id.clone())
+                    .or_insert(evidence);
+            }
+        }
+        for ranking in route_ranking.iter() {
+            for evidence in ranking.evidence_references.iter().cloned() {
+                evidence_by_id
+                    .entry(evidence.id.clone())
+                    .or_insert(evidence);
+            }
+        }
+        for comparison in agent_comparison.iter() {
+            for evidence in comparison.evidence_references.iter().cloned() {
+                evidence_by_id
+                    .entry(evidence.id.clone())
+                    .or_insert(evidence);
+            }
+        }
+
+        let stale_drift = self.detect_stale_drift(DetectStaleDriftParams {
+            agent: filters.agent.clone(),
+            candidate_instance_ids: candidate_instance_ids.clone(),
+            limit: Some(filters.limit),
+            stale_days: None,
+            thresholds: StaleDriftThresholds::default(),
+        })?;
+        for evidence in stale_drift.evidence_references.iter().cloned() {
+            evidence_by_id
+                .entry(evidence.id.clone())
+                .or_insert(evidence);
+        }
+        let similar = self.group_similar_skills(SimilarSkillGroupingParams {
+            agent: filters.agent.clone(),
+            limit: Some(filters.limit),
+            min_score: Some(45.0),
+            include_singletons: false,
+            candidate_instance_ids,
+        })?;
+        for evidence in similar.evidence_references.iter().cloned() {
+            evidence_by_id
+                .entry(evidence.id.clone())
+                .or_insert(evidence);
+        }
+
+        let mut capability_rows =
+            workspace_capability_rows(&filters.expected_capabilities, &taxonomy);
+        capability_rows.truncate(filters.limit);
+        let mut readiness_rows = workspace_checklist_rows(
+            &filters,
+            &visible_details,
+            &findings,
+            &conflicts,
+            &analysis.groups,
+            &diagnostics,
+            &taxonomy,
+            task_readiness.as_ref(),
+            route_ranking.as_ref(),
+            &stale_drift,
+            &similar,
+        );
+        readiness_rows.truncate(filters.limit);
+        let checklist_rows = readiness_rows.clone();
+        let mut agent_rows = if let Some(comparison) = agent_comparison.as_ref() {
+            workspace_agent_rows_from_comparison(comparison, &visible_details, &diagnostics)
+        } else {
+            workspace_agent_rows_from_catalog(
+                &visible_details,
+                &diagnostics,
+                filters.agent.as_deref(),
+            )
+        };
+        agent_rows.truncate(filters.limit);
+
+        let mut gap_notes = taxonomy.gap_notes.clone();
+        if let Some(readiness) = task_readiness.as_ref() {
+            gap_notes.extend(readiness.missing_gap_notes.iter().cloned());
+        }
+        gap_notes.extend(stale_drift.gap_notes.iter().cloned());
+        gap_notes.extend(similar.gap_notes.iter().cloned());
+        gap_notes.extend(
+            capability_rows
+                .iter()
+                .flat_map(|row| row.gap_notes.iter().cloned()),
+        );
+        gap_notes.sort();
+        gap_notes.dedup();
+        gap_notes.truncate(16);
+
+        let mut blocker_notes = taxonomy.blocker_notes.clone();
+        if let Some(readiness) = task_readiness.as_ref() {
+            blocker_notes.extend(readiness.blocker_risk_notes.iter().cloned());
+        }
+        blocker_notes.extend(stale_drift.blocker_notes.iter().cloned());
+        blocker_notes.extend(similar.blocker_notes.iter().cloned());
+        blocker_notes.extend(
+            agent_rows
+                .iter()
+                .flat_map(|row| row.notes.iter().cloned())
+                .filter(|note| note.contains("blocked") || note.contains("disabled")),
+        );
+        blocker_notes.sort();
+        blocker_notes.dedup();
+        blocker_notes.truncate(16);
+
+        let prompt_instance_ids = visible_details
+            .iter()
+            .take(12)
+            .map(|detail| detail.id.clone())
+            .collect::<Vec<_>>();
+        let prompt_available = !prompt_instance_ids.is_empty();
+        let summary = workspace_readiness_summary(
+            raw_project_root.as_deref(),
+            &visible_details,
+            &taxonomy,
+            &readiness_rows,
+            &agent_rows,
+            &capability_rows,
+            &gap_notes,
+            &blocker_notes,
+        );
+
+        Ok(WorkspaceReadinessResult {
+            generated_by: "deterministic-service",
+            catalog_available: true,
+            filters: filters.clone(),
+            summary,
+            readiness_rows,
+            checklist_rows,
+            agent_rows,
+            capability_rows,
+            gap_notes,
+            blocker_notes,
+            evidence_references: evidence_by_id.into_values().collect(),
+            prompt_request: WorkspaceReadinessPromptRequest {
+                available: prompt_available,
+                preview_method: "llm.previewPrompt",
+                confirm_method: "llm.confirmPromptAndSend",
+                action: "workspace_readiness",
+                request: LlmPreviewPromptParams {
+                    action: LlmPromptActionKind::WorkspaceReadiness,
+                    profile_id: None,
+                    skill_instance_id: None,
+                    instance_ids: prompt_instance_ids,
+                    analysis_kind: None,
+                    user_intent: filters.task.clone().or_else(|| {
+                        Some(
+                            "Explain deterministic workspace readiness using only local catalog evidence."
+                                .to_string(),
+                        )
+                    }),
+                },
+                note: if prompt_available {
+                    "Optional provider-backed explanation must be requested through prompt preview and explicit confirmation; workspace.checkReadiness never sends provider traffic."
+                        .to_string()
+                } else {
+                    "Prompt preview is unavailable until local catalog evidence produces workspace readiness rows."
+                        .to_string()
+                },
+            },
+            safety_flags: workspace_readiness_safety_flags(),
+        })
+    }
+
     pub fn check_task_readiness(
         &self,
         params: TaskReadinessParams,
@@ -6056,6 +6456,45 @@ impl ServiceHost {
                     &mut redactor,
                 ));
             }
+            LlmPromptActionKind::WorkspaceReadiness => {
+                let result = self.check_workspace_readiness(WorkspaceReadinessParams {
+                    agent: None,
+                    task: params.user_intent.clone(),
+                    project_root: None,
+                    expected_capabilities: Vec::new(),
+                    limit: Some(8),
+                    candidate_instance_ids: params.instance_ids.clone(),
+                })?;
+                prompt_scope.extend([
+                    "deterministic workspace readiness checklist".to_string(),
+                    "agent readiness summaries".to_string(),
+                    "capability readiness rows".to_string(),
+                    "local gap and blocker notes".to_string(),
+                    "evidence reference summaries".to_string(),
+                    "safety flags".to_string(),
+                ]);
+                included_fields.extend([
+                    "redacted task or workspace intent".to_string(),
+                    "readiness checklist categories, statuses, and scores".to_string(),
+                    "agent names, enabled counts, adapter status, and best local candidates"
+                        .to_string(),
+                    "capability names, coverage levels, and gap/blocker notes".to_string(),
+                    "finding/conflict/analysis/stale/routing evidence ids and labels".to_string(),
+                    "read-only safety flags".to_string(),
+                ]);
+                excluded_fields.extend([
+                    "raw source paths".to_string(),
+                    "raw provider response".to_string(),
+                    "agent config contents".to_string(),
+                    "raw prompt or response persistence".to_string(),
+                    "raw skill body".to_string(),
+                    "raw frontmatter".to_string(),
+                ]);
+                sections.push(render_workspace_readiness_prompt_section(
+                    &result,
+                    &mut redactor,
+                ));
+            }
             LlmPromptActionKind::TaskReadiness => {
                 let task = params.user_intent.as_deref().ok_or_else(|| {
                     ServiceError::InvalidRequest(
@@ -6160,6 +6599,7 @@ impl ServiceHost {
             LlmPromptActionKind::KnowledgeSearch => 750,
             LlmPromptActionKind::SimilarSkillGrouping => 850,
             LlmPromptActionKind::CapabilityTaxonomy => 850,
+            LlmPromptActionKind::WorkspaceReadiness => 900,
             LlmPromptActionKind::TaskReadiness => 750,
             LlmPromptActionKind::RoutingConfidence => 850,
         };
@@ -10591,6 +11031,679 @@ fn stable_similar_group_id(member_ids: &[String]) -> String {
     format!("similar-group-{:x}", digest)[..26].to_string()
 }
 
+fn workspace_readiness_safety_flags() -> WorkspaceReadinessSafetyFlags {
+    agent_readiness_safety_flags()
+}
+
+fn workspace_readiness_filters(
+    params: &WorkspaceReadinessParams,
+    redaction_roots: &[(String, &'static str)],
+) -> WorkspaceReadinessFilters {
+    let mut expected_capabilities = params
+        .expected_capabilities
+        .iter()
+        .map(|value| redact_for_llm_preview(value.trim()))
+        .filter(|value| !value.is_empty())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    expected_capabilities.sort();
+    let mut candidate_instance_ids = params
+        .candidate_instance_ids
+        .iter()
+        .map(|value| redact_for_llm_preview(value.trim()))
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    candidate_instance_ids.sort();
+    candidate_instance_ids.dedup();
+    WorkspaceReadinessFilters {
+        agent: params.agent.as_deref().and_then(normalize_agent_label),
+        task: params
+            .task
+            .as_deref()
+            .map(str::trim)
+            .filter(|task| !task.is_empty())
+            .map(redact_for_llm_preview),
+        project_root: params
+            .project_root
+            .as_deref()
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+            .map(|path| redact_string(&redact_for_llm_preview(path), redaction_roots)),
+        expected_capabilities,
+        limit: params.limit.unwrap_or(12).clamp(1, 50),
+        candidate_instance_ids,
+    }
+}
+
+fn empty_workspace_readiness_result(
+    filters: WorkspaceReadinessFilters,
+    catalog_available: bool,
+) -> WorkspaceReadinessResult {
+    WorkspaceReadinessResult {
+        generated_by: "deterministic-service",
+        catalog_available,
+        filters,
+        summary: WorkspaceReadinessSummary {
+            workspace_available: false,
+            project_available: false,
+            visible_skill_count: 0,
+            enabled_skill_count: 0,
+            agent_count: 0,
+            domain_count: 0,
+            capability_count: 0,
+            ready_count: 0,
+            partial_count: 0,
+            blocked_count: 1,
+            gap_count: 1,
+            blocker_count: 1,
+            summary: "No local catalog is available, so workspace readiness has no skill evidence."
+                .to_string(),
+        },
+        readiness_rows: vec![WorkspaceReadinessChecklistRow {
+            id: "workspace-readiness-catalog".to_string(),
+            category: "catalog",
+            status: "blocked",
+            score: 0,
+            title: "Local catalog unavailable".to_string(),
+            detail: "Run a local scan before relying on workspace readiness.".to_string(),
+            agent: None,
+            capability: None,
+            evidence_refs: Vec::new(),
+        }],
+        checklist_rows: vec![WorkspaceReadinessChecklistRow {
+            id: "workspace-readiness-catalog".to_string(),
+            category: "catalog",
+            status: "blocked",
+            score: 0,
+            title: "Local catalog unavailable".to_string(),
+            detail: "Run a local scan before relying on workspace readiness.".to_string(),
+            agent: None,
+            capability: None,
+            evidence_refs: Vec::new(),
+        }],
+        agent_rows: Vec::new(),
+        capability_rows: Vec::new(),
+        gap_notes: vec![
+            "Run a local scan before relying on workspace readiness for project coverage review."
+                .to_string(),
+        ],
+        blocker_notes: vec![
+            "No provider request was sent and no fallback network lookup was attempted."
+                .to_string(),
+        ],
+        evidence_references: Vec::new(),
+        prompt_request: WorkspaceReadinessPromptRequest {
+            available: false,
+            preview_method: "llm.previewPrompt",
+            confirm_method: "llm.confirmPromptAndSend",
+            action: "workspace_readiness",
+            request: LlmPreviewPromptParams {
+                action: LlmPromptActionKind::WorkspaceReadiness,
+                profile_id: None,
+                skill_instance_id: None,
+                instance_ids: Vec::new(),
+                analysis_kind: None,
+                user_intent: Some(
+                    "Explain deterministic workspace readiness using only local catalog evidence."
+                        .to_string(),
+                ),
+            },
+            note: "Prompt preview is unavailable until local catalog evidence exists.".to_string(),
+        },
+        safety_flags: workspace_readiness_safety_flags(),
+    }
+}
+
+fn workspace_detail_matches(project_root: Option<&Path>, detail: &SkillDetailRecord) -> bool {
+    let Some(project_root) = project_root else {
+        return true;
+    };
+    detail.scope == Scope::AgentProject.as_str()
+        || detail.path.starts_with(project_root)
+        || detail.display_path.starts_with(project_root)
+}
+
+fn workspace_status_for_score(score: u8) -> &'static str {
+    match score {
+        80..=100 => "ready",
+        45..=79 => "partial",
+        _ => "blocked",
+    }
+}
+
+fn workspace_status_counts<'a>(
+    statuses: impl IntoIterator<Item = &'a str>,
+) -> (usize, usize, usize) {
+    let mut ready = 0usize;
+    let mut partial = 0usize;
+    let mut blocked = 0usize;
+    for status in statuses {
+        match status {
+            "ready" => ready += 1,
+            "partial" => partial += 1,
+            _ => blocked += 1,
+        }
+    }
+    (ready, partial, blocked)
+}
+
+fn workspace_capability_rows(
+    expected_capabilities: &[String],
+    taxonomy: &CapabilityTaxonomyResult,
+) -> Vec<WorkspaceReadinessCapabilityRow> {
+    let expected_keys = expected_capabilities
+        .iter()
+        .map(|capability| capability_key(capability))
+        .collect::<BTreeSet<_>>();
+    let mut rows = taxonomy
+        .coverage_rows
+        .iter()
+        .map(|coverage| {
+            let expected = expected_keys.is_empty()
+                || expected_keys.contains(&capability_key(&coverage.domain_name))
+                || expected_keys.contains(&coverage.domain_key);
+            let blocker_notes = if coverage.routing_ambiguity != "low" {
+                vec![format!(
+                    "`{}` has routing ambiguity signals.",
+                    redact_for_llm_preview(&coverage.domain_name)
+                )]
+            } else if coverage.duplicates_redundancy != "low" {
+                vec![format!(
+                    "`{}` has duplicate or redundancy signals.",
+                    redact_for_llm_preview(&coverage.domain_name)
+                )]
+            } else {
+                Vec::new()
+            };
+            WorkspaceReadinessCapabilityRow {
+                capability: coverage.domain_name.clone(),
+                domain_key: coverage.domain_key.clone(),
+                domain_name: coverage.domain_name.clone(),
+                status: workspace_status_for_score(coverage.coverage_score),
+                coverage_level: coverage.coverage_level,
+                coverage_score: coverage.coverage_score,
+                expected,
+                skill_count: coverage.skill_count,
+                enabled_skill_count: coverage.enabled_skill_count,
+                agent_count: coverage.agent_count,
+                gap_notes: coverage.gaps.clone(),
+                blocker_notes,
+                evidence_refs: coverage.evidence_refs.clone(),
+            }
+        })
+        .collect::<Vec<_>>();
+
+    for expected in expected_capabilities {
+        let key = capability_key(expected);
+        if rows
+            .iter()
+            .any(|row| row.domain_key == key || capability_key(&row.capability) == key)
+        {
+            continue;
+        }
+        rows.push(WorkspaceReadinessCapabilityRow {
+            capability: expected.clone(),
+            domain_key: key.clone(),
+            domain_name: expected.clone(),
+            status: "blocked",
+            coverage_level: "gap",
+            coverage_score: 0,
+            expected: true,
+            skill_count: 0,
+            enabled_skill_count: 0,
+            agent_count: 0,
+            gap_notes: vec![format!(
+                "Expected capability `{}` has no matching local capability-domain evidence.",
+                redact_for_llm_preview(expected)
+            )],
+            blocker_notes: vec![format!(
+                "Expected capability `{}` is not covered by visible local skills.",
+                redact_for_llm_preview(expected)
+            )],
+            evidence_refs: Vec::new(),
+        });
+    }
+    rows.sort_by(|left, right| {
+        right
+            .expected
+            .cmp(&left.expected)
+            .then_with(|| right.coverage_score.cmp(&left.coverage_score))
+            .then_with(|| left.domain_name.cmp(&right.domain_name))
+    });
+    rows
+}
+
+fn capability_key(value: &str) -> String {
+    value
+        .to_ascii_lowercase()
+        .chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+#[allow(clippy::too_many_arguments)]
+fn workspace_checklist_rows(
+    filters: &WorkspaceReadinessFilters,
+    visible_details: &[SkillDetailRecord],
+    findings: &[RuleFindingRecord],
+    conflicts: &[ConflictGroupRecord],
+    analysis_groups: &[CrossAgentAnalysisGroup],
+    diagnostics: &[AdapterDiagnosticsRecord],
+    taxonomy: &CapabilityTaxonomyResult,
+    task_readiness: Option<&TaskReadinessResult>,
+    route_ranking: Option<&SkillRouteRankingResult>,
+    stale_drift: &StaleDriftDetectionResult,
+    similar: &SimilarSkillGroupingResult,
+) -> Vec<WorkspaceReadinessChecklistRow> {
+    let mut rows = Vec::new();
+    let visible_count = visible_details.len();
+    let enabled_count = visible_details.iter().filter(|skill| skill.enabled).count();
+    let project_count = visible_details
+        .iter()
+        .filter(|skill| skill.scope == Scope::AgentProject.as_str())
+        .count();
+    let coverage_score = if taxonomy.summary.domain_count == 0 {
+        0
+    } else {
+        taxonomy
+            .coverage_rows
+            .iter()
+            .map(|row| usize::from(row.coverage_score))
+            .sum::<usize>()
+            .checked_div(taxonomy.coverage_rows.len().max(1))
+            .unwrap_or(0)
+            .min(100) as u8
+    };
+    rows.push(WorkspaceReadinessChecklistRow {
+        id: "workspace-readiness-capability-coverage".to_string(),
+        category: "capability_coverage",
+        status: workspace_status_for_score(coverage_score),
+        score: coverage_score,
+        title: "Capability coverage".to_string(),
+        detail: format!(
+            "{} capability domain(s) are visible across {} local skill(s).",
+            taxonomy.summary.domain_count, visible_count
+        ),
+        agent: filters.agent.clone(),
+        capability: None,
+        evidence_refs: taxonomy
+            .coverage_rows
+            .iter()
+            .flat_map(|row| row.evidence_refs.iter().cloned())
+            .take(8)
+            .collect(),
+    });
+
+    let enabled_score = if visible_count == 0 {
+        0
+    } else {
+        ((enabled_count * 100) / visible_count).min(100) as u8
+    };
+    rows.push(WorkspaceReadinessChecklistRow {
+        id: "workspace-readiness-enabled-scope".to_string(),
+        category: "enabled_scoped_state",
+        status: workspace_status_for_score(enabled_score),
+        score: enabled_score,
+        title: "Enabled and scoped skills".to_string(),
+        detail: format!(
+            "{} of {} visible skill(s) are enabled; {} are project-scoped.",
+            enabled_count, visible_count, project_count
+        ),
+        agent: filters.agent.clone(),
+        capability: None,
+        evidence_refs: Vec::new(),
+    });
+
+    let blocking_finding_count = findings
+        .iter()
+        .filter(|finding| matches!(finding.effective_severity.as_str(), "critical" | "error"))
+        .count();
+    let risk_score = (100i16
+        - (blocking_finding_count as i16 * 18).min(54)
+        - (conflicts.len() as i16 * 16).min(32)
+        - (analysis_groups.len() as i16 * 4).min(20))
+    .clamp(0, 100) as u8;
+    rows.push(WorkspaceReadinessChecklistRow {
+        id: "workspace-readiness-risk-findings".to_string(),
+        category: "risk_finding_state",
+        status: workspace_status_for_score(risk_score),
+        score: risk_score,
+        title: "Risk and finding state".to_string(),
+        detail: format!(
+            "{} blocking finding(s), {} same-agent conflict(s), and {} cross-agent analysis group(s) are visible.",
+            blocking_finding_count,
+            conflicts.len(),
+            analysis_groups.len()
+        ),
+        agent: filters.agent.clone(),
+        capability: None,
+        evidence_refs: Vec::new(),
+    });
+
+    let stale_score = (100i16
+        - (stale_drift.summary.high_risk_count as i16 * 20).min(60)
+        - (stale_drift.summary.medium_risk_count as i16 * 10).min(30)
+        - (stale_drift.summary.drift_count as i16 * 6).min(24))
+    .clamp(0, 100) as u8;
+    rows.push(WorkspaceReadinessChecklistRow {
+        id: "workspace-readiness-stale-drift".to_string(),
+        category: "stale_drift",
+        status: workspace_status_for_score(stale_score),
+        score: stale_score,
+        title: "Stale and drift signals".to_string(),
+        detail: format!(
+            "{} stale/drift row(s), {} high-risk row(s), and {} drift signal(s) were derived locally.",
+            stale_drift.summary.returned_row_count,
+            stale_drift.summary.high_risk_count,
+            stale_drift.summary.drift_count
+        ),
+        agent: filters.agent.clone(),
+        capability: None,
+        evidence_refs: stale_drift
+            .stale_drift_rows
+            .iter()
+            .flat_map(|row| row.evidence_refs.iter().cloned())
+            .take(8)
+            .collect(),
+    });
+
+    let ambiguity_count = similar.summary.routing_ambiguity_count
+        + route_ranking
+            .map(|ranking| ranking.ambiguity_warnings.len())
+            .unwrap_or(0);
+    let ambiguity_score = (100i16 - (ambiguity_count as i16 * 18).min(72)).clamp(0, 100) as u8;
+    rows.push(WorkspaceReadinessChecklistRow {
+        id: "workspace-readiness-routing-ambiguity".to_string(),
+        category: "routing_ambiguity",
+        status: workspace_status_for_score(ambiguity_score),
+        score: ambiguity_score,
+        title: "Routing ambiguity".to_string(),
+        detail: format!(
+            "{} similar-skill group(s) and {} routing ambiguity signal(s) are visible.",
+            similar.summary.returned_group_count, ambiguity_count
+        ),
+        agent: filters.agent.clone(),
+        capability: None,
+        evidence_refs: similar
+            .groups
+            .iter()
+            .flat_map(|group| group.evidence_refs.iter().cloned())
+            .take(8)
+            .collect(),
+    });
+
+    let blocked_adapter_count = diagnostics
+        .iter()
+        .filter(|diagnostic| {
+            diagnostic.status == "blocked" || diagnostic.access.writable_status == "blocked"
+        })
+        .count();
+    let adapter_score = (100i16 - (blocked_adapter_count as i16 * 12).min(60)).clamp(0, 100) as u8;
+    rows.push(WorkspaceReadinessChecklistRow {
+        id: "workspace-readiness-adapter-capability".to_string(),
+        category: "adapter_capability",
+        status: workspace_status_for_score(adapter_score),
+        score: adapter_score,
+        title: "Adapter capability".to_string(),
+        detail: format!(
+            "{} adapter diagnostic row(s) are available; {} have blocked status.",
+            diagnostics.len(),
+            blocked_adapter_count
+        ),
+        agent: filters.agent.clone(),
+        capability: None,
+        evidence_refs: Vec::new(),
+    });
+
+    if let Some(readiness) = task_readiness {
+        rows.push(WorkspaceReadinessChecklistRow {
+            id: "workspace-readiness-task-fit".to_string(),
+            category: "task_fit",
+            status: workspace_status_for_score(readiness.score),
+            score: readiness.score,
+            title: "Task readiness".to_string(),
+            detail: readiness.summary.clone(),
+            agent: filters.agent.clone(),
+            capability: None,
+            evidence_refs: readiness
+                .candidate_skills
+                .iter()
+                .flat_map(|candidate| candidate.evidence_refs.iter().cloned())
+                .take(8)
+                .collect(),
+        });
+    }
+
+    rows.sort_by(|left, right| {
+        workspace_status_rank(left.status)
+            .cmp(&workspace_status_rank(right.status))
+            .then_with(|| left.score.cmp(&right.score))
+            .then_with(|| left.category.cmp(right.category))
+    });
+    rows
+}
+
+fn workspace_status_rank(status: &str) -> u8 {
+    match status {
+        "blocked" => 0,
+        "partial" => 1,
+        "ready" => 2,
+        _ => 3,
+    }
+}
+
+fn workspace_agent_rows_from_comparison(
+    comparison: &AgentReadinessComparisonResult,
+    visible_details: &[SkillDetailRecord],
+    diagnostics: &[AdapterDiagnosticsRecord],
+) -> Vec<WorkspaceReadinessAgentRow> {
+    comparison
+        .agent_rows
+        .iter()
+        .map(|row| {
+            let diagnostic = diagnostics
+                .iter()
+                .find(|diagnostic| diagnostic.agent == row.agent);
+            let visible_skill_count = visible_details
+                .iter()
+                .filter(|skill| skill.agent == row.agent)
+                .count();
+            let enabled_skill_count = visible_details
+                .iter()
+                .filter(|skill| skill.agent == row.agent && skill.enabled)
+                .count();
+            let project_skill_count = visible_details
+                .iter()
+                .filter(|skill| {
+                    skill.agent == row.agent && skill.scope == Scope::AgentProject.as_str()
+                })
+                .count();
+            WorkspaceReadinessAgentRow {
+                agent: row.agent.clone(),
+                display_name: row.display_name.clone(),
+                status: workspace_status_for_score(row.comparison_score),
+                score: row.comparison_score,
+                visible_skill_count,
+                enabled_skill_count,
+                project_skill_count,
+                best_candidate: row.best_candidate.clone(),
+                adapter_status: diagnostic.map(|diagnostic| diagnostic.status.to_string()),
+                writable_status: diagnostic
+                    .map(|diagnostic| diagnostic.access.writable_status.to_string()),
+                install_status: diagnostic
+                    .map(|diagnostic| diagnostic.access.install_status.to_string()),
+                gap_count: row.gap_count,
+                blocker_count: row.blocker_count,
+                notes: row
+                    .gap_notes
+                    .iter()
+                    .chain(row.blocker_notes.iter())
+                    .take(8)
+                    .cloned()
+                    .collect(),
+                evidence_refs: row.evidence_refs.clone(),
+            }
+        })
+        .collect()
+}
+
+fn workspace_agent_rows_from_catalog(
+    visible_details: &[SkillDetailRecord],
+    diagnostics: &[AdapterDiagnosticsRecord],
+    agent_filter: Option<&str>,
+) -> Vec<WorkspaceReadinessAgentRow> {
+    let mut agents = visible_details
+        .iter()
+        .filter_map(|skill| normalize_agent_label(&skill.agent))
+        .collect::<BTreeSet<_>>();
+    for diagnostic in diagnostics {
+        if agent_matches(agent_filter, Some(diagnostic.agent)) {
+            agents.insert(diagnostic.agent.to_string());
+        }
+    }
+    agents
+        .into_iter()
+        .filter(|agent| agent_matches(agent_filter, Some(agent.as_str())))
+        .map(|agent| {
+            let diagnostic = diagnostics
+                .iter()
+                .find(|diagnostic| diagnostic.agent == agent);
+            let visible_skill_count = visible_details
+                .iter()
+                .filter(|skill| skill.agent == agent)
+                .count();
+            let enabled_skill_count = visible_details
+                .iter()
+                .filter(|skill| skill.agent == agent && skill.enabled)
+                .count();
+            let project_skill_count = visible_details
+                .iter()
+                .filter(|skill| skill.agent == agent && skill.scope == Scope::AgentProject.as_str())
+                .count();
+            let mut score = if visible_skill_count == 0 {
+                0i16
+            } else {
+                35 + ((enabled_skill_count * 45) / visible_skill_count).min(45) as i16
+                    + (project_skill_count.min(2) as i16 * 5)
+            };
+            if diagnostic
+                .map(|diagnostic| diagnostic.status == "blocked")
+                .unwrap_or(false)
+            {
+                score -= 25;
+            }
+            let score = score.clamp(0, 100) as u8;
+            let mut notes = Vec::new();
+            if visible_skill_count == 0 {
+                notes.push("No visible skills were found for this agent.".to_string());
+            }
+            if enabled_skill_count < visible_skill_count {
+                notes.push(format!(
+                    "{} of {} visible skill(s) are disabled.",
+                    visible_skill_count.saturating_sub(enabled_skill_count),
+                    visible_skill_count
+                ));
+            }
+            if let Some(diagnostic) = diagnostic {
+                notes.push(format!(
+                    "Adapter diagnostics status={}, writable_status={}, install_status={}.",
+                    diagnostic.status,
+                    diagnostic.access.writable_status,
+                    diagnostic.access.install_status
+                ));
+            }
+            WorkspaceReadinessAgentRow {
+                agent: agent.clone(),
+                display_name: agent_readiness_display_name(&agent),
+                status: workspace_status_for_score(score),
+                score,
+                visible_skill_count,
+                enabled_skill_count,
+                project_skill_count,
+                best_candidate: None,
+                adapter_status: diagnostic.map(|diagnostic| diagnostic.status.to_string()),
+                writable_status: diagnostic
+                    .map(|diagnostic| diagnostic.access.writable_status.to_string()),
+                install_status: diagnostic
+                    .map(|diagnostic| diagnostic.access.install_status.to_string()),
+                gap_count: usize::from(visible_skill_count == 0),
+                blocker_count: usize::from(score < 45),
+                notes,
+                evidence_refs: Vec::new(),
+            }
+        })
+        .collect()
+}
+
+fn workspace_readiness_summary(
+    project_root: Option<&Path>,
+    visible_details: &[SkillDetailRecord],
+    taxonomy: &CapabilityTaxonomyResult,
+    readiness_rows: &[WorkspaceReadinessChecklistRow],
+    agent_rows: &[WorkspaceReadinessAgentRow],
+    capability_rows: &[WorkspaceReadinessCapabilityRow],
+    gap_notes: &[String],
+    blocker_notes: &[String],
+) -> WorkspaceReadinessSummary {
+    let agent_count = visible_details
+        .iter()
+        .filter_map(|skill| normalize_agent_label(&skill.agent))
+        .collect::<BTreeSet<_>>()
+        .len()
+        .max(agent_rows.len());
+    let visible_skill_count = visible_details.len();
+    let enabled_skill_count = visible_details.iter().filter(|skill| skill.enabled).count();
+    let statuses = readiness_rows
+        .iter()
+        .map(|row| row.status)
+        .chain(agent_rows.iter().map(|row| row.status))
+        .chain(capability_rows.iter().map(|row| row.status))
+        .collect::<Vec<_>>();
+    let (ready_count, partial_count, blocked_count) = workspace_status_counts(statuses);
+    let project_available = project_root.is_some()
+        || visible_details
+            .iter()
+            .any(|skill| skill.scope == Scope::AgentProject.as_str());
+    let summary = if visible_skill_count == 0 {
+        "Workspace readiness is blocked because no visible local skills matched the selected workspace filters."
+            .to_string()
+    } else if blocked_count > 0 {
+        format!(
+            "Workspace readiness is partial: {} visible skill(s), {} capability row(s), and {} blocker row(s) need review.",
+            visible_skill_count,
+            capability_rows.len(),
+            blocked_count
+        )
+    } else {
+        format!(
+            "Workspace readiness is ready across {} visible skill(s), {} agent(s), and {} capability row(s).",
+            visible_skill_count,
+            agent_count,
+            capability_rows.len()
+        )
+    };
+    WorkspaceReadinessSummary {
+        workspace_available: visible_skill_count > 0,
+        project_available,
+        visible_skill_count,
+        enabled_skill_count,
+        agent_count,
+        domain_count: taxonomy.summary.domain_count,
+        capability_count: capability_rows.len(),
+        ready_count,
+        partial_count,
+        blocked_count,
+        gap_count: gap_notes.len(),
+        blocker_count: blocker_notes.len(),
+        summary,
+    }
+}
+
 fn task_readiness_safety_flags() -> TaskReadinessSafetyFlags {
     TaskReadinessSafetyFlags {
         read_only: true,
@@ -14035,6 +15148,144 @@ fn render_task_readiness_prompt_section(
     )
 }
 
+fn render_workspace_readiness_prompt_section(
+    result: &WorkspaceReadinessResult,
+    redactor: &mut PromptRedactor<'_>,
+) -> String {
+    let checklist = result
+        .readiness_rows
+        .iter()
+        .take(10)
+        .map(|row| {
+            format!(
+                "- {} status={} score={} category={} detail={}",
+                redactor.redact(&row.title),
+                row.status,
+                row.score,
+                row.category,
+                redactor.redact(&row.detail)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let agents = result
+        .agent_rows
+        .iter()
+        .take(8)
+        .map(|row| {
+            format!(
+                "- {} status={} score={} visible={} enabled={} project={} adapter={} writable={} best={}",
+                redactor.redact(&row.display_name),
+                row.status,
+                row.score,
+                row.visible_skill_count,
+                row.enabled_skill_count,
+                row.project_skill_count,
+                row.adapter_status
+                    .as_deref()
+                    .map(|value| redactor.redact(value))
+                    .unwrap_or_else(|| "n/a".to_string()),
+                row.writable_status
+                    .as_deref()
+                    .map(|value| redactor.redact(value))
+                    .unwrap_or_else(|| "n/a".to_string()),
+                row.best_candidate
+                    .as_ref()
+                    .map(|candidate| redactor.redact(&candidate.skill_name))
+                    .unwrap_or_else(|| "none".to_string())
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let capabilities = result
+        .capability_rows
+        .iter()
+        .take(10)
+        .map(|row| {
+            format!(
+                "- {} status={} coverage={} score={} expected={} skills={} enabled={} gaps={}; blockers={}",
+                redactor.redact(&row.capability),
+                row.status,
+                row.coverage_level,
+                row.coverage_score,
+                row.expected,
+                row.skill_count,
+                row.enabled_skill_count,
+                row.gap_notes
+                    .iter()
+                    .take(3)
+                    .map(|note| redactor.redact(note))
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                row.blocker_notes
+                    .iter()
+                    .take(3)
+                    .map(|note| redactor.redact(note))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let evidence = result
+        .evidence_references
+        .iter()
+        .take(16)
+        .map(|reference| {
+            format!(
+                "- {} {} {}",
+                reference.source_type,
+                redactor.redact(&reference.source_id),
+                redactor.redact(&reference.label)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "Workspace readiness evidence:\n- catalog_available: {}\n- workspace_available: {}\n- project_available: {}\n- visible_skill_count: {}\n- enabled_skill_count: {}\n- agent_count: {}\n- domain_count: {}\n- capability_count: {}\n- ready_count: {}\n- partial_count: {}\n- blocked_count: {}\n- gap_count: {}\n- blocker_count: {}\n- summary: {}\n\nChecklist rows:\n{}\n\nAgent rows:\n{}\n\nCapability rows:\n{}\n\nGap notes:\n{}\n\nBlocker notes:\n{}\n\nEvidence references:\n{}\n\nSafety flags: read_only=true, app_local_only=true, provider_request_sent=false, write_back_allowed=false, write_actions_available=false, skill_files_mutated=false, agent_config_mutated=false, script_execution_allowed=false, execution_actions_available=false, config_mutation_allowed=false, snapshot_created=false, triage_mutation_allowed=false, credential_accessed=false, raw_prompt_persisted=false, raw_response_persisted=false, raw_trace_persisted=false, cloud_sync_performed=false, telemetry_emitted=false.",
+        result.catalog_available,
+        result.summary.workspace_available,
+        result.summary.project_available,
+        result.summary.visible_skill_count,
+        result.summary.enabled_skill_count,
+        result.summary.agent_count,
+        result.summary.domain_count,
+        result.summary.capability_count,
+        result.summary.ready_count,
+        result.summary.partial_count,
+        result.summary.blocked_count,
+        result.summary.gap_count,
+        result.summary.blocker_count,
+        redactor.redact(&result.summary.summary),
+        if checklist.is_empty() { "none" } else { &checklist },
+        if agents.is_empty() { "none" } else { &agents },
+        if capabilities.is_empty() { "none" } else { &capabilities },
+        if result.gap_notes.is_empty() {
+            "none".to_string()
+        } else {
+            result
+                .gap_notes
+                .iter()
+                .take(10)
+                .map(|note| redactor.redact(note))
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+        if result.blocker_notes.is_empty() {
+            "none".to_string()
+        } else {
+            result
+                .blocker_notes
+                .iter()
+                .take(10)
+                .map(|note| redactor.redact(note))
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+        if evidence.is_empty() { "none" } else { &evidence },
+    )
+}
+
 fn render_routing_confidence_prompt_section(
     ranking: &SkillRouteRankingResult,
     redactor: &mut PromptRedactor<'_>,
@@ -14405,6 +15656,7 @@ mod tests {
         assert!(methods.contains(&Value::String(
             "knowledge.buildCapabilityTaxonomy".to_string()
         )));
+        assert!(methods.contains(&Value::String("workspace.checkReadiness".to_string())));
         assert!(methods.contains(&Value::String("task.checkReadiness".to_string())));
         assert!(methods.contains(&Value::String("task.rankSkillRoutes".to_string())));
         assert!(methods.contains(&Value::String("task.compareAgentReadiness".to_string())));
@@ -20772,6 +22024,177 @@ mod tests {
     }
 
     #[test]
+    fn workspace_check_readiness_returns_local_read_only_checklist() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-workspace-readiness-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_similar_grouping_fixture(&host);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let result = host
+            .check_workspace_readiness(WorkspaceReadinessParams {
+                agent: None,
+                task: Some("Validate release readiness and privacy evidence".to_string()),
+                project_root: None,
+                expected_capabilities: vec![
+                    "Release & Validation".to_string(),
+                    "Security & Privacy".to_string(),
+                ],
+                limit: Some(8),
+                candidate_instance_ids: Vec::new(),
+            })
+            .expect("workspace readiness");
+
+        assert_eq!(result.generated_by, "deterministic-service");
+        assert!(result.catalog_available);
+        assert!(result.summary.workspace_available);
+        assert!(result.summary.visible_skill_count >= 3);
+        assert!(!result.readiness_rows.is_empty());
+        assert_eq!(result.readiness_rows.len(), result.checklist_rows.len());
+        assert!(result
+            .readiness_rows
+            .iter()
+            .any(|row| row.category == "capability_coverage"));
+        assert!(result
+            .readiness_rows
+            .iter()
+            .any(|row| row.category == "routing_ambiguity"));
+        assert!(!result.agent_rows.is_empty());
+        assert!(!result.capability_rows.is_empty());
+        assert!(result
+            .capability_rows
+            .iter()
+            .any(|row| row.expected && row.capability == "Release & Validation"));
+        assert_eq!(result.prompt_request.action, "workspace_readiness");
+        assert_eq!(
+            result.prompt_request.request.action,
+            LlmPromptActionKind::WorkspaceReadiness
+        );
+        assert_agent_readiness_safety_flags(&WireAgentReadinessSafetyFlags {
+            read_only: result.safety_flags.read_only,
+            app_local_only: result.safety_flags.app_local_only,
+            provider_request_sent: result.safety_flags.provider_request_sent,
+            write_back_allowed: result.safety_flags.write_back_allowed,
+            write_actions_available: result.safety_flags.write_actions_available,
+            skill_files_mutated: result.safety_flags.skill_files_mutated,
+            agent_config_mutated: result.safety_flags.agent_config_mutated,
+            script_execution_allowed: result.safety_flags.script_execution_allowed,
+            execution_actions_available: result.safety_flags.execution_actions_available,
+            config_mutation_allowed: result.safety_flags.config_mutation_allowed,
+            snapshot_created: result.safety_flags.snapshot_created,
+            triage_mutation_allowed: result.safety_flags.triage_mutation_allowed,
+            credential_accessed: result.safety_flags.credential_accessed,
+            raw_secret_returned: result.safety_flags.raw_secret_returned,
+            raw_prompt_persisted: result.safety_flags.raw_prompt_persisted,
+            raw_response_persisted: result.safety_flags.raw_response_persisted,
+            raw_trace_persisted: result.safety_flags.raw_trace_persisted,
+            cloud_sync_performed: result.safety_flags.cloud_sync_performed,
+            telemetry_emitted: result.safety_flags.telemetry_emitted,
+        });
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn workspace_check_readiness_missing_catalog_returns_safe_empty_result() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-workspace-readiness-empty-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let result = host
+            .check_workspace_readiness(WorkspaceReadinessParams::default())
+            .expect("empty workspace readiness");
+
+        assert!(!result.catalog_available);
+        assert!(!result.summary.workspace_available);
+        assert_eq!(result.summary.visible_skill_count, 0);
+        assert_eq!(result.summary.blocked_count, 1);
+        assert_eq!(result.prompt_request.action, "workspace_readiness");
+        assert!(!result.prompt_request.available);
+        assert!(result.safety_flags.read_only);
+        assert!(result.safety_flags.app_local_only);
+        assert!(!result.safety_flags.provider_request_sent);
+        assert!(!result.safety_flags.write_back_allowed);
+        assert!(!result.safety_flags.skill_files_mutated);
+        assert!(!result.safety_flags.agent_config_mutated);
+        assert!(!result.safety_flags.script_execution_allowed);
+        assert!(!result.safety_flags.credential_accessed);
+        assert!(!host.catalog_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn workspace_readiness_prompt_preview_is_redacted_and_preview_only() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-workspace-readiness-prompt-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_similar_grouping_fixture(&host);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("workspace-preview".to_string()),
+            method: "llm.previewPrompt".to_string(),
+            params: json!({
+                "action": "workspace_readiness",
+                "user_intent": "Validate release readiness using /tmp/home/private-project and token=secret-fixture-value",
+                "instance_ids": ["similar-claude-a", "similar-codex-a"]
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let preview: WireLlmPreviewPromptResult =
+            serde_json::from_value(response.result.expect("preview result"))
+                .expect("decode prompt preview");
+        assert_eq!(preview.action, "workspace_readiness");
+        assert!(preview
+            .prompt_preview
+            .contains("Workspace readiness evidence"));
+        assert!(!preview.prompt_preview.contains("secret-fixture-value"));
+        assert!(!preview.provider_request_sent);
+        assert!(!preview.write_back_allowed);
+        assert!(preview.draft_requires_user_copy);
+        assert!(!preview.raw_prompt_persisted);
+        assert!(!preview.raw_response_persisted);
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
     fn service_protocol_fixtures_decode() {
         let fixtures_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../..")
@@ -21010,6 +22433,27 @@ mod tests {
                 for domain in &taxonomy.domains {
                     assert_agent_readiness_safety_flags(&domain.safety_flags);
                 }
+            }
+            "workspace.checkReadiness" => {
+                let readiness: WireWorkspaceReadinessResult =
+                    decode_fixture_result(method, result, path);
+                assert_eq!(readiness.generated_by, "deterministic-service");
+                assert!(readiness.catalog_available);
+                assert_eq!(
+                    readiness.readiness_rows.len(),
+                    readiness.checklist_rows.len()
+                );
+                assert!(!readiness.readiness_rows.is_empty());
+                assert!(!readiness.agent_rows.is_empty());
+                assert!(!readiness.capability_rows.is_empty());
+                assert!(readiness.readiness_rows.iter().all(|row| row.score <= 100));
+                assert_eq!(readiness.prompt_request.action, "workspace_readiness");
+                assert_eq!(readiness.prompt_request.preview_method, "llm.previewPrompt");
+                assert_eq!(
+                    readiness.prompt_request.request.action,
+                    LlmPromptActionKind::WorkspaceReadiness
+                );
+                assert_agent_readiness_safety_flags(&readiness.safety_flags);
             }
             "task.checkReadiness" => {
                 let readiness: WireTaskReadinessResult =
@@ -21884,6 +23328,11 @@ mod tests {
             "knowledge.buildCapabilityTaxonomy" => {
                 json!({ "include_single_skill_domains": true, "limit": 4 })
             }
+            "workspace.checkReadiness" => json!({
+                "task": "fixture workspace readiness check",
+                "expected_capabilities": ["Release & Validation", "Security & Privacy"],
+                "limit": 4
+            }),
             "task.checkReadiness" => json!({ "task": "fixture task readiness check" }),
             "task.rankSkillRoutes" => json!({ "task": "fixture routing confidence check" }),
             "task.compareAgentReadiness" => json!({
@@ -22696,6 +24145,111 @@ mod tests {
         stale_drift_context: Option<WireKnowledgeStaleDriftContext>,
         similarity_group_ids: Vec<String>,
         match_reasons: Vec<String>,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireWorkspaceReadinessResult {
+        generated_by: String,
+        catalog_available: bool,
+        filters: WireWorkspaceReadinessFilters,
+        summary: WireWorkspaceReadinessSummary,
+        readiness_rows: Vec<WireWorkspaceReadinessChecklistRow>,
+        checklist_rows: Vec<WireWorkspaceReadinessChecklistRow>,
+        agent_rows: Vec<WireWorkspaceReadinessAgentRow>,
+        capability_rows: Vec<WireWorkspaceReadinessCapabilityRow>,
+        gap_notes: Vec<String>,
+        blocker_notes: Vec<String>,
+        evidence_references: Vec<WireTaskReadinessEvidenceReference>,
+        prompt_request: WireAgentReadinessPromptRequest,
+        safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireWorkspaceReadinessFilters {
+        agent: Option<String>,
+        task: Option<String>,
+        project_root: Option<String>,
+        expected_capabilities: Vec<String>,
+        limit: usize,
+        candidate_instance_ids: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireWorkspaceReadinessSummary {
+        workspace_available: bool,
+        project_available: bool,
+        visible_skill_count: usize,
+        enabled_skill_count: usize,
+        agent_count: usize,
+        domain_count: usize,
+        capability_count: usize,
+        ready_count: usize,
+        partial_count: usize,
+        blocked_count: usize,
+        gap_count: usize,
+        blocker_count: usize,
+        summary: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireWorkspaceReadinessChecklistRow {
+        id: String,
+        category: String,
+        status: String,
+        score: u8,
+        title: String,
+        detail: String,
+        agent: Option<String>,
+        capability: Option<String>,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireWorkspaceReadinessAgentRow {
+        agent: String,
+        display_name: String,
+        status: String,
+        score: u8,
+        visible_skill_count: usize,
+        enabled_skill_count: usize,
+        project_skill_count: usize,
+        best_candidate: Option<WireAgentReadinessBestCandidate>,
+        adapter_status: Option<String>,
+        writable_status: Option<String>,
+        install_status: Option<String>,
+        gap_count: usize,
+        blocker_count: usize,
+        notes: Vec<String>,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireWorkspaceReadinessCapabilityRow {
+        capability: String,
+        domain_key: String,
+        domain_name: String,
+        status: String,
+        coverage_level: String,
+        coverage_score: u8,
+        expected: bool,
+        skill_count: usize,
+        enabled_skill_count: usize,
+        agent_count: usize,
+        gap_notes: Vec<String>,
+        blocker_notes: Vec<String>,
         evidence_refs: Vec<String>,
     }
 

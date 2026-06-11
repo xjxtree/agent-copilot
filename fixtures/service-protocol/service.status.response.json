@@ -19,6 +19,7 @@
       "knowledge.search",
       "knowledge.groupSimilarSkills",
       "knowledge.buildCapabilityTaxonomy",
+      "workspace.checkReadiness",
       "task.checkReadiness",
       "task.rankSkillRoutes",
       "task.compareAgentReadiness",
