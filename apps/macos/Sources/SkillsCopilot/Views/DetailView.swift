@@ -178,6 +178,8 @@ struct DetailView: View {
                             isCheckingWorkspaceReadiness: store.isCheckingWorkspaceReadiness,
                             remediationPlanResult: store.remediationPlanResult,
                             isPlanningRemediation: store.isPlanningRemediation,
+                            remediationPreviewDraftsResult: store.remediationPreviewDraftsResult,
+                            isPreviewingRemediationDrafts: store.isPreviewingRemediationDrafts,
                             onScoreQuality: {
                                 Task {
                                     await store.scoreSelectedSkillQuality()
@@ -261,6 +263,11 @@ struct DetailView: View {
                             onPlanRemediation: {
                                 Task {
                                     await store.planRemediation()
+                                }
+                            },
+                            onPreviewRemediationDrafts: {
+                                Task {
+                                    await store.previewRemediationDrafts()
                                 }
                             },
                             taskBenchmarkText: $store.taskBenchmarkText,
@@ -910,6 +917,8 @@ private struct AnalysisSection: View {
     let isCheckingWorkspaceReadiness: Bool
     let remediationPlanResult: RemediationPlanResult?
     let isPlanningRemediation: Bool
+    let remediationPreviewDraftsResult: RemediationPreviewDraftsResult?
+    let isPreviewingRemediationDrafts: Bool
     let onScoreQuality: () -> Void
     let onPreviewQualityPrompt: () -> Void
     let onSendQualityPrompt: () -> Void
@@ -927,6 +936,7 @@ private struct AnalysisSection: View {
     let onBuildCapabilityTaxonomy: () -> Void
     let onCheckWorkspaceReadiness: () -> Void
     let onPlanRemediation: () -> Void
+    let onPreviewRemediationDrafts: () -> Void
     @Binding var taskBenchmarkText: String
     let taskBenchmarkInput: String
     let taskBenchmarkList: TaskBenchmarkListResult
@@ -1094,6 +1104,12 @@ private struct AnalysisSection: View {
                 result: remediationPlanResult,
                 isPlanning: isPlanningRemediation,
                 onPlan: onPlanRemediation
+            )
+
+            RemediationPreviewDraftsPanel(
+                result: remediationPreviewDraftsResult,
+                isPreviewing: isPreviewingRemediationDrafts,
+                onPreview: onPreviewRemediationDrafts
             )
 
             KnowledgeSearchPanel(
@@ -4541,6 +4557,354 @@ private struct RemediationPlanItemCard: View {
             return "puzzlepiece.extension"
         }
         return "wrench.and.screwdriver"
+    }
+}
+
+private struct RemediationPreviewDraftsPanel: View {
+    let result: RemediationPreviewDraftsResult?
+    let isPreviewing: Bool
+    let onPreview: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.fixPreviewTitle, systemImage: "doc.text.magnifyingglass")
+                    .font(.headline)
+                Spacer()
+                Label(UIStrings.llmPromptCopyOnly, systemImage: "doc.on.doc")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(UIStrings.fixPreviewBoundary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+
+            HStack(spacing: 8) {
+                Button {
+                    onPreview()
+                } label: {
+                    Label(UIStrings.fixPreviewAction, systemImage: "wand.and.stars")
+                }
+                .disabled(isPreviewing)
+
+                if isPreviewing {
+                    Label(UIStrings.llmPreparing, systemImage: "hourglass")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if let result {
+                RemediationPreviewDraftsResultView(result: result)
+            } else {
+                Label(UIStrings.fixPreviewNoResult, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Label(UIStrings.fixPreviewCopyOnlyBoundary, systemImage: "nosign")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct RemediationPreviewDraftsResultView: View {
+    let result: RemediationPreviewDraftsResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let fallbackReason = result.fallbackReason, !fallbackReason.isEmpty {
+                Label(fallbackReason, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+                SummaryChip(title: UIStrings.fixPreviewDrafts, value: "\(draftCount)", systemImage: "doc.text")
+                SummaryChip(title: UIStrings.fixPreviewFrontmatter, value: "\(frontmatterCount)", systemImage: "list.bullet.rectangle")
+                SummaryChip(title: UIStrings.fixPreviewDescription, value: "\(descriptionCount)", systemImage: "text.alignleft")
+                SummaryChip(title: UIStrings.fixPreviewPermissions, value: "\(permissionsCount)", systemImage: "lock.shield")
+                SummaryChip(title: UIStrings.fixPreviewDependency, value: "\(dependencyCount)", systemImage: "shippingbox")
+                SummaryChip(title: UIStrings.fixPreviewPolicy, value: "\(policyCount)", systemImage: "checkmark.shield")
+                SummaryChip(title: UIStrings.knowledgeBlockerNotes, value: "\(blockerCount)", systemImage: "lock.trianglebadge.exclamationmark")
+                SummaryChip(title: UIStrings.llmPromptCopyOnly, value: "\(copyOnlyCount)", systemImage: "doc.on.doc")
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                MetadataRow(label: UIStrings.routingAccuracyGeneratedBy, value: result.generatedBy)
+                MetadataRow(label: UIStrings.routingAccuracyCatalog, value: result.catalogAvailable ? UIStrings.routingAccuracyAvailable : UIStrings.routingAccuracyUnavailableShort)
+                MetadataRow(label: UIStrings.agent, value: agentFilterLabel)
+                if let taskText = result.filters.taskText, !taskText.isEmpty {
+                    MetadataRow(label: UIStrings.taskBenchmarkTaskPlaceholder, value: taskText)
+                }
+                if let limit = result.filters.limit {
+                    MetadataRow(label: UIStrings.text("filter.limit", "Limit"), value: "\(limit)")
+                }
+                if let promptRequest = result.promptRequest {
+                    MetadataRow(label: UIStrings.routingAccuracyPromptRequest, value: promptRequestLabel(promptRequest))
+                }
+            }
+
+            if !result.summary.summaryText.isEmpty {
+                Text(result.summary.summaryText)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            RemediationPreviewDraftGroupList(groups: draftGroups)
+            RoutingInlineList(title: UIStrings.knowledgeGapNotes, empty: UIStrings.routingAccuracyNoGaps, values: result.gapNotes, systemImage: "puzzlepiece.extension")
+            RoutingInlineList(title: UIStrings.knowledgeBlockerNotes, empty: UIStrings.routingAccuracyNoBlockers, values: result.blockerNotes, systemImage: "exclamationmark.octagon")
+            CrossAgentReadinessEvidenceList(evidence: result.evidenceReferences)
+            StaleDriftSafetyList(safety: result.safetyFlags)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var draftCount: Int {
+        result.summary.totalCount > 0 ? result.summary.totalCount : result.draftItems.count
+    }
+
+    private var frontmatterCount: Int {
+        result.summary.frontmatterCount > 0 ? result.summary.frontmatterCount : countDrafts(matching: "frontmatter")
+    }
+
+    private var descriptionCount: Int {
+        result.summary.descriptionCount > 0 ? result.summary.descriptionCount : countDrafts(matching: "description")
+    }
+
+    private var permissionsCount: Int {
+        result.summary.permissionsCount > 0 ? result.summary.permissionsCount : countDrafts(matching: "permission")
+    }
+
+    private var dependencyCount: Int {
+        result.summary.dependencyCount > 0 ? result.summary.dependencyCount : countDrafts(matching: "depend")
+    }
+
+    private var policyCount: Int {
+        result.summary.policyCount > 0 ? result.summary.policyCount : countDrafts(matching: "policy")
+    }
+
+    private var blockerCount: Int {
+        result.summary.blockerCount > 0 ? result.summary.blockerCount : result.blockerNotes.count + result.draftItems.reduce(0) { $0 + $1.blockerNotes.count }
+    }
+
+    private var copyOnlyCount: Int {
+        result.summary.copyOnlyCount > 0 ? result.summary.copyOnlyCount : result.draftItems.count
+    }
+
+    private var agentFilterLabel: String {
+        if !result.filters.agents.isEmpty {
+            return result.filters.agents.map(DisplayText.agent).joined(separator: ", ")
+        }
+        return result.filters.agent.map(DisplayText.agent) ?? UIStrings.text("health.allAgents", "All Agents")
+    }
+
+    private var draftGroups: [(type: String, items: [RemediationPreviewDraftItem])] {
+        let grouped = Dictionary(grouping: result.draftItems, by: \.draftType)
+        return grouped.keys.sorted { lhs, rhs in
+            draftTypeSortIndex(lhs) < draftTypeSortIndex(rhs)
+        }.map { type in
+            (type: type, items: grouped[type] ?? [])
+        }
+    }
+
+    private func countDrafts(matching draftType: String) -> Int {
+        result.draftItems.filter { item in
+            item.draftType.localizedCaseInsensitiveContains(draftType)
+        }.count
+    }
+
+    private func draftTypeSortIndex(_ draftType: String) -> Int {
+        let normalized = draftType.lowercased()
+        if normalized.contains("frontmatter") { return 0 }
+        if normalized.contains("description") { return 1 }
+        if normalized.contains("permission") { return 2 }
+        if normalized.contains("depend") { return 3 }
+        if normalized.contains("policy") { return 4 }
+        return 5
+    }
+
+    private func promptRequestLabel(_ promptRequest: RoutingAccuracyPromptRequest) -> String {
+        let state = promptRequest.enabled ? UIStrings.llmEnabled : UIStrings.llmDisabled
+        let copy = promptRequest.copyOnly ? UIStrings.llmPromptCopyOnly : UIStrings.llmSkillAnalysisEnabledUnsafe
+        return "\(promptRequest.requestKind) · \(state) · \(copy)"
+    }
+}
+
+private struct RemediationPreviewDraftGroupList: View {
+    let groups: [(type: String, items: [RemediationPreviewDraftItem])]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(UIStrings.fixPreviewDrafts)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if groups.isEmpty {
+                Text(UIStrings.fixPreviewNoDrafts)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(groups, id: \.type) { group in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(draftTypeLabel(group.type))
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 360), spacing: 8)], alignment: .leading, spacing: 8) {
+                            ForEach(group.items.prefix(8)) { item in
+                                RemediationPreviewDraftCard(item: item)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func draftTypeLabel(_ draftType: String) -> String {
+        let normalized = draftType.lowercased()
+        if normalized.contains("frontmatter") { return UIStrings.fixPreviewFrontmatter }
+        if normalized.contains("description") { return UIStrings.fixPreviewDescription }
+        if normalized.contains("permission") { return UIStrings.fixPreviewPermissions }
+        if normalized.contains("depend") { return UIStrings.fixPreviewDependency }
+        if normalized.contains("policy") { return UIStrings.fixPreviewPolicy }
+        return draftType.isEmpty ? UIStrings.unknown : draftType
+    }
+}
+
+private struct RemediationPreviewDraftCard: View {
+    let item: RemediationPreviewDraftItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(item.title, systemImage: iconName)
+                    .font(.callout.bold())
+                    .lineLimit(1)
+                Spacer()
+                if let confidenceLabel {
+                    Text(confidenceLabel)
+                        .font(.caption2.bold())
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
+                MetadataRow(label: UIStrings.fixPreviewDraftType, value: draftTypeLabel)
+                if let agent = item.agent, !agent.isEmpty {
+                    MetadataRow(label: UIStrings.agent, value: DisplayText.agent(agent))
+                }
+                if let findingID = item.findingID, !findingID.isEmpty {
+                    MetadataRow(label: UIStrings.fixPreviewFinding, value: findingID)
+                }
+                if let ruleID = item.ruleID, !ruleID.isEmpty {
+                    MetadataRow(label: UIStrings.knowledgeRules, value: ruleID)
+                }
+            }
+
+            if let skill = item.affectedSkill {
+                CapabilitySkillList(skills: [skill])
+            }
+
+            if let currentText = item.currentText, !currentText.isEmpty {
+                DraftSnippetBlock(title: UIStrings.fixPreviewCurrentSnippet, text: currentText, allowsCopy: false, copyLabel: item.copyLabel)
+            }
+
+            DraftSnippetBlock(title: UIStrings.fixPreviewProposedSnippet, text: item.proposedText, allowsCopy: true, copyLabel: item.copyLabel)
+
+            if !item.editGuidance.isEmpty {
+                Label(item.editGuidance, systemImage: "pencil.and.list.clipboard")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            if !item.rationale.isEmpty {
+                Text(item.rationale)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: item.evidenceRefs, systemImage: "checklist")
+            RoutingInlineList(title: UIStrings.knowledgeBlockerNotes, empty: UIStrings.routingAccuracyNoBlockers, values: item.blockerNotes, systemImage: "exclamationmark.octagon")
+            RoutingInlineList(title: UIStrings.knowledgeSafetyFlags, empty: UIStrings.taskBenchmarkNoSafetyFlags, values: item.safetyFlags, systemImage: "checkmark.shield")
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var confidenceLabel: String? {
+        if let confidenceScore = item.confidenceScore, let band = item.confidenceBand, !band.isEmpty {
+            return "\(confidenceScore) · \(band)"
+        }
+        if let confidenceScore = item.confidenceScore {
+            return "\(confidenceScore)"
+        }
+        return item.confidenceBand?.isEmpty == false ? item.confidenceBand : nil
+    }
+
+    private var draftTypeLabel: String {
+        let normalized = item.draftType.lowercased()
+        if normalized.contains("frontmatter") { return UIStrings.fixPreviewFrontmatter }
+        if normalized.contains("description") { return UIStrings.fixPreviewDescription }
+        if normalized.contains("permission") { return UIStrings.fixPreviewPermissions }
+        if normalized.contains("depend") { return UIStrings.fixPreviewDependency }
+        if normalized.contains("policy") { return UIStrings.fixPreviewPolicy }
+        return item.draftType
+    }
+
+    private var iconName: String {
+        let normalized = item.draftType.lowercased()
+        if normalized.contains("frontmatter") { return "list.bullet.rectangle" }
+        if normalized.contains("description") { return "text.alignleft" }
+        if normalized.contains("permission") { return "lock.shield" }
+        if normalized.contains("depend") { return "shippingbox" }
+        if normalized.contains("policy") { return "checkmark.shield" }
+        return "doc.text.magnifyingglass"
+    }
+}
+
+private struct DraftSnippetBlock: View {
+    let title: String
+    let text: String
+    let allowsCopy: Bool
+    let copyLabel: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Label(title, systemImage: "doc.text")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if allowsCopy && !text.isEmpty {
+                    Button {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(text, forType: .string)
+                    } label: {
+                        Label(copyLabel.isEmpty ? UIStrings.fixPreviewCopyDraft : copyLabel, systemImage: "doc.on.doc")
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
+            Text(text.isEmpty ? UIStrings.emptyPlaceholder : text)
+                .font(.system(.caption, design: .monospaced))
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(8)
+                .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
+        }
     }
 }
 

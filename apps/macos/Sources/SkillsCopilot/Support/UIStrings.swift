@@ -642,6 +642,26 @@ enum UIStrings {
     static var remediationPlanGuidanceOnly: String { text("remediationPlan.guidanceOnly", "Guidance only") }
     static var remediationPlanNextArea: String { text("remediationPlan.nextArea", "Review area") }
     static var remediationPlanReviewGuidance: String { text("remediationPlan.reviewGuidance", "Review the supporting evidence in existing safe UI areas; no direct write action is available from this plan.") }
+    static var fixPreviewTitle: String { text("fixPreview.title", "Fix Preview Drafts") }
+    static var fixPreviewBoundary: String { text("fixPreview.boundary", "User-triggered, local-only draft previews for likely skill fixes. Drafts are copy-only guidance: this panel cannot call a provider, write skill files, mutate agent config, create snapshots, change triage, execute scripts, read credentials, persist raw prompts/responses/traces, sync cloud data, or emit telemetry.") }
+    static var fixPreviewCopyOnlyBoundary: String { text("fixPreview.copyOnlyBoundary", "Copy proposed text into an existing safe edit flow if you choose to use it. No Apply or Write action is exposed here.") }
+    static var fixPreviewAction: String { text("fixPreview.action.preview", "Preview Drafts") }
+    static var fixPreviewUnavailable: String { text("fixPreview.unavailable", "Fix preview drafts are unavailable in this service build.") }
+    static var fixPreviewNoResult: String { text("fixPreview.empty.result", "No fix preview drafts loaded.") }
+    static var fixPreviewDraft: String { text("fixPreview.draft", "Fix draft") }
+    static var fixPreviewDrafts: String { text("fixPreview.drafts", "Drafts") }
+    static var fixPreviewNoDrafts: String { text("fixPreview.empty.drafts", "No fix preview drafts returned.") }
+    static var fixPreviewFrontmatter: String { text("fixPreview.type.frontmatter", "Frontmatter") }
+    static var fixPreviewDescription: String { text("fixPreview.type.description", "Description") }
+    static var fixPreviewPermissions: String { text("fixPreview.type.permissions", "Permissions") }
+    static var fixPreviewDependency: String { text("fixPreview.type.dependency", "Dependency") }
+    static var fixPreviewPolicy: String { text("fixPreview.type.policy", "Policy") }
+    static var fixPreviewDraftType: String { text("fixPreview.draftType", "Draft type") }
+    static var fixPreviewFinding: String { text("fixPreview.finding", "Finding") }
+    static var fixPreviewCurrentSnippet: String { text("fixPreview.currentSnippet", "Current snippet") }
+    static var fixPreviewProposedSnippet: String { text("fixPreview.proposedSnippet", "Proposed draft") }
+    static var fixPreviewCopyDraft: String { text("fixPreview.copyDraft", "Copy Draft") }
+    static var fixPreviewEditGuidanceFallback: String { text("fixPreview.editGuidance.fallback", "Review this draft in the relevant existing editor or source file; this preview does not apply changes.") }
     static var taskBenchmarkTitle: String { text("taskBenchmark.title", "Task Benchmark Set") }
     static var taskBenchmarkBoundary: String { text("taskBenchmark.boundary", "User-triggered, local benchmark evaluation for task routing. Local evaluation does not call a provider and cannot write skill files, mutate agent config, create snapshots, change triage, execute scripts, or read credentials.") }
     static var taskBenchmarkTaskPlaceholder: String { text("taskBenchmark.task.placeholder", "Optional benchmark task text; otherwise the current readiness/routing task is used") }

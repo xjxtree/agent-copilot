@@ -46,6 +46,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var capabilityTaxonomyResult: CapabilityTaxonomyResult?
     @Published private(set) var workspaceReadinessResult: WorkspaceReadinessResult?
     @Published private(set) var remediationPlanResult: RemediationPlanResult?
+    @Published private(set) var remediationPreviewDraftsResult: RemediationPreviewDraftsResult?
     @Published private(set) var traceImportList = AgentTraceImportListResult(imports: [])
     @Published private(set) var traceImportResult: AgentTraceImportResult?
     @Published private(set) var traceImportDeleteResult: AgentTraceImportDeleteResult?
@@ -61,6 +62,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var isBuildingCapabilityTaxonomy = false
     @Published private(set) var isCheckingWorkspaceReadiness = false
     @Published private(set) var isPlanningRemediation = false
+    @Published private(set) var isPreviewingRemediationDrafts = false
     @Published private(set) var isLoadingTraceImports = false
     @Published private(set) var isImportingTrace = false
     @Published private(set) var deletingTaskBenchmarkIDs: Set<String> = []
@@ -111,6 +113,7 @@ final class SkillStore: ObservableObject {
             capabilityTaxonomyResult = nil
             workspaceReadinessResult = nil
             remediationPlanResult = nil
+            remediationPreviewDraftsResult = nil
             Task { await loadAgentConfigSnapshots() }
             Task { await loadCleanupQueue() }
             Task { await loadCrossAgentComparisons() }
@@ -185,7 +188,7 @@ final class SkillStore: ObservableObject {
     }
 
     private var isTaskBenchmarkBusy: Bool {
-        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isGroupingSimilarSkills || isBuildingCapabilityTaxonomy || isCheckingWorkspaceReadiness || isPlanningRemediation || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty
+        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isGroupingSimilarSkills || isBuildingCapabilityTaxonomy || isCheckingWorkspaceReadiness || isPlanningRemediation || isPreviewingRemediationDrafts || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty
     }
 
     private var isLLMPromptBusy: Bool {
@@ -1559,6 +1562,30 @@ final class SkillStore: ObservableObject {
             )
         } catch {
             remediationPlanResult = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
+    func previewRemediationDrafts() async {
+        guard !isPreviewingRemediationDrafts else { return }
+        guard !isRefreshBusy else {
+            remediationPreviewDraftsResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        isPreviewingRemediationDrafts = true
+        defer { isPreviewingRemediationDrafts = false }
+
+        let agent = agentFilter == .all ? nil : agentFilter.rawValue
+        let taskText = selectedCrossAgentReadinessInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            remediationPreviewDraftsResult = try await service.previewRemediationDrafts(
+                taskText: taskText.isEmpty ? nil : taskText,
+                agent: agent,
+                project: activeProjectContext,
+                limit: 20
+            )
+        } catch {
+            remediationPreviewDraftsResult = .unavailable(reason: error.localizedDescription)
         }
     }
 

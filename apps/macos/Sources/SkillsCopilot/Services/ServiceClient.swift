@@ -352,6 +352,28 @@ private struct RemediationPlanParams: Encodable {
     }
 }
 
+private struct RemediationPreviewDraftsParams: Encodable {
+    let task: String?
+    let agent: String?
+    let projectRoot: String?
+    let currentCWD: String?
+    let workspace: String?
+    let limit: Int?
+    let draftTypes: [String]
+    let includeBlocked: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case task
+        case agent
+        case projectRoot = "project_root"
+        case currentCWD = "current_cwd"
+        case workspace
+        case limit
+        case draftTypes = "draft_types"
+        case includeBlocked = "include_blocked"
+    }
+}
+
 private struct TaskBenchmarkDeleteParams: Encodable {
     let benchmarkId: String
 
@@ -1018,6 +1040,32 @@ final class ServiceClient {
         )
         do {
             return try await call(method: "remediation.plan", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func previewRemediationDrafts(
+        taskText: String? = nil,
+        agent: String? = nil,
+        project: ProjectContext? = nil,
+        limit: Int? = 20,
+        draftTypes: [String] = ["frontmatter", "description", "permissions", "dependency", "policy"],
+        includeBlocked: Bool = true
+    ) async throws -> RemediationPreviewDraftsResult {
+        let normalizedTask = taskText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let params = RemediationPreviewDraftsParams(
+            task: normalizedTask?.isEmpty == true ? nil : normalizedTask,
+            agent: agent,
+            projectRoot: project?.rootPath,
+            currentCWD: project?.currentCWD,
+            workspace: project?.name,
+            limit: limit,
+            draftTypes: draftTypes,
+            includeBlocked: includeBlocked
+        )
+        do {
+            return try await call(method: "remediation.previewDrafts", params: params)
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .unavailable()
         }
