@@ -537,7 +537,14 @@ Model families:
   - `knowledge.search` response: `{ generated_by, catalog_available, filters, summary, rows, facets, gap_notes, blocker_notes, evidence_references, prompt_request, safety_flags }`。
   - `rows`: `[{ rank, instance_id, definition_id, skill_name, agent, scope, enabled, state, source, purpose_snippet, description_snippet, matched_fields, match_reasons, keywords, tools, rules, capability_tags, risk_tags, quality_context, readiness_context, stale_drift_context, evidence_refs, safety_flags }]`。
   - `facets`: grouped counts for agents, scopes, states, enabled values, risks, tools, and keywords.
-- `SimilarityGroup` / `CapabilityTaxonomy` / `WorkspaceReadiness`（V2.53-V2.55 future）：future derived grouping and readiness views; not implemented yet.
+- `SimilarityGroup` / `SimilarityGroupMember`（V2.53 completed）：local-only, read-only grouping view over existing catalog evidence and derived tags; it does not persist a grouping artifact.
+  - `knowledge.groupSimilarSkills` response: `{ generated_by, catalog_available, filters, summary, groups, gap_notes, blocker_notes, evidence_references, prompt_request, safety_flags }`。
+  - `filters`: `{ agent, limit, min_score, candidate_instance_ids, include_singletons }`。
+  - `summary`: `{ indexed_skill_count, candidate_skill_count, matched_group_count, returned_group_count, duplicate_group_count, confusable_group_count, coverage_redundancy_group_count, routing_ambiguity_count, summary }`。
+  - `groups`: `[{ group_id, rank, group_type, similarity_score, ambiguity_risk, coverage_redundancy, routing_ambiguity, canonical_name, canonical_key, title, summary, why_grouped, shared_terms, shared_tools, shared_rules, shared_capability_tags, shared_risk_tags, shared_source_signals, members, evidence_refs, safety_flags }]`。
+  - `members`: `[{ instance_id, definition_id, skill_name, agent, scope, enabled, state, source, quality_context, readiness_context, stale_drift_context, match_reasons, similarity_reasons, evidence_refs }]`。
+  - grouping signals: source/name/tool/rule/capability/risk overlap, quality/readiness/stale-drift context, and same/similar/confusable routing patterns. The output is explanatory and read-only; it distinguishes coverage redundancy from routing ambiguity and does not create new skill or agent state.
+- `CapabilityTaxonomy` / `WorkspaceReadiness`（V2.54-V2.55 future）：future derived grouping and readiness views; not implemented yet.
 - `ReviewSession` / `RemediationHistory`（V2.56-V2.61）：local review state, actions considered, decisions, reopened issues, and summary. AI suggestions remain untrusted and cannot directly mutate skill files or agent config.
 - `PolicyPack` / `PolicyProfile` / `ComplianceReport`（V2.63-V2.66）：local policy schema, import/export metadata, profile bindings, deterministic evidence, and optional AI explanation.
 - `ProviderObservabilityView`（V2.69）：derived UI/reporting layer over `ProviderCallMetadataMinimal`, adding call history, cost trends, provider errors, rate limits, availability, cleanup/retention controls, and optional redacted export. Do not persist API keys, raw prompts, raw responses, credentials, or local paths by default.

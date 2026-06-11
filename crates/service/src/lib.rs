@@ -64,6 +64,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "analysis.scoreSkillQuality",
     "analysis.detectStaleDrift",
     "knowledge.search",
+    "knowledge.groupSimilarSkills",
     "task.checkReadiness",
     "task.rankSkillRoutes",
     "task.compareAgentReadiness",
@@ -922,6 +923,102 @@ pub type KnowledgeSearchPromptRequest = AgentReadinessPromptRequest;
 pub type KnowledgeSearchSafetyFlags = AgentReadinessSafetyFlags;
 
 #[derive(Debug, Clone, Default, Deserialize)]
+pub struct SimilarSkillGroupingParams {
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+    #[serde(default)]
+    pub min_score: Option<f64>,
+    #[serde(default)]
+    pub include_singletons: bool,
+    #[serde(default)]
+    pub candidate_instance_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SimilarSkillGroupingResult {
+    pub generated_by: &'static str,
+    pub catalog_available: bool,
+    pub filters: SimilarSkillGroupingFilters,
+    pub summary: SimilarSkillGroupingSummary,
+    pub groups: Vec<SimilarSkillGroup>,
+    pub gap_notes: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub evidence_references: Vec<TaskReadinessEvidenceReference>,
+    pub prompt_request: SimilarSkillGroupingPromptRequest,
+    pub safety_flags: SimilarSkillGroupingSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SimilarSkillGroupingFilters {
+    pub agent: Option<String>,
+    pub limit: usize,
+    pub min_score: u8,
+    pub include_singletons: bool,
+    pub candidate_instance_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SimilarSkillGroupingSummary {
+    pub indexed_skill_count: usize,
+    pub candidate_skill_count: usize,
+    pub matched_group_count: usize,
+    pub returned_group_count: usize,
+    pub duplicate_group_count: usize,
+    pub confusable_group_count: usize,
+    pub coverage_redundancy_group_count: usize,
+    pub routing_ambiguity_count: usize,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SimilarSkillGroup {
+    pub group_id: String,
+    pub rank: usize,
+    pub group_type: &'static str,
+    pub similarity_score: u8,
+    pub ambiguity_risk: &'static str,
+    pub coverage_redundancy: &'static str,
+    pub routing_ambiguity: &'static str,
+    pub canonical_name: String,
+    pub canonical_key: String,
+    pub title: String,
+    pub summary: String,
+    pub why_grouped: Vec<String>,
+    pub shared_terms: Vec<String>,
+    pub shared_tools: Vec<String>,
+    pub shared_rules: Vec<String>,
+    pub shared_capability_tags: Vec<String>,
+    pub shared_risk_tags: Vec<String>,
+    pub shared_source_signals: Vec<String>,
+    pub members: Vec<SimilarSkillMember>,
+    pub evidence_refs: Vec<String>,
+    pub safety_flags: SimilarSkillGroupingSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SimilarSkillMember {
+    pub instance_id: String,
+    pub definition_id: String,
+    pub skill_name: String,
+    pub agent: String,
+    pub scope: String,
+    pub enabled: bool,
+    pub state: String,
+    pub source: KnowledgeSearchSource,
+    pub quality_context: Option<KnowledgeQualityContext>,
+    pub readiness_context: Option<KnowledgeReadinessContext>,
+    pub stale_drift_context: Option<KnowledgeStaleDriftContext>,
+    pub match_reasons: Vec<String>,
+    pub similarity_reasons: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+pub type SimilarSkillGroupingPromptRequest = AgentReadinessPromptRequest;
+pub type SimilarSkillGroupingSafetyFlags = AgentReadinessSafetyFlags;
+
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct DetectStaleDriftParams {
     #[serde(default)]
     pub agent: Option<String>,
@@ -1701,6 +1798,7 @@ pub enum LlmPromptActionKind {
     QualityScore,
     StaleDriftDetection,
     KnowledgeSearch,
+    SimilarSkillGrouping,
     TaskReadiness,
     RoutingConfidence,
 }
@@ -1716,6 +1814,7 @@ impl LlmPromptActionKind {
             Self::QualityScore => "quality_score",
             Self::StaleDriftDetection => "stale_drift_detection",
             Self::KnowledgeSearch => "knowledge_search",
+            Self::SimilarSkillGrouping => "similar_skill_grouping",
             Self::TaskReadiness => "task_readiness",
             Self::RoutingConfidence => "routing_confidence",
         }
@@ -2246,6 +2345,14 @@ impl ServiceHost {
                     serde_json::from_value(request.params)?
                 };
                 serde_json::to_value(self.search_knowledge(params)?).map_err(Into::into)
+            }
+            "knowledge.groupSimilarSkills" => {
+                let params: SimilarSkillGroupingParams = if request.params.is_null() {
+                    SimilarSkillGroupingParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.group_similar_skills(params)?).map_err(Into::into)
             }
             "task.checkReadiness" => {
                 let params: TaskReadinessParams = serde_json::from_value(request.params)?;
@@ -4064,6 +4171,181 @@ impl ServiceHost {
         })
     }
 
+    pub fn group_similar_skills(
+        &self,
+        params: SimilarSkillGroupingParams,
+    ) -> Result<SimilarSkillGroupingResult, ServiceError> {
+        if matches!(params.limit, Some(0)) {
+            return Err(ServiceError::InvalidRequest(
+                "knowledge.groupSimilarSkills limit must be greater than zero".to_string(),
+            ));
+        }
+
+        let filters = similar_skill_grouping_filters(&params);
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let Some(catalog) = self.open_existing_catalog_read_only()? else {
+            return Ok(empty_similar_skill_grouping_result(filters, false));
+        };
+
+        let skills = self.list_visible_skill_records(&catalog)?;
+        let findings = list_findings(&catalog)?;
+        let conflicts = list_conflicts(&catalog)?;
+        let analysis = analyze_catalog(&catalog, &adapter_ctx)?;
+        let adapter_diagnostics = list_adapter_diagnostics(&adapter_ctx);
+        let roots = self.redaction_roots(&adapter_ctx);
+        let agent_filter = filters.agent.as_deref().filter(|agent| !agent.is_empty());
+        let candidate_ids = filters
+            .candidate_instance_ids
+            .iter()
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        let stale_by_id = self
+            .detect_stale_drift(DetectStaleDriftParams {
+                agent: filters.agent.clone(),
+                candidate_instance_ids: filters.candidate_instance_ids.clone(),
+                limit: Some(100),
+                stale_days: None,
+                thresholds: StaleDriftThresholds::default(),
+            })?
+            .stale_drift_rows
+            .into_iter()
+            .map(|row| (row.instance_id.clone(), row))
+            .collect::<BTreeMap<_, _>>();
+
+        let mut gap_notes = Vec::new();
+        let mut evidence = Vec::new();
+        let mut candidates = Vec::new();
+        for skill in &skills {
+            if !agent_matches(agent_filter, Some(skill.agent.as_str())) {
+                continue;
+            }
+            if !candidate_ids.is_empty() && !candidate_ids.contains(&skill.id) {
+                continue;
+            }
+            let Some(detail) = catalog.get_skill_detail(&skill.id)? else {
+                gap_notes.push(format!(
+                    "Catalog row `{}` did not have detail evidence available.",
+                    redact_for_llm_preview(&skill.id)
+                ));
+                continue;
+            };
+            let related_findings = knowledge_related_findings(&findings, &detail);
+            let related_conflicts = knowledge_related_conflicts(&conflicts, &detail);
+            let related_analysis = knowledge_related_analysis(&analysis.groups, &detail);
+            let diagnostic = adapter_diagnostics
+                .iter()
+                .find(|diagnostic| diagnostic.agent == detail.agent);
+            let quality = self
+                .score_skill_quality(ScoreSkillQualityParams {
+                    instance_id: detail.id.clone(),
+                    agent: Some(detail.agent.clone()),
+                    definition_id: Some(detail.definition_id.clone()),
+                })
+                .ok();
+            let stale = stale_by_id.get(&detail.id);
+            candidates.push(similar_skill_candidate(
+                &detail,
+                SimilarSkillCandidateSignals {
+                    findings: &related_findings,
+                    conflicts: &related_conflicts,
+                    analysis_groups: &related_analysis,
+                    diagnostic,
+                    quality: quality.as_ref(),
+                    stale,
+                    redaction_roots: &roots,
+                },
+                &mut evidence,
+            ));
+        }
+
+        let candidate_skill_count = candidates.len();
+        let mut groups =
+            similar_skill_groups_from_candidates(candidates, filters.min_score, &mut evidence);
+        if !filters.include_singletons {
+            groups.retain(|group| group.members.len() > 1);
+        }
+        let matched_group_count = groups.len();
+        groups.sort_by(|left, right| {
+            right
+                .similarity_score
+                .cmp(&left.similarity_score)
+                .then_with(|| right.members.len().cmp(&left.members.len()))
+                .then_with(|| left.canonical_key.cmp(&right.canonical_key))
+                .then_with(|| left.group_id.cmp(&right.group_id))
+        });
+        groups.truncate(filters.limit);
+        for (index, group) in groups.iter_mut().enumerate() {
+            group.rank = index + 1;
+        }
+
+        if candidate_skill_count == 0 {
+            gap_notes.push(
+                "No visible local skill evidence matched the similar-grouping filters.".to_string(),
+            );
+        } else if groups.is_empty() {
+            gap_notes.push(
+                "No deterministic similarity group met the selected score threshold.".to_string(),
+            );
+        }
+        gap_notes.sort();
+        gap_notes.dedup();
+
+        let blocker_notes = similar_skill_grouping_blocker_notes(&groups);
+        let prompt_instance_ids = groups
+            .iter()
+            .flat_map(|group| {
+                group
+                    .members
+                    .iter()
+                    .map(|member| member.instance_id.clone())
+            })
+            .take(12)
+            .collect::<Vec<_>>();
+        let prompt_available = !prompt_instance_ids.is_empty();
+        let summary = similar_skill_grouping_summary(
+            skills.len(),
+            candidate_skill_count,
+            matched_group_count,
+            &groups,
+        );
+
+        Ok(SimilarSkillGroupingResult {
+            generated_by: "deterministic-service",
+            catalog_available: true,
+            filters: filters.clone(),
+            summary,
+            groups,
+            gap_notes,
+            blocker_notes,
+            evidence_references: evidence,
+            prompt_request: SimilarSkillGroupingPromptRequest {
+                available: prompt_available,
+                preview_method: "llm.previewPrompt",
+                confirm_method: "llm.confirmPromptAndSend",
+                action: "similar_skill_grouping",
+                request: LlmPreviewPromptParams {
+                    action: LlmPromptActionKind::SimilarSkillGrouping,
+                    profile_id: None,
+                    skill_instance_id: None,
+                    instance_ids: prompt_instance_ids,
+                    analysis_kind: None,
+                    user_intent: Some(
+                        "Explain deterministic similar skill grouping using only local catalog evidence."
+                            .to_string(),
+                    ),
+                },
+                note: if prompt_available {
+                    "Optional provider-backed explanation must be requested through prompt preview and explicit confirmation; knowledge.groupSimilarSkills never sends provider traffic."
+                        .to_string()
+                } else {
+                    "Prompt preview is unavailable until local catalog evidence produces similar-skill groups."
+                        .to_string()
+                },
+            },
+            safety_flags: similar_skill_grouping_safety_flags(),
+        })
+    }
+
     pub fn check_task_readiness(
         &self,
         params: TaskReadinessParams,
@@ -5376,6 +5658,46 @@ impl ServiceHost {
                     &mut redactor,
                 ));
             }
+            LlmPromptActionKind::SimilarSkillGrouping => {
+                let result = self.group_similar_skills(SimilarSkillGroupingParams {
+                    agent: None,
+                    limit: Some(8),
+                    min_score: None,
+                    include_singletons: false,
+                    candidate_instance_ids: params.instance_ids.clone(),
+                })?;
+                prompt_scope.extend([
+                    "deterministic similar skill groups".to_string(),
+                    "group similarity and ambiguity signals".to_string(),
+                    "member quality and stale-drift context".to_string(),
+                    "local gap and blocker notes".to_string(),
+                    "evidence reference summaries".to_string(),
+                    "safety flags".to_string(),
+                ]);
+                included_fields.extend([
+                    "candidate skill ids".to_string(),
+                    "group ids and group types".to_string(),
+                    "canonical names and keys".to_string(),
+                    "similarity, ambiguity, redundancy, and routing ambiguity bands".to_string(),
+                    "shared terms, tools, rules, capability, risk, and source signals".to_string(),
+                    "member skill names, agents, scopes, enabled states, and local contexts"
+                        .to_string(),
+                    "finding/conflict/analysis evidence ids and labels".to_string(),
+                    "read-only safety flags".to_string(),
+                ]);
+                excluded_fields.extend([
+                    "raw source paths".to_string(),
+                    "raw provider response".to_string(),
+                    "agent config contents".to_string(),
+                    "raw prompt or response persistence".to_string(),
+                    "raw skill body".to_string(),
+                    "raw frontmatter".to_string(),
+                ]);
+                sections.push(render_similar_skill_grouping_prompt_section(
+                    &result,
+                    &mut redactor,
+                ));
+            }
             LlmPromptActionKind::TaskReadiness => {
                 let task = params.user_intent.as_deref().ok_or_else(|| {
                     ServiceError::InvalidRequest(
@@ -5478,6 +5800,7 @@ impl ServiceHost {
             LlmPromptActionKind::QualityScore => 650,
             LlmPromptActionKind::StaleDriftDetection => 750,
             LlmPromptActionKind::KnowledgeSearch => 750,
+            LlmPromptActionKind::SimilarSkillGrouping => 850,
             LlmPromptActionKind::TaskReadiness => 750,
             LlmPromptActionKind::RoutingConfidence => 850,
         };
@@ -8352,6 +8675,847 @@ fn knowledge_search_summary(
         stale_or_drift_count,
         summary,
     }
+}
+
+fn similar_skill_grouping_safety_flags() -> SimilarSkillGroupingSafetyFlags {
+    agent_readiness_safety_flags()
+}
+
+fn similar_skill_grouping_filters(
+    params: &SimilarSkillGroupingParams,
+) -> SimilarSkillGroupingFilters {
+    let mut candidate_instance_ids = params
+        .candidate_instance_ids
+        .iter()
+        .map(|value| redact_for_llm_preview(value.trim()))
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    candidate_instance_ids.sort();
+    candidate_instance_ids.dedup();
+    let min_score = params.min_score.unwrap_or(45.0).clamp(0.0, 100.0).round() as u8;
+    SimilarSkillGroupingFilters {
+        agent: params
+            .agent
+            .as_deref()
+            .map(str::trim)
+            .filter(|agent| !agent.is_empty())
+            .map(ToOwned::to_owned),
+        limit: params.limit.unwrap_or(25).clamp(1, 100),
+        min_score,
+        include_singletons: params.include_singletons,
+        candidate_instance_ids,
+    }
+}
+
+fn empty_similar_skill_grouping_result(
+    filters: SimilarSkillGroupingFilters,
+    catalog_available: bool,
+) -> SimilarSkillGroupingResult {
+    SimilarSkillGroupingResult {
+        generated_by: "deterministic-service",
+        catalog_available,
+        filters,
+        summary: SimilarSkillGroupingSummary {
+            indexed_skill_count: 0,
+            candidate_skill_count: 0,
+            matched_group_count: 0,
+            returned_group_count: 0,
+            duplicate_group_count: 0,
+            confusable_group_count: 0,
+            coverage_redundancy_group_count: 0,
+            routing_ambiguity_count: 0,
+            summary: "No local catalog is available, so similar skill grouping has no skill evidence."
+                .to_string(),
+        },
+        groups: Vec::new(),
+        gap_notes: vec![
+            "Run a local scan before relying on similar skill grouping for dedupe or routing review."
+                .to_string(),
+        ],
+        blocker_notes: vec![
+            "No provider request was sent and no fallback network lookup was attempted."
+                .to_string(),
+        ],
+        evidence_references: Vec::new(),
+        prompt_request: SimilarSkillGroupingPromptRequest {
+            available: false,
+            preview_method: "llm.previewPrompt",
+            confirm_method: "llm.confirmPromptAndSend",
+            action: "similar_skill_grouping",
+            request: LlmPreviewPromptParams {
+                action: LlmPromptActionKind::SimilarSkillGrouping,
+                profile_id: None,
+                skill_instance_id: None,
+                instance_ids: Vec::new(),
+                analysis_kind: None,
+                user_intent: Some(
+                    "Explain deterministic similar skill grouping using only local catalog evidence."
+                        .to_string(),
+                ),
+            },
+            note: "Prompt preview is unavailable until local catalog evidence exists.".to_string(),
+        },
+        safety_flags: similar_skill_grouping_safety_flags(),
+    }
+}
+
+struct SimilarSkillCandidateSignals<'a> {
+    findings: &'a [RuleFindingRecord],
+    conflicts: &'a [ConflictGroupRecord],
+    analysis_groups: &'a [CrossAgentAnalysisGroup],
+    diagnostic: Option<&'a AdapterDiagnosticsRecord>,
+    quality: Option<&'a SkillQualityScoreResult>,
+    stale: Option<&'a StaleDriftRow>,
+    redaction_roots: &'a [(String, &'static str)],
+}
+
+#[derive(Debug, Clone)]
+struct SimilarSkillCandidate {
+    detail: SkillDetailRecord,
+    member: SimilarSkillMember,
+    canonical_key: String,
+    terms: Vec<String>,
+    tools: Vec<String>,
+    rules: Vec<String>,
+    capability_tags: Vec<String>,
+    risk_tags: Vec<String>,
+    source_signals: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct SimilarSkillPair {
+    left: usize,
+    right: usize,
+    score: u8,
+    group_type: &'static str,
+    coverage_redundancy: &'static str,
+    routing_ambiguity: &'static str,
+    ambiguity_risk: &'static str,
+    why_grouped: Vec<String>,
+    shared_terms: Vec<String>,
+    shared_tools: Vec<String>,
+    shared_rules: Vec<String>,
+    shared_capability_tags: Vec<String>,
+    shared_risk_tags: Vec<String>,
+    shared_source_signals: Vec<String>,
+}
+
+fn similar_skill_candidate(
+    skill: &SkillDetailRecord,
+    signals: SimilarSkillCandidateSignals<'_>,
+    evidence: &mut Vec<TaskReadinessEvidenceReference>,
+) -> SimilarSkillCandidate {
+    let tools = knowledge_tools(&skill.permissions);
+    let keywords = knowledge_keywords(skill, &tools, signals.findings);
+    let rules = signals
+        .findings
+        .iter()
+        .map(|finding| finding.rule_id.clone())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let risk_level = task_readiness_risk_level(
+        signals.findings,
+        signals.conflicts,
+        signals.analysis_groups,
+        skill,
+    );
+    let capability_tags = knowledge_capability_tags(skill, signals.diagnostic);
+    let risk_tags = knowledge_risk_tags(risk_level, signals.findings, signals.stale);
+    let mut source_signals = BTreeSet::new();
+    source_signals.insert(knowledge_root_provenance(skill));
+    source_signals.insert(format!(
+        "source-path:{}",
+        redact_path_string(&skill.display_path, signals.redaction_roots)
+    ));
+    source_signals.insert(format!(
+        "fingerprint:{}",
+        redact_for_llm_preview(&skill.fingerprint)
+    ));
+    let parent = Path::new(&skill.display_path)
+        .parent()
+        .map(|path| redact_path_string(path, signals.redaction_roots));
+    if let Some(parent) = parent {
+        source_signals.insert(format!("source-root:{parent}"));
+    }
+
+    let skill_ref = push_task_readiness_evidence(
+        evidence,
+        "skill",
+        &skill.id,
+        format!(
+            "Catalog similar-skill member for `{}` ({}, {}, enabled={}, state={})",
+            redact_for_llm_preview(&skill.name),
+            redact_for_llm_preview(&skill.agent),
+            redact_for_llm_preview(&skill.scope),
+            skill.enabled,
+            redact_for_llm_preview(&skill.state)
+        ),
+        None,
+        Some(skill.id.clone()),
+    );
+    let mut evidence_refs = vec![skill_ref];
+    for finding in signals.findings {
+        evidence_refs.push(push_task_readiness_evidence(
+            evidence,
+            "finding",
+            &finding.id,
+            format!(
+                "{} finding `{}`: {}",
+                redact_for_llm_preview(&finding.effective_severity),
+                redact_for_llm_preview(&finding.rule_id),
+                redact_for_llm_preview(&finding.message)
+            ),
+            Some(finding.effective_severity.clone()),
+            finding.instance_id.clone(),
+        ));
+    }
+    for conflict in signals.conflicts {
+        evidence_refs.push(push_task_readiness_evidence(
+            evidence,
+            "conflict",
+            &conflict.id,
+            format!(
+                "Same-agent conflict `{}` covers {} instance(s)",
+                redact_for_llm_preview(&conflict.reason),
+                conflict.instance_ids.len()
+            ),
+            Some("warning".to_string()),
+            Some(skill.id.clone()),
+        ));
+    }
+    for group in signals.analysis_groups {
+        evidence_refs.push(push_task_readiness_evidence(
+            evidence,
+            "analysis",
+            &group.id,
+            format!(
+                "{} analysis `{}`: {}",
+                redact_for_llm_preview(&group.severity),
+                redact_for_llm_preview(&group.kind),
+                redact_for_llm_preview(&group.title)
+            ),
+            Some(group.severity.clone()),
+            Some(skill.id.clone()),
+        ));
+    }
+    if let Some(quality) = signals.quality {
+        evidence_refs.push(push_task_readiness_evidence(
+            evidence,
+            "quality_score",
+            &skill.id,
+            format!(
+                "V2.43 quality score {} / 100 ({})",
+                quality.score, quality.band
+            ),
+            None,
+            Some(skill.id.clone()),
+        ));
+    }
+    if let Some(stale) = signals.stale {
+        evidence_refs.push(push_task_readiness_evidence(
+            evidence,
+            "stale_drift",
+            &skill.id,
+            format!(
+                "V2.51 stale/drift score {} / 100 ({})",
+                stale.stale_drift_score, stale.stale_drift_band
+            ),
+            None,
+            Some(skill.id.clone()),
+        ));
+    }
+    evidence_refs.sort();
+    evidence_refs.dedup();
+
+    let canonical_key = normalize_similarity_key(&skill.name);
+    let match_reasons = vec![
+        format!(
+            "Local catalog member has canonical key `{}` and {} derived keyword(s).",
+            redact_for_llm_preview(&canonical_key),
+            keywords.len()
+        ),
+        format!(
+            "Risk context is `{}`; risk affects ambiguity notes but never creates write actions.",
+            risk_level
+        ),
+    ];
+
+    SimilarSkillCandidate {
+        detail: skill.clone(),
+        member: SimilarSkillMember {
+            instance_id: skill.id.clone(),
+            definition_id: skill.definition_id.clone(),
+            skill_name: redact_for_llm_preview(&skill.name),
+            agent: skill.agent.clone(),
+            scope: skill.scope.clone(),
+            enabled: skill.enabled,
+            state: skill.state.clone(),
+            source: KnowledgeSearchSource {
+                source_path: redact_path_string(&skill.path, signals.redaction_roots),
+                display_path: redact_path_string(&skill.display_path, signals.redaction_roots),
+                root_provenance: knowledge_root_provenance(skill),
+                fingerprint: redact_for_llm_preview(&skill.fingerprint),
+            },
+            quality_context: signals.quality.map(|quality| KnowledgeQualityContext {
+                score: quality.score,
+                grade: quality.grade,
+                band: quality.band,
+                reasons: quality.reasons.iter().take(3).cloned().collect(),
+            }),
+            readiness_context: None,
+            stale_drift_context: signals.stale.map(|stale| KnowledgeStaleDriftContext {
+                score: stale.stale_drift_score,
+                band: stale.stale_drift_band,
+                fingerprint_drift: stale.drift_signals.fingerprint_drift,
+                finding_drift: stale.drift_signals.finding_drift,
+                source_drift: stale.drift_signals.source_drift,
+                stale_by_mtime: stale.drift_signals.stale_by_mtime,
+                readiness_impact_level: stale
+                    .readiness_impact
+                    .as_ref()
+                    .map(|impact| impact.impact_level),
+            }),
+            match_reasons,
+            similarity_reasons: Vec::new(),
+            evidence_refs,
+        },
+        canonical_key,
+        terms: keywords,
+        tools,
+        rules,
+        capability_tags,
+        risk_tags,
+        source_signals: source_signals.into_iter().collect(),
+    }
+}
+
+fn similar_skill_groups_from_candidates(
+    candidates: Vec<SimilarSkillCandidate>,
+    min_score: u8,
+    evidence: &mut Vec<TaskReadinessEvidenceReference>,
+) -> Vec<SimilarSkillGroup> {
+    let mut pairs = Vec::new();
+    for left in 0..candidates.len() {
+        for right in (left + 1)..candidates.len() {
+            let pair = similar_skill_pair(&candidates[left], &candidates[right], left, right);
+            if pair.score >= min_score {
+                pairs.push(pair);
+            }
+        }
+    }
+
+    let mut adjacency = vec![Vec::<usize>::new(); candidates.len()];
+    for pair in &pairs {
+        adjacency[pair.left].push(pair.right);
+        adjacency[pair.right].push(pair.left);
+    }
+
+    let mut seen = vec![false; candidates.len()];
+    let mut components = Vec::new();
+    for index in 0..candidates.len() {
+        if seen[index] {
+            continue;
+        }
+        let mut stack = vec![index];
+        let mut component = Vec::new();
+        seen[index] = true;
+        while let Some(current) = stack.pop() {
+            component.push(current);
+            for next in &adjacency[current] {
+                if !seen[*next] {
+                    seen[*next] = true;
+                    stack.push(*next);
+                }
+            }
+        }
+        component.sort();
+        components.push(component);
+    }
+
+    let mut groups = Vec::new();
+    for component in components {
+        let related_pairs = pairs
+            .iter()
+            .filter(|pair| component.contains(&pair.left) && component.contains(&pair.right))
+            .cloned()
+            .collect::<Vec<_>>();
+        if component.len() > 1 && related_pairs.is_empty() {
+            continue;
+        }
+        groups.push(similar_skill_group_from_component(
+            &candidates,
+            &component,
+            &related_pairs,
+            evidence,
+        ));
+    }
+    groups
+}
+
+fn similar_skill_pair(
+    left: &SimilarSkillCandidate,
+    right: &SimilarSkillCandidate,
+    left_index: usize,
+    right_index: usize,
+) -> SimilarSkillPair {
+    let shared_terms = sorted_intersection(&left.terms, &right.terms, 12);
+    let shared_tools = sorted_intersection(&left.tools, &right.tools, 12);
+    let shared_rules = sorted_intersection(&left.rules, &right.rules, 12);
+    let shared_capability_tags =
+        sorted_intersection(&left.capability_tags, &right.capability_tags, 12);
+    let shared_risk_tags = sorted_intersection(&left.risk_tags, &right.risk_tags, 12);
+    let shared_source_signals = sorted_intersection(&left.source_signals, &right.source_signals, 8);
+    let same_definition = left.detail.definition_id == right.detail.definition_id;
+    let same_canonical = left.canonical_key == right.canonical_key;
+    let same_agent = left.detail.agent == right.detail.agent;
+    let same_fingerprint = left.detail.fingerprint == right.detail.fingerprint;
+    let same_source_path = left.detail.display_path == right.detail.display_path;
+
+    let mut score = 0u16;
+    let mut why_grouped = Vec::new();
+    if same_definition {
+        score += 35;
+        why_grouped
+            .push("Shared catalog definition id indicates same local skill identity.".to_string());
+    }
+    if same_canonical {
+        score += 30;
+        why_grouped
+            .push("Same canonical skill name/key creates high duplicate likelihood.".to_string());
+    }
+    if same_source_path {
+        score += 25;
+        why_grouped.push("Shared source path is treated as source overlap evidence.".to_string());
+    } else if shared_source_signals
+        .iter()
+        .any(|signal| signal.starts_with("source-root:"))
+    {
+        score += 10;
+        why_grouped.push("Shared source root suggests overlapping provenance.".to_string());
+    }
+    if same_fingerprint {
+        score += 20;
+        why_grouped.push(
+            "Shared content fingerprint indicates near-identical catalog evidence.".to_string(),
+        );
+    }
+    if !shared_tools.is_empty() {
+        score += (shared_tools.len() as u16 * 8).min(24);
+        why_grouped.push(format!(
+            "Shared tool coverage: {}.",
+            shared_tools
+                .iter()
+                .take(6)
+                .map(|term| redact_for_llm_preview(term))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    if !shared_rules.is_empty() {
+        score += (shared_rules.len() as u16 * 6).min(18);
+        why_grouped.push(format!(
+            "Shared rule/finding signals: {}.",
+            shared_rules
+                .iter()
+                .take(6)
+                .map(|term| redact_for_llm_preview(term))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    if !shared_terms.is_empty() {
+        score += (shared_terms.len() as u16 * 4).min(20);
+        why_grouped.push(format!(
+            "Shared purpose/keyword terms: {}.",
+            shared_terms
+                .iter()
+                .take(8)
+                .map(|term| redact_for_llm_preview(term))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    if !shared_capability_tags.is_empty() {
+        score += (shared_capability_tags.len() as u16 * 3).min(12);
+    }
+    if !shared_risk_tags.is_empty() {
+        score += (shared_risk_tags.len() as u16 * 2).min(8);
+    }
+    if same_agent {
+        score += 5;
+    }
+
+    let score = score.min(100) as u8;
+    let coverage_redundancy = if same_canonical || shared_tools.len() >= 3 || score >= 80 {
+        "high"
+    } else if shared_tools.len() >= 2 || shared_terms.len() >= 4 || score >= 55 {
+        "medium"
+    } else {
+        "low"
+    };
+    let routing_ambiguity = if same_canonical && left.detail.enabled && right.detail.enabled {
+        "high"
+    } else if shared_terms.len() >= 5 && shared_tools.len() >= 2 {
+        "medium"
+    } else {
+        "low"
+    };
+    let ambiguity_risk = if routing_ambiguity == "high"
+        || left.detail.state != "loaded"
+        || right.detail.state != "loaded"
+        || !left.detail.enabled
+        || !right.detail.enabled
+        || shared_risk_tags
+            .iter()
+            .any(|tag| tag == "risk-high" || tag == "risk-blocked")
+    {
+        "high"
+    } else if routing_ambiguity == "medium" || coverage_redundancy == "medium" {
+        "medium"
+    } else {
+        "low"
+    };
+    let group_type = if same_canonical || same_definition || same_fingerprint {
+        "duplicate"
+    } else if same_source_path || shared_source_signals.len() > 1 {
+        "source_overlap"
+    } else if coverage_redundancy == "high" {
+        "coverage_redundancy"
+    } else if routing_ambiguity != "low" || ambiguity_risk == "high" {
+        "confusable"
+    } else {
+        "similar"
+    };
+
+    SimilarSkillPair {
+        left: left_index,
+        right: right_index,
+        score,
+        group_type,
+        coverage_redundancy,
+        routing_ambiguity,
+        ambiguity_risk,
+        why_grouped,
+        shared_terms,
+        shared_tools,
+        shared_rules,
+        shared_capability_tags,
+        shared_risk_tags,
+        shared_source_signals,
+    }
+}
+
+fn similar_skill_group_from_component(
+    candidates: &[SimilarSkillCandidate],
+    component: &[usize],
+    pairs: &[SimilarSkillPair],
+    evidence: &mut Vec<TaskReadinessEvidenceReference>,
+) -> SimilarSkillGroup {
+    let best_pair = pairs.iter().max_by(|left, right| {
+        left.score
+            .cmp(&right.score)
+            .then_with(|| left.group_type.cmp(right.group_type))
+    });
+    let mut members = component
+        .iter()
+        .map(|index| candidates[*index].member.clone())
+        .collect::<Vec<_>>();
+    let reasons_by_member = similar_skill_member_reasons(component, pairs);
+    for (member_index, member) in members.iter_mut().enumerate() {
+        if let Some(reasons) = reasons_by_member.get(&member_index) {
+            member.similarity_reasons = reasons.clone();
+        } else {
+            member.similarity_reasons.push(
+                "Singleton retained by include_singletons without a peer above threshold."
+                    .to_string(),
+            );
+        }
+    }
+    members.sort_by(|left, right| {
+        left.agent
+            .cmp(&right.agent)
+            .then_with(|| left.skill_name.cmp(&right.skill_name))
+            .then_with(|| left.instance_id.cmp(&right.instance_id))
+    });
+
+    let canonical_name = members
+        .iter()
+        .map(|member| member.skill_name.clone())
+        .min()
+        .unwrap_or_else(|| "unknown-skill".to_string());
+    let canonical_key = normalize_similarity_key(&canonical_name);
+    let member_ids = members
+        .iter()
+        .map(|member| member.instance_id.clone())
+        .collect::<Vec<_>>();
+    let group_id = stable_similar_group_id(&member_ids);
+    let mut evidence_refs = members
+        .iter()
+        .flat_map(|member| member.evidence_refs.clone())
+        .collect::<Vec<_>>();
+    let group_ref = push_task_readiness_evidence(
+        evidence,
+        "similar_skill_group",
+        &group_id,
+        format!(
+            "Similar skill group `{}` with {} member(s) and score {}",
+            redact_for_llm_preview(&canonical_key),
+            members.len(),
+            best_pair.map(|pair| pair.score).unwrap_or(0)
+        ),
+        None,
+        members.first().map(|member| member.instance_id.clone()),
+    );
+    evidence_refs.push(group_ref);
+    evidence_refs.sort();
+    evidence_refs.dedup();
+
+    let shared_terms = union_pair_values(pairs, |pair| &pair.shared_terms);
+    let shared_tools = union_pair_values(pairs, |pair| &pair.shared_tools);
+    let shared_rules = union_pair_values(pairs, |pair| &pair.shared_rules);
+    let shared_capability_tags = union_pair_values(pairs, |pair| &pair.shared_capability_tags);
+    let shared_risk_tags = union_pair_values(pairs, |pair| &pair.shared_risk_tags);
+    let shared_source_signals = union_pair_values(pairs, |pair| &pair.shared_source_signals);
+    let mut why_grouped = pairs
+        .iter()
+        .flat_map(|pair| pair.why_grouped.clone())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    if why_grouped.is_empty() {
+        why_grouped
+            .push("Singleton retained for review; no peer met the selected threshold.".to_string());
+    }
+    why_grouped.truncate(8);
+
+    let group_type = best_pair.map(|pair| pair.group_type).unwrap_or("similar");
+    let similarity_score = best_pair.map(|pair| pair.score).unwrap_or(0);
+    let ambiguity_risk = max_band(pairs.iter().map(|pair| pair.ambiguity_risk)).unwrap_or("low");
+    let coverage_redundancy =
+        max_band(pairs.iter().map(|pair| pair.coverage_redundancy)).unwrap_or("low");
+    let routing_ambiguity =
+        max_band(pairs.iter().map(|pair| pair.routing_ambiguity)).unwrap_or("low");
+    let title = format!(
+        "{}: {} member(s), {} similarity",
+        canonical_name,
+        members.len(),
+        similarity_score
+    );
+    let summary = format!(
+        "{} local skill member(s) grouped as {}. Coverage redundancy is {}; routing ambiguity is {}; ambiguity risk is {}.",
+        members.len(),
+        group_type,
+        coverage_redundancy,
+        routing_ambiguity,
+        ambiguity_risk
+    );
+
+    SimilarSkillGroup {
+        group_id,
+        rank: 0,
+        group_type,
+        similarity_score,
+        ambiguity_risk,
+        coverage_redundancy,
+        routing_ambiguity,
+        canonical_name,
+        canonical_key,
+        title,
+        summary,
+        why_grouped,
+        shared_terms,
+        shared_tools,
+        shared_rules,
+        shared_capability_tags,
+        shared_risk_tags,
+        shared_source_signals,
+        members,
+        evidence_refs,
+        safety_flags: similar_skill_grouping_safety_flags(),
+    }
+}
+
+fn similar_skill_member_reasons(
+    component: &[usize],
+    pairs: &[SimilarSkillPair],
+) -> BTreeMap<usize, Vec<String>> {
+    let component_position = component
+        .iter()
+        .enumerate()
+        .map(|(position, original)| (*original, position))
+        .collect::<BTreeMap<_, _>>();
+    let mut reasons: BTreeMap<usize, BTreeSet<String>> = BTreeMap::new();
+    for pair in pairs {
+        let reason = format!(
+            "Paired above threshold with score {} via {} evidence.",
+            pair.score, pair.group_type
+        );
+        if let Some(position) = component_position.get(&pair.left) {
+            reasons.entry(*position).or_default().insert(reason.clone());
+        }
+        if let Some(position) = component_position.get(&pair.right) {
+            reasons.entry(*position).or_default().insert(reason);
+        }
+    }
+    reasons
+        .into_iter()
+        .map(|(key, value)| (key, value.into_iter().collect()))
+        .collect()
+}
+
+fn similar_skill_grouping_blocker_notes(groups: &[SimilarSkillGroup]) -> Vec<String> {
+    let mut notes = Vec::new();
+    if groups.iter().any(|group| group.routing_ambiguity == "high") {
+        notes.push(
+            "High routing ambiguity means humans should inspect candidates before selecting a route; no automatic rerouting is performed."
+                .to_string(),
+        );
+    }
+    if groups
+        .iter()
+        .any(|group| group.coverage_redundancy == "high")
+    {
+        notes.push(
+            "High coverage redundancy is advisory only and does not disable, merge, or delete skills."
+                .to_string(),
+        );
+    }
+    if groups.iter().any(|group| {
+        group
+            .members
+            .iter()
+            .any(|member| !member.enabled || member.state != "loaded")
+    }) {
+        notes.push(
+            "Disabled or non-loaded members are included for confusability review but are not made routable."
+                .to_string(),
+        );
+    }
+    if groups.iter().any(|group| group.ambiguity_risk == "high") {
+        notes.push(
+            "High ambiguity risk is derived from local state, risk, stale/drift, and overlap signals only."
+                .to_string(),
+        );
+    }
+    if notes.is_empty() {
+        notes.push(
+            "Similar skill grouping used local catalog evidence only and found no returned-group blockers."
+                .to_string(),
+        );
+    }
+    notes
+}
+
+fn similar_skill_grouping_summary(
+    indexed_skill_count: usize,
+    candidate_skill_count: usize,
+    matched_group_count: usize,
+    groups: &[SimilarSkillGroup],
+) -> SimilarSkillGroupingSummary {
+    let duplicate_group_count = groups
+        .iter()
+        .filter(|group| group.group_type == "duplicate")
+        .count();
+    let confusable_group_count = groups
+        .iter()
+        .filter(|group| group.group_type == "confusable")
+        .count();
+    let coverage_redundancy_group_count = groups
+        .iter()
+        .filter(|group| group.coverage_redundancy == "high")
+        .count();
+    let routing_ambiguity_count = groups
+        .iter()
+        .filter(|group| group.routing_ambiguity != "low")
+        .count();
+    let summary = if groups.is_empty() {
+        "No deterministic similar skill groups matched the selected filters.".to_string()
+    } else {
+        format!(
+            "Returned {} of {} similar skill group(s) from {} candidate skill(s) across {} indexed visible skill(s); {} duplicate group(s), {} high coverage redundancy group(s), and {} routing ambiguity group(s).",
+            groups.len(),
+            matched_group_count,
+            candidate_skill_count,
+            indexed_skill_count,
+            duplicate_group_count,
+            coverage_redundancy_group_count,
+            routing_ambiguity_count
+        )
+    };
+    SimilarSkillGroupingSummary {
+        indexed_skill_count,
+        candidate_skill_count,
+        matched_group_count,
+        returned_group_count: groups.len(),
+        duplicate_group_count,
+        confusable_group_count,
+        coverage_redundancy_group_count,
+        routing_ambiguity_count,
+        summary,
+    }
+}
+
+fn normalize_similarity_key(value: &str) -> String {
+    task_readiness_terms(value).join("-")
+}
+
+fn sorted_intersection(left: &[String], right: &[String], limit: usize) -> Vec<String> {
+    let right = right.iter().collect::<BTreeSet<_>>();
+    left.iter()
+        .filter(|value| right.contains(value))
+        .cloned()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .take(limit)
+        .collect()
+}
+
+fn union_pair_values<'a>(
+    pairs: &'a [SimilarSkillPair],
+    values: impl Fn(&'a SimilarSkillPair) -> &'a Vec<String>,
+) -> Vec<String> {
+    pairs
+        .iter()
+        .flat_map(values)
+        .cloned()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .take(16)
+        .collect()
+}
+
+fn max_band<'a>(bands: impl Iterator<Item = &'a str>) -> Option<&'static str> {
+    let mut max = None;
+    let mut score = 0u8;
+    for band in bands {
+        let band_score = match band {
+            "high" => 3,
+            "medium" => 2,
+            _ => 1,
+        };
+        if band_score > score {
+            score = band_score;
+            max = Some(match band_score {
+                3 => "high",
+                2 => "medium",
+                _ => "low",
+            });
+        }
+    }
+    max
+}
+
+fn stable_similar_group_id(member_ids: &[String]) -> String {
+    let mut sorted = member_ids.to_vec();
+    sorted.sort();
+    let mut hasher = Sha256::new();
+    for id in &sorted {
+        hasher.update(id.as_bytes());
+        hasher.update(b"\0");
+    }
+    let digest = hasher.finalize();
+    format!("similar-group-{:x}", digest)[..26].to_string()
 }
 
 fn task_readiness_safety_flags() -> TaskReadinessSafetyFlags {
@@ -11474,6 +12638,123 @@ fn render_knowledge_search_prompt_section(
     )
 }
 
+fn render_similar_skill_grouping_prompt_section(
+    result: &SimilarSkillGroupingResult,
+    redactor: &mut PromptRedactor<'_>,
+) -> String {
+    let groups = result
+        .groups
+        .iter()
+        .take(8)
+        .map(|group| {
+            let members = group
+                .members
+                .iter()
+                .take(6)
+                .map(|member| {
+                    format!(
+                        "{} ({}, {}, enabled={}, state={}, quality={}, stale_drift={})",
+                        redactor.redact(&member.skill_name),
+                        redactor.redact(&member.agent),
+                        redactor.redact(&member.scope),
+                        member.enabled,
+                        redactor.redact(&member.state),
+                        member
+                            .quality_context
+                            .as_ref()
+                            .map(|context| format!("{} ({}/100)", context.band, context.score))
+                            .unwrap_or_else(|| "n/a".to_string()),
+                        member
+                            .stale_drift_context
+                            .as_ref()
+                            .map(|context| format!("{} ({}/100)", context.band, context.score))
+                            .unwrap_or_else(|| "n/a".to_string()),
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("; ");
+            format!(
+                "- #{} {} type={} score={} ambiguity_risk={} coverage_redundancy={} routing_ambiguity={}; shared_terms={}; shared_tools={}; shared_rules={}; shared_risk={}; why={}; members={}",
+                group.rank,
+                redactor.redact(&group.title),
+                group.group_type,
+                group.similarity_score,
+                group.ambiguity_risk,
+                group.coverage_redundancy,
+                group.routing_ambiguity,
+                group.shared_terms.iter().take(8).cloned().collect::<Vec<_>>().join(", "),
+                group.shared_tools.iter().take(8).cloned().collect::<Vec<_>>().join(", "),
+                group.shared_rules.iter().take(8).cloned().collect::<Vec<_>>().join(", "),
+                group.shared_risk_tags.iter().take(8).cloned().collect::<Vec<_>>().join(", "),
+                group
+                    .why_grouped
+                    .iter()
+                    .take(4)
+                    .map(|reason| redactor.redact(reason))
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                members
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let evidence = result
+        .evidence_references
+        .iter()
+        .take(16)
+        .map(|reference| {
+            format!(
+                "- {} {} {}",
+                reference.source_type,
+                redactor.redact(&reference.source_id),
+                redactor.redact(&reference.label)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "Similar skill grouping evidence:\n- catalog_available: {}\n- agent: {}\n- min_score: {}\n- indexed_skill_count: {}\n- candidate_skill_count: {}\n- matched_group_count: {}\n- returned_group_count: {}\n- duplicate_group_count: {}\n- coverage_redundancy_group_count: {}\n- routing_ambiguity_count: {}\n- summary: {}\n\nGroups:\n{}\n\nGap notes:\n{}\n\nBlocker notes:\n{}\n\nEvidence references:\n{}\n\nSafety flags: read_only=true, app_local_only=true, provider_request_sent=false, write_back_allowed=false, write_actions_available=false, skill_files_mutated=false, agent_config_mutated=false, script_execution_allowed=false, execution_actions_available=false, config_mutation_allowed=false, snapshot_created=false, triage_mutation_allowed=false, credential_accessed=false, raw_prompt_persisted=false, raw_response_persisted=false, raw_trace_persisted=false, cloud_sync_performed=false, telemetry_emitted=false.",
+        result.catalog_available,
+        result
+            .filters
+            .agent
+            .as_deref()
+            .map(|agent| redactor.redact(agent))
+            .unwrap_or_else(|| "all".to_string()),
+        result.filters.min_score,
+        result.summary.indexed_skill_count,
+        result.summary.candidate_skill_count,
+        result.summary.matched_group_count,
+        result.summary.returned_group_count,
+        result.summary.duplicate_group_count,
+        result.summary.coverage_redundancy_group_count,
+        result.summary.routing_ambiguity_count,
+        redactor.redact(&result.summary.summary),
+        if groups.is_empty() { "none" } else { &groups },
+        if result.gap_notes.is_empty() {
+            "none".to_string()
+        } else {
+            result
+                .gap_notes
+                .iter()
+                .map(|note| redactor.redact(note))
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+        if result.blocker_notes.is_empty() {
+            "none".to_string()
+        } else {
+            result
+                .blocker_notes
+                .iter()
+                .map(|note| redactor.redact(note))
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+        if evidence.is_empty() { "none" } else { &evidence },
+    )
+}
+
 fn render_task_readiness_prompt_section(
     readiness: &TaskReadinessResult,
     redactor: &mut PromptRedactor<'_>,
@@ -13831,6 +15112,324 @@ mod tests {
         assert!(!provider_call_metadata_path(&app_data_dir).exists());
         assert!(!user_home.join(".claude/settings.json").exists());
         assert!(!user_home.join(".codex/config.toml").exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn knowledge_group_similar_skills_returns_duplicate_and_confusable_groups() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-similar-group-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-similar-group-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_similar_grouping_fixture(&host);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("similar-group".to_string()),
+            method: "knowledge.groupSimilarSkills".to_string(),
+            params: json!({ "limit": 10, "min_score": 40 }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("similar grouping result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("deterministic-service")
+        );
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/candidate_skill_count")
+                .and_then(Value::as_u64),
+            Some(4)
+        );
+        let groups = result
+            .get("groups")
+            .and_then(Value::as_array)
+            .expect("groups");
+        assert!(groups.iter().any(|group| {
+            group.get("group_type").and_then(Value::as_str) == Some("duplicate")
+                && group
+                    .get("members")
+                    .and_then(Value::as_array)
+                    .is_some_and(|members| members.len() >= 2)
+        }));
+        assert!(groups.iter().any(|group| {
+            group
+                .get("routing_ambiguity")
+                .and_then(Value::as_str)
+                .is_some_and(|value| value == "medium" || value == "high")
+        }));
+        assert!(groups.iter().all(|group| {
+            group
+                .get("why_grouped")
+                .and_then(Value::as_array)
+                .is_some_and(|why| !why.is_empty())
+        }));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/action")
+                .and_then(Value::as_str),
+            Some("similar_skill_grouping")
+        );
+        assert_eq!(
+            result
+                .pointer("/prompt_request/request/action")
+                .and_then(Value::as_str),
+            Some("similar_skill_grouping")
+        );
+        assert_agent_readiness_safety(&result);
+        for group in groups {
+            assert_eq!(
+                group
+                    .pointer("/safety_flags/read_only")
+                    .and_then(Value::as_bool),
+                Some(true)
+            );
+        }
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn knowledge_group_similar_skills_applies_filters_limit_and_singletons() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-similar-filter-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-similar-filter-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_similar_grouping_fixture(&host);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("similar-filter".to_string()),
+            method: "knowledge.groupSimilarSkills".to_string(),
+            params: json!({
+                "agent": "codex",
+                "candidate_instance_ids": ["similar-codex-a", "similar-unrelated"],
+                "include_singletons": true,
+                "limit": 1,
+                "min_score": 90
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("similar filter result");
+        assert_eq!(
+            result.pointer("/filters/agent").and_then(Value::as_str),
+            Some("codex")
+        );
+        assert_eq!(
+            result
+                .pointer("/filters/include_singletons")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/matched_group_count")
+                .and_then(Value::as_u64),
+            Some(2)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/returned_group_count")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            result.get("groups").and_then(Value::as_array).map(Vec::len),
+            Some(1)
+        );
+        assert!(result
+            .pointer("/groups/0/members")
+            .and_then(Value::as_array)
+            .is_some_and(|members| members.len() == 1));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn knowledge_group_similar_skills_missing_catalog_returns_safe_empty_result() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-similar-missing-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("similar-missing".to_string()),
+            method: "knowledge.groupSimilarSkills".to_string(),
+            params: json!({ "agent": "codex" }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("missing catalog similar result");
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/returned_group_count")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert!(result
+            .get("groups")
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_agent_readiness_safety(&result);
+        assert!(
+            !host.catalog_path().exists(),
+            "missing-catalog grouping must not initialize catalog.sqlite"
+        );
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    }
+
+    #[test]
+    fn knowledge_group_similar_skills_rejects_invalid_limit_without_writes() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-similar-invalid-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("similar-invalid".to_string()),
+            method: "knowledge.groupSimilarSkills".to_string(),
+            params: json!({ "limit": 0 }),
+        });
+
+        assert!(!response.ok);
+        let error = response.error.expect("invalid similar grouping error");
+        assert_eq!(error.code, "invalid_request");
+        assert!(error.message.contains("limit"));
+        assert!(
+            !app_data_dir.exists(),
+            "invalid grouping request must not initialize app data"
+        );
+    }
+
+    #[test]
+    fn knowledge_group_similar_skills_preserves_provider_and_write_boundaries() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-similar-safety-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-similar-safety-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_similar_grouping_fixture(&host);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("similar-safety".to_string()),
+            method: "knowledge.groupSimilarSkills".to_string(),
+            params: json!({ "limit": 10 }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("similar safety result");
+        assert_agent_readiness_safety(&result);
+        assert_eq!(
+            result
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/write_back_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let serialized = serde_json::to_string(&result).expect("serialize similar result");
+        assert!(!serialized.contains(&app_data_dir.to_string_lossy().to_string()));
+        assert!(!serialized.contains(&user_home.to_string_lossy().to_string()));
+        assert!(!serialized.contains("fixture-redacted-value"));
 
         let _ = fs::remove_dir_all(app_data_dir);
         let _ = fs::remove_dir_all(user_home);
@@ -17937,6 +19536,26 @@ mod tests {
                     assert_agent_readiness_safety_flags(&row.safety_flags);
                 }
             }
+            "knowledge.groupSimilarSkills" => {
+                let grouping: WireSimilarSkillGroupingResult =
+                    decode_fixture_result(method, result, path);
+                assert_eq!(grouping.generated_by, "deterministic-service");
+                assert!(grouping.catalog_available);
+                assert_eq!(grouping.summary.returned_group_count, grouping.groups.len());
+                assert!(!grouping.groups.is_empty());
+                assert!(!grouping.groups[0].members.is_empty());
+                assert!(grouping.groups[0].similarity_score <= 100);
+                assert_eq!(grouping.prompt_request.action, "similar_skill_grouping");
+                assert_eq!(grouping.prompt_request.preview_method, "llm.previewPrompt");
+                assert_eq!(
+                    grouping.prompt_request.request.action,
+                    LlmPromptActionKind::SimilarSkillGrouping
+                );
+                assert_agent_readiness_safety_flags(&grouping.safety_flags);
+                for group in &grouping.groups {
+                    assert_agent_readiness_safety_flags(&group.safety_flags);
+                }
+            }
             "task.checkReadiness" => {
                 let readiness: WireTaskReadinessResult =
                     decode_fixture_result(method, result, path);
@@ -19418,6 +21037,95 @@ mod tests {
         source_drift: bool,
         stale_by_mtime: bool,
         readiness_impact_level: Option<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireSimilarSkillGroupingResult {
+        generated_by: String,
+        catalog_available: bool,
+        filters: WireSimilarSkillGroupingFilters,
+        summary: WireSimilarSkillGroupingSummary,
+        groups: Vec<WireSimilarSkillGroup>,
+        gap_notes: Vec<String>,
+        blocker_notes: Vec<String>,
+        evidence_references: Vec<WireTaskReadinessEvidenceReference>,
+        prompt_request: WireAgentReadinessPromptRequest,
+        safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireSimilarSkillGroupingFilters {
+        agent: Option<String>,
+        limit: usize,
+        min_score: u8,
+        include_singletons: bool,
+        candidate_instance_ids: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireSimilarSkillGroupingSummary {
+        indexed_skill_count: usize,
+        candidate_skill_count: usize,
+        matched_group_count: usize,
+        returned_group_count: usize,
+        duplicate_group_count: usize,
+        confusable_group_count: usize,
+        coverage_redundancy_group_count: usize,
+        routing_ambiguity_count: usize,
+        summary: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireSimilarSkillGroup {
+        group_id: String,
+        rank: usize,
+        group_type: String,
+        similarity_score: u8,
+        ambiguity_risk: String,
+        coverage_redundancy: String,
+        routing_ambiguity: String,
+        canonical_name: String,
+        canonical_key: String,
+        title: String,
+        summary: String,
+        why_grouped: Vec<String>,
+        shared_terms: Vec<String>,
+        shared_tools: Vec<String>,
+        shared_rules: Vec<String>,
+        shared_capability_tags: Vec<String>,
+        shared_risk_tags: Vec<String>,
+        shared_source_signals: Vec<String>,
+        members: Vec<WireSimilarSkillMember>,
+        evidence_refs: Vec<String>,
+        safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireSimilarSkillMember {
+        instance_id: String,
+        definition_id: String,
+        skill_name: String,
+        agent: String,
+        scope: String,
+        enabled: bool,
+        state: String,
+        source: WireKnowledgeSearchSource,
+        quality_context: Option<WireKnowledgeQualityContext>,
+        readiness_context: Option<WireKnowledgeReadinessContext>,
+        stale_drift_context: Option<WireKnowledgeStaleDriftContext>,
+        match_reasons: Vec<String>,
+        similarity_reasons: Vec<String>,
+        evidence_refs: Vec<String>,
     }
 
     #[allow(dead_code)]
@@ -21666,6 +23374,226 @@ mod tests {
                 }],
             )
             .expect("refresh knowledge conflicts");
+    }
+
+    fn seed_catalog_with_similar_grouping_fixture(host: &ServiceHost) {
+        fs::create_dir_all(&host.app_data_dir).expect("create app data");
+        let catalog = Catalog::open(&host.catalog_path()).expect("open catalog");
+        catalog.init().expect("init catalog");
+        let claude_path = host
+            .adapter_ctx
+            .user_home
+            .join(".claude/skills/release-readiness/SKILL.md");
+        let codex_path = host
+            .adapter_ctx
+            .user_home
+            .join(".codex/skills/release-readiness/SKILL.md");
+        let research_path = host
+            .adapter_ctx
+            .user_home
+            .join(".codex/skills/release-research/SKILL.md");
+        let unrelated_path = host
+            .adapter_ctx
+            .user_home
+            .join(".codex/skills/theme-helper/SKILL.md");
+        let instances = vec![
+            SkillInstance {
+                id: "similar-claude-a".to_string(),
+                agent: AgentId::ClaudeCode,
+                scope: Scope::AgentGlobal,
+                project_root: None,
+                path: claude_path.clone(),
+                display_path: claude_path,
+                definition_id: "similar-release-definition".to_string(),
+                name: "release-readiness-audit".to_string(),
+                display_name: "release-readiness-audit".to_string(),
+                description: "Release readiness audit for local validation and privacy review."
+                    .to_string(),
+                version: None,
+                state: SkillState::Loaded,
+                enabled: true,
+                frontmatter_raw:
+                    "name: release-readiness-audit\ndescription: Release readiness audit\nallowed-tools:\n  - Read\n  - Bash\n"
+                        .to_string(),
+                body:
+                    "Prepare release readiness evidence from local catalog findings and privacy checks."
+                        .to_string(),
+                scripts: Vec::new(),
+                permissions: PermissionRequest {
+                    tools: vec!["Read".to_string(), "Bash".to_string()],
+                    files: vec!["docs/**".to_string()],
+                    network: NetworkAccess::None,
+                    network_declared: true,
+                    exec: true,
+                    exec_declared: true,
+                    requires_human: true,
+                    requires_human_declared: true,
+                },
+                fingerprint: "similar-release-fingerprint".to_string(),
+                mtime: 1,
+                first_seen: 1,
+                last_seen: 1,
+            },
+            SkillInstance {
+                id: "similar-codex-a".to_string(),
+                agent: AgentId::Codex,
+                scope: Scope::AgentGlobal,
+                project_root: None,
+                path: codex_path.clone(),
+                display_path: codex_path,
+                definition_id: "similar-release-definition".to_string(),
+                name: "release-readiness-audit".to_string(),
+                display_name: "release-readiness-audit".to_string(),
+                description: "Release readiness audit for local validation and privacy review."
+                    .to_string(),
+                version: None,
+                state: SkillState::Loaded,
+                enabled: true,
+                frontmatter_raw:
+                    "name: release-readiness-audit\ndescription: Release readiness audit\nallowed-tools:\n  - Read\n  - Bash\n"
+                        .to_string(),
+                body:
+                    "Prepare release readiness evidence from local catalog findings and privacy checks."
+                        .to_string(),
+                scripts: Vec::new(),
+                permissions: PermissionRequest {
+                    tools: vec!["Read".to_string(), "Bash".to_string()],
+                    files: vec!["docs/**".to_string()],
+                    network: NetworkAccess::None,
+                    network_declared: true,
+                    exec: true,
+                    exec_declared: true,
+                    requires_human: true,
+                    requires_human_declared: true,
+                },
+                fingerprint: "similar-release-fingerprint".to_string(),
+                mtime: 1,
+                first_seen: 1,
+                last_seen: 1,
+            },
+            SkillInstance {
+                id: "similar-codex-research".to_string(),
+                agent: AgentId::Codex,
+                scope: Scope::AgentGlobal,
+                project_root: None,
+                path: research_path.clone(),
+                display_path: research_path,
+                definition_id: "similar-research-definition".to_string(),
+                name: "release-research-readiness".to_string(),
+                display_name: "release-research-readiness".to_string(),
+                description:
+                    "Research release readiness evidence, validation notes, and privacy findings."
+                        .to_string(),
+                version: None,
+                state: SkillState::Broken,
+                enabled: false,
+                frontmatter_raw:
+                    "name: release-research-readiness\ndescription: Release research readiness\nallowed-tools:\n  - Read\n  - Bash\n"
+                        .to_string(),
+                body:
+                    "Research local release evidence and compare readiness findings for review."
+                        .to_string(),
+                scripts: Vec::new(),
+                permissions: PermissionRequest {
+                    tools: vec!["Read".to_string(), "Bash".to_string()],
+                    files: vec!["docs/**".to_string()],
+                    network: NetworkAccess::None,
+                    network_declared: true,
+                    exec: true,
+                    exec_declared: true,
+                    requires_human: true,
+                    requires_human_declared: true,
+                },
+                fingerprint: "similar-research-fingerprint".to_string(),
+                mtime: 1,
+                first_seen: 1,
+                last_seen: 1,
+            },
+            SkillInstance {
+                id: "similar-unrelated".to_string(),
+                agent: AgentId::Codex,
+                scope: Scope::AgentGlobal,
+                project_root: None,
+                path: unrelated_path.clone(),
+                display_path: unrelated_path,
+                definition_id: "similar-theme-definition".to_string(),
+                name: "theme-helper".to_string(),
+                display_name: "theme-helper".to_string(),
+                description: "Theme helper fixture for unrelated grouping coverage.".to_string(),
+                version: None,
+                state: SkillState::Loaded,
+                enabled: true,
+                frontmatter_raw: "name: theme-helper\ndescription: Theme helper\n".to_string(),
+                body: "Theme helper body for unrelated singleton tests.".to_string(),
+                scripts: Vec::new(),
+                permissions: PermissionRequest::default(),
+                fingerprint: "similar-theme-fingerprint".to_string(),
+                mtime: unix_timestamp_millis(),
+                first_seen: 1,
+                last_seen: unix_timestamp_millis(),
+            },
+        ];
+        catalog
+            .upsert_skill_instances(&instances)
+            .expect("upsert similar grouping skills");
+        catalog
+            .refresh_rule_findings(&[
+                RuleFindingDraft {
+                    id: "similar-release-exec".to_string(),
+                    instance_id: Some("similar-claude-a".to_string()),
+                    definition_id: Some("similar-release-definition".to_string()),
+                    rule_id: "permissions.exec-needs-human".to_string(),
+                    severity: "error".to_string(),
+                    message:
+                        "Release readiness fixture requires human review; token=fixture-redacted-value."
+                            .to_string(),
+                    suggestion: Some("Keep release audit actions read-only.".to_string()),
+                    created_at: 1,
+                },
+                RuleFindingDraft {
+                    id: "similar-research-drift".to_string(),
+                    instance_id: Some("similar-codex-research".to_string()),
+                    definition_id: Some("similar-research-definition".to_string()),
+                    rule_id: "fingerprint.changed".to_string(),
+                    severity: "warning".to_string(),
+                    message: "Research readiness fingerprint drift fixture.".to_string(),
+                    suggestion: Some("Review changed release research guidance.".to_string()),
+                    created_at: 2,
+                },
+            ])
+            .expect("refresh similar grouping findings");
+        catalog
+            .refresh_definitions_and_conflicts(
+                &[
+                    SkillDefinitionDraft {
+                        id: "similar-release-definition".to_string(),
+                        canonical_name: "release-readiness-audit".to_string(),
+                        description: "Similar release readiness fixture.".to_string(),
+                        active_instance: Some("similar-claude-a".to_string()),
+                        has_multiple_instances: true,
+                        has_conflict: true,
+                    },
+                    SkillDefinitionDraft {
+                        id: "similar-research-definition".to_string(),
+                        canonical_name: "release-research-readiness".to_string(),
+                        description: "Similar release research fixture.".to_string(),
+                        active_instance: Some("similar-codex-research".to_string()),
+                        has_multiple_instances: false,
+                        has_conflict: false,
+                    },
+                ],
+                &[ConflictGroupDraft {
+                    id: "similar-release-conflict".to_string(),
+                    definition_id: "similar-release-definition".to_string(),
+                    reason: "duplicate-canonical-name".to_string(),
+                    winner_id: Some("similar-claude-a".to_string()),
+                    instance_ids: vec![
+                        "similar-claude-a".to_string(),
+                        "similar-codex-a".to_string(),
+                    ],
+                }],
+            )
+            .expect("refresh similar grouping conflicts");
     }
 
     fn cleanup_skill(

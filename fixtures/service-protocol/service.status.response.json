@@ -17,6 +17,7 @@
       "analysis.scoreSkillQuality",
       "analysis.detectStaleDrift",
       "knowledge.search",
+      "knowledge.groupSimilarSkills",
       "task.checkReadiness",
       "task.rankSkillRoutes",
       "task.compareAgentReadiness",

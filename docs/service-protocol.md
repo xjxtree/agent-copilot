@@ -1,6 +1,6 @@
 # skills-copilot Service Protocol
 
-> Status: V2.36 Pi writable evidence harness, V2.37 Pi writable guarded slice, V2.38 Hermes external roots, V2.39 OpenClaw workspace deepening, V2.40 Adapter diagnostics, V2.41 AI Provider Foundation, V2.42 Prompt Preview / Redaction, and V2.43-V2.52 task-centered analysis surfaces are integrated. V2.38 models `skills.external_dirs` as explicit read-only external roots, not generic project roots, and Hermes writable/install remains blocked. V2.39 limits OpenClaw project scope to confirmed workspace roots, not arbitrary repo roots, and OpenClaw writable/install remains blocked. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, V2.19 health dashboard, V2.20 read-only AI skill analysis assist, V2.21 scan accuracy/dedupe alignment, V2.22 finding/conflict semantics, V2.23 Health Dashboard / Adapter Capability UX, V2.24 Skill Detail diagnostics, V2.25 Agent-config timeline, V2.26 Finding explainability, V2.27 Skill identity/provenance dedupe, V2.28 Conflict semantic closeout, V2.29 Finding triage persistence, V2.30 AI skill analysis workflow, V2.31 Cleanup Queue, V2.32 Rule tuning / suppression, V2.33 Safe batch actions, V2.34 Cross-agent comparison view, V2.35 Local report export, V2.36 Pi writable evidence harness, V2.37 Pi guarded toggle, V2.38 Hermes external roots, V2.39 OpenClaw workspace deepening, V2.40 Adapter diagnostics, V2.41 provider profiles, V2.42 prompt confirmation, V2.50 cross-agent readiness, V2.51 stale/drift detection, and V2.52 local knowledge search are implemented or synchronized. V2.33 adds `batch.previewSkillToggles` and `batch.applySkillToggles` for preview-first verified writable toggles with explicit confirmation and matching preview id before apply; V2.34 adds read-only `comparison.listCrossAgent`; V2.35 adds user-triggered local/redacted `report.exportLocal`; V2.36 adds evidence-only `evidence.piWritableHarness`; V2.37 adds a guarded minimal Pi native toggle slice (global/project/package), and Pi install stays blocked; V2.40 adds read-only `adapter.listDiagnostics` plus `service.status.adapter_diagnostics` / `app.stateSnapshot.status.adapter_diagnostics`; V2.51 adds read-only `analysis.detectStaleDrift` over local catalog evidence; V2.52 adds read-only `knowledge.search` over local catalog evidence and derived tags.
+> Status: V2.36 Pi writable evidence harness, V2.37 Pi writable guarded slice, V2.38 Hermes external roots, V2.39 OpenClaw workspace deepening, V2.40 Adapter diagnostics, V2.41 AI Provider Foundation, V2.42 Prompt Preview / Redaction, and V2.43-V2.53 task-centered analysis surfaces are integrated. V2.38 models `skills.external_dirs` as explicit read-only external roots, not generic project roots, and Hermes writable/install remains blocked. V2.39 limits OpenClaw project scope to confirmed workspace roots, not arbitrary repo roots, and OpenClaw writable/install remains blocked. Hermes and OpenClaw read-only scanners, V2.18 cross-agent analysis, V2.19 health dashboard, V2.20 read-only AI skill analysis assist, V2.21 scan accuracy/dedupe alignment, V2.22 finding/conflict semantics, V2.23 Health Dashboard / Adapter Capability UX, V2.24 Skill Detail diagnostics, V2.25 Agent-config timeline, V2.26 Finding explainability, V2.27 Skill identity/provenance dedupe, V2.28 Conflict semantic closeout, V2.29 Finding triage persistence, V2.30 AI skill analysis workflow, V2.31 Cleanup Queue, V2.32 Rule tuning / suppression, V2.33 Safe batch actions, V2.34 Cross-agent comparison view, V2.35 Local report export, V2.36 Pi writable evidence harness, V2.37 Pi guarded toggle, V2.38 Hermes external roots, V2.39 OpenClaw workspace deepening, V2.40 Adapter diagnostics, V2.41 provider profiles, V2.42 prompt confirmation, V2.50 cross-agent readiness, V2.51 stale/drift detection, V2.52 local knowledge search, and V2.53 similar grouping are implemented or synchronized. V2.33 adds `batch.previewSkillToggles` and `batch.applySkillToggles` for preview-first verified writable toggles with explicit confirmation and matching preview id before apply; V2.34 adds read-only `comparison.listCrossAgent`; V2.35 adds user-triggered local/redacted `report.exportLocal`; V2.36 adds evidence-only `evidence.piWritableHarness`; V2.37 adds a guarded minimal Pi native toggle slice (global/project/package), and Pi install stays blocked; V2.40 adds read-only `adapter.listDiagnostics` plus `service.status.adapter_diagnostics` / `app.stateSnapshot.status.adapter_diagnostics`; V2.51 adds read-only `analysis.detectStaleDrift` over local catalog evidence; V2.52 adds read-only `knowledge.search` over local catalog evidence and derived tags; V2.53 adds read-only `knowledge.groupSimilarSkills` over local similarity evidence.
 
 > V2.43 `analysis.scoreSkillQuality` is integrated and validated as a read-only deterministic quality score. Closeout evidence includes focused checks, `pnpm check:macos`, real local app validation, fixture screenshot inspection, and `pnpm check:privacy`.
 
@@ -91,6 +91,7 @@ This stdio shape can later move behind a local socket without changing method pa
 | `task.compareAgentReadiness` | No | Integrated (V2.50) | Compare readiness/routing/readiness confidence across Claude/Codex/opencode/Pi/Hermes/OpenClaw for the same task |
 | `analysis.detectStaleDrift` | No | Integrated (V2.51) | Detect stale skills and drift across fingerprints, finding/conflict/source provenance, mtime staleness, and readiness impact using local evidence only |
 | `knowledge.search` | No | Integrated (V2.52) | Local-only read-only search over existing catalog evidence and derived tags; query/agent/limit/optional filters; no default provider/network |
+| `knowledge.groupSimilarSkills` | No | Integrated (V2.53) | Local-only deterministic similar-grouping over existing catalog evidence, V2.52 tags, and source/name/tool/rule/capability/risk overlaps; inputs `agent`, `limit`, optional `min_score`, optional candidate ids, optional singleton inclusion |
 
 `catalog.scanAll` is the native UI scan path.
 
@@ -590,9 +591,9 @@ Current implementation status after V2.50:
 - Implemented in V2.49: `routing.accuracyDashboard`; dashboard output is derived read-only from V2.46 benchmark evaluation, V2.47 routing regression evidence, and V2.48 redacted trace imports. It returns summary metrics, per-agent rows, history rows, gap/issue rows, recent evidence rows, blocker notes, prompt request metadata, and safety flags without writing a dashboard artifact or sending provider traffic.
 - Implemented in V2.50: `task.compareAgentReadiness`; cross-agent task readiness output is derived read-only from V2.44 readiness, V2.45 routing, V2.46 benchmark evaluation, V2.47 routing regression evidence, V2.48 redacted trace imports, V2.49 routing accuracy, and V2.43 quality signals. It returns summary, per-agent rows, optional recommended agent, gap/issue rows, evidence references, prompt request metadata, and safety flags without writing a comparison artifact or sending provider traffic.
 - Implemented in V2.51: `analysis.detectStaleDrift`; stale/drift output is derived read-only from catalog fingerprints, mtime, findings, same-agent conflicts, cross-agent analysis, source/root provenance, and adapter diagnostics. It returns summary counts, stale/drift rows, readiness impact rows, gap/blocker notes, evidence references, prompt request metadata, and safety flags without writing a stale/drift artifact or sending provider traffic.
-- Not yet integrated: V2.53 similar skill grouping and full V2.69 provider observability UX over call metadata remain future work.
+- Not yet integrated in runtime: V2.54 capability taxonomy and full V2.69 provider observability UX over call metadata remain future work.
 
-V2.53+ planning starts from the V2.52 completed protocol surface below.
+V2.54 planning starts from the V2.53 completed protocol surface below.
 
 | Version | Protocol surface | Boundary |
 | --- | --- | --- |
@@ -608,7 +609,8 @@ V2.53+ planning starts from the V2.52 completed protocol surface below.
 | V2.50 | `task.compareAgentReadiness` | Integrated. Cross-agent task readiness comparison over local readiness/routing/benchmark/regression/trace/accuracy evidence; no comparison artifact persistence and no provider/write/script/config/snapshot/triage/credential side effects |
 | V2.51 | `analysis.detectStaleDrift` | Integrated. Read-only stale/drift detection over catalog fingerprint/mtime/finding/conflict/analysis/adapter evidence; no artifact persistence and no provider/write/script/config/snapshot/triage/credential side effects |
 | V2.52 | `knowledge.search` | Integrated. Local-only read-only search over existing catalog evidence and derived tags; rows include purpose snippets, tools/keywords/rules, source provenance, risk/capability tags, quality/readiness/stale-drift context, facets, evidence refs, and no-write/no-provider safety flags |
-| V2.53-V2.55 | `(future) knowledge.groupSimilarSkills`, `(future) knowledge.buildCapabilityTaxonomy`, `(future) workspace.checkReadiness` | Similar grouping / taxonomy / readiness remain future and are not claimed in this branch |
+| V2.53 | `knowledge.groupSimilarSkills` | Integrated. Local-only deterministic grouping over existing catalog evidence, V2.52 tags, source/name/tool/rule/capability/risk overlaps, and quality/readiness/stale-drift context; distinguishes coverage redundancy from routing ambiguity with no provider/write/script/config/snapshot/triage/credential side effects |
+| V2.54-V2.55 | `(future) knowledge.buildCapabilityTaxonomy`, `(future) workspace.checkReadiness` | Taxonomy / readiness remain future and are not claimed in this branch |
 | V2.56-V2.60 | `(planned) remediation.plan`, `(planned) remediation.previewDrafts`, `(planned) remediation.previewImpact`, `(planned) remediation.history` | AI suggestions are draft/read-only unless user enters existing safe write flow |
 | V2.61-V2.68 | `(planned) reviewSession.*`, `(planned) policyPack.*`, `(planned) governance.exportPack` | Local review/policy/governance records and redacted exports |
 | V2.69 | `(planned) llm.listProviderCallMetadata`, `(planned) llm.summarizeProviderUsage`, `(planned) llm.clearProviderCallMetadata`, `(planned) llm.exportProviderUsage` | Full observability UX over V2.41-V2.42 metadata: call history, cost trends, failures, rate limits, availability, cleanup/retention; no secrets/raw prompt/response by default |
@@ -634,7 +636,31 @@ V2.53+ planning starts from the V2.52 completed protocol surface below.
   - `facets`: grouped counts for agents, scopes, states, enabled values, risks, tools, and keywords.
   - `gap_notes` / `blocker_notes`: local evidence caveats and blockers; no index artifact is created.
 - Safety boundary: user-triggered, deterministic, local-only, read-only, no default provider/network, no writes to skill files/agent config/index artifacts/snapshots/triage/scripts/credentials/raw prompt/raw response/cloud sync/telemetry.
-- V2.53+ similar grouping / taxonomy / workspace readiness / remediation remain future and are not claimed by V2.52.
+- V2.54+ taxonomy / workspace readiness / remediation remain future and must not be inferred from V2.52; V2.53 similar grouping is completed as a separate read-only local grouping slice.
+
+## V2.53 Similar Skill Grouping（completed）
+
+`knowledge.groupSimilarSkills` is the integrated local-only, read-only, deterministic grouping surface for same/similar/confusable skills.
+
+- Input shape: `{ agent, limit, min_score?, candidate_instance_ids?, include_singletons? }`
+  - `agent`: optional agent scope or preference.
+  - `limit`: optional max group/member rows returned.
+  - `min_score`: optional minimum similarity score threshold.
+  - `candidate_instance_ids`: optional narrowed candidate set.
+  - `include_singletons`: optional flag to surface isolated skills as singleton groups.
+- Grouping signals:
+  - existing catalog evidence and derived tags from V2.52
+  - source/name/tool/rule/capability/risk overlap
+  - quality/readiness/stale-drift context
+  - same/similar/confusable routing patterns
+- Output shape: `{ generated_by, catalog_available, filters, summary, groups, gap_notes, blocker_notes, evidence_references, prompt_request, safety_flags }`
+  - `summary`: `{ indexed_skill_count, candidate_skill_count, matched_group_count, returned_group_count, duplicate_group_count, confusable_group_count, coverage_redundancy_group_count, routing_ambiguity_count, summary }`
+  - `groups`: `[{ group_id, rank, group_type, similarity_score, ambiguity_risk, coverage_redundancy, routing_ambiguity, canonical_name, canonical_key, title, summary, why_grouped, shared_terms, shared_tools, shared_rules, shared_capability_tags, shared_risk_tags, shared_source_signals, members, evidence_refs, safety_flags }]`
+  - `members`: `[{ instance_id, definition_id, skill_name, agent, scope, enabled, state, source, quality_context, readiness_context, stale_drift_context, match_reasons, similarity_reasons, evidence_refs }]`
+  - `group_type`: duplicate, similar, confusable, source-overlap, or coverage-redundancy style values.
+- Safety boundary: user-triggered, deterministic, local-only, read-only, no default provider/network, no writes to skill files/agent config/group artifacts/snapshots/triage/scripts/credentials/raw prompt/raw response/raw trace/cloud sync/telemetry.
+- If a provider explanation ever appears later, it must still follow V2.42 preview/redaction/confirmation and remain copy-only.
+- V2.54+ taxonomy / workspace readiness / remediation remain future and must not be inferred from V2.53.
 
 V2.41 additive status/profile surface:
 

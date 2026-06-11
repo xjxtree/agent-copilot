@@ -572,6 +572,27 @@ enum UIStrings {
     static var knowledgeGapNotes: String { text("knowledge.gapNotes", "Gap notes") }
     static var knowledgeBlockerNotes: String { text("knowledge.blockerNotes", "Blocker notes") }
     static var knowledgeSafetyFlags: String { text("knowledge.safetyFlags", "Safety flags") }
+    static var similarGroupingTitle: String { text("similarGrouping.title", "Similar Skill Grouping") }
+    static var similarGroupingBoundary: String { text("similarGrouping.boundary", "User-triggered, read-only local grouping for duplicate, similar, and confusable skills across catalog evidence. It cannot call a provider, write skill files, mutate agent config, create snapshots, change triage, execute scripts, read credentials, persist raw prompts/responses/traces, sync cloud data, or emit telemetry.") }
+    static var similarGroupingAction: String { text("similarGrouping.action.group", "Group Similar Skills") }
+    static var similarGroupingUnavailable: String { text("similarGrouping.unavailable", "Similar skill grouping is unavailable in this service build.") }
+    static var similarGroupingNoResult: String { text("similarGrouping.empty.result", "No similar skill grouping loaded.") }
+    static var similarGroupingNoGroups: String { text("similarGrouping.empty.groups", "No similar skill groups returned.") }
+    static var similarGroupingGroups: String { text("similarGrouping.groups", "Groups") }
+    static var similarGroupingGroup: String { text("similarGrouping.group", "Similar group") }
+    static var similarGroupingMembers: String { text("similarGrouping.members", "Members") }
+    static var similarGroupingDuplicate: String { text("similarGrouping.type.duplicate", "Duplicate") }
+    static var similarGroupingSimilar: String { text("similarGrouping.type.similar", "Similar") }
+    static var similarGroupingConfusable: String { text("similarGrouping.type.confusable", "Confusable") }
+    static var similarGroupingHighAmbiguity: String { text("similarGrouping.highAmbiguity", "High ambiguity") }
+    static var similarGroupingCoverageRedundancy: String { text("similarGrouping.coverageRedundancy", "Coverage redundancy") }
+    static var similarGroupingRoutingAmbiguity: String { text("similarGrouping.routingAmbiguity", "Routing ambiguity") }
+    static var similarGroupingWhyGrouped: String { text("similarGrouping.whyGrouped", "Why grouped") }
+    static var similarGroupingSharedTerms: String { text("similarGrouping.sharedTerms", "Shared terms") }
+    static var similarGroupingSourceSignals: String { text("similarGrouping.sourceSignals", "Source signals") }
+    static var similarGroupingQuality: String { text("similarGrouping.quality", "Quality") }
+    static var similarGroupingReadiness: String { text("similarGrouping.readiness", "Readiness") }
+    static var similarGroupingStaleDrift: String { text("similarGrouping.staleDrift", "Stale / drift") }
     static var taskBenchmarkTitle: String { text("taskBenchmark.title", "Task Benchmark Set") }
     static var taskBenchmarkBoundary: String { text("taskBenchmark.boundary", "User-triggered, local benchmark evaluation for task routing. Local evaluation does not call a provider and cannot write skill files, mutate agent config, create snapshots, change triage, execute scripts, or read credentials.") }
     static var taskBenchmarkTaskPlaceholder: String { text("taskBenchmark.task.placeholder", "Optional benchmark task text; otherwise the current readiness/routing task is used") }

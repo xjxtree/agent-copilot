@@ -42,6 +42,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var routingAccuracyDashboard: RoutingAccuracyDashboard?
     @Published private(set) var staleDriftDetection: StaleDriftDetectionResult?
     @Published private(set) var knowledgeSearchResult: KnowledgeSearchResult?
+    @Published private(set) var similarSkillGroupingResult: SimilarSkillGroupingResult?
     @Published private(set) var traceImportList = AgentTraceImportListResult(imports: [])
     @Published private(set) var traceImportResult: AgentTraceImportResult?
     @Published private(set) var traceImportDeleteResult: AgentTraceImportDeleteResult?
@@ -53,6 +54,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var isLoadingRoutingAccuracyDashboard = false
     @Published private(set) var isDetectingStaleDrift = false
     @Published private(set) var isSearchingKnowledge = false
+    @Published private(set) var isGroupingSimilarSkills = false
     @Published private(set) var isLoadingTraceImports = false
     @Published private(set) var isImportingTrace = false
     @Published private(set) var deletingTaskBenchmarkIDs: Set<String> = []
@@ -99,6 +101,7 @@ final class SkillStore: ObservableObject {
             routingAccuracyDashboard = nil
             staleDriftDetection = nil
             knowledgeSearchResult = nil
+            similarSkillGroupingResult = nil
             Task { await loadAgentConfigSnapshots() }
             Task { await loadCleanupQueue() }
             Task { await loadCrossAgentComparisons() }
@@ -173,7 +176,7 @@ final class SkillStore: ObservableObject {
     }
 
     private var isTaskBenchmarkBusy: Bool {
-        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty
+        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isGroupingSimilarSkills || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty
     }
 
     private var isLLMPromptBusy: Bool {
@@ -1451,6 +1454,29 @@ final class SkillStore: ObservableObject {
             )
         } catch {
             knowledgeSearchResult = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
+    func groupSimilarSkills() async {
+        guard !isGroupingSimilarSkills else { return }
+        guard !isRefreshBusy else {
+            similarSkillGroupingResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        isGroupingSimilarSkills = true
+        defer { isGroupingSimilarSkills = false }
+
+        let agent = agentFilter == .all ? nil : agentFilter.rawValue
+        do {
+            similarSkillGroupingResult = try await service.groupSimilarSkills(
+                agent: agent,
+                limit: 20,
+                minScore: 0.62,
+                includeSingletons: false
+            )
+        } catch {
+            similarSkillGroupingResult = .unavailable(reason: error.localizedDescription)
         }
     }
 

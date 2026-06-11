@@ -283,7 +283,15 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
 - 输入仅限 `query`、可选 `agent`、可选 `limit`、以及可选 filters；filters 只用于收窄 purpose、tools、keywords、rules、source、risk、task fit、capability tags。
 - 默认不发起 provider / network 调用；若未来存在 provider 说明，仍必须遵守 V2.42 preview/redaction/确认，且只能 copy-only，不得影响 deterministic search 结果。
 - 输出安全标志必须默认 false：`provider_request_sent`、`write_back_allowed`、`config_mutation_allowed`、`index_write_allowed`、`snapshot_created`、`triage_mutation_allowed`、`script_execution_allowed`、`credential_accessed`、`raw_prompt_persisted`、`raw_response_persisted`、`raw_trace_persisted`、`cloud_sync_performed`、`telemetry_emitted`。
-- V2.53+ similar grouping / taxonomy / workspace readiness / remediation remain future and must not be inferred from V2.52.
+- V2.54+ taxonomy / workspace readiness / remediation remain future and must not be inferred from V2.52; V2.53 similar grouping is documented separately and completed as a read-only local grouping slice.
+
+### 2.4.3.1.7 V2.53 Similar Skill Grouping（completed）
+
+- `knowledge.groupSimilarSkills` is user-triggered, local-only, read-only, deterministic, and evidence-first. It groups same/similar/confusable skills using existing catalog evidence, V2.52 derived tags, and source/name/tool/rule/capability/risk overlaps.
+- The method must not write skill files, agent config, grouping artifacts, snapshots, triage state, or raw trace content; it must not execute scripts; it must not read or write credentials.
+- The method must not default to provider or network usage. If provider explanation is ever added later, it must still go through V2.42 preview/redaction/confirmation and remain copy-only.
+- Output safety flags must default false: `provider_request_sent`, `write_back_allowed`, `config_mutation_allowed`, `group_artifact_written`, `snapshot_created`, `triage_mutation_allowed`, `script_execution_allowed`, `credential_accessed`, `raw_prompt_persisted`, `raw_response_persisted`, `raw_trace_persisted`, `cloud_sync_performed`, `telemetry_emitted`.
+- Output shape must remain explanatory: summary, groups, members, gap notes, blocker notes, evidence references, prompt request metadata, and safety flags. The grouping explanation must distinguish coverage redundancy from routing ambiguity and must not imply remediation, taxonomy, or workspace readiness is implemented.
 
 ### 2.4.3 Finding triage persistence 边界（V2.29）
 

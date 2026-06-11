@@ -170,6 +170,8 @@ struct DetailView: View {
                             knowledgeSearchText: $store.knowledgeSearchText,
                             knowledgeSearchResult: store.knowledgeSearchResult,
                             isSearchingKnowledge: store.isSearchingKnowledge,
+                            similarSkillGroupingResult: store.similarSkillGroupingResult,
+                            isGroupingSimilarSkills: store.isGroupingSimilarSkills,
                             onScoreQuality: {
                                 Task {
                                     await store.scoreSelectedSkillQuality()
@@ -233,6 +235,11 @@ struct DetailView: View {
                             onSearchKnowledge: {
                                 Task {
                                     await store.searchKnowledge()
+                                }
+                            },
+                            onGroupSimilarSkills: {
+                                Task {
+                                    await store.groupSimilarSkills()
                                 }
                             },
                             taskBenchmarkText: $store.taskBenchmarkText,
@@ -874,6 +881,8 @@ private struct AnalysisSection: View {
     @Binding var knowledgeSearchText: String
     let knowledgeSearchResult: KnowledgeSearchResult?
     let isSearchingKnowledge: Bool
+    let similarSkillGroupingResult: SimilarSkillGroupingResult?
+    let isGroupingSimilarSkills: Bool
     let onScoreQuality: () -> Void
     let onPreviewQualityPrompt: () -> Void
     let onSendQualityPrompt: () -> Void
@@ -887,6 +896,7 @@ private struct AnalysisSection: View {
     let onLoadRoutingAccuracyDashboard: () -> Void
     let onDetectStaleDrift: () -> Void
     let onSearchKnowledge: () -> Void
+    let onGroupSimilarSkills: () -> Void
     @Binding var taskBenchmarkText: String
     let taskBenchmarkInput: String
     let taskBenchmarkList: TaskBenchmarkListResult
@@ -1030,6 +1040,12 @@ private struct AnalysisSection: View {
                 result: staleDriftDetection,
                 isDetecting: isDetectingStaleDrift,
                 onDetect: onDetectStaleDrift
+            )
+
+            SimilarSkillGroupingPanel(
+                result: similarSkillGroupingResult,
+                isGrouping: isGroupingSimilarSkills,
+                onGroup: onGroupSimilarSkills
             )
 
             KnowledgeSearchPanel(
@@ -3179,6 +3195,332 @@ private struct StaleDriftSafetyList: View {
             (UIStrings.routingAccuracyCloudSync, safety.cloudSyncEnabled),
             (UIStrings.routingAccuracyTelemetry, safety.telemetryEnabled)
         ]
+    }
+}
+
+private struct SimilarSkillGroupingPanel: View {
+    let result: SimilarSkillGroupingResult?
+    let isGrouping: Bool
+    let onGroup: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.similarGroupingTitle, systemImage: "rectangle.3.group.bubble")
+                    .font(.headline)
+                Spacer()
+                Label(UIStrings.readOnlyPreview, systemImage: "lock.shield")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(UIStrings.similarGroupingBoundary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+
+            HStack(spacing: 8) {
+                Button {
+                    onGroup()
+                } label: {
+                    Label(UIStrings.similarGroupingAction, systemImage: "rectangle.stack.badge.person.crop")
+                }
+                .disabled(isGrouping)
+
+                if isGrouping {
+                    Label(UIStrings.llmPreparing, systemImage: "hourglass")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if let result {
+                SimilarSkillGroupingResultView(result: result)
+            } else {
+                Label(UIStrings.similarGroupingNoResult, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Label(UIStrings.llmReviewNoActions, systemImage: "nosign")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct SimilarSkillGroupingResultView: View {
+    let result: SimilarSkillGroupingResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let fallbackReason = result.fallbackReason, !fallbackReason.isEmpty {
+                Label(fallbackReason, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+                SummaryChip(title: UIStrings.similarGroupingGroups, value: "\(groupCount)", systemImage: "rectangle.stack")
+                SummaryChip(title: UIStrings.similarGroupingMembers, value: "\(memberCount)", systemImage: "person.3")
+                SummaryChip(title: UIStrings.similarGroupingDuplicate, value: "\(duplicateCount)", systemImage: "doc.on.doc")
+                SummaryChip(title: UIStrings.similarGroupingConfusable, value: "\(confusableCount)", systemImage: "point.3.connected.trianglepath.dotted")
+                SummaryChip(title: UIStrings.similarGroupingHighAmbiguity, value: "\(result.summary.highAmbiguityCount)", systemImage: "exclamationmark.triangle")
+                SummaryChip(title: UIStrings.similarGroupingRoutingAmbiguity, value: "\(result.summary.routingAmbiguityCount)", systemImage: "arrow.triangle.branch")
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                MetadataRow(label: UIStrings.routingAccuracyGeneratedBy, value: result.generatedBy)
+                MetadataRow(label: UIStrings.routingAccuracyCatalog, value: result.catalogAvailable ? UIStrings.routingAccuracyAvailable : UIStrings.routingAccuracyUnavailableShort)
+                MetadataRow(label: UIStrings.agent, value: result.filters.agents.isEmpty ? (result.filters.agent.map(DisplayText.agent) ?? UIStrings.text("health.allAgents", "All Agents")) : result.filters.agents.map(DisplayText.agent).joined(separator: ", "))
+                if let limit = result.filters.limit {
+                    MetadataRow(label: UIStrings.text("filter.limit", "Limit"), value: "\(limit)")
+                }
+                if let minScore = result.filters.minScore {
+                    MetadataRow(label: UIStrings.similarGroupingSimilar, value: RoutingAccuracySummary.confidenceLabel(minScore))
+                }
+                MetadataRow(label: UIStrings.text("filter.singletons", "Singletons"), value: result.filters.includeSingletons ? UIStrings.stateEnabled : UIStrings.stateDisabled)
+                if let promptRequest = result.promptRequest {
+                    MetadataRow(label: UIStrings.routingAccuracyPromptRequest, value: promptRequestLabel(promptRequest))
+                }
+            }
+
+            if !result.summary.summaryText.isEmpty {
+                Text(result.summary.summaryText)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            SimilarSkillGroupList(groups: result.groups)
+            RoutingInlineList(title: UIStrings.knowledgeGapNotes, empty: UIStrings.routingAccuracyNoGaps, values: result.gapNotes, systemImage: "puzzlepiece.extension")
+            RoutingInlineList(title: UIStrings.knowledgeBlockerNotes, empty: UIStrings.routingAccuracyNoBlockers, values: result.blockerNotes, systemImage: "exclamationmark.octagon")
+            CrossAgentReadinessEvidenceList(evidence: result.evidenceReferences)
+            StaleDriftSafetyList(safety: result.safetyFlags)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var groupCount: Int {
+        result.summary.groupCount > 0 ? result.summary.groupCount : result.groups.count
+    }
+
+    private var memberCount: Int {
+        result.summary.memberCount > 0 ? result.summary.memberCount : result.groups.reduce(0) { $0 + $1.members.count }
+    }
+
+    private var duplicateCount: Int {
+        result.summary.duplicateCount > 0 ? result.summary.duplicateCount : result.groups.filter { $0.typeLabel == UIStrings.similarGroupingDuplicate }.count
+    }
+
+    private var confusableCount: Int {
+        result.summary.confusableCount > 0 ? result.summary.confusableCount : result.groups.filter { $0.typeLabel == UIStrings.similarGroupingConfusable }.count
+    }
+
+    private func promptRequestLabel(_ promptRequest: RoutingAccuracyPromptRequest) -> String {
+        let state = promptRequest.enabled ? UIStrings.llmEnabled : UIStrings.llmDisabled
+        let copy = promptRequest.copyOnly ? UIStrings.llmPromptCopyOnly : UIStrings.llmSkillAnalysisEnabledUnsafe
+        return "\(promptRequest.requestKind) · \(state) · \(copy)"
+    }
+}
+
+private struct SimilarSkillGroupList: View {
+    let groups: [SimilarSkillGroup]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(UIStrings.similarGroupingGroups)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if groups.isEmpty {
+                Text(UIStrings.similarGroupingNoGroups)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 360), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(groups.prefix(8)) { group in
+                        SimilarSkillGroupCard(group: group)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct SimilarSkillGroupCard: View {
+    let group: SimilarSkillGroup
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Label(group.title, systemImage: iconName)
+                    .font(.callout.bold())
+                    .lineLimit(1)
+                Spacer()
+                Text(group.displayRank)
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 6) {
+                SimilarSkillPill(text: group.typeLabel, systemImage: iconName)
+                if let score = group.similarityScore {
+                    SimilarSkillPill(text: RoutingAccuracySummary.confidenceLabel(score), systemImage: "gauge.medium")
+                }
+                if let ambiguityRisk = group.ambiguityRisk, !ambiguityRisk.isEmpty {
+                    SimilarSkillPill(text: ambiguityRisk, systemImage: "exclamationmark.triangle")
+                }
+            }
+
+            if !group.summary.isEmpty {
+                Text(group.summary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
+                if let coverage = group.coverageRedundancy, !coverage.isEmpty {
+                    MetadataRow(label: UIStrings.similarGroupingCoverageRedundancy, value: coverage)
+                }
+                if let ambiguity = group.routingAmbiguity, !ambiguity.isEmpty {
+                    MetadataRow(label: UIStrings.similarGroupingRoutingAmbiguity, value: ambiguity)
+                }
+            }
+
+            RoutingInlineList(title: UIStrings.similarGroupingWhyGrouped, empty: UIStrings.routingConfidenceNoReasons, values: group.whyGrouped, systemImage: "text.bubble")
+            KnowledgeTokenFlow(title: UIStrings.similarGroupingSharedTerms, values: group.sharedTerms)
+            KnowledgeTokenFlow(title: UIStrings.knowledgeTools, values: group.sharedTools)
+            KnowledgeTokenFlow(title: UIStrings.knowledgeRules, values: group.sharedRules)
+            KnowledgeTokenFlow(title: UIStrings.knowledgeCapabilities, values: group.sharedCapabilities)
+            KnowledgeTokenFlow(title: UIStrings.knowledgeRisks, values: group.sharedRisks)
+            KnowledgeTokenFlow(title: UIStrings.similarGroupingSourceSignals, values: group.sourceSignals)
+            SimilarSkillMemberList(members: group.members)
+            RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: group.evidenceRefs, systemImage: "checklist")
+            RoutingInlineList(title: UIStrings.knowledgeSafetyFlags, empty: UIStrings.taskBenchmarkNoSafetyFlags, values: group.safetyFlags, systemImage: "checkmark.shield")
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var iconName: String {
+        switch group.typeLabel {
+        case UIStrings.similarGroupingDuplicate:
+            return "doc.on.doc"
+        case UIStrings.similarGroupingConfusable:
+            return "point.3.connected.trianglepath.dotted"
+        default:
+            return "rectangle.3.group.bubble"
+        }
+    }
+}
+
+private struct SimilarSkillMemberList: View {
+    let members: [SimilarSkillMember]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(UIStrings.similarGroupingMembers)
+                .font(.caption2.bold())
+                .foregroundStyle(.secondary)
+            if members.isEmpty {
+                Text(UIStrings.knowledgeNoRows)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(members.prefix(6)) { member in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Label(member.skillName, systemImage: "doc.text")
+                                .font(.caption.bold())
+                                .lineLimit(1)
+                            Spacer()
+                            Text(member.agent.map(DisplayText.agent) ?? UIStrings.unknown)
+                                .font(.caption2.bold())
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 3) {
+                            MetadataRow(label: UIStrings.scope, value: member.scope ?? UIStrings.unknown)
+                            MetadataRow(label: UIStrings.state, value: member.statusLabel)
+                            if let definitionID = member.definitionID, !definitionID.isEmpty {
+                                MetadataRow(label: UIStrings.definition, value: definitionID)
+                            }
+                            if let quality = qualityLabel(member), !quality.isEmpty {
+                                MetadataRow(label: UIStrings.similarGroupingQuality, value: quality)
+                            }
+                            if let readiness = readinessLabel(member), !readiness.isEmpty {
+                                MetadataRow(label: UIStrings.similarGroupingReadiness, value: readiness)
+                            }
+                            if let staleDrift = member.staleDriftState, !staleDrift.isEmpty {
+                                MetadataRow(label: UIStrings.similarGroupingStaleDrift, value: staleDrift)
+                            }
+                            if let sourceKind = member.sourceKind, !sourceKind.isEmpty {
+                                MetadataRow(label: UIStrings.provenanceKind, value: sourceKind)
+                            }
+                            if let sourceRoot = member.sourceRoot, !sourceRoot.isEmpty {
+                                MetadataRow(label: UIStrings.provenanceRoot, value: sourceRoot)
+                            }
+                        }
+
+                        if let sourcePath = member.sourcePath, !sourcePath.isEmpty {
+                            Text(sourcePath)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .textSelection(.enabled)
+                        }
+
+                        RoutingInlineList(title: UIStrings.routingConfidenceMatchReasons, empty: UIStrings.routingConfidenceNoReasons, values: member.reasons, systemImage: "text.bubble")
+                        RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: member.evidenceRefs, systemImage: "checklist")
+                        RoutingInlineList(title: UIStrings.knowledgeSafetyFlags, empty: UIStrings.taskBenchmarkNoSafetyFlags, values: member.safetyFlags, systemImage: "checkmark.shield")
+                    }
+                    .padding(8)
+                    .background(.quaternary.opacity(0.32), in: RoundedRectangle(cornerRadius: 6))
+                }
+            }
+        }
+    }
+
+    private func qualityLabel(_ member: SimilarSkillMember) -> String? {
+        scoreBandLabel(score: member.qualityScore, band: member.qualityBand)
+    }
+
+    private func readinessLabel(_ member: SimilarSkillMember) -> String? {
+        scoreBandLabel(score: member.readinessScore, band: member.readinessBand)
+    }
+
+    private func scoreBandLabel(score: Double?, band: String?) -> String? {
+        let pieces = [
+            score.map(RoutingAccuracySummary.confidenceLabel),
+            band
+        ].compactMap { value -> String? in
+            guard let value, !value.isEmpty else { return nil }
+            return value
+        }
+        return pieces.isEmpty ? nil : pieces.joined(separator: " · ")
+    }
+}
+
+private struct SimilarSkillPill: View {
+    let text: String
+    let systemImage: String
+
+    var body: some View {
+        Label(text, systemImage: systemImage)
+            .font(.caption2.bold())
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(.quaternary.opacity(0.45), in: Capsule())
+            .lineLimit(1)
     }
 }
 

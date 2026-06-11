@@ -51,6 +51,8 @@ struct SkillStoreTests {
         try await routingAccuracyDashboardUsesReadOnlyServiceContract()
         try await staleDriftDetectionUsesReadOnlyServiceContract()
         try await knowledgeSearchUsesReadOnlyServiceContract()
+        try await similarSkillGroupingUsesReadOnlyServiceContract()
+        try await similarSkillGroupingFallsBackWhenMethodUnavailable()
         try await crossAgentReadinessUsesReadOnlyServiceContract()
         try await routingConfidenceClearsStaleSelection()
         try await llmPreparePreviewIsScopedToSelectedSkillAndReadOnly()
@@ -1354,6 +1356,72 @@ struct SkillStoreTests {
         try expectFalse(calls.contains("credential"), "Knowledge search must not call credential paths.")
     }
 
+    private func similarSkillGroupingUsesReadOnlyServiceContract() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+        let snapshotCallsBeforeGrouping = countOccurrences("snapshot.", in: fake.calls())
+        await store.groupSimilarSkills()
+
+        let result = store.similarSkillGroupingResult
+        try expectEqual(result?.generatedBy, "local-v2.53", "Similar grouping should expose generator metadata.")
+        try expectEqual(result?.summary.groupCount, 1, "Similar grouping should expose group count.")
+        try expectEqual(result?.groups.first?.title, "Audit release skills", "Similar grouping should expose group title.")
+        try expectEqual(result?.groups.first?.typeLabel, UIStrings.similarGroupingDuplicate, "Similar grouping should expose duplicate type.")
+        try expectEqual(result?.groups.first?.members.first?.skillName, "Beta", "Similar grouping should expose member rows.")
+        try expectEqual(result?.groups.first?.sharedTools, ["rg"], "Similar grouping should expose shared tools.")
+        try expectEqual(result?.gapNotes.first, "No benchmark separates the two skills.", "Similar grouping should expose gap notes.")
+        try expectEqual(result?.evidenceReferences.first?.title, "Similar grouping", "Similar grouping should expose evidence references.")
+        try expectFalse(result?.safetyFlags.providerRequestSent ?? true, "Similar grouping must not send provider requests.")
+        try expectFalse(result?.safetyFlags.writeBackAllowed ?? true, "Similar grouping must not allow write-back.")
+        try expectFalse(result?.safetyFlags.writeActionsAvailable ?? true, "Similar grouping must not expose write actions.")
+        try expectFalse(result?.safetyFlags.scriptExecutionAllowed ?? true, "Similar grouping must not allow script execution.")
+        try expectFalse(result?.safetyFlags.executionActionsAvailable ?? true, "Similar grouping must not expose execution actions.")
+        try expectFalse(result?.safetyFlags.configMutationAllowed ?? true, "Similar grouping must not mutate config.")
+        try expectFalse(result?.safetyFlags.snapshotCreated ?? true, "Similar grouping must not create snapshots.")
+        try expectFalse(result?.safetyFlags.triageMutationAllowed ?? true, "Similar grouping must not mutate triage.")
+        try expectFalse(result?.safetyFlags.credentialAccessed ?? true, "Similar grouping must not access credentials.")
+        try expectFalse(result?.safetyFlags.rawPromptPersisted ?? true, "Similar grouping must not persist raw prompts.")
+        try expectFalse(result?.safetyFlags.rawResponsePersisted ?? true, "Similar grouping must not persist raw responses.")
+        try expectFalse(result?.safetyFlags.rawTracePersisted ?? true, "Similar grouping must not persist raw traces.")
+        try expectFalse(result?.safetyFlags.cloudSyncEnabled ?? true, "Similar grouping must not sync cloud data.")
+        try expectFalse(result?.safetyFlags.telemetryEnabled ?? true, "Similar grouping must not emit telemetry.")
+        try expectFalse(store.isGroupingSimilarSkills, "Similar grouping should reset loading state.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "knowledge.groupSimilarSkills", "Similar grouping should call the V2.53 grouping method.")
+        try expectContains(calls, "\"agent\":\"claude-code\"", "Similar grouping should pass the current agent filter.")
+        try expectContains(calls, "\"limit\":20", "Similar grouping should pass the group limit.")
+        try expectContains(calls, "\"min_score\":0.62", "Similar grouping should pass the score threshold.")
+        try expectContains(calls, "\"include_singletons\":false", "Similar grouping should omit singleton groups by default.")
+        try expectFalse(calls.contains("llm.previewPrompt"), "Similar grouping must not prepare provider prompts.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Similar grouping must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Similar grouping must not call config write paths.")
+        try expectFalse(calls.contains("script.execute"), "Similar grouping must not call execution paths.")
+        try expectEqual(countOccurrences("snapshot.", in: calls), snapshotCallsBeforeGrouping, "Similar grouping must not call snapshot paths.")
+        try expectFalse(calls.contains("credential"), "Similar grouping must not call credential paths.")
+    }
+
+    private func similarSkillGroupingFallsBackWhenMethodUnavailable() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "normal")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+        await store.groupSimilarSkills()
+
+        try expectEqual(store.similarSkillGroupingResult?.isUnavailable, true, "Similar grouping should expose unavailable fallback for older services.")
+        try expectEqual(store.similarSkillGroupingResult?.fallbackReason, UIStrings.similarGroupingUnavailable, "Unknown method fallback should use the localized unavailable copy.")
+        try expectFalse(store.isGroupingSimilarSkills, "Unavailable similar grouping should reset loading state.")
+        try expectContains(fake.calls(), "knowledge.groupSimilarSkills", "Fallback should still prove the intended V2.53 method was attempted.")
+    }
+
     private func crossAgentReadinessUsesReadOnlyServiceContract() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -1796,6 +1864,12 @@ private final class FakeServiceScript {
               respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.52","catalog_available":true,"filters":{"query":"release audit","agent":"claude-code","limit":20},"summary":{"result_count":1,"agent_count":1,"gap_count":1,"blocker_count":0,"summary":"Beta matches local knowledge for release audit work."},"knowledge_rows":[{"rank":1,"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","purpose":"Handles local audit release notes.","matched_fields":["purpose","tools"],"match_reasons":["Purpose mentions audit."],"keywords":["audit","release"],"tools":["rg"],"rules":["permissions.network-declared"],"capability_tags":["analysis"],"risk_tags":["local-only"],"evidence_refs":["catalog:beta"],"safety_flags":["provider not sent"]}],"facet_rows":[{"facet":"agent","value":"claude-code","count":1}],"gap_notes":["No fresh trace confirms the release audit route."],"blocker_notes":[],"evidence_references":[{"title":"Knowledge index","detail":"Beta indexed from local catalog metadata.","source":"knowledge.search","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"knowledge_search","summary":"Provider explanation is copy-only and preview-gated.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent"]}}}'
             fi
             respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: knowledge.search"}}'
+            ;;
+          *\\"knowledge.groupSimilarSkills\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.53","catalog_available":true,"filters":{"agent":"claude-code","limit":20,"min_score":0.62,"include_singletons":false},"summary":{"group_count":1,"member_count":2,"duplicate_count":1,"similar_count":0,"confusable_count":0,"high_ambiguity_count":1,"coverage_redundancy_count":1,"routing_ambiguity_count":1,"summary":"Beta and Gamma overlap on audit routing."},"groups":[{"group_id":"grp-1","rank":1,"group_type":"duplicate","similarity_score":0.88,"ambiguity_risk":"high","coverage_redundancy":"substantial overlap","routing_ambiguity":"likely wrong-pick","title":"Audit release skills","summary":"Two skills cover the same audit release workflow.","why_grouped":["Same keywords and tool declarations."],"shared_terms":["audit","release"],"shared_tools":["rg"],"shared_rules":["permissions.network-declared"],"shared_capabilities":["analysis"],"shared_risks":["routing ambiguity"],"source_signals":["same project root"],"members":[{"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","source_kind":"project","source_root":"project","quality_score":82,"quality_band":"Good","readiness_score":74,"readiness_band":"Partial","stale_drift_state":"fresh","reasons":["Name and purpose overlap."],"evidence_refs":["catalog:beta"],"safety_flags":["provider not sent"]}],"evidence_refs":["catalog:beta","catalog:gamma"],"safety_flags":["provider not sent"]}],"gap_notes":["No benchmark separates the two skills."],"blocker_notes":[],"evidence_references":[{"title":"Similar grouping","detail":"Beta and Gamma grouped from local catalog evidence.","source":"knowledge.groupSimilarSkills","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"similar_skill_grouping","summary":"Provider explanation is copy-only and preview-gated.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent"]}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: knowledge.groupSimilarSkills"}}'
             ;;
           *\\"task.listBenchmarks\\"*)
             if [ "$scenario" = "prompt-ready" ]; then

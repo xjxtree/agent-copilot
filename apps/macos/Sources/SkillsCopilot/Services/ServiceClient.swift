@@ -284,6 +284,20 @@ private struct KnowledgeSearchParams: Encodable {
     }
 }
 
+private struct SimilarSkillGroupingParams: Encodable {
+    let agent: String?
+    let limit: Int?
+    let minScore: Double?
+    let includeSingletons: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case agent
+        case limit
+        case minScore = "min_score"
+        case includeSingletons = "include_singletons"
+    }
+}
+
 private struct TaskBenchmarkDeleteParams: Encodable {
     let benchmarkId: String
 
@@ -864,6 +878,25 @@ final class ServiceClient {
         let params = KnowledgeSearchParams(query: query, agent: agent, limit: limit)
         do {
             return try await call(method: "knowledge.search", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func groupSimilarSkills(
+        agent: String? = nil,
+        limit: Int? = 20,
+        minScore: Double? = 0.62,
+        includeSingletons: Bool = false
+    ) async throws -> SimilarSkillGroupingResult {
+        let params = SimilarSkillGroupingParams(
+            agent: agent,
+            limit: limit,
+            minScore: minScore,
+            includeSingletons: includeSingletons
+        )
+        do {
+            return try await call(method: "knowledge.groupSimilarSkills", params: params)
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .unavailable()
         }

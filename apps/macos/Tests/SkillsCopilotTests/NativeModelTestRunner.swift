@@ -56,6 +56,7 @@ public func runNativeModelTests() {
         try CrossAgentReadinessModelTests().run()
         try StaleDriftDetectionModelTests().run()
         try LocalKnowledgeIndexModelTests().run()
+        try SimilarSkillGroupingModelTests().run()
         try AIProviderModelTests().run()
         try LLMModelTests().run()
         try ScriptExecutionModelTests().run()
