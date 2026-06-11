@@ -283,7 +283,7 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
 - 输入仅限 `query`、可选 `agent`、可选 `limit`、以及可选 filters；filters 只用于收窄 purpose、tools、keywords、rules、source、risk、task fit、capability tags。
 - 默认不发起 provider / network 调用；若未来存在 provider 说明，仍必须遵守 V2.42 preview/redaction/确认，且只能 copy-only，不得影响 deterministic search 结果。
 - 输出安全标志必须默认 false：`provider_request_sent`、`write_back_allowed`、`config_mutation_allowed`、`index_write_allowed`、`snapshot_created`、`triage_mutation_allowed`、`script_execution_allowed`、`credential_accessed`、`raw_prompt_persisted`、`raw_response_persisted`、`raw_trace_persisted`、`cloud_sync_performed`、`telemetry_emitted`。
-- V2.55 workspace readiness is implemented as `workspace.checkReadiness` and must not be inferred from V2.52 alone; it is local-only, user-triggered, deterministic, and read-only by default, with no provider requests by default, no skill/config/snapshot/triage/readiness-artifact writes, no scripts, no credentials, no raw prompt/response/trace persistence, and no cloud sync/telemetry. V2.53 similar grouping and V2.54 taxonomy are documented separately as read-only local slices.
+- V2.55 workspace readiness is implemented as `workspace.checkReadiness` and must not be inferred from V2.52 alone; it is local-only, user-triggered, deterministic, and read-only by default, with no provider requests by default, no skill/config/snapshot/triage/readiness-artifact writes, no scripts, no credentials, no raw prompt/response/trace persistence, and no cloud sync/telemetry. V2.53 similar grouping and V2.54 taxonomy are documented separately as read-only local slices; V2.56 remediation planning remains planned.
 
 ### 2.4.3.1.7 V2.53 Similar Skill Grouping（completed）
 
@@ -300,6 +300,14 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
 - The method must not default to provider or network usage. Optional provider explanation remains V2.42 preview/redaction/confirmation-gated and copy-only, and must not affect deterministic taxonomy results.
 - Output safety flags must default false: `provider_request_sent`, `write_back_allowed`, `write_actions_available`, `skill_files_mutated`, `agent_config_mutated`, `script_execution_allowed`, `execution_actions_available`, `config_mutation_allowed`, `snapshot_created`, `triage_mutation_allowed`, `credential_accessed`, `raw_prompt_persisted`, `raw_response_persisted`, `raw_trace_persisted`, `cloud_sync_performed`, and `telemetry_emitted`.
 - Output shape must remain explanatory: summary, domain rows, coverage rows, representative skills, gap notes, blocker notes, evidence references, prompt request metadata, and safety flags. The taxonomy explanation may surface coverage redundancy and routing ambiguity but must not imply workspace readiness or remediation planning is implemented.
+
+### 2.4.3.1.9 V2.56 Remediation Planner（planned）
+
+- `remediation.plan` is user-triggered, local-only, deterministic, and read-only by default. It should consume findings, gaps, routing ambiguity, drift, task/workspace context, and candidate instance IDs to derive prioritized remediation rows.
+- The method must not write skill files, agent config, remediation artifacts, snapshots, triage, or scripts; it must not read or write credentials; it must not default to provider or network usage.
+- Output safety flags must default false: `provider_request_sent`, `write_back_allowed`, `config_mutation_allowed`, `artifact_written`, `snapshot_created`, `triage_mutation_allowed`, `script_execution_allowed`, `credential_accessed`, `raw_prompt_persisted`, `raw_response_persisted`, `raw_trace_persisted`, `cloud_sync_performed`, `telemetry_emitted`.
+- Output shape should remain explanatory: summary, plan rows, gap notes, blocker notes, evidence references, prompt request metadata, and safety flags. Plan rows should include priority, issue type, affected instances, next step, confidence, and writable-path requirement notes.
+- Any optional provider explanation, if ever added, must remain V2.42 preview/redaction/confirmation-gated and copy-only; it must not change the deterministic plan or become an execution trigger.
 
 ### 2.4.3 Finding triage persistence 边界（V2.29）
 
