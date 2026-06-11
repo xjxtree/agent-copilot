@@ -61,6 +61,8 @@ struct SkillStoreTests {
         try await remediationPlanFallsBackWhenMethodUnavailable()
         try await remediationPreviewDraftsUsesCopyOnlyServiceContract()
         try await remediationPreviewDraftsFallsBackWhenMethodUnavailable()
+        try await remediationImpactPreviewUsesReadOnlyServiceContract()
+        try await remediationImpactPreviewFallsBackWhenMethodUnavailable()
         try await crossAgentReadinessUsesReadOnlyServiceContract()
         try await routingConfidenceClearsStaleSelection()
         try await llmPreparePreviewIsScopedToSelectedSkillAndReadOnly()
@@ -1707,6 +1709,86 @@ struct SkillStoreTests {
         try expectContains(fake.calls(), "remediation.previewDrafts", "Fallback should still prove the intended V2.57 method was attempted.")
     }
 
+    private func remediationImpactPreviewUsesReadOnlyServiceContract() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        store.routingConfidenceText = "Prepare local release audit work."
+        await store.reload()
+        let snapshotCallsBeforePreview = countOccurrences("snapshot.", in: fake.calls())
+        await store.previewRemediationImpact()
+
+        let result = store.remediationImpactPreviewResult
+        try expectEqual(result?.generatedBy, "local-v2.58", "Impact preview should expose generator metadata.")
+        try expectEqual(result?.summary.totalCount, 6, "Impact preview should expose total impact count.")
+        try expectEqual(result?.summary.taskImpactCount, 1, "Impact preview should expose task impact count.")
+        try expectEqual(result?.impactRows.first?.title, "Overall readiness improves", "Impact preview should expose general impact rows.")
+        try expectEqual(result?.taskImpactRows.first?.delta, "+12 readiness", "Impact preview should expose task deltas.")
+        try expectEqual(result?.agentImpactRows.first?.agent, "claude-code", "Impact preview should expose agent rows.")
+        try expectEqual(result?.skillImpactRows.first?.skill?.skillName, "Beta", "Impact preview should expose affected skill evidence.")
+        try expectEqual(result?.riskDeltaRows.first?.title, "Network declaration risk drops", "Impact preview should expose risk deltas.")
+        try expectEqual(result?.snapshotRollbackRows.first?.title, "No snapshot is created", "Impact preview should expose snapshot/rollback plan rows.")
+        try expectEqual(result?.gapNotes.first, "Codex still lacks project-scoped coverage.", "Impact preview should expose gap notes.")
+        try expectEqual(result?.blockerNotes.first, "No apply/write path is exposed.", "Impact preview should expose blocker notes.")
+        try expectEqual(result?.evidenceReferences.first?.title, "Impact preview", "Impact preview should expose evidence references.")
+        try expectEqual(result?.promptRequest?.requestKind, "remediation_preview_impact", "Impact preview prompt metadata should use V2.58 request kind.")
+        try expectFalse(result?.safetyFlags.providerRequestSent ?? true, "Impact preview must not send provider requests.")
+        try expectFalse(result?.safetyFlags.writeBackAllowed ?? true, "Impact preview must not allow write-back.")
+        try expectFalse(result?.safetyFlags.writeActionsAvailable ?? true, "Impact preview must not expose write actions.")
+        try expectFalse(result?.safetyFlags.scriptExecutionAllowed ?? true, "Impact preview must not allow script execution.")
+        try expectFalse(result?.safetyFlags.executionActionsAvailable ?? true, "Impact preview must not expose execution actions.")
+        try expectFalse(result?.safetyFlags.configMutationAllowed ?? true, "Impact preview must not mutate config.")
+        try expectFalse(result?.safetyFlags.snapshotCreated ?? true, "Impact preview must not create snapshots.")
+        try expectFalse(result?.safetyFlags.triageMutationAllowed ?? true, "Impact preview must not mutate triage.")
+        try expectFalse(result?.safetyFlags.credentialAccessed ?? true, "Impact preview must not access credentials.")
+        try expectFalse(result?.safetyFlags.rawPromptPersisted ?? true, "Impact preview must not persist raw prompts.")
+        try expectFalse(result?.safetyFlags.rawResponsePersisted ?? true, "Impact preview must not persist raw responses.")
+        try expectFalse(result?.safetyFlags.rawTracePersisted ?? true, "Impact preview must not persist raw traces.")
+        try expectFalse(result?.safetyFlags.cloudSyncEnabled ?? true, "Impact preview must not sync cloud data.")
+        try expectFalse(result?.safetyFlags.telemetryEnabled ?? true, "Impact preview must not emit telemetry.")
+        try expectFalse(store.isPreviewingRemediationImpact, "Impact preview should reset loading state.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "remediation.previewImpact", "Impact preview UI should call the V2.58 impact method.")
+        try expectContains(calls, "\"task\":\"Prepare local release audit work.\"", "Impact preview should pass current task context when present.")
+        try expectContains(calls, "\"agent\":\"claude-code\"", "Impact preview should pass the current agent filter.")
+        try expectContains(calls, "\"selected_skill_id\":\"beta\"", "Impact preview should pass selected skill context.")
+        try expectContains(calls, "\"selected_skill_name\":\"Beta\"", "Impact preview should pass selected skill name.")
+        try expectContains(calls, "\"action\":\"review\"", "Impact preview should default to review action.")
+        try expectContains(calls, "\"limit\":20", "Impact preview should pass the impact limit.")
+        try expectContains(calls, "\"include_task_impacts\":true", "Impact preview should include task impact rows.")
+        try expectContains(calls, "\"include_agent_impacts\":true", "Impact preview should include agent impact rows.")
+        try expectContains(calls, "\"include_skill_impacts\":true", "Impact preview should include skill impact rows.")
+        try expectContains(calls, "\"include_risk_deltas\":true", "Impact preview should include risk deltas.")
+        try expectContains(calls, "\"include_snapshot_rollback\":true", "Impact preview should include snapshot/rollback plan rows.")
+        try expectContains(calls, "\"include_blocked\":true", "Impact preview should keep blockers visible.")
+        try expectFalse(calls.contains("llm.previewPrompt"), "Impact preview must not prepare provider prompts.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Impact preview must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Impact preview must not call config write paths.")
+        try expectFalse(calls.contains("script.execute"), "Impact preview must not call execution paths.")
+        try expectEqual(countOccurrences("snapshot.", in: calls), snapshotCallsBeforePreview, "Impact preview must not call snapshot paths.")
+        try expectFalse(calls.contains("credential"), "Impact preview must not call credential paths.")
+    }
+
+    private func remediationImpactPreviewFallsBackWhenMethodUnavailable() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "normal")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+        await store.previewRemediationImpact()
+
+        try expectEqual(store.remediationImpactPreviewResult?.isUnavailable, true, "Impact preview should expose unavailable fallback for older services.")
+        try expectEqual(store.remediationImpactPreviewResult?.fallbackReason, UIStrings.impactPreviewUnavailable, "Unknown method fallback should use the localized unavailable copy.")
+        try expectFalse(store.isPreviewingRemediationImpact, "Unavailable impact preview should reset loading state.")
+        try expectContains(fake.calls(), "remediation.previewImpact", "Fallback should still prove the intended V2.58 method was attempted.")
+    }
+
     private func crossAgentReadinessUsesReadOnlyServiceContract() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -2179,6 +2261,12 @@ private final class FakeServiceScript {
               respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.57","catalog_available":true,"filters":{"task":"Prepare local release audit work.","agent":"claude-code","limit":20},"summary":{"total_count":2,"frontmatter_count":1,"description_count":0,"permissions_count":1,"dependency_count":0,"policy_count":0,"blocker_count":1,"copy_only_count":2,"summary":"Two copy-only remediation drafts are available for review."},"draft_items":[{"draft_id":"draft-frontmatter","title":"Declare network permission","draft_type":"frontmatter","agent":"claude-code","affected_skill":{"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","readiness_score":78},"finding_id":"finding-beta","rule_id":"permissions.network-declared","current_text":"permissions: {}","proposed_text":"permissions:\\n  network: true","rationale":"Finding reports undeclared network access.","confidence_score":82,"confidence_band":"High","copy_label":"Copy YAML","edit_guidance":"Paste into SKILL.md frontmatter after manual review.","evidence_refs":["finding:permissions.network-declared"],"blocker_notes":["Review network intent before editing."],"safety_flags":["copy only","provider not sent"]},{"draft_id":"draft-permissions","title":"Add human confirmation note","draft_type":"permissions","agent":"claude-code","affected_skill":{"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","readiness_score":78},"finding_id":"finding-exec","rule_id":"permissions.exec-needs-human","current_text":"Run local commands as needed.","proposed_text":"Ask the user to confirm before running local commands.","rationale":"Execution-capable guidance must remain explicitly human-confirmed.","confidence_score":76,"confidence_band":"Medium","copy_label":"Copy sentence","edit_guidance":"Review wording in the skill body; this preview does not write files.","evidence_refs":["finding:permissions.exec-needs-human"],"blocker_notes":[],"safety_flags":["copy only","provider not sent"]}],"gap_notes":["No dependency draft needed."],"blocker_notes":["No automatic write/apply path is exposed."],"evidence_references":[{"title":"Fix preview","detail":"Derived from local findings.","source":"remediation.previewDrafts","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"remediation_preview_drafts","summary":"Provider explanation is not sent.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent","copy only"]}}}'
             fi
             respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: remediation.previewDrafts"}}'
+            ;;
+          *\\"remediation.previewImpact\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.58","catalog_available":true,"filters":{"task":"Prepare local release audit work.","agent":"claude-code","limit":20},"summary":{"total_count":6,"task_impact_count":1,"agent_impact_count":1,"skill_impact_count":1,"risk_delta_count":1,"snapshot_rollback_count":1,"blocker_count":1,"gap_count":1,"no_write_count":1,"summary":"Impact preview is read-only and shows where remediation would improve routing confidence."},"impact_rows":[{"row_id":"impact-overall","title":"Overall readiness improves","category":"overall","impact":"Improves release audit readiness without writing files.","rationale":"Derived from remediation plan and workspace readiness.","severity":"info","evidence_refs":["remediation:plan"],"safety_flags":["provider not sent","no write"]}],"task_impact_rows":[{"row_id":"task-release-audit","title":"Release audit route gets clearer","category":"task","before":"Partial","after":"Ready","delta":"+12 readiness","impact":"The selected task has a stronger local route.","rationale":"Routing confidence and workspace readiness both point to Beta.","severity":"medium","evidence_refs":["task:release-audit"]}],"agent_impact_rows":[{"row_id":"agent-claude","title":"Claude Code remains the recommended agent","category":"agent","agent":"claude-code","delta":"+8 comparison","impact":"No cross-agent write path is needed.","severity":"low"}],"skill_impact_rows":[{"row_id":"skill-beta","title":"Beta benefits from clearer permissions","category":"skill","agent":"claude-code","skill":{"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","readiness_score":78},"impact":"The permission finding would become easier to review.","severity":"medium"}],"risk_delta_rows":[{"row_id":"risk-network","title":"Network declaration risk drops","category":"risk_delta","before":"Medium","after":"Low","delta":"-1 risk band","impact":"Manual review remains required.","severity":"warning"}],"snapshot_rollback_rows":[{"row_id":"rollback-none","title":"No snapshot is created","category":"snapshot_rollback","impact":"Rollback remains a plan note only because no write happens.","severity":"info","safety_flags":["snapshot not created"]}],"gap_notes":["Codex still lacks project-scoped coverage."],"blocker_notes":["No apply/write path is exposed."],"evidence_references":[{"title":"Impact preview","detail":"Derived from local remediation evidence.","source":"remediation.previewImpact","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"remediation_preview_impact","summary":"Provider explanation is not sent.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent","preview only","no write"]}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: remediation.previewImpact"}}'
             ;;
           *\\"task.listBenchmarks\\"*)
             if [ "$scenario" = "prompt-ready" ]; then

@@ -180,6 +180,8 @@ struct DetailView: View {
                             isPlanningRemediation: store.isPlanningRemediation,
                             remediationPreviewDraftsResult: store.remediationPreviewDraftsResult,
                             isPreviewingRemediationDrafts: store.isPreviewingRemediationDrafts,
+                            remediationImpactPreviewResult: store.remediationImpactPreviewResult,
+                            isPreviewingRemediationImpact: store.isPreviewingRemediationImpact,
                             onScoreQuality: {
                                 Task {
                                     await store.scoreSelectedSkillQuality()
@@ -268,6 +270,11 @@ struct DetailView: View {
                             onPreviewRemediationDrafts: {
                                 Task {
                                     await store.previewRemediationDrafts()
+                                }
+                            },
+                            onPreviewRemediationImpact: {
+                                Task {
+                                    await store.previewRemediationImpact()
                                 }
                             },
                             taskBenchmarkText: $store.taskBenchmarkText,
@@ -919,6 +926,8 @@ private struct AnalysisSection: View {
     let isPlanningRemediation: Bool
     let remediationPreviewDraftsResult: RemediationPreviewDraftsResult?
     let isPreviewingRemediationDrafts: Bool
+    let remediationImpactPreviewResult: RemediationImpactPreviewResult?
+    let isPreviewingRemediationImpact: Bool
     let onScoreQuality: () -> Void
     let onPreviewQualityPrompt: () -> Void
     let onSendQualityPrompt: () -> Void
@@ -937,6 +946,7 @@ private struct AnalysisSection: View {
     let onCheckWorkspaceReadiness: () -> Void
     let onPlanRemediation: () -> Void
     let onPreviewRemediationDrafts: () -> Void
+    let onPreviewRemediationImpact: () -> Void
     @Binding var taskBenchmarkText: String
     let taskBenchmarkInput: String
     let taskBenchmarkList: TaskBenchmarkListResult
@@ -1110,6 +1120,12 @@ private struct AnalysisSection: View {
                 result: remediationPreviewDraftsResult,
                 isPreviewing: isPreviewingRemediationDrafts,
                 onPreview: onPreviewRemediationDrafts
+            )
+
+            RemediationImpactPreviewPanel(
+                result: remediationImpactPreviewResult,
+                isPreviewing: isPreviewingRemediationImpact,
+                onPreview: onPreviewRemediationImpact
             )
 
             KnowledgeSearchPanel(
@@ -4905,6 +4921,274 @@ private struct DraftSnippetBlock: View {
                 .padding(8)
                 .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
         }
+    }
+}
+
+private struct RemediationImpactPreviewPanel: View {
+    let result: RemediationImpactPreviewResult?
+    let isPreviewing: Bool
+    let onPreview: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.impactPreviewTitle, systemImage: "chart.line.uptrend.xyaxis")
+                    .font(.headline)
+                Spacer()
+                Label(UIStrings.readOnlyPreview, systemImage: "lock.shield")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(UIStrings.impactPreviewBoundary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+
+            HStack(spacing: 8) {
+                Button {
+                    onPreview()
+                } label: {
+                    Label(UIStrings.impactPreviewAction, systemImage: "scope")
+                }
+                .disabled(isPreviewing)
+
+                if isPreviewing {
+                    Label(UIStrings.llmPreparing, systemImage: "hourglass")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if let result {
+                RemediationImpactPreviewResultView(result: result)
+            } else {
+                Label(UIStrings.impactPreviewNoResult, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Label(UIStrings.impactPreviewNoWriteBoundary, systemImage: "nosign")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct RemediationImpactPreviewResultView: View {
+    let result: RemediationImpactPreviewResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let fallbackReason = result.fallbackReason, !fallbackReason.isEmpty {
+                Label(fallbackReason, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+                SummaryChip(title: UIStrings.impactPreviewImpacts, value: "\(impactCount)", systemImage: "scope")
+                SummaryChip(title: UIStrings.impactPreviewTaskImpacts, value: "\(taskImpactCount)", systemImage: "checklist")
+                SummaryChip(title: UIStrings.impactPreviewAgentImpacts, value: "\(agentImpactCount)", systemImage: "person.2")
+                SummaryChip(title: UIStrings.impactPreviewSkillImpacts, value: "\(skillImpactCount)", systemImage: "wrench.and.screwdriver")
+                SummaryChip(title: UIStrings.impactPreviewRiskDeltas, value: "\(riskDeltaCount)", systemImage: "arrow.up.arrow.down")
+                SummaryChip(title: UIStrings.impactPreviewSnapshotRollback, value: "\(snapshotRollbackCount)", systemImage: "arrow.uturn.backward.circle")
+                SummaryChip(title: UIStrings.knowledgeBlockerNotes, value: "\(blockerCount)", systemImage: "lock.trianglebadge.exclamationmark")
+                SummaryChip(title: UIStrings.impactPreviewNoWrite, value: "\(noWriteCount)", systemImage: "lock.shield")
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                MetadataRow(label: UIStrings.routingAccuracyGeneratedBy, value: result.generatedBy)
+                MetadataRow(label: UIStrings.routingAccuracyCatalog, value: result.catalogAvailable ? UIStrings.routingAccuracyAvailable : UIStrings.routingAccuracyUnavailableShort)
+                MetadataRow(label: UIStrings.agent, value: agentFilterLabel)
+                if let projectRoot = result.filters.projectRoot, !projectRoot.isEmpty {
+                    MetadataRow(label: UIStrings.project, value: projectRoot)
+                }
+                if let workspace = result.filters.workspace, !workspace.isEmpty {
+                    MetadataRow(label: UIStrings.workspaceReadinessTitle, value: workspace)
+                }
+                if let taskText = result.filters.taskText, !taskText.isEmpty {
+                    MetadataRow(label: UIStrings.taskBenchmarkTaskPlaceholder, value: taskText)
+                }
+                if let limit = result.filters.limit {
+                    MetadataRow(label: UIStrings.text("filter.limit", "Limit"), value: "\(limit)")
+                }
+                if let promptRequest = result.promptRequest {
+                    MetadataRow(label: UIStrings.routingAccuracyPromptRequest, value: promptRequestLabel(promptRequest))
+                }
+            }
+
+            if !result.summary.summaryText.isEmpty {
+                Text(result.summary.summaryText)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            RemediationImpactRowGroupList(title: UIStrings.impactPreviewImpacts, rows: result.impactRows, empty: UIStrings.impactPreviewNoImpacts, systemImage: "scope")
+            RemediationImpactRowGroupList(title: UIStrings.impactPreviewTaskImpacts, rows: result.taskImpactRows, empty: UIStrings.impactPreviewNoTaskImpacts, systemImage: "checklist")
+            RemediationImpactRowGroupList(title: UIStrings.impactPreviewAgentImpacts, rows: result.agentImpactRows, empty: UIStrings.impactPreviewNoAgentImpacts, systemImage: "person.2")
+            RemediationImpactRowGroupList(title: UIStrings.impactPreviewSkillImpacts, rows: result.skillImpactRows, empty: UIStrings.impactPreviewNoSkillImpacts, systemImage: "wrench.and.screwdriver")
+            RemediationImpactRowGroupList(title: UIStrings.impactPreviewRiskDeltas, rows: result.riskDeltaRows, empty: UIStrings.impactPreviewNoRiskDeltas, systemImage: "arrow.up.arrow.down")
+            RemediationImpactRowGroupList(title: UIStrings.impactPreviewSnapshotRollback, rows: result.snapshotRollbackRows, empty: UIStrings.impactPreviewNoSnapshotRollback, systemImage: "arrow.uturn.backward.circle")
+            RoutingInlineList(title: UIStrings.knowledgeGapNotes, empty: UIStrings.routingAccuracyNoGaps, values: result.gapNotes, systemImage: "puzzlepiece.extension")
+            RoutingInlineList(title: UIStrings.knowledgeBlockerNotes, empty: UIStrings.routingAccuracyNoBlockers, values: result.blockerNotes, systemImage: "exclamationmark.octagon")
+            CrossAgentReadinessEvidenceList(evidence: result.evidenceReferences)
+            StaleDriftSafetyList(safety: result.safetyFlags)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var allRows: [RemediationImpactRow] {
+        result.impactRows + result.taskImpactRows + result.agentImpactRows + result.skillImpactRows + result.riskDeltaRows + result.snapshotRollbackRows
+    }
+
+    private var impactCount: Int {
+        result.summary.totalCount > 0 ? result.summary.totalCount : allRows.count
+    }
+
+    private var taskImpactCount: Int {
+        result.summary.taskImpactCount > 0 ? result.summary.taskImpactCount : result.taskImpactRows.count
+    }
+
+    private var agentImpactCount: Int {
+        result.summary.agentImpactCount > 0 ? result.summary.agentImpactCount : result.agentImpactRows.count
+    }
+
+    private var skillImpactCount: Int {
+        result.summary.skillImpactCount > 0 ? result.summary.skillImpactCount : result.skillImpactRows.count
+    }
+
+    private var riskDeltaCount: Int {
+        result.summary.riskDeltaCount > 0 ? result.summary.riskDeltaCount : result.riskDeltaRows.count
+    }
+
+    private var snapshotRollbackCount: Int {
+        result.summary.snapshotRollbackCount > 0 ? result.summary.snapshotRollbackCount : result.snapshotRollbackRows.count
+    }
+
+    private var blockerCount: Int {
+        result.summary.blockerCount > 0 ? result.summary.blockerCount : result.blockerNotes.count
+    }
+
+    private var noWriteCount: Int {
+        result.summary.noWriteCount > 0 ? result.summary.noWriteCount : result.safetyFlags.notes.filter { note in
+            note.localizedCaseInsensitiveContains("write") || note.localizedCaseInsensitiveContains("read")
+        }.count
+    }
+
+    private var agentFilterLabel: String {
+        if !result.filters.agents.isEmpty {
+            return result.filters.agents.map(DisplayText.agent).joined(separator: ", ")
+        }
+        return result.filters.agent.map(DisplayText.agent) ?? UIStrings.text("health.allAgents", "All Agents")
+    }
+
+    private func promptRequestLabel(_ promptRequest: RoutingAccuracyPromptRequest) -> String {
+        let state = promptRequest.enabled ? UIStrings.llmEnabled : UIStrings.llmDisabled
+        let copy = promptRequest.copyOnly ? UIStrings.llmPromptCopyOnly : UIStrings.llmSkillAnalysisEnabledUnsafe
+        return "\(promptRequest.requestKind) · \(state) · \(copy)"
+    }
+}
+
+private struct RemediationImpactRowGroupList: View {
+    let title: String
+    let rows: [RemediationImpactRow]
+    let empty: String
+    let systemImage: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(title, systemImage: systemImage)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if rows.isEmpty {
+                Text(empty)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(rows.prefix(8)) { row in
+                        RemediationImpactRowCard(row: row, fallbackIcon: systemImage)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct RemediationImpactRowCard: View {
+    let row: RemediationImpactRow
+    let fallbackIcon: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(row.title, systemImage: iconName)
+                    .font(.callout.bold())
+                    .lineLimit(1)
+                Spacer()
+                Text(row.severity)
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
+                MetadataRow(label: UIStrings.remediationPlanCategory, value: row.category)
+                if let agent = row.agent, !agent.isEmpty {
+                    MetadataRow(label: UIStrings.agent, value: DisplayText.agent(agent))
+                }
+                if let before = row.before, !before.isEmpty {
+                    MetadataRow(label: UIStrings.impactPreviewBefore, value: before)
+                }
+                if let after = row.after, !after.isEmpty {
+                    MetadataRow(label: UIStrings.impactPreviewAfter, value: after)
+                }
+                if let delta = row.delta, !delta.isEmpty {
+                    MetadataRow(label: UIStrings.impactPreviewDelta, value: delta)
+                }
+            }
+
+            if let skill = row.skill {
+                CapabilitySkillList(skills: [skill])
+            }
+
+            if !row.impact.isEmpty {
+                Label(row.impact, systemImage: "chart.line.uptrend.xyaxis")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            if !row.rationale.isEmpty {
+                Text(row.rationale)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: row.evidenceRefs, systemImage: "checklist")
+            RoutingInlineList(title: UIStrings.knowledgeSafetyFlags, empty: UIStrings.taskBenchmarkNoSafetyFlags, values: row.safetyFlags, systemImage: "checkmark.shield")
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var iconName: String {
+        let normalized = row.category.lowercased()
+        if normalized.contains("risk") { return "arrow.up.arrow.down" }
+        if normalized.contains("snapshot") || normalized.contains("rollback") { return "arrow.uturn.backward.circle" }
+        if normalized.contains("agent") { return "person.2" }
+        if normalized.contains("skill") { return "wrench.and.screwdriver" }
+        if normalized.contains("task") { return "checklist" }
+        return fallbackIcon
     }
 }
 

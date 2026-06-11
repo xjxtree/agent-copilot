@@ -374,6 +374,46 @@ private struct RemediationPreviewDraftsParams: Encodable {
     }
 }
 
+private struct RemediationImpactPreviewParams: Encodable {
+    let task: String?
+    let agent: String?
+    let projectRoot: String?
+    let currentCWD: String?
+    let workspace: String?
+    let selectedSkillID: String?
+    let selectedSkillName: String?
+    let selectedSkillAgent: String?
+    let selectedSkillPath: String?
+    let action: String
+    let limit: Int?
+    let includeTaskImpacts: Bool
+    let includeAgentImpacts: Bool
+    let includeSkillImpacts: Bool
+    let includeRiskDeltas: Bool
+    let includeSnapshotRollback: Bool
+    let includeBlocked: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case task
+        case agent
+        case projectRoot = "project_root"
+        case currentCWD = "current_cwd"
+        case workspace
+        case selectedSkillID = "selected_skill_id"
+        case selectedSkillName = "selected_skill_name"
+        case selectedSkillAgent = "selected_skill_agent"
+        case selectedSkillPath = "selected_skill_path"
+        case action
+        case limit
+        case includeTaskImpacts = "include_task_impacts"
+        case includeAgentImpacts = "include_agent_impacts"
+        case includeSkillImpacts = "include_skill_impacts"
+        case includeRiskDeltas = "include_risk_deltas"
+        case includeSnapshotRollback = "include_snapshot_rollback"
+        case includeBlocked = "include_blocked"
+    }
+}
+
 private struct TaskBenchmarkDeleteParams: Encodable {
     let benchmarkId: String
 
@@ -1066,6 +1106,48 @@ final class ServiceClient {
         )
         do {
             return try await call(method: "remediation.previewDrafts", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func previewRemediationImpact(
+        taskText: String? = nil,
+        agent: String? = nil,
+        project: ProjectContext? = nil,
+        selectedSkill: SkillRecord? = nil,
+        action: String = "review",
+        limit: Int? = 20,
+        includeTaskImpacts: Bool = true,
+        includeAgentImpacts: Bool = true,
+        includeSkillImpacts: Bool = true,
+        includeRiskDeltas: Bool = true,
+        includeSnapshotRollback: Bool = true,
+        includeBlocked: Bool = true
+    ) async throws -> RemediationImpactPreviewResult {
+        let normalizedTask = taskText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedAction = action.trimmingCharacters(in: .whitespacesAndNewlines)
+        let params = RemediationImpactPreviewParams(
+            task: normalizedTask?.isEmpty == true ? nil : normalizedTask,
+            agent: agent,
+            projectRoot: project?.rootPath,
+            currentCWD: project?.currentCWD,
+            workspace: project?.name,
+            selectedSkillID: selectedSkill?.id,
+            selectedSkillName: selectedSkill?.name,
+            selectedSkillAgent: selectedSkill?.agent,
+            selectedSkillPath: selectedSkill?.displayPath.isEmpty == false ? selectedSkill?.displayPath : selectedSkill?.path,
+            action: normalizedAction.isEmpty ? "review" : normalizedAction,
+            limit: limit,
+            includeTaskImpacts: includeTaskImpacts,
+            includeAgentImpacts: includeAgentImpacts,
+            includeSkillImpacts: includeSkillImpacts,
+            includeRiskDeltas: includeRiskDeltas,
+            includeSnapshotRollback: includeSnapshotRollback,
+            includeBlocked: includeBlocked
+        )
+        do {
+            return try await call(method: "remediation.previewImpact", params: params)
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .unavailable()
         }

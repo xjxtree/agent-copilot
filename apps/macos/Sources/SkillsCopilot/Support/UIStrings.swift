@@ -662,6 +662,29 @@ enum UIStrings {
     static var fixPreviewProposedSnippet: String { text("fixPreview.proposedSnippet", "Proposed draft") }
     static var fixPreviewCopyDraft: String { text("fixPreview.copyDraft", "Copy Draft") }
     static var fixPreviewEditGuidanceFallback: String { text("fixPreview.editGuidance.fallback", "Review this draft in the relevant existing editor or source file; this preview does not apply changes.") }
+    static var impactPreviewTitle: String { text("impactPreview.title", "Impact Preview") }
+    static var impactPreviewBoundary: String { text("impactPreview.boundary", "User-triggered, local-only impact preview for remediation work. It estimates task, agent, skill, risk, and rollback effects from deterministic local evidence only; this panel cannot call a provider, write skill files, mutate agent config, create snapshots, change triage, execute scripts, read credentials, persist raw prompts/responses/traces, sync cloud data, or emit telemetry.") }
+    static var impactPreviewNoWriteBoundary: String { text("impactPreview.noWriteBoundary", "Preview impact only. No Apply, Confirm, Write, Snapshot, or Rollback action is exposed here.") }
+    static var impactPreviewAction: String { text("impactPreview.action.preview", "Preview Impact") }
+    static var impactPreviewUnavailable: String { text("impactPreview.unavailable", "Impact preview is unavailable in this service build.") }
+    static var impactPreviewNoResult: String { text("impactPreview.empty.result", "No impact preview loaded.") }
+    static var impactPreviewImpact: String { text("impactPreview.impact", "Impact") }
+    static var impactPreviewImpacts: String { text("impactPreview.impacts", "Impacts") }
+    static var impactPreviewNoImpacts: String { text("impactPreview.empty.impacts", "No general impact rows returned.") }
+    static var impactPreviewTaskImpacts: String { text("impactPreview.taskImpacts", "Task impacts") }
+    static var impactPreviewNoTaskImpacts: String { text("impactPreview.empty.taskImpacts", "No task impact rows returned.") }
+    static var impactPreviewAgentImpacts: String { text("impactPreview.agentImpacts", "Agent impacts") }
+    static var impactPreviewNoAgentImpacts: String { text("impactPreview.empty.agentImpacts", "No agent impact rows returned.") }
+    static var impactPreviewSkillImpacts: String { text("impactPreview.skillImpacts", "Skill impacts") }
+    static var impactPreviewNoSkillImpacts: String { text("impactPreview.empty.skillImpacts", "No skill impact rows returned.") }
+    static var impactPreviewRiskDeltas: String { text("impactPreview.riskDeltas", "Risk deltas") }
+    static var impactPreviewNoRiskDeltas: String { text("impactPreview.empty.riskDeltas", "No risk delta rows returned.") }
+    static var impactPreviewSnapshotRollback: String { text("impactPreview.snapshotRollback", "Snapshot / rollback") }
+    static var impactPreviewNoSnapshotRollback: String { text("impactPreview.empty.snapshotRollback", "No snapshot or rollback rows returned.") }
+    static var impactPreviewNoWrite: String { text("impactPreview.noWrite", "No-write flags") }
+    static var impactPreviewBefore: String { text("impactPreview.before", "Before") }
+    static var impactPreviewAfter: String { text("impactPreview.after", "After") }
+    static var impactPreviewDelta: String { text("impactPreview.delta", "Delta") }
     static var taskBenchmarkTitle: String { text("taskBenchmark.title", "Task Benchmark Set") }
     static var taskBenchmarkBoundary: String { text("taskBenchmark.boundary", "User-triggered, local benchmark evaluation for task routing. Local evaluation does not call a provider and cannot write skill files, mutate agent config, create snapshots, change triage, execute scripts, or read credentials.") }
     static var taskBenchmarkTaskPlaceholder: String { text("taskBenchmark.task.placeholder", "Optional benchmark task text; otherwise the current readiness/routing task is used") }

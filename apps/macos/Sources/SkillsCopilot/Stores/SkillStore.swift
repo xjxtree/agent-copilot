@@ -47,6 +47,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var workspaceReadinessResult: WorkspaceReadinessResult?
     @Published private(set) var remediationPlanResult: RemediationPlanResult?
     @Published private(set) var remediationPreviewDraftsResult: RemediationPreviewDraftsResult?
+    @Published private(set) var remediationImpactPreviewResult: RemediationImpactPreviewResult?
     @Published private(set) var traceImportList = AgentTraceImportListResult(imports: [])
     @Published private(set) var traceImportResult: AgentTraceImportResult?
     @Published private(set) var traceImportDeleteResult: AgentTraceImportDeleteResult?
@@ -63,6 +64,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var isCheckingWorkspaceReadiness = false
     @Published private(set) var isPlanningRemediation = false
     @Published private(set) var isPreviewingRemediationDrafts = false
+    @Published private(set) var isPreviewingRemediationImpact = false
     @Published private(set) var isLoadingTraceImports = false
     @Published private(set) var isImportingTrace = false
     @Published private(set) var deletingTaskBenchmarkIDs: Set<String> = []
@@ -114,6 +116,7 @@ final class SkillStore: ObservableObject {
             workspaceReadinessResult = nil
             remediationPlanResult = nil
             remediationPreviewDraftsResult = nil
+            remediationImpactPreviewResult = nil
             Task { await loadAgentConfigSnapshots() }
             Task { await loadCleanupQueue() }
             Task { await loadCrossAgentComparisons() }
@@ -188,7 +191,7 @@ final class SkillStore: ObservableObject {
     }
 
     private var isTaskBenchmarkBusy: Bool {
-        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isGroupingSimilarSkills || isBuildingCapabilityTaxonomy || isCheckingWorkspaceReadiness || isPlanningRemediation || isPreviewingRemediationDrafts || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty
+        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isGroupingSimilarSkills || isBuildingCapabilityTaxonomy || isCheckingWorkspaceReadiness || isPlanningRemediation || isPreviewingRemediationDrafts || isPreviewingRemediationImpact || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty
     }
 
     private var isLLMPromptBusy: Bool {
@@ -1586,6 +1589,38 @@ final class SkillStore: ObservableObject {
             )
         } catch {
             remediationPreviewDraftsResult = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
+    func previewRemediationImpact() async {
+        guard !isPreviewingRemediationImpact else { return }
+        guard !isRefreshBusy else {
+            remediationImpactPreviewResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        isPreviewingRemediationImpact = true
+        defer { isPreviewingRemediationImpact = false }
+
+        let agent = agentFilter == .all ? nil : agentFilter.rawValue
+        let taskText = selectedCrossAgentReadinessInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            remediationImpactPreviewResult = try await service.previewRemediationImpact(
+                taskText: taskText.isEmpty ? nil : taskText,
+                agent: agent,
+                project: activeProjectContext,
+                selectedSkill: selectedSkill,
+                action: "review",
+                limit: 20,
+                includeTaskImpacts: true,
+                includeAgentImpacts: true,
+                includeSkillImpacts: true,
+                includeRiskDeltas: true,
+                includeSnapshotRollback: true,
+                includeBlocked: true
+            )
+        } catch {
+            remediationImpactPreviewResult = .unavailable(reason: error.localizedDescription)
         }
     }
 
