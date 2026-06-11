@@ -174,6 +174,8 @@ struct DetailView: View {
                             isGroupingSimilarSkills: store.isGroupingSimilarSkills,
                             capabilityTaxonomyResult: store.capabilityTaxonomyResult,
                             isBuildingCapabilityTaxonomy: store.isBuildingCapabilityTaxonomy,
+                            workspaceReadinessResult: store.workspaceReadinessResult,
+                            isCheckingWorkspaceReadiness: store.isCheckingWorkspaceReadiness,
                             onScoreQuality: {
                                 Task {
                                     await store.scoreSelectedSkillQuality()
@@ -247,6 +249,11 @@ struct DetailView: View {
                             onBuildCapabilityTaxonomy: {
                                 Task {
                                     await store.buildCapabilityTaxonomy()
+                                }
+                            },
+                            onCheckWorkspaceReadiness: {
+                                Task {
+                                    await store.checkWorkspaceReadiness()
                                 }
                             },
                             taskBenchmarkText: $store.taskBenchmarkText,
@@ -892,6 +899,8 @@ private struct AnalysisSection: View {
     let isGroupingSimilarSkills: Bool
     let capabilityTaxonomyResult: CapabilityTaxonomyResult?
     let isBuildingCapabilityTaxonomy: Bool
+    let workspaceReadinessResult: WorkspaceReadinessResult?
+    let isCheckingWorkspaceReadiness: Bool
     let onScoreQuality: () -> Void
     let onPreviewQualityPrompt: () -> Void
     let onSendQualityPrompt: () -> Void
@@ -907,6 +916,7 @@ private struct AnalysisSection: View {
     let onSearchKnowledge: () -> Void
     let onGroupSimilarSkills: () -> Void
     let onBuildCapabilityTaxonomy: () -> Void
+    let onCheckWorkspaceReadiness: () -> Void
     @Binding var taskBenchmarkText: String
     let taskBenchmarkInput: String
     let taskBenchmarkList: TaskBenchmarkListResult
@@ -1062,6 +1072,12 @@ private struct AnalysisSection: View {
                 result: capabilityTaxonomyResult,
                 isBuilding: isBuildingCapabilityTaxonomy,
                 onBuild: onBuildCapabilityTaxonomy
+            )
+
+            WorkspaceReadinessPanel(
+                result: workspaceReadinessResult,
+                isChecking: isCheckingWorkspaceReadiness,
+                onCheck: onCheckWorkspaceReadiness
             )
 
             KnowledgeSearchPanel(
@@ -3858,6 +3874,327 @@ private struct CapabilitySkillList: View {
                 }
             }
         }
+    }
+}
+
+private struct WorkspaceReadinessPanel: View {
+    let result: WorkspaceReadinessResult?
+    let isChecking: Bool
+    let onCheck: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.workspaceReadinessTitle, systemImage: "checklist.checked")
+                    .font(.headline)
+                Spacer()
+                Label(UIStrings.readOnlyPreview, systemImage: "lock.shield")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(UIStrings.workspaceReadinessBoundary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+
+            HStack(spacing: 8) {
+                Button {
+                    onCheck()
+                } label: {
+                    Label(UIStrings.workspaceReadinessAction, systemImage: "checkmark.seal")
+                }
+                .disabled(isChecking)
+
+                if isChecking {
+                    Label(UIStrings.llmPreparing, systemImage: "hourglass")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if let result {
+                WorkspaceReadinessResultView(result: result)
+            } else {
+                Label(UIStrings.workspaceReadinessNoResult, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Label(UIStrings.llmReviewNoActions, systemImage: "nosign")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct WorkspaceReadinessResultView: View {
+    let result: WorkspaceReadinessResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let fallbackReason = result.fallbackReason, !fallbackReason.isEmpty {
+                Label(fallbackReason, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+                SummaryChip(title: UIStrings.workspaceReadinessOverall, value: result.summary.overallState, systemImage: "gauge.medium")
+                SummaryChip(title: UIStrings.similarGroupingReadiness, value: scoreLabel, systemImage: "speedometer")
+                SummaryChip(title: UIStrings.workspaceReadinessChecklist, value: "\(checklistCount)", systemImage: "checklist")
+                SummaryChip(title: UIStrings.workspaceReadinessReady, value: "\(readyCount)", systemImage: "checkmark.circle")
+                SummaryChip(title: UIStrings.workspaceReadinessPartial, value: "\(partialCount)", systemImage: "circle.lefthalf.filled")
+                SummaryChip(title: UIStrings.workspaceReadinessBlocked, value: "\(blockedCount)", systemImage: "exclamationmark.octagon")
+                SummaryChip(title: UIStrings.agent, value: "\(agentCount)", systemImage: "person.2")
+                SummaryChip(title: UIStrings.knowledgeCapabilities, value: "\(capabilityCount)", systemImage: "tag")
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                MetadataRow(label: UIStrings.routingAccuracyGeneratedBy, value: result.generatedBy)
+                MetadataRow(label: UIStrings.routingAccuracyCatalog, value: result.catalogAvailable ? UIStrings.routingAccuracyAvailable : UIStrings.routingAccuracyUnavailableShort)
+                MetadataRow(label: UIStrings.agent, value: agentFilterLabel)
+                if let projectRoot = result.filters.projectRoot, !projectRoot.isEmpty {
+                    MetadataRow(label: UIStrings.project, value: projectRoot)
+                }
+                if let workspace = result.filters.workspace, !workspace.isEmpty {
+                    MetadataRow(label: UIStrings.workspaceReadinessTitle, value: workspace)
+                }
+                if let taskText = result.filters.taskText, !taskText.isEmpty {
+                    MetadataRow(label: UIStrings.taskBenchmarkTaskPlaceholder, value: taskText)
+                }
+                if let limit = result.filters.limit {
+                    MetadataRow(label: UIStrings.text("filter.limit", "Limit"), value: "\(limit)")
+                }
+                if let promptRequest = result.promptRequest {
+                    MetadataRow(label: UIStrings.routingAccuracyPromptRequest, value: promptRequestLabel(promptRequest))
+                }
+            }
+
+            if !result.summary.summaryText.isEmpty {
+                Text(result.summary.summaryText)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            WorkspaceReadinessChecklistList(rows: result.checklistRows)
+            WorkspaceReadinessAgentList(rows: result.agentRows)
+            WorkspaceReadinessCapabilityList(rows: result.capabilityRows)
+            RoutingInlineList(title: UIStrings.knowledgeGapNotes, empty: UIStrings.routingAccuracyNoGaps, values: result.gapNotes, systemImage: "puzzlepiece.extension")
+            RoutingInlineList(title: UIStrings.knowledgeBlockerNotes, empty: UIStrings.routingAccuracyNoBlockers, values: result.blockerNotes, systemImage: "exclamationmark.octagon")
+            CrossAgentReadinessEvidenceList(evidence: result.evidenceReferences)
+            StaleDriftSafetyList(safety: result.safetyFlags)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var scoreLabel: String {
+        guard let score = result.summary.readinessScore else { return UIStrings.unknown }
+        return "\(score)"
+    }
+
+    private var checklistCount: Int {
+        result.summary.checklistCount > 0 ? result.summary.checklistCount : result.checklistRows.count
+    }
+
+    private var readyCount: Int {
+        result.summary.readyCount > 0 ? result.summary.readyCount : result.checklistRows.filter { $0.status.localizedCaseInsensitiveContains("ready") }.count
+    }
+
+    private var partialCount: Int {
+        result.summary.partialCount > 0 ? result.summary.partialCount : result.checklistRows.filter { $0.status.localizedCaseInsensitiveContains("partial") }.count
+    }
+
+    private var blockedCount: Int {
+        result.summary.blockedCount > 0 ? result.summary.blockedCount : result.checklistRows.filter { $0.status.localizedCaseInsensitiveContains("block") }.count
+    }
+
+    private var agentCount: Int {
+        result.summary.agentCount > 0 ? result.summary.agentCount : result.agentRows.count
+    }
+
+    private var capabilityCount: Int {
+        result.summary.capabilityCount > 0 ? result.summary.capabilityCount : result.capabilityRows.count
+    }
+
+    private var agentFilterLabel: String {
+        if !result.filters.agents.isEmpty {
+            return result.filters.agents.map(DisplayText.agent).joined(separator: ", ")
+        }
+        return result.filters.agent.map(DisplayText.agent) ?? UIStrings.text("health.allAgents", "All Agents")
+    }
+
+    private func promptRequestLabel(_ promptRequest: RoutingAccuracyPromptRequest) -> String {
+        let state = promptRequest.enabled ? UIStrings.llmEnabled : UIStrings.llmDisabled
+        let copy = promptRequest.copyOnly ? UIStrings.llmPromptCopyOnly : UIStrings.llmSkillAnalysisEnabledUnsafe
+        return "\(promptRequest.requestKind) · \(state) · \(copy)"
+    }
+}
+
+private struct WorkspaceReadinessChecklistList: View {
+    let rows: [WorkspaceReadinessChecklistRow]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(UIStrings.workspaceReadinessChecklist)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if rows.isEmpty {
+                Text(UIStrings.workspaceReadinessNoChecklist)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(rows.prefix(8)) { row in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Label(row.title, systemImage: "checklist")
+                                    .font(.callout.bold())
+                                    .lineLimit(1)
+                                Spacer()
+                                Text(row.status)
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.secondary)
+                            }
+                            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 3) {
+                                if let agent = row.agent, !agent.isEmpty {
+                                    MetadataRow(label: UIStrings.agent, value: DisplayText.agent(agent))
+                                }
+                                if let capability = row.capability, !capability.isEmpty {
+                                    MetadataRow(label: UIStrings.capabilityTaxonomyCapability, value: capability)
+                                }
+                                if let severity = row.severity, !severity.isEmpty {
+                                    MetadataRow(label: UIStrings.cleanupFilterPriority, value: severity)
+                                }
+                            }
+                            if !row.summary.isEmpty {
+                                Text(row.summary)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .textSelection(.enabled)
+                            }
+                            RoutingInlineList(title: UIStrings.workspaceReadinessRequired, empty: UIStrings.knowledgeNoRows, values: row.requiredSkills, systemImage: "target")
+                            CapabilitySkillList(skills: row.matchedSkills)
+                            RoutingInlineList(title: UIStrings.knowledgeGapNotes, empty: UIStrings.routingAccuracyNoGaps, values: row.gapNotes, systemImage: "puzzlepiece.extension")
+                            RoutingInlineList(title: UIStrings.knowledgeBlockerNotes, empty: UIStrings.routingAccuracyNoBlockers, values: row.blockerNotes, systemImage: "exclamationmark.octagon")
+                            RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: row.evidenceRefs, systemImage: "checklist")
+                            RoutingInlineList(title: UIStrings.knowledgeSafetyFlags, empty: UIStrings.taskBenchmarkNoSafetyFlags, values: row.safetyFlags, systemImage: "checkmark.shield")
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct WorkspaceReadinessAgentList: View {
+    let rows: [WorkspaceReadinessAgentRow]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(UIStrings.workspaceReadinessAgentRows)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if rows.isEmpty {
+                Text(UIStrings.workspaceReadinessNoAgentRows)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 240), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(rows.prefix(8)) { row in
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(row.displayName ?? DisplayText.agent(row.agent))
+                                    .font(.caption.bold())
+                                Spacer()
+                                Text(agentScoreLabel(row))
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.secondary)
+                            }
+                            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 3) {
+                                MetadataRow(label: UIStrings.workspaceReadinessEnabled, value: "\(row.enabledSkillCount)")
+                                MetadataRow(label: UIStrings.workspaceReadinessRequired, value: "\(row.requiredSkillCount)")
+                                MetadataRow(label: UIStrings.workspaceReadinessMatched, value: "\(row.matchedSkillCount)")
+                                MetadataRow(label: UIStrings.knowledgeGapNotes, value: "\(row.gapCount)")
+                                MetadataRow(label: UIStrings.knowledgeBlockerNotes, value: "\(row.blockerCount)")
+                            }
+                            RoutingInlineList(title: UIStrings.staleDriftReasons, empty: UIStrings.staleDriftNoReasons, values: row.notes, systemImage: "text.bubble")
+                            RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: row.evidenceRefs, systemImage: "checklist")
+                        }
+                        .padding(8)
+                        .background(.quaternary.opacity(0.32), in: RoundedRectangle(cornerRadius: 6))
+                    }
+                }
+            }
+        }
+    }
+
+    private func agentScoreLabel(_ row: WorkspaceReadinessAgentRow) -> String {
+        if let readinessScore = row.readinessScore {
+            return "\(readinessScore) · \(row.readinessState)"
+        }
+        return row.readinessState
+    }
+}
+
+private struct WorkspaceReadinessCapabilityList: View {
+    let rows: [WorkspaceReadinessCapabilityRow]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(UIStrings.workspaceReadinessCapabilityRows)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if rows.isEmpty {
+                Text(UIStrings.workspaceReadinessNoCapabilityRows)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 340), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(rows.prefix(8)) { row in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Label(row.capability, systemImage: "tag")
+                                    .font(.callout.bold())
+                                    .lineLimit(1)
+                                Spacer()
+                                Text(capabilityScoreLabel(row))
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.secondary)
+                            }
+                            Text(row.domain)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            CapabilityCoverageList(coverage: row.agentCoverage)
+                            CapabilitySkillList(skills: row.representativeSkills)
+                            RoutingInlineList(title: UIStrings.knowledgeGapNotes, empty: UIStrings.routingAccuracyNoGaps, values: row.gapNotes, systemImage: "puzzlepiece.extension")
+                            RoutingInlineList(title: UIStrings.knowledgeBlockerNotes, empty: UIStrings.routingAccuracyNoBlockers, values: row.blockerNotes, systemImage: "exclamationmark.octagon")
+                            RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: row.evidenceRefs, systemImage: "checklist")
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+            }
+        }
+    }
+
+    private func capabilityScoreLabel(_ row: WorkspaceReadinessCapabilityRow) -> String {
+        if let readinessScore = row.readinessScore {
+            return "\(readinessScore) · \(row.readinessState)"
+        }
+        return row.readinessState
     }
 }
 

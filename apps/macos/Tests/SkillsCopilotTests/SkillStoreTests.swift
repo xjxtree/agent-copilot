@@ -55,6 +55,8 @@ struct SkillStoreTests {
         try await similarSkillGroupingFallsBackWhenMethodUnavailable()
         try await capabilityTaxonomyUsesReadOnlyServiceContract()
         try await capabilityTaxonomyFallsBackWhenMethodUnavailable()
+        try await workspaceReadinessUsesReadOnlyServiceContract()
+        try await workspaceReadinessFallsBackWhenMethodUnavailable()
         try await crossAgentReadinessUsesReadOnlyServiceContract()
         try await routingConfidenceClearsStaleSelection()
         try await llmPreparePreviewIsScopedToSelectedSkillAndReadOnly()
@@ -1490,6 +1492,75 @@ struct SkillStoreTests {
         try expectContains(fake.calls(), "knowledge.buildCapabilityTaxonomy", "Fallback should still prove the intended V2.54 method was attempted.")
     }
 
+    private func workspaceReadinessUsesReadOnlyServiceContract() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        store.routingConfidenceText = "Prepare local release audit work."
+        await store.reload()
+        let snapshotCallsBeforeCheck = countOccurrences("snapshot.", in: fake.calls())
+        await store.checkWorkspaceReadiness()
+
+        let result = store.workspaceReadinessResult
+        try expectEqual(result?.generatedBy, "local-v2.55", "Workspace readiness should expose generator metadata.")
+        try expectEqual(result?.summary.overallState, "partial", "Workspace readiness should expose overall state.")
+        try expectEqual(result?.summary.readinessScore, 78, "Workspace readiness should expose readiness score.")
+        try expectEqual(result?.checklistRows.first?.title, "Release audit skill enabled", "Workspace readiness should expose checklist rows.")
+        try expectEqual(result?.checklistRows.first?.matchedSkills.first?.skillName, "Beta", "Workspace readiness should expose matched skills.")
+        try expectEqual(result?.agentRows.first?.agent, "claude-code", "Workspace readiness should expose per-agent rows.")
+        try expectEqual(result?.capabilityRows.first?.capability, "Release audit", "Workspace readiness should expose capability rows.")
+        try expectEqual(result?.gapNotes.first, "Codex lacks a project-scoped release audit skill.", "Workspace readiness should expose gap notes.")
+        try expectEqual(result?.evidenceReferences.first?.title, "Workspace readiness", "Workspace readiness should expose evidence references.")
+        try expectFalse(result?.safetyFlags.providerRequestSent ?? true, "Workspace readiness must not send provider requests.")
+        try expectFalse(result?.safetyFlags.writeBackAllowed ?? true, "Workspace readiness must not allow write-back.")
+        try expectFalse(result?.safetyFlags.writeActionsAvailable ?? true, "Workspace readiness must not expose write actions.")
+        try expectFalse(result?.safetyFlags.scriptExecutionAllowed ?? true, "Workspace readiness must not allow script execution.")
+        try expectFalse(result?.safetyFlags.executionActionsAvailable ?? true, "Workspace readiness must not expose execution actions.")
+        try expectFalse(result?.safetyFlags.configMutationAllowed ?? true, "Workspace readiness must not mutate config.")
+        try expectFalse(result?.safetyFlags.snapshotCreated ?? true, "Workspace readiness must not create snapshots.")
+        try expectFalse(result?.safetyFlags.triageMutationAllowed ?? true, "Workspace readiness must not mutate triage.")
+        try expectFalse(result?.safetyFlags.credentialAccessed ?? true, "Workspace readiness must not access credentials.")
+        try expectFalse(result?.safetyFlags.rawPromptPersisted ?? true, "Workspace readiness must not persist raw prompts.")
+        try expectFalse(result?.safetyFlags.rawResponsePersisted ?? true, "Workspace readiness must not persist raw responses.")
+        try expectFalse(result?.safetyFlags.rawTracePersisted ?? true, "Workspace readiness must not persist raw traces.")
+        try expectFalse(result?.safetyFlags.cloudSyncEnabled ?? true, "Workspace readiness must not sync cloud data.")
+        try expectFalse(result?.safetyFlags.telemetryEnabled ?? true, "Workspace readiness must not emit telemetry.")
+        try expectFalse(store.isCheckingWorkspaceReadiness, "Workspace readiness should reset loading state.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "workspace.checkReadiness", "Workspace readiness should call the V2.55 workspace method.")
+        try expectContains(calls, "\"task\":\"Prepare local release audit work.\"", "Workspace readiness should pass current task context when present.")
+        try expectContains(calls, "\"agent\":\"claude-code\"", "Workspace readiness should pass the current agent filter.")
+        try expectContains(calls, "\"limit\":40", "Workspace readiness should pass the check limit.")
+        try expectContains(calls, "\"include_checklist\":true", "Workspace readiness should request checklist rows.")
+        try expectContains(calls, "\"include_capabilities\":true", "Workspace readiness should request capability rows.")
+        try expectFalse(calls.contains("llm.previewPrompt"), "Workspace readiness must not prepare provider prompts.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Workspace readiness must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Workspace readiness must not call config write paths.")
+        try expectFalse(calls.contains("script.execute"), "Workspace readiness must not call execution paths.")
+        try expectEqual(countOccurrences("snapshot.", in: calls), snapshotCallsBeforeCheck, "Workspace readiness must not call snapshot paths.")
+        try expectFalse(calls.contains("credential"), "Workspace readiness must not call credential paths.")
+    }
+
+    private func workspaceReadinessFallsBackWhenMethodUnavailable() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "normal")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+        await store.checkWorkspaceReadiness()
+
+        try expectEqual(store.workspaceReadinessResult?.isUnavailable, true, "Workspace readiness should expose unavailable fallback for older services.")
+        try expectEqual(store.workspaceReadinessResult?.fallbackReason, UIStrings.workspaceReadinessUnavailable, "Unknown method fallback should use the localized unavailable copy.")
+        try expectFalse(store.isCheckingWorkspaceReadiness, "Unavailable workspace readiness should reset loading state.")
+        try expectContains(fake.calls(), "workspace.checkReadiness", "Fallback should still prove the intended V2.55 method was attempted.")
+    }
+
     private func crossAgentReadinessUsesReadOnlyServiceContract() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -1944,6 +2015,12 @@ private final class FakeServiceScript {
               respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.54","catalog_available":true,"filters":{"agent":"claude-code","limit":20,"include_gaps":true},"summary":{"domain_count":1,"capability_count":2,"skill_count":3,"agent_count":1,"gap_count":1,"blocker_count":0,"summary":"Audit capabilities are covered but benchmark evidence is thin."},"coverage_by_agent":[{"agent":"claude-code","skill_count":3,"capability_count":2,"coverage_state":"covered","notes":["Release audit is covered."]}],"domains":[{"domain_id":"audit","name":"Audit workflows","summary":"Local audit and release review skills.","capability_count":2,"skill_count":3,"coverage_by_agent":[{"agent":"claude-code","skill_count":3,"capability_count":2,"coverage_state":"covered"}],"capabilities":[{"capability_id":"release-audit","name":"Release audit","summary":"Prepare local release audit evidence.","keywords":["audit","release"],"tools":["rg"],"rules":["permissions.network-declared"],"risk_tags":["local-only"],"representative_skills":[{"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","quality_score":82,"readiness_score":74,"reasons":["Purpose maps to release audit."],"evidence_refs":["catalog:beta"],"safety_flags":["provider not sent"]}],"evidence_refs":["catalog:beta"],"safety_flags":["provider not sent"]}],"gap_notes":["No imported trace covers release audit."],"blocker_notes":[],"evidence_refs":["domain:audit"],"safety_flags":["provider not sent"]}],"gap_notes":["Codex has no equivalent audit capability."],"blocker_notes":[],"evidence_references":[{"title":"Capability taxonomy","detail":"Capabilities derived from local catalog evidence.","source":"knowledge.buildCapabilityTaxonomy","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"capability_taxonomy","summary":"Provider explanation is copy-only and preview-gated.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent"]}}}'
             fi
             respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: knowledge.buildCapabilityTaxonomy"}}'
+            ;;
+          *\\"workspace.checkReadiness\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.55","catalog_available":true,"filters":{"task":"Prepare local release audit work.","agent":"claude-code","limit":40,"include_checklist":true,"include_capabilities":true},"summary":{"overall_state":"partial","readiness_score":78,"checklist_count":2,"ready_count":1,"partial_count":1,"blocked_count":0,"agent_count":2,"capability_count":2,"gap_count":1,"blocker_count":0,"summary":"Workspace is partially ready for release audit work."},"checklist_rows":[{"check_id":"release-audit","title":"Release audit skill enabled","status":"ready","severity":"info","agent":"claude-code","capability":"Release audit","summary":"Beta is enabled and project scoped.","required_skills":["Beta"],"matched_skills":[{"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","quality_score":82,"readiness_score":78,"reasons":["Project-scoped audit coverage."],"evidence_refs":["catalog:beta"],"safety_flags":["provider not sent"]}],"gaps":[],"blockers":[],"evidence_refs":["catalog:beta"],"safety_flags":["provider not sent"]},{"check_id":"codex-audit","title":"Codex release audit route","status":"partial","severity":"warning","agent":"codex","capability":"Release audit","summary":"Codex lacks project-scoped coverage.","required_skills":["Release audit"],"matched_skills":[],"gaps":["No Codex project-scoped release audit skill."],"blockers":[],"evidence_refs":["catalog:gamma"],"safety_flags":["provider not sent"]}],"agent_rows":[{"agent":"claude-code","display_name":"Claude Code","readiness_score":86,"readiness_state":"ready","enabled_skill_count":3,"required_skill_count":2,"matched_skill_count":2,"gap_count":0,"blocker_count":0,"notes":["Project skills are scoped correctly."],"evidence_refs":["agent:claude-code"]},{"agent":"codex","display_name":"Codex","readiness_score":62,"readiness_state":"partial","enabled_skill_count":1,"required_skill_count":2,"matched_skill_count":1,"gap_count":1,"blocker_count":0,"notes":["No project-scoped Codex release audit skill."],"evidence_refs":["agent:codex"]}],"capability_rows":[{"capability_id":"release-audit","domain":"Release & Validation","capability":"Release audit","readiness_state":"partial","readiness_score":78,"agent_coverage":[{"agent":"claude-code","skill_count":2,"capability_count":1,"coverage_state":"covered"},{"agent":"codex","skill_count":0,"capability_count":1,"coverage_state":"gap"}],"representative_skills":[{"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","readiness_score":78}],"gap_notes":["No Codex route is enabled."],"blocker_notes":[],"evidence_refs":["capability:release-audit"]}],"gap_notes":["Codex lacks a project-scoped release audit skill."],"blocker_notes":[],"evidence_references":[{"title":"Workspace readiness","detail":"Derived from local catalog evidence.","source":"workspace.checkReadiness","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"workspace_readiness","summary":"Provider explanation is copy-only and preview-gated.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent"]}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: workspace.checkReadiness"}}'
             ;;
           *\\"task.listBenchmarks\\"*)
             if [ "$scenario" = "prompt-ready" ]; then

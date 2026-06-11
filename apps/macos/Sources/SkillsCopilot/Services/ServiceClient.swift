@@ -310,6 +310,28 @@ private struct CapabilityTaxonomyParams: Encodable {
     }
 }
 
+private struct WorkspaceReadinessParams: Encodable {
+    let task: String?
+    let agent: String?
+    let projectRoot: String?
+    let currentCWD: String?
+    let workspace: String?
+    let limit: Int?
+    let includeChecklist: Bool
+    let includeCapabilities: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case task
+        case agent
+        case projectRoot = "project_root"
+        case currentCWD = "current_cwd"
+        case workspace
+        case limit
+        case includeChecklist = "include_checklist"
+        case includeCapabilities = "include_capabilities"
+    }
+}
+
 private struct TaskBenchmarkDeleteParams: Encodable {
     let benchmarkId: String
 
@@ -926,6 +948,32 @@ final class ServiceClient {
         )
         do {
             return try await call(method: "knowledge.buildCapabilityTaxonomy", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func checkWorkspaceReadiness(
+        taskText: String? = nil,
+        agent: String? = nil,
+        project: ProjectContext? = nil,
+        limit: Int? = 40,
+        includeChecklist: Bool = true,
+        includeCapabilities: Bool = true
+    ) async throws -> WorkspaceReadinessResult {
+        let normalizedTask = taskText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let params = WorkspaceReadinessParams(
+            task: normalizedTask?.isEmpty == true ? nil : normalizedTask,
+            agent: agent,
+            projectRoot: project?.rootPath,
+            currentCWD: project?.currentCWD,
+            workspace: project?.name,
+            limit: limit,
+            includeChecklist: includeChecklist,
+            includeCapabilities: includeCapabilities
+        )
+        do {
+            return try await call(method: "workspace.checkReadiness", params: params)
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .unavailable()
         }

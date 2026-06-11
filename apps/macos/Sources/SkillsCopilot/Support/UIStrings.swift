@@ -605,6 +605,25 @@ enum UIStrings {
     static var capabilityTaxonomyCoverage: String { text("capabilityTaxonomy.coverage", "Coverage") }
     static var capabilityTaxonomyAgentCoverage: String { text("capabilityTaxonomy.agentCoverage", "Agent coverage") }
     static var capabilityTaxonomyRepresentativeSkills: String { text("capabilityTaxonomy.representativeSkills", "Representative skills") }
+    static var workspaceReadinessTitle: String { text("workspaceReadiness.title", "Workspace Readiness") }
+    static var workspaceReadinessBoundary: String { text("workspaceReadiness.boundary", "User-triggered, read-only local workspace readiness check for expected work, enabled/scoped skills, agent coverage, capability gaps, blockers, and evidence. It cannot call a provider, write skill files, mutate agent config, create snapshots, change triage, execute scripts, read credentials, persist raw prompts/responses/traces, sync cloud data, or emit telemetry.") }
+    static var workspaceReadinessAction: String { text("workspaceReadiness.action.check", "Check Workspace") }
+    static var workspaceReadinessUnavailable: String { text("workspaceReadiness.unavailable", "Workspace readiness is unavailable in this service build.") }
+    static var workspaceReadinessNoResult: String { text("workspaceReadiness.empty.result", "No workspace readiness check loaded.") }
+    static var workspaceReadinessChecklist: String { text("workspaceReadiness.checklist", "Readiness checklist") }
+    static var workspaceReadinessNoChecklist: String { text("workspaceReadiness.empty.checklist", "No checklist rows returned.") }
+    static var workspaceReadinessChecklistItem: String { text("workspaceReadiness.checklist.item", "Readiness check") }
+    static var workspaceReadinessAgentRows: String { text("workspaceReadiness.agents", "Agent readiness") }
+    static var workspaceReadinessNoAgentRows: String { text("workspaceReadiness.empty.agents", "No agent readiness rows returned.") }
+    static var workspaceReadinessCapabilityRows: String { text("workspaceReadiness.capabilities", "Capability readiness") }
+    static var workspaceReadinessNoCapabilityRows: String { text("workspaceReadiness.empty.capabilities", "No capability readiness rows returned.") }
+    static var workspaceReadinessOverall: String { text("workspaceReadiness.overall", "Overall") }
+    static var workspaceReadinessReady: String { text("workspaceReadiness.ready", "Ready") }
+    static var workspaceReadinessPartial: String { text("workspaceReadiness.partial", "Partial") }
+    static var workspaceReadinessBlocked: String { text("workspaceReadiness.blocked", "Blocked") }
+    static var workspaceReadinessRequired: String { text("workspaceReadiness.required", "Required") }
+    static var workspaceReadinessMatched: String { text("workspaceReadiness.matched", "Matched") }
+    static var workspaceReadinessEnabled: String { text("workspaceReadiness.enabled", "Enabled") }
     static var taskBenchmarkTitle: String { text("taskBenchmark.title", "Task Benchmark Set") }
     static var taskBenchmarkBoundary: String { text("taskBenchmark.boundary", "User-triggered, local benchmark evaluation for task routing. Local evaluation does not call a provider and cannot write skill files, mutate agent config, create snapshots, change triage, execute scripts, or read credentials.") }
     static var taskBenchmarkTaskPlaceholder: String { text("taskBenchmark.task.placeholder", "Optional benchmark task text; otherwise the current readiness/routing task is used") }

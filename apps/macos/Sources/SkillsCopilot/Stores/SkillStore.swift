@@ -44,6 +44,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var knowledgeSearchResult: KnowledgeSearchResult?
     @Published private(set) var similarSkillGroupingResult: SimilarSkillGroupingResult?
     @Published private(set) var capabilityTaxonomyResult: CapabilityTaxonomyResult?
+    @Published private(set) var workspaceReadinessResult: WorkspaceReadinessResult?
     @Published private(set) var traceImportList = AgentTraceImportListResult(imports: [])
     @Published private(set) var traceImportResult: AgentTraceImportResult?
     @Published private(set) var traceImportDeleteResult: AgentTraceImportDeleteResult?
@@ -57,6 +58,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var isSearchingKnowledge = false
     @Published private(set) var isGroupingSimilarSkills = false
     @Published private(set) var isBuildingCapabilityTaxonomy = false
+    @Published private(set) var isCheckingWorkspaceReadiness = false
     @Published private(set) var isLoadingTraceImports = false
     @Published private(set) var isImportingTrace = false
     @Published private(set) var deletingTaskBenchmarkIDs: Set<String> = []
@@ -105,6 +107,7 @@ final class SkillStore: ObservableObject {
             knowledgeSearchResult = nil
             similarSkillGroupingResult = nil
             capabilityTaxonomyResult = nil
+            workspaceReadinessResult = nil
             Task { await loadAgentConfigSnapshots() }
             Task { await loadCleanupQueue() }
             Task { await loadCrossAgentComparisons() }
@@ -179,7 +182,7 @@ final class SkillStore: ObservableObject {
     }
 
     private var isTaskBenchmarkBusy: Bool {
-        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isGroupingSimilarSkills || isBuildingCapabilityTaxonomy || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty
+        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isGroupingSimilarSkills || isBuildingCapabilityTaxonomy || isCheckingWorkspaceReadiness || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty
     }
 
     private var isLLMPromptBusy: Bool {
@@ -1505,6 +1508,32 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func checkWorkspaceReadiness() async {
+        guard !isCheckingWorkspaceReadiness else { return }
+        guard !isRefreshBusy else {
+            workspaceReadinessResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        isCheckingWorkspaceReadiness = true
+        defer { isCheckingWorkspaceReadiness = false }
+
+        let agent = agentFilter == .all ? nil : agentFilter.rawValue
+        let taskText = selectedCrossAgentReadinessInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            workspaceReadinessResult = try await service.checkWorkspaceReadiness(
+                taskText: taskText.isEmpty ? nil : taskText,
+                agent: agent,
+                project: activeProjectContext,
+                limit: 40,
+                includeChecklist: true,
+                includeCapabilities: true
+            )
+        } catch {
+            workspaceReadinessResult = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
     func compareCrossAgentReadiness() async {
         let taskText = selectedCrossAgentReadinessInput
         guard !taskText.isEmpty else {
@@ -1917,6 +1946,9 @@ final class SkillStore: ObservableObject {
         }
         if capabilityTaxonomyResult?.isUnavailable == true {
             capabilityTaxonomyResult = nil
+        }
+        if workspaceReadinessResult?.isUnavailable == true {
+            workspaceReadinessResult = nil
         }
         deletingTaskBenchmarkIDs.removeAll()
         if taskBenchmarkList.isUnavailable {
