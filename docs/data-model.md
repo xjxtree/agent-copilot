@@ -509,6 +509,18 @@ Model families:
   - `history_rows`: `[{ unix_day, trace_count, outcomes, accuracy_rate }]`。
   - `gap_issue_rows` and `recent_evidence_rows` cite local evidence refs from `trace.importLocal`, `task.evaluateBenchmarks`, and `task.detectRoutingRegression` without storing raw trace or raw prompts/responses.
   - 该模型不引入 provider 调用，仍依赖 app-local trace import + benchmark/quality/routing 的本地 evidence；optional provider explanation 仅能走 V2.42 preview/confirmation/copy-only。
+- `CrossAgentTaskReadiness`（V2.50 completed）
+
+  用于同一任务跨 Claude/Codex/opencode/Pi/Hermes/OpenClaw 的只读 readiness 比较；默认 read-only、deterministic、本地 evidence-first。该模型是 `task.compareAgentReadiness` 的派生 response，不持久化新的 comparison artifact。
+
+  - `task.compareAgentReadiness` response: `{ generated_by, catalog_available, filters, summary, agent_rows, recommended_agent, gap_issue_rows, evidence_references, prompt_request, safety_flags }`。
+  - `summary`: `{ agent_count, candidate_count, ready_agent_count, partial_agent_count, blocked_agent_count, gap_issue_count, recommended_agent, summary }`。
+  - `agent_rows`: `[{ rank, agent, display_name, comparison_score, readiness_score, readiness_band, routing_confidence_score, routing_confidence_band, candidate_count, best_candidate, enabled_scope_risk_state, blocker_count, gap_count, reasons, blocker_notes, gap_notes, routing_accuracy_context, benchmark_context, evidence_refs }]`。
+  - `best_candidate`: `{ instance_id, definition_id, skill_name, scope, enabled, state, readiness_score, readiness_band, routing_confidence_score, routing_confidence_band, quality_score }`。
+  - `enabled_scope_risk_state`: `{ enabled, scope, state, risk_level, risk_summary, writable_status, adapter_status }`。
+  - `routing_accuracy_context`: `{ trace_count, accuracy_rate, benchmark_count, benchmark_gap_count, regression_count, recent_evidence_count, notes }`；`benchmark_context`: `{ evaluated_count, matched_count, gap_count, regression_count, notes }`。
+  - 数据来源：`TaskReadinessAssessment`, `TaskBenchmark`, `RoutingRegression`, `TraceImport`, `RoutingAccuracy`，以及 existing `SkillQualityScore`。
+  - 与现有模型一致：默认不持久化 raw trace/raw prompt/raw response/raw skill body；可选 provider 辅助仍走 V2.42 preview/redaction/confirmation/copy-only。
 - `KnowledgeIndex` / `SimilarityGroup` / `CapabilityTaxonomy`（V2.51-V2.54）：local-only index and derived groupings; no default network dependency.
 - `ReviewSession` / `RemediationHistory`（V2.56-V2.61）：local review state, actions considered, decisions, reopened issues, and summary. AI suggestions remain untrusted and cannot directly mutate skill files or agent config.
 - `PolicyPack` / `PolicyProfile` / `ComplianceReport`（V2.63-V2.66）：local policy schema, import/export metadata, profile bindings, deterministic evidence, and optional AI explanation.

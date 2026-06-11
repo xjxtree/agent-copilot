@@ -259,6 +259,15 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
 - Dashboard 生成不得发起 provider 请求，不得读取 credentials，不得改写 agent config、skill files、snapshot、triage、catalog writes 或 rule tuning state，不得执行脚本，不得做 cloud sync 或 telemetry。
 - 可选 provider 说明仍必须走 V2.42 `llm.previewPrompt` + `llm.confirmPromptAndSend`，并保持 copy/display-only；provider 输出不能改变 deterministic dashboard metrics，也不能触发写入或执行。
 
+### 2.4.3.1.4 V2.50 Cross-agent Task Readiness（completed）
+
+- `task.compareAgentReadiness` 是用户触发的 read-only 比较入口：同一任务在 Claude/Codex/opencode/Pi/Hermes/OpenClaw 之间横向对比 readiness、routing confidence、quality、enabled/scope/risk state、benchmark/regression/accuracy context 和可见性。
+- 本方法默认不发起 provider 请求；核心证据必须先由本地 deterministic 路径生成：`task.checkReadiness`、`task.rankSkillRoutes`、`task.evaluateBenchmarks`、`task.detectRoutingRegression`、`trace.importLocal`、`routing.accuracyDashboard`。
+- 禁止在该方法路径执行：skill 文件写入、agent-config 写入、comparison artifact 写入、snapshot 创建/回滚、triage 变更、scripts 执行、credentials 读写。
+- 同时禁止新建 raw path/prompt/response 持久化；输出可包含 redacted 证据引用与可复查 IDs，不应包含 secret、raw prompt、raw response、raw trace 或未脱敏路径。
+- 可选 provider 说明仍受 V2.42 约束（preview/redaction/确认，copy-only）；它只用于说明辅助，不得改变 deterministic 比较结论，也不得触发任何 write/action。
+- `task.compareAgentReadiness` 的安全边界与输出必须明确标注：`provider_request_sent`、`write_back_allowed`、`config_mutation_allowed`、`snapshot_created`、`triage_mutation_allowed`、`script_execution_allowed`、`credential_accessed`、`raw_prompt_persisted`、`raw_response_persisted`、`raw_trace_persisted` 都应默认 false。
+
 ### 2.4.3 Finding triage persistence 边界（V2.29）
 
 - Finding triage 持久化只发生在 app-local catalog/app data 层，目标是降低重复噪音并提示用户复核；不参与 agent 配置写入，也不改写 skill 内容。

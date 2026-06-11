@@ -32,6 +32,8 @@ final class SkillStore: ObservableObject {
     @Published private(set) var checkingTaskReadinessSkillIDs: Set<SkillRecord.ID> = []
     @Published private(set) var routingConfidenceResult: SkillRoutingConfidenceResult?
     @Published private(set) var rankingRoutingSkillIDs: Set<SkillRecord.ID> = []
+    @Published private(set) var crossAgentReadinessResult: CrossAgentReadinessResult?
+    @Published private(set) var isComparingCrossAgentReadiness = false
     @Published private(set) var taskBenchmarkList = TaskBenchmarkListResult(benchmarks: [])
     @Published private(set) var taskBenchmarkEvaluation: TaskBenchmarkEvaluationResult?
     @Published private(set) var taskBenchmarkDeleteResult: TaskBenchmarkDeleteResult?
@@ -112,6 +114,9 @@ final class SkillStore: ObservableObject {
         didSet {
             if oldValue != taskReadinessText {
                 taskReadinessResult = nil
+                if normalizedCrossAgentReadinessText.isEmpty {
+                    crossAgentReadinessResult = nil
+                }
             }
         }
     }
@@ -119,6 +124,16 @@ final class SkillStore: ObservableObject {
         didSet {
             if oldValue != routingConfidenceText {
                 routingConfidenceResult = nil
+                if normalizedCrossAgentReadinessText.isEmpty {
+                    crossAgentReadinessResult = nil
+                }
+            }
+        }
+    }
+    @Published var crossAgentReadinessText = "" {
+        didSet {
+            if oldValue != crossAgentReadinessText {
+                crossAgentReadinessResult = nil
             }
         }
     }
@@ -145,7 +160,7 @@ final class SkillStore: ObservableObject {
     }
 
     private var isTaskBenchmarkBusy: Bool {
-        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isLoadingTraceImports || isImportingTrace || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty
+        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty
     }
 
     private var isLLMPromptBusy: Bool {
@@ -534,6 +549,14 @@ final class SkillStore: ObservableObject {
             return trimmedRouting
         }
         return normalizedTaskReadinessText
+    }
+
+    var selectedCrossAgentReadinessInput: String {
+        let trimmedCrossAgent = normalizedCrossAgentReadinessText
+        if !trimmedCrossAgent.isEmpty {
+            return trimmedCrossAgent
+        }
+        return selectedTaskBenchmarkInput
     }
 
     func isDeletingTaskBenchmark(_ benchmark: TaskBenchmarkRecord) -> Bool {
@@ -1369,6 +1392,33 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func compareCrossAgentReadiness() async {
+        let taskText = selectedCrossAgentReadinessInput
+        guard !taskText.isEmpty else {
+            crossAgentReadinessResult = .unavailable(taskText: "", reason: UIStrings.crossAgentReadinessTaskRequired)
+            return
+        }
+        guard !isRefreshBusy else {
+            crossAgentReadinessResult = .unavailable(taskText: taskText, reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        isComparingCrossAgentReadiness = true
+        defer { isComparingCrossAgentReadiness = false }
+
+        do {
+            crossAgentReadinessResult = try await service.compareAgentReadiness(
+                taskText: taskText,
+                agents: nil,
+                limitPerAgent: 3,
+                includeRoutingAccuracy: true,
+                includeBenchmarks: true
+            )
+        } catch {
+            crossAgentReadinessResult = .unavailable(taskText: taskText, reason: error.localizedDescription)
+        }
+    }
+
     func loadTraceImports() async {
         guard !isLoadingTraceImports else { return }
         isLoadingTraceImports = true
@@ -1743,6 +1793,9 @@ final class SkillStore: ObservableObject {
             routingConfidenceRankedSkillID = nil
         }
         rankingRoutingSkillIDs = rankingRoutingSkillIDs.filter { currentSkillIDs.contains($0) }
+        if crossAgentReadinessResult?.isUnavailable == true {
+            crossAgentReadinessResult = nil
+        }
         deletingTaskBenchmarkIDs.removeAll()
         if taskBenchmarkList.isUnavailable {
             taskBenchmarkEvaluation = nil
@@ -1876,6 +1929,10 @@ final class SkillStore: ObservableObject {
 
     private func routingConfidencePromptKey(skillID: SkillRecord.ID, taskText: String) -> String {
         "routing-confidence:\(skillID):\(taskText)"
+    }
+
+    private var normalizedCrossAgentReadinessText: String {
+        crossAgentReadinessText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var normalizedTaskBenchmarkText: String {

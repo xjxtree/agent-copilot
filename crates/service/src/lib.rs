@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     env, fs,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
@@ -64,6 +64,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "analysis.scoreSkillQuality",
     "task.checkReadiness",
     "task.rankSkillRoutes",
+    "task.compareAgentReadiness",
     "task.listBenchmarks",
     "task.saveBenchmark",
     "task.deleteBenchmark",
@@ -618,6 +619,166 @@ pub struct SkillRouteRankingResult {
     pub evidence_references: Vec<TaskReadinessEvidenceReference>,
     pub prompt_request: RoutingConfidencePromptRequest,
     pub safety_flags: RoutingConfidenceSafetyFlags,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CompareAgentReadinessParams {
+    #[serde(alias = "user_intent", alias = "task_text")]
+    pub task: String,
+    #[serde(default, alias = "target_agents")]
+    pub agents: Vec<String>,
+    #[serde(default)]
+    pub limit_per_agent: Option<usize>,
+    #[serde(default)]
+    pub include_routing_accuracy: bool,
+    #[serde(default)]
+    pub include_benchmarks: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AgentReadinessComparisonResult {
+    pub generated_by: &'static str,
+    pub catalog_available: bool,
+    pub filters: AgentReadinessComparisonFilters,
+    pub summary: AgentReadinessComparisonSummary,
+    pub agent_rows: Vec<AgentReadinessComparisonRow>,
+    pub recommended_agent: Option<AgentReadinessRecommendation>,
+    pub gap_issue_rows: Vec<AgentReadinessGapIssueRow>,
+    pub evidence_references: Vec<TaskReadinessEvidenceReference>,
+    pub prompt_request: AgentReadinessPromptRequest,
+    pub safety_flags: AgentReadinessSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AgentReadinessComparisonFilters {
+    pub agents: Vec<String>,
+    pub limit_per_agent: usize,
+    pub include_routing_accuracy: bool,
+    pub include_benchmarks: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AgentReadinessComparisonSummary {
+    pub agent_count: usize,
+    pub candidate_count: usize,
+    pub ready_agent_count: usize,
+    pub partial_agent_count: usize,
+    pub blocked_agent_count: usize,
+    pub gap_issue_count: usize,
+    pub recommended_agent: Option<String>,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AgentReadinessComparisonRow {
+    pub rank: usize,
+    pub agent: String,
+    pub display_name: String,
+    pub comparison_score: u8,
+    pub readiness_score: u8,
+    pub readiness_band: &'static str,
+    pub routing_confidence_score: u8,
+    pub routing_confidence_band: &'static str,
+    pub candidate_count: usize,
+    pub best_candidate: Option<AgentReadinessBestCandidate>,
+    pub enabled_scope_risk_state: Option<TaskReadinessState>,
+    pub blocker_count: usize,
+    pub gap_count: usize,
+    pub reasons: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub gap_notes: Vec<String>,
+    pub routing_accuracy_context: Option<AgentReadinessAccuracyContext>,
+    pub benchmark_context: Option<AgentReadinessBenchmarkContext>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AgentReadinessBestCandidate {
+    pub instance_id: String,
+    pub definition_id: String,
+    pub skill_name: String,
+    pub scope: String,
+    pub enabled: bool,
+    pub state: String,
+    pub readiness_score: u8,
+    pub readiness_band: &'static str,
+    pub routing_confidence_score: u8,
+    pub routing_confidence_band: &'static str,
+    pub quality_score: Option<u8>,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct AgentReadinessAccuracyContext {
+    pub trace_count: usize,
+    pub accuracy_rate: f64,
+    pub benchmark_count: usize,
+    pub benchmark_gap_count: usize,
+    pub regression_count: usize,
+    pub recent_evidence_count: usize,
+    pub notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct AgentReadinessBenchmarkContext {
+    pub evaluated_count: usize,
+    pub matched_count: usize,
+    pub gap_count: usize,
+    pub regression_count: usize,
+    pub notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AgentReadinessRecommendation {
+    pub agent: String,
+    pub display_name: String,
+    pub comparison_score: u8,
+    pub readiness_score: u8,
+    pub routing_confidence_score: u8,
+    pub skill_name: Option<String>,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AgentReadinessGapIssueRow {
+    pub source: &'static str,
+    pub severity: &'static str,
+    pub agent: String,
+    pub title: String,
+    pub detail: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AgentReadinessPromptRequest {
+    pub available: bool,
+    pub preview_method: &'static str,
+    pub confirm_method: &'static str,
+    pub action: &'static str,
+    pub request: LlmPreviewPromptParams,
+    pub note: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct AgentReadinessSafetyFlags {
+    pub read_only: bool,
+    pub app_local_only: bool,
+    pub provider_request_sent: bool,
+    pub write_back_allowed: bool,
+    pub write_actions_available: bool,
+    pub skill_files_mutated: bool,
+    pub agent_config_mutated: bool,
+    pub script_execution_allowed: bool,
+    pub execution_actions_available: bool,
+    pub config_mutation_allowed: bool,
+    pub snapshot_created: bool,
+    pub triage_mutation_allowed: bool,
+    pub credential_accessed: bool,
+    pub raw_secret_returned: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_trace_persisted: bool,
+    pub cloud_sync_performed: bool,
+    pub telemetry_emitted: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1822,6 +1983,10 @@ impl ServiceHost {
             "task.rankSkillRoutes" => {
                 let params: RankSkillRoutesParams = serde_json::from_value(request.params)?;
                 serde_json::to_value(self.rank_skill_routes(params)?).map_err(Into::into)
+            }
+            "task.compareAgentReadiness" => {
+                let params: CompareAgentReadinessParams = serde_json::from_value(request.params)?;
+                serde_json::to_value(self.compare_agent_readiness(params)?).map_err(Into::into)
             }
             "task.listBenchmarks" => {
                 let params: ListTaskBenchmarksParams = if request.params.is_null() {
@@ -3462,6 +3627,172 @@ impl ServiceHost {
             limit: params.limit,
         })?;
         Ok(skill_route_ranking_from_readiness(readiness))
+    }
+
+    pub fn compare_agent_readiness(
+        &self,
+        params: CompareAgentReadinessParams,
+    ) -> Result<AgentReadinessComparisonResult, ServiceError> {
+        let task = params.task.trim();
+        if task.is_empty() {
+            return Err(ServiceError::InvalidRequest(
+                "task.compareAgentReadiness requires a non-empty task".to_string(),
+            ));
+        }
+
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let task = redact_string(
+            &redact_for_llm_preview(task),
+            &self.redaction_roots(&adapter_ctx),
+        );
+        let limit_per_agent = params.limit_per_agent.unwrap_or(3).clamp(1, 10);
+        let requested_agents = normalize_agent_filter_list(params.agents);
+        let filters = AgentReadinessComparisonFilters {
+            agents: requested_agents.clone(),
+            limit_per_agent,
+            include_routing_accuracy: params.include_routing_accuracy,
+            include_benchmarks: params.include_benchmarks,
+        };
+
+        let Some(catalog) = self.open_existing_catalog_read_only()? else {
+            return Ok(empty_agent_readiness_comparison(
+                task,
+                filters,
+                false,
+                "No local catalog is available; cross-agent readiness comparison has no candidate evidence.",
+            ));
+        };
+
+        let skills = self.list_visible_skill_records(&catalog)?;
+        let agents =
+            agent_readiness_agents_for_comparison(&skills, &adapter_ctx, &requested_agents);
+        if agents.is_empty() {
+            return Ok(empty_agent_readiness_comparison(
+                task,
+                filters,
+                true,
+                "No supported agent skills matched the selected filters in the current catalog.",
+            ));
+        }
+
+        let accuracy_by_agent = if params.include_routing_accuracy {
+            Some(agent_readiness_accuracy_context(
+                self.routing_accuracy_dashboard(RoutingAccuracyDashboardParams {
+                    agent: None,
+                    window_days: Some(30),
+                    limit: Some(100),
+                    include_history: false,
+                    include_recent_evidence: true,
+                })?,
+            ))
+        } else {
+            None
+        };
+        let benchmark_by_agent = if params.include_benchmarks {
+            Some(agent_readiness_benchmark_context(
+                self.evaluate_task_benchmarks(EvaluateTaskBenchmarksParams {
+                    ids: Vec::new(),
+                    limit: None,
+                })?,
+            ))
+        } else {
+            None
+        };
+
+        let mut evidence_by_id = BTreeMap::new();
+        let mut rows = Vec::new();
+        let mut gap_issue_rows = Vec::new();
+        for agent in agents {
+            let readiness = self.check_task_readiness(TaskReadinessParams {
+                task: task.clone(),
+                agent: Some(agent.clone()),
+                candidate_instance_ids: Vec::new(),
+                limit: Some(limit_per_agent),
+            })?;
+            let ranking = skill_route_ranking_from_readiness(readiness.clone());
+            for evidence in readiness.evidence_references.iter().cloned() {
+                evidence_by_id
+                    .entry(evidence.id.clone())
+                    .or_insert(evidence);
+            }
+            let accuracy_context = accuracy_by_agent
+                .as_ref()
+                .and_then(|by_agent| by_agent.get(&agent).cloned());
+            let benchmark_context = benchmark_by_agent
+                .as_ref()
+                .and_then(|by_agent| by_agent.get(&agent).cloned());
+            let row = agent_readiness_row_from_results(
+                &agent,
+                &readiness,
+                &ranking,
+                accuracy_context,
+                benchmark_context,
+            );
+            gap_issue_rows.extend(agent_readiness_gap_issue_rows(&row));
+            rows.push(row);
+        }
+
+        rows.sort_by(|left, right| {
+            right
+                .comparison_score
+                .cmp(&left.comparison_score)
+                .then_with(|| right.readiness_score.cmp(&left.readiness_score))
+                .then_with(|| {
+                    right
+                        .routing_confidence_score
+                        .cmp(&left.routing_confidence_score)
+                })
+                .then_with(|| left.agent.cmp(&right.agent))
+        });
+        for (index, row) in rows.iter_mut().enumerate() {
+            row.rank = index + 1;
+        }
+        let recommended_agent = rows
+            .iter()
+            .find(|row| row.candidate_count > 0 && row.comparison_score > 0)
+            .map(agent_readiness_recommendation);
+        let prompt_instance_ids = rows
+            .iter()
+            .filter_map(|row| row.best_candidate.as_ref())
+            .take(8)
+            .map(|candidate| candidate.instance_id.clone())
+            .collect::<Vec<_>>();
+        let prompt_available = !prompt_instance_ids.is_empty();
+        let summary = agent_readiness_summary(&rows, &gap_issue_rows, &recommended_agent);
+        let evidence_references = evidence_by_id.into_values().collect::<Vec<_>>();
+
+        Ok(AgentReadinessComparisonResult {
+            generated_by: "deterministic-service",
+            catalog_available: true,
+            filters,
+            summary,
+            agent_rows: rows,
+            recommended_agent,
+            gap_issue_rows,
+            evidence_references,
+            prompt_request: AgentReadinessPromptRequest {
+                available: prompt_available,
+                preview_method: "llm.previewPrompt",
+                confirm_method: "llm.confirmPromptAndSend",
+                action: "task_readiness",
+                request: LlmPreviewPromptParams {
+                    action: LlmPromptActionKind::TaskReadiness,
+                    profile_id: None,
+                    skill_instance_id: None,
+                    instance_ids: prompt_instance_ids,
+                    analysis_kind: None,
+                    user_intent: Some(task),
+                },
+                note: if prompt_available {
+                    "Optional provider-backed explanation must be requested through prompt preview and explicit confirmation; task.compareAgentReadiness never sends provider traffic."
+                        .to_string()
+                } else {
+                    "Prompt preview is unavailable until local catalog evidence produces cross-agent candidates."
+                        .to_string()
+                },
+            },
+            safety_flags: agent_readiness_safety_flags(),
+        })
     }
 
     pub fn list_task_benchmarks(
@@ -6587,6 +6918,480 @@ fn routing_confidence_safety_flags() -> RoutingConfidenceSafetyFlags {
     }
 }
 
+fn agent_readiness_safety_flags() -> AgentReadinessSafetyFlags {
+    AgentReadinessSafetyFlags {
+        read_only: true,
+        app_local_only: true,
+        provider_request_sent: false,
+        write_back_allowed: false,
+        write_actions_available: false,
+        skill_files_mutated: false,
+        agent_config_mutated: false,
+        script_execution_allowed: false,
+        execution_actions_available: false,
+        config_mutation_allowed: false,
+        snapshot_created: false,
+        triage_mutation_allowed: false,
+        credential_accessed: false,
+        raw_secret_returned: false,
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+        raw_trace_persisted: false,
+        cloud_sync_performed: false,
+        telemetry_emitted: false,
+    }
+}
+
+fn empty_agent_readiness_comparison(
+    task: String,
+    filters: AgentReadinessComparisonFilters,
+    catalog_available: bool,
+    note: &str,
+) -> AgentReadinessComparisonResult {
+    AgentReadinessComparisonResult {
+        generated_by: "deterministic-service",
+        catalog_available,
+        filters,
+        summary: AgentReadinessComparisonSummary {
+            agent_count: 0,
+            candidate_count: 0,
+            ready_agent_count: 0,
+            partial_agent_count: 0,
+            blocked_agent_count: 0,
+            gap_issue_count: 1,
+            recommended_agent: None,
+            summary: note.to_string(),
+        },
+        agent_rows: Vec::new(),
+        recommended_agent: None,
+        gap_issue_rows: vec![AgentReadinessGapIssueRow {
+            source: "task.compareAgentReadiness",
+            severity: "high",
+            agent: "all".to_string(),
+            title: "No cross-agent readiness candidates".to_string(),
+            detail: note.to_string(),
+            evidence_refs: Vec::new(),
+        }],
+        evidence_references: Vec::new(),
+        prompt_request: AgentReadinessPromptRequest {
+            available: false,
+            preview_method: "llm.previewPrompt",
+            confirm_method: "llm.confirmPromptAndSend",
+            action: "task_readiness",
+            request: LlmPreviewPromptParams {
+                action: LlmPromptActionKind::TaskReadiness,
+                profile_id: None,
+                skill_instance_id: None,
+                instance_ids: Vec::new(),
+                analysis_kind: None,
+                user_intent: Some(task),
+            },
+            note: "Prompt preview is unavailable until local catalog evidence produces cross-agent candidates."
+                .to_string(),
+        },
+        safety_flags: agent_readiness_safety_flags(),
+    }
+}
+
+fn normalize_agent_filter_list(agents: Vec<String>) -> Vec<String> {
+    let mut normalized = agents
+        .into_iter()
+        .filter_map(|agent| normalize_agent_label(&agent))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    normalized.sort_by_key(|agent| agent_readiness_agent_order(agent));
+    normalized
+}
+
+fn normalize_agent_label(agent: &str) -> Option<String> {
+    let normalized = agent.trim().to_ascii_lowercase().replace(['_', ' '], "-");
+    let canonical = match normalized.as_str() {
+        "" => return None,
+        "claude" | "claude-code" | "claudecode" => "claude-code",
+        "codex" => "codex",
+        "opencode" | "open-code" => "opencode",
+        "pi" => "pi",
+        "hermes" => "hermes",
+        "openclaw" | "open-claw" => "openclaw",
+        other => other,
+    };
+    Some(canonical.to_string())
+}
+
+fn agent_readiness_agents_for_comparison(
+    skills: &[SkillRecord],
+    adapter_ctx: &AdapterContext,
+    requested_agents: &[String],
+) -> Vec<String> {
+    if !requested_agents.is_empty() {
+        return requested_agents.to_vec();
+    }
+    let mut agents = skills
+        .iter()
+        .filter_map(|skill| normalize_agent_label(&skill.agent))
+        .filter(|agent| agent != "tool-global")
+        .collect::<BTreeSet<_>>();
+    for diagnostic in list_adapter_diagnostics(adapter_ctx) {
+        let present = diagnostic.config.detected_count > 0
+            || diagnostic.roots.iter().any(|root| root.exists)
+            || skills.iter().any(|skill| skill.agent == diagnostic.agent);
+        if present {
+            agents.insert(diagnostic.agent.to_string());
+        }
+    }
+    let mut agents = agents.into_iter().collect::<Vec<_>>();
+    agents.sort_by_key(|agent| agent_readiness_agent_order(agent));
+    agents
+}
+
+fn agent_readiness_agent_order(agent: &str) -> usize {
+    match agent {
+        "claude-code" => 0,
+        "codex" => 1,
+        "opencode" => 2,
+        "pi" => 3,
+        "hermes" => 4,
+        "openclaw" => 5,
+        _ => 99,
+    }
+}
+
+fn agent_readiness_display_name(agent: &str) -> String {
+    match agent {
+        "claude-code" => "Claude Code",
+        "codex" => "Codex",
+        "opencode" => "opencode",
+        "pi" => "Pi",
+        "hermes" => "Hermes",
+        "openclaw" => "OpenClaw",
+        other => other,
+    }
+    .to_string()
+}
+
+fn agent_readiness_row_from_results(
+    agent: &str,
+    readiness: &TaskReadinessResult,
+    ranking: &SkillRouteRankingResult,
+    accuracy_context: Option<AgentReadinessAccuracyContext>,
+    benchmark_context: Option<AgentReadinessBenchmarkContext>,
+) -> AgentReadinessComparisonRow {
+    let best_route = ranking.route_candidates.first();
+    let best_candidate = best_route.map(|route| AgentReadinessBestCandidate {
+        instance_id: route.instance_id.clone(),
+        definition_id: route.definition_id.clone(),
+        skill_name: route.skill_name.clone(),
+        scope: route.scope.clone(),
+        enabled: route.enabled,
+        state: route.state.clone(),
+        readiness_score: route.readiness_score,
+        readiness_band: route.readiness_band,
+        routing_confidence_score: route.confidence_score,
+        routing_confidence_band: route.confidence_band,
+        quality_score: route.quality_score,
+    });
+    let blocker_count = readiness
+        .candidate_skills
+        .iter()
+        .map(|candidate| candidate.blocker_risk_notes.len())
+        .sum::<usize>();
+    let gap_count = readiness.missing_gap_notes.len()
+        + readiness
+            .candidate_skills
+            .iter()
+            .map(|candidate| candidate.missing_gap_notes.len())
+            .sum::<usize>();
+    let mut reasons = Vec::new();
+    if let Some(route) = best_route {
+        reasons.extend(route.match_reasons.iter().take(3).cloned());
+        reasons.extend(route.confidence_rationale.iter().take(2).cloned());
+    } else {
+        reasons.push("No visible route candidate for this agent matched the task.".to_string());
+    }
+    let mut blocker_notes = readiness
+        .candidate_skills
+        .iter()
+        .flat_map(|candidate| candidate.blocker_risk_notes.iter().cloned())
+        .collect::<Vec<_>>();
+    if blocker_notes.is_empty() && readiness.candidate_skills.is_empty() {
+        blocker_notes.push("No candidate evidence was available for this agent.".to_string());
+    }
+    blocker_notes.sort();
+    blocker_notes.dedup();
+    blocker_notes.truncate(6);
+    let mut gap_notes = readiness.missing_gap_notes.clone();
+    gap_notes.extend(
+        readiness
+            .candidate_skills
+            .iter()
+            .flat_map(|candidate| candidate.missing_gap_notes.iter().cloned()),
+    );
+    gap_notes.sort();
+    gap_notes.dedup();
+    gap_notes.truncate(6);
+    let routing_confidence_score = ranking.overall_confidence_score;
+    let comparison_score = agent_readiness_comparison_score(
+        readiness.score,
+        routing_confidence_score,
+        accuracy_context.as_ref(),
+        benchmark_context.as_ref(),
+    );
+    AgentReadinessComparisonRow {
+        rank: 0,
+        agent: agent.to_string(),
+        display_name: agent_readiness_display_name(agent),
+        comparison_score,
+        readiness_score: readiness.score,
+        readiness_band: readiness.band,
+        routing_confidence_score,
+        routing_confidence_band: ranking.overall_confidence_band,
+        candidate_count: readiness.candidate_skills.len(),
+        best_candidate,
+        enabled_scope_risk_state: best_route.map(|route| route.enabled_scope_risk_state.clone()),
+        blocker_count,
+        gap_count,
+        reasons,
+        blocker_notes,
+        gap_notes,
+        routing_accuracy_context: accuracy_context,
+        benchmark_context,
+        evidence_refs: best_route
+            .map(|route| route.evidence_refs.clone())
+            .unwrap_or_default(),
+    }
+}
+
+fn agent_readiness_comparison_score(
+    readiness_score: u8,
+    routing_confidence_score: u8,
+    accuracy_context: Option<&AgentReadinessAccuracyContext>,
+    benchmark_context: Option<&AgentReadinessBenchmarkContext>,
+) -> u8 {
+    let mut score =
+        ((u16::from(readiness_score) * 3 + u16::from(routing_confidence_score) * 2) / 5) as i16;
+    if let Some(context) = accuracy_context {
+        score -= (context.regression_count as i16 * 6).min(18);
+        score -= (context.benchmark_gap_count as i16 * 4).min(12);
+        if context.trace_count > 0 && context.accuracy_rate >= 0.8 {
+            score += 3;
+        }
+    }
+    if let Some(context) = benchmark_context {
+        score -= (context.gap_count as i16 * 4).min(12);
+        score -= (context.regression_count as i16 * 6).min(18);
+        if context.evaluated_count > 0 && context.gap_count == 0 {
+            score += 2;
+        }
+    }
+    score.clamp(0, 100) as u8
+}
+
+fn agent_readiness_gap_issue_rows(
+    row: &AgentReadinessComparisonRow,
+) -> Vec<AgentReadinessGapIssueRow> {
+    let mut issues = Vec::new();
+    if row.candidate_count == 0 {
+        issues.push(AgentReadinessGapIssueRow {
+            source: "task.checkReadiness",
+            severity: "high",
+            agent: row.agent.clone(),
+            title: "No candidate skill for agent".to_string(),
+            detail: "No visible skill candidate matched the task for this agent.".to_string(),
+            evidence_refs: Vec::new(),
+        });
+    }
+    for note in &row.gap_notes {
+        issues.push(AgentReadinessGapIssueRow {
+            source: "task.checkReadiness",
+            severity: "medium",
+            agent: row.agent.clone(),
+            title: "Readiness gap".to_string(),
+            detail: note.clone(),
+            evidence_refs: row.evidence_refs.clone(),
+        });
+    }
+    for note in &row.blocker_notes {
+        issues.push(AgentReadinessGapIssueRow {
+            source: "task.checkReadiness",
+            severity: "high",
+            agent: row.agent.clone(),
+            title: "Readiness blocker or risk".to_string(),
+            detail: note.clone(),
+            evidence_refs: row.evidence_refs.clone(),
+        });
+    }
+    if let Some(context) = &row.routing_accuracy_context {
+        if context.benchmark_gap_count > 0 || context.regression_count > 0 {
+            issues.push(AgentReadinessGapIssueRow {
+                source: "routing.accuracyDashboard",
+                severity: if context.regression_count > 0 {
+                    "critical"
+                } else {
+                    "medium"
+                },
+                agent: row.agent.clone(),
+                title: "Routing accuracy context requires review".to_string(),
+                detail: format!(
+                    "{} benchmark gap(s) and {} regression(s) are associated with this agent.",
+                    context.benchmark_gap_count, context.regression_count
+                ),
+                evidence_refs: row.evidence_refs.clone(),
+            });
+        }
+    }
+    if let Some(context) = &row.benchmark_context {
+        if context.gap_count > 0 || context.regression_count > 0 {
+            issues.push(AgentReadinessGapIssueRow {
+                source: "task.evaluateBenchmarks",
+                severity: if context.regression_count > 0 {
+                    "critical"
+                } else {
+                    "medium"
+                },
+                agent: row.agent.clone(),
+                title: "Benchmark context requires review".to_string(),
+                detail: format!(
+                    "{} benchmark gap(s) and {} regression(s) are associated with this agent.",
+                    context.gap_count, context.regression_count
+                ),
+                evidence_refs: row.evidence_refs.clone(),
+            });
+        }
+    }
+    issues
+}
+
+fn agent_readiness_recommendation(
+    row: &AgentReadinessComparisonRow,
+) -> AgentReadinessRecommendation {
+    AgentReadinessRecommendation {
+        agent: row.agent.clone(),
+        display_name: row.display_name.clone(),
+        comparison_score: row.comparison_score,
+        readiness_score: row.readiness_score,
+        routing_confidence_score: row.routing_confidence_score,
+        skill_name: row
+            .best_candidate
+            .as_ref()
+            .map(|candidate| candidate.skill_name.clone()),
+        reason: match &row.best_candidate {
+            Some(candidate) => format!(
+                "{} has the strongest local readiness/routing score for `{}` with risk {}.",
+                row.display_name,
+                candidate.skill_name,
+                row.enabled_scope_risk_state
+                    .as_ref()
+                    .map(|state| state.risk_level)
+                    .unwrap_or("unknown")
+            ),
+            None => format!(
+                "{} is ranked highest, but no concrete candidate was available.",
+                row.display_name
+            ),
+        },
+    }
+}
+
+fn agent_readiness_summary(
+    rows: &[AgentReadinessComparisonRow],
+    gap_issue_rows: &[AgentReadinessGapIssueRow],
+    recommended_agent: &Option<AgentReadinessRecommendation>,
+) -> AgentReadinessComparisonSummary {
+    let candidate_count = rows.iter().map(|row| row.candidate_count).sum();
+    let ready_agent_count = rows
+        .iter()
+        .filter(|row| matches!(row.readiness_band, "ready" | "mostly_ready"))
+        .count();
+    let blocked_agent_count = rows
+        .iter()
+        .filter(|row| row.candidate_count == 0 || row.readiness_band == "blocked")
+        .count();
+    let partial_agent_count = rows
+        .len()
+        .saturating_sub(ready_agent_count + blocked_agent_count);
+    let summary = if let Some(recommended) = recommended_agent {
+        format!(
+            "Compared {} agent(s) and {} candidate skill(s); recommended {} with comparison score {}/100.",
+            rows.len(),
+            candidate_count,
+            recommended.display_name,
+            recommended.comparison_score
+        )
+    } else if rows.is_empty() {
+        "No agent readiness rows were available for the selected filters.".to_string()
+    } else {
+        format!(
+            "Compared {} agent(s), but no agent produced a usable candidate for recommendation.",
+            rows.len()
+        )
+    };
+    AgentReadinessComparisonSummary {
+        agent_count: rows.len(),
+        candidate_count,
+        ready_agent_count,
+        partial_agent_count,
+        blocked_agent_count,
+        gap_issue_count: gap_issue_rows.len(),
+        recommended_agent: recommended_agent
+            .as_ref()
+            .map(|recommendation| recommendation.agent.clone()),
+        summary,
+    }
+}
+
+fn agent_readiness_accuracy_context(
+    dashboard: RoutingAccuracyDashboardResult,
+) -> BTreeMap<String, AgentReadinessAccuracyContext> {
+    dashboard
+        .agent_rows
+        .into_iter()
+        .map(|row| {
+            (
+                row.agent,
+                AgentReadinessAccuracyContext {
+                    trace_count: row.trace_count,
+                    accuracy_rate: row.accuracy_rate,
+                    benchmark_count: row.benchmark_count,
+                    benchmark_gap_count: row.benchmark_gap_count,
+                    regression_count: row.regression_count,
+                    recent_evidence_count: row.recent_evidence_count,
+                    notes: row.notes,
+                },
+            )
+        })
+        .collect()
+}
+
+fn agent_readiness_benchmark_context(
+    evaluation: TaskBenchmarkEvaluationResult,
+) -> BTreeMap<String, AgentReadinessBenchmarkContext> {
+    let mut by_agent: BTreeMap<String, AgentReadinessBenchmarkContext> = BTreeMap::new();
+    for item in evaluation.benchmark_results {
+        let Some(route) = item.top_route else {
+            continue;
+        };
+        let context = by_agent.entry(route.agent).or_default();
+        context.evaluated_count += 1;
+        if matches!(
+            item.expected_match_status,
+            "expected_match" | "acceptable_match"
+        ) {
+            context.matched_count += 1;
+        } else {
+            context.gap_count += 1;
+        }
+        context.notes.extend(item.gap_notes);
+        context.notes.extend(item.blocker_notes);
+    }
+    for context in by_agent.values_mut() {
+        context.notes.sort();
+        context.notes.dedup();
+        context.notes.truncate(6);
+    }
+    by_agent
+}
+
 fn task_benchmark_safety_flags() -> TaskBenchmarkSafetyFlags {
     TaskBenchmarkSafetyFlags {
         read_only: true,
@@ -8970,6 +9775,7 @@ mod tests {
         assert!(methods.contains(&Value::String("analysis.scoreSkillQuality".to_string())));
         assert!(methods.contains(&Value::String("task.checkReadiness".to_string())));
         assert!(methods.contains(&Value::String("task.rankSkillRoutes".to_string())));
+        assert!(methods.contains(&Value::String("task.compareAgentReadiness".to_string())));
         assert!(methods.contains(&Value::String("task.listBenchmarks".to_string())));
         assert!(methods.contains(&Value::String("task.saveBenchmark".to_string())));
         assert!(methods.contains(&Value::String("task.deleteBenchmark".to_string())));
@@ -10855,6 +11661,314 @@ mod tests {
             "missing-catalog routing must not initialize catalog.sqlite"
         );
         assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    }
+
+    #[test]
+    fn task_compare_agent_readiness_rejects_empty_task_without_writes() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-agent-readiness-empty-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("agent-readiness-empty".to_string()),
+            method: "task.compareAgentReadiness".to_string(),
+            params: json!({ "task": "   " }),
+        });
+
+        assert!(!response.ok);
+        let error = response.error.expect("empty compare error");
+        assert_eq!(error.code, "invalid_request");
+        assert!(error.message.contains("non-empty task"));
+        assert!(
+            !app_data_dir.exists(),
+            "empty cross-agent readiness request must not initialize app data"
+        );
+    }
+
+    #[test]
+    fn task_compare_agent_readiness_missing_catalog_returns_safe_empty_result() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-agent-readiness-missing-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("agent-readiness-missing".to_string()),
+            method: "task.compareAgentReadiness".to_string(),
+            params: json!({
+                "task_text": "Prepare a release readiness report",
+                "agents": ["claude-code", "codex"]
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("missing catalog comparison");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("deterministic-service")
+        );
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/agent_count")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert!(result
+            .get("agent_rows")
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty));
+        assert!(result.get("recommended_agent").is_some_and(Value::is_null));
+        assert!(result
+            .get("gap_issue_rows")
+            .and_then(Value::as_array)
+            .is_some_and(|rows| rows.len() == 1));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_agent_readiness_safety(&result);
+        assert!(
+            !host.catalog_path().exists(),
+            "missing-catalog cross-agent readiness must not initialize catalog.sqlite"
+        );
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    }
+
+    #[test]
+    fn task_compare_agent_readiness_ranks_multiple_agents_and_recommends_one() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-agent-readiness-multi-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-agent-readiness-multi-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_cleanup_queue_fixture(&host);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("agent-readiness-multi".to_string()),
+            method: "task.compareAgentReadiness".to_string(),
+            params: json!({
+                "user_intent": "Review the shared fixture skill and local cleanup posture",
+                "agents": ["codex", "claude-code"],
+                "limit_per_agent": 2
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("multi-agent comparison");
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/agent_count")
+                .and_then(Value::as_u64),
+            Some(2)
+        );
+        assert!(result
+            .pointer("/summary/candidate_count")
+            .and_then(Value::as_u64)
+            .is_some_and(|count| count >= 2));
+        assert!(result
+            .get("agent_rows")
+            .and_then(Value::as_array)
+            .is_some_and(|rows| rows.len() == 2));
+        assert!(result
+            .pointer("/agent_rows/0/comparison_score")
+            .and_then(Value::as_u64)
+            .is_some_and(|score| score <= 100));
+        assert!(result
+            .pointer("/agent_rows/0/best_candidate/skill_name")
+            .and_then(Value::as_str)
+            .is_some());
+        assert!(result
+            .pointer("/recommended_agent/agent")
+            .and_then(Value::as_str)
+            .is_some_and(|agent| matches!(agent, "claude-code" | "codex")));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/action")
+                .and_then(Value::as_str),
+            Some("task_readiness")
+        );
+        assert_eq!(
+            result
+                .pointer("/prompt_request/request/action")
+                .and_then(Value::as_str),
+            Some("task_readiness")
+        );
+        assert_agent_readiness_safety(&result);
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn task_compare_agent_readiness_includes_optional_accuracy_context_read_only() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-agent-readiness-accuracy-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-agent-readiness-accuracy-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_llm_skill(&host, &app_data_dir.join("fixture-skill").join("SKILL.md"));
+        let save = host.handle(ServiceRequest {
+            id: Some("agent-readiness-benchmark-save".to_string()),
+            method: "task.saveBenchmark".to_string(),
+            params: json!({
+                "id": "agent-readiness-routing-fixture",
+                "title": "Agent readiness routing fixture",
+                "task": "Analyze local skill posture and execution safety",
+                "expected_skill_refs": ["llm-skill-id"],
+                "acceptable_agents": ["claude-code"]
+            }),
+        });
+        assert!(save.ok, "{:?}", save.error);
+        let import = host.handle(ServiceRequest {
+            id: Some("agent-readiness-trace-import".to_string()),
+            method: "trace.importLocal".to_string(),
+            params: json!({
+                "title": "Agent readiness trace fixture",
+                "content": "The agent selected llm-skill-id for Analyze local skill posture and execution safety.",
+                "task": "Analyze local skill posture and execution safety",
+                "agent": "claude-code",
+                "expected_skill_refs": ["llm-skill-id"]
+            }),
+        });
+        assert!(import.ok, "{:?}", import.error);
+
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("agent-readiness-accuracy".to_string()),
+            method: "task.compareAgentReadiness".to_string(),
+            params: json!({
+                "task": "Analyze local skill posture and execution safety",
+                "agents": ["claude-code"],
+                "include_routing_accuracy": true,
+                "include_benchmarks": true
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("accuracy comparison");
+        assert_eq!(
+            result
+                .pointer("/filters/include_routing_accuracy")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/filters/include_benchmarks")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert!(result
+            .pointer("/agent_rows/0/routing_accuracy_context/benchmark_count")
+            .and_then(Value::as_u64)
+            .is_some());
+        assert!(result
+            .pointer("/agent_rows/0/benchmark_context/evaluated_count")
+            .and_then(Value::as_u64)
+            .is_some());
+        assert_agent_readiness_safety(&result);
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
     }
 
     #[test]
@@ -14130,6 +15244,44 @@ mod tests {
                 assert!(!ranking.safety_flags.raw_prompt_persisted);
                 assert!(!ranking.safety_flags.raw_response_persisted);
             }
+            "task.compareAgentReadiness" => {
+                let comparison: WireAgentReadinessComparisonResult =
+                    decode_fixture_result(method, result, path);
+                assert_eq!(comparison.generated_by, "deterministic-service");
+                assert!(comparison.catalog_available);
+                assert_eq!(comparison.summary.agent_count, comparison.agent_rows.len());
+                assert!(comparison.summary.candidate_count >= comparison.agent_rows.len());
+                assert!(!comparison.agent_rows.is_empty());
+                assert!(comparison.recommended_agent.is_some());
+                assert_eq!(comparison.prompt_request.action, "task_readiness");
+                assert_eq!(
+                    comparison.prompt_request.preview_method,
+                    "llm.previewPrompt"
+                );
+                assert_eq!(
+                    comparison.prompt_request.request.action,
+                    LlmPromptActionKind::TaskReadiness
+                );
+                assert!(comparison.safety_flags.read_only);
+                assert!(comparison.safety_flags.app_local_only);
+                assert!(!comparison.safety_flags.provider_request_sent);
+                assert!(!comparison.safety_flags.write_back_allowed);
+                assert!(!comparison.safety_flags.write_actions_available);
+                assert!(!comparison.safety_flags.skill_files_mutated);
+                assert!(!comparison.safety_flags.agent_config_mutated);
+                assert!(!comparison.safety_flags.script_execution_allowed);
+                assert!(!comparison.safety_flags.execution_actions_available);
+                assert!(!comparison.safety_flags.config_mutation_allowed);
+                assert!(!comparison.safety_flags.snapshot_created);
+                assert!(!comparison.safety_flags.triage_mutation_allowed);
+                assert!(!comparison.safety_flags.credential_accessed);
+                assert!(!comparison.safety_flags.raw_secret_returned);
+                assert!(!comparison.safety_flags.raw_prompt_persisted);
+                assert!(!comparison.safety_flags.raw_response_persisted);
+                assert!(!comparison.safety_flags.raw_trace_persisted);
+                assert!(!comparison.safety_flags.cloud_sync_performed);
+                assert!(!comparison.safety_flags.telemetry_emitted);
+            }
             "task.listBenchmarks" => {
                 let benchmarks: WireTaskBenchmarkListResult =
                     decode_fixture_result(method, result, path);
@@ -14663,6 +15815,42 @@ mod tests {
         }
     }
 
+    fn assert_agent_readiness_safety(result: &Value) {
+        assert_eq!(
+            result
+                .pointer("/safety_flags/read_only")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/app_local_only")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        for path in [
+            "/safety_flags/provider_request_sent",
+            "/safety_flags/write_back_allowed",
+            "/safety_flags/write_actions_available",
+            "/safety_flags/skill_files_mutated",
+            "/safety_flags/agent_config_mutated",
+            "/safety_flags/script_execution_allowed",
+            "/safety_flags/execution_actions_available",
+            "/safety_flags/config_mutation_allowed",
+            "/safety_flags/snapshot_created",
+            "/safety_flags/triage_mutation_allowed",
+            "/safety_flags/credential_accessed",
+            "/safety_flags/raw_secret_returned",
+            "/safety_flags/raw_prompt_persisted",
+            "/safety_flags/raw_response_persisted",
+            "/safety_flags/raw_trace_persisted",
+            "/safety_flags/cloud_sync_performed",
+            "/safety_flags/telemetry_emitted",
+        ] {
+            assert_eq!(result.pointer(path).and_then(Value::as_bool), Some(false));
+        }
+    }
+
     fn assert_findings_cover_v28_contract(
         findings: &[WireRuleFindingRecord],
         expected_rule_ids: &[&str],
@@ -14854,6 +16042,11 @@ mod tests {
             "analysis.scoreSkillQuality" => json!({ "instance_id": "missing-skill" }),
             "task.checkReadiness" => json!({ "task": "fixture task readiness check" }),
             "task.rankSkillRoutes" => json!({ "task": "fixture routing confidence check" }),
+            "task.compareAgentReadiness" => json!({
+                "task": "fixture cross-agent readiness check",
+                "agents": ["claude-code", "codex"],
+                "limit_per_agent": 2
+            }),
             "task.listBenchmarks" => json!({}),
             "task.saveBenchmark" => json!({
                 "id": "fixture-benchmark",
@@ -15401,6 +16594,174 @@ mod tests {
         raw_secret_returned: bool,
         raw_prompt_persisted: bool,
         raw_response_persisted: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAgentReadinessComparisonResult {
+        generated_by: String,
+        catalog_available: bool,
+        filters: WireAgentReadinessComparisonFilters,
+        summary: WireAgentReadinessComparisonSummary,
+        agent_rows: Vec<WireAgentReadinessComparisonRow>,
+        recommended_agent: Option<WireAgentReadinessRecommendation>,
+        gap_issue_rows: Vec<WireAgentReadinessGapIssueRow>,
+        evidence_references: Vec<WireTaskReadinessEvidenceReference>,
+        prompt_request: WireAgentReadinessPromptRequest,
+        safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAgentReadinessComparisonFilters {
+        agents: Vec<String>,
+        limit_per_agent: usize,
+        include_routing_accuracy: bool,
+        include_benchmarks: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAgentReadinessComparisonSummary {
+        agent_count: usize,
+        candidate_count: usize,
+        ready_agent_count: usize,
+        partial_agent_count: usize,
+        blocked_agent_count: usize,
+        gap_issue_count: usize,
+        recommended_agent: Option<String>,
+        summary: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAgentReadinessComparisonRow {
+        rank: usize,
+        agent: String,
+        display_name: String,
+        comparison_score: u8,
+        readiness_score: u8,
+        readiness_band: String,
+        routing_confidence_score: u8,
+        routing_confidence_band: String,
+        candidate_count: usize,
+        best_candidate: Option<WireAgentReadinessBestCandidate>,
+        enabled_scope_risk_state: Option<WireTaskReadinessState>,
+        blocker_count: usize,
+        gap_count: usize,
+        reasons: Vec<String>,
+        blocker_notes: Vec<String>,
+        gap_notes: Vec<String>,
+        routing_accuracy_context: Option<WireAgentReadinessAccuracyContext>,
+        benchmark_context: Option<WireAgentReadinessBenchmarkContext>,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAgentReadinessBestCandidate {
+        instance_id: String,
+        definition_id: String,
+        skill_name: String,
+        scope: String,
+        enabled: bool,
+        state: String,
+        readiness_score: u8,
+        readiness_band: String,
+        routing_confidence_score: u8,
+        routing_confidence_band: String,
+        quality_score: Option<u8>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAgentReadinessAccuracyContext {
+        trace_count: usize,
+        accuracy_rate: f64,
+        benchmark_count: usize,
+        benchmark_gap_count: usize,
+        regression_count: usize,
+        recent_evidence_count: usize,
+        notes: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAgentReadinessBenchmarkContext {
+        evaluated_count: usize,
+        matched_count: usize,
+        gap_count: usize,
+        regression_count: usize,
+        notes: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAgentReadinessRecommendation {
+        agent: String,
+        display_name: String,
+        comparison_score: u8,
+        readiness_score: u8,
+        routing_confidence_score: u8,
+        skill_name: Option<String>,
+        reason: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAgentReadinessGapIssueRow {
+        source: String,
+        severity: String,
+        agent: String,
+        title: String,
+        detail: String,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAgentReadinessPromptRequest {
+        available: bool,
+        preview_method: String,
+        confirm_method: String,
+        action: String,
+        request: LlmPreviewPromptParams,
+        note: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAgentReadinessSafetyFlags {
+        read_only: bool,
+        app_local_only: bool,
+        provider_request_sent: bool,
+        write_back_allowed: bool,
+        write_actions_available: bool,
+        skill_files_mutated: bool,
+        agent_config_mutated: bool,
+        script_execution_allowed: bool,
+        execution_actions_available: bool,
+        config_mutation_allowed: bool,
+        snapshot_created: bool,
+        triage_mutation_allowed: bool,
+        credential_accessed: bool,
+        raw_secret_returned: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+        raw_trace_persisted: bool,
+        cloud_sync_performed: bool,
+        telemetry_emitted: bool,
     }
 
     #[allow(dead_code)]

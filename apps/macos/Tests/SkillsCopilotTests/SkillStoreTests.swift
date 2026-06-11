@@ -49,6 +49,7 @@ struct SkillStoreTests {
         try await agentTraceImportUsesLocalServiceContract()
         try await agentTraceImportFallsBackWhenMethodUnavailable()
         try await routingAccuracyDashboardUsesReadOnlyServiceContract()
+        try await crossAgentReadinessUsesReadOnlyServiceContract()
         try await routingConfidenceClearsStaleSelection()
         try await llmPreparePreviewIsScopedToSelectedSkillAndReadOnly()
         try await promptPreviewRequiresConfiguredProviderAndExplicitSend()
@@ -1253,6 +1254,68 @@ struct SkillStoreTests {
         try expectFalse(calls.contains("credential"), "Routing accuracy dashboard must not call credential paths.")
     }
 
+    private func crossAgentReadinessUsesReadOnlyServiceContract() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        store.routingConfidenceText = "Route a local audit release note task."
+        await store.reload()
+        let snapshotCallsBeforeCompare = countOccurrences("snapshot.", in: fake.calls())
+        await store.compareCrossAgentReadiness()
+
+        let result = store.crossAgentReadinessResult
+        try expectEqual(result?.generatedBy, "local-v2.50", "Cross-agent readiness should expose generator metadata.")
+        try expectEqual(result?.recommendedAgent?.agent, "claude-code", "Cross-agent readiness should expose recommended agent.")
+        try expectEqual(result?.recommendedAgent?.comparisonScore, 93, "Cross-agent readiness should expose recommendation comparison score.")
+        try expectEqual(result?.recommendedAgent?.skill?.name, "Beta", "Cross-agent readiness should expose recommended skill.")
+        try expectEqual(result?.agentRows.map(\.agent), ["claude-code", "codex"], "Cross-agent readiness should expose per-agent rows.")
+        try expectEqual(result?.agentRows.first?.rank, 1, "Cross-agent readiness should expose agent rank.")
+        try expectEqual(result?.agentRows.first?.comparisonScore, 93, "Cross-agent readiness should expose comparison score.")
+        try expectEqual(result?.agentRows.first?.readinessScore, 88, "Cross-agent readiness should expose readiness score.")
+        try expectEqual(result?.agentRows.first?.routingScore, 91, "Cross-agent readiness should expose routing score.")
+        try expectEqual(result?.agentRows.first?.bestCandidateSkill?.definitionID, "def.beta", "Cross-agent readiness should expose best candidate definition id.")
+        try expectEqual(result?.agentRows.first?.enabledState, "Enabled", "Cross-agent readiness should expose nested enabled state.")
+        try expectEqual(result?.agentRows.first?.scopeState, "agent-project", "Cross-agent readiness should expose nested scope state.")
+        try expectEqual(result?.agentRows.first?.riskState, "low", "Cross-agent readiness should expose nested risk state.")
+        try expectEqual(result?.agentRows.first?.accuracyContext, "7 of 8 known traces hit expected route.", "Cross-agent readiness should expose routing accuracy context.")
+        try expectEqual(result?.agentRows.first?.benchmarkContext, "Benchmark expected route is covered.", "Cross-agent readiness should expose benchmark context.")
+        try expectEqual(result?.gapIssueRows.first?.title, "Missing Codex benchmark", "Cross-agent readiness should expose gap rows.")
+        try expectEqual(result?.evidenceReferences.first?.title, "Benchmark", "Cross-agent readiness should expose evidence references.")
+        try expectFalse(result?.safetyFlags.providerRequestSent ?? true, "Cross-agent readiness must not send provider requests.")
+        try expectFalse(result?.safetyFlags.writeBackAllowed ?? true, "Cross-agent readiness must not allow write-back.")
+        try expectFalse(result?.safetyFlags.writeActionsAvailable ?? true, "Cross-agent readiness must not expose write actions.")
+        try expectFalse(result?.safetyFlags.scriptExecutionAllowed ?? true, "Cross-agent readiness must not allow script execution.")
+        try expectFalse(result?.safetyFlags.executionActionsAvailable ?? true, "Cross-agent readiness must not expose execution actions.")
+        try expectFalse(result?.safetyFlags.configMutationAllowed ?? true, "Cross-agent readiness must not mutate config.")
+        try expectFalse(result?.safetyFlags.snapshotCreated ?? true, "Cross-agent readiness must not create snapshots.")
+        try expectFalse(result?.safetyFlags.triageMutationAllowed ?? true, "Cross-agent readiness must not mutate triage.")
+        try expectFalse(result?.safetyFlags.credentialAccessed ?? true, "Cross-agent readiness must not access credentials.")
+        try expectFalse(result?.safetyFlags.rawPromptPersisted ?? true, "Cross-agent readiness must not persist raw prompts.")
+        try expectFalse(result?.safetyFlags.rawResponsePersisted ?? true, "Cross-agent readiness must not persist raw responses.")
+        try expectFalse(result?.safetyFlags.rawTracePersisted ?? true, "Cross-agent readiness must not persist raw traces.")
+        try expectFalse(result?.safetyFlags.cloudSyncEnabled ?? true, "Cross-agent readiness must not sync cloud data.")
+        try expectFalse(result?.safetyFlags.telemetryEnabled ?? true, "Cross-agent readiness must not emit telemetry.")
+        try expectFalse(store.isComparingCrossAgentReadiness, "Cross-agent readiness compare should reset loading state.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "task.compareAgentReadiness", "Cross-agent readiness should call the V2.50 compare method.")
+        try expectContains(calls, "\"task\":\"Route a local audit release note task.\"", "Cross-agent readiness should send canonical task text.")
+        try expectContains(calls, "\"limit_per_agent\":3", "Cross-agent readiness should send the per-agent limit.")
+        try expectContains(calls, "\"include_routing_accuracy\":true", "Cross-agent readiness should request accuracy context explicitly.")
+        try expectContains(calls, "\"include_benchmarks\":true", "Cross-agent readiness should request benchmark context explicitly.")
+        try expectFalse(calls.contains("\"task_text\":\"Route a local audit release note task.\""), "Local compare must not send duplicate task_text aliases.")
+        try expectFalse(calls.contains("\"user_intent\":\"Route a local audit release note task.\""), "Local compare must not send duplicate user_intent aliases.")
+        try expectFalse(calls.contains("llm.previewPrompt"), "Cross-agent readiness must not prepare provider prompts.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Cross-agent readiness must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Cross-agent readiness must not call config write paths.")
+        try expectFalse(calls.contains("script.execute"), "Cross-agent readiness must not call execution paths.")
+        try expectEqual(countOccurrences("snapshot.", in: calls), snapshotCallsBeforeCompare, "Cross-agent readiness must not call snapshot paths.")
+        try expectFalse(calls.contains("credential"), "Cross-agent readiness must not call credential paths.")
+    }
+
     private func routingConfidenceClearsStaleSelection() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -1621,6 +1684,12 @@ private final class FakeServiceScript {
               respond '{"id":"test","ok":true,"result":{"task":"Route a local audit release note task.","confidence_score":88,"band":"High","summary":"Beta is the strongest selected route; Alpha is a nearby alternate.","candidate_routes":[{"instance_id":"beta","name":"Beta","agent":"claude-code","confidence_score":88,"band":"High","summary":"Best project-scoped local audit fit.","match_reasons":["Description matches local audit.","Selected skill is enabled."],"ambiguity_warnings":["Alpha has overlapping audit wording."],"wrong_pick_risks":["Could miss release-note-specific examples."],"evidence_references":[{"title":"Metadata","detail":"Description mentions local audit.","source":"catalog"}]},{"instance_id":"alpha","name":"Alpha","agent":"claude-code","score":69,"band":"Medium","summary":"Nearby fallback with weaker task wording.","match_reasons":["Same agent and enabled."],"ambiguity_warnings":[],"wrong_pick_risks":["Less project-specific."],"evidence":["Enabled fallback"]}],"ambiguity_warnings":["Alpha has overlapping audit wording."],"wrong_pick_risks":["Choosing Alpha may miss project-scoped evidence."],"evidence_references":[{"title":"Comparison","detail":"Same-agent candidates reviewed.","source":"analysis"}],"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_secret_returned":false}}}'
             fi
             respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: task.rankSkillRoutes"}}'
+            ;;
+          *\\"task.compareAgentReadiness\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.50","catalog_available":true,"filters":{"limit_per_agent":3,"include_routing_accuracy":true,"include_benchmarks":true},"summary":{"agent_count":2,"candidate_count":5,"ready_agent_count":1,"partial_agent_count":1,"blocked_agent_count":0,"gap_issue_count":1,"recommended_agent":"claude-code","summary":"Claude Code is strongest for this task; Codex is usable but lacks benchmark coverage."},"recommended_agent":{"agent":"claude-code","display_name":"Claude Code","comparison_score":93,"readiness_score":88,"routing_confidence_score":91,"skill_name":"Beta","reason":"Best local task fit with benchmark and accuracy context."},"agent_rows":[{"rank":1,"agent":"claude-code","display_name":"Claude Code","comparison_score":93,"readiness_score":88,"readiness_band":"Ready","routing_confidence_score":91,"routing_confidence_band":"High","best_candidate":{"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","scope":"agent-project","enabled":true,"state":"loaded","readiness_score":88,"readiness_band":"Ready","routing_confidence_score":91,"routing_confidence_band":"High","quality_score":82},"candidate_count":3,"enabled_scope_risk_state":{"enabled":true,"scope":"agent-project","state":"loaded","risk_level":"low","risk_summary":"Low local risk.","writable_status":"verified","adapter_status":"healthy"},"blocker_count":0,"gap_count":0,"reasons":["Description matches local audit.","Benchmark expected route is covered."],"blocker_notes":[],"gap_notes":[],"routing_accuracy_context":{"summary":"7 of 8 known traces hit expected route."},"benchmark_context":{"summary":"Benchmark expected route is covered."},"evidence_refs":["benchmark:bench-1","trace:trace-1"]},{"rank":2,"agent":"codex","display_name":"Codex","comparison_score":72,"readiness_score":74,"readiness_band":"Partial","routing_confidence_score":67,"routing_confidence_band":"Medium","best_candidate":{"instance_id":"gamma","definition_id":"codex:gamma","skill_name":"Gamma","scope":"agent-global","enabled":true,"state":"loaded","readiness_score":74,"readiness_band":"Partial","routing_confidence_score":67,"routing_confidence_band":"Medium","quality_score":76},"candidate_count":2,"enabled_scope_risk_state":{"enabled":true,"scope":"agent-global","state":"loaded","risk_level":"medium","risk_summary":"Benchmark coverage is missing.","writable_status":"verified","adapter_status":"healthy"},"blocker_count":0,"gap_count":1,"reasons":["Documentation wording overlaps."],"blocker_notes":[],"gap_notes":["No benchmark covers the Codex route."],"routing_accuracy_context":{"summary":"No imported traces in window."},"benchmark_context":{"summary":"No baseline saved."},"evidence_refs":["catalog:gamma"]}],"gap_issue_rows":[{"source":"benchmark","severity":"warning","agent":"codex","title":"Missing Codex benchmark","detail":"No benchmark covers the Codex route for this task.","evidence_refs":["benchmark:none"]}],"evidence_references":[{"title":"Benchmark","detail":"Beta benchmark matched expected route.","source":"task.evaluateBenchmarks","agent":"claude-code"},{"title":"Routing accuracy","detail":"Trace evidence favors Claude Code.","source":"routing.accuracyDashboard","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"cross_agent_task_readiness","summary":"Provider explanation is copy-only and preview-gated.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent"]}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: task.compareAgentReadiness"}}'
             ;;
           *\\"task.listBenchmarks\\"*)
             if [ "$scenario" = "prompt-ready" ]; then

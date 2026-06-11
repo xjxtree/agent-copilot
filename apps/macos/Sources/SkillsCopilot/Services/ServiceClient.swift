@@ -180,6 +180,22 @@ private struct TaskRoutingConfidenceParams: Encodable {
     }
 }
 
+private struct CrossAgentReadinessParams: Encodable {
+    let task: String
+    let agents: [String]?
+    let limitPerAgent: Int?
+    let includeRoutingAccuracy: Bool
+    let includeBenchmarks: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case task
+        case agents
+        case limitPerAgent = "limit_per_agent"
+        case includeRoutingAccuracy = "include_routing_accuracy"
+        case includeBenchmarks = "include_benchmarks"
+    }
+}
+
 private struct TaskBenchmarkListParams: Encodable {
     let limit: Int?
 
@@ -694,6 +710,27 @@ final class ServiceClient {
         )
         do {
             return try await call(method: "task.rankSkillRoutes", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable(taskText: taskText)
+        }
+    }
+
+    func compareAgentReadiness(
+        taskText: String,
+        agents: [String]? = nil,
+        limitPerAgent: Int = 3,
+        includeRoutingAccuracy: Bool = true,
+        includeBenchmarks: Bool = true
+    ) async throws -> CrossAgentReadinessResult {
+        let params = CrossAgentReadinessParams(
+            task: taskText,
+            agents: agents,
+            limitPerAgent: limitPerAgent,
+            includeRoutingAccuracy: includeRoutingAccuracy,
+            includeBenchmarks: includeBenchmarks
+        )
+        do {
+            return try await call(method: "task.compareAgentReadiness", params: params)
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .unavailable(taskText: taskText)
         }

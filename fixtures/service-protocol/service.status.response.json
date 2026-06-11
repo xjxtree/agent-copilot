@@ -17,6 +17,7 @@
       "analysis.scoreSkillQuality",
       "task.checkReadiness",
       "task.rankSkillRoutes",
+      "task.compareAgentReadiness",
       "task.listBenchmarks",
       "task.saveBenchmark",
       "task.deleteBenchmark",

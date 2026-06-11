@@ -4,7 +4,7 @@
 >
 > Scanner / rules / catalog 始终是事实来源；LLM/AI provider 是 AI agent skills 的核心分析增强，用于质量、任务可用性、routing 置信度、trace 分析、remediation 和治理总结。
 >
-> 当前实现边界（V2.47 baseline）：
+> 当前实现边界（V2.50 baseline，V2.51 stale/drift detection 仍未实现）：
 >
 > - 已落地 disabled-by-default 的 service/UI gate 和 request prepare/estimate 能力。
 > - 已落地用户显式配置的 OpenAI-compatible / Claude-compatible provider profile 基础：`llm.listProviderProfiles`、`llm.saveProviderProfile`、`llm.deleteProviderProfile`、`llm.testProviderConnection`、macOS Keychain-first API key storage、预算字段、disabled/unconfigured state，以及 test connection 的最小 redacted call metadata。
@@ -39,6 +39,18 @@
 > - `trace.listImports`：查询历史导入的 app-local redacted metadata。
 > - `trace.deleteImport`：删除本地 trace import 元数据；仍为 read-only 工作流边界，不改 triage、不写配置、不改 snapshot、不执行脚本。
 > - 可选 provider 说明仍走 V2.42 preview/redaction/confirmation，纯 copy-only，不参与 deterministic 结果。
+
+> V2.49（已完成）：
+>
+> - `routing.accuracyDashboard`：从 V2.46 benchmark、V2.47 routing regression evidence 与 V2.48 redacted trace imports 派生 summary、agent rows、history rows、gap/issue rows、recent evidence rows、prompt request metadata 与 safety flags。
+> - Dashboard 生成是 user-triggered/read-only，本地指标不写 dashboard artifact、不落 raw trace、不发 provider 请求、不改 triage/config/snapshot/skill 文件、不读 credentials、不执行脚本。
+> - 可选 provider 说明仍走 V2.42 preview/redaction/confirmation，copy-only，不改变 deterministic dashboard 结果。
+
+> V2.50（已完成）：
+>
+> - `task.compareAgentReadiness`：同一任务横向比较 Claude/Codex/opencode/Pi/Hermes/OpenClaw 的本地候选可见性、readiness/routing score、quality 传播信号、enabled/scope/risk state、benchmark/regression/accuracy context、gap/blocker 与 evidence refs。
+> - Cross-agent readiness 是 user-triggered/read-only，本地比较不写 comparison artifact、不发 provider 请求、不改 triage/config/snapshot/skill 文件、不读 credentials、不执行脚本。
+> - 可选 provider 说明仍走 V2.42 preview/redaction/confirmation，copy-only，不改变 deterministic 推荐 agent 或 per-agent 排序。
 
 ## 1. 双层分工
 
@@ -88,7 +100,7 @@ Provider 配置原则：
 | V2.47（实现） | Routing regression detection | 基于 V2.46 benchmark 结果的 app-local baseline 对比（`task.saveRoutingBaseline` + `task.detectRoutingRegression`）；local evidence-first + optional AI 说明 |
 | V2.48（实现） | Agent behavior trace import（`trace.importLocal`/`trace.listImports`/`trace.deleteImport`） | trace 文本先 redacted 后存元数据与可复查摘要；deterministic local 判读 hit/miss/wrong-pick/ambiguity；不落 raw trace；可选 provider 说明走 V2.42 |
 | V2.49（实现） | Routing accuracy dashboard（`routing.accuracyDashboard`） | V2.46 benchmark results + V2.47 regression evidence + V2.48 redacted trace imports；local evidence-first + optional AI 说明 |
-| V2.50 | cross-agent task readiness（规划） | benchmark results + catalog snapshots + imported trace evidence；local evidence-first + optional AI 说明 |
+| V2.50（实现） | cross-agent task readiness（`task.compareAgentReadiness`） | 同一任务横向比较 Claude/Codex/opencode/Pi/Hermes/OpenClaw 的 skill 可见性、质量、路由置信度与 gap；输入来自 `task.checkReadiness` / `task.rankSkillRoutes` / benchmark / regression / trace import / accuracy evidence；read-only，本地 evidence-first，provider 仅在 V2.42 preview-confirmed copy-only |
 | V2.51-V2.55 | stale/drift、knowledge index、similar grouping、taxonomy、workspace readiness | fingerprints、mtime、source/root provenance、local index |
 | V2.56-V2.60 | remediation planner、fix drafts、impact preview、batch review、history | findings、triage、policy, snapshots, writable capability matrix |
 | V2.61-V2.70 | review session、governance report、policy packs、skill map、full provider observability、safe write planning | local reports, policy profiles, V2.41-V2.42 call metadata, evidence gates |

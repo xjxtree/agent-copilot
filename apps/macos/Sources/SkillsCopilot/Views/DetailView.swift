@@ -159,6 +159,10 @@ struct DetailView: View {
                             isSendingRoutingConfidencePrompt: { skill in store.isSendingRoutingConfidencePrompt(for: skill) },
                             routingConfidencePromptSendResult: { skill in store.routingConfidencePromptSendResult(for: skill) },
                             canSendRoutingConfidencePrompt: { skill in store.canSendRoutingConfidencePrompt(for: skill) },
+                            crossAgentReadinessText: $store.crossAgentReadinessText,
+                            crossAgentReadinessInput: store.selectedCrossAgentReadinessInput,
+                            crossAgentReadinessResult: store.crossAgentReadinessResult,
+                            isComparingCrossAgentReadiness: store.isComparingCrossAgentReadiness,
                             routingAccuracyDashboard: store.routingAccuracyDashboard,
                             isLoadingRoutingAccuracyDashboard: store.isLoadingRoutingAccuracyDashboard,
                             onScoreQuality: {
@@ -204,6 +208,11 @@ struct DetailView: View {
                             onSendRoutingConfidencePrompt: {
                                 Task {
                                     await store.confirmPromptForSelectedRoutingConfidence()
+                                }
+                            },
+                            onCompareCrossAgentReadiness: {
+                                Task {
+                                    await store.compareCrossAgentReadiness()
                                 }
                             },
                             onLoadRoutingAccuracyDashboard: {
@@ -839,6 +848,10 @@ private struct AnalysisSection: View {
     let isSendingRoutingConfidencePrompt: (SkillRecord) -> Bool
     let routingConfidencePromptSendResult: (SkillRecord) -> LLMPromptSendResult?
     let canSendRoutingConfidencePrompt: (SkillRecord) -> Bool
+    @Binding var crossAgentReadinessText: String
+    let crossAgentReadinessInput: String
+    let crossAgentReadinessResult: CrossAgentReadinessResult?
+    let isComparingCrossAgentReadiness: Bool
     let routingAccuracyDashboard: RoutingAccuracyDashboard?
     let isLoadingRoutingAccuracyDashboard: Bool
     let onScoreQuality: () -> Void
@@ -850,6 +863,7 @@ private struct AnalysisSection: View {
     let onRankRoutingConfidence: () -> Void
     let onPreviewRoutingConfidencePrompt: () -> Void
     let onSendRoutingConfidencePrompt: () -> Void
+    let onCompareCrossAgentReadiness: () -> Void
     let onLoadRoutingAccuracyDashboard: () -> Void
     @Binding var taskBenchmarkText: String
     let taskBenchmarkInput: String
@@ -974,6 +988,14 @@ private struct AnalysisSection: View {
                 onRank: onRankRoutingConfidence,
                 onPreviewPrompt: onPreviewRoutingConfidencePrompt,
                 onSendPrompt: onSendRoutingConfidencePrompt
+            )
+
+            CrossAgentReadinessPanel(
+                taskText: $crossAgentReadinessText,
+                currentTaskText: crossAgentReadinessInput,
+                result: crossAgentReadinessResult,
+                isComparing: isComparingCrossAgentReadiness,
+                onCompare: onCompareCrossAgentReadiness
             )
 
             RoutingAccuracyDashboardPanel(
@@ -2002,6 +2024,451 @@ private struct RoutingEvidenceList: View {
                 }
             }
         }
+    }
+}
+
+private struct CrossAgentReadinessPanel: View {
+    @Binding var taskText: String
+    let currentTaskText: String
+    let result: CrossAgentReadinessResult?
+    let isComparing: Bool
+    let onCompare: () -> Void
+
+    private var effectiveTaskText: String {
+        let trimmed = taskText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? currentTaskText : trimmed
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.crossAgentReadinessTitle, systemImage: "person.3.sequence")
+                    .font(.headline)
+                Spacer()
+                Label(UIStrings.readOnlyPreview, systemImage: "lock.shield")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(UIStrings.crossAgentReadinessBoundary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                TextField(UIStrings.crossAgentReadinessTaskPlaceholder, text: $taskText, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(2...4)
+                    .labelsHidden()
+
+                Button {
+                    onCompare()
+                } label: {
+                    Label(UIStrings.crossAgentReadinessCompareAction, systemImage: "arrow.left.arrow.right.square")
+                }
+                .disabled(isComparing || effectiveTaskText.isEmpty)
+                .help(UIStrings.crossAgentReadinessBoundary)
+            }
+
+            if isComparing {
+                Label(UIStrings.llmPreparing, systemImage: "hourglass")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let result {
+                CrossAgentReadinessResultView(result: result)
+            } else {
+                Label(UIStrings.crossAgentReadinessNoResult, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Label(UIStrings.llmReviewNoActions, systemImage: "nosign")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct CrossAgentReadinessResultView: View {
+    let result: CrossAgentReadinessResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let fallbackReason = result.fallbackReason, !fallbackReason.isEmpty {
+                Label(fallbackReason, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+                SummaryChip(
+                    title: UIStrings.crossAgentReadinessAgents,
+                    value: "\(result.summary.agentCount > 0 ? result.summary.agentCount : result.agentRows.count)",
+                    systemImage: "person.3"
+                )
+                SummaryChip(
+                    title: UIStrings.crossAgentReadinessCandidateCount,
+                    value: "\(result.summary.candidateCount)",
+                    systemImage: "rectangle.stack"
+                )
+                SummaryChip(
+                    title: UIStrings.crossAgentReadinessReadinessScore,
+                    value: CrossAgentReadinessSummary.scoreLabel(result.summary.averageReadinessScore),
+                    systemImage: "gauge.medium"
+                )
+                SummaryChip(
+                    title: UIStrings.crossAgentReadinessRoutingScore,
+                    value: CrossAgentReadinessSummary.scoreLabel(result.summary.averageRoutingScore),
+                    systemImage: "point.3.connected.trianglepath.dotted"
+                )
+                SummaryChip(
+                    title: UIStrings.taskReadinessGaps,
+                    value: "\(result.summary.gapCount)",
+                    systemImage: "puzzlepiece.extension"
+                )
+                SummaryChip(
+                    title: UIStrings.taskReadinessBlockers,
+                    value: "\(result.summary.blockerCount)",
+                    systemImage: "exclamationmark.octagon"
+                )
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                MetadataRow(label: UIStrings.routingAccuracyGeneratedBy, value: result.generatedBy)
+                MetadataRow(label: UIStrings.routingAccuracyCatalog, value: result.catalogAvailable ? UIStrings.routingAccuracyAvailable : UIStrings.routingAccuracyUnavailableShort)
+                MetadataRow(label: UIStrings.taskReadinessTask, value: result.taskText.isEmpty ? UIStrings.unknown : result.taskText)
+                MetadataRow(label: UIStrings.crossAgentReadinessCandidateCount, value: "\(result.summary.candidateCount)")
+                if let promptRequest = result.promptRequest {
+                    MetadataRow(label: UIStrings.routingAccuracyPromptRequest, value: promptRequestLabel(promptRequest))
+                }
+            }
+
+            if !result.summary.summaryText.isEmpty {
+                Text(result.summary.summaryText)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            CrossAgentReadinessRecommendationView(recommendation: result.recommendedAgent)
+            CrossAgentReadinessAgentList(agents: result.agentRows)
+            CrossAgentReadinessGapList(gaps: result.gapIssueRows)
+            CrossAgentReadinessEvidenceList(evidence: result.evidenceReferences)
+            CrossAgentReadinessSafetyList(safety: result.safetyFlags)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private func promptRequestLabel(_ promptRequest: RoutingAccuracyPromptRequest) -> String {
+        let state = promptRequest.enabled ? UIStrings.llmEnabled : UIStrings.llmDisabled
+        let copy = promptRequest.copyOnly ? UIStrings.llmPromptCopyOnly : UIStrings.llmSkillAnalysisEnabledUnsafe
+        return "\(promptRequest.requestKind) · \(state) · \(copy)"
+    }
+}
+
+private struct CrossAgentReadinessRecommendationView: View {
+    let recommendation: CrossAgentReadinessRecommendedAgent?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(UIStrings.crossAgentReadinessRecommendedAgent)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if let recommendation {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Label(recommendation.displayName ?? DisplayText.agent(recommendation.agent), systemImage: "target")
+                        .font(.callout.bold())
+                    if let comparisonScore = recommendation.comparisonScore {
+                        Text("\(comparisonScore)")
+                            .font(.caption.monospacedDigit().bold())
+                            .foregroundStyle(.secondary)
+                    }
+                    if let score = recommendation.score {
+                        Text("\(score)")
+                            .font(.caption.monospacedDigit().bold())
+                            .foregroundStyle(.secondary)
+                    }
+                    if let routingScore = recommendation.routingScore {
+                        Text("\(routingScore)")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    if let band = recommendation.band, !band.isEmpty {
+                        Text(band)
+                            .font(.caption.bold())
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(.quaternary.opacity(0.55), in: Capsule())
+                    }
+                    if let skill = recommendation.skill {
+                        Text(skill.name)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    Spacer()
+                }
+                if !recommendation.summary.isEmpty {
+                    Text(recommendation.summary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+            } else {
+                Text(UIStrings.crossAgentReadinessNoRecommendation)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+private struct CrossAgentReadinessAgentList: View {
+    let agents: [CrossAgentReadinessAgentRow]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(UIStrings.crossAgentReadinessAgents)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if agents.isEmpty {
+                Text(UIStrings.crossAgentReadinessNoAgents)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(agents) { row in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(rowTitle(row))
+                                    .font(.callout.bold())
+                                    .lineLimit(1)
+                                Spacer()
+                                if let comparisonScore = row.comparisonScore {
+                                    Text("\(comparisonScore)")
+                                        .font(.caption.monospacedDigit().bold())
+                                }
+                                Text("\(row.readinessScore)")
+                                    .font(.caption.monospacedDigit().bold())
+                                Text(row.readinessBand)
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
+                                MetadataRow(label: UIStrings.crossAgentReadinessComparisonScore, value: row.comparisonScore.map(String.init) ?? UIStrings.unknown)
+                                MetadataRow(label: UIStrings.crossAgentReadinessRoutingScore, value: row.routingLabel)
+                                MetadataRow(label: UIStrings.crossAgentReadinessBestSkill, value: row.bestCandidateSkill?.name ?? UIStrings.unknown)
+                                MetadataRow(label: UIStrings.crossAgentReadinessCandidateCount, value: "\(row.candidateCount)")
+                                MetadataRow(label: UIStrings.crossAgentReadinessEnabledState, value: row.enabledState ?? UIStrings.unknown)
+                                MetadataRow(label: UIStrings.crossAgentReadinessScopeState, value: row.scopeState ?? UIStrings.unknown)
+                                MetadataRow(label: UIStrings.crossAgentReadinessRiskState, value: row.riskState ?? UIStrings.unknown)
+                                MetadataRow(label: UIStrings.taskReadinessBlockers, value: "\(row.blockerCount)")
+                                MetadataRow(label: UIStrings.taskReadinessGaps, value: "\(row.gapCount)")
+                            }
+
+                            if let accuracy = row.accuracyContext, !accuracy.isEmpty {
+                                Label(accuracy, systemImage: "target")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if let regression = row.regressionContext, !regression.isEmpty {
+                                Label(regression, systemImage: "chart.line.downtrend.xyaxis")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if let benchmark = row.benchmarkContext, !benchmark.isEmpty {
+                                Label(benchmark, systemImage: "checklist")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            RoutingInlineList(
+                                title: UIStrings.crossAgentReadinessReasons,
+                                empty: UIStrings.crossAgentReadinessNoReasons,
+                                values: row.reasons,
+                                systemImage: "checkmark.circle"
+                            )
+                            RoutingInlineList(
+                                title: UIStrings.taskReadinessBlockers,
+                                empty: UIStrings.taskReadinessNoBlockers,
+                                values: row.blockerNotes,
+                                systemImage: "exclamationmark.octagon"
+                            )
+                            RoutingInlineList(
+                                title: UIStrings.taskReadinessGaps,
+                                empty: UIStrings.taskReadinessNoGaps,
+                                values: row.gapNotes,
+                                systemImage: "puzzlepiece.extension"
+                            )
+                            RoutingInlineList(
+                                title: UIStrings.crossAgentReadinessEvidence,
+                                empty: UIStrings.crossAgentReadinessNoEvidence,
+                                values: row.evidenceRefs,
+                                systemImage: "checklist"
+                            )
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+            }
+        }
+    }
+
+    private func rowTitle(_ row: CrossAgentReadinessAgentRow) -> String {
+        if let rank = row.rank {
+            return "#\(rank) \(row.displayName ?? DisplayText.agent(row.agent))"
+        }
+        return row.displayName ?? DisplayText.agent(row.agent)
+    }
+}
+
+private struct CrossAgentReadinessGapList: View {
+    let gaps: [CrossAgentReadinessGapIssueRow]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(UIStrings.crossAgentReadinessGapsIssues)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if gaps.isEmpty {
+                Text(UIStrings.crossAgentReadinessNoGapsIssues)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(gaps.prefix(6)) { gap in
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Label(gap.title, systemImage: "puzzlepiece.extension")
+                                .font(.callout)
+                            Spacer()
+                            if let severity = gap.severity, !severity.isEmpty {
+                                Text(severity)
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        HStack(spacing: 8) {
+                            if let agent = gap.agent, !agent.isEmpty {
+                                Text(DisplayText.agent(agent))
+                            }
+                            if let source = gap.source, !source.isEmpty {
+                                Text(source)
+                            }
+                        }
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        Text(gap.detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                        if !gap.evidenceRefs.isEmpty {
+                            Text(gap.evidenceRefs.joined(separator: ", "))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                                .textSelection(.enabled)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct CrossAgentReadinessEvidenceList: View {
+    let evidence: [CrossAgentReadinessEvidenceReference]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(UIStrings.crossAgentReadinessEvidence)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if evidence.isEmpty {
+                Text(UIStrings.crossAgentReadinessNoEvidence)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(evidence.prefix(6)) { item in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Label(item.title, systemImage: "checklist")
+                            .font(.callout)
+                        HStack(spacing: 8) {
+                            if let agent = item.agent, !agent.isEmpty {
+                                Text(DisplayText.agent(agent))
+                            }
+                            if let source = item.source, !source.isEmpty {
+                                Text(source)
+                            }
+                        }
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        Text(item.detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct CrossAgentReadinessSafetyList: View {
+    let safety: CrossAgentReadinessSafety
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(UIStrings.crossAgentReadinessSafetyFlags)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            Label(
+                safety.allReadOnlyFlagsClear ? UIStrings.routingAccuracySafetyClear : UIStrings.llmSkillAnalysisEnabledUnsafe,
+                systemImage: safety.allReadOnlyFlagsClear ? "checkmark.shield" : "exclamationmark.triangle"
+            )
+            .font(.callout)
+            .foregroundStyle(.secondary)
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 185), spacing: 8)], alignment: .leading, spacing: 8) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                    SafetyPill(label: row.label, isBlocked: !row.isUnsafe)
+                }
+            }
+
+            if !safety.notes.isEmpty {
+                ForEach(safety.notes.prefix(4), id: \.self) { note in
+                    Label(note, systemImage: "info.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private var rows: [(label: String, isUnsafe: Bool)] {
+        [
+            (UIStrings.skillQualityProviderNotSent, safety.providerRequestSent),
+            (UIStrings.skillQualityWritesBlocked, safety.writeBackAllowed || safety.writeActionsAvailable),
+            (UIStrings.skillQualityScriptsBlocked, safety.scriptExecutionAllowed || safety.executionActionsAvailable),
+            (UIStrings.skillQualityMutationsBlocked, safety.configMutationAllowed || safety.snapshotCreated || safety.triageMutationAllowed),
+            (UIStrings.skillQualityCredentialsBlocked, safety.credentialAccessed || safety.rawSecretReturned),
+            (UIStrings.llmPromptRawPromptStored, safety.rawPromptPersisted),
+            (UIStrings.llmPromptRawResponseStored, safety.rawResponsePersisted),
+            (UIStrings.routingAccuracyRawTraceStored, safety.rawTracePersisted),
+            (UIStrings.routingAccuracyCloudSync, safety.cloudSyncEnabled),
+            (UIStrings.routingAccuracyTelemetry, safety.telemetryEnabled)
+        ]
     }
 }
 

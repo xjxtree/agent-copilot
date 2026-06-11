@@ -440,6 +440,34 @@ enum UIStrings {
     static var taskReadinessNoBlockers: String { text("taskReadiness.empty.blockers", "No blockers returned.") }
     static var taskReadinessNoRisks: String { text("taskReadiness.empty.risks", "No risk notes returned.") }
     static var taskReadinessNoEvidence: String { text("taskReadiness.empty.evidence", "No evidence items returned.") }
+    static var crossAgentReadinessTitle: String { text("crossAgentReadiness.title", "Cross-agent Task Readiness") }
+    static var crossAgentReadinessBoundary: String { text("crossAgentReadiness.boundary", "User-triggered, read-only cross-agent task fit comparison from local readiness, routing, benchmark, regression, and accuracy evidence. It cannot call a provider, write skill files, mutate agent config, create snapshots, change triage, execute scripts, read credentials, persist raw prompts/responses/traces, sync cloud data, or emit telemetry.") }
+    static var crossAgentReadinessTaskPlaceholder: String { text("crossAgentReadiness.task.placeholder", "Describe a task, or reuse the current readiness/routing task") }
+    static var crossAgentReadinessCompareAction: String { text("crossAgentReadiness.action.compare", "Compare Agents") }
+    static var crossAgentReadinessTaskRequired: String { text("crossAgentReadiness.taskRequired", "Enter a task before comparing agents.") }
+    static var crossAgentReadinessUnavailable: String { text("crossAgentReadiness.unavailable", "Cross-agent task readiness is unavailable in this service build.") }
+    static var crossAgentReadinessRecommendedAgent: String { text("crossAgentReadiness.recommendedAgent", "Recommended agent") }
+    static var crossAgentReadinessNoRecommendation: String { text("crossAgentReadiness.empty.recommendation", "No recommended agent returned.") }
+    static var crossAgentReadinessAgents: String { text("crossAgentReadiness.agents", "Per-agent readiness") }
+    static var crossAgentReadinessNoAgents: String { text("crossAgentReadiness.empty.agents", "No agent readiness rows returned.") }
+    static var crossAgentReadinessReadinessScore: String { text("crossAgentReadiness.readinessScore", "Readiness") }
+    static var crossAgentReadinessComparisonScore: String { text("crossAgentReadiness.comparisonScore", "Comparison") }
+    static var crossAgentReadinessRoutingScore: String { text("crossAgentReadiness.routingScore", "Routing") }
+    static var crossAgentReadinessBestSkill: String { text("crossAgentReadiness.bestSkill", "Best skill") }
+    static var crossAgentReadinessCandidateCount: String { text("crossAgentReadiness.candidateCount", "Candidates") }
+    static var crossAgentReadinessEnabledState: String { text("crossAgentReadiness.enabledState", "Enabled state") }
+    static var crossAgentReadinessScopeState: String { text("crossAgentReadiness.scopeState", "Scope state") }
+    static var crossAgentReadinessRiskState: String { text("crossAgentReadiness.riskState", "Risk state") }
+    static var crossAgentReadinessAccuracy: String { text("crossAgentReadiness.accuracy", "Accuracy context") }
+    static var crossAgentReadinessRegression: String { text("crossAgentReadiness.regression", "Regression context") }
+    static var crossAgentReadinessReasons: String { text("crossAgentReadiness.reasons", "Reasons") }
+    static var crossAgentReadinessNoReasons: String { text("crossAgentReadiness.empty.reasons", "No reasons returned.") }
+    static var crossAgentReadinessEvidence: String { text("crossAgentReadiness.evidence", "Evidence") }
+    static var crossAgentReadinessNoEvidence: String { text("crossAgentReadiness.empty.evidence", "No evidence returned.") }
+    static var crossAgentReadinessGapsIssues: String { text("crossAgentReadiness.gapsIssues", "Gaps / issues") }
+    static var crossAgentReadinessNoGapsIssues: String { text("crossAgentReadiness.empty.gapsIssues", "No gaps or issues returned.") }
+    static var crossAgentReadinessSafetyFlags: String { text("crossAgentReadiness.safetyFlags", "Safety flags") }
+    static var crossAgentReadinessNoResult: String { text("crossAgentReadiness.empty.result", "No cross-agent readiness comparison loaded.") }
     static var routingConfidenceTitle: String { text("routingConfidence.title", "AI Routing Confidence") }
     static var routingConfidenceBoundary: String { text("routingConfidence.boundary", "User-triggered, read-only route ranking from local evidence. It cannot write skill files, mutate agent config, create snapshots, change triage, execute scripts, or read credentials.") }
     static var routingConfidenceTaskPlaceholder: String { text("routingConfidence.task.placeholder", "Describe the task to rank route fit") }
