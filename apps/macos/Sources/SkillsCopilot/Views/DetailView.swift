@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 enum DetailSection: String, CaseIterable, Identifiable {
@@ -137,8 +138,18 @@ struct DetailView: View {
                             llmStatus: store.llmStatus,
                             isPreparing: { action in store.isPreparingLLMAction(action) },
                             result: { action in store.llmPrepareResult(for: action) },
+                            promptPreview: { action in store.llmPromptPreview(for: action) },
+                            isPreviewingPrompt: { action in store.isPreviewingLLMPrompt(for: action) },
+                            isSendingPrompt: { action in store.isSendingLLMPrompt(for: action) },
+                            promptSendResult: { action in store.llmPromptSendResult(for: action) },
+                            canSendPrompt: { action in store.canSendLLMPrompt(for: action) },
                             skillAnalysisResult: { kind, scope in store.skillAnalysisPrepareResult(kind: kind, scope: scope) },
                             isPreparingSkillAnalysis: { kind, scope in store.isPreparingSkillAnalysis(kind: kind, scope: scope) },
+                            skillAnalysisPromptPreview: { kind, scope in store.skillAnalysisPromptPreview(kind: kind, scope: scope) },
+                            isPreviewingSkillAnalysisPrompt: { kind, scope in store.isPreviewingSkillAnalysisPrompt(kind: kind, scope: scope) },
+                            isSendingSkillAnalysisPrompt: { kind, scope in store.isSendingSkillAnalysisPrompt(kind: kind, scope: scope) },
+                            skillAnalysisPromptSendResult: { kind, scope in store.skillAnalysisPromptSendResult(kind: kind, scope: scope) },
+                            canSendSkillAnalysisPrompt: { kind, scope in store.canSendSkillAnalysisPrompt(kind: kind, scope: scope) },
                             onPrepareSkillAnalysis: { kind, scope in
                                 Task {
                                     switch scope.key {
@@ -147,6 +158,16 @@ struct DetailView: View {
                                     default:
                                         await store.prepareSelectedSkillAnalysis(kind: kind)
                                     }
+                                }
+                            },
+                            onPreviewSkillAnalysisPrompt: { kind, scope in
+                                Task {
+                                    await store.previewPromptForSkillAnalysis(kind: kind, scope: scope)
+                                }
+                            },
+                            onSendSkillAnalysisPrompt: { kind, scope in
+                                Task {
+                                    await store.confirmPromptForSkillAnalysis(kind: kind, scope: scope)
                                 }
                             },
                             onPrepare: { action in
@@ -161,6 +182,16 @@ struct DetailView: View {
                                     case .draftFrontmatter:
                                         await store.prepareDraftFrontmatterLLM()
                                     }
+                                }
+                            },
+                            onPreviewPrompt: { action in
+                                Task {
+                                    await store.previewPromptForSelectedLLMAction(action)
+                                }
+                            },
+                            onSendPrompt: { action in
+                                Task {
+                                    await store.confirmPromptForSelectedLLMAction(action)
                                 }
                             },
                             scriptPreview: store.scriptExecutionPreview(for: skill),
@@ -643,10 +674,24 @@ private struct AnalysisSection: View {
     let llmStatus: LLMStatus
     let isPreparing: (LLMAction) -> Bool
     let result: (LLMAction) -> LLMPrepareResult?
+    let promptPreview: (LLMAction) -> LLMPromptPreview?
+    let isPreviewingPrompt: (LLMAction) -> Bool
+    let isSendingPrompt: (LLMAction) -> Bool
+    let promptSendResult: (LLMAction) -> LLMPromptSendResult?
+    let canSendPrompt: (LLMAction) -> Bool
     let skillAnalysisResult: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> LLMSkillAnalysisPrepareResult?
     let isPreparingSkillAnalysis: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> Bool
+    let skillAnalysisPromptPreview: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> LLMPromptPreview?
+    let isPreviewingSkillAnalysisPrompt: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> Bool
+    let isSendingSkillAnalysisPrompt: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> Bool
+    let skillAnalysisPromptSendResult: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> LLMPromptSendResult?
+    let canSendSkillAnalysisPrompt: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> Bool
     let onPrepareSkillAnalysis: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> Void
+    let onPreviewSkillAnalysisPrompt: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> Void
+    let onSendSkillAnalysisPrompt: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> Void
     let onPrepare: (LLMAction) -> Void
+    let onPreviewPrompt: (LLMAction) -> Void
+    let onSendPrompt: (LLMAction) -> Void
     let scriptPreview: ScriptExecutionPreview?
     let isPreviewingScript: Bool
     let onPreviewScript: () -> Void
@@ -678,6 +723,13 @@ private struct AnalysisSection: View {
             SkillAnalysisPreparePanel(
                 result: skillAnalysisResult,
                 isPreparing: isPreparingSkillAnalysis,
+                promptPreview: skillAnalysisPromptPreview,
+                isPreviewingPrompt: isPreviewingSkillAnalysisPrompt,
+                isSendingPrompt: isSendingSkillAnalysisPrompt,
+                promptSendResult: skillAnalysisPromptSendResult,
+                canSendPrompt: canSendSkillAnalysisPrompt,
+                onPreviewPrompt: onPreviewSkillAnalysisPrompt,
+                onSendPrompt: onSendSkillAnalysisPrompt,
                 onPrepare: onPrepareSkillAnalysis
             )
 
@@ -685,6 +737,13 @@ private struct AnalysisSection: View {
                 status: llmStatus,
                 isPreparing: isPreparing,
                 result: result,
+                promptPreview: promptPreview,
+                isPreviewingPrompt: isPreviewingPrompt,
+                isSendingPrompt: isSendingPrompt,
+                promptSendResult: promptSendResult,
+                canSendPrompt: canSendPrompt,
+                onPreviewPrompt: onPreviewPrompt,
+                onSendPrompt: onSendPrompt,
                 onPrepare: onPrepare
             )
 
@@ -885,6 +944,13 @@ private struct CrossAgentComparisonMemberRow: View {
 private struct SkillAnalysisPreparePanel: View {
     let result: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> LLMSkillAnalysisPrepareResult?
     let isPreparing: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> Bool
+    let promptPreview: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> LLMPromptPreview?
+    let isPreviewingPrompt: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> Bool
+    let isSendingPrompt: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> Bool
+    let promptSendResult: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> LLMPromptSendResult?
+    let canSendPrompt: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> Bool
+    let onPreviewPrompt: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> Void
+    let onSendPrompt: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> Void
     let onPrepare: (LLMSkillAnalysisKind, LLMSkillAnalysisRequestScope) -> Void
 
     var body: some View {
@@ -931,7 +997,17 @@ private struct SkillAnalysisPreparePanel: View {
                     Label(UIStrings.llmPreparing, systemImage: "hourglass")
                         .foregroundStyle(.secondary)
                 } else if let result = result(kind, .selected) {
-                    SkillAnalysisPrepareResultView(result: result, scope: .selected)
+                    SkillAnalysisPrepareResultView(
+                        result: result,
+                        scope: .selected,
+                        promptPreview: promptPreview(kind, .selected),
+                        isPreviewingPrompt: isPreviewingPrompt(kind, .selected),
+                        isSendingPrompt: isSendingPrompt(kind, .selected),
+                        promptSendResult: promptSendResult(kind, .selected),
+                        canSendPrompt: canSendPrompt(kind, .selected),
+                        onPreviewPrompt: { onPreviewPrompt(kind, .selected) },
+                        onSendPrompt: { onSendPrompt(kind, .selected) }
+                    )
                 }
             }
 
@@ -939,7 +1015,17 @@ private struct SkillAnalysisPreparePanel: View {
                 Label(UIStrings.llmPreparing, systemImage: "hourglass")
                     .foregroundStyle(.secondary)
             } else if let result = result(.overview, .visible) {
-                SkillAnalysisPrepareResultView(result: result, scope: .visible)
+                SkillAnalysisPrepareResultView(
+                    result: result,
+                    scope: .visible,
+                    promptPreview: promptPreview(.overview, .visible),
+                    isPreviewingPrompt: isPreviewingPrompt(.overview, .visible),
+                    isSendingPrompt: isSendingPrompt(.overview, .visible),
+                    promptSendResult: promptSendResult(.overview, .visible),
+                    canSendPrompt: canSendPrompt(.overview, .visible),
+                    onPreviewPrompt: { onPreviewPrompt(.overview, .visible) },
+                    onSendPrompt: { onSendPrompt(.overview, .visible) }
+                )
             }
         }
         .padding()
@@ -951,6 +1037,13 @@ private struct SkillAnalysisPreparePanel: View {
 private struct SkillAnalysisPrepareResultView: View {
     let result: LLMSkillAnalysisPrepareResult
     let scope: LLMSkillAnalysisRequestScope
+    let promptPreview: LLMPromptPreview?
+    let isPreviewingPrompt: Bool
+    let isSendingPrompt: Bool
+    let promptSendResult: LLMPromptSendResult?
+    let canSendPrompt: Bool
+    let onPreviewPrompt: () -> Void
+    let onSendPrompt: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -984,6 +1077,16 @@ private struct SkillAnalysisPrepareResultView: View {
 
             DraftTextBlock(title: UIStrings.llmSkillAnalysisSummaryDraft, text: result.summaryDraft)
             DraftTextBlock(title: UIStrings.llmSkillAnalysisPromptDraft, text: result.promptDraft)
+
+            PromptPreviewControls(
+                preview: promptPreview,
+                sendResult: promptSendResult,
+                isPreviewing: isPreviewingPrompt,
+                isSending: isSendingPrompt,
+                canSend: canSendPrompt,
+                onPreview: onPreviewPrompt,
+                onSend: onSendPrompt
+            )
 
             Label(UIStrings.llmSkillAnalysisSafetyCopy, systemImage: "nosign")
                 .font(.callout)
@@ -1054,6 +1157,13 @@ private struct LLMAssistPanel: View {
     let status: LLMStatus
     let isPreparing: (LLMAction) -> Bool
     let result: (LLMAction) -> LLMPrepareResult?
+    let promptPreview: (LLMAction) -> LLMPromptPreview?
+    let isPreviewingPrompt: (LLMAction) -> Bool
+    let isSendingPrompt: (LLMAction) -> Bool
+    let promptSendResult: (LLMAction) -> LLMPromptSendResult?
+    let canSendPrompt: (LLMAction) -> Bool
+    let onPreviewPrompt: (LLMAction) -> Void
+    let onSendPrompt: (LLMAction) -> Void
     let onPrepare: (LLMAction) -> Void
 
     var body: some View {
@@ -1098,7 +1208,16 @@ private struct LLMAssistPanel: View {
                         Label(UIStrings.llmPreparing, systemImage: "hourglass")
                             .foregroundStyle(.secondary)
                     } else if let result = result(action) {
-                        LLMPrepareResultView(result: result)
+                        LLMPrepareResultView(
+                            result: result,
+                            promptPreview: promptPreview(action),
+                            isPreviewingPrompt: isPreviewingPrompt(action),
+                            isSendingPrompt: isSendingPrompt(action),
+                            promptSendResult: promptSendResult(action),
+                            canSendPrompt: canSendPrompt(action),
+                            onPreviewPrompt: { onPreviewPrompt(action) },
+                            onSendPrompt: { onSendPrompt(action) }
+                        )
                     }
                 }
             }
@@ -1111,6 +1230,13 @@ private struct LLMAssistPanel: View {
 
 private struct LLMPrepareResultView: View {
     let result: LLMPrepareResult
+    let promptPreview: LLMPromptPreview?
+    let isPreviewingPrompt: Bool
+    let isSendingPrompt: Bool
+    let promptSendResult: LLMPromptSendResult?
+    let canSendPrompt: Bool
+    let onPreviewPrompt: () -> Void
+    let onSendPrompt: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1160,9 +1286,241 @@ private struct LLMPrepareResultView: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
+
+            PromptPreviewControls(
+                preview: promptPreview,
+                sendResult: promptSendResult,
+                isPreviewing: isPreviewingPrompt,
+                isSending: isSendingPrompt,
+                canSend: canSendPrompt,
+                onPreview: onPreviewPrompt,
+                onSend: onSendPrompt
+            )
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
+    }
+}
+
+private struct PromptPreviewControls: View {
+    let preview: LLMPromptPreview?
+    let sendResult: LLMPromptSendResult?
+    let isPreviewing: Bool
+    let isSending: Bool
+    let canSend: Bool
+    let onPreview: () -> Void
+    let onSend: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Button {
+                    onPreview()
+                } label: {
+                    Label(UIStrings.llmPromptPreviewAction, systemImage: "doc.text.magnifyingglass")
+                }
+                .disabled(isPreviewing || isSending)
+
+                Button {
+                    onSend()
+                } label: {
+                    Label(UIStrings.llmPromptConfirmSend, systemImage: "paperplane")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canSend || isPreviewing || isSending)
+                .help(canSend ? UIStrings.llmPromptConfirmSend : UIStrings.llmPromptProviderRequired)
+            }
+
+            if isPreviewing {
+                Label(UIStrings.llmPreparing, systemImage: "hourglass")
+                    .foregroundStyle(.secondary)
+            }
+
+            if let preview {
+                LLMPromptPreviewCard(preview: preview)
+            } else {
+                Label(UIStrings.llmPromptPreviewRequired, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            if isSending {
+                Label(UIStrings.llmPromptSending, systemImage: "network")
+                    .foregroundStyle(.secondary)
+            }
+
+            if let sendResult {
+                LLMPromptSendResultView(result: sendResult)
+            }
+        }
+    }
+}
+
+private struct LLMPromptPreviewCard: View {
+    let preview: LLMPromptPreview
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(UIStrings.llmPromptPreviewTitle, systemImage: preview.enabled ? "eye" : "nosign")
+                .font(.caption.bold())
+                .foregroundStyle(preview.enabled ? Color.secondary : Color.orange)
+
+            if let disabledReason = preview.disabledReason, !disabledReason.isEmpty {
+                Text(disabledReason)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                MetadataRow(label: UIStrings.llmPromptScope, value: preview.promptScope)
+                MetadataRow(label: UIStrings.llmProvider, value: preview.provider ?? UIStrings.unknown)
+                MetadataRow(label: UIStrings.llmModel, value: preview.model ?? UIStrings.unknown)
+                MetadataRow(label: UIStrings.llmPromptDestination, value: preview.destinationHost ?? UIStrings.unknown)
+                if let estimate = preview.estimate {
+                    MetadataRow(
+                        label: UIStrings.llmTokens,
+                        value: UIStrings.llmTokenSummary(
+                            input: estimate.inputTokens,
+                            output: estimate.outputTokens,
+                            total: estimate.totalTokens
+                        )
+                    )
+                    if let cost = estimate.estimatedCostUSD {
+                        MetadataRow(label: UIStrings.llmCost, value: UIStrings.llmEstimatedCost(cost))
+                    }
+                }
+                MetadataRow(label: UIStrings.llmSkillAnalysisConfirmation, value: preview.confirmationRequired ? UIStrings.llmSkillAnalysisRequired : UIStrings.unknown)
+                MetadataRow(label: UIStrings.llmPromptRawPromptStored, value: preview.rawPromptPersisted ? UIStrings.llmEnabled : UIStrings.llmDisabled)
+                MetadataRow(label: UIStrings.llmPromptRawResponseStored, value: preview.rawResponsePersisted ? UIStrings.llmEnabled : UIStrings.llmDisabled)
+                MetadataRow(label: UIStrings.llmPromptCopyOnly, value: preview.draftCopyOnly ? UIStrings.llmEnabled : UIStrings.llmDisabled)
+            }
+
+            PromptFieldList(title: UIStrings.llmPromptIncludedFields, fields: preview.includedFields)
+            PromptFieldList(title: UIStrings.llmPromptExcludedFields, fields: preview.excludedFields)
+            RedactionSummaryView(redaction: preview.redaction)
+
+            if let promptText = preview.promptPreview, !promptText.isEmpty {
+                DraftTextBlock(title: UIStrings.llmPromptRedactedPrompt, text: promptText)
+            }
+        }
+        .padding(10)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
+    }
+}
+
+private struct PromptFieldList: View {
+    let title: String
+    let fields: [LLMPromptField]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if fields.isEmpty {
+                Text(UIStrings.llmPromptNoFields)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(fields) { field in
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Label(field.label, systemImage: "checklist")
+                            .font(.callout)
+                        if let reason = field.reason, !reason.isEmpty {
+                            Text(reason)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct RedactionSummaryView: View {
+    let redaction: LLMPromptRedactionSummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(UIStrings.llmReviewRedaction)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            Text(redaction.summary.isEmpty ? redaction.status : "\(redaction.status): \(redaction.summary)")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            if !redaction.redactedFields.isEmpty {
+                Text(redaction.redactedFields.joined(separator: ", "))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+            if !redaction.placeholders.isEmpty {
+                Text(redaction.placeholders.joined(separator: ", "))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+            ForEach(redaction.warnings, id: \.self) { warning in
+                Label(warning, systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+        }
+    }
+}
+
+private struct LLMPromptSendResultView: View {
+    let result: LLMPromptSendResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(result.message, systemImage: result.success ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .font(.subheadline.bold())
+                .foregroundStyle(result.success ? .green : .orange)
+
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                MetadataRow(label: UIStrings.aiProviderTestResult, value: result.status)
+                MetadataRow(label: UIStrings.llmPromptRawPromptStored, value: result.rawPromptPersisted ? UIStrings.llmEnabled : UIStrings.llmDisabled)
+                MetadataRow(label: UIStrings.llmPromptRawResponseStored, value: result.rawResponsePersisted ? UIStrings.llmEnabled : UIStrings.llmDisabled)
+                MetadataRow(label: UIStrings.llmPromptCopyOnly, value: result.draftCopyOnly ? UIStrings.llmEnabled : UIStrings.llmDisabled)
+                MetadataRow(label: UIStrings.llmSkillAnalysisWriteBack, value: result.writeBackAllowed ? UIStrings.llmSkillAnalysisEnabledUnsafe : UIStrings.llmSkillAnalysisBlocked)
+                MetadataRow(label: UIStrings.llmSkillAnalysisScriptExecution, value: result.scriptExecutionAllowed ? UIStrings.llmSkillAnalysisEnabledUnsafe : UIStrings.llmSkillAnalysisBlocked)
+                if let audit = result.audit {
+                    MetadataRow(label: UIStrings.aiProviderAuditMetadata, value: audit.auditID ?? UIStrings.unknown)
+                    MetadataRow(label: UIStrings.aiProviderAuditRedaction, value: audit.redactionApplied ? UIStrings.llmEnabled : UIStrings.llmDisabled)
+                }
+            }
+
+            if let output = result.outputText, !output.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Label(UIStrings.llmPromptOutput, systemImage: "doc.on.doc")
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(output, forType: .string)
+                        } label: {
+                            Label(UIStrings.llmPromptCopyOutput, systemImage: "doc.on.doc")
+                        }
+                    }
+                    Text(output)
+                        .font(.system(.callout, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
+                }
+            }
+
+            Label(UIStrings.llmReviewNoActions, systemImage: "nosign")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .padding(10)
         .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
     }
 }

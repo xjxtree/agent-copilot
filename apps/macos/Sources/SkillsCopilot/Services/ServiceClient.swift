@@ -156,6 +156,40 @@ private struct PrepareLLMActionParams: Encodable {
     }
 }
 
+private struct PreviewLLMPromptParams: Encodable {
+    let action: String
+    let requestKind: String
+    let analysisKind: LLMSkillAnalysisKind?
+    let scope: String?
+    let instanceIDs: [String]?
+    let instanceId: String?
+    let definitionId: String?
+    let agent: String?
+
+    enum CodingKeys: String, CodingKey {
+        case action
+        case requestKind = "request_kind"
+        case analysisKind = "analysis_kind"
+        case scope
+        case instanceIDs = "instance_ids"
+        case instanceId = "instance_id"
+        case definitionId = "definition_id"
+        case agent
+    }
+}
+
+private struct ConfirmLLMPromptParams: Encodable {
+    let previewID: String
+    let confirmationID: String
+    let request: PreviewLLMPromptParams
+
+    enum CodingKeys: String, CodingKey {
+        case previewID = "preview_id"
+        case confirmationID = "confirmation_id"
+        case request
+    }
+}
+
 private struct ScriptExecutionParams: Encodable {
     let instanceId: String
     let definitionId: String
@@ -476,6 +510,92 @@ final class ServiceClient {
             )
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .unavailable(kind: kind)
+        }
+    }
+
+    func previewPromptForLLMAction(action: LLMAction, skill: SkillRecord) async throws -> LLMPromptPreview {
+        let params = PreviewLLMPromptParams(
+            action: action.rawValue,
+            requestKind: "action",
+            analysisKind: nil,
+            scope: "selected",
+            instanceIDs: nil,
+            instanceId: skill.id,
+            definitionId: skill.definitionId,
+            agent: skill.agent
+        )
+        do {
+            return try await call(method: "llm.previewPrompt", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable(reason: UIStrings.llmSkillAnalysisUnavailable)
+        }
+    }
+
+    func previewPromptForSkillAnalysis(
+        instanceIDs: [String],
+        kind: LLMSkillAnalysisKind,
+        scope: LLMSkillAnalysisRequestScope
+    ) async throws -> LLMPromptPreview {
+        let params = PreviewLLMPromptParams(
+            action: "skill_analysis",
+            requestKind: "skill_analysis",
+            analysisKind: kind,
+            scope: scope.key,
+            instanceIDs: instanceIDs,
+            instanceId: nil,
+            definitionId: nil,
+            agent: nil
+        )
+        do {
+            return try await call(method: "llm.previewPrompt", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable(reason: UIStrings.llmSkillAnalysisUnavailable)
+        }
+    }
+
+    func confirmPromptAndSendForLLMAction(previewID: String, action: LLMAction, skill: SkillRecord) async throws -> LLMPromptSendResult {
+        let request = PreviewLLMPromptParams(
+            action: action.rawValue,
+            requestKind: "action",
+            analysisKind: nil,
+            scope: "selected",
+            instanceIDs: nil,
+            instanceId: skill.id,
+            definitionId: skill.definitionId,
+            agent: skill.agent
+        )
+        return try await confirmPromptAndSend(previewID: previewID, request: request)
+    }
+
+    func confirmPromptAndSendForSkillAnalysis(
+        previewID: String,
+        instanceIDs: [String],
+        kind: LLMSkillAnalysisKind,
+        scope: LLMSkillAnalysisRequestScope
+    ) async throws -> LLMPromptSendResult {
+        let request = PreviewLLMPromptParams(
+            action: "skill_analysis",
+            requestKind: "skill_analysis",
+            analysisKind: kind,
+            scope: scope.key,
+            instanceIDs: instanceIDs,
+            instanceId: nil,
+            definitionId: nil,
+            agent: nil
+        )
+        return try await confirmPromptAndSend(previewID: previewID, request: request)
+    }
+
+    private func confirmPromptAndSend(previewID: String, request: PreviewLLMPromptParams) async throws -> LLMPromptSendResult {
+        let params = ConfirmLLMPromptParams(
+            previewID: previewID,
+            confirmationID: "prompt-confirm-\(UUID().uuidString)",
+            request: request
+        )
+        do {
+            return try await call(method: "llm.confirmPromptAndSend", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable(previewID: previewID, reason: UIStrings.llmSkillAnalysisUnavailable)
         }
     }
 

@@ -38,6 +38,7 @@ struct SkillStoreTests {
         try await prepareSkillAnalysisUsesReadOnlyPrepareContract()
         try await prepareSkillAnalysisFallsBackWhenMethodUnavailable()
         try await llmPreparePreviewIsScopedToSelectedSkillAndReadOnly()
+        try await promptPreviewRequiresConfiguredProviderAndExplicitSend()
         try await previewScriptExecutionSafetyStoresBlockedPreviewWithoutExecute()
     }
 
@@ -807,6 +808,38 @@ struct SkillStoreTests {
         try expectFalse(calls.contains("script.execute"), "LLM analysis preview must not call execution paths.")
     }
 
+    private func promptPreviewRequiresConfiguredProviderAndExplicitSend() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+        await store.prepareAnalyzeLLM()
+        await store.previewPromptForSelectedLLMAction(.analyze)
+
+        let preview = store.llmPromptPreview(for: .analyze)
+        try expectEqual(preview?.previewID, "prompt-preview-beta", "Prompt preview should be stored for the selected skill/action.")
+        try expectEqual(preview?.destinationHost, "llm.example.com", "Prompt preview should expose network destination.")
+        try expectEqual(preview?.includedFields.map(\.name), ["skill.name", "findings.summary"], "Prompt preview should expose included fields.")
+        try expectEqual(store.canSendLLMPrompt(for: .analyze), true, "Configured provider and current preview should allow explicit send.")
+
+        await store.confirmPromptForSelectedLLMAction(.analyze)
+        let sendResult = store.llmPromptSendResult(for: .analyze)
+        try expectEqual(sendResult?.success, true, "Confirmed prompt should store provider result.")
+        try expectEqual(sendResult?.outputText, "Read-only analysis for Beta.", "Provider output should be retained as copy-only text.")
+        try expectFalse(sendResult?.writeBackAllowed ?? true, "Provider result must not enable write-back.")
+        try expectFalse(sendResult?.scriptExecutionAllowed ?? true, "Provider result must not enable script execution.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "llm.previewPrompt", "Prompt preview should use the V2.42 preview method.")
+        try expectContains(calls, "\"preview_id\":\"prompt-preview-beta\"", "Confirm should send the preview id.")
+        try expectContains(calls, "llm.confirmPromptAndSend", "Explicit send should use the V2.42 confirmation method.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Prompt confirmation must not call write paths.")
+        try expectFalse(calls.contains("script.execute"), "Prompt confirmation must not call execution paths.")
+    }
+
     private func previewScriptExecutionSafetyStoresBlockedPreviewWithoutExecute() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -1042,16 +1075,22 @@ private final class FakeServiceScript {
           *\\"llm.status\\"*)
             if [ "$scenario" = "old-service" ]; then
               respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: llm.status"}}'
-            elif [ "$scenario" = "llm-ready" ]; then
+            elif [ "$scenario" = "llm-ready" ] || [ "$scenario" = "prompt-ready" ]; then
               respond '{"id":"test","ok":true,"result":{"enabled":true,"provider":"openai","model":"gpt-5","disabled_reason":null,"supported_actions":["analyze","recommend","explain_conflict","draft_frontmatter"]}}'
             else
               respond '{"id":"test","ok":true,"result":{"enabled":false,"provider":null,"model":null,"disabled_reason":"LLM is disabled.","supported_actions":["analyze","recommend","explain_conflict","draft_frontmatter"]}}'
             fi
             ;;
+          *\\"llm.listProviderProfiles\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"service_available":true,"enabled":true,"configured":true,"active_profile_id":"openai-compatible","credential_storage":"keychain","credential_persistence_allowed":true,"profiles":[{"id":"openai-compatible","kind":"openai-compatible","endpoint":"https://llm.example.com/v1","model":"gpt-5","enabled":true,"configured":true,"has_api_key":true}]}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: llm.listProviderProfiles"}}'
+            ;;
           *\\"llm.prepareSkillAnalysis\\"*)
             if [ "$scenario" = "old-service" ]; then
               respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: llm.prepareSkillAnalysis"}}'
-            elif [ "$scenario" = "llm-ready" ]; then
+            elif [ "$scenario" = "llm-ready" ] || [ "$scenario" = "prompt-ready" ]; then
               if printf '%s' "$input" | grep -q '\\"analysis_kind\\":\\"risk\\"'; then
                 respond '{"id":"test","ok":true,"result":{"enabled":false,"disabled_reason":"AI analysis is disabled by default.","analysis_kind":"risk","selected_skill_count":1,"included_skills":[{"instance_id":"beta","name":"Beta","agent":"claude-code"}],"excluded_count":0,"missing_count":0,"prompt_draft":"Risk prompt for Beta.","summary_draft":"Risk summary for Beta.","write_back_enabled":false,"script_execution_enabled":false,"credential_storage_enabled":false,"confirmation_required":true}}'
               else
@@ -1064,7 +1103,7 @@ private final class FakeServiceScript {
           *\\"llm.prepareAction\\"*)
             if [ "$scenario" = "old-service" ]; then
               respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: llm.prepareAction"}}'
-            elif [ "$scenario" = "llm-ready" ]; then
+            elif [ "$scenario" = "llm-ready" ] || [ "$scenario" = "prompt-ready" ]; then
               case "$input" in
                 *\\"kind\\":\\"draft_frontmatter\\"*)
                   respond '{"id":"test","ok":true,"result":{"action":"draft_frontmatter","enabled":true,"disabled_reason":null,"provider":"openai","model":"gpt-5","estimate":{"input_tokens":240,"output_tokens":180,"total_tokens":420,"estimated_cost_usd":0.0042},"confirmation_required":true}}'
@@ -1076,6 +1115,18 @@ private final class FakeServiceScript {
             else
               respond '{"id":"test","ok":true,"result":{"action":"analyze","enabled":false,"disabled_reason":"LLM is disabled.","provider":null,"model":null,"estimate":null,"confirmation_required":true}}'
             fi
+            ;;
+          *\\"llm.previewPrompt\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"preview_id":"prompt-preview-beta","request_kind":"action","action":"analyze","scope":"selected","prompt_scope":"Selected skill analysis for Beta","enabled":true,"provider":"openai-compatible","model":"gpt-5","destination_host":"llm.example.com","included_fields":["skill.name","findings.summary"],"excluded_fields":[{"name":"api_key","reason":"credential redacted"}],"redaction":{"status":"redacted","summary":"Secrets and local paths removed.","redacted_fields":["api_key"],"placeholders":["<project-root>"]},"estimate":{"input_tokens":240,"output_tokens":120,"total_tokens":360,"estimated_cost_usd":0.0042},"confirmation_required":true,"raw_prompt_persisted":false,"raw_response_persisted":false,"draft_copy_only":true,"redacted_prompt_preview":"Analyze Beta using catalog metadata and finding summaries only."}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: llm.previewPrompt"}}'
+            ;;
+          *\\"llm.confirmPromptAndSend\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"preview_id":"prompt-preview-beta","status":"succeeded","message":"Provider response received.","output_text":"Read-only analysis for Beta.","draft_copy_only":true,"raw_prompt_persisted":false,"raw_response_persisted":false,"write_back_allowed":false,"script_execution_allowed":false,"audit_metadata":{"request_id":"audit-prompt-1","status":"succeeded","provider":"openai-compatible","model":"gpt-5","destination_host":"llm.example.com","redaction_applied":true,"raw_prompt_persisted":false,"raw_response_persisted":false,"input_tokens":240,"output_tokens":80}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: llm.confirmPromptAndSend"}}'
             ;;
           *\\"script.previewExecution\\"*)
             if [ "$scenario" = "script-preview" ]; then

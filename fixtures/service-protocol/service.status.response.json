@@ -19,6 +19,8 @@
       "llm.saveProviderProfile",
       "llm.deleteProviderProfile",
       "llm.testProviderConnection",
+      "llm.previewPrompt",
+      "llm.confirmPromptAndSend",
       "llm.prepareAction",
       "llm.prepareSkillAnalysis",
       "cleanup.listQueue",

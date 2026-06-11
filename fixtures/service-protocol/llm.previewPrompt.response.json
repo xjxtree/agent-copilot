@@ -1,0 +1,81 @@
+{
+  "id": "fixture-llm-preview-prompt",
+  "ok": true,
+  "result": {
+    "preview_id": "prompt-preview-fixture",
+    "status": "blocked",
+    "allowed": false,
+    "reason": "No enabled provider profile is configured; no provider request can be sent.",
+    "action": "recommend",
+    "profile_id": null,
+    "provider": null,
+    "model": null,
+    "destination_host": null,
+    "prompt_scope": [
+      "operation metadata",
+      "safety boundaries",
+      "user intent",
+      "catalog recommendation constraints"
+    ],
+    "included_fields": [
+      "action kind",
+      "draft-only safety instructions",
+      "redacted user intent",
+      "recommendation constraints"
+    ],
+    "excluded_fields": [
+      "source paths",
+      "credential values",
+      "provider API key",
+      "agent config mutation instructions",
+      "script execution instructions",
+      "raw skill bodies"
+    ],
+    "redaction": {
+      "status": "redacted-preview-confirmed-required",
+      "redacted_value_count": 0,
+      "redacted_fields": [],
+      "placeholders": [
+        "$HOME",
+        "<project-root>",
+        "<project-cwd>",
+        "<app-data-dir>",
+        "<redacted>",
+        "<redacted-url>"
+      ],
+      "raw_prompt_persisted": false,
+      "raw_response_persisted": false,
+      "raw_secret_returned": false
+    },
+    "prompt_preview": "You are assisting with AI agent skill governance.\n\nAction: recommend\n\nReturn draft-only analysis. Do not write files, mutate agent config, execute scripts, change triage, create snapshots, call tools, or request secrets.\n\nUser intent: fixture\n\nRecommendation constraints: use current catalog evidence only when available; ask for clarification instead of inventing unavailable skills.\n\nRequired output: concise draft guidance with evidence notes, uncertainty, and safe next steps. Mark all suggestions copy-only.",
+    "estimated_input_tokens": 235,
+    "estimated_output_tokens": 500,
+    "estimated_total_tokens": 735,
+    "estimated_cost_usd": 0,
+    "single_request_token_limit": 8000,
+    "monthly_budget_usd": 5,
+    "requires_confirmation": true,
+    "confirmation": {
+      "required": true,
+      "message": "Confirm to send only this redacted prompt to the displayed provider endpoint.",
+      "display_fields": [
+        "preview_id",
+        "provider",
+        "model",
+        "destination_host",
+        "prompt_scope",
+        "included_fields",
+        "excluded_fields",
+        "redaction",
+        "estimated_total_tokens",
+        "estimated_cost_usd"
+      ]
+    },
+    "write_back_allowed": false,
+    "draft_requires_user_copy": true,
+    "provider_request_sent": false,
+    "raw_secret_returned": false,
+    "raw_prompt_persisted": false,
+    "raw_response_persisted": false
+  }
+}

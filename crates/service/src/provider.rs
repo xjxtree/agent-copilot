@@ -130,6 +130,19 @@ pub struct TestProviderConnectionParams {
     pub timeout_ms: Option<u64>,
 }
 
+#[derive(Debug, Clone)]
+pub struct SendProviderPromptParams {
+    pub profile_id: String,
+    pub confirmation_id: String,
+    pub action_type: String,
+    pub prompt: String,
+    pub estimated_input_tokens: u32,
+    pub estimated_output_tokens: u32,
+    pub estimated_cost_usd: f64,
+    pub redaction_status: String,
+    pub timeout_ms: Option<u64>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListProviderProfilesResult {
     pub profiles: Vec<ProviderProfileRecord>,
@@ -174,6 +187,25 @@ pub struct TestProviderConnectionResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SendProviderPromptResult {
+    pub profile_id: String,
+    pub provider_type: ProviderType,
+    pub model: String,
+    pub destination_host: String,
+    pub status: String,
+    pub provider_request_sent: bool,
+    pub credential_accessed: bool,
+    pub duration_ms: u128,
+    pub error_code: Option<String>,
+    pub error_message: Option<String>,
+    pub output_text: Option<String>,
+    pub audit: ProviderCallMetadata,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_secret_returned: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderCallMetadata {
     pub timestamp: i64,
     pub action_type: String,
@@ -209,6 +241,20 @@ struct ProviderTestFinish<'a> {
     credential_accessed: bool,
     error_code: Option<String>,
     error_message: Option<String>,
+}
+
+struct ProviderPromptFinish {
+    status: String,
+    provider_request_sent: bool,
+    credential_accessed: bool,
+    error_code: Option<String>,
+    error_message: Option<String>,
+    output_text: Option<String>,
+}
+
+struct ProviderPromptHttpSuccess {
+    status: u16,
+    body: String,
 }
 
 impl Default for ProviderProfileStore {
@@ -502,6 +548,191 @@ pub fn test_provider_connection(
     }
 }
 
+pub fn send_provider_prompt(
+    app_data_dir: &Path,
+    params: SendProviderPromptParams,
+) -> Result<SendProviderPromptResult, ProviderError> {
+    let store = load_store(app_data_dir)?;
+    let profile = store
+        .profiles
+        .iter()
+        .find(|profile| profile.id == params.profile_id)
+        .cloned()
+        .ok_or_else(|| ProviderError::ProfileNotFound(params.profile_id.clone()))?;
+    let destination_host = destination_host(&profile.base_url);
+    let started = Instant::now();
+    let estimated_total_tokens = params
+        .estimated_input_tokens
+        .saturating_add(params.estimated_output_tokens);
+
+    if !profile.enabled {
+        return finish_prompt(
+            app_data_dir,
+            &profile,
+            &destination_host,
+            &params,
+            started,
+            ProviderPromptFinish {
+                status: "blocked".to_string(),
+                provider_request_sent: false,
+                credential_accessed: false,
+                error_code: Some("profile_disabled".to_string()),
+                error_message: Some(
+                    "Provider profile is disabled; no request was sent.".to_string(),
+                ),
+                output_text: None,
+            },
+        );
+    }
+    if params.confirmation_id.trim().is_empty() {
+        return finish_prompt(
+            app_data_dir,
+            &profile,
+            &destination_host,
+            &params,
+            started,
+            ProviderPromptFinish {
+                status: "blocked".to_string(),
+                provider_request_sent: false,
+                credential_accessed: false,
+                error_code: Some("missing_confirmation".to_string()),
+                error_message: Some(
+                    "Explicit confirmation id is required before a provider prompt request."
+                        .to_string(),
+                ),
+                output_text: None,
+            },
+        );
+    }
+    if params.prompt.trim().is_empty() {
+        return finish_prompt(
+            app_data_dir,
+            &profile,
+            &destination_host,
+            &params,
+            started,
+            ProviderPromptFinish {
+                status: "blocked".to_string(),
+                provider_request_sent: false,
+                credential_accessed: false,
+                error_code: Some("empty_prompt".to_string()),
+                error_message: Some("Redacted prompt is empty; no request was sent.".to_string()),
+                output_text: None,
+            },
+        );
+    }
+    if profile.single_request_token_limit < estimated_total_tokens {
+        return finish_prompt(
+            app_data_dir,
+            &profile,
+            &destination_host,
+            &params,
+            started,
+            ProviderPromptFinish {
+                status: "blocked".to_string(),
+                provider_request_sent: false,
+                credential_accessed: false,
+                error_code: Some("budget_blocked".to_string()),
+                error_message: Some(
+                    "Single request token limit is lower than the prompt estimate.".to_string(),
+                ),
+                output_text: None,
+            },
+        );
+    }
+    if profile.monthly_budget_usd <= 0.0 {
+        return finish_prompt(
+            app_data_dir,
+            &profile,
+            &destination_host,
+            &params,
+            started,
+            ProviderPromptFinish {
+                status: "blocked".to_string(),
+                provider_request_sent: false,
+                credential_accessed: false,
+                error_code: Some("budget_blocked".to_string()),
+                error_message: Some(
+                    "Monthly provider budget is 0; provider requests are disabled.".to_string(),
+                ),
+                output_text: None,
+            },
+        );
+    }
+
+    let secret = match load_secret(&profile.credential_reference) {
+        Ok(secret) => secret,
+        Err(error) => {
+            return finish_prompt(
+                app_data_dir,
+                &profile,
+                &destination_host,
+                &params,
+                started,
+                ProviderPromptFinish {
+                    status: "blocked".to_string(),
+                    provider_request_sent: false,
+                    credential_accessed: false,
+                    error_code: Some("credential_unavailable".to_string()),
+                    error_message: Some(error.to_string()),
+                    output_text: None,
+                },
+            );
+        }
+    };
+    let timeout = Duration::from_millis(params.timeout_ms.unwrap_or(15_000).clamp(250, 60_000));
+    let call_result = send_prompt_request(&profile, &secret, &params.prompt, &params, timeout);
+    drop(secret);
+
+    match call_result {
+        Ok(success) if (200..300).contains(&success.status) => finish_prompt(
+            app_data_dir,
+            &profile,
+            &destination_host,
+            &params,
+            started,
+            ProviderPromptFinish {
+                status: "succeeded".to_string(),
+                provider_request_sent: true,
+                credential_accessed: true,
+                error_code: None,
+                error_message: None,
+                output_text: extract_output_text(profile.provider_type, &success.body),
+            },
+        ),
+        Ok(success) => finish_prompt(
+            app_data_dir,
+            &profile,
+            &destination_host,
+            &params,
+            started,
+            ProviderPromptFinish {
+                status: "failed".to_string(),
+                provider_request_sent: true,
+                credential_accessed: true,
+                error_code: Some(format!("http_{}", success.status)),
+                error_message: Some("Provider returned a non-success HTTP status.".to_string()),
+                output_text: None,
+            },
+        ),
+        Err(error) => finish_prompt(
+            app_data_dir,
+            &profile,
+            &destination_host,
+            &params,
+            started,
+            ProviderPromptFinish {
+                status: "failed".to_string(),
+                provider_request_sent: true,
+                credential_accessed: true,
+                error_code: Some("network_error".to_string()),
+                error_message: Some(redact_error(&error)),
+                output_text: None,
+            },
+        ),
+    }
+}
+
 pub fn provider_profiles_path(app_data_dir: &Path) -> PathBuf {
     app_data_dir.join("llm").join("provider-profiles.json")
 }
@@ -518,6 +749,10 @@ pub fn default_token_limit() -> u32 {
 
 pub fn default_monthly_budget_usd() -> f64 {
     DEFAULT_MONTHLY_BUDGET_USD
+}
+
+pub fn estimate_prompt_cost_usd(provider_type: ProviderType, tokens: u32) -> f64 {
+    estimated_provider_cost(provider_type, tokens)
 }
 
 fn finish_test(
@@ -563,6 +798,55 @@ fn finish_test(
         error_code: finish.error_code,
         error_message: finish.error_message,
         budget,
+        audit,
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+        raw_secret_returned: false,
+    })
+}
+
+fn finish_prompt(
+    app_data_dir: &Path,
+    profile: &ProviderProfileRecord,
+    destination_host: &str,
+    params: &SendProviderPromptParams,
+    started: Instant,
+    finish: ProviderPromptFinish,
+) -> Result<SendProviderPromptResult, ProviderError> {
+    let audit = ProviderCallMetadata {
+        timestamp: unix_timestamp(),
+        action_type: params.action_type.clone(),
+        profile_id: profile.id.clone(),
+        provider_type: profile.provider_type,
+        model: profile.model.clone(),
+        destination_host: destination_host.to_string(),
+        status: finish.status.clone(),
+        error_code: finish.error_code.clone(),
+        error_message: finish.error_message.clone(),
+        duration_ms: started.elapsed().as_millis(),
+        estimated_input_tokens: params.estimated_input_tokens,
+        estimated_output_tokens: params.estimated_output_tokens,
+        estimated_cost_usd: params.estimated_cost_usd,
+        confirmation_id: params.confirmation_id.clone(),
+        redaction_status: params.redaction_status.clone(),
+        provider_request_sent: finish.provider_request_sent,
+        credential_accessed: finish.credential_accessed,
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+    };
+    append_call_metadata(app_data_dir, &audit)?;
+    Ok(SendProviderPromptResult {
+        profile_id: profile.id.clone(),
+        provider_type: profile.provider_type,
+        model: profile.model.clone(),
+        destination_host: destination_host.to_string(),
+        status: finish.status,
+        provider_request_sent: finish.provider_request_sent,
+        credential_accessed: finish.credential_accessed,
+        duration_ms: audit.duration_ms,
+        error_code: finish.error_code,
+        error_message: finish.error_message,
+        output_text: finish.output_text,
         audit,
         raw_prompt_persisted: false,
         raw_response_persisted: false,
@@ -660,6 +944,88 @@ fn send_test_request(
     }
 }
 
+fn send_prompt_request(
+    profile: &ProviderProfileRecord,
+    secret: &str,
+    prompt: &str,
+    params: &SendProviderPromptParams,
+    timeout: Duration,
+) -> Result<ProviderPromptHttpSuccess, Box<UreqError>> {
+    let url = test_endpoint_url(profile);
+    let max_tokens = params.estimated_output_tokens.clamp(1, 8_000);
+    let mut request = ureq::post(&url)
+        .timeout(timeout)
+        .set("content-type", "application/json");
+    if let Some(org) = profile.organization.as_deref() {
+        request = request.set("openai-organization", org);
+    }
+    let response = match profile.provider_type {
+        ProviderType::OpenAiCompatible => {
+            request = request.set("authorization", &format!("Bearer {secret}"));
+            request
+                .send_json(json!({
+                    "model": profile.model,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "You are reviewing AI agent skills. Return draft-only guidance; do not claim to write files, execute scripts, mutate configuration, or store credentials."
+                        },
+                        {"role": "user", "content": prompt}
+                    ],
+                    "max_tokens": max_tokens,
+                    "temperature": 0.2
+                }))
+                .map_err(Box::new)?
+        }
+        ProviderType::ClaudeCompatible => {
+            request = request.set("x-api-key", secret).set(
+                "anthropic-version",
+                profile.api_version.as_deref().unwrap_or("2023-06-01"),
+            );
+            request
+                .send_json(json!({
+                    "model": profile.model,
+                    "system": "You are reviewing AI agent skills. Return draft-only guidance; do not claim to write files, execute scripts, mutate configuration, or store credentials.",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": max_tokens
+                }))
+                .map_err(Box::new)?
+        }
+    };
+    let status = response.status();
+    let body = response.into_string().unwrap_or_default();
+    Ok(ProviderPromptHttpSuccess { status, body })
+}
+
+fn extract_output_text(provider_type: ProviderType, body: &str) -> Option<String> {
+    let value: Value = serde_json::from_str(body).ok()?;
+    match provider_type {
+        ProviderType::OpenAiCompatible => value
+            .pointer("/choices/0/message/content")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+            .map(ToOwned::to_owned),
+        ProviderType::ClaudeCompatible => {
+            value
+                .get("content")
+                .and_then(Value::as_array)
+                .and_then(|items| {
+                    let text = items
+                        .iter()
+                        .filter_map(|item| item.get("text").and_then(Value::as_str))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    if text.trim().is_empty() {
+                        None
+                    } else {
+                        Some(text.trim().to_string())
+                    }
+                })
+        }
+    }
+}
+
 fn test_endpoint_url(profile: &ProviderProfileRecord) -> String {
     let trimmed = profile.base_url.trim_end_matches('/');
     let path = match profile.provider_type {
@@ -702,11 +1068,30 @@ fn store_secret(
 }
 
 fn load_secret(reference: &ProviderCredentialReference) -> Result<String, ProviderError> {
+    #[cfg(test)]
+    if let Ok(secret) = std::env::var(test_secret_env_name(&reference.account)) {
+        return Ok(secret);
+    }
     let entry = Entry::new(&reference.service, &reference.account)
         .map_err(|error| ProviderError::CredentialStorageUnavailable(error.to_string()))?;
     entry
         .get_password()
         .map_err(|error| ProviderError::CredentialStorageUnavailable(error.to_string()))
+}
+
+#[cfg(test)]
+fn test_secret_env_name(account: &str) -> String {
+    let suffix = account
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() {
+                ch.to_ascii_uppercase()
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>();
+    format!("SKILLS_COPILOT_TEST_SECRET_{suffix}")
 }
 
 fn delete_secret(reference: &ProviderCredentialReference) -> Result<bool, ProviderError> {
@@ -743,7 +1128,8 @@ fn existing_credential_status(reference: &ProviderCredentialReference) -> Provid
 
 fn budget_status(profile: &ProviderProfileRecord) -> ProviderBudgetStatus {
     let estimated_test_tokens = TEST_INPUT_TOKEN_ESTIMATE + TEST_OUTPUT_TOKEN_ESTIMATE;
-    let estimated_test_cost_usd = estimated_test_cost(profile.provider_type, estimated_test_tokens);
+    let estimated_test_cost_usd =
+        estimated_provider_cost(profile.provider_type, estimated_test_tokens);
     if profile.single_request_token_limit < estimated_test_tokens {
         ProviderBudgetStatus {
             single_request_token_limit: profile.single_request_token_limit,
@@ -775,7 +1161,7 @@ fn budget_status(profile: &ProviderProfileRecord) -> ProviderBudgetStatus {
     }
 }
 
-fn estimated_test_cost(provider_type: ProviderType, tokens: u32) -> f64 {
+fn estimated_provider_cost(provider_type: ProviderType, tokens: u32) -> f64 {
     let per_million = match provider_type {
         ProviderType::OpenAiCompatible => 2.50,
         ProviderType::ClaudeCompatible => 3.00,

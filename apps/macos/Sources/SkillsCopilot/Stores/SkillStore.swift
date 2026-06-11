@@ -26,6 +26,10 @@ final class SkillStore: ObservableObject {
     @Published private(set) var preparingLLMActions: Set<LLMAction> = []
     @Published private(set) var skillAnalysisPrepareResults: [String: LLMSkillAnalysisPrepareResult] = [:]
     @Published private(set) var preparingSkillAnalysisKeys: Set<String> = []
+    @Published private(set) var llmPromptPreviews: [String: LLMPromptPreview] = [:]
+    @Published private(set) var previewingLLMPromptKeys: Set<String> = []
+    @Published private(set) var sendingLLMPromptKeys: Set<String> = []
+    @Published private(set) var llmPromptSendResults: [String: LLMPromptSendResult] = [:]
     @Published private(set) var scriptExecutionPreviews: [SkillRecord.ID: ScriptExecutionPreview] = [:]
     @Published private(set) var previewingScriptExecutionSkillIDs: Set<SkillRecord.ID> = []
     @Published private(set) var batchTogglePreview: BatchTogglePreview?
@@ -90,7 +94,11 @@ final class SkillStore: ObservableObject {
     }
 
     var isRefreshBusy: Bool {
-        isLoading || isScanning || isWriting || isProjectUpdating || isSavingSettings || isSavingAIProvider || isTestingAIProvider || isApplyingBatchToggle || isExportingLocalReport
+        isLoading || isScanning || isWriting || isProjectUpdating || isSavingSettings || isSavingAIProvider || isTestingAIProvider || isApplyingBatchToggle || isExportingLocalReport || isLLMPromptBusy
+    }
+
+    private var isLLMPromptBusy: Bool {
+        !previewingLLMPromptKeys.isEmpty || !sendingLLMPromptKeys.isEmpty
     }
 
     private func toggleDisabledReason(for skill: SkillRecord) -> String? {
@@ -300,6 +308,60 @@ final class SkillStore: ObservableObject {
 
     func isPreparingSkillAnalysis(kind: LLMSkillAnalysisKind, scope: LLMSkillAnalysisRequestScope) -> Bool {
         preparingSkillAnalysisKeys.contains(skillAnalysisKey(kind: kind, scope: scope))
+    }
+
+    func llmPromptPreview(for action: LLMAction) -> LLMPromptPreview? {
+        guard let skill = selectedSkill else { return nil }
+        return llmPromptPreviews[llmPromptActionKey(action: action, skillID: skill.id)]
+    }
+
+    func isPreviewingLLMPrompt(for action: LLMAction) -> Bool {
+        guard let skill = selectedSkill else { return false }
+        return previewingLLMPromptKeys.contains(llmPromptActionKey(action: action, skillID: skill.id))
+    }
+
+    func isSendingLLMPrompt(for action: LLMAction) -> Bool {
+        guard let skill = selectedSkill else { return false }
+        return sendingLLMPromptKeys.contains(llmPromptActionKey(action: action, skillID: skill.id))
+    }
+
+    func llmPromptSendResult(for action: LLMAction) -> LLMPromptSendResult? {
+        guard let skill = selectedSkill else { return nil }
+        return llmPromptSendResults[llmPromptActionKey(action: action, skillID: skill.id)]
+    }
+
+    func canSendLLMPrompt(for action: LLMAction) -> Bool {
+        guard let preview = llmPromptPreview(for: action) else { return false }
+        return canSendLLMPrompt(preview)
+    }
+
+    func skillAnalysisPromptPreview(kind: LLMSkillAnalysisKind, scope: LLMSkillAnalysisRequestScope) -> LLMPromptPreview? {
+        let instanceIDs = skillAnalysisInstanceIDs(scope: scope)
+        guard !instanceIDs.isEmpty else { return nil }
+        return llmPromptPreviews[skillAnalysisPromptKey(kind: kind, scope: scope, instanceIDs: instanceIDs)]
+    }
+
+    func isPreviewingSkillAnalysisPrompt(kind: LLMSkillAnalysisKind, scope: LLMSkillAnalysisRequestScope) -> Bool {
+        let instanceIDs = skillAnalysisInstanceIDs(scope: scope)
+        guard !instanceIDs.isEmpty else { return false }
+        return previewingLLMPromptKeys.contains(skillAnalysisPromptKey(kind: kind, scope: scope, instanceIDs: instanceIDs))
+    }
+
+    func isSendingSkillAnalysisPrompt(kind: LLMSkillAnalysisKind, scope: LLMSkillAnalysisRequestScope) -> Bool {
+        let instanceIDs = skillAnalysisInstanceIDs(scope: scope)
+        guard !instanceIDs.isEmpty else { return false }
+        return sendingLLMPromptKeys.contains(skillAnalysisPromptKey(kind: kind, scope: scope, instanceIDs: instanceIDs))
+    }
+
+    func skillAnalysisPromptSendResult(kind: LLMSkillAnalysisKind, scope: LLMSkillAnalysisRequestScope) -> LLMPromptSendResult? {
+        let instanceIDs = skillAnalysisInstanceIDs(scope: scope)
+        guard !instanceIDs.isEmpty else { return nil }
+        return llmPromptSendResults[skillAnalysisPromptKey(kind: kind, scope: scope, instanceIDs: instanceIDs)]
+    }
+
+    func canSendSkillAnalysisPrompt(kind: LLMSkillAnalysisKind, scope: LLMSkillAnalysisRequestScope) -> Bool {
+        guard let preview = skillAnalysisPromptPreview(kind: kind, scope: scope) else { return false }
+        return canSendLLMPrompt(preview)
     }
 
     func scriptExecutionPreview(for skill: SkillRecord) -> ScriptExecutionPreview? {
@@ -768,6 +830,75 @@ final class SkillStore: ObservableObject {
         await prepareSkillAnalysis(kind: kind, scope: .visible, instanceIDs: instanceIDs)
     }
 
+    func previewPromptForSelectedLLMAction(_ action: LLMAction) async {
+        guard let skill = selectedSkill else { return }
+        let key = llmPromptActionKey(action: action, skillID: skill.id)
+        guard !isRefreshBusy else {
+            llmPromptPreviews[key] = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        previewingLLMPromptKeys.insert(key)
+        llmPromptSendResults.removeValue(forKey: key)
+        defer { previewingLLMPromptKeys.remove(key) }
+
+        do {
+            llmPromptPreviews[key] = try await service.previewPromptForLLMAction(action: action, skill: skill)
+        } catch {
+            llmPromptPreviews[key] = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
+    func confirmPromptForSelectedLLMAction(_ action: LLMAction) async {
+        guard let skill = selectedSkill else { return }
+        let key = llmPromptActionKey(action: action, skillID: skill.id)
+        await confirmLLMPrompt(key: key) { previewID in
+            try await service.confirmPromptAndSendForLLMAction(
+                previewID: previewID,
+                action: action,
+                skill: skill
+            )
+        }
+    }
+
+    func previewPromptForSkillAnalysis(kind: LLMSkillAnalysisKind, scope: LLMSkillAnalysisRequestScope) async {
+        let instanceIDs = skillAnalysisInstanceIDs(scope: scope)
+        guard !instanceIDs.isEmpty else { return }
+        let key = skillAnalysisPromptKey(kind: kind, scope: scope, instanceIDs: instanceIDs)
+        guard !isRefreshBusy else {
+            llmPromptPreviews[key] = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        previewingLLMPromptKeys.insert(key)
+        llmPromptSendResults.removeValue(forKey: key)
+        defer { previewingLLMPromptKeys.remove(key) }
+
+        do {
+            llmPromptPreviews[key] = try await service.previewPromptForSkillAnalysis(
+                instanceIDs: instanceIDs,
+                kind: kind,
+                scope: scope
+            )
+        } catch {
+            llmPromptPreviews[key] = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
+    func confirmPromptForSkillAnalysis(kind: LLMSkillAnalysisKind, scope: LLMSkillAnalysisRequestScope) async {
+        let instanceIDs = skillAnalysisInstanceIDs(scope: scope)
+        guard !instanceIDs.isEmpty else { return }
+        let key = skillAnalysisPromptKey(kind: kind, scope: scope, instanceIDs: instanceIDs)
+        await confirmLLMPrompt(key: key) { previewID in
+            try await service.confirmPromptAndSendForSkillAnalysis(
+                previewID: previewID,
+                instanceIDs: instanceIDs,
+                kind: kind,
+                scope: scope
+            )
+        }
+    }
+
     func previewScriptExecutionSafety(for skill: SkillRecord) async {
         guard !isRefreshBusy else {
             scriptExecutionPreviews[skill.id] = .unavailable(skill: skill, reason: UIStrings.operationUnavailableBusy)
@@ -1103,6 +1234,65 @@ final class SkillStore: ObservableObject {
 
     private func skillAnalysisKey(kind: LLMSkillAnalysisKind, scope: LLMSkillAnalysisRequestScope) -> String {
         "\(scope.key):\(kind.rawValue)"
+    }
+
+    private func skillAnalysisInstanceIDs(scope: LLMSkillAnalysisRequestScope) -> [String] {
+        switch scope.key {
+        case LLMSkillAnalysisRequestScope.visible.key:
+            return filteredSkills.map(\.id)
+        default:
+            return selectedSkill.map { [$0.id] } ?? []
+        }
+    }
+
+    private func llmPromptActionKey(action: LLMAction, skillID: SkillRecord.ID) -> String {
+        "action:\(skillID):\(action.rawValue)"
+    }
+
+    private func skillAnalysisPromptKey(
+        kind: LLMSkillAnalysisKind,
+        scope: LLMSkillAnalysisRequestScope,
+        instanceIDs: [String]
+    ) -> String {
+        "skill-analysis:\(scope.key):\(kind.rawValue):\(instanceIDs.joined(separator: ","))"
+    }
+
+    private func canSendLLMPrompt(_ preview: LLMPromptPreview) -> Bool {
+        aiProviderStatus.serviceAvailable
+            && aiProviderStatus.configured
+            && aiProviderStatus.activeProfile != nil
+            && preview.enabled
+            && !preview.previewID.isEmpty
+            && preview.confirmationRequired
+            && !preview.rawPromptPersisted
+            && !preview.rawResponsePersisted
+    }
+
+    private func confirmLLMPrompt(
+        key: String,
+        send: (String) async throws -> LLMPromptSendResult
+    ) async {
+        guard let preview = llmPromptPreviews[key] else { return }
+        guard canSendLLMPrompt(preview) else {
+            llmPromptSendResults[key] = .unavailable(
+                previewID: preview.previewID,
+                reason: aiProviderStatus.configured ? UIStrings.llmPromptPreviewRequired : UIStrings.llmPromptProviderRequired
+            )
+            return
+        }
+        guard !isRefreshBusy else {
+            llmPromptSendResults[key] = .unavailable(previewID: preview.previewID, reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        sendingLLMPromptKeys.insert(key)
+        defer { sendingLLMPromptKeys.remove(key) }
+
+        do {
+            llmPromptSendResults[key] = try await send(preview.previewID)
+        } catch {
+            llmPromptSendResults[key] = .unavailable(previewID: preview.previewID, reason: error.localizedDescription)
+        }
     }
 
     private func prepareLLMAction(_ action: LLMAction) async {

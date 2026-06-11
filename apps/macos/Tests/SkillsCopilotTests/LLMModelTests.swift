@@ -7,6 +7,8 @@ struct LLMModelTests {
         try statusDecodesRealServicePayload()
         try prepareResultDecodesEstimatePayload()
         try skillAnalysisPrepareDecodesFlexiblePayload()
+        try promptPreviewDecodesV242Payload()
+        try promptSendResultDecodesCopyOnlyAuditPayload()
     }
 
     private struct ServiceEnvelope<ResultPayload: Decodable>: Decodable {
@@ -147,6 +149,97 @@ struct LLMModelTests {
         try expectFalse(result.safety.scriptExecutionEnabled, "Skill analysis prepare should keep script execution disabled.")
         try expectFalse(result.safety.credentialStorageEnabled, "Skill analysis prepare should keep credential storage disabled.")
         try expectEqual(result.safety.confirmationRequired, true, "Skill analysis prepare should require confirmation.")
+    }
+
+    private func promptPreviewDecodesV242Payload() throws {
+        let data = Data(
+            """
+            {
+              "preview_id": "preview-1",
+              "request_kind": "skill_analysis",
+              "analysis_kind": "risk",
+              "scope": "selected",
+              "prompt_scope": "Selected skill risk review",
+              "provider": "openai-compatible",
+              "model": "gpt-5",
+              "destination_host": "llm.example.com",
+              "included_fields": [{"name":"skill.name","label":"Skill name"}, "findings.summary"],
+              "excluded_fields": [{"name":"api_key","reason":"credential"}],
+              "redaction": {
+                "status": "redacted",
+                "summary": "Secrets and local paths removed.",
+                "redacted_fields": ["api_key"],
+                "placeholders": ["<project-root>"]
+              },
+              "estimate": {
+                "input_tokens": 600,
+                "output_tokens": 300,
+                "total_tokens": 900,
+                "estimated_cost_usd": 0.012
+              },
+              "confirmation_required": true,
+              "raw_prompt_persisted": false,
+              "raw_response_persisted": false,
+              "draft_copy_only": true,
+              "redacted_prompt_preview": "Analyze Beta without paths."
+            }
+            """.utf8
+        )
+
+        let preview = try JSONDecoder().decode(LLMPromptPreview.self, from: data)
+
+        try expectEqual(preview.previewID, "preview-1", "Prompt preview should decode preview id.")
+        try expectEqual(preview.analysisKind, .risk, "Prompt preview should decode skill analysis kind.")
+        try expectEqual(preview.promptScope, "Selected skill risk review", "Prompt preview should decode prompt scope.")
+        try expectEqual(preview.destinationHost, "llm.example.com", "Prompt preview should decode destination host.")
+        try expectEqual(preview.includedFields.count, 2, "Prompt preview should decode flexible included fields.")
+        try expectEqual(preview.excludedFields.first?.reason, "credential", "Prompt preview should decode excluded field reason.")
+        try expectEqual(preview.redaction.redactedFields, ["api_key"], "Prompt preview should decode redaction fields.")
+        try expectEqual(preview.estimate?.totalTokens, 900, "Prompt preview should decode token estimate.")
+        try expectFalse(preview.rawPromptPersisted, "Prompt preview should keep raw prompt persistence false.")
+        try expectFalse(preview.rawResponsePersisted, "Prompt preview should keep raw response persistence false.")
+        try expectEqual(preview.promptPreview, "Analyze Beta without paths.", "Prompt preview should decode redacted prompt text.")
+    }
+
+    private func promptSendResultDecodesCopyOnlyAuditPayload() throws {
+        let data = Data(
+            """
+            {
+              "preview_id": "preview-1",
+              "status": "succeeded",
+              "message": "Done.",
+              "output_text": "Read-only recommendation.",
+              "draft_copy_only": true,
+              "raw_prompt_persisted": false,
+              "raw_response_persisted": false,
+              "write_back_allowed": false,
+              "script_execution_allowed": false,
+              "audit_metadata": {
+                "request_id": "audit-42",
+                "status": "succeeded",
+                "provider": "openai-compatible",
+                "model": "gpt-5",
+                "destination_host": "llm.example.com",
+                "redaction_applied": true,
+                "raw_prompt_persisted": false,
+                "raw_response_persisted": false,
+                "input_tokens": 600,
+                "output_tokens": 120
+              }
+            }
+            """.utf8
+        )
+
+        let result = try JSONDecoder().decode(LLMPromptSendResult.self, from: data)
+
+        try expectEqual(result.success, true, "Prompt send should decode succeeded status.")
+        try expectEqual(result.outputText, "Read-only recommendation.", "Prompt send should decode copy-only output.")
+        try expectEqual(result.draftCopyOnly, true, "Prompt send should remain copy-only.")
+        try expectFalse(result.rawPromptPersisted, "Prompt send should keep raw prompt persistence false.")
+        try expectFalse(result.rawResponsePersisted, "Prompt send should keep raw response persistence false.")
+        try expectFalse(result.writeBackAllowed, "Prompt send must not allow write-back.")
+        try expectFalse(result.scriptExecutionAllowed, "Prompt send must not allow script execution.")
+        try expectEqual(result.audit?.auditID, "audit-42", "Prompt send should decode audit metadata.")
     }
 
 }

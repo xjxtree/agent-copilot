@@ -4,9 +4,9 @@
 >
 > 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.41 AI Provider Foundation 已完成**。V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout、V2.29 Finding triage persistence、V2.30 AI skill analysis workflow、V2.31 Cleanup Queue、V2.32 Rule tuning / suppression、V2.33 Safe batch actions、V2.34 Cross-agent comparison view、V2.35 Local report export、V2.36 Pi writable evidence harness、V2.37 Pi writable guarded slice、V2.38 Hermes external roots、V2.39 OpenClaw workspace 深化、V2.40 Adapter diagnostics、V2.41 AI Provider Foundation 均已收口。V2.41 仅新增用户显式配置 provider profile、Keychain-first secret、显式 Test Connection 与最小 redacted metadata；OpenClaw/Hermes writable/install 与 Pi install 继续 blocked。
+> 当前阶段：**V2.42 Prompt Preview / Redaction 已完成**。V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout、V2.29 Finding triage persistence、V2.30 AI skill analysis workflow、V2.31 Cleanup Queue、V2.32 Rule tuning / suppression、V2.33 Safe batch actions、V2.34 Cross-agent comparison view、V2.35 Local report export、V2.36 Pi writable evidence harness、V2.37 Pi writable guarded slice、V2.38 Hermes external roots、V2.39 OpenClaw workspace 深化、V2.40 Adapter diagnostics、V2.41 AI Provider Foundation、V2.42 Prompt Preview / Redaction 均已收口。V2.42 provider-backed analysis 请求必须 preview/redact/estimate/destination-visible/explicit-confirm 后才发送；OpenClaw/Hermes writable/install 与 Pi install 继续 blocked。
 >
-> 近期主线：继续围绕 AI agent skills 的管理、检查、分析和配置审计打磨体验。V2.41 Provider Foundation 已完成，后续版本线统一为 **V2.42-V2.70 AI-native Task-centered Skills Governance**：本地 scanner/rules/catalog 提供事实层，用户自配 OpenAI-compatible / Claude-compatible 大模型负责复杂质量判断、任务可用性、routing 置信度、trace 分析、remediation、policy 与治理报告。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
+> 近期主线：继续围绕 AI agent skills 的管理、检查、分析和配置审计打磨体验。V2.41 Provider Foundation 与 V2.42 Prompt Preview / Redaction 已完成，后续版本线统一为 **V2.43-V2.70 AI-native Task-centered Skills Governance**：本地 scanner/rules/catalog 提供事实层，用户自配 OpenAI-compatible / Claude-compatible 大模型负责复杂质量判断、任务可用性、routing 置信度、trace 分析、remediation、policy 与治理报告。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
 >
 > 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.25 各阶段能力、V2.9 Tool-global skill pool、V2.11 Adapter capability matrix、V2.16-V2.25 management/analysis/history line。后续候选变更仍需重新验证。
 >
@@ -990,12 +990,12 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 2. 用户显式配置 OpenAI-compatible 或 Claude-compatible provider 后，AI 参与复杂判断：quality、task readiness、routing confidence、capability gap、trace accuracy、remediation、policy explanation。
 3. 用户围绕真实任务和工作区进行 review session，形成本地治理报告和可追溯处理历史。
 
-当前代码检查结论：主线已有 `llm.status` / `llm.prepareAction` / `llm.prepareSkillAnalysis`、provider/model DTO、token/cost estimate、macOS read-only preview UI，以及 V2.41 的 provider profile 配置、Keychain-first API key storage、显式 Test Connection、预算字段与最小 redacted test-call metadata。尚未实现 V2.42 prompt preview/redaction transport、confirmed provider-backed Analyze/Recommend/skill-analysis execution、full provider observability 或 V2.43+ 质量/任务可用性/路由能力。
+当前代码检查结论：主线已有 `llm.status` / `llm.prepareAction` / `llm.prepareSkillAnalysis`、provider/model DTO、token/cost estimate、macOS read-only preview UI、V2.41 provider profile 配置/Keychain-first API key storage/显式 Test Connection/预算字段/最小 redacted test-call metadata，以及 V2.42 `llm.previewPrompt` / `llm.confirmPromptAndSend` provider-backed prompt preview/redaction/confirmed draft output。尚未实现 full provider observability 或 V2.43+ 质量/任务可用性/路由能力。
 
 | Version | Goal | Completion signal |
 | --- | --- | --- |
 | V2.41 | AI Provider Foundation | 已完成：用户可配置 OpenAI-compatible / Claude-compatible endpoint、API key、model、headers/API version；Keychain-first；test connection、预算、disabled/unconfigured state 清晰可见；不自动分析、不写入、不执行；建立最小 provider test-call metadata schema（status/duration/error/redaction/token/cost，默认无 raw prompt/response）。 |
-| V2.42 | Prompt Preview / Redaction / Token Estimate | 每次 AI 调用前展示 prompt scope、included/excluded fields、脱敏摘要、token/cost estimate、provider/model、network destination；用户确认后才发送；确认后的调用必须写入最小审计 metadata，证明 redaction、confirmation 与 network destination。 |
+| V2.42 | Prompt Preview / Redaction / Token Estimate | 已完成：每次 AI 调用前展示 prompt scope、included/excluded fields、脱敏摘要、token/cost estimate、provider/model、network destination；用户确认后才发送；确认后的调用必须写入最小审计 metadata，证明 redaction、confirmation 与 network destination。 |
 | V2.43 | AI Skill Quality Score | 基于本地 metadata/findings/conflicts/adapter diagnostics 与模型判断，给出 quality score、分项理由、风险说明和改进建议。 |
 | V2.44 | AI Task Readiness Check | 用户输入真实任务，评估当前 agent/skills 是否可用、启用、在正确 scope、风险可控，以及缺少什么。 |
 | V2.45 | AI Routing Confidence | 对 task-to-skill 候选排序，解释匹配证据、置信度、相似/歧义候选、错选/漏选风险。 |
@@ -1033,6 +1033,19 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 4. `pnpm check:privacy`
 5. App-window-only screenshot and manual redaction inspection for local path/credential placeholders before handoff.
 6. Confirm V2.41 scope only: user-triggered network, no background analysis, no writes/scripts/telemetry/AI write-back.
+
+### V2.42 Verification Checklist（完成）
+
+1. Focused Rust/Swift checks：`cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features`、`swift test --package-path apps/macos`。
+2. `pnpm check:macos`。
+3. Real local launch (`./script/build_and_run.sh run` / `pnpm dev:macos`) 并进行 `SkillsCopilot` 窗口 `Computer Use`/AX 观察；若窗口解析失败，记录 blocker。
+4. `pnpm check:privacy`。
+5. App-window-only 截图并手工检查脱敏情况。
+6. 复核 V2.42 口径：每次 provider-backed 请求发送前均显示 prompt scope、included/excluded 字段、redaction summary、token/cost estimate、destination，并要求用户确认。
+7. 复核关闭口径：无背景请求；无脚本执行；无 telemetry；无 AI write-back / apply / config / snapshot side effects。
+8. 复核最小 metadata 落盘：确认后的请求记录 redaction 状态、confirmation id、destination host、token/cost、status/error/duration，不持久化 raw prompt/response。
+
+Closeout status: completed on 2026-06-11. Focused Rust/Swift checks, `pnpm check:macos`, real local Computer Use against the explicit current bundle path, fixture screenshot inspection, and privacy gate passed. Real local validation did not save a screenshot because the live app exposed local paths; the recorded evidence is textual with placeholders.
 
 ## V2.35 Local report export (completed)
 

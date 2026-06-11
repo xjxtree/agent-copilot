@@ -1,0 +1,12 @@
+{
+  "id": "fixture-llm-confirm-prompt-and-send",
+  "method": "llm.confirmPromptAndSend",
+  "params": {
+    "preview_id": "prompt-preview-fixture",
+    "confirmation_id": "confirm-fixture",
+    "request": {
+      "action": "recommend",
+      "user_intent": "fixture"
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "id": "fixture-llm-preview-prompt",
+  "method": "llm.previewPrompt",
+  "params": {
+    "action": "recommend",
+    "user_intent": "fixture"
+  }
+}

@@ -670,6 +670,7 @@ dependencies = [
  "keyring",
  "serde",
  "serde_json",
+ "sha2",
  "skills-copilot-catalog",
  "skills-copilot-commands",
  "skills-copilot-core",

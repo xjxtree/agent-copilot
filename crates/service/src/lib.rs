@@ -7,6 +7,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use skills_copilot_catalog::{
     Catalog, ConfigSnapshotRecord, ConflictGroupRecord, FindingTriageRecord, RuleFindingRecord,
     RuleTuningRecord, SkillDetailRecord, SkillEventRecord, SkillRecord,
@@ -43,9 +44,10 @@ use project_context::{
 };
 use provider::{
     default_monthly_budget_usd, default_token_limit, delete_provider_profile,
-    list_provider_profiles, provider_call_metadata_path, provider_profiles_path,
-    save_provider_profile, test_provider_connection, DeleteProviderProfileParams,
-    ListProviderProfilesResult, ProviderError, SaveProviderProfileParams,
+    estimate_prompt_cost_usd, list_provider_profiles, provider_call_metadata_path,
+    provider_profiles_path, save_provider_profile, send_provider_prompt, test_provider_connection,
+    DeleteProviderProfileParams, ListProviderProfilesResult, ProviderCallMetadata, ProviderError,
+    ProviderProfileRecord, SaveProviderProfileParams, SendProviderPromptParams,
     TestProviderConnectionParams,
 };
 
@@ -63,6 +65,8 @@ const SUPPORTED_METHODS: &[&str] = &[
     "llm.saveProviderProfile",
     "llm.deleteProviderProfile",
     "llm.testProviderConnection",
+    "llm.previewPrompt",
+    "llm.confirmPromptAndSend",
     "llm.prepareAction",
     "llm.prepareSkillAnalysis",
     "cleanup.listQueue",
@@ -390,12 +394,59 @@ pub struct LlmPrepareSkillAnalysisParams {
     pub analysis_kind: LlmSkillAnalysisKind,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct LlmPreviewPromptParams {
+    #[serde(alias = "kind")]
+    pub action: LlmPromptActionKind,
+    #[serde(default)]
+    pub profile_id: Option<String>,
+    #[serde(default, alias = "instance_id")]
+    pub skill_instance_id: Option<String>,
+    #[serde(default)]
+    pub instance_ids: Vec<String>,
+    #[serde(default)]
+    pub analysis_kind: Option<LlmSkillAnalysisKind>,
+    #[serde(default)]
+    pub user_intent: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct LlmConfirmPromptAndSendParams {
+    pub preview_id: String,
+    pub confirmation_id: String,
+    pub request: LlmPreviewPromptParams,
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LlmSkillAnalysisKind {
     Overview,
     Risk,
     Cleanup,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LlmPromptActionKind {
+    Analyze,
+    Recommend,
+    ExplainConflict,
+    DraftFrontmatter,
+    SkillAnalysis,
+}
+
+impl LlmPromptActionKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Analyze => "analyze",
+            Self::Recommend => "recommend",
+            Self::ExplainConflict => "explain_conflict",
+            Self::DraftFrontmatter => "draft_frontmatter",
+            Self::SkillAnalysis => "skill_analysis",
+        }
+    }
 }
 
 impl LlmSkillAnalysisKind {
@@ -478,6 +529,74 @@ pub struct LlmPrepareSkillAnalysisResult {
     pub estimated_total_tokens: u32,
     pub provider_request_sent: bool,
     pub generated_by: &'static str,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LlmPreviewPromptResult {
+    pub preview_id: String,
+    pub status: String,
+    pub allowed: bool,
+    pub reason: String,
+    pub action: &'static str,
+    pub profile_id: Option<String>,
+    pub provider: Option<String>,
+    pub model: Option<String>,
+    pub destination_host: Option<String>,
+    pub prompt_scope: Vec<String>,
+    pub included_fields: Vec<String>,
+    pub excluded_fields: Vec<String>,
+    pub redaction: LlmPromptRedactionSummary,
+    pub prompt_preview: String,
+    pub estimated_input_tokens: u32,
+    pub estimated_output_tokens: u32,
+    pub estimated_total_tokens: u32,
+    pub estimated_cost_usd: f64,
+    pub single_request_token_limit: u32,
+    pub monthly_budget_usd: f64,
+    pub requires_confirmation: bool,
+    pub confirmation: LlmConfirmationRequirement,
+    pub write_back_allowed: bool,
+    pub draft_requires_user_copy: bool,
+    pub provider_request_sent: bool,
+    pub raw_secret_returned: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LlmPromptRedactionSummary {
+    pub status: String,
+    pub redacted_value_count: usize,
+    pub redacted_fields: Vec<String>,
+    pub placeholders: Vec<&'static str>,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_secret_returned: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LlmConfirmPromptAndSendResult {
+    pub preview_id: String,
+    pub confirmation_id: String,
+    pub status: String,
+    pub action: &'static str,
+    pub profile_id: String,
+    pub provider: String,
+    pub model: String,
+    pub destination_host: String,
+    pub provider_request_sent: bool,
+    pub credential_accessed: bool,
+    pub draft_output: Option<String>,
+    pub draft_requires_user_copy: bool,
+    pub write_back_allowed: bool,
+    pub script_execution_allowed: bool,
+    pub config_mutation_allowed: bool,
+    pub snapshot_created: bool,
+    pub triage_mutation_allowed: bool,
+    pub audit: ProviderCallMetadata,
+    pub raw_secret_returned: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -853,6 +972,14 @@ impl ServiceHost {
                 let params: TestProviderConnectionParams = serde_json::from_value(request.params)?;
                 serde_json::to_value(test_provider_connection(&self.app_data_dir, params)?)
                     .map_err(Into::into)
+            }
+            "llm.previewPrompt" => {
+                let params: LlmPreviewPromptParams = serde_json::from_value(request.params)?;
+                serde_json::to_value(self.preview_llm_prompt(params)?).map_err(Into::into)
+            }
+            "llm.confirmPromptAndSend" => {
+                let params: LlmConfirmPromptAndSendParams = serde_json::from_value(request.params)?;
+                serde_json::to_value(self.confirm_llm_prompt_and_send(params)?).map_err(Into::into)
             }
             "llm.prepareAction" => {
                 let params: LlmPrepareActionParams = serde_json::from_value(request.params)?;
@@ -1717,6 +1844,176 @@ impl ServiceHost {
         list_provider_profiles(&self.app_data_dir).map_err(Into::into)
     }
 
+    pub fn preview_llm_prompt(
+        &self,
+        params: LlmPreviewPromptParams,
+    ) -> Result<LlmPreviewPromptResult, ServiceError> {
+        let profile = self.resolve_llm_prompt_profile(params.profile_id.as_deref())?;
+        let built = self.build_llm_prompt(&params)?;
+        let provider = profile
+            .as_ref()
+            .map(|profile| profile.provider_type.as_str().to_string());
+        let model = profile.as_ref().map(|profile| profile.model.clone());
+        let profile_id = profile.as_ref().map(|profile| profile.id.clone());
+        let destination_host = profile
+            .as_ref()
+            .map(|profile| destination_host_for_url(&profile.base_url));
+        let single_request_token_limit = profile
+            .as_ref()
+            .map(|profile| profile.single_request_token_limit)
+            .unwrap_or_else(default_token_limit);
+        let monthly_budget_usd = profile
+            .as_ref()
+            .map(|profile| profile.monthly_budget_usd)
+            .unwrap_or_else(default_monthly_budget_usd);
+        let estimated_input_tokens = estimate_tokens(&[&built.prompt_preview]);
+        let estimated_output_tokens = built.estimated_output_tokens;
+        let estimated_total_tokens = estimated_input_tokens.saturating_add(estimated_output_tokens);
+        let estimated_cost_usd = profile
+            .as_ref()
+            .map(|profile| estimate_prompt_cost_usd(profile.provider_type, estimated_total_tokens))
+            .unwrap_or(0.0);
+        let (allowed, reason) = match profile.as_ref() {
+            None => (
+                false,
+                "No enabled provider profile is configured; no provider request can be sent."
+                    .to_string(),
+            ),
+            Some(profile) if !profile.enabled => (
+                false,
+                format!("Provider profile `{}` is disabled.", profile.id),
+            ),
+            Some(profile) if profile.monthly_budget_usd <= 0.0 => (
+                false,
+                "Monthly provider budget is 0; provider requests are disabled.".to_string(),
+            ),
+            Some(profile) if profile.single_request_token_limit < estimated_total_tokens => (
+                false,
+                "Single request token limit is lower than the redacted prompt estimate."
+                    .to_string(),
+            ),
+            Some(_) => (
+                true,
+                "Redacted prompt preview is ready for explicit confirmation.".to_string(),
+            ),
+        };
+        let preview_id = llm_preview_id(
+            &params,
+            profile.as_ref(),
+            &built.prompt_preview,
+            estimated_input_tokens,
+            estimated_output_tokens,
+        );
+
+        Ok(LlmPreviewPromptResult {
+            preview_id,
+            status: if allowed { "ready" } else { "blocked" }.to_string(),
+            allowed,
+            reason,
+            action: params.action.as_str(),
+            profile_id,
+            provider,
+            model,
+            destination_host,
+            prompt_scope: built.prompt_scope,
+            included_fields: built.included_fields,
+            excluded_fields: built.excluded_fields,
+            redaction: built.redaction,
+            prompt_preview: built.prompt_preview,
+            estimated_input_tokens,
+            estimated_output_tokens,
+            estimated_total_tokens,
+            estimated_cost_usd,
+            single_request_token_limit,
+            monthly_budget_usd,
+            requires_confirmation: true,
+            confirmation: LlmConfirmationRequirement {
+                required: true,
+                message:
+                    "Confirm to send only this redacted prompt to the displayed provider endpoint."
+                        .to_string(),
+                display_fields: vec![
+                    "preview_id",
+                    "provider",
+                    "model",
+                    "destination_host",
+                    "prompt_scope",
+                    "included_fields",
+                    "excluded_fields",
+                    "redaction",
+                    "estimated_total_tokens",
+                    "estimated_cost_usd",
+                ],
+            },
+            write_back_allowed: false,
+            draft_requires_user_copy: true,
+            provider_request_sent: false,
+            raw_secret_returned: false,
+            raw_prompt_persisted: false,
+            raw_response_persisted: false,
+        })
+    }
+
+    pub fn confirm_llm_prompt_and_send(
+        &self,
+        params: LlmConfirmPromptAndSendParams,
+    ) -> Result<LlmConfirmPromptAndSendResult, ServiceError> {
+        if params.confirmation_id.trim().is_empty() {
+            return Err(ServiceError::ConfirmationRequired(
+                "llm.confirmPromptAndSend requires an explicit confirmation_id".to_string(),
+            ));
+        }
+        let preview = self.preview_llm_prompt(params.request.clone())?;
+        if preview.preview_id != params.preview_id {
+            return Err(ServiceError::InvalidRequest(
+                "preview_id does not match the current redacted prompt preview".to_string(),
+            ));
+        }
+        let profile_id = preview.profile_id.clone().ok_or_else(|| {
+            ServiceError::InvalidRequest(
+                "No provider profile is available for the confirmed prompt.".to_string(),
+            )
+        })?;
+        let send = send_provider_prompt(
+            &self.app_data_dir,
+            SendProviderPromptParams {
+                profile_id: profile_id.clone(),
+                confirmation_id: params.confirmation_id.clone(),
+                action_type: llm_prompt_action_type(&params.request),
+                prompt: preview.prompt_preview.clone(),
+                estimated_input_tokens: preview.estimated_input_tokens,
+                estimated_output_tokens: preview.estimated_output_tokens,
+                estimated_cost_usd: preview.estimated_cost_usd,
+                redaction_status: preview.redaction.status.clone(),
+                timeout_ms: params.timeout_ms,
+            },
+        )?;
+
+        Ok(LlmConfirmPromptAndSendResult {
+            preview_id: params.preview_id,
+            confirmation_id: params.confirmation_id,
+            status: send.status,
+            action: params.request.action.as_str(),
+            profile_id,
+            provider: send.provider_type.as_str().to_string(),
+            model: send.model,
+            destination_host: send.destination_host,
+            provider_request_sent: send.provider_request_sent,
+            credential_accessed: send.credential_accessed,
+            draft_output: send.output_text,
+            draft_requires_user_copy: true,
+            write_back_allowed: false,
+            script_execution_allowed: false,
+            config_mutation_allowed: false,
+            snapshot_created: false,
+            triage_mutation_allowed: false,
+            audit: send.audit,
+            raw_secret_returned: send.raw_secret_returned,
+            raw_prompt_persisted: send.raw_prompt_persisted,
+            raw_response_persisted: send.raw_response_persisted,
+        })
+    }
+
     pub fn script_execution_status(&self) -> ScriptExecutionStatus {
         ScriptExecutionStatus {
             enabled: false,
@@ -1726,6 +2023,272 @@ impl ServiceHost {
             audit_path: display_path(&self.script_execution_audit_path()),
             llm_initiation_allowed: false,
         }
+    }
+
+    fn resolve_llm_prompt_profile(
+        &self,
+        requested_profile_id: Option<&str>,
+    ) -> Result<Option<ProviderProfileRecord>, ServiceError> {
+        let profiles = list_provider_profiles(&self.app_data_dir)?;
+        if let Some(profile_id) = requested_profile_id.filter(|id| !id.trim().is_empty()) {
+            return profiles
+                .profiles
+                .into_iter()
+                .find(|profile| profile.id == profile_id)
+                .map(Some)
+                .ok_or_else(|| ProviderError::ProfileNotFound(profile_id.to_string()).into());
+        }
+        Ok(profiles
+            .default_profile_id
+            .as_deref()
+            .and_then(|default_id| {
+                profiles
+                    .profiles
+                    .iter()
+                    .find(|profile| profile.id == default_id)
+            })
+            .or_else(|| profiles.profiles.iter().find(|profile| profile.enabled))
+            .cloned())
+    }
+
+    fn build_llm_prompt(
+        &self,
+        params: &LlmPreviewPromptParams,
+    ) -> Result<BuiltLlmPrompt, ServiceError> {
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let roots = self.redaction_roots(&adapter_ctx);
+        let mut redactor = PromptRedactor::new(&roots);
+        let mut prompt_scope = vec![
+            "operation metadata".to_string(),
+            "safety boundaries".to_string(),
+        ];
+        let mut included_fields = vec![
+            "action kind".to_string(),
+            "draft-only safety instructions".to_string(),
+        ];
+        let mut excluded_fields = vec![
+            "source paths".to_string(),
+            "credential values".to_string(),
+            "provider API key".to_string(),
+            "agent config mutation instructions".to_string(),
+            "script execution instructions".to_string(),
+        ];
+        let mut sections = vec![
+            "You are assisting with AI agent skill governance.".to_string(),
+            format!("Action: {}", params.action.as_str()),
+            "Return draft-only analysis. Do not write files, mutate agent config, execute scripts, change triage, create snapshots, call tools, or request secrets.".to_string(),
+        ];
+        if let Some(intent) = params
+            .user_intent
+            .as_deref()
+            .filter(|intent| !intent.trim().is_empty())
+        {
+            prompt_scope.push("user intent".to_string());
+            included_fields.push("redacted user intent".to_string());
+            sections.push(format!("User intent: {}", redactor.redact(intent)));
+        }
+
+        match params.action {
+            LlmPromptActionKind::Analyze | LlmPromptActionKind::DraftFrontmatter => {
+                let instance_id = params.skill_instance_id.as_deref().ok_or_else(|| {
+                    ServiceError::InvalidRequest(format!(
+                        "llm.previewPrompt {} requires skill_instance_id",
+                        params.action.as_str()
+                    ))
+                })?;
+                let skill = self.get_llm_skill_detail(instance_id)?;
+                prompt_scope.extend([
+                    "selected skill metadata".to_string(),
+                    "selected skill redacted frontmatter".to_string(),
+                    "selected skill redacted body".to_string(),
+                    "related finding summaries".to_string(),
+                ]);
+                included_fields.extend([
+                    "skill id".to_string(),
+                    "skill name".to_string(),
+                    "agent".to_string(),
+                    "scope".to_string(),
+                    "enabled state".to_string(),
+                    "redacted description".to_string(),
+                    "redacted frontmatter".to_string(),
+                    "redacted skill body".to_string(),
+                    "rule finding ids and messages".to_string(),
+                ]);
+                sections.push(self.render_skill_prompt_section(&skill, &mut redactor)?);
+            }
+            LlmPromptActionKind::Recommend => {
+                prompt_scope.extend([
+                    "user intent".to_string(),
+                    "catalog recommendation constraints".to_string(),
+                ]);
+                included_fields.push("recommendation constraints".to_string());
+                excluded_fields.push("raw skill bodies".to_string());
+                sections.push(
+                    "Recommendation constraints: use current catalog evidence only when available; ask for clarification instead of inventing unavailable skills."
+                        .to_string(),
+                );
+            }
+            LlmPromptActionKind::ExplainConflict => {
+                prompt_scope.extend([
+                    "current conflict summaries".to_string(),
+                    "current rule finding summaries".to_string(),
+                ]);
+                included_fields.extend([
+                    "conflict ids".to_string(),
+                    "definition ids".to_string(),
+                    "rule ids".to_string(),
+                    "finding severities".to_string(),
+                ]);
+                excluded_fields.push("raw skill bodies".to_string());
+                let summary = self.llm_conflict_summary()?;
+                sections.push(format!(
+                    "Conflict and finding summary:\n{}",
+                    redactor.redact(&summary)
+                ));
+            }
+            LlmPromptActionKind::SkillAnalysis => {
+                let analysis_kind = params
+                    .analysis_kind
+                    .unwrap_or(LlmSkillAnalysisKind::Overview);
+                prompt_scope.extend([
+                    "selected skill metadata".to_string(),
+                    "selected skill redacted frontmatter".to_string(),
+                    "selected skill redacted body".to_string(),
+                    "related finding summaries".to_string(),
+                    "missing selection count".to_string(),
+                ]);
+                included_fields.extend([
+                    "analysis kind".to_string(),
+                    "selected skill ids".to_string(),
+                    "skill names".to_string(),
+                    "agents".to_string(),
+                    "scopes".to_string(),
+                    "enabled states".to_string(),
+                    "redacted descriptions".to_string(),
+                    "redacted frontmatter".to_string(),
+                    "redacted skill bodies".to_string(),
+                    "rule finding ids and messages".to_string(),
+                ]);
+                sections.push(format!("Analysis kind: {}", analysis_kind.as_str()));
+                sections.push(self.render_skill_analysis_prompt_sections(params, &mut redactor)?);
+            }
+        }
+
+        sections.push("Required output: concise draft guidance with evidence notes, uncertainty, and safe next steps. Mark all suggestions copy-only.".to_string());
+        let estimated_output_tokens = match params.action {
+            LlmPromptActionKind::Analyze => 700,
+            LlmPromptActionKind::Recommend => 500,
+            LlmPromptActionKind::ExplainConflict => 650,
+            LlmPromptActionKind::DraftFrontmatter => 450,
+            LlmPromptActionKind::SkillAnalysis => params
+                .analysis_kind
+                .unwrap_or(LlmSkillAnalysisKind::Overview)
+                .output_token_estimate(),
+        };
+        let prompt_preview = sections.join("\n\n");
+        let redaction = redactor.summary();
+
+        Ok(BuiltLlmPrompt {
+            prompt_preview,
+            prompt_scope,
+            included_fields,
+            excluded_fields,
+            redaction,
+            estimated_output_tokens,
+        })
+    }
+
+    fn render_skill_prompt_section(
+        &self,
+        skill: &SkillDetailRecord,
+        redactor: &mut PromptRedactor<'_>,
+    ) -> Result<String, ServiceError> {
+        let findings = self.llm_findings_for_skill(skill)?;
+        let finding_lines = if findings.is_empty() {
+            "none".to_string()
+        } else {
+            findings
+                .iter()
+                .take(12)
+                .map(|finding| {
+                    format!(
+                        "- {} severity={} message={} suggestion={}",
+                        redactor.redact(&finding.rule_id),
+                        redactor.redact(&finding.severity),
+                        redactor.redact(&finding.message),
+                        finding
+                            .suggestion
+                            .as_deref()
+                            .map(|suggestion| redactor.redact(suggestion))
+                            .unwrap_or_else(|| "none".to_string())
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        Ok(format!(
+            "Selected skill:\n- id: {}\n- name: {}\n- agent: {}\n- scope: {}\n- enabled: {}\n- description: {}\n\nRedacted frontmatter:\n{}\n\nRedacted body:\n{}\n\nRelated findings:\n{}",
+            redactor.redact(&skill.id),
+            redactor.redact(&skill.name),
+            redactor.redact(&skill.agent),
+            redactor.redact(&skill.scope),
+            skill.enabled,
+            redactor.redact(&skill.description),
+            redactor.redact(&skill.frontmatter_raw),
+            redactor.redact(&skill.body),
+            finding_lines
+        ))
+    }
+
+    fn render_skill_analysis_prompt_sections(
+        &self,
+        params: &LlmPreviewPromptParams,
+        redactor: &mut PromptRedactor<'_>,
+    ) -> Result<String, ServiceError> {
+        let Some(catalog) = self.open_existing_catalog_read_only()? else {
+            return Ok(format!(
+                "Selected skill count: {}\nIncluded skills: 0\nMissing or excluded selections: {}",
+                params.instance_ids.len(),
+                params.instance_ids.len()
+            ));
+        };
+        let mut sections = Vec::new();
+        let mut included_count = 0usize;
+        for instance_id in &params.instance_ids {
+            let Some(skill) = catalog.get_skill_detail(instance_id)? else {
+                continue;
+            };
+            included_count += 1;
+            sections.push(self.render_skill_prompt_section(&skill, redactor)?);
+        }
+        let missing_count = params.instance_ids.len().saturating_sub(included_count);
+        let mut header = format!(
+            "Selected skill count: {}\nIncluded skills: {included_count}\nMissing or excluded selections: {missing_count}",
+            params.instance_ids.len()
+        );
+        if sections.is_empty() {
+            header.push_str("\nNo selected skill details were available.");
+            Ok(header)
+        } else {
+            Ok(format!("{header}\n\n{}", sections.join("\n\n---\n\n")))
+        }
+    }
+
+    fn llm_findings_for_skill(
+        &self,
+        skill: &SkillDetailRecord,
+    ) -> Result<Vec<RuleFindingRecord>, ServiceError> {
+        let Some(catalog) = self.open_existing_catalog_read_only()? else {
+            return Ok(Vec::new());
+        };
+        Ok(catalog
+            .list_rule_findings()?
+            .into_iter()
+            .filter(|finding| {
+                finding.instance_id.as_deref() == Some(skill.id.as_str())
+                    || finding.definition_id.as_deref() == Some(skill.definition_id.as_str())
+            })
+            .collect())
     }
 
     pub fn prepare_llm_action(
@@ -2792,6 +3355,160 @@ fn estimate_tokens(parts: &[&str]) -> u32 {
     u32::try_from(estimated).unwrap_or(u32::MAX)
 }
 
+#[derive(Debug, Clone)]
+struct BuiltLlmPrompt {
+    prompt_preview: String,
+    prompt_scope: Vec<String>,
+    included_fields: Vec<String>,
+    excluded_fields: Vec<String>,
+    redaction: LlmPromptRedactionSummary,
+    estimated_output_tokens: u32,
+}
+
+struct PromptRedactor<'a> {
+    roots: &'a [(String, &'static str)],
+    redacted_value_count: usize,
+    redacted_fields: BTreeMap<String, ()>,
+}
+
+impl<'a> PromptRedactor<'a> {
+    fn new(roots: &'a [(String, &'static str)]) -> Self {
+        Self {
+            roots,
+            redacted_value_count: 0,
+            redacted_fields: BTreeMap::new(),
+        }
+    }
+
+    fn redact(&mut self, value: &str) -> String {
+        let (path_redacted, path_count) = redact_with_count(value, self.roots);
+        if path_count > 0 {
+            self.redacted_value_count += path_count;
+            self.redacted_fields.insert("local paths".to_string(), ());
+        }
+        let mut token_count = 0usize;
+        let redacted = path_redacted
+            .split_whitespace()
+            .map(|token| {
+                let trimmed = token.trim_matches(|ch: char| {
+                    matches!(ch, '"' | '\'' | ',' | ';' | ')' | '(' | '[' | ']')
+                });
+                let lower = trimmed.to_lowercase();
+                if lower.contains("key")
+                    || lower.contains("token")
+                    || lower.contains("secret")
+                    || lower.contains("credential")
+                    || lower.contains("password")
+                {
+                    token_count += 1;
+                    "<redacted>"
+                } else if lower.starts_with("http://") || lower.starts_with("https://") {
+                    token_count += 1;
+                    "<redacted-url>"
+                } else {
+                    token
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+        if token_count > 0 {
+            self.redacted_value_count += token_count;
+            self.redacted_fields
+                .insert("secret-like tokens and private URLs".to_string(), ());
+        }
+        redacted
+    }
+
+    fn summary(self) -> LlmPromptRedactionSummary {
+        LlmPromptRedactionSummary {
+            status: "redacted-preview-confirmed-required".to_string(),
+            redacted_value_count: self.redacted_value_count,
+            redacted_fields: self.redacted_fields.into_keys().collect(),
+            placeholders: vec![
+                "$HOME",
+                "<project-root>",
+                "<project-cwd>",
+                "<app-data-dir>",
+                "<redacted>",
+                "<redacted-url>",
+            ],
+            raw_prompt_persisted: false,
+            raw_response_persisted: false,
+            raw_secret_returned: false,
+        }
+    }
+}
+
+fn redact_with_count(value: &str, roots: &[(String, &'static str)]) -> (String, usize) {
+    let mut redacted = value.to_string();
+    let mut count = 0usize;
+    for (root, placeholder) in roots {
+        if !root.is_empty() && redacted.contains(root) {
+            count += redacted.matches(root).count();
+            redacted = redacted.replace(root, placeholder);
+        }
+    }
+    (redacted, count)
+}
+
+fn llm_preview_id(
+    params: &LlmPreviewPromptParams,
+    profile: Option<&ProviderProfileRecord>,
+    prompt_preview: &str,
+    estimated_input_tokens: u32,
+    estimated_output_tokens: u32,
+) -> String {
+    let profile_fingerprint = profile
+        .map(|profile| {
+            format!(
+                "{}\x1f{}\x1f{}\x1f{}",
+                profile.id,
+                profile.provider_type.as_str(),
+                profile.base_url,
+                profile.model
+            )
+        })
+        .unwrap_or_else(|| "no-profile".to_string());
+    let source = serde_json::json!({
+        "version": "v2.42",
+        "profile": profile_fingerprint,
+        "action": params.action.as_str(),
+        "skill_instance_id": params.skill_instance_id,
+        "instance_ids": params.instance_ids,
+        "analysis_kind": params.analysis_kind.map(|kind| kind.as_str()),
+        "prompt": prompt_preview,
+        "estimated_input_tokens": estimated_input_tokens,
+        "estimated_output_tokens": estimated_output_tokens
+    });
+    let digest = Sha256::digest(source.to_string().as_bytes());
+    format!("prompt-preview-{digest:x}")
+}
+
+fn llm_prompt_action_type(params: &LlmPreviewPromptParams) -> String {
+    match params.action {
+        LlmPromptActionKind::SkillAnalysis => format!(
+            "skill_analysis:{}",
+            params
+                .analysis_kind
+                .unwrap_or(LlmSkillAnalysisKind::Overview)
+                .as_str()
+        ),
+        other => other.as_str().to_string(),
+    }
+}
+
+fn destination_host_for_url(base_url: &str) -> String {
+    let without_scheme = base_url
+        .strip_prefix("https://")
+        .or_else(|| base_url.strip_prefix("http://"))
+        .unwrap_or(base_url);
+    without_scheme
+        .split('/')
+        .next()
+        .unwrap_or("<unknown>")
+        .to_string()
+}
+
 fn llm_review_risk(
     findings: &[RuleFindingRecord],
     frontmatter_raw: &str,
@@ -3115,6 +3832,8 @@ mod tests {
         assert!(methods.contains(&Value::String("llm.saveProviderProfile".to_string())));
         assert!(methods.contains(&Value::String("llm.deleteProviderProfile".to_string())));
         assert!(methods.contains(&Value::String("llm.testProviderConnection".to_string())));
+        assert!(methods.contains(&Value::String("llm.previewPrompt".to_string())));
+        assert!(methods.contains(&Value::String("llm.confirmPromptAndSend".to_string())));
         assert!(methods.contains(&Value::String("llm.prepareAction".to_string())));
         assert!(methods.contains(&Value::String("llm.prepareSkillAnalysis".to_string())));
         assert!(methods.contains(&Value::String("cleanup.listQueue".to_string())));
@@ -4336,6 +5055,358 @@ mod tests {
 
         let _ = fs::remove_dir_all(app_data_dir);
         let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn llm_preview_prompt_returns_redacted_confirmation_payload() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-llm-preview-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+        let skill_path = app_data_dir.join("secret-project-path").join("SKILL.md");
+        seed_catalog_with_llm_skill(&host, &skill_path);
+        let save = host.handle(ServiceRequest {
+            id: Some("provider-save".to_string()),
+            method: "llm.saveProviderProfile".to_string(),
+            params: json!({
+                "id": "fixture-openai",
+                "display_name": "Fixture OpenAI",
+                "provider_type": "openai-compatible",
+                "base_url": "https://example.invalid/v1",
+                "model": "fixture-model",
+                "enabled": true,
+                "single_request_token_limit": 4096,
+                "monthly_budget_usd": 3.5
+            }),
+        });
+        assert!(save.ok, "{:?}", save.error);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("preview".to_string()),
+            method: "llm.previewPrompt".to_string(),
+            params: json!({
+                "action": "skill_analysis",
+                "instance_ids": ["llm-skill-id", "missing-skill-id"],
+                "analysis_kind": "risk",
+                "user_intent": "review credential_marker=fixture-redacted-value without leaking local paths"
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("preview result");
+        assert_eq!(result.get("status").and_then(Value::as_str), Some("ready"));
+        assert_eq!(result.get("allowed").and_then(Value::as_bool), Some(true));
+        assert_eq!(
+            result.get("requires_confirmation").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result.get("provider_request_sent").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("write_back_allowed").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .get("draft_requires_user_copy")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert!(result
+            .get("preview_id")
+            .and_then(Value::as_str)
+            .is_some_and(|id| id.starts_with("prompt-preview-")));
+        assert_eq!(
+            result
+                .pointer("/redaction/raw_prompt_persisted")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/redaction/raw_secret_returned")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert!(result
+            .pointer("/redaction/redacted_value_count")
+            .and_then(Value::as_u64)
+            .is_some_and(|count| count > 0));
+
+        let serialized = serde_json::to_string(&result).expect("serialize preview");
+        assert!(serialized.contains("<redacted>"));
+        assert!(!serialized.contains("OPENAI_API_KEY"));
+        assert!(!serialized.contains("fixture-redacted-value"));
+        assert!(!serialized.contains(&skill_path.to_string_lossy().to_string()));
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn llm_confirm_prompt_rejects_mismatched_preview_without_metadata() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-llm-preview-mismatch-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_llm_skill(&host, &app_data_dir.join("fixture-skill").join("SKILL.md"));
+        let save = host.handle(ServiceRequest {
+            id: Some("provider-save".to_string()),
+            method: "llm.saveProviderProfile".to_string(),
+            params: json!({
+                "id": "fixture-openai",
+                "display_name": "Fixture OpenAI",
+                "provider_type": "openai-compatible",
+                "base_url": "https://example.invalid/v1",
+                "model": "fixture-model",
+                "enabled": true
+            }),
+        });
+        assert!(save.ok, "{:?}", save.error);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("confirm".to_string()),
+            method: "llm.confirmPromptAndSend".to_string(),
+            params: json!({
+                "preview_id": "prompt-preview-stale",
+                "confirmation_id": "confirm-preview",
+                "request": {
+                    "action": "analyze",
+                    "skill_instance_id": "llm-skill-id"
+                }
+            }),
+        });
+
+        assert!(!response.ok);
+        let error = response.error.expect("mismatch error");
+        assert_eq!(error.code, "invalid_request");
+        assert!(error.message.contains("preview_id"));
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn llm_confirm_prompt_blocks_without_credential_and_writes_metadata_only() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-llm-confirm-blocked-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+        let save = host.handle(ServiceRequest {
+            id: Some("provider-save".to_string()),
+            method: "llm.saveProviderProfile".to_string(),
+            params: json!({
+                "id": "fixture-openai",
+                "display_name": "Fixture OpenAI",
+                "provider_type": "openai-compatible",
+                "base_url": "https://example.invalid/v1",
+                "model": "fixture-model",
+                "enabled": true
+            }),
+        });
+        assert!(save.ok, "{:?}", save.error);
+        let request = json!({
+            "action": "recommend",
+            "user_intent": "review token=fixture-redacted-value"
+        });
+        let preview = host.handle(ServiceRequest {
+            id: Some("preview".to_string()),
+            method: "llm.previewPrompt".to_string(),
+            params: request.clone(),
+        });
+        assert!(preview.ok, "{:?}", preview.error);
+        let preview_id = preview
+            .result
+            .as_ref()
+            .and_then(|result| result.get("preview_id"))
+            .and_then(Value::as_str)
+            .expect("preview id")
+            .to_string();
+
+        let confirm = host.handle(ServiceRequest {
+            id: Some("confirm".to_string()),
+            method: "llm.confirmPromptAndSend".to_string(),
+            params: json!({
+                "preview_id": preview_id,
+                "confirmation_id": "confirm-without-credential",
+                "request": request,
+                "timeout_ms": 250
+            }),
+        });
+
+        assert!(confirm.ok, "{:?}", confirm.error);
+        let result = confirm.result.expect("confirm result");
+        assert_eq!(
+            result.get("status").and_then(Value::as_str),
+            Some("blocked")
+        );
+        assert_eq!(
+            result.get("provider_request_sent").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("credential_accessed").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.pointer("/audit/error_code").and_then(Value::as_str),
+            Some("credential_unavailable")
+        );
+        assert_eq!(
+            result
+                .pointer("/audit/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let audit_content =
+            fs::read_to_string(provider_call_metadata_path(&app_data_dir)).expect("audit content");
+        assert!(audit_content.contains("\"action_type\":\"recommend\""));
+        assert!(audit_content.contains("\"status\":\"blocked\""));
+        assert!(!audit_content.contains("fixture-redacted-value"));
+        assert!(!audit_content.contains("review token"));
+        assert!(!audit_content.contains("api_key"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn llm_confirm_prompt_sends_redacted_prompt_to_mock_provider_and_audits_metadata_only() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-llm-confirm-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let (base_url, server) = spawn_mock_openai_server();
+        let host = test_host(app_data_dir.clone());
+        let skill_path = app_data_dir.join("fixture-skill").join("SKILL.md");
+        seed_catalog_with_llm_skill(&host, &skill_path);
+        let save = host.handle(ServiceRequest {
+            id: Some("provider-save".to_string()),
+            method: "llm.saveProviderProfile".to_string(),
+            params: json!({
+                "id": "mock-openai",
+                "display_name": "Mock OpenAI",
+                "provider_type": "openai-compatible",
+                "base_url": base_url,
+                "model": "mock-model",
+                "enabled": true,
+                "single_request_token_limit": 4096,
+                "monthly_budget_usd": 10.0
+            }),
+        });
+        assert!(save.ok, "{:?}", save.error);
+        std::env::set_var(
+            "SKILLS_COPILOT_TEST_SECRET_PROVIDER_MOCK_OPENAI",
+            "test-secret-key",
+        );
+
+        let request = json!({
+            "action": "analyze",
+            "skill_instance_id": "llm-skill-id",
+            "user_intent": "summarize risk without exposing token=fixture-redacted-value"
+        });
+        let preview = host.handle(ServiceRequest {
+            id: Some("preview".to_string()),
+            method: "llm.previewPrompt".to_string(),
+            params: request.clone(),
+        });
+        assert!(preview.ok, "{:?}", preview.error);
+        let preview_result = preview.result.expect("preview result");
+        let preview_id = preview_result
+            .get("preview_id")
+            .and_then(Value::as_str)
+            .expect("preview id")
+            .to_string();
+
+        let confirm = host.handle(ServiceRequest {
+            id: Some("confirm".to_string()),
+            method: "llm.confirmPromptAndSend".to_string(),
+            params: json!({
+                "preview_id": preview_id,
+                "confirmation_id": "confirm-mock-provider",
+                "request": request,
+                "timeout_ms": 2_000
+            }),
+        });
+        std::env::remove_var("SKILLS_COPILOT_TEST_SECRET_PROVIDER_MOCK_OPENAI");
+
+        assert!(confirm.ok, "{:?}", confirm.error);
+        let result = confirm.result.expect("confirm result");
+        assert_eq!(
+            result.get("status").and_then(Value::as_str),
+            Some("succeeded")
+        );
+        assert_eq!(
+            result.get("provider_request_sent").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result.get("credential_accessed").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result.get("draft_output").and_then(Value::as_str),
+            Some("Draft-only review from mock provider.")
+        );
+        assert_eq!(
+            result.get("write_back_allowed").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .get("script_execution_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("raw_prompt_persisted").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .get("raw_response_persisted")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.pointer("/audit/action_type").and_then(Value::as_str),
+            Some("analyze")
+        );
+        assert_eq!(
+            result
+                .pointer("/audit/confirmation_id")
+                .and_then(Value::as_str),
+            Some("confirm-mock-provider")
+        );
+
+        let request_text = server.join().expect("mock server thread");
+        assert!(request_text
+            .to_lowercase()
+            .contains("authorization: bearer test-secret-key"));
+        assert!(request_text.contains("<redacted>"));
+        assert!(!request_text.contains("OPENAI_API_KEY"));
+        assert!(!request_text.contains("fixture-redacted-value"));
+        assert!(!request_text.contains(&skill_path.to_string_lossy().to_string()));
+
+        let audit_content =
+            fs::read_to_string(provider_call_metadata_path(&app_data_dir)).expect("audit content");
+        assert!(audit_content.contains("\"action_type\":\"analyze\""));
+        assert!(audit_content.contains("\"status\":\"succeeded\""));
+        assert!(audit_content.contains("\"provider_request_sent\":true"));
+        assert!(!audit_content.contains("Draft-only review from mock provider."));
+        assert!(!audit_content.contains("OPENAI_API_KEY"));
+        assert!(!audit_content.contains("test-secret-key"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
     }
 
     #[test]
@@ -5766,6 +6837,32 @@ mod tests {
                 assert!(!tested.raw_response_persisted);
                 assert!(!tested.raw_secret_returned);
             }
+            "llm.previewPrompt" => {
+                let preview: WireLlmPreviewPromptResult =
+                    decode_fixture_result(method, result, path);
+                assert!(preview.requires_confirmation);
+                assert!(!preview.provider_request_sent);
+                assert!(!preview.write_back_allowed);
+                assert!(preview.draft_requires_user_copy);
+                assert!(!preview.raw_secret_returned);
+                assert!(!preview.raw_prompt_persisted);
+                assert!(!preview.raw_response_persisted);
+                assert!(!preview.redaction.raw_prompt_persisted);
+                assert!(!preview.redaction.raw_response_persisted);
+                assert!(!preview.redaction.raw_secret_returned);
+            }
+            "llm.confirmPromptAndSend" => {
+                let confirmed: WireLlmConfirmPromptAndSendResult =
+                    decode_fixture_result(method, result, path);
+                assert!(!confirmed.write_back_allowed);
+                assert!(!confirmed.script_execution_allowed);
+                assert!(!confirmed.config_mutation_allowed);
+                assert!(!confirmed.snapshot_created);
+                assert!(!confirmed.triage_mutation_allowed);
+                assert!(!confirmed.raw_secret_returned);
+                assert!(!confirmed.raw_prompt_persisted);
+                assert!(!confirmed.raw_response_persisted);
+            }
             "llm.prepareAction" => {
                 let prepare: WireLlmPrepareActionResult =
                     decode_fixture_result(method, result, path);
@@ -6186,6 +7283,18 @@ mod tests {
             "llm.testProviderConnection" => json!({
                 "profile_id": "dispatch-provider",
                 "confirmation_id": "dispatch-confirmation"
+            }),
+            "llm.previewPrompt" => json!({
+                "action": "recommend",
+                "user_intent": "fixture"
+            }),
+            "llm.confirmPromptAndSend" => json!({
+                "preview_id": "prompt-preview-stale",
+                "confirmation_id": "dispatch-confirmation",
+                "request": {
+                    "action": "recommend",
+                    "user_intent": "fixture"
+                }
             }),
             "llm.prepareSkillAnalysis" => {
                 json!({ "instance_ids": ["missing-skill"], "analysis_kind": "overview" })
@@ -6667,6 +7776,80 @@ mod tests {
         estimated_total_tokens: u32,
         provider_request_sent: bool,
         generated_by: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireLlmPreviewPromptResult {
+        preview_id: String,
+        status: String,
+        allowed: bool,
+        reason: String,
+        action: String,
+        profile_id: Option<String>,
+        provider: Option<String>,
+        model: Option<String>,
+        destination_host: Option<String>,
+        prompt_scope: Vec<String>,
+        included_fields: Vec<String>,
+        excluded_fields: Vec<String>,
+        redaction: WireLlmPromptRedactionSummary,
+        prompt_preview: String,
+        estimated_input_tokens: u32,
+        estimated_output_tokens: u32,
+        estimated_total_tokens: u32,
+        estimated_cost_usd: f64,
+        single_request_token_limit: u32,
+        monthly_budget_usd: f64,
+        requires_confirmation: bool,
+        confirmation: WireLlmConfirmationRequirement,
+        write_back_allowed: bool,
+        draft_requires_user_copy: bool,
+        provider_request_sent: bool,
+        raw_secret_returned: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireLlmPromptRedactionSummary {
+        status: String,
+        redacted_value_count: usize,
+        redacted_fields: Vec<String>,
+        placeholders: Vec<String>,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+        raw_secret_returned: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireLlmConfirmPromptAndSendResult {
+        preview_id: String,
+        confirmation_id: String,
+        status: String,
+        action: String,
+        profile_id: String,
+        provider: String,
+        model: String,
+        destination_host: String,
+        provider_request_sent: bool,
+        credential_accessed: bool,
+        draft_output: Option<String>,
+        draft_requires_user_copy: bool,
+        write_back_allowed: bool,
+        script_execution_allowed: bool,
+        config_mutation_allowed: bool,
+        snapshot_created: bool,
+        triage_mutation_allowed: bool,
+        audit: WireProviderCallMetadata,
+        raw_secret_returned: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
     }
 
     #[allow(dead_code)]
@@ -7321,6 +8504,63 @@ mod tests {
                 extra_roots: Vec::new(),
             },
         }
+    }
+
+    fn spawn_mock_openai_server() -> (String, std::thread::JoinHandle<String>) {
+        let listener =
+            std::net::TcpListener::bind("127.0.0.1:0").expect("bind mock provider listener");
+        let port = listener
+            .local_addr()
+            .expect("mock provider local addr")
+            .port();
+        let handle = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept mock provider request");
+            let mut bytes = Vec::new();
+            let mut buffer = [0u8; 1024];
+            let mut header_end = None;
+            while header_end.is_none() {
+                let read = std::io::Read::read(&mut stream, &mut buffer)
+                    .expect("read mock provider headers");
+                assert!(read > 0, "mock provider request closed before headers");
+                bytes.extend_from_slice(&buffer[..read]);
+                header_end = find_header_end(&bytes);
+            }
+            let header_end = header_end.expect("header end");
+            let headers = String::from_utf8_lossy(&bytes[..header_end]).to_string();
+            let content_length = headers
+                .lines()
+                .find_map(|line| {
+                    let (name, value) = line.split_once(':')?;
+                    if name.eq_ignore_ascii_case("content-length") {
+                        value.trim().parse::<usize>().ok()
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(0);
+            let body_start = header_end + 4;
+            while bytes.len().saturating_sub(body_start) < content_length {
+                let read =
+                    std::io::Read::read(&mut stream, &mut buffer).expect("read mock provider body");
+                assert!(read > 0, "mock provider request closed before body");
+                bytes.extend_from_slice(&buffer[..read]);
+            }
+            let request_text = String::from_utf8_lossy(&bytes).to_string();
+            let body = r#"{"choices":[{"message":{"content":"Draft-only review from mock provider."}}],"usage":{"prompt_tokens":32,"completion_tokens":8,"total_tokens":40}}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            std::io::Write::write_all(&mut stream, response.as_bytes())
+                .expect("write mock provider response");
+            request_text
+        });
+        (format!("http://localhost:{port}/v1"), handle)
+    }
+
+    fn find_header_end(bytes: &[u8]) -> Option<usize> {
+        bytes.windows(4).position(|window| window == b"\r\n\r\n")
     }
 
     fn seed_catalog_with_llm_skill(host: &ServiceHost, path: &Path) {
