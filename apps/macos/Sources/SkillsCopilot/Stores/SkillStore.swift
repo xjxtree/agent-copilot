@@ -45,6 +45,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var similarSkillGroupingResult: SimilarSkillGroupingResult?
     @Published private(set) var capabilityTaxonomyResult: CapabilityTaxonomyResult?
     @Published private(set) var workspaceReadinessResult: WorkspaceReadinessResult?
+    @Published private(set) var remediationPlanResult: RemediationPlanResult?
     @Published private(set) var traceImportList = AgentTraceImportListResult(imports: [])
     @Published private(set) var traceImportResult: AgentTraceImportResult?
     @Published private(set) var traceImportDeleteResult: AgentTraceImportDeleteResult?
@@ -59,6 +60,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var isGroupingSimilarSkills = false
     @Published private(set) var isBuildingCapabilityTaxonomy = false
     @Published private(set) var isCheckingWorkspaceReadiness = false
+    @Published private(set) var isPlanningRemediation = false
     @Published private(set) var isLoadingTraceImports = false
     @Published private(set) var isImportingTrace = false
     @Published private(set) var deletingTaskBenchmarkIDs: Set<String> = []
@@ -108,6 +110,7 @@ final class SkillStore: ObservableObject {
             similarSkillGroupingResult = nil
             capabilityTaxonomyResult = nil
             workspaceReadinessResult = nil
+            remediationPlanResult = nil
             Task { await loadAgentConfigSnapshots() }
             Task { await loadCleanupQueue() }
             Task { await loadCrossAgentComparisons() }
@@ -182,7 +185,7 @@ final class SkillStore: ObservableObject {
     }
 
     private var isTaskBenchmarkBusy: Bool {
-        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isGroupingSimilarSkills || isBuildingCapabilityTaxonomy || isCheckingWorkspaceReadiness || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty
+        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isGroupingSimilarSkills || isBuildingCapabilityTaxonomy || isCheckingWorkspaceReadiness || isPlanningRemediation || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty
     }
 
     private var isLLMPromptBusy: Bool {
@@ -1531,6 +1534,31 @@ final class SkillStore: ObservableObject {
             )
         } catch {
             workspaceReadinessResult = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
+    func planRemediation() async {
+        guard !isPlanningRemediation else { return }
+        guard !isRefreshBusy else {
+            remediationPlanResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        isPlanningRemediation = true
+        defer { isPlanningRemediation = false }
+
+        let agent = agentFilter == .all ? nil : agentFilter.rawValue
+        let taskText = selectedCrossAgentReadinessInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            remediationPlanResult = try await service.planRemediation(
+                taskText: taskText.isEmpty ? nil : taskText,
+                agent: agent,
+                project: activeProjectContext,
+                limit: 20,
+                includeGuidanceOnly: true
+            )
+        } catch {
+            remediationPlanResult = .unavailable(reason: error.localizedDescription)
         }
     }
 

@@ -57,6 +57,8 @@ struct SkillStoreTests {
         try await capabilityTaxonomyFallsBackWhenMethodUnavailable()
         try await workspaceReadinessUsesReadOnlyServiceContract()
         try await workspaceReadinessFallsBackWhenMethodUnavailable()
+        try await remediationPlanUsesReadOnlyServiceContract()
+        try await remediationPlanFallsBackWhenMethodUnavailable()
         try await crossAgentReadinessUsesReadOnlyServiceContract()
         try await routingConfidenceClearsStaleSelection()
         try await llmPreparePreviewIsScopedToSelectedSkillAndReadOnly()
@@ -1561,6 +1563,75 @@ struct SkillStoreTests {
         try expectContains(fake.calls(), "workspace.checkReadiness", "Fallback should still prove the intended V2.55 method was attempted.")
     }
 
+    private func remediationPlanUsesReadOnlyServiceContract() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        store.routingConfidenceText = "Prepare local release audit work."
+        await store.reload()
+        let snapshotCallsBeforePlan = countOccurrences("snapshot.", in: fake.calls())
+        await store.planRemediation()
+
+        let result = store.remediationPlanResult
+        try expectEqual(result?.generatedBy, "local-v2.56", "Remediation plan should expose generator metadata.")
+        try expectEqual(result?.summary.totalCount, 2, "Remediation plan should expose total item count.")
+        try expectEqual(result?.summary.highCount, 1, "Remediation plan should expose high-priority count.")
+        try expectEqual(result?.priorityRows.first?.title, "High priority", "Remediation plan should expose priority rows.")
+        try expectEqual(result?.items.first?.title, "Add Codex release audit coverage", "Remediation plan should expose plan items.")
+        try expectEqual(result?.items.first?.skill?.skillName, "Beta", "Remediation plan should expose referenced skill evidence.")
+        try expectEqual(result?.items.first?.guidanceOnly, true, "Remediation items must stay guidance-only.")
+        try expectEqual(result?.gapNotes.first, "Codex lacks a project-scoped release audit skill.", "Remediation plan should expose gap notes.")
+        try expectEqual(result?.blockerNotes.first, "No automatic write/apply path is exposed.", "Remediation plan should expose blocker notes.")
+        try expectEqual(result?.evidenceReferences.first?.title, "Remediation planner", "Remediation plan should expose evidence references.")
+        try expectFalse(result?.safetyFlags.providerRequestSent ?? true, "Remediation planning must not send provider requests.")
+        try expectFalse(result?.safetyFlags.writeBackAllowed ?? true, "Remediation planning must not allow write-back.")
+        try expectFalse(result?.safetyFlags.writeActionsAvailable ?? true, "Remediation planning must not expose write actions.")
+        try expectFalse(result?.safetyFlags.scriptExecutionAllowed ?? true, "Remediation planning must not allow script execution.")
+        try expectFalse(result?.safetyFlags.executionActionsAvailable ?? true, "Remediation planning must not expose execution actions.")
+        try expectFalse(result?.safetyFlags.configMutationAllowed ?? true, "Remediation planning must not mutate config.")
+        try expectFalse(result?.safetyFlags.snapshotCreated ?? true, "Remediation planning must not create snapshots.")
+        try expectFalse(result?.safetyFlags.triageMutationAllowed ?? true, "Remediation planning must not mutate triage.")
+        try expectFalse(result?.safetyFlags.credentialAccessed ?? true, "Remediation planning must not access credentials.")
+        try expectFalse(result?.safetyFlags.rawPromptPersisted ?? true, "Remediation planning must not persist raw prompts.")
+        try expectFalse(result?.safetyFlags.rawResponsePersisted ?? true, "Remediation planning must not persist raw responses.")
+        try expectFalse(result?.safetyFlags.rawTracePersisted ?? true, "Remediation planning must not persist raw traces.")
+        try expectFalse(result?.safetyFlags.cloudSyncEnabled ?? true, "Remediation planning must not sync cloud data.")
+        try expectFalse(result?.safetyFlags.telemetryEnabled ?? true, "Remediation planning must not emit telemetry.")
+        try expectFalse(store.isPlanningRemediation, "Remediation planner should reset loading state.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "remediation.plan", "Remediation planner should call the V2.56 remediation method.")
+        try expectContains(calls, "\"task\":\"Prepare local release audit work.\"", "Remediation planner should pass current task context when present.")
+        try expectContains(calls, "\"agent\":\"claude-code\"", "Remediation planner should pass the current agent filter.")
+        try expectContains(calls, "\"limit\":20", "Remediation planner should pass the plan limit.")
+        try expectContains(calls, "\"include_guidance_only\":true", "Remediation planner should request guidance-only output.")
+        try expectFalse(calls.contains("llm.previewPrompt"), "Remediation planning must not prepare provider prompts.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Remediation planning must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Remediation planning must not call config write paths.")
+        try expectFalse(calls.contains("script.execute"), "Remediation planning must not call execution paths.")
+        try expectEqual(countOccurrences("snapshot.", in: calls), snapshotCallsBeforePlan, "Remediation planning must not call snapshot paths.")
+        try expectFalse(calls.contains("credential"), "Remediation planning must not call credential paths.")
+    }
+
+    private func remediationPlanFallsBackWhenMethodUnavailable() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "normal")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+        await store.planRemediation()
+
+        try expectEqual(store.remediationPlanResult?.isUnavailable, true, "Remediation planner should expose unavailable fallback for older services.")
+        try expectEqual(store.remediationPlanResult?.fallbackReason, UIStrings.remediationPlanUnavailable, "Unknown method fallback should use the localized unavailable copy.")
+        try expectFalse(store.isPlanningRemediation, "Unavailable remediation planner should reset loading state.")
+        try expectContains(fake.calls(), "remediation.plan", "Fallback should still prove the intended V2.56 method was attempted.")
+    }
+
     private func crossAgentReadinessUsesReadOnlyServiceContract() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -2021,6 +2092,12 @@ private final class FakeServiceScript {
               respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.55","catalog_available":true,"filters":{"task":"Prepare local release audit work.","agent":"claude-code","limit":40,"include_checklist":true,"include_capabilities":true},"summary":{"overall_state":"partial","readiness_score":78,"checklist_count":2,"ready_count":1,"partial_count":1,"blocked_count":0,"agent_count":2,"capability_count":2,"gap_count":1,"blocker_count":0,"summary":"Workspace is partially ready for release audit work."},"checklist_rows":[{"check_id":"release-audit","title":"Release audit skill enabled","status":"ready","severity":"info","agent":"claude-code","capability":"Release audit","summary":"Beta is enabled and project scoped.","required_skills":["Beta"],"matched_skills":[{"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","quality_score":82,"readiness_score":78,"reasons":["Project-scoped audit coverage."],"evidence_refs":["catalog:beta"],"safety_flags":["provider not sent"]}],"gaps":[],"blockers":[],"evidence_refs":["catalog:beta"],"safety_flags":["provider not sent"]},{"check_id":"codex-audit","title":"Codex release audit route","status":"partial","severity":"warning","agent":"codex","capability":"Release audit","summary":"Codex lacks project-scoped coverage.","required_skills":["Release audit"],"matched_skills":[],"gaps":["No Codex project-scoped release audit skill."],"blockers":[],"evidence_refs":["catalog:gamma"],"safety_flags":["provider not sent"]}],"agent_rows":[{"agent":"claude-code","display_name":"Claude Code","readiness_score":86,"readiness_state":"ready","enabled_skill_count":3,"required_skill_count":2,"matched_skill_count":2,"gap_count":0,"blocker_count":0,"notes":["Project skills are scoped correctly."],"evidence_refs":["agent:claude-code"]},{"agent":"codex","display_name":"Codex","readiness_score":62,"readiness_state":"partial","enabled_skill_count":1,"required_skill_count":2,"matched_skill_count":1,"gap_count":1,"blocker_count":0,"notes":["No project-scoped Codex release audit skill."],"evidence_refs":["agent:codex"]}],"capability_rows":[{"capability_id":"release-audit","domain":"Release & Validation","capability":"Release audit","readiness_state":"partial","readiness_score":78,"agent_coverage":[{"agent":"claude-code","skill_count":2,"capability_count":1,"coverage_state":"covered"},{"agent":"codex","skill_count":0,"capability_count":1,"coverage_state":"gap"}],"representative_skills":[{"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","readiness_score":78}],"gap_notes":["No Codex route is enabled."],"blocker_notes":[],"evidence_refs":["capability:release-audit"]}],"gap_notes":["Codex lacks a project-scoped release audit skill."],"blocker_notes":[],"evidence_references":[{"title":"Workspace readiness","detail":"Derived from local catalog evidence.","source":"workspace.checkReadiness","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"workspace_readiness","summary":"Provider explanation is copy-only and preview-gated.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent"]}}}'
             fi
             respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: workspace.checkReadiness"}}'
+            ;;
+          *\\"remediation.plan\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.56","catalog_available":true,"filters":{"task":"Prepare local release audit work.","agent":"claude-code","limit":20,"include_guidance_only":true},"summary":{"total_count":2,"critical_count":0,"high_count":1,"medium_count":1,"low_count":0,"quick_win_count":1,"blocker_count":1,"gap_count":1,"ambiguity_count":1,"drift_count":1,"summary":"Review the missing Codex route before tuning duplicate audit skills."},"priority_rows":[{"id":"high","priority":"high","title":"High priority","count":1,"rationale":"Blocks release audit coverage.","evidence_refs":["workspace:codex-gap"]},{"id":"medium","priority":"medium","title":"Medium priority","count":1,"rationale":"Reduces routing ambiguity.","evidence_refs":["similar:audit"]}],"plan_items":[{"item_id":"plan-1","title":"Add Codex release audit coverage","priority":"high","category":"gap","status":"guidance_only","agent":"codex","capability":"Release audit","skill":{"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","readiness_score":78},"rationale":"Workspace readiness reports no Codex project route.","suggested_action":"Open Workspace Readiness and review the Codex gap.","guidance_only":true,"next_area":"Workspace Readiness","expected_impact":"Improves cross-agent readiness for release audit tasks.","gap_notes":["Codex lacks project-scoped audit coverage."],"blocker_notes":[],"evidence_refs":["workspace:codex-gap"],"safety_flags":["provider not sent","guidance only"]},{"item_id":"plan-2","title":"Review duplicate audit wording","priority":"medium","category":"routing_ambiguity","status":"guidance_only","agent":"claude-code","capability":"Release audit","rationale":"Similar grouping found overlapping audit skills.","suggested_action":"Open Similar Skill Grouping and compare the duplicate routes.","guidance_only":true,"next_area":"Similar Skill Grouping","expected_impact":"Clarifies routing confidence without writing files.","gap_notes":[],"blocker_notes":["No automatic write/apply path is exposed."],"evidence_refs":["similar:audit"],"safety_flags":["provider not sent","guidance only"]}],"gap_notes":["Codex lacks a project-scoped release audit skill."],"blocker_notes":["No automatic write/apply path is exposed."],"evidence_references":[{"title":"Remediation planner","detail":"Derived from local workspace readiness.","source":"remediation.plan","agent":"codex"}],"prompt_request":{"enabled":false,"request_kind":"remediation_plan","summary":"Provider explanation is not sent.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent","guidance only"]}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: remediation.plan"}}'
             ;;
           *\\"task.listBenchmarks\\"*)
             if [ "$scenario" = "prompt-ready" ]; then

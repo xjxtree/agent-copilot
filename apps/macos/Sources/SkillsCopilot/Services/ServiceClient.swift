@@ -332,6 +332,26 @@ private struct WorkspaceReadinessParams: Encodable {
     }
 }
 
+private struct RemediationPlanParams: Encodable {
+    let task: String?
+    let agent: String?
+    let projectRoot: String?
+    let currentCWD: String?
+    let workspace: String?
+    let limit: Int?
+    let includeGuidanceOnly: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case task
+        case agent
+        case projectRoot = "project_root"
+        case currentCWD = "current_cwd"
+        case workspace
+        case limit
+        case includeGuidanceOnly = "include_guidance_only"
+    }
+}
+
 private struct TaskBenchmarkDeleteParams: Encodable {
     let benchmarkId: String
 
@@ -974,6 +994,30 @@ final class ServiceClient {
         )
         do {
             return try await call(method: "workspace.checkReadiness", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func planRemediation(
+        taskText: String? = nil,
+        agent: String? = nil,
+        project: ProjectContext? = nil,
+        limit: Int? = 20,
+        includeGuidanceOnly: Bool = true
+    ) async throws -> RemediationPlanResult {
+        let normalizedTask = taskText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let params = RemediationPlanParams(
+            task: normalizedTask?.isEmpty == true ? nil : normalizedTask,
+            agent: agent,
+            projectRoot: project?.rootPath,
+            currentCWD: project?.currentCWD,
+            workspace: project?.name,
+            limit: limit,
+            includeGuidanceOnly: includeGuidanceOnly
+        )
+        do {
+            return try await call(method: "remediation.plan", params: params)
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .unavailable()
         }

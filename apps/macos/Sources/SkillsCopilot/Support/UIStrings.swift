@@ -624,6 +624,24 @@ enum UIStrings {
     static var workspaceReadinessRequired: String { text("workspaceReadiness.required", "Required") }
     static var workspaceReadinessMatched: String { text("workspaceReadiness.matched", "Matched") }
     static var workspaceReadinessEnabled: String { text("workspaceReadiness.enabled", "Enabled") }
+    static var remediationPlanTitle: String { text("remediationPlan.title", "AI Remediation Planner") }
+    static var remediationPlanBoundary: String { text("remediationPlan.boundary", "User-triggered, local-only, deterministic remediation planning from findings, gaps, routing ambiguity, stale/drift, readiness, taxonomy, workspace, and evidence signals. It is guidance-only: it cannot call a provider, write skill files, mutate agent config, create snapshots, change triage, execute scripts, read credentials, persist raw prompts/responses/traces, sync cloud data, or emit telemetry.") }
+    static var remediationPlanAction: String { text("remediationPlan.action.plan", "Plan Remediation") }
+    static var remediationPlanUnavailable: String { text("remediationPlan.unavailable", "Remediation planning is unavailable in this service build.") }
+    static var remediationPlanNoResult: String { text("remediationPlan.empty.result", "No remediation plan loaded.") }
+    static var remediationPlanItem: String { text("remediationPlan.item", "Remediation item") }
+    static var remediationPlanItems: String { text("remediationPlan.items", "Plan items") }
+    static var remediationPlanNoItems: String { text("remediationPlan.empty.items", "No remediation plan items returned.") }
+    static var remediationPlanPriorities: String { text("remediationPlan.priorities", "Priority rows") }
+    static var remediationPlanNoPriorities: String { text("remediationPlan.empty.priorities", "No priority rows returned.") }
+    static var remediationPlanCritical: String { text("remediationPlan.critical", "Critical") }
+    static var remediationPlanQuickWins: String { text("remediationPlan.quickWins", "Quick wins") }
+    static var remediationPlanAmbiguity: String { text("remediationPlan.ambiguity", "Ambiguity") }
+    static var remediationPlanDrift: String { text("remediationPlan.drift", "Stale / drift") }
+    static var remediationPlanCategory: String { text("remediationPlan.category", "Category") }
+    static var remediationPlanGuidanceOnly: String { text("remediationPlan.guidanceOnly", "Guidance only") }
+    static var remediationPlanNextArea: String { text("remediationPlan.nextArea", "Review area") }
+    static var remediationPlanReviewGuidance: String { text("remediationPlan.reviewGuidance", "Review the supporting evidence in existing safe UI areas; no direct write action is available from this plan.") }
     static var taskBenchmarkTitle: String { text("taskBenchmark.title", "Task Benchmark Set") }
     static var taskBenchmarkBoundary: String { text("taskBenchmark.boundary", "User-triggered, local benchmark evaluation for task routing. Local evaluation does not call a provider and cannot write skill files, mutate agent config, create snapshots, change triage, execute scripts, or read credentials.") }
     static var taskBenchmarkTaskPlaceholder: String { text("taskBenchmark.task.placeholder", "Optional benchmark task text; otherwise the current readiness/routing task is used") }

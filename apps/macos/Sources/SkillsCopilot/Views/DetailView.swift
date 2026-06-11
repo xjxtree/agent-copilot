@@ -176,6 +176,8 @@ struct DetailView: View {
                             isBuildingCapabilityTaxonomy: store.isBuildingCapabilityTaxonomy,
                             workspaceReadinessResult: store.workspaceReadinessResult,
                             isCheckingWorkspaceReadiness: store.isCheckingWorkspaceReadiness,
+                            remediationPlanResult: store.remediationPlanResult,
+                            isPlanningRemediation: store.isPlanningRemediation,
                             onScoreQuality: {
                                 Task {
                                     await store.scoreSelectedSkillQuality()
@@ -254,6 +256,11 @@ struct DetailView: View {
                             onCheckWorkspaceReadiness: {
                                 Task {
                                     await store.checkWorkspaceReadiness()
+                                }
+                            },
+                            onPlanRemediation: {
+                                Task {
+                                    await store.planRemediation()
                                 }
                             },
                             taskBenchmarkText: $store.taskBenchmarkText,
@@ -901,6 +908,8 @@ private struct AnalysisSection: View {
     let isBuildingCapabilityTaxonomy: Bool
     let workspaceReadinessResult: WorkspaceReadinessResult?
     let isCheckingWorkspaceReadiness: Bool
+    let remediationPlanResult: RemediationPlanResult?
+    let isPlanningRemediation: Bool
     let onScoreQuality: () -> Void
     let onPreviewQualityPrompt: () -> Void
     let onSendQualityPrompt: () -> Void
@@ -917,6 +926,7 @@ private struct AnalysisSection: View {
     let onGroupSimilarSkills: () -> Void
     let onBuildCapabilityTaxonomy: () -> Void
     let onCheckWorkspaceReadiness: () -> Void
+    let onPlanRemediation: () -> Void
     @Binding var taskBenchmarkText: String
     let taskBenchmarkInput: String
     let taskBenchmarkList: TaskBenchmarkListResult
@@ -1078,6 +1088,12 @@ private struct AnalysisSection: View {
                 result: workspaceReadinessResult,
                 isChecking: isCheckingWorkspaceReadiness,
                 onCheck: onCheckWorkspaceReadiness
+            )
+
+            RemediationPlanPanel(
+                result: remediationPlanResult,
+                isPlanning: isPlanningRemediation,
+                onPlan: onPlanRemediation
             )
 
             KnowledgeSearchPanel(
@@ -4195,6 +4211,336 @@ private struct WorkspaceReadinessCapabilityList: View {
             return "\(readinessScore) · \(row.readinessState)"
         }
         return row.readinessState
+    }
+}
+
+private struct RemediationPlanPanel: View {
+    let result: RemediationPlanResult?
+    let isPlanning: Bool
+    let onPlan: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.remediationPlanTitle, systemImage: "wrench.and.screwdriver")
+                    .font(.headline)
+                Spacer()
+                Label(UIStrings.readOnlyPreview, systemImage: "lock.shield")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(UIStrings.remediationPlanBoundary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+
+            HStack(spacing: 8) {
+                Button {
+                    onPlan()
+                } label: {
+                    Label(UIStrings.remediationPlanAction, systemImage: "list.bullet.clipboard")
+                }
+                .disabled(isPlanning)
+
+                if isPlanning {
+                    Label(UIStrings.llmPreparing, systemImage: "hourglass")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if let result {
+                RemediationPlanResultView(result: result)
+            } else {
+                Label(UIStrings.remediationPlanNoResult, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Label(UIStrings.llmReviewNoActions, systemImage: "nosign")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct RemediationPlanResultView: View {
+    let result: RemediationPlanResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let fallbackReason = result.fallbackReason, !fallbackReason.isEmpty {
+                Label(fallbackReason, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+                SummaryChip(title: UIStrings.remediationPlanItems, value: "\(itemCount)", systemImage: "list.bullet")
+                SummaryChip(title: UIStrings.remediationPlanCritical, value: "\(criticalCount)", systemImage: "exclamationmark.octagon")
+                SummaryChip(title: UIStrings.cleanupPriorityHigh, value: "\(highCount)", systemImage: "exclamationmark.triangle")
+                SummaryChip(title: UIStrings.cleanupPriorityMedium, value: "\(mediumCount)", systemImage: "circle.lefthalf.filled")
+                SummaryChip(title: UIStrings.remediationPlanQuickWins, value: "\(quickWinCount)", systemImage: "bolt")
+                SummaryChip(title: UIStrings.knowledgeBlockerNotes, value: "\(blockerCount)", systemImage: "lock.trianglebadge.exclamationmark")
+                SummaryChip(title: UIStrings.knowledgeGapNotes, value: "\(gapCount)", systemImage: "puzzlepiece.extension")
+                SummaryChip(title: UIStrings.remediationPlanAmbiguity, value: "\(ambiguityCount)", systemImage: "arrow.triangle.branch")
+                SummaryChip(title: UIStrings.remediationPlanDrift, value: "\(driftCount)", systemImage: "clock.arrow.circlepath")
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                MetadataRow(label: UIStrings.routingAccuracyGeneratedBy, value: result.generatedBy)
+                MetadataRow(label: UIStrings.routingAccuracyCatalog, value: result.catalogAvailable ? UIStrings.routingAccuracyAvailable : UIStrings.routingAccuracyUnavailableShort)
+                MetadataRow(label: UIStrings.agent, value: agentFilterLabel)
+                if let projectRoot = result.filters.projectRoot, !projectRoot.isEmpty {
+                    MetadataRow(label: UIStrings.project, value: projectRoot)
+                }
+                if let workspace = result.filters.workspace, !workspace.isEmpty {
+                    MetadataRow(label: UIStrings.workspaceReadinessTitle, value: workspace)
+                }
+                if let taskText = result.filters.taskText, !taskText.isEmpty {
+                    MetadataRow(label: UIStrings.taskBenchmarkTaskPlaceholder, value: taskText)
+                }
+                if let limit = result.filters.limit {
+                    MetadataRow(label: UIStrings.text("filter.limit", "Limit"), value: "\(limit)")
+                }
+                MetadataRow(label: UIStrings.remediationPlanGuidanceOnly, value: result.filters.includeGuidanceOnly ? UIStrings.stateEnabled : UIStrings.stateDisabled)
+                if let promptRequest = result.promptRequest {
+                    MetadataRow(label: UIStrings.routingAccuracyPromptRequest, value: promptRequestLabel(promptRequest))
+                }
+            }
+
+            if !result.summary.summaryText.isEmpty {
+                Text(result.summary.summaryText)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            RemediationPriorityList(rows: result.priorityRows)
+            RemediationPlanItemList(items: result.items)
+            RoutingInlineList(title: UIStrings.knowledgeGapNotes, empty: UIStrings.routingAccuracyNoGaps, values: result.gapNotes, systemImage: "puzzlepiece.extension")
+            RoutingInlineList(title: UIStrings.knowledgeBlockerNotes, empty: UIStrings.routingAccuracyNoBlockers, values: result.blockerNotes, systemImage: "exclamationmark.octagon")
+            CrossAgentReadinessEvidenceList(evidence: result.evidenceReferences)
+            StaleDriftSafetyList(safety: result.safetyFlags)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var itemCount: Int {
+        result.summary.totalCount > 0 ? result.summary.totalCount : result.items.count
+    }
+
+    private var criticalCount: Int {
+        result.summary.criticalCount > 0 ? result.summary.criticalCount : countItems(matching: "critical")
+    }
+
+    private var highCount: Int {
+        result.summary.highCount > 0 ? result.summary.highCount : countItems(matching: "high")
+    }
+
+    private var mediumCount: Int {
+        result.summary.mediumCount > 0 ? result.summary.mediumCount : countItems(matching: "medium")
+    }
+
+    private var quickWinCount: Int {
+        result.summary.quickWinCount > 0 ? result.summary.quickWinCount : result.items.filter { item in
+            item.category.localizedCaseInsensitiveContains("quick")
+                || item.suggestedAction.localizedCaseInsensitiveContains("quick")
+        }.count
+    }
+
+    private var blockerCount: Int {
+        result.summary.blockerCount > 0 ? result.summary.blockerCount : result.blockerNotes.count + result.items.reduce(0) { $0 + $1.blockerNotes.count }
+    }
+
+    private var gapCount: Int {
+        result.summary.gapCount > 0 ? result.summary.gapCount : result.gapNotes.count + result.items.reduce(0) { $0 + $1.gapNotes.count }
+    }
+
+    private var ambiguityCount: Int {
+        result.summary.ambiguityCount > 0 ? result.summary.ambiguityCount : result.items.filter { item in
+            item.category.localizedCaseInsensitiveContains("ambigu")
+                || item.rationale.localizedCaseInsensitiveContains("ambigu")
+        }.count
+    }
+
+    private var driftCount: Int {
+        result.summary.driftCount > 0 ? result.summary.driftCount : result.items.filter { item in
+            item.category.localizedCaseInsensitiveContains("drift")
+                || item.category.localizedCaseInsensitiveContains("stale")
+        }.count
+    }
+
+    private var agentFilterLabel: String {
+        if !result.filters.agents.isEmpty {
+            return result.filters.agents.map(DisplayText.agent).joined(separator: ", ")
+        }
+        return result.filters.agent.map(DisplayText.agent) ?? UIStrings.text("health.allAgents", "All Agents")
+    }
+
+    private func countItems(matching priority: String) -> Int {
+        result.items.filter { item in
+            item.priority.localizedCaseInsensitiveContains(priority)
+        }.count
+    }
+
+    private func promptRequestLabel(_ promptRequest: RoutingAccuracyPromptRequest) -> String {
+        let state = promptRequest.enabled ? UIStrings.llmEnabled : UIStrings.llmDisabled
+        let copy = promptRequest.copyOnly ? UIStrings.llmPromptCopyOnly : UIStrings.llmSkillAnalysisEnabledUnsafe
+        return "\(promptRequest.requestKind) · \(state) · \(copy)"
+    }
+}
+
+private struct RemediationPriorityList: View {
+    let rows: [RemediationPlanPriorityRow]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(UIStrings.remediationPlanPriorities)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if rows.isEmpty {
+                Text(UIStrings.remediationPlanNoPriorities)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(rows.prefix(6)) { row in
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(row.title)
+                                    .font(.caption.bold())
+                                    .lineLimit(1)
+                                Spacer()
+                                Text("\(row.count)")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.secondary)
+                            }
+                            MetadataRow(label: UIStrings.cleanupFilterPriority, value: row.priority)
+                            if !row.rationale.isEmpty {
+                                Text(row.rationale)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .textSelection(.enabled)
+                            }
+                            RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: row.evidenceRefs, systemImage: "checklist")
+                        }
+                        .padding(8)
+                        .background(.quaternary.opacity(0.32), in: RoundedRectangle(cornerRadius: 6))
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct RemediationPlanItemList: View {
+    let items: [RemediationPlanItem]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(UIStrings.remediationPlanItems)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if items.isEmpty {
+                Text(UIStrings.remediationPlanNoItems)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 360), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(items.prefix(10)) { item in
+                        RemediationPlanItemCard(item: item)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct RemediationPlanItemCard: View {
+    let item: RemediationPlanItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(item.title, systemImage: iconName)
+                    .font(.callout.bold())
+                    .lineLimit(1)
+                Spacer()
+                Text(item.priority)
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
+                MetadataRow(label: UIStrings.remediationPlanCategory, value: item.category)
+                MetadataRow(label: UIStrings.state, value: item.status)
+                MetadataRow(label: UIStrings.remediationPlanGuidanceOnly, value: item.guidanceOnly ? UIStrings.stateEnabled : UIStrings.stateDisabled)
+                if let agent = item.agent, !agent.isEmpty {
+                    MetadataRow(label: UIStrings.agent, value: DisplayText.agent(agent))
+                }
+                if let capability = item.capability, !capability.isEmpty {
+                    MetadataRow(label: UIStrings.capabilityTaxonomyCapability, value: capability)
+                }
+                if let nextArea = item.nextArea, !nextArea.isEmpty {
+                    MetadataRow(label: UIStrings.remediationPlanNextArea, value: nextArea)
+                }
+            }
+
+            if let skill = item.skill {
+                CapabilitySkillList(skills: [skill])
+            }
+
+            if !item.rationale.isEmpty {
+                Text(item.rationale)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            Label(item.suggestedAction, systemImage: "lightbulb")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+
+            if let impact = item.impact, !impact.isEmpty {
+                Label(impact, systemImage: "chart.line.uptrend.xyaxis")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            RoutingInlineList(title: UIStrings.knowledgeGapNotes, empty: UIStrings.routingAccuracyNoGaps, values: item.gapNotes, systemImage: "puzzlepiece.extension")
+            RoutingInlineList(title: UIStrings.knowledgeBlockerNotes, empty: UIStrings.routingAccuracyNoBlockers, values: item.blockerNotes, systemImage: "exclamationmark.octagon")
+            RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: item.evidenceRefs, systemImage: "checklist")
+            RoutingInlineList(title: UIStrings.knowledgeSafetyFlags, empty: UIStrings.taskBenchmarkNoSafetyFlags, values: item.safetyFlags, systemImage: "checkmark.shield")
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var iconName: String {
+        if item.category.localizedCaseInsensitiveContains("drift") || item.category.localizedCaseInsensitiveContains("stale") {
+            return "clock.arrow.circlepath"
+        }
+        if item.category.localizedCaseInsensitiveContains("ambigu") {
+            return "arrow.triangle.branch"
+        }
+        if item.category.localizedCaseInsensitiveContains("block") {
+            return "lock.trianglebadge.exclamationmark"
+        }
+        if item.category.localizedCaseInsensitiveContains("gap") {
+            return "puzzlepiece.extension"
+        }
+        return "wrench.and.screwdriver"
     }
 }
 
