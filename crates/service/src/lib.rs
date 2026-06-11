@@ -70,6 +70,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "remediation.plan",
     "remediation.previewDrafts",
     "remediation.previewImpact",
+    "remediation.batchReview",
     "task.checkReadiness",
     "task.rankSkillRoutes",
     "task.compareAgentReadiness",
@@ -1621,6 +1622,123 @@ pub type RemediationPreviewImpactPromptRequest = AgentReadinessPromptRequest;
 pub type RemediationPreviewImpactSafetyFlags = AgentReadinessSafetyFlags;
 
 #[derive(Debug, Clone, Default, Deserialize)]
+pub struct RemediationBatchReviewParams {
+    #[serde(default, alias = "task_text", alias = "user_intent")]
+    pub task: Option<String>,
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default, alias = "workspace_path")]
+    pub project_root: Option<String>,
+    #[serde(default, alias = "workspace")]
+    pub workspace_label: Option<String>,
+    #[serde(default)]
+    pub rule_id: Option<String>,
+    #[serde(default, alias = "risk")]
+    pub severity: Option<String>,
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default, alias = "triage")]
+    pub triage_status: Option<String>,
+    #[serde(default, alias = "instance_ids")]
+    pub candidate_instance_ids: Vec<String>,
+    #[serde(default)]
+    pub group_by: Vec<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationBatchReviewResult {
+    pub generated_by: &'static str,
+    pub catalog_available: bool,
+    pub filters: RemediationBatchReviewFilters,
+    pub summary: RemediationBatchReviewSummary,
+    pub review_groups: Vec<RemediationBatchReviewGroup>,
+    pub review_items: Vec<RemediationBatchReviewItem>,
+    pub recommended_next_step_labels: Vec<String>,
+    pub gap_notes: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub evidence_references: Vec<TaskReadinessEvidenceReference>,
+    pub prompt_request: RemediationBatchReviewPromptRequest,
+    pub safety_flags: RemediationBatchReviewSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationBatchReviewFilters {
+    pub task: Option<String>,
+    pub agent: Option<String>,
+    pub project_root: Option<String>,
+    pub workspace_label: Option<String>,
+    pub rule_id: Option<String>,
+    pub severity: Option<String>,
+    pub status: Option<String>,
+    pub triage_status: Option<String>,
+    pub candidate_instance_ids: Vec<String>,
+    pub group_by: Vec<String>,
+    pub limit: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationBatchReviewSummary {
+    pub total_item_count: usize,
+    pub returned_item_count: usize,
+    pub group_count: usize,
+    pub high_risk_count: usize,
+    pub medium_risk_count: usize,
+    pub low_risk_count: usize,
+    pub task_group_count: usize,
+    pub agent_group_count: usize,
+    pub workspace_group_count: usize,
+    pub rule_group_count: usize,
+    pub blocker_count: usize,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationBatchReviewGroup {
+    pub id: String,
+    pub group_type: &'static str,
+    pub label: String,
+    pub item_count: usize,
+    pub high_risk_count: usize,
+    pub medium_risk_count: usize,
+    pub low_risk_count: usize,
+    pub top_item_ids: Vec<String>,
+    pub recommended_next_step_label: String,
+    pub blocker_notes: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationBatchReviewItem {
+    pub id: String,
+    pub rank: usize,
+    pub source: &'static str,
+    pub source_id: String,
+    pub title: String,
+    pub summary: String,
+    pub risk: &'static str,
+    pub severity: String,
+    pub status: String,
+    pub triage_status: Option<String>,
+    pub rule_id: Option<String>,
+    pub task: Option<String>,
+    pub agent: Option<String>,
+    pub workspace: Option<String>,
+    pub affected_skill: Option<RemediationAffectedSkill>,
+    pub affected_instance_ids: Vec<String>,
+    pub recommended_next_step_label: String,
+    pub blocker_notes: Vec<String>,
+    pub gap_notes: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub side_effect_flags: Vec<&'static str>,
+    pub safety_flags: RemediationBatchReviewSafetyFlags,
+}
+
+pub type RemediationBatchReviewPromptRequest = AgentReadinessPromptRequest;
+pub type RemediationBatchReviewSafetyFlags = AgentReadinessSafetyFlags;
+
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct DetectStaleDriftParams {
     #[serde(default)]
     pub agent: Option<String>,
@@ -2406,6 +2524,7 @@ pub enum LlmPromptActionKind {
     RemediationPlan,
     RemediationPreviewDrafts,
     RemediationPreviewImpact,
+    RemediationBatchReview,
     TaskReadiness,
     RoutingConfidence,
 }
@@ -2427,6 +2546,7 @@ impl LlmPromptActionKind {
             Self::RemediationPlan => "remediation_plan",
             Self::RemediationPreviewDrafts => "remediation_preview_drafts",
             Self::RemediationPreviewImpact => "remediation_preview_impact",
+            Self::RemediationBatchReview => "remediation_batch_review",
             Self::TaskReadiness => "task_readiness",
             Self::RoutingConfidence => "routing_confidence",
         }
@@ -3005,6 +3125,14 @@ impl ServiceHost {
                     serde_json::from_value(request.params)?
                 };
                 serde_json::to_value(self.preview_remediation_impact(params)?).map_err(Into::into)
+            }
+            "remediation.batchReview" => {
+                let params: RemediationBatchReviewParams = if request.params.is_null() {
+                    RemediationBatchReviewParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.batch_review_remediation(params)?).map_err(Into::into)
             }
             "task.checkReadiness" => {
                 let params: TaskReadinessParams = serde_json::from_value(request.params)?;
@@ -6740,6 +6868,215 @@ impl ServiceHost {
         })
     }
 
+    pub fn batch_review_remediation(
+        &self,
+        params: RemediationBatchReviewParams,
+    ) -> Result<RemediationBatchReviewResult, ServiceError> {
+        if matches!(params.limit, Some(0)) {
+            return Err(ServiceError::InvalidRequest(
+                "remediation.batchReview limit must be greater than zero".to_string(),
+            ));
+        }
+
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let roots = self.redaction_roots(&adapter_ctx);
+        let filters = remediation_batch_review_filters(&params, &roots);
+        let Some(catalog) = self.open_existing_catalog_read_only()? else {
+            return Ok(empty_remediation_batch_review_result(filters, false));
+        };
+
+        let skills = self.list_visible_skill_records(&catalog)?;
+        let details = skills
+            .iter()
+            .filter(|skill| {
+                agent_matches(filters.agent.as_deref(), Some(skill.agent.as_str()))
+                    && (filters.candidate_instance_ids.is_empty()
+                        || filters.candidate_instance_ids.contains(&skill.id))
+            })
+            .filter_map(|skill| catalog.get_skill_detail(&skill.id).ok().flatten())
+            .filter(|detail| {
+                workspace_detail_matches(params.project_root.as_deref().map(Path::new), detail)
+            })
+            .collect::<Vec<_>>();
+        let detail_by_id = details
+            .iter()
+            .map(|detail| (detail.id.as_str(), detail))
+            .collect::<BTreeMap<_, _>>();
+        let selected_ids = if filters.candidate_instance_ids.is_empty() {
+            details
+                .iter()
+                .map(|detail| detail.id.clone())
+                .collect::<Vec<_>>()
+        } else {
+            filters.candidate_instance_ids.clone()
+        };
+
+        let plan = self.plan_remediation(RemediationPlanParams {
+            agent: filters.agent.clone(),
+            task: filters.task.clone(),
+            project_root: params.project_root.clone(),
+            focus: None,
+            focus_areas: Vec::new(),
+            limit: Some(filters.limit.saturating_mul(2).max(filters.limit)),
+            candidate_instance_ids: selected_ids.clone(),
+            include_deferred: true,
+        })?;
+        let drafts = self.preview_remediation_drafts(RemediationPreviewDraftsParams {
+            agent: filters.agent.clone(),
+            task: filters.task.clone(),
+            skill_ids: selected_ids.clone(),
+            finding_ids: Vec::new(),
+            draft_types: Vec::new(),
+            limit: Some(filters.limit.saturating_mul(2).max(filters.limit)),
+            include_policy_drafts: true,
+        })?;
+        let impact = self.preview_remediation_impact(RemediationPreviewImpactParams {
+            action: Some("review".to_string()),
+            task: filters.task.clone(),
+            agent: filters.agent.clone(),
+            project_root: params.project_root.clone(),
+            skill_ids: selected_ids.clone(),
+            candidate_instance_ids: Vec::new(),
+            draft_ids: Vec::new(),
+            plan_item_ids: Vec::new(),
+            limit: Some(filters.limit.saturating_mul(2).max(filters.limit)),
+            include_snapshot_plan: true,
+            include_rollback_plan: true,
+            include_risk_impact: true,
+            include_task_impact: filters.task.is_some(),
+        })?;
+        let cleanup = self.cleanup_list_queue(CleanupListQueueParams {
+            agent: filters.agent.clone(),
+            limit: Some(filters.limit.saturating_mul(2).max(filters.limit)),
+        })?;
+
+        let mut evidence_by_id = BTreeMap::new();
+        for evidence in plan
+            .evidence_references
+            .iter()
+            .chain(drafts.evidence_references.iter())
+            .chain(impact.evidence_references.iter())
+        {
+            evidence_by_id
+                .entry(evidence.id.clone())
+                .or_insert_with(|| evidence.clone());
+        }
+
+        let mut items = Vec::new();
+        for item in &plan.plan_items {
+            items.push(remediation_batch_review_item_from_plan(
+                item,
+                &filters,
+                &detail_by_id,
+            ));
+        }
+        for item in &drafts.draft_items {
+            items.push(remediation_batch_review_item_from_draft(item, &filters));
+        }
+        for row in &impact.impact_rows {
+            items.push(remediation_batch_review_item_from_impact(row, &filters));
+        }
+        for item in &cleanup.items {
+            items.push(remediation_batch_review_item_from_cleanup(
+                item,
+                &filters,
+                &detail_by_id,
+            ));
+        }
+
+        if details.is_empty() {
+            items.retain(|item| item.affected_instance_ids.is_empty());
+        }
+        items.retain(|item| remediation_batch_review_item_matches(&filters, item));
+
+        let total_item_count = items.len();
+        let items = remediation_sorted_batch_review_items(items, filters.limit);
+        let review_groups = remediation_batch_review_groups(&filters, &items);
+        let recommended_next_step_labels = remediation_batch_review_next_steps(&items);
+
+        let mut gap_notes = plan.gap_notes.clone();
+        gap_notes.extend(drafts.gap_notes.clone());
+        gap_notes.extend(impact.gap_notes.clone());
+        if details.is_empty() {
+            gap_notes.push("No visible local skills matched the batch review filters.".to_string());
+        }
+        if items.is_empty() {
+            gap_notes.push(
+                "No deterministic local review items matched the selected batch filters."
+                    .to_string(),
+            );
+        }
+        gap_notes.sort();
+        gap_notes.dedup();
+        gap_notes.truncate(18);
+
+        let mut blocker_notes = plan.blocker_notes.clone();
+        blocker_notes.extend(drafts.blocker_notes.clone());
+        blocker_notes.extend(impact.blocker_notes.clone());
+        blocker_notes.push(
+            "Batch review is read-only; existing preview-first write flows may only be opened separately after explicit user confirmation."
+                .to_string(),
+        );
+        blocker_notes.push(
+            "Writable capability, snapshot, rollback, and triage states are warning context only; remediation.batchReview does not apply actions."
+                .to_string(),
+        );
+        blocker_notes.sort();
+        blocker_notes.dedup();
+        blocker_notes.truncate(18);
+
+        let prompt_instance_ids = items
+            .iter()
+            .flat_map(|item| item.affected_instance_ids.iter().cloned())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .take(12)
+            .collect::<Vec<_>>();
+        let prompt_available = !items.is_empty();
+        let summary =
+            remediation_batch_review_summary(total_item_count, &items, &review_groups, &filters);
+
+        Ok(RemediationBatchReviewResult {
+            generated_by: "local-v2.59",
+            catalog_available: true,
+            filters: filters.clone(),
+            summary,
+            review_groups,
+            review_items: items,
+            recommended_next_step_labels,
+            gap_notes,
+            blocker_notes,
+            evidence_references: evidence_by_id.into_values().collect(),
+            prompt_request: RemediationBatchReviewPromptRequest {
+                available: prompt_available,
+                preview_method: "llm.previewPrompt",
+                confirm_method: "llm.confirmPromptAndSend",
+                action: "remediation_batch_review",
+                request: LlmPreviewPromptParams {
+                    action: LlmPromptActionKind::RemediationBatchReview,
+                    profile_id: None,
+                    skill_instance_id: None,
+                    instance_ids: prompt_instance_ids,
+                    analysis_kind: None,
+                    user_intent: filters.task.clone().or_else(|| {
+                        Some(
+                            "Explain deterministic batch review workflow items using only local catalog evidence."
+                                .to_string(),
+                        )
+                    }),
+                },
+                note: if prompt_available {
+                    "Optional provider-backed batch review explanation must be requested through prompt preview and explicit confirmation; remediation.batchReview never sends provider traffic and remains copy-only."
+                        .to_string()
+                } else {
+                    "Prompt preview is unavailable until local evidence produces batch review items."
+                        .to_string()
+                },
+            },
+            safety_flags: remediation_batch_review_safety_flags(),
+        })
+    }
+
     pub fn check_task_readiness(
         &self,
         params: TaskReadinessParams,
@@ -8299,6 +8636,53 @@ impl ServiceHost {
                     &mut redactor,
                 ));
             }
+            LlmPromptActionKind::RemediationBatchReview => {
+                let result = self.batch_review_remediation(RemediationBatchReviewParams {
+                    task: params.user_intent.clone(),
+                    agent: None,
+                    project_root: None,
+                    workspace_label: None,
+                    rule_id: None,
+                    severity: None,
+                    status: None,
+                    triage_status: None,
+                    candidate_instance_ids: params.instance_ids.clone(),
+                    group_by: Vec::new(),
+                    limit: Some(12),
+                })?;
+                prompt_scope.extend([
+                    "deterministic batch review queue items".to_string(),
+                    "grouped local task, risk, rule, agent, and workspace evidence".to_string(),
+                    "recommended safe next-step labels".to_string(),
+                    "local gap and blocker notes".to_string(),
+                    "evidence reference summaries".to_string(),
+                    "safety flags".to_string(),
+                ]);
+                included_fields.extend([
+                    "redacted task or batch review intent".to_string(),
+                    "review group ids, labels, risk counts, and top item ids".to_string(),
+                    "review item ids, sources, severities, statuses, and rule ids".to_string(),
+                    "affected skill ids, names, agents, scopes, enabled states, and states"
+                        .to_string(),
+                    "read-only recommended next-step labels".to_string(),
+                    "blockers, gaps, and evidence ids".to_string(),
+                    "read-only safety flags".to_string(),
+                ]);
+                excluded_fields.extend([
+                    "raw source paths".to_string(),
+                    "raw provider response".to_string(),
+                    "agent config contents".to_string(),
+                    "raw prompt or response persistence".to_string(),
+                    "raw skill body".to_string(),
+                    "raw frontmatter".to_string(),
+                    "write/apply instructions".to_string(),
+                    "snapshot creation or rollback commands".to_string(),
+                ]);
+                sections.push(render_remediation_batch_review_prompt_section(
+                    &result,
+                    &mut redactor,
+                ));
+            }
             LlmPromptActionKind::TaskReadiness => {
                 let task = params.user_intent.as_deref().ok_or_else(|| {
                     ServiceError::InvalidRequest(
@@ -8407,6 +8791,7 @@ impl ServiceHost {
             LlmPromptActionKind::RemediationPlan => 900,
             LlmPromptActionKind::RemediationPreviewDrafts => 850,
             LlmPromptActionKind::RemediationPreviewImpact => 850,
+            LlmPromptActionKind::RemediationBatchReview => 900,
             LlmPromptActionKind::TaskReadiness => 750,
             LlmPromptActionKind::RoutingConfidence => 850,
         };
@@ -13538,6 +13923,10 @@ fn remediation_preview_impact_safety_flags() -> RemediationPreviewImpactSafetyFl
     agent_readiness_safety_flags()
 }
 
+fn remediation_batch_review_safety_flags() -> RemediationBatchReviewSafetyFlags {
+    agent_readiness_safety_flags()
+}
+
 fn remediation_plan_filters(
     params: &RemediationPlanParams,
     redaction_roots: &[(String, &'static str)],
@@ -14229,6 +14618,572 @@ fn empty_remediation_preview_impact_result(
             note: "Prompt preview is unavailable until local catalog evidence exists.".to_string(),
         },
         safety_flags: remediation_preview_impact_safety_flags(),
+    }
+}
+
+fn remediation_batch_review_filters(
+    params: &RemediationBatchReviewParams,
+    redaction_roots: &[(String, &'static str)],
+) -> RemediationBatchReviewFilters {
+    let mut group_by = params
+        .group_by
+        .iter()
+        .filter_map(|value| normalize_batch_review_group_by(value))
+        .collect::<Vec<_>>();
+    if group_by.is_empty() {
+        group_by.extend([
+            "risk".to_string(),
+            "rule".to_string(),
+            "agent".to_string(),
+            "workspace".to_string(),
+            "task".to_string(),
+        ]);
+    }
+    group_by.sort();
+    group_by.dedup();
+    RemediationBatchReviewFilters {
+        task: params
+            .task
+            .as_deref()
+            .map(str::trim)
+            .filter(|task| !task.is_empty())
+            .map(|task| redact_string(&redact_for_llm_preview(task), redaction_roots)),
+        agent: params.agent.as_deref().and_then(normalize_agent_label),
+        project_root: params
+            .project_root
+            .as_deref()
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+            .map(|path| redact_string(&redact_for_llm_preview(path), redaction_roots)),
+        workspace_label: params
+            .workspace_label
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(redact_for_llm_preview),
+        rule_id: params
+            .rule_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(redact_for_llm_preview),
+        severity: params
+            .severity
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| remediation_severity(value).to_string()),
+        status: params
+            .status
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| value.to_ascii_lowercase().replace(['_', ' '], "-")),
+        triage_status: params
+            .triage_status
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| value.to_ascii_lowercase().replace(['_', ' '], "-")),
+        candidate_instance_ids: normalized_redacted_ids(&params.candidate_instance_ids),
+        group_by,
+        limit: params.limit.unwrap_or(24).clamp(1, 100),
+    }
+}
+
+fn normalize_batch_review_group_by(value: &str) -> Option<String> {
+    let normalized = value.trim().to_ascii_lowercase().replace(['_', ' '], "-");
+    let canonical = match normalized.as_str() {
+        "" => return None,
+        "task" | "tasks" => "task",
+        "risk" | "severity" | "priority" => "risk",
+        "rule" | "rules" | "rule-id" => "rule",
+        "agent" | "agents" => "agent",
+        "workspace" | "project" | "project-root" => "workspace",
+        "status" | "triage" | "triage-status" => "status",
+        other => other,
+    };
+    Some(canonical.to_string())
+}
+
+fn empty_remediation_batch_review_result(
+    filters: RemediationBatchReviewFilters,
+    catalog_available: bool,
+) -> RemediationBatchReviewResult {
+    RemediationBatchReviewResult {
+        generated_by: "local-v2.59",
+        catalog_available,
+        filters,
+        summary: RemediationBatchReviewSummary {
+            total_item_count: 0,
+            returned_item_count: 0,
+            group_count: 0,
+            high_risk_count: 0,
+            medium_risk_count: 0,
+            low_risk_count: 0,
+            task_group_count: 0,
+            agent_group_count: 0,
+            workspace_group_count: 0,
+            rule_group_count: 0,
+            blocker_count: 1,
+            summary: "No local catalog is available, so batch review has no evidence.".to_string(),
+        },
+        review_groups: Vec::new(),
+        review_items: Vec::new(),
+        recommended_next_step_labels: Vec::new(),
+        gap_notes: vec!["Run a local scan before relying on batch review.".to_string()],
+        blocker_notes: vec![
+            "No provider request was sent and no fallback network lookup was attempted."
+                .to_string(),
+        ],
+        evidence_references: Vec::new(),
+        prompt_request: RemediationBatchReviewPromptRequest {
+            available: false,
+            preview_method: "llm.previewPrompt",
+            confirm_method: "llm.confirmPromptAndSend",
+            action: "remediation_batch_review",
+            request: LlmPreviewPromptParams {
+                action: LlmPromptActionKind::RemediationBatchReview,
+                profile_id: None,
+                skill_instance_id: None,
+                instance_ids: Vec::new(),
+                analysis_kind: None,
+                user_intent: Some(
+                    "Explain deterministic batch review workflow items using only local catalog evidence."
+                        .to_string(),
+                ),
+            },
+            note: "Prompt preview is unavailable until local catalog evidence exists.".to_string(),
+        },
+        safety_flags: remediation_batch_review_safety_flags(),
+    }
+}
+
+fn remediation_batch_review_item_from_plan(
+    item: &RemediationPlanItem,
+    filters: &RemediationBatchReviewFilters,
+    detail_by_id: &BTreeMap<&str, &SkillDetailRecord>,
+) -> RemediationBatchReviewItem {
+    let affected_skill = item.affected_skill.clone().or_else(|| {
+        item.affected_instance_ids
+            .first()
+            .and_then(|id| detail_by_id.get(id.as_str()).copied())
+            .map(remediation_affected_skill)
+    });
+    RemediationBatchReviewItem {
+        id: format!("batch-review:plan:{}", item.id),
+        rank: 0,
+        source: "remediation_plan",
+        source_id: item.id.clone(),
+        title: redact_for_llm_preview(&item.title),
+        summary: redact_for_llm_preview(&item.summary),
+        risk: remediation_risk_band(item.severity),
+        severity: item.severity.to_string(),
+        status: if item.deferred {
+            "deferred".to_string()
+        } else {
+            "open".to_string()
+        },
+        triage_status: None,
+        rule_id: if item.category == "finding" {
+            remediation_rule_id_from_plan_item(item)
+        } else {
+            Some(item.category.to_string())
+        },
+        task: item.affected_task.clone().or_else(|| filters.task.clone()),
+        agent: item.affected_agent.clone(),
+        workspace: filters
+            .workspace_label
+            .clone()
+            .or_else(|| filters.project_root.clone()),
+        affected_skill,
+        affected_instance_ids: item.affected_instance_ids.clone(),
+        recommended_next_step_label: redact_for_llm_preview(&item.suggested_safe_next_action),
+        blocker_notes: redacted_string_vec(&item.blockers),
+        gap_notes: redacted_string_vec(&item.prerequisites),
+        evidence_refs: item.evidence_refs.clone(),
+        side_effect_flags: remediation_side_effect_flags(),
+        safety_flags: remediation_batch_review_safety_flags(),
+    }
+}
+
+fn remediation_batch_review_item_from_draft(
+    item: &RemediationDraftItem,
+    filters: &RemediationBatchReviewFilters,
+) -> RemediationBatchReviewItem {
+    let affected_instance_ids = item
+        .affected_skill
+        .as_ref()
+        .map(|skill| vec![skill.instance_id.clone()])
+        .unwrap_or_default();
+    RemediationBatchReviewItem {
+        id: format!("batch-review:draft:{}", item.id),
+        rank: 0,
+        source: "fix_preview_draft",
+        source_id: item.id.clone(),
+        title: redact_for_llm_preview(&item.title),
+        summary: redact_for_llm_preview(&item.rationale),
+        risk: remediation_risk_for_confidence(item.confidence),
+        severity: remediation_severity_for_confidence(item.confidence).to_string(),
+        status: "copy-only".to_string(),
+        triage_status: None,
+        rule_id: item.rule_id.clone(),
+        task: filters.task.clone(),
+        agent: item.agent.clone(),
+        workspace: filters
+            .workspace_label
+            .clone()
+            .or_else(|| filters.project_root.clone()),
+        affected_skill: item.affected_skill.clone(),
+        affected_instance_ids,
+        recommended_next_step_label: redact_for_llm_preview(&item.copy_label),
+        blocker_notes: redacted_string_vec(&item.blocker_notes),
+        gap_notes: vec![redact_for_llm_preview(&item.edit_guidance)],
+        evidence_refs: item.evidence_refs.clone(),
+        side_effect_flags: remediation_side_effect_flags(),
+        safety_flags: remediation_batch_review_safety_flags(),
+    }
+}
+
+fn remediation_rule_id_from_plan_item(item: &RemediationPlanItem) -> Option<String> {
+    item.title
+        .split('`')
+        .nth(1)
+        .map(redact_for_llm_preview)
+        .or_else(|| {
+            item.evidence_refs
+                .iter()
+                .find_map(|reference| reference.strip_prefix("rule:"))
+                .map(redact_for_llm_preview)
+        })
+}
+
+fn remediation_batch_review_item_from_impact(
+    row: &RemediationImpactRow,
+    filters: &RemediationBatchReviewFilters,
+) -> RemediationBatchReviewItem {
+    let affected_instance_ids = row
+        .affected_skill
+        .as_ref()
+        .map(|skill| vec![skill.instance_id.clone()])
+        .unwrap_or_default();
+    RemediationBatchReviewItem {
+        id: format!("batch-review:impact:{}", row.id),
+        rank: 0,
+        source: "impact_preview",
+        source_id: row.id.clone(),
+        title: redact_for_llm_preview(&row.title),
+        summary: redact_for_llm_preview(&row.summary),
+        risk: remediation_risk_for_confidence(row.confidence),
+        severity: remediation_severity_for_confidence(row.confidence).to_string(),
+        status: "plan-only".to_string(),
+        triage_status: None,
+        rule_id: Some(row.area.to_string()),
+        task: row.affected_task.clone().or_else(|| filters.task.clone()),
+        agent: row.affected_agent.clone(),
+        workspace: filters
+            .workspace_label
+            .clone()
+            .or_else(|| filters.project_root.clone()),
+        affected_skill: row.affected_skill.clone(),
+        affected_instance_ids,
+        recommended_next_step_label: "Open impact preview".to_string(),
+        blocker_notes: redacted_string_vec(&row.blockers),
+        gap_notes: Vec::new(),
+        evidence_refs: row.evidence_refs.clone(),
+        side_effect_flags: remediation_side_effect_flags(),
+        safety_flags: remediation_batch_review_safety_flags(),
+    }
+}
+
+fn remediation_batch_review_item_from_cleanup(
+    item: &CleanupQueueItem,
+    filters: &RemediationBatchReviewFilters,
+    detail_by_id: &BTreeMap<&str, &SkillDetailRecord>,
+) -> RemediationBatchReviewItem {
+    let affected_skill = item
+        .skill_id
+        .as_deref()
+        .and_then(|id| detail_by_id.get(id).copied())
+        .map(remediation_affected_skill);
+    RemediationBatchReviewItem {
+        id: format!("batch-review:cleanup:{}", item.id),
+        rank: 0,
+        source: "cleanup_queue",
+        source_id: item.source_id.clone(),
+        title: redact_for_llm_preview(&item.title),
+        summary: redact_for_llm_preview(&item.detail),
+        risk: remediation_risk_band(&item.severity),
+        severity: remediation_severity(&item.severity).to_string(),
+        status: "open".to_string(),
+        triage_status: None,
+        rule_id: Some(item.kind.clone()),
+        task: filters.task.clone(),
+        agent: item.agent.clone(),
+        workspace: filters
+            .workspace_label
+            .clone()
+            .or_else(|| filters.project_root.clone()),
+        affected_skill,
+        affected_instance_ids: item.skill_id.iter().cloned().collect(),
+        recommended_next_step_label: redact_for_llm_preview(&item.recommended_next_action_label),
+        blocker_notes: vec![
+            "Cleanup queue item is read-only and does not execute cleanup.".to_string(),
+        ],
+        gap_notes: Vec::new(),
+        evidence_refs: vec![format!("cleanup:{}", item.source_id)],
+        side_effect_flags: remediation_side_effect_flags(),
+        safety_flags: remediation_batch_review_safety_flags(),
+    }
+}
+
+fn remediation_risk_for_confidence(confidence: u8) -> &'static str {
+    match confidence {
+        75..=100 => "low",
+        50..=74 => "medium",
+        _ => "high",
+    }
+}
+
+fn remediation_severity_for_confidence(confidence: u8) -> &'static str {
+    match confidence {
+        75..=100 => "info",
+        50..=74 => "warning",
+        _ => "error",
+    }
+}
+
+fn remediation_batch_review_item_matches(
+    filters: &RemediationBatchReviewFilters,
+    item: &RemediationBatchReviewItem,
+) -> bool {
+    if let Some(agent) = filters.agent.as_deref() {
+        if item.agent.as_deref() != Some(agent) {
+            return false;
+        }
+    }
+    if let Some(rule_id) = filters.rule_id.as_deref() {
+        if item.rule_id.as_deref() != Some(rule_id) {
+            return false;
+        }
+    }
+    if let Some(severity) = filters.severity.as_deref() {
+        if item.severity != severity && item.risk != severity {
+            return false;
+        }
+    }
+    if let Some(status) = filters.status.as_deref() {
+        if item.status != status {
+            return false;
+        }
+    }
+    if let Some(triage_status) = filters.triage_status.as_deref() {
+        if item.triage_status.as_deref() != Some(triage_status) {
+            return false;
+        }
+    }
+    if !filters.candidate_instance_ids.is_empty()
+        && !item.affected_instance_ids.iter().any(|id| {
+            filters
+                .candidate_instance_ids
+                .iter()
+                .any(|candidate| candidate == id)
+        })
+    {
+        return false;
+    }
+    true
+}
+
+fn remediation_sorted_batch_review_items(
+    mut items: Vec<RemediationBatchReviewItem>,
+    limit: usize,
+) -> Vec<RemediationBatchReviewItem> {
+    items.sort_by(|left, right| {
+        remediation_batch_risk_rank(left.risk)
+            .cmp(&remediation_batch_risk_rank(right.risk))
+            .then_with(|| {
+                severity_rank_for_queue(&left.severity)
+                    .cmp(&severity_rank_for_queue(&right.severity))
+            })
+            .then_with(|| left.source.cmp(right.source))
+            .then_with(|| left.title.cmp(&right.title))
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    items.truncate(limit);
+    for (index, item) in items.iter_mut().enumerate() {
+        item.rank = index + 1;
+    }
+    items
+}
+
+fn remediation_batch_risk_rank(risk: &str) -> u8 {
+    match risk {
+        "high" => 0,
+        "medium" => 1,
+        "low" => 2,
+        _ => 3,
+    }
+}
+
+fn remediation_batch_review_groups(
+    filters: &RemediationBatchReviewFilters,
+    items: &[RemediationBatchReviewItem],
+) -> Vec<RemediationBatchReviewGroup> {
+    let mut grouped: BTreeMap<(&'static str, String), Vec<&RemediationBatchReviewItem>> =
+        BTreeMap::new();
+    for item in items {
+        for group_by in &filters.group_by {
+            let group_type = match group_by.as_str() {
+                "task" => "task",
+                "risk" => "risk",
+                "rule" => "rule",
+                "agent" => "agent",
+                "workspace" => "workspace",
+                "status" => "status",
+                _ => continue,
+            };
+            let label = match group_type {
+                "task" => item
+                    .task
+                    .clone()
+                    .unwrap_or_else(|| "No task filter".to_string()),
+                "risk" => item.risk.to_string(),
+                "rule" => item
+                    .rule_id
+                    .clone()
+                    .unwrap_or_else(|| "No rule id".to_string()),
+                "agent" => item.agent.clone().unwrap_or_else(|| "No agent".to_string()),
+                "workspace" => item
+                    .workspace
+                    .clone()
+                    .unwrap_or_else(|| "Local catalog".to_string()),
+                "status" => item.status.clone(),
+                _ => unreachable!(),
+            };
+            grouped.entry((group_type, label)).or_default().push(item);
+        }
+    }
+    let mut groups = grouped
+        .into_iter()
+        .map(|((group_type, label), rows)| {
+            let evidence_refs = rows
+                .iter()
+                .flat_map(|item| item.evidence_refs.iter().cloned())
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .take(8)
+                .collect::<Vec<_>>();
+            RemediationBatchReviewGroup {
+                id: stable_batch_review_group_id(group_type, &label, &evidence_refs),
+                group_type,
+                label,
+                item_count: rows.len(),
+                high_risk_count: rows.iter().filter(|item| item.risk == "high").count(),
+                medium_risk_count: rows.iter().filter(|item| item.risk == "medium").count(),
+                low_risk_count: rows.iter().filter(|item| item.risk == "low").count(),
+                top_item_ids: rows.iter().take(5).map(|item| item.id.clone()).collect(),
+                recommended_next_step_label: rows
+                    .first()
+                    .map(|item| item.recommended_next_step_label.clone())
+                    .unwrap_or_else(|| "Review local evidence".to_string()),
+                blocker_notes: rows
+                    .iter()
+                    .flat_map(|item| item.blocker_notes.iter().cloned())
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .take(5)
+                    .collect(),
+                evidence_refs,
+            }
+        })
+        .collect::<Vec<_>>();
+    groups.sort_by(|left, right| {
+        remediation_batch_group_rank(left.group_type)
+            .cmp(&remediation_batch_group_rank(right.group_type))
+            .then_with(|| right.item_count.cmp(&left.item_count))
+            .then_with(|| left.label.cmp(&right.label))
+    });
+    groups.truncate(filters.limit);
+    groups
+}
+
+fn remediation_batch_group_rank(group_type: &str) -> u8 {
+    match group_type {
+        "risk" => 0,
+        "rule" => 1,
+        "agent" => 2,
+        "workspace" => 3,
+        "task" => 4,
+        "status" => 5,
+        _ => 6,
+    }
+}
+
+fn stable_batch_review_group_id(group_type: &str, label: &str, evidence_refs: &[String]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(group_type.as_bytes());
+    hasher.update(b"\0");
+    hasher.update(label.as_bytes());
+    hasher.update(b"\0");
+    for evidence in evidence_refs {
+        hasher.update(evidence.as_bytes());
+        hasher.update(b"\0");
+    }
+    let digest = hasher.finalize();
+    format!("batch-group-{}", hex_prefix(&digest, 12))
+}
+
+fn remediation_batch_review_next_steps(items: &[RemediationBatchReviewItem]) -> Vec<String> {
+    items
+        .iter()
+        .map(|item| item.recommended_next_step_label.clone())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .take(10)
+        .collect()
+}
+
+fn remediation_batch_review_summary(
+    total_item_count: usize,
+    items: &[RemediationBatchReviewItem],
+    groups: &[RemediationBatchReviewGroup],
+    filters: &RemediationBatchReviewFilters,
+) -> RemediationBatchReviewSummary {
+    let high_risk_count = items.iter().filter(|item| item.risk == "high").count();
+    let medium_risk_count = items.iter().filter(|item| item.risk == "medium").count();
+    let low_risk_count = items.iter().filter(|item| item.risk == "low").count();
+    let group_count = |group_type: &str| {
+        groups
+            .iter()
+            .filter(|group| group.group_type == group_type)
+            .count()
+    };
+    let blocker_count = items.iter().map(|item| item.blocker_notes.len()).sum();
+    let summary = if items.is_empty() {
+        "No batch review items matched the selected local filters.".to_string()
+    } else {
+        format!(
+            "Batch review returned {} of {} local read-only item(s) across {} group(s) using {:?} grouping.",
+            items.len(),
+            total_item_count,
+            groups.len(),
+            filters.group_by
+        )
+    };
+    RemediationBatchReviewSummary {
+        total_item_count,
+        returned_item_count: items.len(),
+        group_count: groups.len(),
+        high_risk_count,
+        medium_risk_count,
+        low_risk_count,
+        task_group_count: group_count("task"),
+        agent_group_count: group_count("agent"),
+        workspace_group_count: group_count("workspace"),
+        rule_group_count: group_count("rule"),
+        blocker_count,
+        summary,
     }
 }
 
@@ -14973,6 +15928,13 @@ fn redacted_snippet(value: &str, max_len: usize) -> String {
         snippet.push_str("...");
     }
     snippet
+}
+
+fn redacted_string_vec(values: &[String]) -> Vec<String> {
+    values
+        .iter()
+        .map(|value| redact_for_llm_preview(value))
+        .collect()
 }
 
 fn remediation_patch_like_snippet(
@@ -19039,6 +20001,139 @@ fn render_remediation_preview_impact_prompt_section(
     )
 }
 
+fn render_remediation_batch_review_prompt_section(
+    result: &RemediationBatchReviewResult,
+    redactor: &mut PromptRedactor<'_>,
+) -> String {
+    let groups = result
+        .review_groups
+        .iter()
+        .take(10)
+        .map(|group| {
+            format!(
+                "- {} label={} count={} high={} medium={} low={} next={} blockers={}",
+                group.group_type,
+                redactor.redact(&group.label),
+                group.item_count,
+                group.high_risk_count,
+                group.medium_risk_count,
+                group.low_risk_count,
+                redactor.redact(&group.recommended_next_step_label),
+                group
+                    .blocker_notes
+                    .iter()
+                    .take(3)
+                    .map(|blocker| redactor.redact(blocker))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let items = result
+        .review_items
+        .iter()
+        .take(12)
+        .map(|item| {
+            format!(
+                "- #{} source={} risk={} severity={} status={} rule={} agent={} skill={} title={} next={} blockers={}",
+                item.rank,
+                item.source,
+                item.risk,
+                redactor.redact(&item.severity),
+                redactor.redact(&item.status),
+                item.rule_id
+                    .as_deref()
+                    .map(|value| redactor.redact(value))
+                    .unwrap_or_else(|| "n/a".to_string()),
+                item.agent
+                    .as_deref()
+                    .map(|value| redactor.redact(value))
+                    .unwrap_or_else(|| "n/a".to_string()),
+                item.affected_skill
+                    .as_ref()
+                    .map(|skill| redactor.redact(&skill.skill_name))
+                    .unwrap_or_else(|| "none".to_string()),
+                redactor.redact(&item.title),
+                redactor.redact(&item.recommended_next_step_label),
+                item.blocker_notes
+                    .iter()
+                    .take(3)
+                    .map(|blocker| redactor.redact(blocker))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let evidence = result
+        .evidence_references
+        .iter()
+        .take(16)
+        .map(|reference| {
+            format!(
+                "- {} {} {}",
+                reference.source_type,
+                redactor.redact(&reference.source_id),
+                redactor.redact(&reference.label)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "Batch review evidence:\n- catalog_available: {}\n- total_item_count: {}\n- returned_item_count: {}\n- group_count: {}\n- high_risk_count: {}\n- medium_risk_count: {}\n- low_risk_count: {}\n- task_group_count: {}\n- agent_group_count: {}\n- workspace_group_count: {}\n- rule_group_count: {}\n- blocker_count: {}\n- summary: {}\n\nReview groups:\n{}\n\nReview items:\n{}\n\nRecommended next steps:\n{}\n\nGap notes:\n{}\n\nBlocker notes:\n{}\n\nEvidence references:\n{}\n\nSafety flags: read_only=true, app_local_only=true, provider_request_sent=false, write_back_allowed=false, write_actions_available=false, skill_files_mutated=false, agent_config_mutated=false, script_execution_allowed=false, execution_actions_available=false, config_mutation_allowed=false, snapshot_created=false, triage_mutation_allowed=false, credential_accessed=false, raw_prompt_persisted=false, raw_response_persisted=false, raw_trace_persisted=false, cloud_sync_performed=false, telemetry_emitted=false.",
+        result.catalog_available,
+        result.summary.total_item_count,
+        result.summary.returned_item_count,
+        result.summary.group_count,
+        result.summary.high_risk_count,
+        result.summary.medium_risk_count,
+        result.summary.low_risk_count,
+        result.summary.task_group_count,
+        result.summary.agent_group_count,
+        result.summary.workspace_group_count,
+        result.summary.rule_group_count,
+        result.summary.blocker_count,
+        redactor.redact(&result.summary.summary),
+        if groups.is_empty() { "none" } else { &groups },
+        if items.is_empty() { "none" } else { &items },
+        if result.recommended_next_step_labels.is_empty() {
+            "none".to_string()
+        } else {
+            result
+                .recommended_next_step_labels
+                .iter()
+                .take(10)
+                .map(|label| redactor.redact(label))
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+        if result.gap_notes.is_empty() {
+            "none".to_string()
+        } else {
+            result
+                .gap_notes
+                .iter()
+                .take(10)
+                .map(|note| redactor.redact(note))
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+        if result.blocker_notes.is_empty() {
+            "none".to_string()
+        } else {
+            result
+                .blocker_notes
+                .iter()
+                .take(10)
+                .map(|note| redactor.redact(note))
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+        if evidence.is_empty() { "none" } else { &evidence },
+    )
+}
+
 fn render_routing_confidence_prompt_section(
     ranking: &SkillRouteRankingResult,
     redactor: &mut PromptRedactor<'_>,
@@ -19413,6 +20508,7 @@ mod tests {
         assert!(methods.contains(&Value::String("remediation.plan".to_string())));
         assert!(methods.contains(&Value::String("remediation.previewDrafts".to_string())));
         assert!(methods.contains(&Value::String("remediation.previewImpact".to_string())));
+        assert!(methods.contains(&Value::String("remediation.batchReview".to_string())));
         assert!(methods.contains(&Value::String("task.checkReadiness".to_string())));
         assert!(methods.contains(&Value::String("task.rankSkillRoutes".to_string())));
         assert!(methods.contains(&Value::String("task.compareAgentReadiness".to_string())));
@@ -26599,6 +27695,288 @@ mod tests {
     }
 
     #[test]
+    fn remediation_batch_review_returns_grouped_read_only_queue() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-remediation-batch-review-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_preview_draft_fixture(&host);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let result = host
+            .batch_review_remediation(RemediationBatchReviewParams {
+                task: Some("Review release readiness remediation batch".to_string()),
+                agent: None,
+                project_root: None,
+                workspace_label: Some("fixture-workspace".to_string()),
+                rule_id: None,
+                severity: None,
+                status: None,
+                triage_status: None,
+                candidate_instance_ids: Vec::new(),
+                group_by: vec![
+                    "risk".to_string(),
+                    "rule".to_string(),
+                    "agent".to_string(),
+                    "workspace".to_string(),
+                    "task".to_string(),
+                ],
+                limit: Some(12),
+            })
+            .expect("batch review");
+
+        assert_eq!(result.generated_by, "local-v2.59");
+        assert!(result.catalog_available);
+        assert_eq!(
+            result.summary.returned_item_count,
+            result.review_items.len()
+        );
+        assert_eq!(result.summary.group_count, result.review_groups.len());
+        assert!(!result.review_items.is_empty());
+        assert!(!result.review_groups.is_empty());
+        assert!(result
+            .review_groups
+            .iter()
+            .any(|group| group.group_type == "risk"));
+        assert!(result
+            .review_groups
+            .iter()
+            .any(|group| group.group_type == "rule"));
+        assert_eq!(result.prompt_request.action, "remediation_batch_review");
+        assert_eq!(
+            result.prompt_request.request.action,
+            LlmPromptActionKind::RemediationBatchReview
+        );
+        assert!(result.safety_flags.read_only);
+        assert!(result.safety_flags.app_local_only);
+        assert!(!result.safety_flags.provider_request_sent);
+        assert!(!result.safety_flags.write_back_allowed);
+        assert!(!result.safety_flags.skill_files_mutated);
+        assert!(!result.safety_flags.agent_config_mutated);
+        assert!(!result.safety_flags.snapshot_created);
+        assert!(result.review_items.iter().all(|item| {
+            item.rank > 0
+                && item.safety_flags.read_only
+                && !item.safety_flags.provider_request_sent
+                && !item.safety_flags.write_back_allowed
+                && item
+                    .side_effect_flags
+                    .contains(&"provider_request_sent=false")
+                && item.side_effect_flags.contains(&"write_back_allowed=false")
+        }));
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn remediation_batch_review_missing_catalog_returns_safe_empty_result() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-remediation-batch-review-empty-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let result = host
+            .batch_review_remediation(RemediationBatchReviewParams::default())
+            .expect("empty batch review");
+
+        assert!(!result.catalog_available);
+        assert_eq!(result.summary.returned_item_count, 0);
+        assert!(result.review_items.is_empty());
+        assert!(result.review_groups.is_empty());
+        assert!(!result.prompt_request.available);
+        assert!(result.safety_flags.read_only);
+        assert!(result.safety_flags.app_local_only);
+        assert!(!result.safety_flags.provider_request_sent);
+        assert!(!result.safety_flags.write_back_allowed);
+        assert!(!result.safety_flags.skill_files_mutated);
+        assert!(!result.safety_flags.agent_config_mutated);
+        assert!(!result.safety_flags.snapshot_created);
+        assert!(!host.catalog_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn remediation_batch_review_rejects_invalid_limit_without_writes() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-remediation-batch-review-invalid-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("remediation-batch-review-invalid".to_string()),
+            method: "remediation.batchReview".to_string(),
+            params: json!({ "limit": 0 }),
+        });
+
+        assert!(!response.ok);
+        let error = response.error.expect("invalid batch review error");
+        assert_eq!(error.code, "invalid_request");
+        assert!(error.message.contains("limit"));
+        assert!(
+            !app_data_dir.exists(),
+            "invalid batch review request must not initialize app data"
+        );
+    }
+
+    #[test]
+    fn remediation_batch_review_preserves_provider_write_and_privacy_boundaries() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-remediation-batch-review-safety-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-remediation-batch-review-safety-home-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_preview_draft_fixture(&host);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("remediation-batch-review-safety".to_string()),
+            method: "remediation.batchReview".to_string(),
+            params: json!({
+                "task_text": "batch review token=fixture-redacted-value",
+                "workspace": "fixture-workspace",
+                "candidate_instance_ids": ["similar-claude-a", "similar-codex-a", "similar-codex-research"],
+                "group_by": ["risk", "rule", "agent", "workspace", "task"],
+                "limit": 10
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("batch review safety result");
+        assert_agent_readiness_safety(&result);
+        assert_eq!(
+            result
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/write_actions_available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let serialized = serde_json::to_string(&result).expect("serialize batch review result");
+        assert!(!serialized.contains(&app_data_dir.to_string_lossy().to_string()));
+        assert!(!serialized.contains(&user_home.to_string_lossy().to_string()));
+        assert!(!serialized.contains("fixture-redacted-value"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn remediation_batch_review_prompt_preview_is_redacted_and_copy_only() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-remediation-batch-review-prompt-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_preview_draft_fixture(&host);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("remediation-batch-review-preview".to_string()),
+            method: "llm.previewPrompt".to_string(),
+            params: json!({
+                "action": "remediation_batch_review",
+                "user_intent": "Explain batch review for /tmp/home/private-project with secret-token=fixture-redacted-value",
+                "instance_ids": ["similar-claude-a", "similar-codex-a"]
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let preview: WireLlmPreviewPromptResult =
+            serde_json::from_value(response.result.expect("preview result"))
+                .expect("decode batch review prompt preview");
+        assert_eq!(preview.action, "remediation_batch_review");
+        assert!(preview.prompt_preview.contains("Batch review evidence"));
+        assert!(!preview.prompt_preview.contains("fixture-redacted-value"));
+        assert!(!preview.provider_request_sent);
+        assert!(!preview.write_back_allowed);
+        assert!(preview.draft_requires_user_copy);
+        assert!(!preview.raw_prompt_persisted);
+        assert!(!preview.raw_response_persisted);
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
     fn workspace_check_readiness_returns_local_read_only_checklist() {
         let app_data_dir = env::temp_dir().join(format!(
             "skills-copilot-workspace-readiness-test-{}-{}",
@@ -27124,6 +28502,38 @@ mod tests {
                     .snapshot_rollback_plan_rows
                     .iter()
                     .all(|row| row.plan_only));
+            }
+            "remediation.batchReview" => {
+                let review: WireRemediationBatchReviewResult =
+                    decode_fixture_result(method, result, path);
+                assert_eq!(review.generated_by, "local-v2.59");
+                assert!(review.catalog_available);
+                assert_eq!(
+                    review.summary.returned_item_count,
+                    review.review_items.len()
+                );
+                assert_eq!(review.summary.group_count, review.review_groups.len());
+                assert!(!review.review_items.is_empty());
+                assert!(!review.review_groups.is_empty());
+                assert_eq!(review.prompt_request.action, "remediation_batch_review");
+                assert_eq!(review.prompt_request.preview_method, "llm.previewPrompt");
+                assert_eq!(
+                    review.prompt_request.request.action,
+                    LlmPromptActionKind::RemediationBatchReview
+                );
+                assert_agent_readiness_safety_flags(&review.safety_flags);
+                for item in &review.review_items {
+                    assert!(item.rank > 0);
+                    assert_agent_readiness_safety_flags(&item.safety_flags);
+                    assert!(item
+                        .side_effect_flags
+                        .iter()
+                        .any(|flag| flag == "provider_request_sent=false"));
+                    assert!(item
+                        .side_effect_flags
+                        .iter()
+                        .any(|flag| flag == "write_back_allowed=false"));
+                }
             }
             "task.checkReadiness" => {
                 let readiness: WireTaskReadinessResult =
@@ -28022,6 +29432,11 @@ mod tests {
                 "include_rollback_plan": true,
                 "include_risk_impact": true,
                 "include_task_impact": true
+            }),
+            "remediation.batchReview" => json!({
+                "task": "fixture batch review check",
+                "group_by": ["risk", "rule", "agent", "workspace", "task"],
+                "limit": 4
             }),
             "task.checkReadiness" => json!({ "task": "fixture task readiness check" }),
             "task.rankSkillRoutes" => json!({ "task": "fixture routing confidence check" }),
@@ -29271,6 +30686,104 @@ mod tests {
         blocked_reason: Option<String>,
         plan_only: bool,
         evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationBatchReviewResult {
+        generated_by: String,
+        catalog_available: bool,
+        filters: WireRemediationBatchReviewFilters,
+        summary: WireRemediationBatchReviewSummary,
+        review_groups: Vec<WireRemediationBatchReviewGroup>,
+        review_items: Vec<WireRemediationBatchReviewItem>,
+        recommended_next_step_labels: Vec<String>,
+        gap_notes: Vec<String>,
+        blocker_notes: Vec<String>,
+        evidence_references: Vec<WireTaskReadinessEvidenceReference>,
+        prompt_request: WireAgentReadinessPromptRequest,
+        safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationBatchReviewFilters {
+        task: Option<String>,
+        agent: Option<String>,
+        project_root: Option<String>,
+        workspace_label: Option<String>,
+        rule_id: Option<String>,
+        severity: Option<String>,
+        status: Option<String>,
+        triage_status: Option<String>,
+        candidate_instance_ids: Vec<String>,
+        group_by: Vec<String>,
+        limit: usize,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationBatchReviewSummary {
+        total_item_count: usize,
+        returned_item_count: usize,
+        group_count: usize,
+        high_risk_count: usize,
+        medium_risk_count: usize,
+        low_risk_count: usize,
+        task_group_count: usize,
+        agent_group_count: usize,
+        workspace_group_count: usize,
+        rule_group_count: usize,
+        blocker_count: usize,
+        summary: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationBatchReviewGroup {
+        id: String,
+        group_type: String,
+        label: String,
+        item_count: usize,
+        high_risk_count: usize,
+        medium_risk_count: usize,
+        low_risk_count: usize,
+        top_item_ids: Vec<String>,
+        recommended_next_step_label: String,
+        blocker_notes: Vec<String>,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationBatchReviewItem {
+        id: String,
+        rank: usize,
+        source: String,
+        source_id: String,
+        title: String,
+        summary: String,
+        risk: String,
+        severity: String,
+        status: String,
+        triage_status: Option<String>,
+        rule_id: Option<String>,
+        task: Option<String>,
+        agent: Option<String>,
+        workspace: Option<String>,
+        affected_skill: Option<WireRemediationAffectedSkill>,
+        affected_instance_ids: Vec<String>,
+        recommended_next_step_label: String,
+        blocker_notes: Vec<String>,
+        gap_notes: Vec<String>,
+        evidence_refs: Vec<String>,
+        side_effect_flags: Vec<String>,
+        safety_flags: WireAgentReadinessSafetyFlags,
     }
 
     #[allow(dead_code)]

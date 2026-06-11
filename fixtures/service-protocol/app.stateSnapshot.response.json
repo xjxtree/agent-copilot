@@ -24,6 +24,7 @@
         "remediation.plan",
         "remediation.previewDrafts",
         "remediation.previewImpact",
+        "remediation.batchReview",
         "task.checkReadiness",
         "task.rankSkillRoutes",
         "task.compareAgentReadiness",
