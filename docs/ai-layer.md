@@ -4,7 +4,7 @@
 >
 > Scanner / rules / catalog 始终是事实来源；LLM/AI provider 是 AI agent skills 的核心分析增强，用于质量、任务可用性、routing 置信度、trace 分析、remediation 和治理总结。
 >
-> 当前实现边界（V2.51 baseline；V2.52 Local Knowledge Index 仍未实现）：
+> 当前实现边界（V2.52 baseline；V2.53 Similar Skill Grouping 仍未实现）：
 >
 > - 已落地 disabled-by-default 的 service/UI gate 和 request prepare/estimate 能力。
 > - 已落地用户显式配置的 OpenAI-compatible / Claude-compatible provider profile 基础：`llm.listProviderProfiles`、`llm.saveProviderProfile`、`llm.deleteProviderProfile`、`llm.testProviderConnection`、macOS Keychain-first API key storage、预算字段、disabled/unconfigured state，以及 test connection 的最小 redacted call metadata。
@@ -58,6 +58,12 @@
 > - 已实现 service protocol 与 native Analysis UI：输出 summary、stale/drift rows、readiness impact rows、gap/blocker notes、evidence refs、prompt request metadata 与 safety flags。
 > - 默认不写 skill / agent config / snapshot / triage，不执行脚本，不持久化 raw prompt/response/trace，也不默认发 provider 请求；可选 provider 说明仍必须走 V2.42 preview/redaction/confirmation 且保持 copy-only。
 
+> V2.52（已完成）：
+>
+> - `knowledge.search` 是本地 only、read-only、user-triggered 的 search surface，围绕 existing catalog evidence 与 derived tags 做检索；search scope 聚焦 purpose、tools、keywords、rules、source、agent、risk、task fit、capability tags，并带入 quality/readiness/stale-drift context。
+> - 已实现 service protocol 与 native Analysis UI：输出 summary、rows、facets、gap/blocker notes、evidence refs、prompt request metadata 与 safety flags。
+> - 不默认 provider / network；不写 skill 文件、agent config、snapshot、triage 或 index artifact。未来若存在 provider 说明，仍必须走 V2.42 preview/redaction/confirmation 并保持 copy-only，不影响 deterministic search 结果。
+
 ## 1. 双层分工
 
 | 能力 | 由谁负责 | 何时触发 |
@@ -108,7 +114,8 @@ Provider 配置原则：
 | V2.49（实现） | Routing accuracy dashboard（`routing.accuracyDashboard`） | V2.46 benchmark results + V2.47 regression evidence + V2.48 redacted trace imports；local evidence-first + optional AI 说明 |
 | V2.50（实现） | cross-agent task readiness（`task.compareAgentReadiness`） | 同一任务横向比较 Claude/Codex/opencode/Pi/Hermes/OpenClaw 的 skill 可见性、质量、路由置信度与 gap；输入来自 `task.checkReadiness` / `task.rankSkillRoutes` / benchmark / regression / trace import / accuracy evidence；read-only，本地 evidence-first，provider 仅在 V2.42 preview-confirmed copy-only |
 | V2.51（实现） | stale/drift detection（`analysis.detectStaleDrift`） | fingerprints、mtime、finding/conflict/analysis drift、source/root provenance、readiness impact、local evidence-first、optional V2.42 copy-only provider explanation |
-| V2.52-V2.55 | knowledge index、similar grouping、taxonomy、workspace readiness | fingerprints、mtime、source/root provenance、local index |
+| V2.52（实现） | knowledge index / `knowledge.search` | existing catalog evidence、derived tags、quality/readiness/stale-drift context、local-only read-only search |
+| V2.53-V2.55（future） | similar grouping、taxonomy、workspace readiness | future derived groupings/readiness views；not claimed in this branch |
 | V2.56-V2.60 | remediation planner、fix drafts、impact preview、batch review、history | findings、triage、policy, snapshots, writable capability matrix |
 | V2.61-V2.70 | review session、governance report、policy packs、skill map、full provider observability、safe write planning | local reports, policy profiles, V2.41-V2.42 call metadata, evidence gates |
 

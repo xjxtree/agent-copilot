@@ -277,6 +277,14 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
 - 可选 provider 说明若未来存在，仍受 V2.42 约束（preview/redaction/确认，copy-only）；它只用于说明辅助，不得改变 deterministic stale/drift 结论，也不得触发任何 write/action。
 - `analysis.detectStaleDrift` 的安全边界与输出必须明确标注：`provider_request_sent`、`write_back_allowed`、`config_mutation_allowed`、`snapshot_created`、`triage_mutation_allowed`、`script_execution_allowed`、`credential_accessed`、`raw_prompt_persisted`、`raw_response_persisted`、`raw_trace_persisted` 都应默认 false。
 
+### 2.4.3.1.6 V2.52 Local Knowledge Index（completed）
+
+- `knowledge.search` 是用户触发的 read-only 本地搜索入口：只读 existing catalog evidence 与 derived tags，不写 skill 文件、agent config、snapshot、triage、index artifact，也不读取凭据。
+- 输入仅限 `query`、可选 `agent`、可选 `limit`、以及可选 filters；filters 只用于收窄 purpose、tools、keywords、rules、source、risk、task fit、capability tags。
+- 默认不发起 provider / network 调用；若未来存在 provider 说明，仍必须遵守 V2.42 preview/redaction/确认，且只能 copy-only，不得影响 deterministic search 结果。
+- 输出安全标志必须默认 false：`provider_request_sent`、`write_back_allowed`、`config_mutation_allowed`、`index_write_allowed`、`snapshot_created`、`triage_mutation_allowed`、`script_execution_allowed`、`credential_accessed`、`raw_prompt_persisted`、`raw_response_persisted`、`raw_trace_persisted`、`cloud_sync_performed`、`telemetry_emitted`。
+- V2.53+ similar grouping / taxonomy / workspace readiness / remediation remain future and must not be inferred from V2.52.
+
 ### 2.4.3 Finding triage persistence 边界（V2.29）
 
 - Finding triage 持久化只发生在 app-local catalog/app data 层，目标是降低重复噪音并提示用户复核；不参与 agent 配置写入，也不改写 skill 内容。

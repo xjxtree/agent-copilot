@@ -41,6 +41,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var routingRegressionDetection: RoutingRegressionDetectionResult?
     @Published private(set) var routingAccuracyDashboard: RoutingAccuracyDashboard?
     @Published private(set) var staleDriftDetection: StaleDriftDetectionResult?
+    @Published private(set) var knowledgeSearchResult: KnowledgeSearchResult?
     @Published private(set) var traceImportList = AgentTraceImportListResult(imports: [])
     @Published private(set) var traceImportResult: AgentTraceImportResult?
     @Published private(set) var traceImportDeleteResult: AgentTraceImportDeleteResult?
@@ -51,6 +52,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var isDetectingRoutingRegression = false
     @Published private(set) var isLoadingRoutingAccuracyDashboard = false
     @Published private(set) var isDetectingStaleDrift = false
+    @Published private(set) var isSearchingKnowledge = false
     @Published private(set) var isLoadingTraceImports = false
     @Published private(set) var isImportingTrace = false
     @Published private(set) var deletingTaskBenchmarkIDs: Set<String> = []
@@ -96,6 +98,7 @@ final class SkillStore: ObservableObject {
             handleListCriteriaChanged()
             routingAccuracyDashboard = nil
             staleDriftDetection = nil
+            knowledgeSearchResult = nil
             Task { await loadAgentConfigSnapshots() }
             Task { await loadCleanupQueue() }
             Task { await loadCrossAgentComparisons() }
@@ -140,6 +143,13 @@ final class SkillStore: ObservableObject {
             }
         }
     }
+    @Published var knowledgeSearchText = "" {
+        didSet {
+            if oldValue != knowledgeSearchText {
+                knowledgeSearchResult = nil
+            }
+        }
+    }
     @Published var taskBenchmarkText = ""
     @Published var traceImportText = ""
     @Published var traceImportTitle = ""
@@ -163,7 +173,7 @@ final class SkillStore: ObservableObject {
     }
 
     private var isTaskBenchmarkBusy: Bool {
-        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty
+        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty
     }
 
     private var isLLMPromptBusy: Bool {
@@ -1417,6 +1427,33 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func searchKnowledge() async {
+        let query = normalizedKnowledgeSearchText
+        guard !query.isEmpty else {
+            knowledgeSearchResult = .unavailable(reason: UIStrings.knowledgeQueryRequired)
+            return
+        }
+        guard !isSearchingKnowledge else { return }
+        guard !isRefreshBusy else {
+            knowledgeSearchResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        isSearchingKnowledge = true
+        defer { isSearchingKnowledge = false }
+
+        let agent = agentFilter == .all ? nil : agentFilter.rawValue
+        do {
+            knowledgeSearchResult = try await service.searchKnowledge(
+                query: query,
+                agent: agent,
+                limit: 20
+            )
+        } catch {
+            knowledgeSearchResult = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
     func compareCrossAgentReadiness() async {
         let taskText = selectedCrossAgentReadinessInput
         guard !taskText.isEmpty else {
@@ -1824,6 +1861,9 @@ final class SkillStore: ObservableObject {
         if staleDriftDetection?.isUnavailable == true {
             staleDriftDetection = nil
         }
+        if knowledgeSearchResult?.isUnavailable == true {
+            knowledgeSearchResult = nil
+        }
         deletingTaskBenchmarkIDs.removeAll()
         if taskBenchmarkList.isUnavailable {
             taskBenchmarkEvaluation = nil
@@ -1961,6 +2001,10 @@ final class SkillStore: ObservableObject {
 
     private var normalizedCrossAgentReadinessText: String {
         crossAgentReadinessText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var normalizedKnowledgeSearchText: String {
+        knowledgeSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var normalizedTaskBenchmarkText: String {

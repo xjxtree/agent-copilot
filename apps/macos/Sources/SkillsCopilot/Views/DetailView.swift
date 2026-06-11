@@ -167,6 +167,9 @@ struct DetailView: View {
                             isLoadingRoutingAccuracyDashboard: store.isLoadingRoutingAccuracyDashboard,
                             staleDriftDetection: store.staleDriftDetection,
                             isDetectingStaleDrift: store.isDetectingStaleDrift,
+                            knowledgeSearchText: $store.knowledgeSearchText,
+                            knowledgeSearchResult: store.knowledgeSearchResult,
+                            isSearchingKnowledge: store.isSearchingKnowledge,
                             onScoreQuality: {
                                 Task {
                                     await store.scoreSelectedSkillQuality()
@@ -225,6 +228,11 @@ struct DetailView: View {
                             onDetectStaleDrift: {
                                 Task {
                                     await store.detectStaleDrift()
+                                }
+                            },
+                            onSearchKnowledge: {
+                                Task {
+                                    await store.searchKnowledge()
                                 }
                             },
                             taskBenchmarkText: $store.taskBenchmarkText,
@@ -863,6 +871,9 @@ private struct AnalysisSection: View {
     let isLoadingRoutingAccuracyDashboard: Bool
     let staleDriftDetection: StaleDriftDetectionResult?
     let isDetectingStaleDrift: Bool
+    @Binding var knowledgeSearchText: String
+    let knowledgeSearchResult: KnowledgeSearchResult?
+    let isSearchingKnowledge: Bool
     let onScoreQuality: () -> Void
     let onPreviewQualityPrompt: () -> Void
     let onSendQualityPrompt: () -> Void
@@ -875,6 +886,7 @@ private struct AnalysisSection: View {
     let onCompareCrossAgentReadiness: () -> Void
     let onLoadRoutingAccuracyDashboard: () -> Void
     let onDetectStaleDrift: () -> Void
+    let onSearchKnowledge: () -> Void
     @Binding var taskBenchmarkText: String
     let taskBenchmarkInput: String
     let taskBenchmarkList: TaskBenchmarkListResult
@@ -1018,6 +1030,13 @@ private struct AnalysisSection: View {
                 result: staleDriftDetection,
                 isDetecting: isDetectingStaleDrift,
                 onDetect: onDetectStaleDrift
+            )
+
+            KnowledgeSearchPanel(
+                query: $knowledgeSearchText,
+                result: knowledgeSearchResult,
+                isSearching: isSearchingKnowledge,
+                onSearch: onSearchKnowledge
             )
 
             TaskBenchmarkPanel(
@@ -3160,6 +3179,262 @@ private struct StaleDriftSafetyList: View {
             (UIStrings.routingAccuracyCloudSync, safety.cloudSyncEnabled),
             (UIStrings.routingAccuracyTelemetry, safety.telemetryEnabled)
         ]
+    }
+}
+
+private struct KnowledgeSearchPanel: View {
+    @Binding var query: String
+    let result: KnowledgeSearchResult?
+    let isSearching: Bool
+    let onSearch: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.knowledgeTitle, systemImage: "books.vertical")
+                    .font(.headline)
+                Spacer()
+                Label(UIStrings.readOnlyPreview, systemImage: "lock.shield")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(UIStrings.knowledgeBoundary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+
+            HStack(spacing: 8) {
+                TextField(UIStrings.knowledgeQueryPlaceholder, text: $query)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(onSearch)
+                Button {
+                    onSearch()
+                } label: {
+                    Label(UIStrings.knowledgeSearchAction, systemImage: "magnifyingglass")
+                }
+                .disabled(isSearching)
+            }
+
+            if isSearching {
+                Label(UIStrings.llmPreparing, systemImage: "hourglass")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let result {
+                KnowledgeSearchResultView(result: result)
+            } else {
+                Label(UIStrings.knowledgeNoResult, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Label(UIStrings.llmReviewNoActions, systemImage: "nosign")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct KnowledgeSearchResultView: View {
+    let result: KnowledgeSearchResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let fallbackReason = result.fallbackReason, !fallbackReason.isEmpty {
+                Label(fallbackReason, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+                SummaryChip(title: UIStrings.knowledgeMatches, value: "\(resultCount)", systemImage: "magnifyingglass")
+                SummaryChip(title: UIStrings.agent, value: "\(agentCount)", systemImage: "person.3")
+                SummaryChip(title: UIStrings.knowledgeFacets, value: "\(result.facetRows.count)", systemImage: "tag")
+                SummaryChip(title: UIStrings.knowledgeGapNotes, value: "\(gapCount)", systemImage: "puzzlepiece.extension")
+                SummaryChip(title: UIStrings.knowledgeBlockerNotes, value: "\(blockerCount)", systemImage: "exclamationmark.octagon")
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                MetadataRow(label: UIStrings.routingAccuracyGeneratedBy, value: result.generatedBy)
+                MetadataRow(label: UIStrings.routingAccuracyCatalog, value: result.catalogAvailable ? UIStrings.routingAccuracyAvailable : UIStrings.routingAccuracyUnavailableShort)
+                MetadataRow(label: UIStrings.knowledgeQuery, value: result.filters.query.isEmpty ? UIStrings.unknown : result.filters.query)
+                MetadataRow(label: UIStrings.agent, value: result.filters.agents.isEmpty ? (result.filters.agent.map(DisplayText.agent) ?? UIStrings.text("health.allAgents", "All Agents")) : result.filters.agents.map(DisplayText.agent).joined(separator: ", "))
+                if let limit = result.filters.limit {
+                    MetadataRow(label: UIStrings.text("filter.limit", "Limit"), value: "\(limit)")
+                }
+                if let promptRequest = result.promptRequest {
+                    MetadataRow(label: UIStrings.routingAccuracyPromptRequest, value: promptRequestLabel(promptRequest))
+                }
+            }
+
+            if !result.summary.summaryText.isEmpty {
+                Text(result.summary.summaryText)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            KnowledgeRowsList(rows: result.knowledgeRows)
+            KnowledgeFacetList(facets: result.facetRows)
+            RoutingInlineList(title: UIStrings.knowledgeGapNotes, empty: UIStrings.routingAccuracyNoGaps, values: result.gapNotes, systemImage: "puzzlepiece.extension")
+            RoutingInlineList(title: UIStrings.knowledgeBlockerNotes, empty: UIStrings.routingAccuracyNoBlockers, values: result.blockerNotes, systemImage: "exclamationmark.octagon")
+            CrossAgentReadinessEvidenceList(evidence: result.evidenceReferences)
+            StaleDriftSafetyList(safety: result.safetyFlags)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var resultCount: Int {
+        result.summary.resultCount > 0 ? result.summary.resultCount : result.knowledgeRows.count
+    }
+
+    private var agentCount: Int {
+        result.summary.agentCount > 0 ? result.summary.agentCount : Set(result.knowledgeRows.compactMap(\.agent)).count
+    }
+
+    private var gapCount: Int {
+        result.summary.gapCount > 0 ? result.summary.gapCount : result.gapNotes.count
+    }
+
+    private var blockerCount: Int {
+        result.summary.blockerCount > 0 ? result.summary.blockerCount : result.blockerNotes.count
+    }
+
+    private func promptRequestLabel(_ promptRequest: RoutingAccuracyPromptRequest) -> String {
+        let state = promptRequest.enabled ? UIStrings.llmEnabled : UIStrings.llmDisabled
+        let copy = promptRequest.copyOnly ? UIStrings.llmPromptCopyOnly : UIStrings.llmSkillAnalysisEnabledUnsafe
+        return "\(promptRequest.requestKind) · \(state) · \(copy)"
+    }
+}
+
+private struct KnowledgeRowsList: View {
+    let rows: [KnowledgeSearchRow]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(UIStrings.knowledgeRows)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if rows.isEmpty {
+                Text(UIStrings.knowledgeNoRows)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(rows.prefix(10)) { row in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Label(row.skillName, systemImage: "doc.text.magnifyingglass")
+                                    .font(.callout.bold())
+                                    .lineLimit(1)
+                                Spacer()
+                                Text(row.displayRank)
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
+                                MetadataRow(label: UIStrings.agent, value: row.agent.map(DisplayText.agent) ?? UIStrings.unknown)
+                                MetadataRow(label: UIStrings.scope, value: row.scope ?? UIStrings.unknown)
+                                MetadataRow(label: UIStrings.state, value: row.statusLabel)
+                                if let definitionID = row.definitionID, !definitionID.isEmpty {
+                                    MetadataRow(label: UIStrings.definition, value: definitionID)
+                                }
+                            }
+
+                            if !row.purpose.isEmpty {
+                                Text(row.purpose)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .textSelection(.enabled)
+                            }
+
+                            KnowledgeTokenFlow(title: UIStrings.knowledgeMatchedFields, values: row.matchedFields)
+                            RoutingInlineList(title: UIStrings.routingConfidenceMatchReasons, empty: UIStrings.routingConfidenceNoReasons, values: row.matchReasons, systemImage: "text.bubble")
+                            KnowledgeTokenFlow(title: UIStrings.knowledgeKeywords, values: row.keywords)
+                            KnowledgeTokenFlow(title: UIStrings.knowledgeTools, values: row.tools)
+                            KnowledgeTokenFlow(title: UIStrings.knowledgeRules, values: row.rules)
+                            KnowledgeTokenFlow(title: UIStrings.knowledgeCapabilities, values: row.capabilityTags)
+                            KnowledgeTokenFlow(title: UIStrings.knowledgeRisks, values: row.riskTags)
+                            RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: row.evidenceRefs, systemImage: "checklist")
+                            RoutingInlineList(title: UIStrings.knowledgeSafetyFlags, empty: UIStrings.taskBenchmarkNoSafetyFlags, values: row.safetyFlags, systemImage: "checkmark.shield")
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct KnowledgeTokenFlow: View {
+    let title: String
+    let values: [String]
+
+    var body: some View {
+        if !values.isEmpty {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title)
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 70), spacing: 6)], alignment: .leading, spacing: 6) {
+                    ForEach(values.prefix(10), id: \.self) { value in
+                        Text(value)
+                            .font(.caption2)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(.quaternary.opacity(0.45), in: Capsule())
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct KnowledgeFacetList: View {
+    let facets: [KnowledgeFacetRow]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(UIStrings.knowledgeFacets)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if facets.isEmpty {
+                Text(UIStrings.knowledgeNoFacets)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(facets.prefix(12)) { facet in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(facet.value)
+                                    .font(.caption.bold())
+                                Text(facet.facet)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text("\(facet.count)")
+                                .font(.caption.bold())
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(8)
+                        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
+                    }
+                }
+            }
+        }
     }
 }
 

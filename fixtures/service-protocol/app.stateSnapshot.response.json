@@ -17,6 +17,7 @@
         "evidence.piWritableHarness",
         "analysis.scoreSkillQuality",
         "analysis.detectStaleDrift",
+        "knowledge.search",
         "task.checkReadiness",
         "task.rankSkillRoutes",
         "task.compareAgentReadiness",

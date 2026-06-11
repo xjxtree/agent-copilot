@@ -272,6 +272,18 @@ private struct StaleDriftDetectionParams: Encodable {
     }
 }
 
+private struct KnowledgeSearchParams: Encodable {
+    let query: String
+    let agent: String?
+    let limit: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case query
+        case agent
+        case limit
+    }
+}
+
 private struct TaskBenchmarkDeleteParams: Encodable {
     let benchmarkId: String
 
@@ -843,6 +855,15 @@ final class ServiceClient {
         )
         do {
             return try await call(method: "analysis.detectStaleDrift", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func searchKnowledge(query: String, agent: String? = nil, limit: Int? = 20) async throws -> KnowledgeSearchResult {
+        let params = KnowledgeSearchParams(query: query, agent: agent, limit: limit)
+        do {
+            return try await call(method: "knowledge.search", params: params)
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .unavailable()
         }

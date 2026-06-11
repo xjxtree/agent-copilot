@@ -533,7 +533,11 @@ Model families:
   - `readiness_impact_rows`: `[{ instance_id, skill_name, agent, impact_level, stale_drift_score, notes, evidence_refs }]`。
   - 数据来源：catalog fingerprint / `mtime` / state, `RuleFindingRecord`, same-agent conflicts, cross-agent analysis groups, source/root provenance, adapter diagnostics, and derived readiness impact notes。Previous-scan drift is only asserted when existing local evidence exists（例如 `fingerprint.changed` finding、conflict、analysis group）；missing timestamp/history is surfaced as gap evidence rather than live file I/O。
   - 与现有模型一致：默认不持久化 raw trace/raw prompt/raw response/raw skill body；可选 provider 辅助仍走 V2.42 preview/redaction/confirmation/copy-only，且不得改变 deterministic stale/drift 结果。
-- `KnowledgeIndex` / `SimilarityGroup` / `CapabilityTaxonomy`（V2.52-V2.55）：local-only index and derived groupings; no default network dependency.
+- `KnowledgeSearchResult` / `KnowledgeIndex`（V2.52 completed）：local-only, read-only search view over existing catalog evidence and derived tags; it does not persist an index artifact.
+  - `knowledge.search` response: `{ generated_by, catalog_available, filters, summary, rows, facets, gap_notes, blocker_notes, evidence_references, prompt_request, safety_flags }`。
+  - `rows`: `[{ rank, instance_id, definition_id, skill_name, agent, scope, enabled, state, source, purpose_snippet, description_snippet, matched_fields, match_reasons, keywords, tools, rules, capability_tags, risk_tags, quality_context, readiness_context, stale_drift_context, evidence_refs, safety_flags }]`。
+  - `facets`: grouped counts for agents, scopes, states, enabled values, risks, tools, and keywords.
+- `SimilarityGroup` / `CapabilityTaxonomy` / `WorkspaceReadiness`（V2.53-V2.55 future）：future derived grouping and readiness views; not implemented yet.
 - `ReviewSession` / `RemediationHistory`（V2.56-V2.61）：local review state, actions considered, decisions, reopened issues, and summary. AI suggestions remain untrusted and cannot directly mutate skill files or agent config.
 - `PolicyPack` / `PolicyProfile` / `ComplianceReport`（V2.63-V2.66）：local policy schema, import/export metadata, profile bindings, deterministic evidence, and optional AI explanation.
 - `ProviderObservabilityView`（V2.69）：derived UI/reporting layer over `ProviderCallMetadataMinimal`, adding call history, cost trends, provider errors, rate limits, availability, cleanup/retention controls, and optional redacted export. Do not persist API keys, raw prompts, raw responses, credentials, or local paths by default.

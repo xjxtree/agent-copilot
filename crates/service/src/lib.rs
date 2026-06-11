@@ -63,6 +63,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "evidence.piWritableHarness",
     "analysis.scoreSkillQuality",
     "analysis.detectStaleDrift",
+    "knowledge.search",
     "task.checkReadiness",
     "task.rankSkillRoutes",
     "task.compareAgentReadiness",
@@ -781,6 +782,144 @@ pub struct AgentReadinessSafetyFlags {
     pub cloud_sync_performed: bool,
     pub telemetry_emitted: bool,
 }
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct KnowledgeSearchParams {
+    #[serde(default)]
+    pub query: Option<String>,
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+    #[serde(default)]
+    pub risk: Option<String>,
+    #[serde(default)]
+    pub scope: Option<String>,
+    #[serde(default)]
+    pub enabled: Option<bool>,
+    #[serde(default)]
+    pub tool: Option<String>,
+    #[serde(default)]
+    pub keyword: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct KnowledgeSearchResult {
+    pub generated_by: &'static str,
+    pub catalog_available: bool,
+    pub summary: KnowledgeSearchSummary,
+    pub filters: KnowledgeSearchFilters,
+    pub rows: Vec<KnowledgeSearchRow>,
+    pub facets: KnowledgeSearchFacets,
+    pub gap_notes: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub evidence_references: Vec<TaskReadinessEvidenceReference>,
+    pub prompt_request: KnowledgeSearchPromptRequest,
+    pub safety_flags: KnowledgeSearchSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct KnowledgeSearchSummary {
+    pub indexed_skill_count: usize,
+    pub matched_row_count: usize,
+    pub returned_row_count: usize,
+    pub enabled_count: usize,
+    pub disabled_count: usize,
+    pub high_risk_count: usize,
+    pub stale_or_drift_count: usize,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct KnowledgeSearchFilters {
+    pub query: Option<String>,
+    pub normalized_terms: Vec<String>,
+    pub agent: Option<String>,
+    pub limit: usize,
+    pub risk: Option<String>,
+    pub scope: Option<String>,
+    pub enabled: Option<bool>,
+    pub tool: Option<String>,
+    pub keyword: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct KnowledgeSearchFacets {
+    pub agents: BTreeMap<String, usize>,
+    pub scopes: BTreeMap<String, usize>,
+    pub states: BTreeMap<String, usize>,
+    pub enabled: BTreeMap<String, usize>,
+    pub risks: BTreeMap<String, usize>,
+    pub tools: BTreeMap<String, usize>,
+    pub keywords: BTreeMap<String, usize>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct KnowledgeSearchRow {
+    pub rank: usize,
+    pub instance_id: String,
+    pub definition_id: String,
+    pub skill_name: String,
+    pub agent: String,
+    pub scope: String,
+    pub enabled: bool,
+    pub state: String,
+    pub source: KnowledgeSearchSource,
+    pub purpose_snippet: Option<String>,
+    pub description_snippet: Option<String>,
+    pub matched_fields: Vec<String>,
+    pub match_reasons: Vec<String>,
+    pub keywords: Vec<String>,
+    pub tools: Vec<String>,
+    pub rules: Vec<String>,
+    pub capability_tags: Vec<String>,
+    pub risk_tags: Vec<String>,
+    pub quality_context: Option<KnowledgeQualityContext>,
+    pub readiness_context: Option<KnowledgeReadinessContext>,
+    pub stale_drift_context: Option<KnowledgeStaleDriftContext>,
+    pub evidence_refs: Vec<String>,
+    pub safety_flags: KnowledgeSearchSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct KnowledgeSearchSource {
+    pub source_path: String,
+    pub display_path: String,
+    pub root_provenance: String,
+    pub fingerprint: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct KnowledgeQualityContext {
+    pub score: u8,
+    pub grade: &'static str,
+    pub band: &'static str,
+    pub reasons: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct KnowledgeReadinessContext {
+    pub score: u8,
+    pub band: &'static str,
+    pub risk_level: &'static str,
+    pub risk_summary: String,
+    pub gap_count: usize,
+    pub blocker_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct KnowledgeStaleDriftContext {
+    pub score: u8,
+    pub band: &'static str,
+    pub fingerprint_drift: bool,
+    pub finding_drift: bool,
+    pub source_drift: bool,
+    pub stale_by_mtime: bool,
+    pub readiness_impact_level: Option<&'static str>,
+}
+
+pub type KnowledgeSearchPromptRequest = AgentReadinessPromptRequest;
+pub type KnowledgeSearchSafetyFlags = AgentReadinessSafetyFlags;
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct DetectStaleDriftParams {
@@ -1561,6 +1700,7 @@ pub enum LlmPromptActionKind {
     SkillAnalysis,
     QualityScore,
     StaleDriftDetection,
+    KnowledgeSearch,
     TaskReadiness,
     RoutingConfidence,
 }
@@ -1575,6 +1715,7 @@ impl LlmPromptActionKind {
             Self::SkillAnalysis => "skill_analysis",
             Self::QualityScore => "quality_score",
             Self::StaleDriftDetection => "stale_drift_detection",
+            Self::KnowledgeSearch => "knowledge_search",
             Self::TaskReadiness => "task_readiness",
             Self::RoutingConfidence => "routing_confidence",
         }
@@ -2097,6 +2238,14 @@ impl ServiceHost {
                     serde_json::from_value(request.params)?
                 };
                 serde_json::to_value(self.detect_stale_drift(params)?).map_err(Into::into)
+            }
+            "knowledge.search" => {
+                let params: KnowledgeSearchParams = if request.params.is_null() {
+                    KnowledgeSearchParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.search_knowledge(params)?).map_err(Into::into)
             }
             "task.checkReadiness" => {
                 let params: TaskReadinessParams = serde_json::from_value(request.params)?;
@@ -3747,6 +3896,174 @@ impl ServiceHost {
         })
     }
 
+    pub fn search_knowledge(
+        &self,
+        params: KnowledgeSearchParams,
+    ) -> Result<KnowledgeSearchResult, ServiceError> {
+        if matches!(params.limit, Some(0)) {
+            return Err(ServiceError::InvalidRequest(
+                "knowledge.search limit must be greater than zero".to_string(),
+            ));
+        }
+
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let filters = knowledge_search_filters(&params);
+        let Some(catalog) = self.open_existing_catalog_read_only()? else {
+            return Ok(empty_knowledge_search_result(filters, false));
+        };
+
+        let skills = self.list_visible_skill_records(&catalog)?;
+        let findings = list_findings(&catalog)?;
+        let conflicts = list_conflicts(&catalog)?;
+        let analysis = analyze_catalog(&catalog, &adapter_ctx)?;
+        let adapter_diagnostics = list_adapter_diagnostics(&adapter_ctx);
+        let roots = self.redaction_roots(&adapter_ctx);
+        let agent_filter = filters.agent.as_deref().filter(|agent| !agent.is_empty());
+        let readiness_by_id = if filters.query.is_some() {
+            let readiness = self.check_task_readiness(TaskReadinessParams {
+                task: filters.query.clone().unwrap_or_default(),
+                agent: filters.agent.clone(),
+                candidate_instance_ids: Vec::new(),
+                limit: Some(100),
+            })?;
+            readiness
+                .candidate_skills
+                .into_iter()
+                .map(|candidate| (candidate.instance_id.clone(), candidate))
+                .collect::<BTreeMap<_, _>>()
+        } else {
+            BTreeMap::new()
+        };
+        let stale_by_id = self
+            .detect_stale_drift(DetectStaleDriftParams {
+                agent: filters.agent.clone(),
+                candidate_instance_ids: Vec::new(),
+                limit: Some(100),
+                stale_days: None,
+                thresholds: StaleDriftThresholds::default(),
+            })?
+            .stale_drift_rows
+            .into_iter()
+            .map(|row| (row.instance_id.clone(), row))
+            .collect::<BTreeMap<_, _>>();
+
+        let mut gap_notes = Vec::new();
+        let mut evidence = Vec::new();
+        let mut rows = Vec::new();
+        for skill in &skills {
+            if !agent_matches(agent_filter, Some(skill.agent.as_str())) {
+                continue;
+            }
+            let Some(detail) = catalog.get_skill_detail(&skill.id)? else {
+                gap_notes.push(format!(
+                    "Catalog row `{}` did not have detail evidence available.",
+                    redact_for_llm_preview(&skill.id)
+                ));
+                continue;
+            };
+            let related_findings = knowledge_related_findings(&findings, &detail);
+            let related_conflicts = knowledge_related_conflicts(&conflicts, &detail);
+            let related_analysis = knowledge_related_analysis(&analysis.groups, &detail);
+            let diagnostic = adapter_diagnostics
+                .iter()
+                .find(|diagnostic| diagnostic.agent == detail.agent);
+            let quality = self
+                .score_skill_quality(ScoreSkillQualityParams {
+                    instance_id: detail.id.clone(),
+                    agent: Some(detail.agent.clone()),
+                    definition_id: Some(detail.definition_id.clone()),
+                })
+                .ok();
+            let readiness = readiness_by_id.get(&detail.id);
+            let stale = stale_by_id.get(&detail.id);
+            let Some(row) = knowledge_search_row(
+                &detail,
+                KnowledgeSearchRowSignals {
+                    query_terms: &filters.normalized_terms,
+                    filters: &filters,
+                    findings: &related_findings,
+                    conflicts: &related_conflicts,
+                    analysis_groups: &related_analysis,
+                    diagnostic,
+                    quality: quality.as_ref(),
+                    readiness,
+                    stale,
+                    redaction_roots: &roots,
+                },
+                &mut evidence,
+            ) else {
+                continue;
+            };
+            rows.push(row);
+        }
+
+        let matched_row_count = rows.len();
+        rows.sort_by(|left, right| {
+            knowledge_row_rank_score(right)
+                .cmp(&knowledge_row_rank_score(left))
+                .then_with(|| left.agent.cmp(&right.agent))
+                .then_with(|| left.skill_name.cmp(&right.skill_name))
+                .then_with(|| left.instance_id.cmp(&right.instance_id))
+        });
+        rows.truncate(filters.limit);
+        for (index, row) in rows.iter_mut().enumerate() {
+            row.rank = index + 1;
+        }
+        if rows.is_empty() {
+            gap_notes.push(
+                "No visible local skill evidence matched the knowledge search filters.".to_string(),
+            );
+        }
+        gap_notes.sort();
+        gap_notes.dedup();
+
+        let facets = knowledge_search_facets(&rows);
+        let blocker_notes = knowledge_search_blocker_notes(&rows);
+        let prompt_instance_ids = rows
+            .iter()
+            .take(8)
+            .map(|row| row.instance_id.clone())
+            .collect::<Vec<_>>();
+        let prompt_available = !prompt_instance_ids.is_empty();
+        let summary = knowledge_search_summary(skills.len(), matched_row_count, &rows);
+
+        Ok(KnowledgeSearchResult {
+            generated_by: "deterministic-service",
+            catalog_available: true,
+            summary,
+            filters: filters.clone(),
+            rows,
+            facets,
+            gap_notes,
+            blocker_notes,
+            evidence_references: evidence,
+            prompt_request: KnowledgeSearchPromptRequest {
+                available: prompt_available,
+                preview_method: "llm.previewPrompt",
+                confirm_method: "llm.confirmPromptAndSend",
+                action: "knowledge_search",
+                request: LlmPreviewPromptParams {
+                    action: LlmPromptActionKind::KnowledgeSearch,
+                    profile_id: None,
+                    skill_instance_id: None,
+                    instance_ids: prompt_instance_ids,
+                    analysis_kind: None,
+                    user_intent: filters.query.clone().or_else(|| {
+                        Some("Explain deterministic local knowledge search results.".to_string())
+                    }),
+                },
+                note: if prompt_available {
+                    "Optional provider-backed explanation must be requested through prompt preview and explicit confirmation; knowledge.search never sends provider traffic."
+                        .to_string()
+                } else {
+                    "Prompt preview is unavailable until local catalog evidence produces knowledge rows."
+                        .to_string()
+                },
+            },
+            safety_flags: knowledge_search_safety_flags(),
+        })
+    }
+
     pub fn check_task_readiness(
         &self,
         params: TaskReadinessParams,
@@ -5017,6 +5334,48 @@ impl ServiceHost {
                 ]);
                 sections.push(render_stale_drift_prompt_section(&detection, &mut redactor));
             }
+            LlmPromptActionKind::KnowledgeSearch => {
+                let result = self.search_knowledge(KnowledgeSearchParams {
+                    query: params.user_intent.clone(),
+                    agent: None,
+                    limit: Some(8),
+                    risk: None,
+                    scope: None,
+                    enabled: None,
+                    tool: None,
+                    keyword: None,
+                })?;
+                prompt_scope.extend([
+                    "deterministic local knowledge rows".to_string(),
+                    "search filters and facets".to_string(),
+                    "quality/readiness/stale-drift context".to_string(),
+                    "local gap and blocker notes".to_string(),
+                    "evidence reference summaries".to_string(),
+                    "safety flags".to_string(),
+                ]);
+                included_fields.extend([
+                    "redacted search query".to_string(),
+                    "candidate skill ids".to_string(),
+                    "skill names".to_string(),
+                    "agents".to_string(),
+                    "scopes".to_string(),
+                    "enabled states".to_string(),
+                    "matched fields and match reasons".to_string(),
+                    "keywords, tools, rules, capability tags, and risk tags".to_string(),
+                    "quality/readiness/stale-drift summaries".to_string(),
+                    "read-only safety flags".to_string(),
+                ]);
+                excluded_fields.extend([
+                    "raw source paths".to_string(),
+                    "raw provider response".to_string(),
+                    "agent config contents".to_string(),
+                    "raw prompt or response artifacts".to_string(),
+                ]);
+                sections.push(render_knowledge_search_prompt_section(
+                    &result,
+                    &mut redactor,
+                ));
+            }
             LlmPromptActionKind::TaskReadiness => {
                 let task = params.user_intent.as_deref().ok_or_else(|| {
                     ServiceError::InvalidRequest(
@@ -5118,6 +5477,7 @@ impl ServiceHost {
                 .output_token_estimate(),
             LlmPromptActionKind::QualityScore => 650,
             LlmPromptActionKind::StaleDriftDetection => 750,
+            LlmPromptActionKind::KnowledgeSearch => 750,
             LlmPromptActionKind::TaskReadiness => 750,
             LlmPromptActionKind::RoutingConfidence => 850,
         };
@@ -7254,6 +7614,744 @@ fn stale_drift_blocker_notes(rows: &[StaleDriftRow]) -> Vec<String> {
         );
     }
     notes
+}
+
+fn knowledge_search_safety_flags() -> KnowledgeSearchSafetyFlags {
+    agent_readiness_safety_flags()
+}
+
+fn knowledge_search_filters(params: &KnowledgeSearchParams) -> KnowledgeSearchFilters {
+    let query = params
+        .query
+        .as_deref()
+        .map(str::trim)
+        .filter(|query| !query.is_empty())
+        .map(redact_for_llm_preview);
+    let mut normalized_terms = query
+        .as_deref()
+        .map(task_readiness_terms)
+        .unwrap_or_default();
+    if let Some(keyword) = params.keyword.as_deref().map(str::trim) {
+        if !keyword.is_empty() {
+            normalized_terms.extend(task_readiness_terms(keyword));
+        }
+    }
+    normalized_terms.sort();
+    normalized_terms.dedup();
+    KnowledgeSearchFilters {
+        query,
+        normalized_terms,
+        agent: params
+            .agent
+            .as_deref()
+            .map(str::trim)
+            .filter(|agent| !agent.is_empty())
+            .map(ToOwned::to_owned),
+        limit: params.limit.unwrap_or(25).clamp(1, 100),
+        risk: params
+            .risk
+            .as_deref()
+            .map(normalize_filter_value)
+            .filter(|risk| !risk.is_empty()),
+        scope: params
+            .scope
+            .as_deref()
+            .map(normalize_filter_value)
+            .filter(|scope| !scope.is_empty()),
+        enabled: params.enabled,
+        tool: params
+            .tool
+            .as_deref()
+            .map(normalize_filter_value)
+            .filter(|tool| !tool.is_empty()),
+        keyword: params
+            .keyword
+            .as_deref()
+            .map(normalize_filter_value)
+            .filter(|keyword| !keyword.is_empty()),
+    }
+}
+
+fn normalize_filter_value(value: &str) -> String {
+    value.trim().to_ascii_lowercase().replace(['_', ' '], "-")
+}
+
+fn empty_knowledge_search_result(
+    filters: KnowledgeSearchFilters,
+    catalog_available: bool,
+) -> KnowledgeSearchResult {
+    KnowledgeSearchResult {
+        generated_by: "deterministic-service",
+        catalog_available,
+        summary: KnowledgeSearchSummary {
+            indexed_skill_count: 0,
+            matched_row_count: 0,
+            returned_row_count: 0,
+            enabled_count: 0,
+            disabled_count: 0,
+            high_risk_count: 0,
+            stale_or_drift_count: 0,
+            summary: "No local catalog is available, so knowledge search has no skill evidence."
+                .to_string(),
+        },
+        filters,
+        rows: Vec::new(),
+        facets: KnowledgeSearchFacets::default(),
+        gap_notes: vec![
+            "Run a local scan before relying on knowledge search for skill discovery.".to_string(),
+        ],
+        blocker_notes: vec![
+            "No provider request was sent and no fallback network lookup was attempted."
+                .to_string(),
+        ],
+        evidence_references: Vec::new(),
+        prompt_request: KnowledgeSearchPromptRequest {
+            available: false,
+            preview_method: "llm.previewPrompt",
+            confirm_method: "llm.confirmPromptAndSend",
+            action: "knowledge_search",
+            request: LlmPreviewPromptParams {
+                action: LlmPromptActionKind::KnowledgeSearch,
+                profile_id: None,
+                skill_instance_id: None,
+                instance_ids: Vec::new(),
+                analysis_kind: None,
+                user_intent: Some(
+                    "Explain deterministic local knowledge search results.".to_string(),
+                ),
+            },
+            note: "Prompt preview is unavailable until local catalog evidence exists.".to_string(),
+        },
+        safety_flags: knowledge_search_safety_flags(),
+    }
+}
+
+struct KnowledgeSearchRowSignals<'a> {
+    query_terms: &'a [String],
+    filters: &'a KnowledgeSearchFilters,
+    findings: &'a [RuleFindingRecord],
+    conflicts: &'a [ConflictGroupRecord],
+    analysis_groups: &'a [CrossAgentAnalysisGroup],
+    diagnostic: Option<&'a AdapterDiagnosticsRecord>,
+    quality: Option<&'a SkillQualityScoreResult>,
+    readiness: Option<&'a TaskReadinessCandidate>,
+    stale: Option<&'a StaleDriftRow>,
+    redaction_roots: &'a [(String, &'static str)],
+}
+
+fn knowledge_search_row(
+    skill: &SkillDetailRecord,
+    signals: KnowledgeSearchRowSignals<'_>,
+    evidence: &mut Vec<TaskReadinessEvidenceReference>,
+) -> Option<KnowledgeSearchRow> {
+    if let Some(scope) = signals.filters.scope.as_deref() {
+        if normalize_filter_value(&skill.scope) != scope {
+            return None;
+        }
+    }
+    if let Some(enabled) = signals.filters.enabled {
+        if skill.enabled != enabled {
+            return None;
+        }
+    }
+
+    let tools = knowledge_tools(&skill.permissions);
+    if let Some(tool) = signals.filters.tool.as_deref() {
+        if !tools
+            .iter()
+            .any(|candidate| normalize_filter_value(candidate) == tool)
+        {
+            return None;
+        }
+    }
+
+    let keywords = knowledge_keywords(skill, &tools, signals.findings);
+    if let Some(keyword) = signals.filters.keyword.as_deref() {
+        if !keywords
+            .iter()
+            .any(|candidate| normalize_filter_value(candidate).contains(keyword))
+        {
+            return None;
+        }
+    }
+
+    let risk_level = signals
+        .readiness
+        .map(|readiness| readiness.enabled_scope_risk_state.risk_level)
+        .unwrap_or_else(|| {
+            task_readiness_risk_level(
+                signals.findings,
+                signals.conflicts,
+                signals.analysis_groups,
+                skill,
+            )
+        });
+    if let Some(risk) = signals.filters.risk.as_deref() {
+        if risk_level != risk
+            && !signals.findings.iter().any(|finding| {
+                normalize_filter_value(&finding.effective_severity) == risk
+                    || normalize_filter_value(&finding.rule_id).contains(risk)
+            })
+        {
+            return None;
+        }
+    }
+
+    let (matched_fields, matched_terms) =
+        knowledge_match_terms(skill, &tools, &keywords, signals.query_terms);
+    if !signals.query_terms.is_empty() && matched_terms.is_empty() {
+        return None;
+    }
+
+    let skill_ref = push_task_readiness_evidence(
+        evidence,
+        "skill",
+        &skill.id,
+        format!(
+            "Catalog knowledge row for `{}` ({}, {}, enabled={}, state={})",
+            redact_for_llm_preview(&skill.name),
+            redact_for_llm_preview(&skill.agent),
+            redact_for_llm_preview(&skill.scope),
+            skill.enabled,
+            redact_for_llm_preview(&skill.state)
+        ),
+        None,
+        Some(skill.id.clone()),
+    );
+    let mut evidence_refs = vec![skill_ref];
+    for finding in signals.findings {
+        evidence_refs.push(push_task_readiness_evidence(
+            evidence,
+            "finding",
+            &finding.id,
+            format!(
+                "{} finding `{}`: {}",
+                redact_for_llm_preview(&finding.effective_severity),
+                redact_for_llm_preview(&finding.rule_id),
+                redact_for_llm_preview(&finding.message)
+            ),
+            Some(finding.effective_severity.clone()),
+            finding.instance_id.clone(),
+        ));
+    }
+    for conflict in signals.conflicts {
+        evidence_refs.push(push_task_readiness_evidence(
+            evidence,
+            "conflict",
+            &conflict.id,
+            format!(
+                "Same-agent conflict `{}` covers {} instance(s)",
+                redact_for_llm_preview(&conflict.reason),
+                conflict.instance_ids.len()
+            ),
+            Some("warning".to_string()),
+            Some(skill.id.clone()),
+        ));
+    }
+    for group in signals.analysis_groups {
+        evidence_refs.push(push_task_readiness_evidence(
+            evidence,
+            "analysis",
+            &group.id,
+            format!(
+                "{} analysis `{}`: {}",
+                redact_for_llm_preview(&group.severity),
+                redact_for_llm_preview(&group.kind),
+                redact_for_llm_preview(&group.title)
+            ),
+            Some(group.severity.clone()),
+            Some(skill.id.clone()),
+        ));
+    }
+    if let Some(diagnostic) = signals.diagnostic {
+        evidence_refs.push(push_task_readiness_evidence(
+            evidence,
+            "adapter_diagnostics",
+            diagnostic.agent,
+            format!(
+                "{} adapter diagnostics: status={}, writable_status={}, install_status={}",
+                redact_for_llm_preview(diagnostic.display_name),
+                redact_for_llm_preview(diagnostic.status),
+                redact_for_llm_preview(diagnostic.access.writable_status),
+                redact_for_llm_preview(diagnostic.access.install_status)
+            ),
+            None,
+            Some(skill.id.clone()),
+        ));
+    }
+    if let Some(quality) = signals.quality {
+        evidence_refs.push(push_task_readiness_evidence(
+            evidence,
+            "quality_score",
+            &skill.id,
+            format!(
+                "V2.43 quality score {} / 100 ({})",
+                quality.score, quality.band
+            ),
+            None,
+            Some(skill.id.clone()),
+        ));
+    }
+    if let Some(stale) = signals.stale {
+        evidence_refs.push(push_task_readiness_evidence(
+            evidence,
+            "stale_drift",
+            &skill.id,
+            format!(
+                "V2.51 stale/drift score {} / 100 ({})",
+                stale.stale_drift_score, stale.stale_drift_band
+            ),
+            None,
+            Some(skill.id.clone()),
+        ));
+    }
+    evidence_refs.sort();
+    evidence_refs.dedup();
+
+    let mut match_reasons = Vec::new();
+    if matched_terms.is_empty() {
+        match_reasons.push(
+            "Listed from local catalog evidence without a lexical query constraint.".to_string(),
+        );
+    } else {
+        match_reasons.push(format!(
+            "Matched query term(s): {}.",
+            matched_terms
+                .iter()
+                .take(8)
+                .map(|term| redact_for_llm_preview(term))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    if !skill.description.trim().is_empty() {
+        match_reasons.push(format!(
+            "Description evidence: {}",
+            redact_for_llm_preview(&knowledge_snippet(&skill.description, signals.query_terms))
+        ));
+    }
+    if let Some(readiness) = signals.readiness {
+        match_reasons.push(format!(
+            "Task readiness context is {} ({}/100) with risk {}.",
+            readiness.band, readiness.score, readiness.enabled_scope_risk_state.risk_level
+        ));
+    }
+    if let Some(stale) = signals.stale {
+        match_reasons.push(format!(
+            "Stale/drift context is {} ({}/100).",
+            stale.stale_drift_band, stale.stale_drift_score
+        ));
+    }
+
+    let rules = signals
+        .findings
+        .iter()
+        .map(|finding| finding.rule_id.clone())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let capability_tags = knowledge_capability_tags(skill, signals.diagnostic);
+    let risk_tags = knowledge_risk_tags(risk_level, signals.findings, signals.stale);
+
+    Some(KnowledgeSearchRow {
+        rank: 0,
+        instance_id: skill.id.clone(),
+        definition_id: skill.definition_id.clone(),
+        skill_name: redact_for_llm_preview(&skill.name),
+        agent: skill.agent.clone(),
+        scope: skill.scope.clone(),
+        enabled: skill.enabled,
+        state: skill.state.clone(),
+        source: KnowledgeSearchSource {
+            source_path: redact_path_string(&skill.path, signals.redaction_roots),
+            display_path: redact_path_string(&skill.display_path, signals.redaction_roots),
+            root_provenance: knowledge_root_provenance(skill),
+            fingerprint: redact_for_llm_preview(&skill.fingerprint),
+        },
+        purpose_snippet: knowledge_optional_snippet(&skill.body, signals.query_terms),
+        description_snippet: knowledge_optional_snippet(&skill.description, signals.query_terms),
+        matched_fields,
+        match_reasons,
+        keywords,
+        tools,
+        rules,
+        capability_tags,
+        risk_tags,
+        quality_context: signals.quality.map(|quality| KnowledgeQualityContext {
+            score: quality.score,
+            grade: quality.grade,
+            band: quality.band,
+            reasons: quality.reasons.iter().take(3).cloned().collect(),
+        }),
+        readiness_context: signals
+            .readiness
+            .map(|readiness| KnowledgeReadinessContext {
+                score: readiness.score,
+                band: readiness.band,
+                risk_level: readiness.enabled_scope_risk_state.risk_level,
+                risk_summary: readiness.enabled_scope_risk_state.risk_summary.clone(),
+                gap_count: readiness.missing_gap_notes.len(),
+                blocker_count: readiness.blocker_risk_notes.len(),
+            }),
+        stale_drift_context: signals.stale.map(|stale| KnowledgeStaleDriftContext {
+            score: stale.stale_drift_score,
+            band: stale.stale_drift_band,
+            fingerprint_drift: stale.drift_signals.fingerprint_drift,
+            finding_drift: stale.drift_signals.finding_drift,
+            source_drift: stale.drift_signals.source_drift,
+            stale_by_mtime: stale.drift_signals.stale_by_mtime,
+            readiness_impact_level: stale
+                .readiness_impact
+                .as_ref()
+                .map(|impact| impact.impact_level),
+        }),
+        evidence_refs,
+        safety_flags: knowledge_search_safety_flags(),
+    })
+}
+
+fn knowledge_related_findings(
+    findings: &[RuleFindingRecord],
+    skill: &SkillDetailRecord,
+) -> Vec<RuleFindingRecord> {
+    findings
+        .iter()
+        .filter(|finding| {
+            finding.instance_id.as_deref() == Some(skill.id.as_str())
+                || finding.definition_id.as_deref() == Some(skill.definition_id.as_str())
+        })
+        .cloned()
+        .collect()
+}
+
+fn knowledge_related_conflicts(
+    conflicts: &[ConflictGroupRecord],
+    skill: &SkillDetailRecord,
+) -> Vec<ConflictGroupRecord> {
+    conflicts
+        .iter()
+        .filter(|conflict| {
+            conflict.definition_id == skill.definition_id
+                || conflict
+                    .instance_ids
+                    .iter()
+                    .any(|instance_id| instance_id == &skill.id)
+        })
+        .cloned()
+        .collect()
+}
+
+fn knowledge_related_analysis(
+    groups: &[CrossAgentAnalysisGroup],
+    skill: &SkillDetailRecord,
+) -> Vec<CrossAgentAnalysisGroup> {
+    groups
+        .iter()
+        .filter(|group| {
+            group
+                .instance_ids
+                .iter()
+                .any(|instance_id| instance_id == &skill.id)
+        })
+        .cloned()
+        .collect()
+}
+
+fn knowledge_tools(permissions: &Value) -> Vec<String> {
+    let normalized = permissions.get("normalized").unwrap_or(permissions);
+    let mut tools = normalized
+        .get("tools")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(str::trim)
+        .filter(|tool| !tool.is_empty())
+        .map(redact_for_llm_preview)
+        .collect::<Vec<_>>();
+    tools.sort();
+    tools.dedup();
+    tools
+}
+
+fn knowledge_keywords(
+    skill: &SkillDetailRecord,
+    tools: &[String],
+    findings: &[RuleFindingRecord],
+) -> Vec<String> {
+    let mut terms = BTreeSet::new();
+    for value in [
+        skill.name.as_str(),
+        skill.description.as_str(),
+        skill.frontmatter_raw.as_str(),
+        skill.body.as_str(),
+    ] {
+        for term in task_readiness_terms(value).into_iter().take(20) {
+            terms.insert(term);
+        }
+    }
+    for tool in tools {
+        terms.insert(tool.to_ascii_lowercase());
+    }
+    for finding in findings {
+        terms.insert(finding.rule_id.clone());
+    }
+    terms.into_iter().take(30).collect()
+}
+
+fn knowledge_match_terms(
+    skill: &SkillDetailRecord,
+    tools: &[String],
+    keywords: &[String],
+    query_terms: &[String],
+) -> (Vec<String>, Vec<String>) {
+    let fields = [
+        ("name", skill.name.as_str()),
+        ("description", skill.description.as_str()),
+        ("frontmatter", skill.frontmatter_raw.as_str()),
+        ("body", skill.body.as_str()),
+        ("agent", skill.agent.as_str()),
+        ("scope", skill.scope.as_str()),
+    ];
+    let tools_joined = tools.join(" ");
+    let keywords_joined = keywords.join(" ");
+    let derived_fields = [
+        ("tools", tools_joined.as_str()),
+        ("keywords", keywords_joined.as_str()),
+    ];
+    let mut matched_fields = BTreeSet::new();
+    let mut matched_terms = BTreeSet::new();
+    for term in query_terms {
+        for (field, value) in fields.iter().chain(derived_fields.iter()) {
+            if value.to_ascii_lowercase().contains(term) {
+                matched_fields.insert((*field).to_string());
+                matched_terms.insert(term.clone());
+            }
+        }
+    }
+    (
+        matched_fields.into_iter().collect(),
+        matched_terms.into_iter().collect(),
+    )
+}
+
+fn knowledge_optional_snippet(value: &str, query_terms: &[String]) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(knowledge_snippet(trimmed, query_terms))
+    }
+}
+
+fn knowledge_snippet(value: &str, query_terms: &[String]) -> String {
+    let compact = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    let start = query_terms
+        .iter()
+        .filter_map(|term| compact.to_ascii_lowercase().find(term))
+        .min()
+        .unwrap_or(0);
+    let start = start.saturating_sub(40);
+    let mut snippet = compact.chars().skip(start).take(180).collect::<String>();
+    if start > 0 {
+        snippet.insert_str(0, "...");
+    }
+    if compact.chars().count() > start + snippet.chars().count() {
+        snippet.push_str("...");
+    }
+    redact_for_llm_preview(&snippet)
+}
+
+fn knowledge_capability_tags(
+    skill: &SkillDetailRecord,
+    diagnostic: Option<&AdapterDiagnosticsRecord>,
+) -> Vec<String> {
+    let mut tags = BTreeSet::new();
+    tags.insert(skill.agent.clone());
+    tags.insert(skill.scope.clone());
+    tags.insert(if skill.enabled { "enabled" } else { "disabled" }.to_string());
+    tags.insert(skill.state.clone());
+    tags.insert("local-catalog".to_string());
+    tags.insert("read-only".to_string());
+    if let Some(diagnostic) = diagnostic {
+        tags.insert(format!("adapter-{}", diagnostic.status));
+        tags.insert(format!("writable-{}", diagnostic.access.writable_status));
+        tags.insert(format!("install-{}", diagnostic.access.install_status));
+    }
+    tags.into_iter().collect()
+}
+
+fn knowledge_risk_tags(
+    risk_level: &'static str,
+    findings: &[RuleFindingRecord],
+    stale: Option<&StaleDriftRow>,
+) -> Vec<String> {
+    let mut tags = BTreeSet::new();
+    tags.insert(format!("risk-{risk_level}"));
+    for finding in findings {
+        tags.insert(format!("severity-{}", finding.effective_severity));
+        tags.insert(format!("rule-{}", finding.rule_id));
+    }
+    if let Some(stale) = stale {
+        tags.insert(format!("stale-drift-{}", stale.stale_drift_band));
+        if stale.drift_signals.fingerprint_drift {
+            tags.insert("fingerprint-drift".to_string());
+        }
+        if stale.drift_signals.source_drift {
+            tags.insert("source-drift".to_string());
+        }
+        if stale.drift_signals.stale_by_mtime {
+            tags.insert("mtime-stale".to_string());
+        }
+    }
+    tags.into_iter().collect()
+}
+
+fn knowledge_root_provenance(skill: &SkillDetailRecord) -> String {
+    if skill.scope == Scope::AgentProject.as_str() {
+        "project-scope catalog evidence".to_string()
+    } else if skill.scope == Scope::ToolGlobal.as_str() {
+        "tool-global catalog evidence".to_string()
+    } else {
+        "agent-scope catalog evidence".to_string()
+    }
+}
+
+fn knowledge_row_rank_score(row: &KnowledgeSearchRow) -> i16 {
+    let mut score = 0i16;
+    score += (row.matched_fields.len() as i16 * 12).min(48);
+    if let Some(readiness) = &row.readiness_context {
+        score += i16::from(readiness.score) / 4;
+    }
+    if let Some(quality) = &row.quality_context {
+        score += i16::from(quality.score) / 5;
+    }
+    if row.enabled {
+        score += 8;
+    }
+    if row.state == "loaded" {
+        score += 5;
+    }
+    if let Some(stale) = &row.stale_drift_context {
+        score -= i16::from(stale.score) / 8;
+    }
+    score
+}
+
+fn knowledge_search_facets(rows: &[KnowledgeSearchRow]) -> KnowledgeSearchFacets {
+    let mut facets = KnowledgeSearchFacets::default();
+    for row in rows {
+        *facets.agents.entry(row.agent.clone()).or_insert(0) += 1;
+        *facets.scopes.entry(row.scope.clone()).or_insert(0) += 1;
+        *facets.states.entry(row.state.clone()).or_insert(0) += 1;
+        *facets
+            .enabled
+            .entry(if row.enabled { "true" } else { "false" }.to_string())
+            .or_insert(0) += 1;
+        if let Some(readiness) = &row.readiness_context {
+            *facets
+                .risks
+                .entry(readiness.risk_level.to_string())
+                .or_insert(0) += 1;
+        } else if let Some(tag) = row
+            .risk_tags
+            .iter()
+            .find_map(|tag| tag.strip_prefix("risk-").map(ToOwned::to_owned))
+        {
+            *facets.risks.entry(tag).or_insert(0) += 1;
+        }
+        for tool in row.tools.iter().take(12) {
+            *facets.tools.entry(tool.clone()).or_insert(0) += 1;
+        }
+        for keyword in row.keywords.iter().take(12) {
+            *facets.keywords.entry(keyword.clone()).or_insert(0) += 1;
+        }
+    }
+    facets
+}
+
+fn knowledge_search_blocker_notes(rows: &[KnowledgeSearchRow]) -> Vec<String> {
+    let mut notes = Vec::new();
+    if rows.iter().any(|row| !row.enabled || row.state != "loaded") {
+        notes.push(
+            "Some matched knowledge rows are disabled or not loaded; discovery does not make them ready routing targets."
+                .to_string(),
+        );
+    }
+    if rows.iter().any(|row| {
+        row.risk_tags
+            .iter()
+            .any(|tag| tag == "risk-high" || tag == "risk-blocked")
+    }) {
+        notes.push(
+            "High or blocked risk rows are included for inspection only; no write or execution action is enabled."
+                .to_string(),
+        );
+    }
+    if rows.iter().any(|row| {
+        row.stale_drift_context
+            .as_ref()
+            .is_some_and(|context| context.score > 0)
+    }) {
+        notes.push(
+            "Stale/drift context comes from current local catalog evidence and does not create an index artifact."
+                .to_string(),
+        );
+    }
+    if notes.is_empty() {
+        notes.push(
+            "Knowledge search used local catalog evidence only and found no matched-row blockers."
+                .to_string(),
+        );
+    }
+    notes
+}
+
+fn knowledge_search_summary(
+    indexed_skill_count: usize,
+    matched_row_count: usize,
+    rows: &[KnowledgeSearchRow],
+) -> KnowledgeSearchSummary {
+    let enabled_count = rows.iter().filter(|row| row.enabled).count();
+    let disabled_count = rows.len().saturating_sub(enabled_count);
+    let high_risk_count = rows
+        .iter()
+        .filter(|row| {
+            row.risk_tags
+                .iter()
+                .any(|tag| tag == "risk-high" || tag == "risk-blocked")
+        })
+        .count();
+    let stale_or_drift_count = rows
+        .iter()
+        .filter(|row| {
+            row.stale_drift_context
+                .as_ref()
+                .is_some_and(|context| context.score > 0)
+        })
+        .count();
+    let summary = if rows.is_empty() {
+        "No local knowledge rows matched the selected search filters.".to_string()
+    } else {
+        format!(
+            "Returned {} of {} matched local knowledge row(s) from {} indexed visible skill(s); {} row(s) are enabled and {} row(s) carry high/blocking risk.",
+            rows.len(),
+            matched_row_count,
+            indexed_skill_count,
+            enabled_count,
+            high_risk_count
+        )
+    };
+    KnowledgeSearchSummary {
+        indexed_skill_count,
+        matched_row_count,
+        returned_row_count: rows.len(),
+        enabled_count,
+        disabled_count,
+        high_risk_count,
+        stale_or_drift_count,
+        summary,
+    }
 }
 
 fn task_readiness_safety_flags() -> TaskReadinessSafetyFlags {
@@ -10276,6 +11374,106 @@ fn render_stale_drift_prompt_section(
     )
 }
 
+fn render_knowledge_search_prompt_section(
+    result: &KnowledgeSearchResult,
+    redactor: &mut PromptRedactor<'_>,
+) -> String {
+    let rows = result
+        .rows
+        .iter()
+        .take(8)
+        .map(|row| {
+            format!(
+                "- #{} {} ({}, {}, enabled={}, state={}): matched_fields={}; quality={}; readiness={}; stale_drift={}; reasons={}",
+                row.rank,
+                redactor.redact(&row.skill_name),
+                redactor.redact(&row.agent),
+                redactor.redact(&row.scope),
+                row.enabled,
+                redactor.redact(&row.state),
+                row.matched_fields.join(", "),
+                row.quality_context
+                    .as_ref()
+                    .map(|context| format!("{} ({}/100)", context.band, context.score))
+                    .unwrap_or_else(|| "n/a".to_string()),
+                row.readiness_context
+                    .as_ref()
+                    .map(|context| format!("{} ({}/100, risk={})", context.band, context.score, context.risk_level))
+                    .unwrap_or_else(|| "n/a".to_string()),
+                row.stale_drift_context
+                    .as_ref()
+                    .map(|context| format!("{} ({}/100)", context.band, context.score))
+                    .unwrap_or_else(|| "n/a".to_string()),
+                row.match_reasons
+                    .iter()
+                    .take(3)
+                    .map(|reason| redactor.redact(reason))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let evidence = result
+        .evidence_references
+        .iter()
+        .take(16)
+        .map(|reference| {
+            format!(
+                "- {} {} {}",
+                reference.source_type,
+                redactor.redact(&reference.source_id),
+                redactor.redact(&reference.label)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "Knowledge search evidence:\n- catalog_available: {}\n- query: {}\n- normalized_terms: {}\n- indexed_skill_count: {}\n- matched_row_count: {}\n- returned_row_count: {}\n- enabled_count: {}\n- high_risk_count: {}\n- stale_or_drift_count: {}\n- summary: {}\n\nRows:\n{}\n\nGap notes:\n{}\n\nBlocker notes:\n{}\n\nEvidence references:\n{}\n\nSafety flags: read_only=true, app_local_only=true, provider_request_sent=false, write_back_allowed=false, write_actions_available=false, skill_files_mutated=false, agent_config_mutated=false, script_execution_allowed=false, execution_actions_available=false, config_mutation_allowed=false, snapshot_created=false, triage_mutation_allowed=false, credential_accessed=false, raw_prompt_persisted=false, raw_response_persisted=false, raw_trace_persisted=false, cloud_sync_performed=false, telemetry_emitted=false.",
+        result.catalog_available,
+        result
+            .filters
+            .query
+            .as_deref()
+            .map(|query| redactor.redact(query))
+            .unwrap_or_else(|| "none".to_string()),
+        if result.filters.normalized_terms.is_empty() {
+            "none".to_string()
+        } else {
+            result.filters.normalized_terms.join(", ")
+        },
+        result.summary.indexed_skill_count,
+        result.summary.matched_row_count,
+        result.summary.returned_row_count,
+        result.summary.enabled_count,
+        result.summary.high_risk_count,
+        result.summary.stale_or_drift_count,
+        redactor.redact(&result.summary.summary),
+        if rows.is_empty() { "none" } else { &rows },
+        if result.gap_notes.is_empty() {
+            "none".to_string()
+        } else {
+            result
+                .gap_notes
+                .iter()
+                .map(|note| redactor.redact(note))
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+        if result.blocker_notes.is_empty() {
+            "none".to_string()
+        } else {
+            result
+                .blocker_notes
+                .iter()
+                .map(|note| redactor.redact(note))
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+        if evidence.is_empty() { "none" } else { &evidence },
+    )
+}
+
 fn render_task_readiness_prompt_section(
     readiness: &TaskReadinessResult,
     redactor: &mut PromptRedactor<'_>,
@@ -10681,7 +11879,9 @@ mod tests {
     use super::*;
     use serde::de::DeserializeOwned;
     use skills_copilot_catalog::{ConflictGroupDraft, RuleFindingDraft, SkillDefinitionDraft};
-    use skills_copilot_core::{AgentId, PermissionRequest, SkillInstance, SkillState};
+    use skills_copilot_core::{
+        AgentId, NetworkAccess, PermissionRequest, SkillInstance, SkillState,
+    };
 
     #[test]
     fn status_request_returns_supported_methods() {
@@ -10715,6 +11915,7 @@ mod tests {
         assert!(methods.contains(&Value::String("adapter.listDiagnostics".to_string())));
         assert!(methods.contains(&Value::String("analysis.scoreSkillQuality".to_string())));
         assert!(methods.contains(&Value::String("analysis.detectStaleDrift".to_string())));
+        assert!(methods.contains(&Value::String("knowledge.search".to_string())));
         assert!(methods.contains(&Value::String("task.checkReadiness".to_string())));
         assert!(methods.contains(&Value::String("task.rankSkillRoutes".to_string())));
         assert!(methods.contains(&Value::String("task.compareAgentReadiness".to_string())));
@@ -12330,6 +13531,306 @@ mod tests {
         assert!(!serialized.contains("OPENAI_API_KEY=<redacted>"));
         assert!(!serialized.contains("fixture-redacted-value"));
         assert!(!serialized.contains("skills-copilot-stale-drift"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn knowledge_search_lists_local_catalog_rows() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-knowledge-list-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-knowledge-list-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_knowledge_fixture(&host);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("knowledge-list".to_string()),
+            method: "knowledge.search".to_string(),
+            params: json!({ "limit": 10 }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("knowledge search result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("deterministic-service")
+        );
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/indexed_skill_count")
+                .and_then(Value::as_u64),
+            Some(2)
+        );
+        assert!(result
+            .get("rows")
+            .and_then(Value::as_array)
+            .is_some_and(|rows| rows.len() == 2));
+        assert!(result
+            .pointer("/rows/0/keywords")
+            .and_then(Value::as_array)
+            .is_some_and(|keywords| !keywords.is_empty()));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/action")
+                .and_then(Value::as_str),
+            Some("knowledge_search")
+        );
+        assert_agent_readiness_safety(&result);
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn knowledge_search_matches_query_and_filters() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-knowledge-query-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-knowledge-query-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_knowledge_fixture(&host);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("knowledge-query".to_string()),
+            method: "knowledge.search".to_string(),
+            params: json!({
+                "query": "release readiness audit",
+                "agent": "claude-code",
+                "tool": "Read",
+                "risk": "high",
+                "enabled": true,
+                "limit": 5
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("knowledge query result");
+        assert_eq!(
+            result.pointer("/filters/query").and_then(Value::as_str),
+            Some("release readiness audit")
+        );
+        assert_eq!(
+            result
+                .pointer("/filters/normalized_terms")
+                .and_then(Value::as_array)
+                .map(Vec::len),
+            Some(3)
+        );
+        assert_eq!(
+            result
+                .pointer("/rows/0/instance_id")
+                .and_then(Value::as_str),
+            Some("knowledge-release")
+        );
+        assert!(result
+            .pointer("/rows/0/matched_fields")
+            .and_then(Value::as_array)
+            .is_some_and(|fields| fields
+                .iter()
+                .any(|field| field.as_str() == Some("description"))));
+        assert!(result
+            .pointer("/rows/0/tools")
+            .and_then(Value::as_array)
+            .is_some_and(|tools| tools.iter().any(|tool| tool.as_str() == Some("Read"))));
+        assert!(result
+            .pointer("/rows/0/quality_context/score")
+            .and_then(Value::as_u64)
+            .is_some());
+        assert!(result
+            .pointer("/rows/0/readiness_context/score")
+            .and_then(Value::as_u64)
+            .is_some());
+        assert!(result
+            .pointer("/rows/0/stale_drift_context/score")
+            .and_then(Value::as_u64)
+            .is_some());
+        assert_eq!(
+            result
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_agent_readiness_safety(&result);
+
+        let serialized = serde_json::to_string(&result).expect("serialize knowledge result");
+        assert!(!serialized.contains(&app_data_dir.to_string_lossy().to_string()));
+        assert!(!serialized.contains(&user_home.to_string_lossy().to_string()));
+        assert!(!serialized.contains("fixture-redacted-value"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn knowledge_search_missing_catalog_returns_safe_empty_result() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-knowledge-missing-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("knowledge-missing".to_string()),
+            method: "knowledge.search".to_string(),
+            params: json!({ "query": "release readiness" }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("missing catalog knowledge result");
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/returned_row_count")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert!(result
+            .get("rows")
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_agent_readiness_safety(&result);
+        assert!(
+            !host.catalog_path().exists(),
+            "missing-catalog knowledge search must not initialize catalog.sqlite"
+        );
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    }
+
+    #[test]
+    fn knowledge_search_rejects_invalid_limit_without_writes() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-knowledge-invalid-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("knowledge-invalid".to_string()),
+            method: "knowledge.search".to_string(),
+            params: json!({ "limit": 0 }),
+        });
+
+        assert!(!response.ok);
+        let error = response.error.expect("invalid knowledge error");
+        assert_eq!(error.code, "invalid_request");
+        assert!(error.message.contains("limit"));
+        assert!(
+            !app_data_dir.exists(),
+            "invalid knowledge request must not initialize app data"
+        );
+    }
+
+    #[test]
+    fn knowledge_search_preserves_provider_and_write_boundaries() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-knowledge-safety-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-knowledge-safety-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_knowledge_fixture(&host);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("knowledge-safety".to_string()),
+            method: "knowledge.search".to_string(),
+            params: json!({ "query": "release readiness", "limit": 5 }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("knowledge safety result");
+        assert_agent_readiness_safety(&result);
+        assert_eq!(
+            result
+                .pointer("/rows/0/safety_flags/read_only")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
 
         let _ = fs::remove_dir_all(app_data_dir);
         let _ = fs::remove_dir_all(user_home);
@@ -16417,6 +17918,25 @@ mod tests {
                     assert_agent_readiness_safety_flags(&row.safety_flags);
                 }
             }
+            "knowledge.search" => {
+                let search: WireKnowledgeSearchResult = decode_fixture_result(method, result, path);
+                assert_eq!(search.generated_by, "deterministic-service");
+                assert!(search.catalog_available);
+                assert_eq!(search.summary.returned_row_count, search.rows.len());
+                assert!(!search.rows.is_empty());
+                assert!(!search.rows[0].instance_id.is_empty());
+                assert!(!search.rows[0].matched_fields.is_empty());
+                assert_eq!(search.prompt_request.action, "knowledge_search");
+                assert_eq!(search.prompt_request.preview_method, "llm.previewPrompt");
+                assert_eq!(
+                    search.prompt_request.request.action,
+                    LlmPromptActionKind::KnowledgeSearch
+                );
+                assert_agent_readiness_safety_flags(&search.safety_flags);
+                for row in &search.rows {
+                    assert_agent_readiness_safety_flags(&row.safety_flags);
+                }
+            }
             "task.checkReadiness" => {
                 let readiness: WireTaskReadinessResult =
                     decode_fixture_result(method, result, path);
@@ -17286,6 +18806,7 @@ mod tests {
             }
             "analysis.scoreSkillQuality" => json!({ "instance_id": "missing-skill" }),
             "analysis.detectStaleDrift" => json!({ "limit": 4, "stale_days": 30 }),
+            "knowledge.search" => json!({ "query": "fixture knowledge search", "limit": 4 }),
             "task.checkReadiness" => json!({ "task": "fixture task readiness check" }),
             "task.rankSkillRoutes" => json!({ "task": "fixture routing confidence check" }),
             "task.compareAgentReadiness" => json!({
@@ -17764,6 +19285,139 @@ mod tests {
         stale_drift_score: u8,
         notes: Vec<String>,
         evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireKnowledgeSearchResult {
+        generated_by: String,
+        catalog_available: bool,
+        summary: WireKnowledgeSearchSummary,
+        filters: WireKnowledgeSearchFilters,
+        rows: Vec<WireKnowledgeSearchRow>,
+        facets: WireKnowledgeSearchFacets,
+        gap_notes: Vec<String>,
+        blocker_notes: Vec<String>,
+        evidence_references: Vec<WireTaskReadinessEvidenceReference>,
+        prompt_request: WireAgentReadinessPromptRequest,
+        safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireKnowledgeSearchSummary {
+        indexed_skill_count: usize,
+        matched_row_count: usize,
+        returned_row_count: usize,
+        enabled_count: usize,
+        disabled_count: usize,
+        high_risk_count: usize,
+        stale_or_drift_count: usize,
+        summary: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireKnowledgeSearchFilters {
+        query: Option<String>,
+        normalized_terms: Vec<String>,
+        agent: Option<String>,
+        limit: usize,
+        risk: Option<String>,
+        scope: Option<String>,
+        enabled: Option<bool>,
+        tool: Option<String>,
+        keyword: Option<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireKnowledgeSearchFacets {
+        agents: BTreeMap<String, usize>,
+        scopes: BTreeMap<String, usize>,
+        states: BTreeMap<String, usize>,
+        enabled: BTreeMap<String, usize>,
+        risks: BTreeMap<String, usize>,
+        tools: BTreeMap<String, usize>,
+        keywords: BTreeMap<String, usize>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireKnowledgeSearchRow {
+        rank: usize,
+        instance_id: String,
+        definition_id: String,
+        skill_name: String,
+        agent: String,
+        scope: String,
+        enabled: bool,
+        state: String,
+        source: WireKnowledgeSearchSource,
+        purpose_snippet: Option<String>,
+        description_snippet: Option<String>,
+        matched_fields: Vec<String>,
+        match_reasons: Vec<String>,
+        keywords: Vec<String>,
+        tools: Vec<String>,
+        rules: Vec<String>,
+        capability_tags: Vec<String>,
+        risk_tags: Vec<String>,
+        quality_context: Option<WireKnowledgeQualityContext>,
+        readiness_context: Option<WireKnowledgeReadinessContext>,
+        stale_drift_context: Option<WireKnowledgeStaleDriftContext>,
+        evidence_refs: Vec<String>,
+        safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireKnowledgeSearchSource {
+        source_path: String,
+        display_path: String,
+        root_provenance: String,
+        fingerprint: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireKnowledgeQualityContext {
+        score: u8,
+        grade: String,
+        band: String,
+        reasons: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireKnowledgeReadinessContext {
+        score: u8,
+        band: String,
+        risk_level: String,
+        risk_summary: String,
+        gap_count: usize,
+        blocker_count: usize,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireKnowledgeStaleDriftContext {
+        score: u8,
+        band: String,
+        fingerprint_drift: bool,
+        finding_drift: bool,
+        source_drift: bool,
+        stale_by_mtime: bool,
+        readiness_impact_level: Option<String>,
     }
 
     #[allow(dead_code)]
@@ -19886,6 +21540,132 @@ mod tests {
                 }],
             )
             .expect("refresh stale drift conflicts");
+    }
+
+    fn seed_catalog_with_knowledge_fixture(host: &ServiceHost) {
+        fs::create_dir_all(&host.app_data_dir).expect("create app data");
+        let catalog = Catalog::open(&host.catalog_path()).expect("open catalog");
+        catalog.init().expect("init catalog");
+        let release_path = host
+            .adapter_ctx
+            .user_home
+            .join(".claude/skills/release-readiness/SKILL.md");
+        let disabled_path = host
+            .adapter_ctx
+            .user_home
+            .join(".codex/skills/disabled-research/SKILL.md");
+        let instances = vec![
+            SkillInstance {
+                id: "knowledge-release".to_string(),
+                agent: AgentId::ClaudeCode,
+                scope: Scope::AgentGlobal,
+                project_root: None,
+                path: release_path.clone(),
+                display_path: release_path,
+                definition_id: "knowledge-release-definition".to_string(),
+                name: "release-readiness-audit".to_string(),
+                display_name: "release-readiness-audit".to_string(),
+                description: "Release readiness audit for local app validation and privacy review."
+                    .to_string(),
+                version: None,
+                state: SkillState::Loaded,
+                enabled: true,
+                frontmatter_raw:
+                    "name: release-readiness-audit\ndescription: Release readiness audit\nallowed-tools:\n  - Read\n"
+                        .to_string(),
+                body:
+                    "Prepare release readiness evidence from local catalog findings and validation notes."
+                        .to_string(),
+                scripts: Vec::new(),
+                permissions: PermissionRequest {
+                    tools: vec!["Read".to_string()],
+                    files: vec!["docs/**".to_string()],
+                    network: NetworkAccess::None,
+                    network_declared: true,
+                    exec: false,
+                    exec_declared: true,
+                    requires_human: true,
+                    requires_human_declared: true,
+                },
+                fingerprint: "knowledge-release-fingerprint".to_string(),
+                mtime: 1,
+                first_seen: 1,
+                last_seen: 1,
+            },
+            SkillInstance {
+                id: "knowledge-disabled".to_string(),
+                agent: AgentId::Codex,
+                scope: Scope::AgentGlobal,
+                project_root: None,
+                path: disabled_path.clone(),
+                display_path: disabled_path,
+                definition_id: "knowledge-disabled-definition".to_string(),
+                name: "disabled-research-helper".to_string(),
+                display_name: "disabled-research-helper".to_string(),
+                description: "Disabled research helper fixture.".to_string(),
+                version: None,
+                state: SkillState::Broken,
+                enabled: false,
+                frontmatter_raw:
+                    "name: disabled-research-helper\ndescription: Disabled research helper\n"
+                        .to_string(),
+                body: "Research helper body for listing tests.".to_string(),
+                scripts: Vec::new(),
+                permissions: PermissionRequest::default(),
+                fingerprint: "knowledge-disabled-fingerprint".to_string(),
+                mtime: unix_timestamp_millis(),
+                first_seen: 1,
+                last_seen: unix_timestamp_millis(),
+            },
+        ];
+        catalog
+            .upsert_skill_instances(&instances)
+            .expect("upsert knowledge skills");
+        catalog
+            .refresh_rule_findings(&[
+                RuleFindingDraft {
+                    id: "knowledge-release-risk".to_string(),
+                    instance_id: Some("knowledge-release".to_string()),
+                    definition_id: Some("knowledge-release-definition".to_string()),
+                    rule_id: "permissions.exec-needs-human".to_string(),
+                    severity: "error".to_string(),
+                    message:
+                        "Release readiness fixture requires human review; token=fixture-redacted-value."
+                            .to_string(),
+                    suggestion: Some("Keep release audit actions read-only.".to_string()),
+                    created_at: 1,
+                },
+                RuleFindingDraft {
+                    id: "knowledge-release-drift".to_string(),
+                    instance_id: Some("knowledge-release".to_string()),
+                    definition_id: Some("knowledge-release-definition".to_string()),
+                    rule_id: "fingerprint.changed".to_string(),
+                    severity: "warning".to_string(),
+                    message: "Release readiness fingerprint drift fixture.".to_string(),
+                    suggestion: Some("Review changed release readiness guidance.".to_string()),
+                    created_at: 2,
+                },
+            ])
+            .expect("refresh knowledge findings");
+        catalog
+            .refresh_definitions_and_conflicts(
+                &[SkillDefinitionDraft {
+                    id: "knowledge-release-definition".to_string(),
+                    canonical_name: "release-readiness-audit".to_string(),
+                    description: "Knowledge release readiness fixture.".to_string(),
+                    active_instance: Some("knowledge-release".to_string()),
+                    has_multiple_instances: true,
+                    has_conflict: true,
+                }],
+                &[ConflictGroupDraft {
+                    id: "knowledge-release-conflict".to_string(),
+                    definition_id: "knowledge-release-definition".to_string(),
+                    reason: "content-drift".to_string(),
+                    winner_id: Some("knowledge-release".to_string()),
+                    instance_ids: vec!["knowledge-release".to_string()],
+                }],
+            )
+            .expect("refresh knowledge conflicts");
     }
 
     fn cleanup_skill(

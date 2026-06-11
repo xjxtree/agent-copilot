@@ -549,6 +549,29 @@ enum UIStrings {
     static var staleDriftNoReasons: String { text("staleDrift.empty.reasons", "No reasons returned.") }
     static var staleDriftNoSignals: String { text("staleDrift.empty.signals", "No signals returned.") }
     static var staleDriftSafetyFlags: String { text("staleDrift.safetyFlags", "Safety flags") }
+    static var knowledgeTitle: String { text("knowledge.title", "Local Knowledge Index") }
+    static var knowledgeBoundary: String { text("knowledge.boundary", "User-triggered, read-only local search across skill purpose, metadata, tags, rules, tools, and evidence. It cannot call a provider, write skill files, mutate agent config, create snapshots, change triage, execute scripts, read credentials, sync cloud data, or emit telemetry.") }
+    static var knowledgeQuery: String { text("knowledge.query", "Knowledge query") }
+    static var knowledgeQueryPlaceholder: String { text("knowledge.query.placeholder", "Search purpose, tools, rules, tags, or evidence") }
+    static var knowledgeSearchAction: String { text("knowledge.action.search", "Search Knowledge") }
+    static var knowledgeQueryRequired: String { text("knowledge.queryRequired", "Enter a query before searching the local knowledge index.") }
+    static var knowledgeUnavailable: String { text("knowledge.unavailable", "Local knowledge search is unavailable in this service build.") }
+    static var knowledgeNoResult: String { text("knowledge.empty.result", "No knowledge search loaded.") }
+    static var knowledgeNoRows: String { text("knowledge.empty.rows", "No knowledge rows returned.") }
+    static var knowledgeRows: String { text("knowledge.rows", "Knowledge rows") }
+    static var knowledgeMatches: String { text("knowledge.matches", "Matches") }
+    static var knowledgeMatchedFields: String { text("knowledge.matchedFields", "Matched fields") }
+    static var knowledgeKeywords: String { text("knowledge.keywords", "Keywords") }
+    static var knowledgeTools: String { text("knowledge.tools", "Tools") }
+    static var knowledgeRules: String { text("knowledge.rules", "Rules") }
+    static var knowledgeCapabilities: String { text("knowledge.capabilities", "Capabilities") }
+    static var knowledgeRisks: String { text("knowledge.risks", "Risk tags") }
+    static var knowledgeFacets: String { text("knowledge.facets", "Facets") }
+    static var knowledgeFacet: String { text("knowledge.facet", "Facet") }
+    static var knowledgeNoFacets: String { text("knowledge.empty.facets", "No facets returned.") }
+    static var knowledgeGapNotes: String { text("knowledge.gapNotes", "Gap notes") }
+    static var knowledgeBlockerNotes: String { text("knowledge.blockerNotes", "Blocker notes") }
+    static var knowledgeSafetyFlags: String { text("knowledge.safetyFlags", "Safety flags") }
     static var taskBenchmarkTitle: String { text("taskBenchmark.title", "Task Benchmark Set") }
     static var taskBenchmarkBoundary: String { text("taskBenchmark.boundary", "User-triggered, local benchmark evaluation for task routing. Local evaluation does not call a provider and cannot write skill files, mutate agent config, create snapshots, change triage, execute scripts, or read credentials.") }
     static var taskBenchmarkTaskPlaceholder: String { text("taskBenchmark.task.placeholder", "Optional benchmark task text; otherwise the current readiness/routing task is used") }

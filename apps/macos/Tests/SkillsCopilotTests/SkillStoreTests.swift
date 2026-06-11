@@ -50,6 +50,7 @@ struct SkillStoreTests {
         try await agentTraceImportFallsBackWhenMethodUnavailable()
         try await routingAccuracyDashboardUsesReadOnlyServiceContract()
         try await staleDriftDetectionUsesReadOnlyServiceContract()
+        try await knowledgeSearchUsesReadOnlyServiceContract()
         try await crossAgentReadinessUsesReadOnlyServiceContract()
         try await routingConfidenceClearsStaleSelection()
         try await llmPreparePreviewIsScopedToSelectedSkillAndReadOnly()
@@ -1304,6 +1305,55 @@ struct SkillStoreTests {
         try expectFalse(calls.contains("credential"), "Stale drift detection must not call credential paths.")
     }
 
+    private func knowledgeSearchUsesReadOnlyServiceContract() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        store.knowledgeSearchText = "release audit"
+        await store.reload()
+        let snapshotCallsBeforeSearch = countOccurrences("snapshot.", in: fake.calls())
+        await store.searchKnowledge()
+
+        let result = store.knowledgeSearchResult
+        try expectEqual(result?.generatedBy, "local-v2.52", "Knowledge search should expose generator metadata.")
+        try expectEqual(result?.summary.resultCount, 1, "Knowledge search should expose result count.")
+        try expectEqual(result?.knowledgeRows.first?.skillName, "Beta", "Knowledge search should expose matched skill rows.")
+        try expectEqual(result?.knowledgeRows.first?.tools, ["rg"], "Knowledge search should expose tool metadata.")
+        try expectEqual(result?.facetRows.first?.value, "claude-code", "Knowledge search should expose facet rows.")
+        try expectEqual(result?.gapNotes.first, "No fresh trace confirms the release audit route.", "Knowledge search should expose gap notes.")
+        try expectEqual(result?.evidenceReferences.first?.title, "Knowledge index", "Knowledge search should expose evidence references.")
+        try expectFalse(result?.safetyFlags.providerRequestSent ?? true, "Knowledge search must not send provider requests.")
+        try expectFalse(result?.safetyFlags.writeBackAllowed ?? true, "Knowledge search must not allow write-back.")
+        try expectFalse(result?.safetyFlags.writeActionsAvailable ?? true, "Knowledge search must not expose write actions.")
+        try expectFalse(result?.safetyFlags.scriptExecutionAllowed ?? true, "Knowledge search must not allow script execution.")
+        try expectFalse(result?.safetyFlags.executionActionsAvailable ?? true, "Knowledge search must not expose execution actions.")
+        try expectFalse(result?.safetyFlags.configMutationAllowed ?? true, "Knowledge search must not mutate config.")
+        try expectFalse(result?.safetyFlags.snapshotCreated ?? true, "Knowledge search must not create snapshots.")
+        try expectFalse(result?.safetyFlags.triageMutationAllowed ?? true, "Knowledge search must not mutate triage.")
+        try expectFalse(result?.safetyFlags.credentialAccessed ?? true, "Knowledge search must not access credentials.")
+        try expectFalse(result?.safetyFlags.rawPromptPersisted ?? true, "Knowledge search must not persist raw prompts.")
+        try expectFalse(result?.safetyFlags.rawResponsePersisted ?? true, "Knowledge search must not persist raw responses.")
+        try expectFalse(result?.safetyFlags.rawTracePersisted ?? true, "Knowledge search must not persist raw traces.")
+        try expectFalse(result?.safetyFlags.cloudSyncEnabled ?? true, "Knowledge search must not sync cloud data.")
+        try expectFalse(result?.safetyFlags.telemetryEnabled ?? true, "Knowledge search must not emit telemetry.")
+        try expectFalse(store.isSearchingKnowledge, "Knowledge search should reset loading state.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "knowledge.search", "Knowledge UI should call the V2.52 search method.")
+        try expectContains(calls, "\"query\":\"release audit\"", "Knowledge search should pass the user query.")
+        try expectContains(calls, "\"agent\":\"claude-code\"", "Knowledge search should pass the current agent filter.")
+        try expectContains(calls, "\"limit\":20", "Knowledge search should pass the search limit.")
+        try expectFalse(calls.contains("llm.previewPrompt"), "Knowledge search must not prepare provider prompts.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Knowledge search must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Knowledge search must not call config write paths.")
+        try expectFalse(calls.contains("script.execute"), "Knowledge search must not call execution paths.")
+        try expectEqual(countOccurrences("snapshot.", in: calls), snapshotCallsBeforeSearch, "Knowledge search must not call snapshot paths.")
+        try expectFalse(calls.contains("credential"), "Knowledge search must not call credential paths.")
+    }
+
     private func crossAgentReadinessUsesReadOnlyServiceContract() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -1740,6 +1790,12 @@ private final class FakeServiceScript {
               respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.50","catalog_available":true,"filters":{"limit_per_agent":3,"include_routing_accuracy":true,"include_benchmarks":true},"summary":{"agent_count":2,"candidate_count":5,"ready_agent_count":1,"partial_agent_count":1,"blocked_agent_count":0,"gap_issue_count":1,"recommended_agent":"claude-code","summary":"Claude Code is strongest for this task; Codex is usable but lacks benchmark coverage."},"recommended_agent":{"agent":"claude-code","display_name":"Claude Code","comparison_score":93,"readiness_score":88,"routing_confidence_score":91,"skill_name":"Beta","reason":"Best local task fit with benchmark and accuracy context."},"agent_rows":[{"rank":1,"agent":"claude-code","display_name":"Claude Code","comparison_score":93,"readiness_score":88,"readiness_band":"Ready","routing_confidence_score":91,"routing_confidence_band":"High","best_candidate":{"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","scope":"agent-project","enabled":true,"state":"loaded","readiness_score":88,"readiness_band":"Ready","routing_confidence_score":91,"routing_confidence_band":"High","quality_score":82},"candidate_count":3,"enabled_scope_risk_state":{"enabled":true,"scope":"agent-project","state":"loaded","risk_level":"low","risk_summary":"Low local risk.","writable_status":"verified","adapter_status":"healthy"},"blocker_count":0,"gap_count":0,"reasons":["Description matches local audit.","Benchmark expected route is covered."],"blocker_notes":[],"gap_notes":[],"routing_accuracy_context":{"summary":"7 of 8 known traces hit expected route."},"benchmark_context":{"summary":"Benchmark expected route is covered."},"evidence_refs":["benchmark:bench-1","trace:trace-1"]},{"rank":2,"agent":"codex","display_name":"Codex","comparison_score":72,"readiness_score":74,"readiness_band":"Partial","routing_confidence_score":67,"routing_confidence_band":"Medium","best_candidate":{"instance_id":"gamma","definition_id":"codex:gamma","skill_name":"Gamma","scope":"agent-global","enabled":true,"state":"loaded","readiness_score":74,"readiness_band":"Partial","routing_confidence_score":67,"routing_confidence_band":"Medium","quality_score":76},"candidate_count":2,"enabled_scope_risk_state":{"enabled":true,"scope":"agent-global","state":"loaded","risk_level":"medium","risk_summary":"Benchmark coverage is missing.","writable_status":"verified","adapter_status":"healthy"},"blocker_count":0,"gap_count":1,"reasons":["Documentation wording overlaps."],"blocker_notes":[],"gap_notes":["No benchmark covers the Codex route."],"routing_accuracy_context":{"summary":"No imported traces in window."},"benchmark_context":{"summary":"No baseline saved."},"evidence_refs":["catalog:gamma"]}],"gap_issue_rows":[{"source":"benchmark","severity":"warning","agent":"codex","title":"Missing Codex benchmark","detail":"No benchmark covers the Codex route for this task.","evidence_refs":["benchmark:none"]}],"evidence_references":[{"title":"Benchmark","detail":"Beta benchmark matched expected route.","source":"task.evaluateBenchmarks","agent":"claude-code"},{"title":"Routing accuracy","detail":"Trace evidence favors Claude Code.","source":"routing.accuracyDashboard","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"cross_agent_task_readiness","summary":"Provider explanation is copy-only and preview-gated.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent"]}}}'
             fi
             respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: task.compareAgentReadiness"}}'
+            ;;
+          *\\"knowledge.search\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.52","catalog_available":true,"filters":{"query":"release audit","agent":"claude-code","limit":20},"summary":{"result_count":1,"agent_count":1,"gap_count":1,"blocker_count":0,"summary":"Beta matches local knowledge for release audit work."},"knowledge_rows":[{"rank":1,"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","purpose":"Handles local audit release notes.","matched_fields":["purpose","tools"],"match_reasons":["Purpose mentions audit."],"keywords":["audit","release"],"tools":["rg"],"rules":["permissions.network-declared"],"capability_tags":["analysis"],"risk_tags":["local-only"],"evidence_refs":["catalog:beta"],"safety_flags":["provider not sent"]}],"facet_rows":[{"facet":"agent","value":"claude-code","count":1}],"gap_notes":["No fresh trace confirms the release audit route."],"blocker_notes":[],"evidence_references":[{"title":"Knowledge index","detail":"Beta indexed from local catalog metadata.","source":"knowledge.search","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"knowledge_search","summary":"Provider explanation is copy-only and preview-gated.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent"]}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: knowledge.search"}}'
             ;;
           *\\"task.listBenchmarks\\"*)
             if [ "$scenario" = "prompt-ready" ]; then
