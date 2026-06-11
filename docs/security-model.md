@@ -32,7 +32,7 @@
 >
 > V2.59 Batch Review Workflow 仍然是 local-only、deterministic、user-triggered、read-only-by-default 的组织层：`remediation.batchReview` 只把候选下一步按 task/risk/rule/agent/workspace 聚合成 review groups/items、safe next-step labels、evidence refs、gap/blocker notes、prompt metadata 与 safety flags；它不能应用动作、变更 triage、创建/回滚 snapshot、写 skill 文件或 agent config、执行脚本、读取 credentials、持久化 raw prompt/response/trace、同步云端、发 telemetry，或默认发起 provider traffic。任何未来可选 provider wording 仍必须通过 V2.42 prompt preview/redaction/confirmation，并保持 copy-only；现有 safe write 路径仍只允许 preview-first + explicit-confirm。
 >
-> V2.60 Remediation History 目前仍是 docs-only 规划：目标是把用户显式复查过的 remediation 结果保存在本地 app-data，记录 redacted metadata、decision、recurrence、reopened issue 与 impact note，并允许 user-triggered record/list/delete/clear；它不能默认发起 provider traffic，不能写 skill 文件或 agent config，不能执行脚本，不能读 credentials，不能持久化 raw prompt/response/trace，也不能同步云端或发 telemetry。任何 AI wording 仍必须走 V2.42 preview/redaction/confirmation，且保持 copy-only。
+> V2.60 Remediation History 是 user-triggered、app-local metadata-only 边界：`remediation.recordHistory` 只把用户显式复查过的 remediation decision、source refs、recurrence/reopened marker、readiness/routing improvement note、blocker/gap note、evidence refs 与 redaction summary 保存到 app data `remediation-history.json`；`remediation.listHistory` / `remediation.deleteHistory` 只读/删该本地 metadata。它不能默认发起 provider traffic，不能写 skill 文件或 agent config，不能变更 triage，不能创建或回滚 snapshot，不能执行脚本，不能读 credentials，不能持久化 raw prompt/response/trace，也不能同步云端或发 telemetry。任何 AI wording 仍必须走 V2.42 preview/redaction/confirmation，且保持 copy-only。
 >
 > V2.10 skill execution safety 当前是 default-deny 边界：
 >

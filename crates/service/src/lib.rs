@@ -17833,7 +17833,7 @@ fn remediation_history_recurrence_rows(
     let mut rows = grouped
         .into_iter()
         .map(|(recurrence_key, mut members)| {
-            members.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
+            members.sort_by_key(|record| std::cmp::Reverse(record.updated_at));
             let latest = members[0];
             let mut source_item_refs = members
                 .iter()
