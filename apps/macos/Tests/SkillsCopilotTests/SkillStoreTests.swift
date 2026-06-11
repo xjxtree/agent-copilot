@@ -48,6 +48,7 @@ struct SkillStoreTests {
         try await routingRegressionFallsBackWhenMethodUnavailable()
         try await agentTraceImportUsesLocalServiceContract()
         try await agentTraceImportFallsBackWhenMethodUnavailable()
+        try await routingAccuracyDashboardUsesReadOnlyServiceContract()
         try await routingConfidenceClearsStaleSelection()
         try await llmPreparePreviewIsScopedToSelectedSkillAndReadOnly()
         try await promptPreviewRequiresConfiguredProviderAndExplicitSend()
@@ -1206,6 +1207,52 @@ struct SkillStoreTests {
         try expectFalse(calls.contains("script.execute"), "Unavailable trace flow must not call execution paths.")
     }
 
+    private func routingAccuracyDashboardUsesReadOnlyServiceContract() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+        let snapshotCallsBeforeDashboard = countOccurrences("snapshot.", in: fake.calls())
+        await store.loadRoutingAccuracyDashboard()
+
+        let dashboard = store.routingAccuracyDashboard
+        try expectEqual(dashboard?.generatedBy, "local-v2.49", "Routing accuracy dashboard should expose generator metadata.")
+        try expectEqual(dashboard?.summary.hitCount, 7, "Routing accuracy dashboard should expose hit count.")
+        try expectEqual(dashboard?.summary.wrongPickCount, 1, "Routing accuracy dashboard should expose wrong-pick count.")
+        try expectEqual(dashboard?.agents.first?.agent, "claude-code", "Routing accuracy dashboard should expose per-agent rows.")
+        try expectEqual(dashboard?.gaps.first?.title, "Missing trace coverage", "Routing accuracy dashboard should expose gaps.")
+        try expectFalse(dashboard?.safetyFlags.providerRequestSent ?? true, "Routing accuracy must not send provider requests.")
+        try expectFalse(dashboard?.safetyFlags.writeBackAllowed ?? true, "Routing accuracy must not allow write-back.")
+        try expectFalse(dashboard?.safetyFlags.scriptExecutionAllowed ?? true, "Routing accuracy must not allow script execution.")
+        try expectFalse(dashboard?.safetyFlags.configMutationAllowed ?? true, "Routing accuracy must not mutate config.")
+        try expectFalse(dashboard?.safetyFlags.snapshotCreated ?? true, "Routing accuracy must not create snapshots.")
+        try expectFalse(dashboard?.safetyFlags.triageMutationAllowed ?? true, "Routing accuracy must not mutate triage.")
+        try expectFalse(dashboard?.safetyFlags.credentialAccessed ?? true, "Routing accuracy must not access credentials.")
+        try expectFalse(dashboard?.safetyFlags.rawPromptPersisted ?? true, "Routing accuracy must not persist raw prompts.")
+        try expectFalse(dashboard?.safetyFlags.rawResponsePersisted ?? true, "Routing accuracy must not persist raw responses.")
+        try expectFalse(dashboard?.safetyFlags.rawTracePersisted ?? true, "Routing accuracy must not persist raw traces.")
+        try expectFalse(dashboard?.safetyFlags.cloudSyncEnabled ?? true, "Routing accuracy must not sync cloud data.")
+        try expectFalse(dashboard?.safetyFlags.telemetryEnabled ?? true, "Routing accuracy must not emit telemetry.")
+        try expectFalse(store.isLoadingRoutingAccuracyDashboard, "Routing accuracy load should reset loading state.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "routing.accuracyDashboard", "Routing accuracy UI should call the V2.49 dashboard method.")
+        try expectContains(calls, "\"agent\":\"claude-code\"", "Routing accuracy should pass the current agent filter.")
+        try expectContains(calls, "\"window_days\":30", "Routing accuracy should pass the dashboard window.")
+        try expectContains(calls, "\"limit\":20", "Routing accuracy should pass the dashboard limit.")
+        try expectContains(calls, "\"include_history\":true", "Routing accuracy should request history explicitly.")
+        try expectContains(calls, "\"include_recent_evidence\":true", "Routing accuracy should request recent evidence explicitly.")
+        try expectFalse(calls.contains("llm.previewPrompt"), "Routing accuracy dashboard must not prepare provider prompts.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Routing accuracy dashboard must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Routing accuracy dashboard must not call config write paths.")
+        try expectFalse(calls.contains("script.execute"), "Routing accuracy dashboard must not call execution paths.")
+        try expectEqual(countOccurrences("snapshot.", in: calls), snapshotCallsBeforeDashboard, "Routing accuracy dashboard must not call snapshot paths.")
+        try expectFalse(calls.contains("credential"), "Routing accuracy dashboard must not call credential paths.")
+    }
+
     private func routingConfidenceClearsStaleSelection() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -1604,6 +1651,12 @@ private final class FakeServiceScript {
               respond '{"id":"test","ok":true,"result":{"baseline_id":"baseline-1","benchmark_count":1,"regression_count":1,"improved_count":0,"unchanged_count":0,"average_score_delta":-16,"match_status_changed_count":1,"top_route_changed_count":1,"regressions":[{"benchmark_id":"bench-1","task":"Route a local audit task.","regression_type":"expected_to_acceptable","previous_match_status":"matched","current_match_status":"acceptable","previous_score":88,"current_score":72,"score_delta":-16,"previous_top_route":{"instance_id":"beta","name":"Beta","agent":"claude-code","confidence_score":88,"band":"High"},"current_top_route":{"instance_id":"alpha","name":"Alpha","agent":"claude-code","confidence_score":72,"band":"Medium"},"top_route_changed":true,"new_blockers":["Expected route dropped below top rank."],"new_gaps":["Release-note examples still missing."],"safety_flags":["provider not sent"],"evidence_references":[{"title":"Regression","detail":"Top route changed from Beta to Alpha.","source":"task.detectRoutingRegression"}]}],"new_blockers":["Expected route dropped below top rank."],"new_gaps":["Release-note examples still missing."],"evidence_references":[{"title":"Baseline","detail":"Compared against baseline-1.","source":"task.detectRoutingRegression"}],"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_secret_returned":false}}}'
             fi
             respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: task.detectRoutingRegression"}}'
+            ;;
+          *\\"routing.accuracyDashboard\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.49","catalog_available":true,"filters":{"agent":"claude-code","window_days":30,"limit":20,"include_history":true,"include_recent_evidence":true},"summary":{"trace_count":11,"hit_count":7,"miss_count":2,"wrong_pick_count":1,"ambiguous_count":1,"unknown_count":0,"benchmark_count":5,"benchmark_matched_count":4,"benchmark_gap_count":3,"regression_count":1,"missing_benchmark_count":2,"accuracy_rate":0.636,"known_outcome_rate":1.0,"summary":"Seven of eleven imported traces hit the expected route."},"agent_rows":[{"agent":"claude-code","trace_count":11,"outcomes":{"hit":7,"miss":2,"wrong_pick":1,"ambiguous":1,"unknown":0},"accuracy_rate":0.636,"benchmark_count":5,"benchmark_matched_count":4,"benchmark_gap_count":3,"regression_count":1,"recent_evidence_count":2,"notes":["One expected route has no benchmark."]}],"history_rows":[{"unix_day":1781136000,"trace_count":11,"outcomes":{"hit":7,"miss":2,"wrong_pick":1,"ambiguous":1,"unknown":0},"accuracy_rate":0.636}],"gap_issue_rows":[{"source":"trace","severity":"warning","agent":"openclaw","title":"Missing trace coverage","detail":"No OpenClaw traces in the selected window.","evidence_refs":["trace:none"]}],"recent_evidence_rows":[{"source":"trace.importLocal","agent":"claude-code","title":"Trace","outcome":"hit","detail":"Beta matched expected route in trace-1.","evidence_refs":["trace-1"],"observed_at":1781136000000}],"blocker_notes":["One expected route has no benchmark."],"prompt_request":{"enabled":false,"request_kind":"routing_accuracy","summary":"Provider explanation is copy-only and preview-gated.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"script_execution_allowed":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent"]}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: routing.accuracyDashboard"}}'
             ;;
           *\\"task.deleteBenchmark\\"*)
             if [ "$scenario" = "prompt-ready" ]; then

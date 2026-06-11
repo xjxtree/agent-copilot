@@ -87,7 +87,8 @@ Provider 配置原则：
 | V2.46（实现） | Task benchmark set | app-local `task-benchmarks.json`、expected/acceptable route match、local evidence-first + optional AI 说明 |
 | V2.47（实现） | Routing regression detection | 基于 V2.46 benchmark 结果的 app-local baseline 对比（`task.saveRoutingBaseline` + `task.detectRoutingRegression`）；local evidence-first + optional AI 说明 |
 | V2.48（实现） | Agent behavior trace import（`trace.importLocal`/`trace.listImports`/`trace.deleteImport`） | trace 文本先 redacted 后存元数据与可复查摘要；deterministic local 判读 hit/miss/wrong-pick/ambiguity；不落 raw trace；可选 provider 说明走 V2.42 |
-| V2.49-V2.50 | routing accuracy / cross-agent task readiness（规划） | benchmark results + catalog snapshots + imported trace evidence；local evidence-first + optional AI 说明 |
+| V2.49（实现） | Routing accuracy dashboard（`routing.accuracyDashboard`） | V2.46 benchmark results + V2.47 regression evidence + V2.48 redacted trace imports；local evidence-first + optional AI 说明 |
+| V2.50 | cross-agent task readiness（规划） | benchmark results + catalog snapshots + imported trace evidence；local evidence-first + optional AI 说明 |
 | V2.51-V2.55 | stale/drift、knowledge index、similar grouping、taxonomy、workspace readiness | fingerprints、mtime、source/root provenance、local index |
 | V2.56-V2.60 | remediation planner、fix drafts、impact preview、batch review、history | findings、triage、policy, snapshots, writable capability matrix |
 | V2.61-V2.70 | review session、governance report、policy packs、skill map、full provider observability、safe write planning | local reports, policy profiles, V2.41-V2.42 call metadata, evidence gates |

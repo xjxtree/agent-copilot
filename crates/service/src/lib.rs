@@ -70,6 +70,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "task.evaluateBenchmarks",
     "task.saveRoutingBaseline",
     "task.detectRoutingRegression",
+    "routing.accuracyDashboard",
     "trace.importLocal",
     "trace.listImports",
     "trace.deleteImport",
@@ -950,6 +951,149 @@ pub struct RoutingRegressionComparisonFields {
     pub evidence_refs: Vec<String>,
 }
 
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct RoutingAccuracyDashboardParams {
+    #[serde(default, alias = "target_agent")]
+    pub agent: Option<String>,
+    #[serde(default, alias = "days")]
+    pub window_days: Option<u32>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+    #[serde(default)]
+    pub include_history: bool,
+    #[serde(default)]
+    pub include_recent_evidence: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RoutingAccuracyDashboardResult {
+    pub generated_by: &'static str,
+    pub catalog_available: bool,
+    pub filters: RoutingAccuracyDashboardFilters,
+    pub summary: RoutingAccuracyDashboardSummary,
+    pub agent_rows: Vec<RoutingAccuracyAgentRow>,
+    pub history_rows: Vec<RoutingAccuracyHistoryRow>,
+    pub gap_issue_rows: Vec<RoutingAccuracyIssueRow>,
+    pub recent_evidence_rows: Vec<RoutingAccuracyEvidenceRow>,
+    pub blocker_notes: Vec<String>,
+    pub prompt_request: RoutingAccuracyPromptRequest,
+    pub safety_flags: RoutingAccuracySafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RoutingAccuracyDashboardFilters {
+    pub agent: Option<String>,
+    pub window_days: u32,
+    pub limit: usize,
+    pub include_history: bool,
+    pub include_recent_evidence: bool,
+    pub window_start_millis: i64,
+    pub window_end_millis: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct RoutingAccuracyDashboardSummary {
+    pub trace_count: usize,
+    pub hit_count: usize,
+    pub miss_count: usize,
+    pub wrong_pick_count: usize,
+    pub ambiguous_count: usize,
+    pub unknown_count: usize,
+    pub benchmark_count: usize,
+    pub benchmark_matched_count: usize,
+    pub benchmark_gap_count: usize,
+    pub regression_count: usize,
+    pub missing_benchmark_count: usize,
+    pub accuracy_rate: f64,
+    pub known_outcome_rate: f64,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct RoutingAccuracyOutcomeCounts {
+    pub hit: usize,
+    pub miss: usize,
+    pub wrong_pick: usize,
+    pub ambiguous: usize,
+    pub unknown: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RoutingAccuracyAgentRow {
+    pub agent: String,
+    pub trace_count: usize,
+    pub outcomes: RoutingAccuracyOutcomeCounts,
+    pub accuracy_rate: f64,
+    pub benchmark_count: usize,
+    pub benchmark_matched_count: usize,
+    pub benchmark_gap_count: usize,
+    pub regression_count: usize,
+    pub recent_evidence_count: usize,
+    pub notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RoutingAccuracyHistoryRow {
+    pub unix_day: i64,
+    pub trace_count: usize,
+    pub outcomes: RoutingAccuracyOutcomeCounts,
+    pub accuracy_rate: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RoutingAccuracyIssueRow {
+    pub source: &'static str,
+    pub severity: &'static str,
+    pub agent: Option<String>,
+    pub title: String,
+    pub detail: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RoutingAccuracyEvidenceRow {
+    pub source: &'static str,
+    pub agent: Option<String>,
+    pub title: String,
+    pub outcome: Option<String>,
+    pub detail: String,
+    pub evidence_refs: Vec<String>,
+    pub observed_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RoutingAccuracyPromptRequest {
+    pub available: bool,
+    pub preview_method: &'static str,
+    pub confirm_method: &'static str,
+    pub action: &'static str,
+    pub request: LlmPreviewPromptParams,
+    pub note: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct RoutingAccuracySafetyFlags {
+    pub read_only: bool,
+    pub app_local_only: bool,
+    pub provider_request_sent: bool,
+    pub write_back_allowed: bool,
+    pub write_actions_available: bool,
+    pub skill_files_mutated: bool,
+    pub agent_config_mutated: bool,
+    pub script_execution_allowed: bool,
+    pub execution_actions_available: bool,
+    pub config_mutation_allowed: bool,
+    pub snapshot_created: bool,
+    pub triage_mutation_allowed: bool,
+    pub credential_accessed: bool,
+    pub raw_secret_returned: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_trace_persisted: bool,
+    pub cloud_sync_performed: bool,
+    pub telemetry_emitted: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TraceImportRecord {
     pub id: String,
@@ -1718,6 +1862,14 @@ impl ServiceHost {
                     serde_json::from_value(request.params)?
                 };
                 serde_json::to_value(self.detect_routing_regression(params)?).map_err(Into::into)
+            }
+            "routing.accuracyDashboard" => {
+                let params: RoutingAccuracyDashboardParams = if request.params.is_null() {
+                    RoutingAccuracyDashboardParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.routing_accuracy_dashboard(params)?).map_err(Into::into)
             }
             "trace.importLocal" => {
                 let params: TraceImportLocalParams = serde_json::from_value(request.params)?;
@@ -3578,6 +3730,265 @@ impl ServiceHost {
             baseline: Some(baseline),
             current_evaluation,
             safety_flags: task_benchmark_safety_flags(),
+        })
+    }
+
+    pub fn routing_accuracy_dashboard(
+        &self,
+        params: RoutingAccuracyDashboardParams,
+    ) -> Result<RoutingAccuracyDashboardResult, ServiceError> {
+        let now = unix_timestamp_millis();
+        let window_days = params.window_days.unwrap_or(30).clamp(1, 365);
+        let limit = params.limit.unwrap_or(25).clamp(1, 250);
+        let window_start_millis = now.saturating_sub(i64::from(window_days) * 86_400_000);
+        let agent_filter = params
+            .agent
+            .as_deref()
+            .map(str::trim)
+            .filter(|agent| !agent.is_empty())
+            .map(str::to_string);
+
+        let imports_file_available = self.trace_imports_path().exists();
+        let benchmark_file_available = self.task_benchmarks_path().exists();
+        let baseline_file_available = self.routing_regression_baseline_path().exists();
+        let mut imports = self.load_trace_imports()?;
+        imports.retain(|import| {
+            import.imported_at >= window_start_millis
+                && import.imported_at <= now
+                && routing_accuracy_agent_matches_import(&agent_filter, import)
+        });
+
+        let detection = self.detect_routing_regression(DetectRoutingRegressionParams {
+            ids: Vec::new(),
+            limit: None,
+            score_drop_threshold: None,
+            confidence_drop_threshold: None,
+        })?;
+
+        let mut summary = RoutingAccuracyDashboardSummary::default();
+        let mut agent_rows: BTreeMap<String, RoutingAccuracyAgentAggregate> = BTreeMap::new();
+        let mut history_rows: BTreeMap<i64, RoutingAccuracyOutcomeCounts> = BTreeMap::new();
+        let mut gap_issue_rows = Vec::new();
+        let mut recent_evidence_rows = Vec::new();
+
+        for import in &imports {
+            let outcome = routing_accuracy_normalize_outcome(&import.analysis.outcome);
+            routing_accuracy_increment_summary(&mut summary, outcome);
+            let agent = routing_accuracy_trace_agent(import);
+            agent_rows
+                .entry(agent.clone())
+                .or_default()
+                .record_trace(outcome);
+            if params.include_history {
+                let unix_day = import.imported_at.div_euclid(86_400_000);
+                routing_accuracy_increment_counts(
+                    history_rows.entry(unix_day).or_default(),
+                    outcome,
+                );
+            }
+            if params.include_recent_evidence {
+                recent_evidence_rows.push(RoutingAccuracyEvidenceRow {
+                    source: "trace.importLocal",
+                    agent: Some(agent),
+                    title: import.title.clone(),
+                    outcome: Some(outcome.to_string()),
+                    detail: routing_accuracy_trace_detail(import),
+                    evidence_refs: import.analysis.evidence_refs.clone(),
+                    observed_at: Some(import.imported_at),
+                });
+            }
+        }
+
+        let benchmark_results = &detection.current_evaluation.benchmark_results;
+        for item in benchmark_results
+            .iter()
+            .filter(|item| routing_accuracy_agent_matches_benchmark(&agent_filter, item))
+        {
+            summary.benchmark_count += 1;
+            if matches!(
+                item.expected_match_status,
+                "expected_match" | "acceptable_match"
+            ) {
+                summary.benchmark_matched_count += 1;
+            } else {
+                summary.benchmark_gap_count += 1;
+            }
+            let agent = routing_accuracy_benchmark_agent(item);
+            let agent_row = agent_rows.entry(agent.clone()).or_default();
+            agent_row.benchmark_count += 1;
+            if matches!(
+                item.expected_match_status,
+                "expected_match" | "acceptable_match"
+            ) {
+                agent_row.benchmark_matched_count += 1;
+            } else {
+                agent_row.benchmark_gap_count += 1;
+            }
+            if item.expected_match_status != "expected_match"
+                || !item.gap_notes.is_empty()
+                || !item.blocker_notes.is_empty()
+            {
+                gap_issue_rows.push(RoutingAccuracyIssueRow {
+                    source: "task.evaluateBenchmarks",
+                    severity: routing_accuracy_benchmark_severity(item),
+                    agent: Some(agent.clone()),
+                    title: item.title.clone(),
+                    detail: routing_accuracy_benchmark_issue_detail(item),
+                    evidence_refs: item.evidence_refs.clone(),
+                });
+            }
+            if params.include_recent_evidence {
+                recent_evidence_rows.push(RoutingAccuracyEvidenceRow {
+                    source: "task.evaluateBenchmarks",
+                    agent: Some(agent),
+                    title: item.title.clone(),
+                    outcome: Some(item.expected_match_status.to_string()),
+                    detail: format!(
+                        "Benchmark score {}/100 with route confidence {}/100.",
+                        item.score, item.route_confidence_score
+                    ),
+                    evidence_refs: item.evidence_refs.clone(),
+                    observed_at: None,
+                });
+            }
+        }
+
+        for item in detection
+            .items
+            .iter()
+            .filter(|item| routing_accuracy_agent_matches_regression(&agent_filter, item))
+        {
+            if item.regression {
+                summary.regression_count += 1;
+                let agent = routing_accuracy_regression_agent(item);
+                let agent_key = agent.clone().unwrap_or_else(|| "unknown".to_string());
+                agent_rows.entry(agent_key).or_default().regression_count += 1;
+                gap_issue_rows.push(RoutingAccuracyIssueRow {
+                    source: "task.detectRoutingRegression",
+                    severity: "critical",
+                    agent,
+                    title: item.title.clone(),
+                    detail: item.reasons.join(" "),
+                    evidence_refs: item.evidence_refs.clone(),
+                });
+            }
+            if item.status == "missing_current_benchmark" {
+                summary.missing_benchmark_count += 1;
+            }
+            if params.include_recent_evidence {
+                recent_evidence_rows.push(RoutingAccuracyEvidenceRow {
+                    source: "task.detectRoutingRegression",
+                    agent: routing_accuracy_regression_agent(item),
+                    title: item.title.clone(),
+                    outcome: Some(item.status.to_string()),
+                    detail: routing_accuracy_regression_detail(item),
+                    evidence_refs: item.evidence_refs.clone(),
+                    observed_at: None,
+                });
+            }
+        }
+
+        summary.trace_count = imports.len();
+        summary.accuracy_rate = routing_accuracy_rate(
+            summary.hit_count,
+            summary.hit_count
+                + summary.miss_count
+                + summary.wrong_pick_count
+                + summary.ambiguous_count,
+        );
+        summary.known_outcome_rate = routing_accuracy_rate(
+            summary.hit_count
+                + summary.miss_count
+                + summary.wrong_pick_count
+                + summary.ambiguous_count,
+            summary.trace_count,
+        );
+        summary.summary = routing_accuracy_summary_text(&summary, detection.catalog_available);
+
+        let mut blocker_notes = detection.blocker_notes.clone();
+        if !detection.catalog_available {
+            blocker_notes.push(
+                "No local catalog is available; dashboard metrics are limited to app-local trace metadata and saved benchmark records."
+                    .to_string(),
+            );
+        }
+        if !imports_file_available {
+            blocker_notes.push("No app-local trace imports are saved.".to_string());
+        }
+        if !benchmark_file_available {
+            blocker_notes.push("No app-local task benchmarks are saved.".to_string());
+        }
+        if !baseline_file_available {
+            blocker_notes.push(
+                "No app-local routing regression baseline is saved; regression evidence is unavailable."
+                    .to_string(),
+            );
+        }
+        if imports.is_empty() && benchmark_results.is_empty() {
+            blocker_notes
+                .push("No routing accuracy evidence matched the current filters.".to_string());
+        }
+        blocker_notes.sort();
+        blocker_notes.dedup();
+
+        gap_issue_rows.sort_by(|left, right| {
+            routing_accuracy_severity_rank(left.severity)
+                .cmp(&routing_accuracy_severity_rank(right.severity))
+                .then_with(|| left.source.cmp(right.source))
+                .then_with(|| left.title.cmp(&right.title))
+        });
+        gap_issue_rows.truncate(limit);
+        recent_evidence_rows.sort_by(|left, right| {
+            right
+                .observed_at
+                .cmp(&left.observed_at)
+                .then_with(|| left.source.cmp(right.source))
+                .then_with(|| left.title.cmp(&right.title))
+        });
+        recent_evidence_rows.truncate(limit);
+
+        let agent_rows = agent_rows
+            .into_iter()
+            .map(|(agent, aggregate)| aggregate.into_row(agent))
+            .collect::<Vec<_>>();
+        let history_rows = if params.include_history {
+            history_rows
+                .into_iter()
+                .map(|(unix_day, outcomes)| {
+                    let known =
+                        outcomes.hit + outcomes.miss + outcomes.wrong_pick + outcomes.ambiguous;
+                    RoutingAccuracyHistoryRow {
+                        unix_day,
+                        trace_count: known + outcomes.unknown,
+                        accuracy_rate: routing_accuracy_rate(outcomes.hit, known),
+                        outcomes,
+                    }
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        Ok(RoutingAccuracyDashboardResult {
+            generated_by: "deterministic-service",
+            catalog_available: detection.catalog_available,
+            filters: RoutingAccuracyDashboardFilters {
+                agent: agent_filter,
+                window_days,
+                limit,
+                include_history: params.include_history,
+                include_recent_evidence: params.include_recent_evidence,
+                window_start_millis,
+                window_end_millis: now,
+            },
+            summary,
+            agent_rows,
+            history_rows,
+            gap_issue_rows,
+            recent_evidence_rows,
+            blocker_notes,
+            prompt_request: routing_accuracy_prompt_request(&imports, benchmark_results),
+            safety_flags: routing_accuracy_safety_flags(),
         })
     }
 
@@ -6214,6 +6625,338 @@ fn trace_import_safety_flags() -> TraceImportSafetyFlags {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+struct RoutingAccuracyAgentAggregate {
+    outcomes: RoutingAccuracyOutcomeCounts,
+    benchmark_count: usize,
+    benchmark_matched_count: usize,
+    benchmark_gap_count: usize,
+    regression_count: usize,
+    recent_evidence_count: usize,
+    notes: Vec<String>,
+}
+
+impl RoutingAccuracyAgentAggregate {
+    fn record_trace(&mut self, outcome: &'static str) {
+        routing_accuracy_increment_counts(&mut self.outcomes, outcome);
+        self.recent_evidence_count += 1;
+    }
+
+    fn into_row(mut self, agent: String) -> RoutingAccuracyAgentRow {
+        let known = self.outcomes.hit
+            + self.outcomes.miss
+            + self.outcomes.wrong_pick
+            + self.outcomes.ambiguous;
+        let trace_count = known + self.outcomes.unknown;
+        let accuracy_rate = routing_accuracy_rate(self.outcomes.hit, known);
+        if self.benchmark_gap_count > 0 {
+            self.notes.push(format!(
+                "{} benchmark gap(s) require review.",
+                self.benchmark_gap_count
+            ));
+        }
+        if self.regression_count > 0 {
+            self.notes.push(format!(
+                "{} routing regression(s) detected.",
+                self.regression_count
+            ));
+        }
+        self.notes.sort();
+        self.notes.dedup();
+        RoutingAccuracyAgentRow {
+            agent,
+            trace_count,
+            outcomes: self.outcomes,
+            accuracy_rate,
+            benchmark_count: self.benchmark_count,
+            benchmark_matched_count: self.benchmark_matched_count,
+            benchmark_gap_count: self.benchmark_gap_count,
+            regression_count: self.regression_count,
+            recent_evidence_count: self.recent_evidence_count,
+            notes: self.notes,
+        }
+    }
+}
+
+fn routing_accuracy_safety_flags() -> RoutingAccuracySafetyFlags {
+    RoutingAccuracySafetyFlags {
+        read_only: true,
+        app_local_only: true,
+        provider_request_sent: false,
+        write_back_allowed: false,
+        write_actions_available: false,
+        skill_files_mutated: false,
+        agent_config_mutated: false,
+        script_execution_allowed: false,
+        execution_actions_available: false,
+        config_mutation_allowed: false,
+        snapshot_created: false,
+        triage_mutation_allowed: false,
+        credential_accessed: false,
+        raw_secret_returned: false,
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+        raw_trace_persisted: false,
+        cloud_sync_performed: false,
+        telemetry_emitted: false,
+    }
+}
+
+fn routing_accuracy_normalize_outcome(outcome: &str) -> &'static str {
+    match outcome {
+        "hit" => "hit",
+        "miss" => "miss",
+        "wrong_pick" => "wrong_pick",
+        "ambiguous" => "ambiguous",
+        _ => "unknown",
+    }
+}
+
+fn routing_accuracy_increment_summary(
+    summary: &mut RoutingAccuracyDashboardSummary,
+    outcome: &'static str,
+) {
+    match outcome {
+        "hit" => summary.hit_count += 1,
+        "miss" => summary.miss_count += 1,
+        "wrong_pick" => summary.wrong_pick_count += 1,
+        "ambiguous" => summary.ambiguous_count += 1,
+        _ => summary.unknown_count += 1,
+    }
+}
+
+fn routing_accuracy_increment_counts(
+    counts: &mut RoutingAccuracyOutcomeCounts,
+    outcome: &'static str,
+) {
+    match outcome {
+        "hit" => counts.hit += 1,
+        "miss" => counts.miss += 1,
+        "wrong_pick" => counts.wrong_pick += 1,
+        "ambiguous" => counts.ambiguous += 1,
+        _ => counts.unknown += 1,
+    }
+}
+
+fn routing_accuracy_rate(numerator: usize, denominator: usize) -> f64 {
+    if denominator == 0 {
+        return 0.0;
+    }
+    ((numerator as f64 / denominator as f64) * 10_000.0).round() / 10_000.0
+}
+
+fn routing_accuracy_agent_matches(candidate: &str, agent_filter: &Option<String>) -> bool {
+    match agent_filter.as_deref() {
+        Some(filter) => candidate.eq_ignore_ascii_case(filter),
+        None => true,
+    }
+}
+
+fn routing_accuracy_agent_matches_import(
+    agent_filter: &Option<String>,
+    import: &TraceImportRecord,
+) -> bool {
+    import
+        .agent
+        .as_deref()
+        .is_some_and(|agent| routing_accuracy_agent_matches(agent, agent_filter))
+        || import
+            .analysis
+            .detected_skills
+            .iter()
+            .any(|skill| routing_accuracy_agent_matches(&skill.agent, agent_filter))
+        || agent_filter.is_none()
+}
+
+fn routing_accuracy_agent_matches_benchmark(
+    agent_filter: &Option<String>,
+    item: &TaskBenchmarkEvaluationItem,
+) -> bool {
+    item.top_route
+        .as_ref()
+        .is_some_and(|route| routing_accuracy_agent_matches(&route.agent, agent_filter))
+        || agent_filter.is_none()
+}
+
+fn routing_accuracy_agent_matches_regression(
+    agent_filter: &Option<String>,
+    item: &RoutingRegressionItem,
+) -> bool {
+    routing_accuracy_regression_agent(item)
+        .as_deref()
+        .is_some_and(|agent| routing_accuracy_agent_matches(agent, agent_filter))
+        || agent_filter.is_none()
+}
+
+fn routing_accuracy_trace_agent(import: &TraceImportRecord) -> String {
+    import
+        .agent
+        .clone()
+        .or_else(|| {
+            import
+                .analysis
+                .detected_skills
+                .first()
+                .map(|skill| skill.agent.clone())
+        })
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+fn routing_accuracy_benchmark_agent(item: &TaskBenchmarkEvaluationItem) -> String {
+    item.top_route
+        .as_ref()
+        .map(|route| route.agent.clone())
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+fn routing_accuracy_regression_agent(item: &RoutingRegressionItem) -> Option<String> {
+    item.current
+        .as_ref()
+        .and_then(|current| current.top_route.as_ref())
+        .map(|route| route.agent.clone())
+        .or_else(|| {
+            item.baseline
+                .as_ref()
+                .and_then(|baseline| baseline.top_route.as_ref())
+                .map(|route| route.agent.clone())
+        })
+}
+
+fn routing_accuracy_trace_detail(import: &TraceImportRecord) -> String {
+    let detected = import.analysis.detected_skills.len();
+    if let Some(task) = &import.task {
+        format!(
+            "Trace outcome {} for `{}` with {} detected skill(s).",
+            import.analysis.outcome, task, detected
+        )
+    } else {
+        format!(
+            "Trace outcome {} with {} detected skill(s).",
+            import.analysis.outcome, detected
+        )
+    }
+}
+
+fn routing_accuracy_benchmark_severity(item: &TaskBenchmarkEvaluationItem) -> &'static str {
+    match item.expected_match_status {
+        "blocked_no_route" | "mismatch" => "high",
+        "acceptable_match" | "no_expectation" => "medium",
+        _ if !item.blocker_notes.is_empty() => "high",
+        _ if !item.gap_notes.is_empty() => "medium",
+        _ => "low",
+    }
+}
+
+fn routing_accuracy_benchmark_issue_detail(item: &TaskBenchmarkEvaluationItem) -> String {
+    let mut parts = vec![format!(
+        "Benchmark status {} with score {}/100.",
+        item.expected_match_status, item.score
+    )];
+    parts.extend(item.blocker_notes.clone());
+    parts.extend(item.gap_notes.clone());
+    parts.join(" ")
+}
+
+fn routing_accuracy_regression_detail(item: &RoutingRegressionItem) -> String {
+    let mut parts = Vec::new();
+    if let Some(delta) = item.score_delta {
+        parts.push(format!("score delta {delta}"));
+    }
+    if let Some(delta) = item.confidence_delta {
+        parts.push(format!("confidence delta {delta}"));
+    }
+    if parts.is_empty() {
+        item.reasons.join(" ")
+    } else {
+        parts.join(", ")
+    }
+}
+
+fn routing_accuracy_summary_text(
+    summary: &RoutingAccuracyDashboardSummary,
+    catalog_available: bool,
+) -> String {
+    if summary.trace_count == 0 && summary.benchmark_count == 0 {
+        if catalog_available {
+            return "No routing accuracy evidence matched the selected filters.".to_string();
+        }
+        return "No routing accuracy evidence matched the selected filters, and no local catalog is available.".to_string();
+    }
+    format!(
+        "Reviewed {} trace import(s), {} benchmark(s), and {} regression(s); hit rate {:.0}% across known trace outcomes.",
+        summary.trace_count,
+        summary.benchmark_count,
+        summary.regression_count,
+        summary.accuracy_rate * 100.0
+    )
+}
+
+fn routing_accuracy_severity_rank(severity: &str) -> u8 {
+    match severity {
+        "critical" => 0,
+        "high" => 1,
+        "medium" => 2,
+        "low" => 3,
+        _ => 4,
+    }
+}
+
+fn routing_accuracy_prompt_request(
+    imports: &[TraceImportRecord],
+    benchmark_results: &[TaskBenchmarkEvaluationItem],
+) -> RoutingAccuracyPromptRequest {
+    let benchmark_route = benchmark_results.iter().find_map(|item| {
+        item.top_route
+            .as_ref()
+            .map(|route| (item.task.clone(), route))
+    });
+    let (available, instance_ids, task, note) = if let Some((task, route)) = benchmark_route {
+        (
+            true,
+            vec![route.instance_id.clone()],
+            Some(task),
+            "Optional provider-backed dashboard explanation must be requested through prompt preview and explicit confirmation; routing.accuracyDashboard never sends provider traffic.".to_string(),
+        )
+    } else if let Some(import) = imports
+        .iter()
+        .find(|import| import.task.is_some() && !import.analysis.detected_skills.is_empty())
+    {
+        (
+            true,
+            import
+                .analysis
+                .detected_skills
+                .iter()
+                .map(|skill| skill.instance_id.clone())
+                .collect(),
+            import.task.clone(),
+            "Optional provider-backed dashboard explanation must be requested through prompt preview and explicit confirmation; routing.accuracyDashboard never sends provider traffic.".to_string(),
+        )
+    } else {
+        (
+            false,
+            Vec::new(),
+            None,
+            "Prompt preview is unavailable until local routing evidence includes a task and route candidate.".to_string(),
+        )
+    };
+    RoutingAccuracyPromptRequest {
+        available,
+        preview_method: "llm.previewPrompt",
+        confirm_method: "llm.confirmPromptAndSend",
+        action: "routing_confidence",
+        request: LlmPreviewPromptParams {
+            action: LlmPromptActionKind::RoutingConfidence,
+            profile_id: None,
+            skill_instance_id: None,
+            instance_ids,
+            analysis_kind: None,
+            user_intent: task,
+        },
+        note,
+    }
+}
+
 fn trace_import_redaction_summary_from(
     summary: LlmPromptRedactionSummary,
 ) -> TraceImportRedactionSummary {
@@ -8233,6 +8976,7 @@ mod tests {
         assert!(methods.contains(&Value::String("task.evaluateBenchmarks".to_string())));
         assert!(methods.contains(&Value::String("task.saveRoutingBaseline".to_string())));
         assert!(methods.contains(&Value::String("task.detectRoutingRegression".to_string())));
+        assert!(methods.contains(&Value::String("routing.accuracyDashboard".to_string())));
         assert!(methods.contains(&Value::String("trace.importLocal".to_string())));
         assert!(methods.contains(&Value::String("trace.listImports".to_string())));
         assert!(methods.contains(&Value::String("trace.deleteImport".to_string())));
@@ -11091,6 +11835,324 @@ mod tests {
     }
 
     #[test]
+    fn routing_accuracy_dashboard_empty_evidence_returns_safe_empty_result() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-routing-accuracy-empty-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+        assert!(!host.catalog_path().exists());
+        assert!(!host.task_benchmarks_path().exists());
+        assert!(!host.routing_regression_baseline_path().exists());
+        assert!(!host.trace_imports_path().exists());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("routing-accuracy-empty".to_string()),
+            method: "routing.accuracyDashboard".to_string(),
+            params: json!({
+                "window_days": 30,
+                "include_history": true,
+                "include_recent_evidence": true
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("empty dashboard result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("deterministic-service")
+        );
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/trace_count")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/benchmark_count")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/regression_count")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            result
+                .pointer("/agent_rows")
+                .and_then(Value::as_array)
+                .map(Vec::len),
+            Some(0)
+        );
+        assert!(result
+            .pointer("/blocker_notes")
+            .and_then(Value::as_array)
+            .is_some_and(|notes| notes.iter().any(|note| note
+                .as_str()
+                .is_some_and(|note| note.contains("No app-local trace imports")))));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_routing_accuracy_dashboard_safety(&result);
+        assert!(!host.catalog_path().exists());
+        assert!(!host.task_benchmarks_path().exists());
+        assert!(!host.routing_regression_baseline_path().exists());
+        assert!(!host.trace_imports_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn routing_accuracy_dashboard_trace_imports_produce_counts_and_agent_rows() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-routing-accuracy-trace-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_llm_skill(&host, &app_data_dir.join("fixture-skill").join("SKILL.md"));
+
+        let hit = host.handle(ServiceRequest {
+            id: Some("trace-hit".to_string()),
+            method: "trace.importLocal".to_string(),
+            params: json!({
+                "content": "Assistant selected llm-fixture with id llm-skill-id.",
+                "title": "Hit trace",
+                "agent": "claude-code",
+                "task": "Analyze local skill posture",
+                "expected_skill_refs": ["llm-skill-id"]
+            }),
+        });
+        assert!(hit.ok, "{:?}", hit.error);
+        let wrong_pick = host.handle(ServiceRequest {
+            id: Some("trace-wrong-pick".to_string()),
+            method: "trace.importLocal".to_string(),
+            params: json!({
+                "content": "Assistant selected llm-fixture with id llm-skill-id.",
+                "title": "Wrong pick trace",
+                "agent": "claude-code",
+                "task": "Route release notes",
+                "expected_skill_refs": ["other-skill-id"]
+            }),
+        });
+        assert!(wrong_pick.ok, "{:?}", wrong_pick.error);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("routing-accuracy-traces".to_string()),
+            method: "routing.accuracyDashboard".to_string(),
+            params: json!({
+                "agent": "claude-code",
+                "include_history": true,
+                "include_recent_evidence": true,
+                "limit": 10
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("trace dashboard result");
+        assert_eq!(
+            result
+                .pointer("/summary/trace_count")
+                .and_then(Value::as_u64),
+            Some(2)
+        );
+        assert_eq!(
+            result.pointer("/summary/hit_count").and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/wrong_pick_count")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/accuracy_rate")
+                .and_then(Value::as_f64),
+            Some(0.5)
+        );
+        assert_eq!(
+            result
+                .pointer("/agent_rows/0/agent")
+                .and_then(Value::as_str),
+            Some("claude-code")
+        );
+        assert_eq!(
+            result
+                .pointer("/agent_rows/0/outcomes/hit")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            result
+                .pointer("/agent_rows/0/outcomes/wrong_pick")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert!(result
+            .pointer("/history_rows")
+            .and_then(Value::as_array)
+            .is_some_and(|rows| rows.len() == 1));
+        assert!(result
+            .pointer("/recent_evidence_rows")
+            .and_then(Value::as_array)
+            .is_some_and(|rows| rows.len() >= 2));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/available")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_routing_accuracy_dashboard_safety(&result);
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn routing_accuracy_dashboard_includes_benchmark_regression_and_recent_evidence() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-routing-accuracy-regression-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_llm_skill(&host, &app_data_dir.join("fixture-skill").join("SKILL.md"));
+
+        let save_benchmark = host.handle(ServiceRequest {
+            id: Some("benchmark-save".to_string()),
+            method: "task.saveBenchmark".to_string(),
+            params: json!({
+                "id": "local-routing-fixture",
+                "title": "Local routing fixture",
+                "task": "Analyze local skill posture and execution safety",
+                "expected_skill_refs": ["llm-skill-id"]
+            }),
+        });
+        assert!(save_benchmark.ok, "{:?}", save_benchmark.error);
+        let save_baseline = host.handle(ServiceRequest {
+            id: Some("routing-baseline-save".to_string()),
+            method: "task.saveRoutingBaseline".to_string(),
+            params: json!({}),
+        });
+        assert!(save_baseline.ok, "{:?}", save_baseline.error);
+        let update_benchmark = host.handle(ServiceRequest {
+            id: Some("benchmark-update".to_string()),
+            method: "task.saveBenchmark".to_string(),
+            params: json!({
+                "id": "local-routing-fixture",
+                "title": "Local routing fixture",
+                "task": "Analyze local skill posture and execution safety",
+                "expected_skill_refs": ["other-skill-id"]
+            }),
+        });
+        assert!(update_benchmark.ok, "{:?}", update_benchmark.error);
+
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+        let baseline_before =
+            fs::read_to_string(host.routing_regression_baseline_path()).expect("baseline before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("routing-accuracy-regression".to_string()),
+            method: "routing.accuracyDashboard".to_string(),
+            params: json!({
+                "include_recent_evidence": true,
+                "limit": 10
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("regression dashboard result");
+        assert_eq!(
+            result
+                .pointer("/summary/benchmark_count")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/benchmark_gap_count")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/regression_count")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert!(result
+            .pointer("/gap_issue_rows")
+            .and_then(Value::as_array)
+            .is_some_and(|rows| rows
+                .iter()
+                .any(|row| row.get("source").and_then(Value::as_str)
+                    == Some("task.detectRoutingRegression"))));
+        assert!(result
+            .pointer("/recent_evidence_rows")
+            .and_then(Value::as_array)
+            .is_some_and(|rows| rows
+                .iter()
+                .any(|row| row.get("source").and_then(Value::as_str)
+                    == Some("task.evaluateBenchmarks"))));
+        assert_eq!(
+            result
+                .pointer("/agent_rows/0/regression_count")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            result
+                .pointer("/prompt_request/available")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_routing_accuracy_dashboard_safety(&result);
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        let baseline_after =
+            fs::read_to_string(host.routing_regression_baseline_path()).expect("baseline after");
+        assert_eq!(baseline_after, baseline_before);
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
     fn llm_preview_prompt_accepts_task_readiness_action_with_redaction() {
         let app_data_dir = env::temp_dir().join(format!(
             "skills-copilot-readiness-preview-test-{}-{}",
@@ -13174,6 +14236,42 @@ mod tests {
                     assert!(!item.safety_flags.raw_response_persisted);
                 }
             }
+            "routing.accuracyDashboard" => {
+                let dashboard: WireRoutingAccuracyDashboardResult =
+                    decode_fixture_result(method, result, path);
+                assert_eq!(dashboard.generated_by, "deterministic-service");
+                assert!(dashboard.summary.accuracy_rate <= 1.0);
+                assert!(dashboard.summary.known_outcome_rate <= 1.0);
+                assert_eq!(dashboard.prompt_request.preview_method, "llm.previewPrompt");
+                assert_eq!(
+                    dashboard.prompt_request.confirm_method,
+                    "llm.confirmPromptAndSend"
+                );
+                assert_eq!(dashboard.prompt_request.action, "routing_confidence");
+                assert_eq!(
+                    dashboard.prompt_request.request.action,
+                    LlmPromptActionKind::RoutingConfidence
+                );
+                assert!(dashboard.safety_flags.read_only);
+                assert!(dashboard.safety_flags.app_local_only);
+                assert!(!dashboard.safety_flags.provider_request_sent);
+                assert!(!dashboard.safety_flags.write_back_allowed);
+                assert!(!dashboard.safety_flags.write_actions_available);
+                assert!(!dashboard.safety_flags.skill_files_mutated);
+                assert!(!dashboard.safety_flags.agent_config_mutated);
+                assert!(!dashboard.safety_flags.script_execution_allowed);
+                assert!(!dashboard.safety_flags.execution_actions_available);
+                assert!(!dashboard.safety_flags.config_mutation_allowed);
+                assert!(!dashboard.safety_flags.snapshot_created);
+                assert!(!dashboard.safety_flags.triage_mutation_allowed);
+                assert!(!dashboard.safety_flags.credential_accessed);
+                assert!(!dashboard.safety_flags.raw_secret_returned);
+                assert!(!dashboard.safety_flags.raw_prompt_persisted);
+                assert!(!dashboard.safety_flags.raw_response_persisted);
+                assert!(!dashboard.safety_flags.raw_trace_persisted);
+                assert!(!dashboard.safety_flags.cloud_sync_performed);
+                assert!(!dashboard.safety_flags.telemetry_emitted);
+            }
             "trace.importLocal" => {
                 let imported: WireTraceImportLocalResult =
                     decode_fixture_result(method, result, path);
@@ -13529,6 +14627,42 @@ mod tests {
         assert!(!flags.telemetry_emitted);
     }
 
+    fn assert_routing_accuracy_dashboard_safety(result: &Value) {
+        assert_eq!(
+            result
+                .pointer("/safety_flags/read_only")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/app_local_only")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        for path in [
+            "/safety_flags/provider_request_sent",
+            "/safety_flags/write_back_allowed",
+            "/safety_flags/write_actions_available",
+            "/safety_flags/skill_files_mutated",
+            "/safety_flags/agent_config_mutated",
+            "/safety_flags/script_execution_allowed",
+            "/safety_flags/execution_actions_available",
+            "/safety_flags/config_mutation_allowed",
+            "/safety_flags/snapshot_created",
+            "/safety_flags/triage_mutation_allowed",
+            "/safety_flags/credential_accessed",
+            "/safety_flags/raw_secret_returned",
+            "/safety_flags/raw_prompt_persisted",
+            "/safety_flags/raw_response_persisted",
+            "/safety_flags/raw_trace_persisted",
+            "/safety_flags/cloud_sync_performed",
+            "/safety_flags/telemetry_emitted",
+        ] {
+            assert_eq!(result.pointer(path).and_then(Value::as_bool), Some(false));
+        }
+    }
+
     fn assert_findings_cover_v28_contract(
         findings: &[WireRuleFindingRecord],
         expected_rule_ids: &[&str],
@@ -13731,6 +14865,11 @@ mod tests {
             "task.evaluateBenchmarks" => json!({}),
             "task.saveRoutingBaseline" => json!({}),
             "task.detectRoutingRegression" => json!({}),
+            "routing.accuracyDashboard" => json!({
+                "window_days": 30,
+                "include_history": true,
+                "include_recent_evidence": true
+            }),
             "trace.importLocal" => json!({
                 "content": "Fixture trace selected fixture-skill-id for local routing.",
                 "title": "Fixture trace import",
@@ -14510,6 +15649,155 @@ mod tests {
         gap_notes: Vec<String>,
         blocker_notes: Vec<String>,
         evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRoutingAccuracyDashboardResult {
+        generated_by: String,
+        catalog_available: bool,
+        filters: WireRoutingAccuracyDashboardFilters,
+        summary: WireRoutingAccuracyDashboardSummary,
+        agent_rows: Vec<WireRoutingAccuracyAgentRow>,
+        history_rows: Vec<WireRoutingAccuracyHistoryRow>,
+        gap_issue_rows: Vec<WireRoutingAccuracyIssueRow>,
+        recent_evidence_rows: Vec<WireRoutingAccuracyEvidenceRow>,
+        blocker_notes: Vec<String>,
+        prompt_request: WireRoutingAccuracyPromptRequest,
+        safety_flags: WireRoutingAccuracySafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRoutingAccuracyDashboardFilters {
+        agent: Option<String>,
+        window_days: u32,
+        limit: usize,
+        include_history: bool,
+        include_recent_evidence: bool,
+        window_start_millis: i64,
+        window_end_millis: i64,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRoutingAccuracyDashboardSummary {
+        trace_count: usize,
+        hit_count: usize,
+        miss_count: usize,
+        wrong_pick_count: usize,
+        ambiguous_count: usize,
+        unknown_count: usize,
+        benchmark_count: usize,
+        benchmark_matched_count: usize,
+        benchmark_gap_count: usize,
+        regression_count: usize,
+        missing_benchmark_count: usize,
+        accuracy_rate: f64,
+        known_outcome_rate: f64,
+        summary: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRoutingAccuracyOutcomeCounts {
+        hit: usize,
+        miss: usize,
+        wrong_pick: usize,
+        ambiguous: usize,
+        unknown: usize,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRoutingAccuracyAgentRow {
+        agent: String,
+        trace_count: usize,
+        outcomes: WireRoutingAccuracyOutcomeCounts,
+        accuracy_rate: f64,
+        benchmark_count: usize,
+        benchmark_matched_count: usize,
+        benchmark_gap_count: usize,
+        regression_count: usize,
+        recent_evidence_count: usize,
+        notes: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRoutingAccuracyHistoryRow {
+        unix_day: i64,
+        trace_count: usize,
+        outcomes: WireRoutingAccuracyOutcomeCounts,
+        accuracy_rate: f64,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRoutingAccuracyIssueRow {
+        source: String,
+        severity: String,
+        agent: Option<String>,
+        title: String,
+        detail: String,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRoutingAccuracyEvidenceRow {
+        source: String,
+        agent: Option<String>,
+        title: String,
+        outcome: Option<String>,
+        detail: String,
+        evidence_refs: Vec<String>,
+        observed_at: Option<i64>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRoutingAccuracyPromptRequest {
+        available: bool,
+        preview_method: String,
+        confirm_method: String,
+        action: String,
+        request: LlmPreviewPromptParams,
+        note: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRoutingAccuracySafetyFlags {
+        read_only: bool,
+        app_local_only: bool,
+        provider_request_sent: bool,
+        write_back_allowed: bool,
+        write_actions_available: bool,
+        skill_files_mutated: bool,
+        agent_config_mutated: bool,
+        script_execution_allowed: bool,
+        execution_actions_available: bool,
+        config_mutation_allowed: bool,
+        snapshot_created: bool,
+        triage_mutation_allowed: bool,
+        credential_accessed: bool,
+        raw_secret_returned: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+        raw_trace_persisted: bool,
+        cloud_sync_performed: bool,
+        telemetry_emitted: bool,
     }
 
     #[allow(dead_code)]

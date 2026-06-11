@@ -159,6 +159,8 @@ struct DetailView: View {
                             isSendingRoutingConfidencePrompt: { skill in store.isSendingRoutingConfidencePrompt(for: skill) },
                             routingConfidencePromptSendResult: { skill in store.routingConfidencePromptSendResult(for: skill) },
                             canSendRoutingConfidencePrompt: { skill in store.canSendRoutingConfidencePrompt(for: skill) },
+                            routingAccuracyDashboard: store.routingAccuracyDashboard,
+                            isLoadingRoutingAccuracyDashboard: store.isLoadingRoutingAccuracyDashboard,
                             onScoreQuality: {
                                 Task {
                                     await store.scoreSelectedSkillQuality()
@@ -202,6 +204,11 @@ struct DetailView: View {
                             onSendRoutingConfidencePrompt: {
                                 Task {
                                     await store.confirmPromptForSelectedRoutingConfidence()
+                                }
+                            },
+                            onLoadRoutingAccuracyDashboard: {
+                                Task {
+                                    await store.loadRoutingAccuracyDashboard()
                                 }
                             },
                             taskBenchmarkText: $store.taskBenchmarkText,
@@ -832,6 +839,8 @@ private struct AnalysisSection: View {
     let isSendingRoutingConfidencePrompt: (SkillRecord) -> Bool
     let routingConfidencePromptSendResult: (SkillRecord) -> LLMPromptSendResult?
     let canSendRoutingConfidencePrompt: (SkillRecord) -> Bool
+    let routingAccuracyDashboard: RoutingAccuracyDashboard?
+    let isLoadingRoutingAccuracyDashboard: Bool
     let onScoreQuality: () -> Void
     let onPreviewQualityPrompt: () -> Void
     let onSendQualityPrompt: () -> Void
@@ -841,6 +850,7 @@ private struct AnalysisSection: View {
     let onRankRoutingConfidence: () -> Void
     let onPreviewRoutingConfidencePrompt: () -> Void
     let onSendRoutingConfidencePrompt: () -> Void
+    let onLoadRoutingAccuracyDashboard: () -> Void
     @Binding var taskBenchmarkText: String
     let taskBenchmarkInput: String
     let taskBenchmarkList: TaskBenchmarkListResult
@@ -964,6 +974,12 @@ private struct AnalysisSection: View {
                 onRank: onRankRoutingConfidence,
                 onPreviewPrompt: onPreviewRoutingConfidencePrompt,
                 onSendPrompt: onSendRoutingConfidencePrompt
+            )
+
+            RoutingAccuracyDashboardPanel(
+                dashboard: routingAccuracyDashboard,
+                isLoading: isLoadingRoutingAccuracyDashboard,
+                onLoad: onLoadRoutingAccuracyDashboard
             )
 
             TaskBenchmarkPanel(
@@ -1986,6 +2002,384 @@ private struct RoutingEvidenceList: View {
                 }
             }
         }
+    }
+}
+
+private struct RoutingAccuracyDashboardPanel: View {
+    let dashboard: RoutingAccuracyDashboard?
+    let isLoading: Bool
+    let onLoad: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.routingAccuracyTitle, systemImage: "chart.xyaxis.line")
+                    .font(.headline)
+                Spacer()
+                Label(UIStrings.readOnlyPreview, systemImage: "lock.shield")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(UIStrings.routingAccuracyBoundary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+
+            HStack(spacing: 8) {
+                Button {
+                    onLoad()
+                } label: {
+                    Label(UIStrings.routingAccuracyLoadAction, systemImage: "arrow.clockwise")
+                }
+                .disabled(isLoading)
+
+                if isLoading {
+                    Label(UIStrings.llmPreparing, systemImage: "hourglass")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+
+            if let dashboard {
+                RoutingAccuracyDashboardView(dashboard: dashboard)
+            } else {
+                Label(UIStrings.routingAccuracyNoDashboard, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Label(UIStrings.llmReviewNoActions, systemImage: "nosign")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct RoutingAccuracyDashboardView: View {
+    let dashboard: RoutingAccuracyDashboard
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let fallbackReason = dashboard.fallbackReason, !fallbackReason.isEmpty {
+                Label(fallbackReason, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+                SummaryChip(
+                    title: UIStrings.routingAccuracyAccuracyRate,
+                    value: dashboard.summary.accuracyRate.map(RoutingAccuracySummary.percentLabel)
+                        ?? dashboard.summary.rateLabel(dashboard.summary.hitRate, count: dashboard.summary.hitCount),
+                    systemImage: "target"
+                )
+                SummaryChip(
+                    title: UIStrings.routingAccuracyWrongPickRate,
+                    value: dashboard.summary.rateLabel(dashboard.summary.wrongPickRate, count: dashboard.summary.wrongPickCount),
+                    systemImage: "xmark.octagon"
+                )
+                SummaryChip(
+                    title: UIStrings.routingAccuracyImports,
+                    value: RoutingAccuracySummary.countLabel(dashboard.summary.totalImports),
+                    systemImage: "doc.text.magnifyingglass"
+                )
+                SummaryChip(
+                    title: UIStrings.routingAccuracyKnownOutcomeRate,
+                    value: dashboard.summary.knownOutcomeRate.map(RoutingAccuracySummary.percentLabel) ?? UIStrings.unknown,
+                    systemImage: "checklist"
+                )
+                SummaryChip(
+                    title: UIStrings.routingAccuracyRegressions,
+                    value: RoutingAccuracySummary.countLabel(dashboard.summary.regressionCount),
+                    systemImage: "chart.line.downtrend.xyaxis"
+                )
+                SummaryChip(
+                    title: UIStrings.routingAccuracyAvgConfidence,
+                    value: RoutingAccuracySummary.confidenceLabel(dashboard.summary.averageConfidence),
+                    systemImage: "gauge.medium"
+                )
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                MetadataRow(label: UIStrings.routingAccuracyGeneratedBy, value: dashboard.generatedBy)
+                MetadataRow(label: UIStrings.routingAccuracyCatalog, value: dashboard.catalogAvailable ? UIStrings.routingAccuracyAvailable : UIStrings.routingAccuracyUnavailableShort)
+                MetadataRow(label: UIStrings.routingAccuracyWindow, value: windowLabel)
+                MetadataRow(label: UIStrings.routingAccuracyBenchmarks, value: RoutingAccuracySummary.countLabel(dashboard.summary.totalBenchmarks))
+                MetadataRow(label: UIStrings.routingAccuracyBenchmarkMatched, value: RoutingAccuracySummary.countLabel(dashboard.summary.benchmarkMatchedCount))
+                MetadataRow(label: UIStrings.routingAccuracyBenchmarkGaps, value: RoutingAccuracySummary.countLabel(dashboard.summary.benchmarkGapCount))
+                MetadataRow(label: UIStrings.routingAccuracyMissingBenchmarks, value: RoutingAccuracySummary.countLabel(dashboard.summary.missingBenchmarkCount))
+                MetadataRow(label: UIStrings.routingAccuracyGaps, value: RoutingAccuracySummary.countLabel(dashboard.summary.gapCount))
+                MetadataRow(label: UIStrings.routingAccuracyBlockers, value: RoutingAccuracySummary.countLabel(dashboard.summary.blockerCount))
+                if let promptRequest = dashboard.promptRequest {
+                    MetadataRow(label: UIStrings.routingAccuracyPromptRequest, value: promptRequestLabel(promptRequest))
+                }
+            }
+
+            if !dashboard.summary.summaryText.isEmpty {
+                Text(dashboard.summary.summaryText)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            RoutingAccuracyAgentList(agents: dashboard.agents)
+            RoutingAccuracyHistoryList(history: dashboard.history)
+            RoutingAccuracyGapList(gaps: dashboard.gaps)
+            SkillQualityStringList(
+                title: UIStrings.routingAccuracyBlockerNotes,
+                empty: UIStrings.routingAccuracyNoBlockers,
+                values: dashboard.blockerNotes,
+                systemImage: "exclamationmark.octagon"
+            )
+            RoutingAccuracyEvidenceList(evidence: dashboard.recentEvidence)
+            RoutingAccuracySafetyList(safety: dashboard.safetyFlags)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var windowLabel: String {
+        if let days = dashboard.filters.windowDays {
+            return String(format: UIStrings.routingAccuracyDays, days)
+        }
+        return UIStrings.unknown
+    }
+
+    private func promptRequestLabel(_ promptRequest: RoutingAccuracyPromptRequest) -> String {
+        let state = promptRequest.enabled ? UIStrings.llmEnabled : UIStrings.llmDisabled
+        let copy = promptRequest.copyOnly ? UIStrings.llmPromptCopyOnly : UIStrings.llmSkillAnalysisEnabledUnsafe
+        return "\(promptRequest.requestKind) · \(state) · \(copy)"
+    }
+}
+
+private struct RoutingAccuracyAgentList: View {
+    let agents: [RoutingAccuracyAgentRow]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(UIStrings.routingAccuracyAgents)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if agents.isEmpty {
+                Text(UIStrings.routingAccuracyNoAgents)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(agents) { agent in
+                        HStack(alignment: .firstTextBaseline, spacing: 12) {
+                            Text(DisplayText.agent(agent.agent))
+                                .font(.callout.bold())
+                                .frame(minWidth: 110, alignment: .leading)
+                            Text(agent.hitRateLabel())
+                                .font(.caption.monospacedDigit().bold())
+                                .frame(width: 58, alignment: .trailing)
+                            Text(agent.wrongPickRateLabel())
+                                .font(.caption.monospacedDigit())
+                                .frame(width: 58, alignment: .trailing)
+                            Text(RoutingAccuracySummary.confidenceLabel(agent.averageConfidence))
+                                .font(.caption.monospacedDigit())
+                                .frame(width: 58, alignment: .trailing)
+                            Text("\(agent.totalCount)")
+                                .font(.caption.monospacedDigit())
+                                .frame(width: 48, alignment: .trailing)
+                            Spacer()
+                            SafetyPill(
+                                label: "\(UIStrings.routingAccuracyBenchmarkGaps) \(agent.benchmarkGapCount)",
+                                isBlocked: agent.benchmarkGapCount == 0
+                            )
+                            SafetyPill(
+                                label: "\(UIStrings.routingAccuracyRegressions) \(agent.regressionCount)",
+                                isBlocked: agent.regressionCount == 0
+                            )
+                        }
+                        .padding(.vertical, 7)
+                        Divider()
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct RoutingAccuracyHistoryList: View {
+    let history: [RoutingAccuracyHistoryPoint]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(UIStrings.routingAccuracyHistory)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if history.isEmpty {
+                Text(UIStrings.routingAccuracyNoHistory)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(history.prefix(6)) { point in
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(point.label)
+                                .font(.caption.bold())
+                                .lineLimit(1)
+                            MetadataLine(label: UIStrings.routingAccuracyHitRate, value: point.hitRate.map(RoutingAccuracySummary.percentLabel) ?? UIStrings.unknown)
+                            MetadataLine(label: UIStrings.routingAccuracyWrongPickRate, value: point.wrongPickRate.map(RoutingAccuracySummary.percentLabel) ?? UIStrings.unknown)
+                            MetadataLine(label: UIStrings.routingAccuracyRegressions, value: "\(point.regressionCount)")
+                        }
+                        .padding(9)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 6))
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct RoutingAccuracyGapList: View {
+    let gaps: [RoutingAccuracyGap]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(UIStrings.routingAccuracyGaps)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if gaps.isEmpty {
+                Text(UIStrings.routingAccuracyNoGaps)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(gaps.prefix(6)) { gap in
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Label(gap.title, systemImage: "puzzlepiece.extension")
+                                .font(.callout)
+                            Spacer()
+                            if let count = gap.count {
+                                Text("\(count)")
+                                    .font(.caption.monospacedDigit().bold())
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Text(gap.detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                        if let severity = gap.severity, !severity.isEmpty {
+                            Text(severity)
+                                .font(.caption2.bold())
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct RoutingAccuracyEvidenceList: View {
+    let evidence: [RoutingAccuracyEvidenceRow]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(UIStrings.routingAccuracyRecentEvidence)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if evidence.isEmpty {
+                Text(UIStrings.routingAccuracyNoEvidence)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(evidence.prefix(6)) { item in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Label(item.title, systemImage: "checklist")
+                            .font(.callout)
+                        HStack(spacing: 8) {
+                            if let agent = item.agent, !agent.isEmpty {
+                                Text(DisplayText.agent(agent))
+                            }
+                            if let outcome = item.outcome, !outcome.isEmpty {
+                                Text(outcome)
+                            }
+                            if let observedAt = item.observedAt {
+                                Text(DisplayText.timestamp(observedAt))
+                            }
+                        }
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        Text(item.detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                        if let source = item.source, !source.isEmpty {
+                            Text(source)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        if !item.evidenceRefs.isEmpty {
+                            Text(item.evidenceRefs.joined(separator: ", "))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                                .textSelection(.enabled)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct RoutingAccuracySafetyList: View {
+    let safety: RoutingAccuracySafety
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(UIStrings.routingAccuracySafetyFlags)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            Label(
+                safety.allReadOnlyFlagsClear ? UIStrings.routingAccuracySafetyClear : UIStrings.llmSkillAnalysisEnabledUnsafe,
+                systemImage: safety.allReadOnlyFlagsClear ? "checkmark.shield" : "exclamationmark.triangle"
+            )
+            .font(.callout)
+            .foregroundStyle(.secondary)
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 185), spacing: 8)], alignment: .leading, spacing: 8) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                    SafetyPill(label: row.label, isBlocked: !row.isUnsafe)
+                }
+            }
+
+            if !safety.notes.isEmpty {
+                ForEach(safety.notes.prefix(4), id: \.self) { note in
+                    Label(note, systemImage: "info.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private var rows: [(label: String, isUnsafe: Bool)] {
+        [
+            (UIStrings.skillQualityProviderNotSent, safety.providerRequestSent),
+            (UIStrings.skillQualityWritesBlocked, safety.writeBackAllowed),
+            (UIStrings.skillQualityScriptsBlocked, safety.scriptExecutionAllowed),
+            (UIStrings.skillQualityMutationsBlocked, safety.configMutationAllowed || safety.snapshotCreated || safety.triageMutationAllowed),
+            (UIStrings.skillQualityCredentialsBlocked, safety.credentialAccessed || safety.rawSecretReturned),
+            (UIStrings.llmPromptRawPromptStored, safety.rawPromptPersisted),
+            (UIStrings.llmPromptRawResponseStored, safety.rawResponsePersisted),
+            (UIStrings.routingAccuracyRawTraceStored, safety.rawTracePersisted),
+            (UIStrings.routingAccuracyCloudSync, safety.cloudSyncEnabled),
+            (UIStrings.routingAccuracyTelemetry, safety.telemetryEnabled)
+        ]
     }
 }
 

@@ -14,6 +14,7 @@ struct LLMModelTests {
         try taskBenchmarkDecodesFlexiblePayload()
         try routingRegressionDecodesFlexiblePayload()
         try agentTraceImportDecodesFlexiblePayload()
+        try routingAccuracyDashboardDecodesFlexiblePayload()
         try promptPreviewDecodesV242Payload()
         try promptPreviewDecodesServiceArrayScopePayload()
         try promptSendResultDecodesCopyOnlyAuditPayload()
@@ -748,6 +749,143 @@ struct LLMModelTests {
         try expectEqual(list.imports.first?.id, "trace-2", "Trace list should decode records alias.")
         try expectEqual(list.imports.first?.outcome, "ambiguous", "Trace list should decode match_status alias.")
         try expectEqual(list.imports.first?.expectedSkills.map(\.name), ["Beta"], "Trace list should decode expected skill name string.")
+    }
+
+    private func routingAccuracyDashboardDecodesFlexiblePayload() throws {
+        let data = Data(
+            """
+            {
+              "generated_by": "local-v2.49",
+              "catalog_available": true,
+              "filters": {
+                "agent": "claude-code",
+                "window_days": "30",
+                "limit": 20,
+                "include_history": true,
+                "include_recent_evidence": true
+              },
+              "summary": {
+                "hits": 7,
+                "miss_count": "2",
+                "wrong_picks": 1,
+                "ambiguous": 1,
+                "unknown_count": 0,
+                "trace_count": 11,
+                "benchmark_count": 5,
+                "benchmark_matched_count": 4,
+                "benchmark_gap_count": 3,
+                "regression_count": 1,
+                "missing_benchmark_count": 2,
+                "gap_count": 3,
+                "blocker_count": 1,
+                "accuracy_rate": 0.636,
+                "known_outcome_rate": 1.0,
+                "summary": "Routing accuracy summary.",
+                "average_confidence": 0.82,
+                "hit_rate": "63.6%",
+                "wrong_pick_rate": 0.091
+              },
+              "agent_rows": [
+                {
+                  "name": "claude-code",
+                  "trace_count": 8,
+                  "outcomes": {
+                    "hit": 6,
+                    "miss": 1,
+                    "wrong_pick": 1,
+                    "ambiguous": 0,
+                    "unknown": 0
+                  },
+                  "accuracy_rate": 0.75,
+                  "average_confidence": 82,
+                  "benchmark_count": 3,
+                  "benchmark_matched_count": 2,
+                  "benchmark_gap_count": 1,
+                  "gap_count": 2,
+                  "regression_count": 1,
+                  "recent_evidence_count": 4,
+                  "notes": ["Codex benchmark missing."]
+                }
+              ],
+              "history_rows": [
+                {
+                  "unix_day": 1781136000,
+                  "trace_count": "4",
+                  "outcomes": {"hit": 3, "miss": 0, "wrong_pick": 1, "ambiguous": 0, "unknown": 0},
+                  "accuracy_rate": 0.75,
+                  "regression_count": 1
+                }
+              ],
+              "gap_issue_rows": [
+                {"source": "trace", "severity": "warning", "agent": "openclaw", "title": "Missing trace coverage", "detail": "No OpenClaw traces.", "evidence_refs": ["trace:none"], "count": "2"},
+                "No baseline for Codex"
+              ],
+              "recent_evidence_rows": [
+                {"source": "trace.importLocal", "agent": "claude-code", "title": "Trace", "outcome": "hit", "detail": "Beta matched expected route.", "evidence_refs": ["trace-1"], "observed_at": 1781136000000}
+              ],
+              "blocker_notes": ["One expected route has no benchmark."],
+              "prompt_request": {
+                "enabled": false,
+                "request_kind": "routing_accuracy",
+                "summary": "Copy-only provider explanation unavailable by default.",
+                "draft_copy_only": true
+              },
+              "safety_flags": {
+                "provider_request_sent": false,
+                "write_back_allowed": false,
+                "script_execution_allowed": false,
+                "config_mutation_allowed": false,
+                "snapshot_created": false,
+                "triage_mutation_allowed": false,
+                "credential_accessed": false,
+                "raw_prompt_persisted": false,
+                "raw_response_persisted": false,
+                "raw_trace_persisted": false,
+                "cloud_sync_enabled": false,
+                "telemetry_enabled": false,
+                "raw_secret_returned": false,
+                "notes": ["provider not sent"]
+              }
+            }
+            """.utf8
+        )
+
+        let dashboard = try JSONDecoder().decode(RoutingAccuracyDashboard.self, from: data)
+
+        try expectEqual(dashboard.generatedBy, "local-v2.49", "Routing accuracy should decode generator.")
+        try expectEqual(dashboard.filters.agent, "claude-code", "Routing accuracy should decode filter agent.")
+        try expectEqual(dashboard.filters.windowDays, 30, "Routing accuracy should decode numeric string window.")
+        try expectEqual(dashboard.summary.hitCount, 7, "Routing accuracy should decode hit alias.")
+        try expectEqual(dashboard.summary.missCount, 2, "Routing accuracy should decode miss string.")
+        try expectEqual(dashboard.summary.wrongPickCount, 1, "Routing accuracy should decode wrong-pick alias.")
+        try expectEqual(dashboard.summary.totalBenchmarks, 5, "Routing accuracy should decode benchmark count alias.")
+        try expectEqual(dashboard.summary.benchmarkMatchedCount, 4, "Routing accuracy should decode benchmark matched count.")
+        try expectEqual(dashboard.summary.benchmarkGapCount, 3, "Routing accuracy should decode benchmark gap count.")
+        try expectEqual(dashboard.summary.missingBenchmarkCount, 2, "Routing accuracy should decode missing benchmark count.")
+        try expectEqual(dashboard.summary.regressionCount, 1, "Routing accuracy should decode regression count.")
+        try expectEqual(dashboard.summary.summaryText, "Routing accuracy summary.", "Routing accuracy should decode summary text.")
+        try expectEqual(dashboard.summary.rateLabel(dashboard.summary.hitRate, count: dashboard.summary.hitCount), "63.6%", "Routing accuracy should format percent strings.")
+        try expectEqual(dashboard.agents.first?.agent, "claude-code", "Routing accuracy should decode agent row name alias.")
+        try expectEqual(dashboard.agents.first?.totalCount, 8, "Routing accuracy should decode agent total alias.")
+        try expectEqual(dashboard.agents.first?.benchmarkMatchedCount, 2, "Routing accuracy should decode agent benchmark matched count.")
+        try expectEqual(dashboard.history.first?.label, "1781136000", "Routing accuracy should decode history unix day.")
+        try expectEqual(dashboard.gaps.map(\.title), ["Missing trace coverage", "No baseline for Codex"], "Routing accuracy should decode object and string gaps.")
+        try expectEqual(dashboard.blockerNotes, ["One expected route has no benchmark."], "Routing accuracy should decode blocker notes.")
+        try expectEqual(dashboard.recentEvidence.first?.source, "trace.importLocal", "Routing accuracy should decode recent evidence.")
+        try expectEqual(dashboard.recentEvidence.first?.outcome, "hit", "Routing accuracy should decode evidence outcome.")
+        try expectEqual(dashboard.promptRequest?.requestKind, "routing_accuracy", "Routing accuracy should decode prompt request.")
+        try expectFalse(dashboard.safetyFlags.providerRequestSent, "Routing accuracy must not send provider requests.")
+        try expectFalse(dashboard.safetyFlags.writeBackAllowed, "Routing accuracy must not allow writes.")
+        try expectFalse(dashboard.safetyFlags.scriptExecutionAllowed, "Routing accuracy must not allow scripts.")
+        try expectFalse(dashboard.safetyFlags.configMutationAllowed, "Routing accuracy must not mutate config.")
+        try expectFalse(dashboard.safetyFlags.snapshotCreated, "Routing accuracy must not create snapshots.")
+        try expectFalse(dashboard.safetyFlags.triageMutationAllowed, "Routing accuracy must not mutate triage.")
+        try expectFalse(dashboard.safetyFlags.credentialAccessed, "Routing accuracy must not access credentials.")
+        try expectFalse(dashboard.safetyFlags.rawPromptPersisted, "Routing accuracy must not persist raw prompts.")
+        try expectFalse(dashboard.safetyFlags.rawResponsePersisted, "Routing accuracy must not persist raw responses.")
+        try expectFalse(dashboard.safetyFlags.rawTracePersisted, "Routing accuracy must not persist raw traces.")
+        try expectFalse(dashboard.safetyFlags.cloudSyncEnabled, "Routing accuracy must not sync cloud data.")
+        try expectFalse(dashboard.safetyFlags.telemetryEnabled, "Routing accuracy must not emit telemetry.")
     }
 
     private func promptSendResultDecodesCopyOnlyAuditPayload() throws {

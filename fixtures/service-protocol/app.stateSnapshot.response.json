@@ -24,6 +24,7 @@
         "task.evaluateBenchmarks",
         "task.saveRoutingBaseline",
         "task.detectRoutingRegression",
+        "routing.accuracyDashboard",
         "trace.importLocal",
         "trace.listImports",
         "trace.deleteImport",

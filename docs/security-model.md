@@ -252,6 +252,13 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
   - 写入 raw prompt/response 或 raw trace
 - 可选 provider 说明为 V2.42 路径：`llm.previewPrompt` + `llm.confirmPromptAndSend`，必须先 preview/redaction/确认，且为 copy-only，不改变 `trace.importLocal` 的确定性输出。
 
+### 2.4.3.1.3 V2.49 Routing Accuracy Dashboard（completed）
+
+- `routing.accuracyDashboard` 是用户触发的只读聚合，不写入新的 dashboard artifact；它从 V2.46 app-local benchmark、V2.47 routing regression baseline/detection 与 V2.48 redacted trace imports 派生指标。
+- 输出只包含 summary、agent rows、history rows、gap/issue rows、recent evidence refs、blocker notes、prompt request metadata 和 safety flags；不得返回 raw trace、raw prompt、raw response、credential、raw skill body 或未脱敏本地路径。
+- Dashboard 生成不得发起 provider 请求，不得读取 credentials，不得改写 agent config、skill files、snapshot、triage、catalog writes 或 rule tuning state，不得执行脚本，不得做 cloud sync 或 telemetry。
+- 可选 provider 说明仍必须走 V2.42 `llm.previewPrompt` + `llm.confirmPromptAndSend`，并保持 copy/display-only；provider 输出不能改变 deterministic dashboard metrics，也不能触发写入或执行。
+
 ### 2.4.3 Finding triage persistence 边界（V2.29）
 
 - Finding triage 持久化只发生在 app-local catalog/app data 层，目标是降低重复噪音并提示用户复核；不参与 agent 配置写入，也不改写 skill 内容。

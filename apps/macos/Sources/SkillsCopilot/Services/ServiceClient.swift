@@ -228,6 +228,22 @@ private struct RoutingRegressionParams: Encodable {
     }
 }
 
+private struct RoutingAccuracyDashboardParams: Encodable {
+    let agent: String?
+    let windowDays: Int?
+    let limit: Int?
+    let includeHistory: Bool
+    let includeRecentEvidence: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case agent
+        case windowDays = "window_days"
+        case limit
+        case includeHistory = "include_history"
+        case includeRecentEvidence = "include_recent_evidence"
+    }
+}
+
 private struct TaskBenchmarkDeleteParams: Encodable {
     let benchmarkId: String
 
@@ -740,6 +756,27 @@ final class ServiceClient {
         )
         do {
             return try await call(method: "task.detectRoutingRegression", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func routingAccuracyDashboard(
+        agent: String? = nil,
+        windowDays: Int? = 30,
+        limit: Int? = 20,
+        includeHistory: Bool = true,
+        includeRecentEvidence: Bool = true
+    ) async throws -> RoutingAccuracyDashboard {
+        let params = RoutingAccuracyDashboardParams(
+            agent: agent,
+            windowDays: windowDays,
+            limit: limit,
+            includeHistory: includeHistory,
+            includeRecentEvidence: includeRecentEvidence
+        )
+        do {
+            return try await call(method: "routing.accuracyDashboard", params: params)
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .unavailable()
         }

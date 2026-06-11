@@ -499,13 +499,16 @@ Model families:
   - `safety_flags`: 每条导入和评估输出都带有 `provider_request_sent`, `agent_config_mutated`, `skill_files_mutated`, `raw_prompt_persisted`, `raw_response_persisted`, `raw_trace_persisted`, `cloud_sync_performed`, `telemetry_emitted`，默认全 false。
   - 本模型不持久化 raw skill body、raw prompt/response、raw transcript/log，全量判读先基于 deterministic 本地证据。
 
-- `RoutingAccuracy`（V2.49，规划）
+- `RoutingAccuracy`（V2.49 completed）
 
-  为后续 routing 准确性看板准备的汇总/时序模型（可由 `trace-imports` 派生）：
+  用于 routing 准确性看板的只读派生模型；不持久化新的 dashboard artifact，而是从 app-local benchmark、routing regression baseline/detection、redacted trace imports 和 catalog evidence 动态生成。
 
-  - `routing_accuracy`：按 agent/workspace/时间窗聚合 `hit/miss/wrong_pick/ambiguity` 与 `gap`，引用 `TraceImport` 的 `import_id`。
-  - `routing_accuracy_history`: `[{ date_bucket, agent, total_imports, hit_rate, miss_rate, wrong_pick_rate, ambiguity_rate, avg_confidence, benchmark_ref_ids }]`。
-  - 该模型默认不引入新 provider 调用，仍依赖 app-local trace import + benchmark/quality/routing 的本地 evidence。
+  - `routing.accuracyDashboard` response: `{ generated_by, catalog_available, filters, summary, agent_rows, history_rows, gap_issue_rows, recent_evidence_rows, blocker_notes, prompt_request, safety_flags }`。
+  - `summary`: `{ trace_count, hit_count, miss_count, wrong_pick_count, ambiguous_count, unknown_count, benchmark_count, benchmark_matched_count, benchmark_gap_count, regression_count, missing_benchmark_count, accuracy_rate, known_outcome_rate, summary }`。
+  - `agent_rows`: `[{ agent, trace_count, outcomes, accuracy_rate, benchmark_count, benchmark_matched_count, benchmark_gap_count, regression_count, recent_evidence_count, notes }]`。
+  - `history_rows`: `[{ unix_day, trace_count, outcomes, accuracy_rate }]`。
+  - `gap_issue_rows` and `recent_evidence_rows` cite local evidence refs from `trace.importLocal`, `task.evaluateBenchmarks`, and `task.detectRoutingRegression` without storing raw trace or raw prompts/responses.
+  - 该模型不引入 provider 调用，仍依赖 app-local trace import + benchmark/quality/routing 的本地 evidence；optional provider explanation 仅能走 V2.42 preview/confirmation/copy-only。
 - `KnowledgeIndex` / `SimilarityGroup` / `CapabilityTaxonomy`（V2.51-V2.54）：local-only index and derived groupings; no default network dependency.
 - `ReviewSession` / `RemediationHistory`（V2.56-V2.61）：local review state, actions considered, decisions, reopened issues, and summary. AI suggestions remain untrusted and cannot directly mutate skill files or agent config.
 - `PolicyPack` / `PolicyProfile` / `ComplianceReport`（V2.63-V2.66）：local policy schema, import/export metadata, profile bindings, deterministic evidence, and optional AI explanation.

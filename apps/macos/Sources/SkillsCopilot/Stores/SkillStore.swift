@@ -37,6 +37,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var taskBenchmarkDeleteResult: TaskBenchmarkDeleteResult?
     @Published private(set) var routingRegressionBaseline: RoutingRegressionBaselineResult?
     @Published private(set) var routingRegressionDetection: RoutingRegressionDetectionResult?
+    @Published private(set) var routingAccuracyDashboard: RoutingAccuracyDashboard?
     @Published private(set) var traceImportList = AgentTraceImportListResult(imports: [])
     @Published private(set) var traceImportResult: AgentTraceImportResult?
     @Published private(set) var traceImportDeleteResult: AgentTraceImportDeleteResult?
@@ -45,6 +46,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var isEvaluatingTaskBenchmarks = false
     @Published private(set) var isSavingRoutingBaseline = false
     @Published private(set) var isDetectingRoutingRegression = false
+    @Published private(set) var isLoadingRoutingAccuracyDashboard = false
     @Published private(set) var isLoadingTraceImports = false
     @Published private(set) var isImportingTrace = false
     @Published private(set) var deletingTaskBenchmarkIDs: Set<String> = []
@@ -88,6 +90,7 @@ final class SkillStore: ObservableObject {
     @Published var agentFilter: SkillAgentFilter = .claudeCode {
         didSet {
             handleListCriteriaChanged()
+            routingAccuracyDashboard = nil
             Task { await loadAgentConfigSnapshots() }
             Task { await loadCleanupQueue() }
             Task { await loadCrossAgentComparisons() }
@@ -142,7 +145,7 @@ final class SkillStore: ObservableObject {
     }
 
     private var isTaskBenchmarkBusy: Bool {
-        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingTraceImports || isImportingTrace || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty
+        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isLoadingTraceImports || isImportingTrace || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty
     }
 
     private var isLLMPromptBusy: Bool {
@@ -1339,6 +1342,30 @@ final class SkillStore: ObservableObject {
             )
         } catch {
             routingRegressionDetection = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
+    func loadRoutingAccuracyDashboard() async {
+        guard !isLoadingRoutingAccuracyDashboard else { return }
+        guard !isRefreshBusy else {
+            routingAccuracyDashboard = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        isLoadingRoutingAccuracyDashboard = true
+        defer { isLoadingRoutingAccuracyDashboard = false }
+
+        let agent = agentFilter == .all ? nil : agentFilter.rawValue
+        do {
+            routingAccuracyDashboard = try await service.routingAccuracyDashboard(
+                agent: agent,
+                windowDays: 30,
+                limit: 20,
+                includeHistory: true,
+                includeRecentEvidence: true
+            )
+        } catch {
+            routingAccuracyDashboard = .unavailable(reason: error.localizedDescription)
         }
     }
 
