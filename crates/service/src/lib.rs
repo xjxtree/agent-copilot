@@ -34,11 +34,19 @@ use skills_copilot_core::{AdapterContext, AdapterRoot, AgentId, RootSource, Scop
 use thiserror::Error;
 
 mod project_context;
+mod provider;
 
 use project_context::{
     clear_project_context, context_from_paths, load_project_context_state, project_context_summary,
     set_project_context, stored_active_adapter_paths, validate_project_context_for_response,
     ProjectContext, ProjectContextParams, ProjectContextState, ProjectContextSummary,
+};
+use provider::{
+    default_monthly_budget_usd, default_token_limit, delete_provider_profile,
+    list_provider_profiles, provider_call_metadata_path, provider_profiles_path,
+    save_provider_profile, test_provider_connection, DeleteProviderProfileParams,
+    ListProviderProfilesResult, ProviderError, SaveProviderProfileParams,
+    TestProviderConnectionParams,
 };
 
 const DEFAULT_BUNDLE_ID: &str = "dev.skills-copilot.native";
@@ -51,6 +59,10 @@ const SUPPORTED_METHODS: &[&str] = &[
     "adapter.listDiagnostics",
     "evidence.piWritableHarness",
     "llm.status",
+    "llm.listProviderProfiles",
+    "llm.saveProviderProfile",
+    "llm.deleteProviderProfile",
+    "llm.testProviderConnection",
     "llm.prepareAction",
     "llm.prepareSkillAnalysis",
     "cleanup.listQueue",
@@ -220,6 +232,12 @@ pub struct LlmStatus {
     pub monthly_budget_usd: f64,
     pub credentials_storage: String,
     pub credential_persistence_allowed: bool,
+    pub provider_profile_count: usize,
+    pub default_profile_id: Option<String>,
+    pub profiles_path: String,
+    pub call_metadata_path: String,
+    pub raw_prompt_persistence_allowed: bool,
+    pub raw_response_persistence_allowed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -714,6 +732,8 @@ pub enum ServiceError {
     Catalog(#[from] skills_copilot_catalog::CatalogError),
     #[error("command error: {0}")]
     Command(#[from] skills_copilot_commands::CommandError),
+    #[error("provider error: {0}")]
+    Provider(#[from] ProviderError),
     #[error("json error: {0}")]
     Json(#[from] serde_json::Error),
     #[error("skill instance not found: {0}")]
@@ -730,6 +750,7 @@ impl ServiceError {
             Self::Io(_) => "io_error",
             Self::Catalog(_) => "catalog_error",
             Self::Command(_) => "command_error",
+            Self::Provider(_) => "provider_error",
             Self::Json(_) => "json_error",
             Self::SkillNotFound(_) => "skill_not_found",
             Self::ConfirmationRequired(_) => "confirmation_required",
@@ -815,6 +836,24 @@ impl ServiceHost {
                 serde_json::to_value(report).map_err(Into::into)
             }
             "llm.status" => serde_json::to_value(self.llm_status()).map_err(Into::into),
+            "llm.listProviderProfiles" => {
+                serde_json::to_value(self.list_llm_provider_profiles()?).map_err(Into::into)
+            }
+            "llm.saveProviderProfile" => {
+                let params: SaveProviderProfileParams = serde_json::from_value(request.params)?;
+                serde_json::to_value(save_provider_profile(&self.app_data_dir, params)?)
+                    .map_err(Into::into)
+            }
+            "llm.deleteProviderProfile" => {
+                let params: DeleteProviderProfileParams = serde_json::from_value(request.params)?;
+                serde_json::to_value(delete_provider_profile(&self.app_data_dir, params)?)
+                    .map_err(Into::into)
+            }
+            "llm.testProviderConnection" => {
+                let params: TestProviderConnectionParams = serde_json::from_value(request.params)?;
+                serde_json::to_value(test_provider_connection(&self.app_data_dir, params)?)
+                    .map_err(Into::into)
+            }
             "llm.prepareAction" => {
                 let params: LlmPrepareActionParams = serde_json::from_value(request.params)?;
                 serde_json::to_value(self.prepare_llm_action(params)?).map_err(Into::into)
@@ -1608,18 +1647,74 @@ impl ServiceHost {
     }
 
     pub fn llm_status(&self) -> LlmStatus {
-        LlmStatus {
-            enabled: false,
-            configured: false,
-            provider: None,
-            model: None,
-            reason: "LLM actions are disabled by default; no local provider is configured."
+        let profiles = self.list_llm_provider_profiles().ok();
+        let default_profile = profiles.as_ref().and_then(|profiles| {
+            profiles
+                .default_profile_id
+                .as_ref()
+                .and_then(|default_id| {
+                    profiles
+                        .profiles
+                        .iter()
+                        .find(|profile| profile.id == *default_id)
+                })
+                .or_else(|| profiles.profiles.iter().find(|profile| profile.enabled))
+        });
+        let configured = default_profile
+            .is_some_and(|profile| profile.enabled && profile.credential_status.secret_available);
+        let profile_count = profiles
+            .as_ref()
+            .map(|profiles| profiles.profiles.len())
+            .unwrap_or(0);
+        let reason = match default_profile {
+            Some(profile) if configured => {
+                format!(
+                    "Provider profile `{}` is configured; provider calls remain user-triggered and confirmation-gated.",
+                    profile.id
+                )
+            }
+            Some(profile) if !profile.enabled => {
+                format!("Provider profile `{}` exists but is disabled.", profile.id)
+            }
+            Some(profile) => format!(
+                "Provider profile `{}` exists but its API key is unavailable from the OS credential store.",
+                profile.id
+            ),
+            None if profile_count > 0 => {
+                "Provider profiles exist, but none is enabled as the default provider.".to_string()
+            }
+            None => "LLM actions are disabled by default; no local provider is configured."
                 .to_string(),
-            single_request_token_limit: 8_000,
-            monthly_budget_usd: 0.0,
-            credentials_storage: "none".to_string(),
-            credential_persistence_allowed: false,
+        };
+        LlmStatus {
+            enabled: configured,
+            configured,
+            provider: default_profile.map(|profile| profile.provider_type.as_str().to_string()),
+            model: default_profile.map(|profile| profile.model.clone()),
+            reason,
+            single_request_token_limit: default_profile
+                .map(|profile| profile.single_request_token_limit)
+                .unwrap_or_else(default_token_limit),
+            monthly_budget_usd: default_profile
+                .map(|profile| profile.monthly_budget_usd)
+                .unwrap_or_else(default_monthly_budget_usd),
+            credentials_storage: if profile_count == 0 {
+                "none".to_string()
+            } else {
+                "keychain".to_string()
+            },
+            credential_persistence_allowed: profile_count > 0,
+            provider_profile_count: profile_count,
+            default_profile_id: default_profile.map(|profile| profile.id.clone()),
+            profiles_path: display_path(&provider_profiles_path(&self.app_data_dir)),
+            call_metadata_path: display_path(&provider_call_metadata_path(&self.app_data_dir)),
+            raw_prompt_persistence_allowed: false,
+            raw_response_persistence_allowed: false,
         }
+    }
+
+    fn list_llm_provider_profiles(&self) -> Result<ListProviderProfilesResult, ServiceError> {
+        list_provider_profiles(&self.app_data_dir).map_err(Into::into)
     }
 
     pub fn script_execution_status(&self) -> ScriptExecutionStatus {
@@ -3016,6 +3111,10 @@ mod tests {
         assert!(methods.contains(&Value::String("app.stateSnapshot".to_string())));
         assert!(methods.contains(&Value::String("adapter.listDiagnostics".to_string())));
         assert!(methods.contains(&Value::String("llm.status".to_string())));
+        assert!(methods.contains(&Value::String("llm.listProviderProfiles".to_string())));
+        assert!(methods.contains(&Value::String("llm.saveProviderProfile".to_string())));
+        assert!(methods.contains(&Value::String("llm.deleteProviderProfile".to_string())));
+        assert!(methods.contains(&Value::String("llm.testProviderConnection".to_string())));
         assert!(methods.contains(&Value::String("llm.prepareAction".to_string())));
         assert!(methods.contains(&Value::String("llm.prepareSkillAnalysis".to_string())));
         assert!(methods.contains(&Value::String("cleanup.listQueue".to_string())));
@@ -3522,6 +3621,22 @@ mod tests {
                 .and_then(Value::as_bool),
             Some(false)
         );
+        assert_eq!(
+            result.get("provider_profile_count").and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            result
+                .get("raw_prompt_persistence_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .get("raw_response_persistence_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
         assert!(
             !app_data_dir.exists(),
             "llm.status must not initialize app data"
@@ -3530,6 +3645,204 @@ mod tests {
             !user_home.exists(),
             "llm.status must not create credential or config roots"
         );
+    }
+
+    #[test]
+    fn llm_provider_profile_save_persists_metadata_without_secret_file() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-provider-profile-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("provider-save".to_string()),
+            method: "llm.saveProviderProfile".to_string(),
+            params: json!({
+                "id": "fixture-openai",
+                "display_name": "Fixture OpenAI",
+                "provider_type": "openai-compatible",
+                "base_url": "https://example.invalid/v1",
+                "model": "fixture-model",
+                "enabled": true,
+                "single_request_token_limit": 4096,
+                "monthly_budget_usd": 3.5
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("provider save result");
+        assert_eq!(
+            result.pointer("/profile/id").and_then(Value::as_str),
+            Some("fixture-openai")
+        );
+        assert_eq!(
+            result
+                .pointer("/profile/provider_type")
+                .and_then(Value::as_str),
+            Some("openai-compatible")
+        );
+        assert_eq!(
+            result
+                .pointer("/credential_status/secret_available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("raw_secret_returned").and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let profiles_path = provider_profiles_path(&app_data_dir);
+        let profile_content = fs::read_to_string(&profiles_path).expect("profile metadata");
+        assert!(profile_content.contains("fixture-openai"));
+        assert!(!profile_content.contains("api_key"));
+        assert!(!app_data_dir.join("llm-credentials.json").exists());
+        assert!(!app_data_dir.join("llm.yaml").exists());
+
+        let list = host.handle(ServiceRequest {
+            id: Some("provider-list".to_string()),
+            method: "llm.listProviderProfiles".to_string(),
+            params: Value::Null,
+        });
+        assert!(list.ok, "{:?}", list.error);
+        let list_result = list.result.expect("provider list");
+        assert_eq!(
+            list_result
+                .pointer("/profiles/0/id")
+                .and_then(Value::as_str),
+            Some("fixture-openai")
+        );
+        assert_eq!(
+            list_result
+                .get("raw_secrets_returned")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let status = host.handle(ServiceRequest {
+            id: Some("provider-status".to_string()),
+            method: "llm.status".to_string(),
+            params: Value::Null,
+        });
+        assert!(status.ok);
+        let status_result = status.result.expect("status");
+        assert_eq!(
+            status_result.get("configured").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            status_result
+                .get("provider_profile_count")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            status_result
+                .get("credentials_storage")
+                .and_then(Value::as_str),
+            Some("keychain")
+        );
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn llm_test_provider_connection_blocks_without_key_and_writes_metadata_only() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-provider-test-call-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+        let save = host.handle(ServiceRequest {
+            id: Some("provider-save".to_string()),
+            method: "llm.saveProviderProfile".to_string(),
+            params: json!({
+                "id": "fixture-claude",
+                "display_name": "Fixture Claude",
+                "provider_type": "claude-compatible",
+                "base_url": "https://example.invalid",
+                "model": "fixture-claude-model",
+                "enabled": true,
+                "api_version": "2023-06-01",
+                "single_request_token_limit": 4096,
+                "monthly_budget_usd": 2.0
+            }),
+        });
+        assert!(save.ok, "{:?}", save.error);
+
+        let test = host.handle(ServiceRequest {
+            id: Some("provider-test".to_string()),
+            method: "llm.testProviderConnection".to_string(),
+            params: json!({
+                "profile_id": "fixture-claude",
+                "confirmation_id": "confirm-fixture-test",
+                "timeout_ms": 250
+            }),
+        });
+
+        assert!(test.ok, "{:?}", test.error);
+        let result = test.result.expect("test connection");
+        assert_eq!(
+            result.get("status").and_then(Value::as_str),
+            Some("blocked")
+        );
+        assert_eq!(
+            result.get("provider_request_sent").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("credential_accessed").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("raw_prompt_persisted").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .get("raw_response_persisted")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("raw_secret_returned").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.pointer("/audit/action_type").and_then(Value::as_str),
+            Some("test_connection")
+        );
+        assert_eq!(
+            result
+                .pointer("/audit/destination_host")
+                .and_then(Value::as_str),
+            Some("example.invalid")
+        );
+        assert_eq!(
+            result
+                .pointer("/audit/raw_prompt_persisted")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/audit/raw_response_persisted")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let audit_path = provider_call_metadata_path(&app_data_dir);
+        let audit_content = fs::read_to_string(&audit_path).expect("provider metadata");
+        assert!(audit_content.contains("\"action_type\":\"test_connection\""));
+        assert!(audit_content.contains("\"destination_host\":\"example.invalid\""));
+        assert!(!audit_content.contains("connection test"));
+        assert!(!audit_content.contains("api_key"));
+        assert!(!host.script_execution_audit_path().exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
     }
 
     #[test]
@@ -5431,6 +5744,28 @@ mod tests {
                 assert!(!status.configured);
                 assert!(!status.credential_persistence_allowed);
             }
+            "llm.listProviderProfiles" => {
+                let profiles: WireListProviderProfilesResult =
+                    decode_fixture_result(method, result, path);
+                assert!(!profiles.raw_secrets_returned);
+            }
+            "llm.saveProviderProfile" => {
+                let saved: WireSaveProviderProfileResult =
+                    decode_fixture_result(method, result, path);
+                assert!(!saved.raw_secret_returned);
+            }
+            "llm.deleteProviderProfile" => {
+                let deleted: WireDeleteProviderProfileResult =
+                    decode_fixture_result(method, result, path);
+                assert!(!deleted.raw_secret_returned);
+            }
+            "llm.testProviderConnection" => {
+                let tested: WireTestProviderConnectionResult =
+                    decode_fixture_result(method, result, path);
+                assert!(!tested.raw_prompt_persisted);
+                assert!(!tested.raw_response_persisted);
+                assert!(!tested.raw_secret_returned);
+            }
             "llm.prepareAction" => {
                 let prepare: WireLlmPrepareActionResult =
                     decode_fixture_result(method, result, path);
@@ -5836,6 +6171,22 @@ mod tests {
                 "confirmed": false
             }),
             "llm.prepareAction" => json!({ "kind": "recommend", "user_intent": "fixture" }),
+            "llm.saveProviderProfile" => json!({
+                "id": "dispatch-provider",
+                "display_name": "Dispatch Provider",
+                "provider_type": "openai-compatible",
+                "base_url": "https://example.invalid/v1",
+                "model": "dispatch-model",
+                "enabled": false
+            }),
+            "llm.deleteProviderProfile" => json!({
+                "profile_id": "dispatch-provider",
+                "delete_credential": false
+            }),
+            "llm.testProviderConnection" => json!({
+                "profile_id": "dispatch-provider",
+                "confirmation_id": "dispatch-confirmation"
+            }),
             "llm.prepareSkillAnalysis" => {
                 json!({ "instance_ids": ["missing-skill"], "analysis_kind": "overview" })
             }
@@ -6122,6 +6473,140 @@ mod tests {
         monthly_budget_usd: f64,
         credentials_storage: String,
         credential_persistence_allowed: bool,
+        provider_profile_count: usize,
+        default_profile_id: Option<String>,
+        profiles_path: String,
+        call_metadata_path: String,
+        raw_prompt_persistence_allowed: bool,
+        raw_response_persistence_allowed: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireListProviderProfilesResult {
+        profiles: Vec<WireProviderProfileRecord>,
+        default_profile_id: Option<String>,
+        credential_storage: String,
+        credential_persistence_allowed: bool,
+        raw_secrets_returned: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireSaveProviderProfileResult {
+        profile: WireProviderProfileRecord,
+        credential_status: WireProviderCredentialStatus,
+        raw_secret_returned: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireDeleteProviderProfileResult {
+        deleted_profile_id: String,
+        profile_deleted: bool,
+        credential_deleted: bool,
+        raw_secret_returned: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTestProviderConnectionResult {
+        profile_id: String,
+        provider_type: String,
+        model: String,
+        destination_host: String,
+        status: String,
+        provider_request_sent: bool,
+        credential_accessed: bool,
+        duration_ms: u128,
+        error_code: Option<String>,
+        error_message: Option<String>,
+        budget: WireProviderBudgetStatus,
+        audit: WireProviderCallMetadata,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+        raw_secret_returned: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireProviderProfileRecord {
+        id: String,
+        display_name: String,
+        provider_type: String,
+        base_url: String,
+        model: String,
+        enabled: bool,
+        api_version: Option<String>,
+        organization: Option<String>,
+        single_request_token_limit: u32,
+        monthly_budget_usd: f64,
+        credential_reference: WireProviderCredentialReference,
+        credential_status: WireProviderCredentialStatus,
+        created_at: i64,
+        updated_at: i64,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireProviderCredentialReference {
+        storage: String,
+        service: String,
+        account: String,
+        secret_persisted: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireProviderCredentialStatus {
+        state: String,
+        reason: String,
+        secret_available: bool,
+        fallback_available: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireProviderBudgetStatus {
+        single_request_token_limit: u32,
+        monthly_budget_usd: f64,
+        estimated_test_tokens: u32,
+        estimated_test_cost_usd: f64,
+        state: String,
+        reason: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireProviderCallMetadata {
+        timestamp: i64,
+        action_type: String,
+        profile_id: String,
+        provider_type: String,
+        model: String,
+        destination_host: String,
+        status: String,
+        error_code: Option<String>,
+        error_message: Option<String>,
+        duration_ms: u128,
+        estimated_input_tokens: u32,
+        estimated_output_tokens: u32,
+        estimated_cost_usd: f64,
+        confirmation_id: String,
+        redaction_status: String,
+        provider_request_sent: bool,
+        credential_accessed: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
     }
 
     #[allow(dead_code)]

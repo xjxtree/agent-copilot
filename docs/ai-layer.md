@@ -4,17 +4,17 @@
 >
 > Scanner / rules / catalog 始终是事实来源；LLM/AI provider 是 AI agent skills 的核心分析增强，用于质量、任务可用性、routing 置信度、trace 分析、remediation 和治理总结。
 >
-> 当前实现边界（V2.40 baseline）：
+> 当前实现边界（V2.41 baseline）：
 >
-> - 只落地 disabled-by-default 的 service/UI gate 和 request prepare/estimate 能力。
+> - 已落地 disabled-by-default 的 service/UI gate 和 request prepare/estimate 能力。
+> - 已落地用户显式配置的 OpenAI-compatible / Claude-compatible provider profile 基础：`llm.listProviderProfiles`、`llm.saveProviderProfile`、`llm.deleteProviderProfile`、`llm.testProviderConnection`、macOS Keychain-first API key storage、预算字段、disabled/unconfigured state，以及 test connection 的最小 redacted call metadata。
 > - 用户主动触发 Analyze / Recommend / conflict explanation / draft frontmatter 前，可以展示 provider、model、token/cost 估算和不可用原因。
-> - **不实现真实 provider、网络调用或凭据保存**。
+> - 现有 Analyze / Recommend / skill analysis 仍不发送 provider 请求；V2.41 唯一允许的 network path 是用户显式触发的 Test Connection。
 >
-> V2.41+ 规划边界：
+> V2.42+ 规划边界：
 >
-> - 用户可以显式配置 OpenAI-compatible 或 Claude-compatible endpoint、API key 和 model。
-> - API key 优先存入 macOS Keychain；fallback 文件必须权限检查且不得默认保存 secret。
-> - 每次真实 provider 调用前必须展示 prompt preview、redaction summary、token/cost estimate 和 network destination。
+> - V2.42 的 prompt preview/redaction 在 V2.42 验证后才进入生效口径。
+> - 每次真实 provider 调用前必须展示 prompt preview、redaction summary、token/cost estimate 和 network destination（V2.42+）。
 > - AI 输出默认 read-only，不直接写 skill、不改 agent config、不执行脚本、不改变 triage 或 policy 状态。
 
 ## 1. 双层分工
@@ -49,7 +49,7 @@ Provider 配置原则：
 
 - endpoint/API key/model 由用户自己配置。
 - key 不写 SQLite、project directory、logs、prompt artifacts、response artifacts、report exports 或 screenshots。
-- provider call 只在用户发起具体分析动作并确认 prompt preview 后发生。
+- provider call 只在用户发起具体动作后发生；V2.41 仅支持显式 Test Connection，V2.42 起分析请求还必须经过 prompt preview/redaction confirmation。
 - provider request/response 默认不持久化；V2.41-V2.42 需要保存最小 redacted call metadata（status、duration、error、token/cost、redaction status、confirmation id、destination host），用于审计每次真实请求；V2.69 再在此基础上做完整 observability UI、统计、清理和导出策略。
 - provider 不得成为写入者、执行者或确认者。
 

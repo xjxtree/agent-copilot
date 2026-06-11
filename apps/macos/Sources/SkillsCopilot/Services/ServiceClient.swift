@@ -261,6 +261,44 @@ private struct SaveClaudeSettingsParams: Encodable {
     let content: String
 }
 
+private struct SaveAIProviderProfileParams: Encodable {
+    let id: String
+    let displayName: String
+    let providerType: String
+    let baseURL: String
+    let model: String
+    let enabled: Bool
+    let apiVersion: String?
+    let apiKey: String?
+    let singleRequestTokenLimit: Int?
+    let monthlyBudgetUSD: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case displayName = "display_name"
+        case providerType = "provider_type"
+        case baseURL = "base_url"
+        case model
+        case enabled
+        case apiVersion = "api_version"
+        case apiKey = "api_key"
+        case singleRequestTokenLimit = "single_request_token_limit"
+        case monthlyBudgetUSD = "monthly_budget_usd"
+    }
+}
+
+private struct TestAIProviderConnectionParams: Encodable {
+    let profileID: String
+    let confirmationID: String
+    let timeoutMS: Int
+
+    enum CodingKeys: String, CodingKey {
+        case profileID = "profile_id"
+        case confirmationID = "confirmation_id"
+        case timeoutMS = "timeout_ms"
+    }
+}
+
 private struct ProjectContextParams: Encodable {
     let rootPath: String
     let currentCWD: String?
@@ -369,6 +407,48 @@ final class ServiceClient {
             return try await call(method: "llm.status", params: EmptyParams())
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .disabledFallback()
+        }
+    }
+
+    func aiProviderStatus() async throws -> AIProviderStatus {
+        do {
+            return try await call(method: "llm.listProviderProfiles", params: EmptyParams())
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func saveAIProviderSettings(draft: AIProviderSettingsDraft) async throws -> AIProviderStatus {
+        let params = SaveAIProviderProfileParams(
+            id: draft.kind.rawValue,
+            displayName: draft.kind.title,
+            providerType: draft.kind.rawValue,
+            baseURL: draft.trimmedEndpoint,
+            model: draft.trimmedModel,
+            enabled: true,
+            apiVersion: draft.trimmedAPIVersion,
+            apiKey: draft.trimmedAPIKey,
+            singleRequestTokenLimit: draft.parsedSingleRequestTokenLimit,
+            monthlyBudgetUSD: draft.parsedMonthlyBudgetUSD
+        )
+        do {
+            let _: AIProviderSaveResult = try await call(method: "llm.saveProviderProfile", params: params)
+            return try await aiProviderStatus()
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func testAIProviderConnection(draft: AIProviderSettingsDraft) async throws -> AIProviderTestResult {
+        let params = TestAIProviderConnectionParams(
+            profileID: draft.kind.rawValue,
+            confirmationID: "settings-test-\(UUID().uuidString)",
+            timeoutMS: 4_000
+        )
+        do {
+            return try await call(method: "llm.testProviderConnection", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
         }
     }
 

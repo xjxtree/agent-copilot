@@ -1,0 +1,39 @@
+{
+  "id": "fixture-llm-save-provider-profile",
+  "ok": true,
+  "result": {
+    "profile": {
+      "id": "fixture-openai",
+      "display_name": "Fixture OpenAI",
+      "provider_type": "openai-compatible",
+      "base_url": "https://example.invalid/v1",
+      "model": "fixture-model",
+      "enabled": true,
+      "api_version": null,
+      "organization": null,
+      "single_request_token_limit": 4096,
+      "monthly_budget_usd": 3.5,
+      "credential_reference": {
+        "storage": "keychain",
+        "service": "dev.skills-copilot.native.llm",
+        "account": "provider:fixture-openai",
+        "secret_persisted": false
+      },
+      "credential_status": {
+        "state": "missing",
+        "reason": "No API key is stored for this profile.",
+        "secret_available": false,
+        "fallback_available": false
+      },
+      "created_at": 1780590000,
+      "updated_at": 1780590000
+    },
+    "credential_status": {
+      "state": "missing",
+      "reason": "No API key is stored for this profile.",
+      "secret_available": false,
+      "fallback_available": false
+    },
+    "raw_secret_returned": false
+  }
+}

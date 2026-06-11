@@ -4,15 +4,15 @@
 >
 > 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.40 Adapter diagnostics 已完成**。V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout、V2.29 Finding triage persistence、V2.30 AI skill analysis workflow、V2.31 Cleanup Queue、V2.32 Rule tuning / suppression、V2.33 Safe batch actions、V2.34 Cross-agent comparison view、V2.35 Local report export、V2.36 Pi writable evidence harness、V2.37 Pi writable guarded slice、V2.38 Hermes external roots、V2.39 OpenClaw workspace 深化、V2.40 Adapter diagnostics 均已收口。V2.40 只新增 read-only diagnostics；OpenClaw/Hermes writable/install 与 Pi install 继续 blocked。
+> 当前阶段：**V2.41 AI Provider Foundation 已完成**。V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout、V2.29 Finding triage persistence、V2.30 AI skill analysis workflow、V2.31 Cleanup Queue、V2.32 Rule tuning / suppression、V2.33 Safe batch actions、V2.34 Cross-agent comparison view、V2.35 Local report export、V2.36 Pi writable evidence harness、V2.37 Pi writable guarded slice、V2.38 Hermes external roots、V2.39 OpenClaw workspace 深化、V2.40 Adapter diagnostics、V2.41 AI Provider Foundation 均已收口。V2.41 仅新增用户显式配置 provider profile、Keychain-first secret、显式 Test Connection 与最小 redacted metadata；OpenClaw/Hermes writable/install 与 Pi install 继续 blocked。
 >
-> 近期主线：继续围绕 AI agent skills 的管理、检查、分析和配置审计打磨体验。V2.40 Adapter trust and diagnostics 已完成，下一段版本线统一为 **V2.41-V2.70 AI-native Task-centered Skills Governance**：本地 scanner/rules/catalog 提供事实层，用户自配 OpenAI-compatible / Claude-compatible 大模型负责复杂质量判断、任务可用性、routing 置信度、trace 分析、remediation、policy 与治理报告。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
+> 近期主线：继续围绕 AI agent skills 的管理、检查、分析和配置审计打磨体验。V2.41 Provider Foundation 已完成，后续版本线统一为 **V2.42-V2.70 AI-native Task-centered Skills Governance**：本地 scanner/rules/catalog 提供事实层，用户自配 OpenAI-compatible / Claude-compatible 大模型负责复杂质量判断、任务可用性、routing 置信度、trace 分析、remediation、policy 与治理报告。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
 >
 > 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.25 各阶段能力、V2.9 Tool-global skill pool、V2.11 Adapter capability matrix、V2.16-V2.25 management/analysis/history line。后续候选变更仍需重新验证。
 >
 > V2.10 安全边界：默认不真实执行 skill 脚本；任何未来执行请求必须逐次人工确认，并先展示 cwd/env/network/files preview；blocked/cancelled/failure attempts 必须审计；LLM 不能触发执行。
 >
-> 真实本机 app 的 Computer Use 操作验证已在 2026-06-10 对之前 mainline app 通过，验证时显式选择当前 `dist/SkillsCopilot.app` bundle 以避开同 bundle id 的旧 worktree 注册路径。V2.40 已通过 focused checks、`pnpm check:macos`、真实 app smoke launch/window id、`pnpm check:privacy` 与截图人工检查；Computer Use/AX/capture 本轮仍返回 `cgWindowNotFound` / 0 visible windows / 无可见窗口，该项作为工具/窗口层 blocker 保留。后续用户可见、UI 或 service protocol 变更仍需重跑，且不能用 smoke 截图替代真实交互验证。
+> 真实本机 app 的 Computer Use 操作验证已在 2026-06-11 对 V2.41 mainline 通过，验证时显式选择当前 `dist/SkillsCopilot.app` bundle 以避开同 bundle id 的旧 worktree 注册路径；按 app name 调用 Computer Use 仍可能误连到 stale worktree bundle。V2.41 已通过 focused Rust/Swift checks、`pnpm check:macos`、真实 app launch/Computer Use、`pnpm check:privacy` 与截图人工检查。后续用户可见、UI 或 service protocol 变更仍需重跑，且不能用 smoke 截图替代真实交互验证。
 
 ## 0. 设计阶段（已完成）
 
@@ -990,11 +990,11 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 2. 用户显式配置 OpenAI-compatible 或 Claude-compatible provider 后，AI 参与复杂判断：quality、task readiness、routing confidence、capability gap、trace accuracy、remediation、policy explanation。
 3. 用户围绕真实任务和工作区进行 review session，形成本地治理报告和可追溯处理历史。
 
-当前代码检查结论：主线已有 `llm.status` / `llm.prepareAction` / `llm.prepareSkillAnalysis`、provider/model DTO、token/cost estimate 和 macOS read-only preview UI；尚未实现真实 provider client、endpoint/key 配置、网络调用、Keychain credential storage、prompt preview transport、Claude/OpenAI-compatible request execution 或 provider call metadata。V2.41-V2.42 是后续 AI-native 能力的必要基础设施，不应跳过；同时需要落地最小调用审计字段，V2.69 再做完整 observability 体验。
+当前代码检查结论：主线已有 `llm.status` / `llm.prepareAction` / `llm.prepareSkillAnalysis`、provider/model DTO、token/cost estimate、macOS read-only preview UI，以及 V2.41 的 provider profile 配置、Keychain-first API key storage、显式 Test Connection、预算字段与最小 redacted test-call metadata。尚未实现 V2.42 prompt preview/redaction transport、confirmed provider-backed Analyze/Recommend/skill-analysis execution、full provider observability 或 V2.43+ 质量/任务可用性/路由能力。
 
 | Version | Goal | Completion signal |
 | --- | --- | --- |
-| V2.41 | AI Provider Foundation | 用户可配置 OpenAI-compatible / Claude-compatible endpoint、API key、model、headers/API version；Keychain-first；fallback 文件权限检查；test connection、预算、disabled/unconfigured state 清晰可见；不自动分析、不写入、不执行；建立最小 provider call metadata schema（status/duration/error/redaction/token/cost，默认无 raw prompt/response）。 |
+| V2.41 | AI Provider Foundation | 已完成：用户可配置 OpenAI-compatible / Claude-compatible endpoint、API key、model、headers/API version；Keychain-first；test connection、预算、disabled/unconfigured state 清晰可见；不自动分析、不写入、不执行；建立最小 provider test-call metadata schema（status/duration/error/redaction/token/cost，默认无 raw prompt/response）。 |
 | V2.42 | Prompt Preview / Redaction / Token Estimate | 每次 AI 调用前展示 prompt scope、included/excluded fields、脱敏摘要、token/cost estimate、provider/model、network destination；用户确认后才发送；确认后的调用必须写入最小审计 metadata，证明 redaction、confirmation 与 network destination。 |
 | V2.43 | AI Skill Quality Score | 基于本地 metadata/findings/conflicts/adapter diagnostics 与模型判断，给出 quality score、分项理由、风险说明和改进建议。 |
 | V2.44 | AI Task Readiness Check | 用户输入真实任务，评估当前 agent/skills 是否可用、启用、在正确 scope、风险可控，以及缺少什么。 |
@@ -1024,6 +1024,15 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 | V2.68 | Governance Review Pack | 将 review session、routing accuracy、policy compliance、remediation history 和 export artifacts 汇总成完整本地治理包。 |
 | V2.69 | AI Provider Observability | 在 V2.41-V2.42 最小审计字段基础上做完整体验：调用历史 UI、成本趋势、失败/限流分析、provider 可用性、清理策略、导出/保留策略；默认不存 raw prompt/response，不存 secrets。 |
 | V2.70 | Safe Write Expansion Planning | 基于现有 governance/evidence 输出后续 writable 扩展计划；没有 rollback-safe evidence 的 agent/root 继续 blocked。 |
+
+### V2.41 Verification Checklist（文档同步）
+
+1. Focused Rust/Swift checks：`cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features`、`swift test --package-path apps/macos`
+2. `pnpm check:macos`
+3. Real local launch (`./script/build_and_run.sh run` / `pnpm dev:macos`) with an explicit `SkillsCopilot` window `Computer Use`/AX attempt; if window resolution fails, record blocker.
+4. `pnpm check:privacy`
+5. App-window-only screenshot and manual redaction inspection for local path/credential placeholders before handoff.
+6. Confirm V2.41 scope only: user-triggered network, no background analysis, no writes/scripts/telemetry/AI write-back.
 
 ## V2.35 Local report export (completed)
 

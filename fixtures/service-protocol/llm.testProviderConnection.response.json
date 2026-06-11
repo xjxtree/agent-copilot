@@ -1,0 +1,48 @@
+{
+  "id": "fixture-llm-test-provider-connection",
+  "ok": true,
+  "result": {
+    "profile_id": "fixture-openai",
+    "provider_type": "openai-compatible",
+    "model": "fixture-model",
+    "destination_host": "example.invalid",
+    "status": "blocked",
+    "provider_request_sent": false,
+    "credential_accessed": false,
+    "duration_ms": 0,
+    "error_code": "credential_unavailable",
+    "error_message": "API key is unavailable from the OS credential store.",
+    "budget": {
+      "single_request_token_limit": 4096,
+      "monthly_budget_usd": 3.5,
+      "estimated_test_tokens": 16,
+      "estimated_test_cost_usd": 0.00004,
+      "state": "ok",
+      "reason": "Connection test is within configured local budget limits."
+    },
+    "audit": {
+      "timestamp": 1780590000,
+      "action_type": "test_connection",
+      "profile_id": "fixture-openai",
+      "provider_type": "openai-compatible",
+      "model": "fixture-model",
+      "destination_host": "example.invalid",
+      "status": "blocked",
+      "error_code": "credential_unavailable",
+      "error_message": "API key is unavailable from the OS credential store.",
+      "duration_ms": 0,
+      "estimated_input_tokens": 12,
+      "estimated_output_tokens": 4,
+      "estimated_cost_usd": 0.00004,
+      "confirmation_id": "fixture-confirmation",
+      "redaction_status": "metadata-only-no-raw-prompt-or-response",
+      "provider_request_sent": false,
+      "credential_accessed": false,
+      "raw_prompt_persisted": false,
+      "raw_response_persisted": false
+    },
+    "raw_prompt_persisted": false,
+    "raw_response_persisted": false,
+    "raw_secret_returned": false
+  }
+}

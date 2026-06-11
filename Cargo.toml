@@ -27,6 +27,8 @@ sha2 = "0.10"
 thiserror = "2"
 time = { version = "0.3", features = ["formatting", "macros"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+keyring = "3"
+ureq = { version = "2", features = ["json"] }
 skills-copilot-core = { path = "crates/core" }
 skills-copilot-adapters = { path = "crates/adapters" }
 skills-copilot-scanner = { path = "crates/scanner" }

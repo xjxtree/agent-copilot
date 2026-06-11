@@ -1,15 +1,15 @@
 # Development Tasks
 
-> Status: current planning and execution queue as of 2026-06-11. V2.1 through V2.40 are synchronized baseline; V2.41-V2.70 are planned as one unified AI-native, task-centered skills governance line, not separate product branches.
+> Status: current planning and execution queue as of 2026-06-11. V2.1 through V2.41 are synchronized baseline; V2.42-V2.70 continue as one unified AI-native, task-centered skills governance line, not separate product branches.
 
 ## Current Baseline
 
 - Current branch baseline: `main` after V2.16-V2.28 management/analysis/history/explainability/provenance/conflict-semantics line and 2026-06-10 real local Computer Use validation; V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout 均已收口。
 - Product boundary: native macOS SwiftUI/AppKit shell plus Rust service protocol.
-- Completed V2 milestones: first Codex slice, V2.1 through V2.40.
-- Current priority: keep V2.26 finding explainability, V2.27 identity/provenance, V2.28 conflict semantics, V2.29 finding triage persistence, V2.30 read-only AI analysis, V2.31 read-only cleanup queue, V2.32 app-local rule tuning, V2.33 preview-first + explicit-confirm batch actions, V2.34 read-only comparison, V2.35 local redacted export, V2.36 disposable evidence, V2.37 guarded Pi toggle, V2.38 Hermes external roots, V2.39 OpenClaw workspace scope, and V2.40 adapter diagnostics stable while starting V2.41-V2.70 as a single AI-native product line. V2.41 should add user-configured OpenAI-compatible / Claude-compatible provider foundations before higher-level AI task readiness, routing, trace analysis, remediation, policy, and governance workflows.
-- Current code gap: the macOS app and Rust service already expose disabled-by-default `llm.status`, `llm.prepareAction`, `llm.prepareSkillAnalysis`, provider/model metadata, token/cost estimate DTOs, and read-only preview UI. They do not yet implement real provider clients, endpoint/key configuration, network calls, Keychain credential persistence, prompt preview transport, Claude/OpenAI-compatible request execution, or provider call metadata. V2.41-V2.42 must close this foundation gap and add minimal provider-call audit fields before any feature claims AI model-backed analysis; V2.69 expands that foundation into the full observability experience.
-- Real local Computer Use baseline: passed on 2026-06-10 for a previous mainline app against real local HOME/app data/Claude/Codex/opencode roots; validation explicitly targeted the current `dist/SkillsCopilot.app` bundle after detecting a stale same-bundle-id worktree app. V2.40 completed real app smoke launch/window id check, but Computer Use/AX/capture returned `cgWindowNotFound` / 0 visible windows / no visible window; future user-visible, UI, or service protocol changes must rerun Computer Use and keep any blocker explicit.
+- Completed V2 milestones: first Codex slice, V2.1 through V2.41.
+- Current priority: keep V2.26 finding explainability, V2.27 identity/provenance, V2.28 conflict semantics, V2.29 finding triage persistence, V2.30 read-only AI analysis, V2.31 read-only cleanup queue, V2.32 app-local rule tuning, V2.33 preview-first + explicit-confirm batch actions, V2.34 read-only comparison, V2.35 local redacted export, V2.36 disposable evidence, V2.37 guarded Pi toggle, V2.38 Hermes external roots, V2.39 OpenClaw workspace scope, V2.40 adapter diagnostics, and V2.41 provider foundation stable while continuing V2.42-V2.70 as a single AI-native product line.
+- Current code gap: the macOS app and Rust service now expose user-configured OpenAI-compatible / Claude-compatible provider profiles, Keychain-first API key storage, explicit Test Connection, budget fields, and minimal redacted test-call metadata. They still do not implement V2.42 prompt preview/redaction transport for provider-backed analysis calls, confirmed Analyze/Recommend/skill-analysis provider execution, full provider observability, or V2.43+ quality/readiness/routing outputs.
+- Real local Computer Use baseline: passed on 2026-06-11 for V2.41 against real local HOME/app data/Claude/Codex/opencode roots after explicitly targeting the current `dist/SkillsCopilot.app` bundle. Addressing Computer Use by app name can still attach to stale same-bundle-id worktree apps; future user-visible, UI, or service protocol changes must rerun Computer Use against the current bundle path and keep any blocker explicit.
 - Quality gate for code/UI/protocol work: `pnpm check:macos`; add focused Rust/Swift tests when touching shared behavior.
 
 ## Versioned Adapter Plan
@@ -47,7 +47,7 @@
 | V2.38 | Hermes external roots | Completed | Explicit `skills.external_dirs` are modeled as read-only external roots in adapter/scanner/UI provenance; no generic project scan, writable toggle, install, scripts, AI write-back, or credentials |
 | V2.39 | OpenClaw workspace deepening | Completed | Tightened workspace-scope detection and skipped/blocked root explanations without arbitrary repo inference or writes |
 | V2.40 | Adapter diagnostics | Completed | Surface discovered/skipped/blocked roots, config detected, read-only/writable reason, and last scan activity per agent via read-only protocol/status/state fields and sidebar UI; no new writes, execution, provider calls, credentials, or telemetry |
-| V2.41 | AI Provider Foundation | Planned | User-configured OpenAI-compatible and Claude-compatible endpoint/API key/model settings, Keychain-first storage, test connection, budget controls, disabled/unconfigured state, and minimal provider call metadata schema; no automatic analysis, writes, scripts, telemetry, or credential leakage |
+| V2.41 | AI Provider Foundation | Completed | User-configured OpenAI-compatible and Claude-compatible endpoint/API key/model settings, Keychain-first storage, explicit test connection, budget controls, disabled/unconfigured state, and minimal redacted test-call metadata; no automatic analysis, writes, scripts, telemetry, or credential leakage |
 | V2.42 | Prompt preview / redaction / token estimate | Planned | Every AI call shows prompt scope, included/excluded fields, redaction summary, estimated tokens/cost, network destination, and explicit confirmation before network request; confirmed calls record minimal redacted audit metadata |
 | V2.43 | AI Skill Quality Score | Planned | AI-assisted quality score explains metadata completeness, permission clarity, script/dependency risk, findings, conflicts, and suggested improvements from local evidence |
 | V2.44 | AI Task Readiness Check | Planned | User enters a real task; app evaluates which agents/skills are available, enabled, scoped correctly, risky, or missing |
@@ -80,7 +80,7 @@
 
 ## Baseline and Next Priority: V2.26-V2.70
 
-**Goal**: keep the completed V2.26-V2.40 management/analysis baseline stable, then move into a single AI-native task-centered governance line. Users should understand why a finding exists, where a skill came from, whether a conflict is same-agent or cross-agent, which issues are already reviewed, and whether a real task can be routed to the right skill/agent with acceptable quality and risk.
+**Goal**: keep the completed V2.26-V2.41 management/analysis/provider-foundation baseline stable, then move into prompt-safe AI-native task-centered governance. Users should understand why a finding exists, where a skill came from, whether a conflict is same-agent or cross-agent, which issues are already reviewed, and whether a real task can be routed to the right skill/agent with acceptable quality and risk.
 
 **Priority order**
 
@@ -94,7 +94,16 @@
 8. V2.34 Cross-agent comparison view: completed; compare same-name/similar skills across agents by state, source, risk, writable capability, and differences without adding write paths.
 9. V2.35 Local report export: completed; generate redacted local Markdown/JSON audit reports from existing read models without distribution, provider calls, credentials, scripts, or automatic writes.
 10. V2.36-V2.40 Adapter trust and diagnostics: completed; V2.36 Pi writable evidence harness, V2.37 minimal guarded Pi native toggle, V2.38 Hermes external roots, V2.39 OpenClaw workspace scope, and V2.40 read-only adapter diagnostics are complete. Do not extend write semantics without fresh rollback-safe evidence.
-11. V2.41-V2.70 AI-native task-centered governance: provider foundation first, then prompt safety, AI skill quality, task readiness, routing confidence, benchmarks/regression, trace analysis, drift/knowledge, remediation, policy, governance reports, provider observability, and evidence-only safe write expansion planning.
+11. V2.41-V2.70 AI-native task-centered governance: V2.41 provider foundation is completed; next is V2.42 prompt safety, then AI skill quality, task readiness, routing confidence, benchmarks/regression, trace analysis, drift/knowledge, remediation, policy, governance reports, provider observability, and evidence-only safe write expansion planning.
+
+### V2.41 Verification Checklist（文档同步）
+
+1. Focused Rust/Swift checks: `cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features`、`swift test --package-path apps/macos`。
+2. `pnpm check:macos`.
+3. Real local launch (`./script/build_and_run.sh run` 或 `pnpm dev:macos`) 并进行明确的 `SkillsCopilot` 窗口 `Computer Use`/AX 操作；若窗口分辨失败，显式记录 blocker。
+4. `pnpm check:privacy`。
+5. App-window-only 截图并手工复核路径/凭据占位符脱敏。
+6. 按 V2.41 边界复核：仅用户显式触发 provider 网络路径；无后台分析；无新写入脚本/执行/telemetry/AI write-back。
 
 **Tasks**
 
@@ -122,7 +131,7 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 | Priority | Work item | Current status | Next concrete task | Completion signal |
 | --- | --- | --- | --- | --- |
 | P0 | Real local Computer Use rerun gate | Previous mainline pass completed on 2026-06-10; V2.37 slice hit Computer Use `cgWindowNotFound` despite direct CG/AX window evidence | Rerun the real app against local HOME after UI/service/protocol changes, explicitly targeting the current `dist/SkillsCopilot.app` bundle when stale same-bundle-id worktree apps exist, covering project context, scan-all, agent filter, findings filtering/grouping, health dashboard, AI review preview, and script safety preview | App-window-only evidence and runbook notes updated for the new slice, or an explicit tool/session blocker is recorded |
-| P0 | V2.41 AI Provider Foundation | Planned | Implement user-configured OpenAI-compatible / Claude-compatible provider profiles, Keychain-first API key storage, test connection, model/base URL settings, disabled/unconfigured states, budget controls, and minimal provider call metadata schema | Users can safely configure their own endpoint/key/model without any background calls, writes, scripts, telemetry, or credential leakage; minimal call metadata exists before full observability |
+| P0 | V2.41 AI Provider Foundation | Completed | Keep provider profiles, Keychain-first storage, explicit Test Connection, budget fields, and minimal redacted metadata stable while building V2.42 | Users can safely configure their own endpoint/key/model without any background calls, writes, scripts, telemetry, or credential leakage; minimal call metadata exists before full observability |
 | P0 | V2.42 Prompt Preview / Redaction | Planned | Add prompt preview, redaction summary, included/excluded field display, token/cost estimate, destination preview, explicit confirmation, and minimal redacted audit metadata for each confirmed provider request | Every model call is visible, redacted, user-confirmed, and auditable before network egress |
 | P0 | V2.43-V2.45 AI quality/readiness/routing | Planned | Build AI-assisted skill quality score, task readiness check, and routing confidence using local evidence plus user-confirmed provider calls | Users can judge whether a real task has the right available skills and whether the agent is likely to select correctly |
 | P1 | V2.46-V2.50 Benchmark / trace / routing accuracy | Planned | Add task benchmark set, routing regression detection, local trace import, routing accuracy dashboard, and cross-agent task readiness | Users can compare expected vs actual skill selection and detect readiness regressions |

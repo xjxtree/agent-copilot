@@ -471,13 +471,14 @@ CREATE TABLE config_snapshot (
 - Explicitly excluded from report data model: provider/AI outputs, credentials, signed package metadata, distribution targets, telemetry records, and script execution traces.
 - Completed without adding persistent catalog schema; exports are generated from existing read models and written as redacted local artifacts.
 
-## V2.41-V2.70 AI-native task governance planning
+## V2.41-V2.70 AI-native task governance models
 
-The next planning line introduces AI-native analysis models, but schema changes must remain incremental and evidence-driven. Current V2.40 code has no persistent provider profile, prompt, response, benchmark, trace, review session, policy, or governance-pack schema.
+The AI-native line introduces analysis models incrementally and evidence-first. V2.41 adds app-data provider profile metadata and Keychain credential references, but still has no persisted prompt, raw response, benchmark, trace, review session, policy, or governance-pack schema.
 
-Planned model families:
+Model families:
 
-- `ProviderProfile`（V2.41）：provider type (`openai-compatible` / `claude-compatible`), base URL, model, headers/API version metadata, enabled state, budget settings, and credential storage reference. API keys must not be stored in SQLite; prefer Keychain references.
+- `ProviderProfile`（V2.41 completed）：provider type (`openai-compatible` / `claude-compatible`), base URL, model, headers/API version metadata, enabled state, budget settings, and credential storage reference。
+- API keys must not be stored in SQLite. Credential storage is `keychain` in normal production path；fallback persistence（如 `~/.config/skills-copilot/llm.yaml`）只能在显式 opt-in 下允许，并且文档级别仅保留元数据与存储位置摘要，不允许保留 secret 本体。
 - `ProviderCallMetadataMinimal`（V2.41-V2.42）：timestamp, provider type, model, destination host, action type, status/error, duration, token/cost, confirmation id, and redaction status. This is required before full observability and must not include API keys, raw prompts, raw responses, credentials, raw trace excerpts, or unredacted local paths.
 - `PromptPreview`（V2.42）：ephemeral request preview with included/excluded fields, redaction summary, token/cost estimate, destination, and confirmation id. Raw prompt should not be persisted by default.
 - `SkillQualityScore`（V2.43）：derived score from deterministic evidence plus optional AI explanation. Persist only if needed for cache/review; must include source evidence hash and stale invalidation.

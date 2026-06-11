@@ -1,0 +1,11 @@
+{
+  "id": "fixture-llm-list-provider-profiles",
+  "ok": true,
+  "result": {
+    "profiles": [],
+    "default_profile_id": null,
+    "credential_storage": "keychain",
+    "credential_persistence_allowed": true,
+    "raw_secrets_returned": false
+  }
+}

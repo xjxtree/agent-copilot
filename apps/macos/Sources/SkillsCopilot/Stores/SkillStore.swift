@@ -20,6 +20,8 @@ final class SkillStore: ObservableObject {
     @Published private(set) var loadingSkillEventIDs: Set<SkillRecord.ID> = []
     @Published private(set) var status: ServiceStatus?
     @Published private(set) var llmStatus = LLMStatus.disabledFallback()
+    @Published private(set) var aiProviderStatus = AIProviderStatus.unavailable()
+    @Published private(set) var aiProviderTestResult: AIProviderTestResult?
     @Published private(set) var llmPrepareResults: [LLMAction: LLMPrepareResult] = [:]
     @Published private(set) var preparingLLMActions: Set<LLMAction> = []
     @Published private(set) var skillAnalysisPrepareResults: [String: LLMSkillAnalysisPrepareResult] = [:]
@@ -37,6 +39,9 @@ final class SkillStore: ObservableObject {
     @Published private(set) var isProjectUpdating = false
     @Published private(set) var isLoadingSettings = false
     @Published private(set) var isSavingSettings = false
+    @Published private(set) var isLoadingAIProvider = false
+    @Published private(set) var isSavingAIProvider = false
+    @Published private(set) var isTestingAIProvider = false
     @Published private(set) var lastMutationMessage: String?
     @Published private(set) var refreshStatusMessage = UIStrings.refreshIdle
     @Published private(set) var watcherStatusMessage = UIStrings.refreshWatcherManual
@@ -46,6 +51,8 @@ final class SkillStore: ObservableObject {
     @Published private(set) var claudeSettings: ConfigDocumentRecord?
     @Published private(set) var settingsMessage: String?
     @Published private(set) var settingsErrorMessage: String?
+    @Published private(set) var aiProviderMessage: String?
+    @Published private(set) var aiProviderErrorMessage: String?
     @Published var selectedSkillID: SkillRecord.ID?
     @Published var selectedDetailSection: DetailSection = .overview
     @Published var searchText = "" {
@@ -83,7 +90,7 @@ final class SkillStore: ObservableObject {
     }
 
     var isRefreshBusy: Bool {
-        isLoading || isScanning || isWriting || isProjectUpdating || isSavingSettings || isApplyingBatchToggle || isExportingLocalReport
+        isLoading || isScanning || isWriting || isProjectUpdating || isSavingSettings || isSavingAIProvider || isTestingAIProvider || isApplyingBatchToggle || isExportingLocalReport
     }
 
     private func toggleDisabledReason(for skill: SkillRecord) -> String? {
@@ -828,6 +835,82 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func loadAIProviderStatus() async {
+        isLoadingAIProvider = true
+        aiProviderErrorMessage = nil
+        defer { isLoadingAIProvider = false }
+
+        do {
+            aiProviderStatus = try await service.aiProviderStatus()
+            aiProviderTestResult = aiProviderStatus.lastTest
+        } catch {
+            aiProviderStatus = .unavailable(reason: error.localizedDescription)
+            aiProviderErrorMessage = error.localizedDescription
+        }
+    }
+
+    @discardableResult
+    func saveAIProviderSettings(draft: AIProviderSettingsDraft) async -> Bool {
+        guard !isRefreshBusy else {
+            aiProviderErrorMessage = UIStrings.operationUnavailableBusy
+            return false
+        }
+        if let validationMessage = draft.validationMessage {
+            aiProviderErrorMessage = validationMessage
+            return false
+        }
+
+        isSavingAIProvider = true
+        aiProviderErrorMessage = nil
+        aiProviderMessage = nil
+        defer { isSavingAIProvider = false }
+
+        do {
+            aiProviderStatus = try await service.saveAIProviderSettings(draft: draft)
+            aiProviderTestResult = aiProviderStatus.lastTest
+            aiProviderMessage = UIStrings.aiProviderSaved
+            return true
+        } catch ServiceClient.ClientError.service(let error) where error.code == "unknown_method" {
+            aiProviderErrorMessage = UIStrings.aiProviderUnavailable
+            return false
+        } catch {
+            aiProviderErrorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    @discardableResult
+    func testAIProviderConnection(draft: AIProviderSettingsDraft) async -> AIProviderTestResult? {
+        guard !isRefreshBusy else {
+            aiProviderErrorMessage = UIStrings.operationUnavailableBusy
+            return nil
+        }
+        if let validationMessage = draft.validationMessage {
+            aiProviderErrorMessage = validationMessage
+            return nil
+        }
+
+        isTestingAIProvider = true
+        aiProviderErrorMessage = nil
+        aiProviderMessage = nil
+        defer { isTestingAIProvider = false }
+
+        do {
+            let result = try await service.testAIProviderConnection(draft: draft)
+            aiProviderTestResult = result
+            aiProviderMessage = result.success ? UIStrings.aiProviderTestSucceeded : nil
+            if !result.success {
+                aiProviderErrorMessage = result.message
+            }
+            return result
+        } catch {
+            let result = AIProviderTestResult.unavailable(reason: error.localizedDescription)
+            aiProviderTestResult = result
+            aiProviderErrorMessage = result.message
+            return result
+        }
+    }
+
     @discardableResult
     func saveClaudeSettings(content: String) async -> Bool {
         guard !isRefreshBusy else {
@@ -932,12 +1015,15 @@ final class SkillStore: ObservableObject {
     private func refreshCollections() async throws {
         async let appStateSnapshot = service.appStateSnapshot()
         async let llmStatus = service.llmStatus()
+        async let aiProviderStatus = fetchAIProviderStatus()
         async let projectContextState = service.getProjectContext()
         async let agentConfigSnapshots = fetchAgentConfigSnapshots()
         async let ruleTuning = service.listRuleTuning()
         let snapshot = try await appStateSnapshot
         self.status = snapshot.status
         self.llmStatus = try await llmStatus
+        self.aiProviderStatus = await aiProviderStatus
+        self.aiProviderTestResult = self.aiProviderStatus.lastTest ?? aiProviderTestResult
         self.projectContextState = try await projectContextState
         self.skills = snapshot.skills
         self.findings = snapshot.findings
@@ -960,6 +1046,14 @@ final class SkillStore: ObservableObject {
             agentFilter: agentFilter,
             reason: UIStrings.crossAgentComparisonLocalFallback
         )
+    }
+
+    private func fetchAIProviderStatus() async -> AIProviderStatus {
+        do {
+            return try await service.aiProviderStatus()
+        } catch {
+            return .unavailable(reason: error.localizedDescription)
+        }
     }
 
     private func fetchAgentConfigSnapshots() async throws -> [ConfigSnapshotRecord] {

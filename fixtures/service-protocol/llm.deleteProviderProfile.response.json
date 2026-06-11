@@ -1,0 +1,10 @@
+{
+  "id": "fixture-llm-delete-provider-profile",
+  "ok": true,
+  "result": {
+    "deleted_profile_id": "fixture-openai",
+    "profile_deleted": true,
+    "credential_deleted": false,
+    "raw_secret_returned": false
+  }
+}

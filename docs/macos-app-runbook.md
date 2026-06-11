@@ -214,6 +214,19 @@ Fixture smoke must use temporary `HOME`, app data, and project roots only. It mu
 
 Real local validation must verify the UI communicates disabled/default-off LLM state without prompting for or saving a real API key. Do not enter real provider credentials during smoke or docs closeout. The 2026-06-09 current mainline pass verified the disabled controls; future candidates should repeat this check when LLM UI changes.
 
+## V2.41 AI Provider Foundation（文档同步）
+
+V2.41 的 provider foundation 已集成：Settings 提供 OpenAI-compatible / Claude-compatible provider profile、endpoint/model/API version、Keychain-first API key 保存、预算字段和显式 Test Connection。Rust service 新增 `llm.listProviderProfiles`、`llm.saveProviderProfile`、`llm.deleteProviderProfile`、`llm.testProviderConnection`，并只为 test connection 写入最小 redacted call metadata。V2.41 不把 Analyze / Recommend / skill analysis 接到 provider；这些真实分析调用仍等 V2.42 prompt preview/redaction gate 后再开放。
+
+该阶段验收同步建议：
+
+- 运行聚焦 Rust/Swift 校验：`cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features`、`swift test --package-path apps/macos`
+- 运行 `pnpm check:macos`
+- `./script/build_and_run.sh run` / `pnpm dev:macos` 启动真实 app，并做 `Computer Use`/AX 可见窗口操作；不可见时记录 blocker
+- 运行 `pnpm check:privacy`
+- App-window-only 截图并检查路径/凭据占位符已脱敏
+- 复核边界：仅用户触发网络，No background analysis，无新增写入/执行/telemetry/AI write-back
+
 2026-06-08 V2.7 closeout record:
 
 - Full `pnpm check:macos` passed after integrating the service/UI/docs LLM gate work.

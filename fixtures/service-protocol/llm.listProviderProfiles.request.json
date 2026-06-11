@@ -1,0 +1,5 @@
+{
+  "id": "fixture-llm-list-provider-profiles",
+  "method": "llm.listProviderProfiles",
+  "params": {}
+}

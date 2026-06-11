@@ -10,6 +10,12 @@
     "single_request_token_limit": 8000,
     "monthly_budget_usd": 0,
     "credentials_storage": "none",
-    "credential_persistence_allowed": false
+    "credential_persistence_allowed": false,
+    "provider_profile_count": 0,
+    "default_profile_id": null,
+    "profiles_path": "/tmp/skills-copilot-app-data/llm/provider-profiles.json",
+    "call_metadata_path": "/tmp/skills-copilot-app-data/llm/provider-call-metadata.jsonl",
+    "raw_prompt_persistence_allowed": false,
+    "raw_response_persistence_allowed": false
   }
 }

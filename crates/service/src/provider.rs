@@ -1,0 +1,874 @@
+use std::{
+    fs,
+    io::{self, Write},
+    path::{Path, PathBuf},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+};
+
+use keyring::Entry;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use thiserror::Error;
+use ureq::Error as UreqError;
+
+const KEYCHAIN_SERVICE: &str = "dev.skills-copilot.native.llm";
+const PROFILE_STORE_VERSION: u32 = 1;
+const DEFAULT_SINGLE_REQUEST_TOKEN_LIMIT: u32 = 8_000;
+const DEFAULT_MONTHLY_BUDGET_USD: f64 = 5.0;
+const TEST_INPUT_TOKEN_ESTIMATE: u32 = 12;
+const TEST_OUTPUT_TOKEN_ESTIMATE: u32 = 4;
+
+#[derive(Debug, Error)]
+pub enum ProviderError {
+    #[error("io error: {0}")]
+    Io(#[from] io::Error),
+    #[error("json error: {0}")]
+    Json(#[from] serde_json::Error),
+    #[error("invalid provider profile: {0}")]
+    InvalidProfile(String),
+    #[error("provider profile not found: {0}")]
+    ProfileNotFound(String),
+    #[error("credential storage unavailable: {0}")]
+    CredentialStorageUnavailable(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderProfileRecord {
+    pub id: String,
+    pub display_name: String,
+    pub provider_type: ProviderType,
+    pub base_url: String,
+    pub model: String,
+    pub enabled: bool,
+    pub api_version: Option<String>,
+    pub organization: Option<String>,
+    pub single_request_token_limit: u32,
+    pub monthly_budget_usd: f64,
+    pub credential_reference: ProviderCredentialReference,
+    pub credential_status: ProviderCredentialStatus,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ProviderType {
+    #[serde(rename = "openai-compatible")]
+    OpenAiCompatible,
+    #[serde(rename = "claude-compatible")]
+    ClaudeCompatible,
+}
+
+impl ProviderType {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::OpenAiCompatible => "openai-compatible",
+            Self::ClaudeCompatible => "claude-compatible",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderCredentialReference {
+    pub storage: String,
+    pub service: String,
+    pub account: String,
+    pub secret_persisted: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderCredentialStatus {
+    pub state: String,
+    pub reason: String,
+    pub secret_available: bool,
+    pub fallback_available: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderBudgetStatus {
+    pub single_request_token_limit: u32,
+    pub monthly_budget_usd: f64,
+    pub estimated_test_tokens: u32,
+    pub estimated_test_cost_usd: f64,
+    pub state: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveProviderProfileParams {
+    #[serde(default)]
+    pub id: Option<String>,
+    pub display_name: String,
+    pub provider_type: ProviderType,
+    pub base_url: String,
+    pub model: String,
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub api_version: Option<String>,
+    #[serde(default)]
+    pub organization: Option<String>,
+    #[serde(default)]
+    pub api_key: Option<String>,
+    #[serde(default)]
+    pub single_request_token_limit: Option<u32>,
+    #[serde(default)]
+    pub monthly_budget_usd: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteProviderProfileParams {
+    pub profile_id: String,
+    #[serde(default)]
+    pub delete_credential: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TestProviderConnectionParams {
+    pub profile_id: String,
+    pub confirmation_id: String,
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListProviderProfilesResult {
+    pub profiles: Vec<ProviderProfileRecord>,
+    pub default_profile_id: Option<String>,
+    pub credential_storage: String,
+    pub credential_persistence_allowed: bool,
+    pub raw_secrets_returned: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveProviderProfileResult {
+    pub profile: ProviderProfileRecord,
+    pub credential_status: ProviderCredentialStatus,
+    pub raw_secret_returned: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteProviderProfileResult {
+    pub deleted_profile_id: String,
+    pub profile_deleted: bool,
+    pub credential_deleted: bool,
+    pub raw_secret_returned: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TestProviderConnectionResult {
+    pub profile_id: String,
+    pub provider_type: ProviderType,
+    pub model: String,
+    pub destination_host: String,
+    pub status: String,
+    pub provider_request_sent: bool,
+    pub credential_accessed: bool,
+    pub duration_ms: u128,
+    pub error_code: Option<String>,
+    pub error_message: Option<String>,
+    pub budget: ProviderBudgetStatus,
+    pub audit: ProviderCallMetadata,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_secret_returned: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderCallMetadata {
+    pub timestamp: i64,
+    pub action_type: String,
+    pub profile_id: String,
+    pub provider_type: ProviderType,
+    pub model: String,
+    pub destination_host: String,
+    pub status: String,
+    pub error_code: Option<String>,
+    pub error_message: Option<String>,
+    pub duration_ms: u128,
+    pub estimated_input_tokens: u32,
+    pub estimated_output_tokens: u32,
+    pub estimated_cost_usd: f64,
+    pub confirmation_id: String,
+    pub redaction_status: String,
+    pub provider_request_sent: bool,
+    pub credential_accessed: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ProviderProfileStore {
+    version: u32,
+    default_profile_id: Option<String>,
+    profiles: Vec<ProviderProfileRecord>,
+}
+
+struct ProviderTestFinish<'a> {
+    status: &'a str,
+    provider_request_sent: bool,
+    credential_accessed: bool,
+    error_code: Option<String>,
+    error_message: Option<String>,
+}
+
+impl Default for ProviderProfileStore {
+    fn default() -> Self {
+        Self {
+            version: PROFILE_STORE_VERSION,
+            default_profile_id: None,
+            profiles: Vec::new(),
+        }
+    }
+}
+
+pub fn list_provider_profiles(
+    app_data_dir: &Path,
+) -> Result<ListProviderProfilesResult, ProviderError> {
+    let store = load_store(app_data_dir)?;
+    Ok(ListProviderProfilesResult {
+        profiles: store.profiles,
+        default_profile_id: store.default_profile_id,
+        credential_storage: "keychain".to_string(),
+        credential_persistence_allowed: true,
+        raw_secrets_returned: false,
+    })
+}
+
+pub fn save_provider_profile(
+    app_data_dir: &Path,
+    params: SaveProviderProfileParams,
+) -> Result<SaveProviderProfileResult, ProviderError> {
+    let now = unix_timestamp();
+    let mut store = load_store(app_data_dir)?;
+    let profile_id = params
+        .id
+        .as_deref()
+        .map(sanitize_profile_id)
+        .filter(|id| !id.is_empty())
+        .unwrap_or_else(|| sanitize_profile_id(&params.display_name));
+    if profile_id.is_empty() {
+        return Err(ProviderError::InvalidProfile(
+            "profile id or display name must contain an ASCII letter or digit".to_string(),
+        ));
+    }
+    let base_url = validate_base_url(&params.base_url)?;
+    let model = require_non_empty("model", &params.model)?;
+    let display_name = require_non_empty("display_name", &params.display_name)?;
+    let token_limit = params
+        .single_request_token_limit
+        .unwrap_or(DEFAULT_SINGLE_REQUEST_TOKEN_LIMIT)
+        .clamp(1, 200_000);
+    let monthly_budget = params
+        .monthly_budget_usd
+        .unwrap_or(DEFAULT_MONTHLY_BUDGET_USD)
+        .clamp(0.0, 10_000.0);
+    let mut credential_reference = keychain_reference(&profile_id);
+    let credential_status = match params.api_key.as_deref().map(str::trim) {
+        Some(secret) if !secret.is_empty() => match store_secret(&credential_reference, secret) {
+            Ok(()) => ProviderCredentialStatus {
+                state: "available".to_string(),
+                reason: "API key stored in the OS credential store.".to_string(),
+                secret_available: true,
+                fallback_available: false,
+            },
+            Err(error) => ProviderCredentialStatus {
+                state: "unavailable".to_string(),
+                reason: error.to_string(),
+                secret_available: false,
+                fallback_available: false,
+            },
+        },
+        _ => existing_credential_status(&credential_reference),
+    };
+    credential_reference.secret_persisted = credential_status.secret_available;
+    let previous_created_at = store
+        .profiles
+        .iter()
+        .find(|profile| profile.id == profile_id)
+        .map(|profile| profile.created_at)
+        .unwrap_or(now);
+    let profile = ProviderProfileRecord {
+        id: profile_id.clone(),
+        display_name,
+        provider_type: params.provider_type,
+        base_url,
+        model,
+        enabled: params.enabled,
+        api_version: params
+            .api_version
+            .and_then(non_empty_string)
+            .or_else(|| default_api_version(params.provider_type)),
+        organization: params.organization.and_then(non_empty_string),
+        single_request_token_limit: token_limit,
+        monthly_budget_usd: monthly_budget,
+        credential_reference,
+        credential_status: credential_status.clone(),
+        created_at: previous_created_at,
+        updated_at: now,
+    };
+
+    store.profiles.retain(|existing| existing.id != profile_id);
+    store.profiles.push(profile.clone());
+    store.profiles.sort_by(|left, right| left.id.cmp(&right.id));
+    if profile.enabled {
+        store.default_profile_id = Some(profile.id.clone());
+    } else if store.default_profile_id.is_none() {
+        store.default_profile_id = store.profiles.first().map(|profile| profile.id.clone());
+    }
+    save_store(app_data_dir, &store)?;
+
+    Ok(SaveProviderProfileResult {
+        profile,
+        credential_status,
+        raw_secret_returned: false,
+    })
+}
+
+pub fn delete_provider_profile(
+    app_data_dir: &Path,
+    params: DeleteProviderProfileParams,
+) -> Result<DeleteProviderProfileResult, ProviderError> {
+    let mut store = load_store(app_data_dir)?;
+    let Some(profile) = store
+        .profiles
+        .iter()
+        .find(|profile| profile.id == params.profile_id)
+        .cloned()
+    else {
+        return Ok(DeleteProviderProfileResult {
+            deleted_profile_id: params.profile_id,
+            profile_deleted: false,
+            credential_deleted: false,
+            raw_secret_returned: false,
+        });
+    };
+    store.profiles.retain(|existing| existing.id != profile.id);
+    if store.default_profile_id.as_deref() == Some(profile.id.as_str()) {
+        store.default_profile_id = store.profiles.first().map(|profile| profile.id.clone());
+    }
+    save_store(app_data_dir, &store)?;
+    let credential_deleted =
+        params.delete_credential && delete_secret(&profile.credential_reference).unwrap_or(false);
+
+    Ok(DeleteProviderProfileResult {
+        deleted_profile_id: profile.id,
+        profile_deleted: true,
+        credential_deleted,
+        raw_secret_returned: false,
+    })
+}
+
+pub fn test_provider_connection(
+    app_data_dir: &Path,
+    params: TestProviderConnectionParams,
+) -> Result<TestProviderConnectionResult, ProviderError> {
+    let store = load_store(app_data_dir)?;
+    let profile = store
+        .profiles
+        .iter()
+        .find(|profile| profile.id == params.profile_id)
+        .cloned()
+        .ok_or_else(|| ProviderError::ProfileNotFound(params.profile_id.clone()))?;
+    let destination_host = destination_host(&profile.base_url);
+    let budget = budget_status(&profile);
+    let started = Instant::now();
+
+    if !profile.enabled {
+        return finish_test(
+            app_data_dir,
+            &profile,
+            &destination_host,
+            &params.confirmation_id,
+            started,
+            budget,
+            ProviderTestFinish {
+                status: "blocked",
+                provider_request_sent: false,
+                credential_accessed: false,
+                error_code: Some("profile_disabled".to_string()),
+                error_message: Some(
+                    "Provider profile is disabled; no request was sent.".to_string(),
+                ),
+            },
+        );
+    }
+    if params.confirmation_id.trim().is_empty() {
+        return finish_test(
+            app_data_dir,
+            &profile,
+            &destination_host,
+            &params.confirmation_id,
+            started,
+            budget,
+            ProviderTestFinish {
+                status: "blocked",
+                provider_request_sent: false,
+                credential_accessed: false,
+                error_code: Some("missing_confirmation".to_string()),
+                error_message: Some(
+                    "Explicit confirmation id is required before a provider test.".to_string(),
+                ),
+            },
+        );
+    }
+    if budget.state != "ok" {
+        return finish_test(
+            app_data_dir,
+            &profile,
+            &destination_host,
+            &params.confirmation_id,
+            started,
+            budget,
+            ProviderTestFinish {
+                status: "blocked",
+                provider_request_sent: false,
+                credential_accessed: false,
+                error_code: Some("budget_blocked".to_string()),
+                error_message: Some("Provider budget settings block the test request.".to_string()),
+            },
+        );
+    }
+
+    let secret = match load_secret(&profile.credential_reference) {
+        Ok(secret) => secret,
+        Err(error) => {
+            return finish_test(
+                app_data_dir,
+                &profile,
+                &destination_host,
+                &params.confirmation_id,
+                started,
+                budget,
+                ProviderTestFinish {
+                    status: "blocked",
+                    provider_request_sent: false,
+                    credential_accessed: false,
+                    error_code: Some("credential_unavailable".to_string()),
+                    error_message: Some(error.to_string()),
+                },
+            );
+        }
+    };
+    let timeout = Duration::from_millis(params.timeout_ms.unwrap_or(4_000).clamp(250, 15_000));
+    let call_result = send_test_request(&profile, &secret, timeout);
+    drop(secret);
+
+    match call_result {
+        Ok(status) if (200..300).contains(&status) => finish_test(
+            app_data_dir,
+            &profile,
+            &destination_host,
+            &params.confirmation_id,
+            started,
+            budget,
+            ProviderTestFinish {
+                status: "succeeded",
+                provider_request_sent: true,
+                credential_accessed: true,
+                error_code: None,
+                error_message: None,
+            },
+        ),
+        Ok(status) => finish_test(
+            app_data_dir,
+            &profile,
+            &destination_host,
+            &params.confirmation_id,
+            started,
+            budget,
+            ProviderTestFinish {
+                status: "failed",
+                provider_request_sent: true,
+                credential_accessed: true,
+                error_code: Some(format!("http_{status}")),
+                error_message: Some("Provider returned a non-success HTTP status.".to_string()),
+            },
+        ),
+        Err(error) => finish_test(
+            app_data_dir,
+            &profile,
+            &destination_host,
+            &params.confirmation_id,
+            started,
+            budget,
+            ProviderTestFinish {
+                status: "failed",
+                provider_request_sent: true,
+                credential_accessed: true,
+                error_code: Some("network_error".to_string()),
+                error_message: Some(redact_error(&error)),
+            },
+        ),
+    }
+}
+
+pub fn provider_profiles_path(app_data_dir: &Path) -> PathBuf {
+    app_data_dir.join("llm").join("provider-profiles.json")
+}
+
+pub fn provider_call_metadata_path(app_data_dir: &Path) -> PathBuf {
+    app_data_dir
+        .join("llm")
+        .join("provider-call-metadata.jsonl")
+}
+
+pub fn default_token_limit() -> u32 {
+    DEFAULT_SINGLE_REQUEST_TOKEN_LIMIT
+}
+
+pub fn default_monthly_budget_usd() -> f64 {
+    DEFAULT_MONTHLY_BUDGET_USD
+}
+
+fn finish_test(
+    app_data_dir: &Path,
+    profile: &ProviderProfileRecord,
+    destination_host: &str,
+    confirmation_id: &str,
+    started: Instant,
+    budget: ProviderBudgetStatus,
+    finish: ProviderTestFinish<'_>,
+) -> Result<TestProviderConnectionResult, ProviderError> {
+    let audit = ProviderCallMetadata {
+        timestamp: unix_timestamp(),
+        action_type: "test_connection".to_string(),
+        profile_id: profile.id.clone(),
+        provider_type: profile.provider_type,
+        model: profile.model.clone(),
+        destination_host: destination_host.to_string(),
+        status: finish.status.to_string(),
+        error_code: finish.error_code.clone(),
+        error_message: finish.error_message.clone(),
+        duration_ms: started.elapsed().as_millis(),
+        estimated_input_tokens: TEST_INPUT_TOKEN_ESTIMATE,
+        estimated_output_tokens: TEST_OUTPUT_TOKEN_ESTIMATE,
+        estimated_cost_usd: budget.estimated_test_cost_usd,
+        confirmation_id: confirmation_id.to_string(),
+        redaction_status: "metadata-only-no-raw-prompt-or-response".to_string(),
+        provider_request_sent: finish.provider_request_sent,
+        credential_accessed: finish.credential_accessed,
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+    };
+    append_call_metadata(app_data_dir, &audit)?;
+    Ok(TestProviderConnectionResult {
+        profile_id: profile.id.clone(),
+        provider_type: profile.provider_type,
+        model: profile.model.clone(),
+        destination_host: destination_host.to_string(),
+        status: finish.status.to_string(),
+        provider_request_sent: finish.provider_request_sent,
+        credential_accessed: finish.credential_accessed,
+        duration_ms: audit.duration_ms,
+        error_code: finish.error_code,
+        error_message: finish.error_message,
+        budget,
+        audit,
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+        raw_secret_returned: false,
+    })
+}
+
+fn load_store(app_data_dir: &Path) -> Result<ProviderProfileStore, ProviderError> {
+    let path = provider_profiles_path(app_data_dir);
+    if !path.exists() {
+        return Ok(ProviderProfileStore::default());
+    }
+    let content = fs::read_to_string(path)?;
+    let store: ProviderProfileStore = serde_json::from_str(&content)?;
+    Ok(store)
+}
+
+fn save_store(app_data_dir: &Path, store: &ProviderProfileStore) -> Result<(), ProviderError> {
+    let path = provider_profiles_path(app_data_dir);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let tmp_path = path.with_extension("json.tmp");
+    let content = serde_json::to_string_pretty(store)?;
+    {
+        let mut file = fs::OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(&tmp_path)?;
+        file.write_all(content.as_bytes())?;
+        file.write_all(b"\n")?;
+        file.sync_all()?;
+    }
+    fs::rename(tmp_path, path)?;
+    Ok(())
+}
+
+fn append_call_metadata(
+    app_data_dir: &Path,
+    metadata: &ProviderCallMetadata,
+) -> Result<(), ProviderError> {
+    let path = provider_call_metadata_path(app_data_dir);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)?;
+    let line = serde_json::to_string(metadata)?;
+    writeln!(file, "{line}")?;
+    Ok(())
+}
+
+fn send_test_request(
+    profile: &ProviderProfileRecord,
+    secret: &str,
+    timeout: Duration,
+) -> Result<u16, Box<UreqError>> {
+    let url = test_endpoint_url(profile);
+    let mut request = ureq::post(&url)
+        .timeout(timeout)
+        .set("content-type", "application/json");
+    if let Some(org) = profile.organization.as_deref() {
+        request = request.set("openai-organization", org);
+    }
+    match profile.provider_type {
+        ProviderType::OpenAiCompatible => {
+            request = request.set("authorization", &format!("Bearer {secret}"));
+            let response = request
+                .send_json(json!({
+                    "model": profile.model,
+                    "messages": [{"role": "user", "content": "connection test"}],
+                    "max_tokens": 1,
+                    "temperature": 0
+                }))
+                .map_err(Box::new)?;
+            Ok(response.status())
+        }
+        ProviderType::ClaudeCompatible => {
+            request = request.set("x-api-key", secret).set(
+                "anthropic-version",
+                profile.api_version.as_deref().unwrap_or("2023-06-01"),
+            );
+            let response = request
+                .send_json(json!({
+                    "model": profile.model,
+                    "messages": [{"role": "user", "content": "connection test"}],
+                    "max_tokens": 1
+                }))
+                .map_err(Box::new)?;
+            Ok(response.status())
+        }
+    }
+}
+
+fn test_endpoint_url(profile: &ProviderProfileRecord) -> String {
+    let trimmed = profile.base_url.trim_end_matches('/');
+    let path = match profile.provider_type {
+        ProviderType::OpenAiCompatible => {
+            if trimmed.ends_with("/chat/completions") {
+                ""
+            } else {
+                "/chat/completions"
+            }
+        }
+        ProviderType::ClaudeCompatible => {
+            if trimmed.ends_with("/v1/messages") {
+                ""
+            } else {
+                "/v1/messages"
+            }
+        }
+    };
+    format!("{trimmed}{path}")
+}
+
+fn keychain_reference(profile_id: &str) -> ProviderCredentialReference {
+    ProviderCredentialReference {
+        storage: "keychain".to_string(),
+        service: KEYCHAIN_SERVICE.to_string(),
+        account: format!("provider:{profile_id}"),
+        secret_persisted: false,
+    }
+}
+
+fn store_secret(
+    reference: &ProviderCredentialReference,
+    secret: &str,
+) -> Result<(), ProviderError> {
+    let entry = Entry::new(&reference.service, &reference.account)
+        .map_err(|error| ProviderError::CredentialStorageUnavailable(error.to_string()))?;
+    entry
+        .set_password(secret)
+        .map_err(|error| ProviderError::CredentialStorageUnavailable(error.to_string()))
+}
+
+fn load_secret(reference: &ProviderCredentialReference) -> Result<String, ProviderError> {
+    let entry = Entry::new(&reference.service, &reference.account)
+        .map_err(|error| ProviderError::CredentialStorageUnavailable(error.to_string()))?;
+    entry
+        .get_password()
+        .map_err(|error| ProviderError::CredentialStorageUnavailable(error.to_string()))
+}
+
+fn delete_secret(reference: &ProviderCredentialReference) -> Result<bool, ProviderError> {
+    let entry = Entry::new(&reference.service, &reference.account)
+        .map_err(|error| ProviderError::CredentialStorageUnavailable(error.to_string()))?;
+    match entry.delete_credential() {
+        Ok(()) => Ok(true),
+        Err(_) => Ok(false),
+    }
+}
+
+fn existing_credential_status(reference: &ProviderCredentialReference) -> ProviderCredentialStatus {
+    match load_secret(reference) {
+        Ok(secret) if !secret.is_empty() => ProviderCredentialStatus {
+            state: "available".to_string(),
+            reason: "API key is available from the OS credential store.".to_string(),
+            secret_available: true,
+            fallback_available: false,
+        },
+        Ok(_) => ProviderCredentialStatus {
+            state: "missing".to_string(),
+            reason: "No API key is stored for this profile.".to_string(),
+            secret_available: false,
+            fallback_available: false,
+        },
+        Err(error) => ProviderCredentialStatus {
+            state: "missing".to_string(),
+            reason: error.to_string(),
+            secret_available: false,
+            fallback_available: false,
+        },
+    }
+}
+
+fn budget_status(profile: &ProviderProfileRecord) -> ProviderBudgetStatus {
+    let estimated_test_tokens = TEST_INPUT_TOKEN_ESTIMATE + TEST_OUTPUT_TOKEN_ESTIMATE;
+    let estimated_test_cost_usd = estimated_test_cost(profile.provider_type, estimated_test_tokens);
+    if profile.single_request_token_limit < estimated_test_tokens {
+        ProviderBudgetStatus {
+            single_request_token_limit: profile.single_request_token_limit,
+            monthly_budget_usd: profile.monthly_budget_usd,
+            estimated_test_tokens,
+            estimated_test_cost_usd,
+            state: "blocked".to_string(),
+            reason: "Single request token limit is lower than the connection test estimate."
+                .to_string(),
+        }
+    } else if profile.monthly_budget_usd <= 0.0 {
+        ProviderBudgetStatus {
+            single_request_token_limit: profile.single_request_token_limit,
+            monthly_budget_usd: profile.monthly_budget_usd,
+            estimated_test_tokens,
+            estimated_test_cost_usd,
+            state: "blocked".to_string(),
+            reason: "Monthly provider budget is 0; provider requests are disabled.".to_string(),
+        }
+    } else {
+        ProviderBudgetStatus {
+            single_request_token_limit: profile.single_request_token_limit,
+            monthly_budget_usd: profile.monthly_budget_usd,
+            estimated_test_tokens,
+            estimated_test_cost_usd,
+            state: "ok".to_string(),
+            reason: "Connection test is within configured local budget limits.".to_string(),
+        }
+    }
+}
+
+fn estimated_test_cost(provider_type: ProviderType, tokens: u32) -> f64 {
+    let per_million = match provider_type {
+        ProviderType::OpenAiCompatible => 2.50,
+        ProviderType::ClaudeCompatible => 3.00,
+    };
+    f64::from(tokens) * per_million / 1_000_000.0
+}
+
+fn validate_base_url(value: &str) -> Result<String, ProviderError> {
+    let value = require_non_empty("base_url", value)?;
+    if !(value.starts_with("https://") || value.starts_with("http://localhost")) {
+        return Err(ProviderError::InvalidProfile(
+            "base_url must use https:// or http://localhost".to_string(),
+        ));
+    }
+    Ok(value.trim_end_matches('/').to_string())
+}
+
+fn require_non_empty(field: &str, value: &str) -> Result<String, ProviderError> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(ProviderError::InvalidProfile(format!(
+            "{field} must not be empty"
+        )));
+    }
+    Ok(trimmed.to_string())
+}
+
+fn non_empty_string(value: String) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+fn default_api_version(provider_type: ProviderType) -> Option<String> {
+    match provider_type {
+        ProviderType::OpenAiCompatible => None,
+        ProviderType::ClaudeCompatible => Some("2023-06-01".to_string()),
+    }
+}
+
+fn sanitize_profile_id(value: &str) -> String {
+    value
+        .chars()
+        .filter_map(|ch| {
+            let lower = ch.to_ascii_lowercase();
+            if lower.is_ascii_alphanumeric() || matches!(lower, '-' | '_') {
+                Some(lower)
+            } else if ch.is_whitespace() {
+                Some('-')
+            } else {
+                None
+            }
+        })
+        .take(80)
+        .collect::<String>()
+        .trim_matches('-')
+        .to_string()
+}
+
+fn destination_host(base_url: &str) -> String {
+    let without_scheme = base_url
+        .strip_prefix("https://")
+        .or_else(|| base_url.strip_prefix("http://"))
+        .unwrap_or(base_url);
+    without_scheme
+        .split('/')
+        .next()
+        .unwrap_or("<unknown>")
+        .to_string()
+}
+
+fn redact_error(error: &UreqError) -> String {
+    match error {
+        UreqError::Status(status, _) => format!("Provider returned HTTP status {status}."),
+        UreqError::Transport(transport) => transport.to_string(),
+    }
+}
+
+fn unix_timestamp() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64
+}
+
+fn default_enabled() -> bool {
+    false
+}
+
+#[allow(dead_code)]
+fn _assert_no_raw_secret_in_value(value: &Value) -> bool {
+    !value.to_string().contains("api_key")
+}

@@ -1,0 +1,9 @@
+{
+  "id": "fixture-llm-test-provider-connection",
+  "method": "llm.testProviderConnection",
+  "params": {
+    "profile_id": "fixture-openai",
+    "confirmation_id": "fixture-confirmation",
+    "timeout_ms": 250
+  }
+}
