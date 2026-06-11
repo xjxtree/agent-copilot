@@ -7,7 +7,10 @@ struct LLMModelTests {
         try statusDecodesRealServicePayload()
         try prepareResultDecodesEstimatePayload()
         try skillAnalysisPrepareDecodesFlexiblePayload()
+        try skillQualityScoreDecodesFlexiblePayload()
+        try skillQualityScoreDecodesV243ServicePayload()
         try promptPreviewDecodesV242Payload()
+        try promptPreviewDecodesServiceArrayScopePayload()
         try promptSendResultDecodesCopyOnlyAuditPayload()
     }
 
@@ -199,6 +202,179 @@ struct LLMModelTests {
         try expectFalse(preview.rawPromptPersisted, "Prompt preview should keep raw prompt persistence false.")
         try expectFalse(preview.rawResponsePersisted, "Prompt preview should keep raw response persistence false.")
         try expectEqual(preview.promptPreview, "Analyze Beta without paths.", "Prompt preview should decode redacted prompt text.")
+    }
+
+    private func promptPreviewDecodesServiceArrayScopePayload() throws {
+        let data = Data(
+            """
+            {
+              "preview_id": "prompt-preview-quality",
+              "status": "blocked",
+              "allowed": false,
+              "reason": "No enabled provider profile is configured; no provider request can be sent.",
+              "action": "quality_score",
+              "provider": null,
+              "model": null,
+              "destination_host": null,
+              "prompt_scope": [
+                "operation metadata",
+                "deterministic quality score",
+                "safety flags"
+              ],
+              "included_fields": ["skill id", "quality score"],
+              "excluded_fields": ["raw skill body", "provider API key"],
+              "redaction": {
+                "status": "redacted-preview-confirmed-required",
+                "redacted_fields": ["local paths"],
+                "placeholders": ["$HOME", "<redacted>"]
+              },
+              "prompt_preview": "Quality score evidence with redacted local paths.",
+              "estimated_input_tokens": 480,
+              "estimated_output_tokens": 650,
+              "estimated_total_tokens": 1130,
+              "estimated_cost_usd": 0.0,
+              "requires_confirmation": true,
+              "draft_requires_user_copy": true,
+              "raw_prompt_persisted": false,
+              "raw_response_persisted": false
+            }
+            """.utf8
+        )
+
+        let preview = try JSONDecoder().decode(LLMPromptPreview.self, from: data)
+
+        try expectEqual(preview.previewID, "prompt-preview-quality", "Prompt preview should decode service preview id.")
+        try expectEqual(preview.enabled, false, "Blocked preview should not be sendable.")
+        try expectContains(preview.promptScope, "deterministic quality score", "Prompt scope should decode array labels.")
+        try expectEqual(preview.includedFields.map(\.name), ["skill id", "quality score"], "Prompt preview should decode string field arrays.")
+        try expectEqual(preview.estimate?.totalTokens, 1130, "Prompt preview should decode top-level token estimates.")
+        try expectFalse(preview.rawPromptPersisted, "Prompt preview must not persist raw prompt.")
+        try expectFalse(preview.rawResponsePersisted, "Prompt preview must not persist raw response.")
+    }
+
+    private func skillQualityScoreDecodesFlexiblePayload() throws {
+        let data = Data(
+            """
+            {
+              "instance_id": "beta",
+              "quality_score": "82",
+              "grade": "Good",
+              "summary": "Metadata is clear, but permissions need sharper boundaries.",
+              "component_scores": [
+                {
+                  "key": "metadata",
+                  "label": "Metadata completeness",
+                  "score": 90,
+                  "max_score": 100,
+                  "summary": "Name and description are present.",
+                  "evidence": ["description present"]
+                },
+                {
+                  "name": "Permission clarity",
+                  "value": 68,
+                  "status": "needs_review",
+                  "reason": "Network intent is vague."
+                }
+              ],
+              "evidence": [
+                {"title":"Findings","detail":"One permission warning","source":"permissions.network-declared"},
+                "No same-agent conflict"
+              ],
+              "risks": ["Network permission is undeclared."],
+              "suggestions": ["Declare network needs explicitly."],
+              "provider_request_sent": false,
+              "write_back_allowed": false,
+              "script_execution_allowed": false,
+              "execution_actions_available": false,
+              "config_mutation_allowed": false,
+              "snapshot_created": false,
+              "triage_mutation_allowed": false,
+              "credential_accessed": false
+            }
+            """.utf8
+        )
+
+        let result = try JSONDecoder().decode(SkillQualityScoreResult.self, from: data)
+
+        try expectEqual(result.skillID, "beta", "Quality score should decode selected skill id.")
+        try expectEqual(result.score, 82, "Quality score should decode string score.")
+        try expectEqual(result.displayBand, "Good", "Quality score should prefer explicit grade.")
+        try expectEqual(result.components.count, 2, "Quality score should decode component scores.")
+        try expectEqual(result.components[1].label, "Permission clarity", "Quality components should tolerate name fallback.")
+        try expectEqual(result.components[1].score, 68, "Quality components should decode value fallback.")
+        try expectEqual(result.evidence.map(\.detail), ["One permission warning", "No same-agent conflict"], "Quality evidence should decode object and string forms.")
+        try expectEqual(result.riskNotes, ["Network permission is undeclared."], "Quality score should decode risk notes.")
+        try expectEqual(result.suggestedImprovements, ["Declare network needs explicitly."], "Quality score should decode suggestions.")
+        try expectFalse(result.safety.providerRequestSent, "Quality score must report provider request as not sent for local scoring.")
+        try expectFalse(result.safety.writeBackAllowed, "Quality score must not enable write-back.")
+        try expectFalse(result.safety.scriptExecutionAllowed, "Quality score must not enable script execution.")
+        try expectFalse(result.safety.configMutationAllowed, "Quality score must not enable config mutation.")
+        try expectFalse(result.safety.credentialAccessed, "Quality score must not access credentials.")
+    }
+
+    private func skillQualityScoreDecodesV243ServicePayload() throws {
+        let data = Data(
+            """
+            {
+              "instance_id": "fixture-skill-id",
+              "definition_id": "fixture-definition-id",
+              "agent": "codex",
+              "score": 78,
+              "grade": "B",
+              "band": "good",
+              "components": [
+                {
+                  "id": "adapter_state",
+                  "label": "Adapter state",
+                  "score": 10,
+                  "max_score": 15,
+                  "summary": "Adapter diagnostic status is blocked.",
+                  "evidence_refs": ["adapter_diagnostics:codex"]
+                }
+              ],
+              "evidence_references": [
+                {
+                  "id": "adapter_diagnostics:codex",
+                  "source_type": "adapter_diagnostics",
+                  "source_id": "codex",
+                  "label": "Codex adapter diagnostics: status=blocked",
+                  "related_instance_id": "fixture-skill-id"
+                }
+              ],
+              "suggested_improvements": [
+                {
+                  "priority": "medium",
+                  "title": "Compare cross-agent overlap",
+                  "detail": "Use read-only comparison before changing routing.",
+                  "evidence_refs": ["analysis:fixture-analysis-id"]
+                }
+              ],
+              "safety_flags": {
+                "read_only": true,
+                "provider_request_sent": false,
+                "write_back_allowed": false,
+                "script_execution_allowed": false,
+                "config_mutation_allowed": false,
+                "snapshot_created": false,
+                "triage_mutation_allowed": false,
+                "credential_accessed": false,
+                "raw_secret_returned": false
+              }
+            }
+            """.utf8
+        )
+
+        let result = try JSONDecoder().decode(SkillQualityScoreResult.self, from: data)
+
+        try expectEqual(result.skillID, "fixture-skill-id", "V2.43 payload should decode instance id.")
+        try expectEqual(result.displayBand, "B", "V2.43 payload should prefer grade.")
+        try expectEqual(result.components.first?.evidence, ["adapter_diagnostics:codex"], "V2.43 components should decode evidence refs.")
+        try expectEqual(result.evidence.first?.detail, "Codex adapter diagnostics: status=blocked", "V2.43 evidence references should decode labels.")
+        try expectEqual(result.evidence.first?.source, "codex", "V2.43 evidence references should decode source ids.")
+        try expectEqual(result.suggestedImprovements, ["Use read-only comparison before changing routing."], "V2.43 suggestions should decode object details.")
+        try expectFalse(result.safety.providerRequestSent, "V2.43 local score must not send provider requests.")
+        try expectFalse(result.safety.configMutationAllowed, "V2.43 local score must not mutate config.")
+        try expectFalse(result.safety.rawSecretReturned, "V2.43 local score must not return secrets.")
     }
 
     private func promptSendResultDecodesCopyOnlyAuditPayload() throws {

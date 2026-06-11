@@ -14,6 +14,7 @@
       "adapter.listCapabilities",
       "adapter.listDiagnostics",
       "evidence.piWritableHarness",
+      "analysis.scoreSkillQuality",
       "llm.status",
       "llm.listProviderProfiles",
       "llm.saveProviderProfile",

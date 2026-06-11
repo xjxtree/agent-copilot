@@ -4,16 +4,17 @@
 >
 > Scanner / rules / catalog 始终是事实来源；LLM/AI provider 是 AI agent skills 的核心分析增强，用于质量、任务可用性、routing 置信度、trace 分析、remediation 和治理总结。
 >
-> 当前实现边界（V2.42 baseline）：
+> 当前实现边界（V2.43 baseline）：
 >
 > - 已落地 disabled-by-default 的 service/UI gate 和 request prepare/estimate 能力。
 > - 已落地用户显式配置的 OpenAI-compatible / Claude-compatible provider profile 基础：`llm.listProviderProfiles`、`llm.saveProviderProfile`、`llm.deleteProviderProfile`、`llm.testProviderConnection`、macOS Keychain-first API key storage、预算字段、disabled/unconfigured state，以及 test connection 的最小 redacted call metadata。
 > - 用户主动触发 Analyze / Recommend / conflict explanation / draft frontmatter 前，可以展示 provider、model、token/cost 估算和不可用原因。
 > - Analyze / Recommend / conflict explanation / draft frontmatter / skill analysis 可先生成 redacted prompt preview；只有用户显式确认后才可通过 `llm.confirmPromptAndSend` 发起 provider 请求并返回 copy-only draft output。
+> - V2.43 已落地 `analysis.scoreSkillQuality`：基于 metadata、findings、conflicts、analysis、adapter diagnostics 生成 user-triggered/read-only deterministic local quality score；optional provider explanation 只走 V2.42 preview/redaction/confirmation。
 >
-> V2.43+ 规划边界：
+> V2.44+ 规划边界（未实现）：
 >
-> - V2.43 起在 V2.42 的 preview/confirmation 基础上增加 AI skill quality、task readiness、routing confidence 等输出。
+> - V2.44 起在 V2.42/V2.43 基础上增加 task readiness、routing confidence 等输出；当前仍为规划与验收同步阶段，尚未有 V2.44 以外的实现。
 > - 每次真实 provider 调用前必须展示 prompt preview、redaction summary、token/cost estimate 和 network destination。
 > - AI 输出默认 read-only，不直接写 skill、不改 agent config、不执行脚本、不改变 triage 或 policy 状态。
 
@@ -58,7 +59,8 @@ Provider 配置原则：
 | Version | AI role | 本地事实来源 |
 | --- | --- | --- |
 | V2.41-V2.42（实现） | Provider config、prompt preview/redaction/confirmed send 与最小审计 metadata | service status、settings、Keychain/fallback permission checks、confirmation id、redaction status |
-| V2.43-V2.45 | Skill quality、task readiness、routing confidence | metadata、findings、conflicts、analysis、adapter diagnostics |
+| V2.43（实现） | Deterministic skill quality score plus optional preview-confirmed provider explanation | metadata、findings、conflicts、analysis、adapter diagnostics |
+| V2.44-V2.45（planned） | Task readiness、routing confidence | metadata、findings、conflicts、analysis、adapter diagnostics、quality score |
 | V2.46-V2.50 | benchmark、regression、trace import、routing dashboard、cross-agent task readiness | benchmark set、catalog snapshots、imported trace evidence |
 | V2.51-V2.55 | stale/drift、knowledge index、similar grouping、taxonomy、workspace readiness | fingerprints、mtime、source/root provenance、local index |
 | V2.56-V2.60 | remediation planner、fix drafts、impact preview、batch review、history | findings、triage、policy, snapshots, writable capability matrix |

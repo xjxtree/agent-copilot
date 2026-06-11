@@ -26,10 +26,11 @@ use skills_copilot_commands::{
     set_rule_severity_override, set_rule_suppression, skill_health_summary, toggle_skill,
     AdapterCapabilityRecord, AdapterDiagnosticsRecord, AgentCatalogScanReport,
     BatchToggleApplyRecord, BatchTogglePreviewRecord, ConfigDocumentRecord,
-    CrossAgentAnalysisRecord, CrossAgentComparisonRecord, ExportedSkillBundle,
-    PiWritableHarnessReport, ScriptExecutionAttemptRecord, ScriptExecutionPreviewRecord,
-    ScriptExecutionRequest, SkillHealthSummary, SkillInstallPreviewRecord,
-    SnapshotRollbackPreviewRecord, ToolGlobalImportResult, SCRIPT_EXECUTION_DISABLED_REASON,
+    CrossAgentAnalysisGroup, CrossAgentAnalysisRecord, CrossAgentComparisonRecord,
+    ExportedSkillBundle, PiWritableHarnessReport, ScriptExecutionAttemptRecord,
+    ScriptExecutionPreviewRecord, ScriptExecutionRequest, SkillHealthSummary,
+    SkillInstallPreviewRecord, SnapshotRollbackPreviewRecord, ToolGlobalImportResult,
+    SCRIPT_EXECUTION_DISABLED_REASON,
 };
 use skills_copilot_core::{AdapterContext, AdapterRoot, AgentId, RootSource, Scope};
 use thiserror::Error;
@@ -60,6 +61,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "adapter.listCapabilities",
     "adapter.listDiagnostics",
     "evidence.piWritableHarness",
+    "analysis.scoreSkillQuality",
     "llm.status",
     "llm.listProviderProfiles",
     "llm.saveProviderProfile",
@@ -379,6 +381,91 @@ pub struct ReportExportRedaction {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct ScoreSkillQualityParams {
+    #[serde(alias = "skill_instance_id")]
+    pub instance_id: String,
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default)]
+    pub definition_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SkillQualityScoreResult {
+    pub instance_id: String,
+    pub definition_id: String,
+    pub agent: String,
+    pub scope: String,
+    pub skill_name: String,
+    pub score: u8,
+    pub grade: &'static str,
+    pub band: &'static str,
+    pub generated_by: &'static str,
+    pub components: Vec<SkillQualityScoreComponent>,
+    pub reasons: Vec<String>,
+    pub risk_notes: Vec<String>,
+    pub evidence_references: Vec<SkillQualityEvidenceReference>,
+    pub suggested_improvements: Vec<SkillQualitySuggestion>,
+    pub prompt_request: SkillQualityPromptRequest,
+    pub safety_flags: SkillQualitySafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SkillQualityScoreComponent {
+    pub id: &'static str,
+    pub label: &'static str,
+    pub score: u8,
+    pub max_score: u8,
+    pub summary: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SkillQualityEvidenceReference {
+    pub id: String,
+    pub source_type: &'static str,
+    pub source_id: String,
+    pub label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub severity: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub related_instance_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SkillQualitySuggestion {
+    pub priority: &'static str,
+    pub title: String,
+    pub detail: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SkillQualityPromptRequest {
+    pub available: bool,
+    pub preview_method: &'static str,
+    pub confirm_method: &'static str,
+    pub action: &'static str,
+    pub request: LlmPreviewPromptParams,
+    pub note: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SkillQualitySafetyFlags {
+    pub read_only: bool,
+    pub provider_request_sent: bool,
+    pub write_back_allowed: bool,
+    pub script_execution_allowed: bool,
+    pub config_mutation_allowed: bool,
+    pub snapshot_created: bool,
+    pub triage_mutation_allowed: bool,
+    pub credential_accessed: bool,
+    pub raw_secret_returned: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct LlmPrepareActionParams {
     pub kind: LlmActionKind,
     #[serde(default, alias = "instance_id")]
@@ -435,6 +522,7 @@ pub enum LlmPromptActionKind {
     ExplainConflict,
     DraftFrontmatter,
     SkillAnalysis,
+    QualityScore,
 }
 
 impl LlmPromptActionKind {
@@ -445,6 +533,7 @@ impl LlmPromptActionKind {
             Self::ExplainConflict => "explain_conflict",
             Self::DraftFrontmatter => "draft_frontmatter",
             Self::SkillAnalysis => "skill_analysis",
+            Self::QualityScore => "quality_score",
         }
     }
 }
@@ -953,6 +1042,10 @@ impl ServiceHost {
                 let report: PiWritableHarnessReport =
                     run_pi_writable_evidence_harness(&self.pi_writable_harness_root(params))?;
                 serde_json::to_value(report).map_err(Into::into)
+            }
+            "analysis.scoreSkillQuality" => {
+                let params: ScoreSkillQualityParams = serde_json::from_value(request.params)?;
+                serde_json::to_value(self.score_skill_quality(params)?).map_err(Into::into)
             }
             "llm.status" => serde_json::to_value(self.llm_status()).map_err(Into::into),
             "llm.listProviderProfiles" => {
@@ -2014,6 +2107,298 @@ impl ServiceHost {
         })
     }
 
+    pub fn score_skill_quality(
+        &self,
+        params: ScoreSkillQualityParams,
+    ) -> Result<SkillQualityScoreResult, ServiceError> {
+        let Some(catalog) = self.open_existing_catalog_read_only()? else {
+            return Err(ServiceError::SkillNotFound(params.instance_id));
+        };
+        let skill = catalog
+            .get_skill_detail(&params.instance_id)?
+            .ok_or_else(|| ServiceError::SkillNotFound(params.instance_id.clone()))?;
+        if let Some(agent) = params.agent.as_deref().filter(|agent| !agent.is_empty()) {
+            if agent != skill.agent {
+                return Err(ServiceError::InvalidRequest(format!(
+                    "analysis.scoreSkillQuality agent `{agent}` does not match skill agent `{}`",
+                    skill.agent
+                )));
+            }
+        }
+        if let Some(definition_id) = params
+            .definition_id
+            .as_deref()
+            .filter(|definition_id| !definition_id.is_empty())
+        {
+            if definition_id != skill.definition_id {
+                return Err(ServiceError::InvalidRequest(format!(
+                    "analysis.scoreSkillQuality definition_id `{definition_id}` does not match skill definition `{}`",
+                    skill.definition_id
+                )));
+            }
+        }
+
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let findings = catalog
+            .list_rule_findings()?
+            .into_iter()
+            .filter(|finding| {
+                finding.instance_id.as_deref() == Some(skill.id.as_str())
+                    || finding.definition_id.as_deref() == Some(skill.definition_id.as_str())
+            })
+            .collect::<Vec<_>>();
+        let conflicts = catalog
+            .list_conflict_groups()?
+            .into_iter()
+            .filter(|conflict| {
+                conflict.definition_id == skill.definition_id
+                    || conflict
+                        .instance_ids
+                        .iter()
+                        .any(|instance_id| instance_id == &skill.id)
+            })
+            .collect::<Vec<_>>();
+        let analysis = analyze_catalog(&catalog, &adapter_ctx)?;
+        let related_analysis = analysis
+            .groups
+            .into_iter()
+            .filter(|group| {
+                group
+                    .instance_ids
+                    .iter()
+                    .any(|instance_id| instance_id == &skill.id)
+            })
+            .collect::<Vec<_>>();
+        let adapter_diagnostics = list_adapter_diagnostics(&adapter_ctx)
+            .into_iter()
+            .find(|diagnostic| diagnostic.agent == skill.agent);
+
+        let mut evidence = Vec::new();
+        let skill_evidence_id = push_quality_evidence(
+            &mut evidence,
+            "skill",
+            &skill.id,
+            format!(
+                "Catalog metadata for `{}` ({}, {})",
+                redact_for_llm_preview(&skill.name),
+                redact_for_llm_preview(&skill.agent),
+                redact_for_llm_preview(&skill.scope)
+            ),
+            None,
+            Some(skill.id.clone()),
+        );
+        let definition_evidence_id = push_quality_evidence(
+            &mut evidence,
+            "definition",
+            &skill.definition_id,
+            format!(
+                "Definition identity `{}`",
+                redact_for_llm_preview(&skill.definition_id)
+            ),
+            None,
+            Some(skill.id.clone()),
+        );
+
+        let mut components = Vec::new();
+        let mut reasons = Vec::new();
+        let mut risk_notes = Vec::new();
+        let mut suggestions = Vec::new();
+
+        let (metadata_score, metadata_summary, metadata_suggestions) =
+            quality_metadata_component(&skill);
+        reasons.push(metadata_summary.clone());
+        suggestions.extend(metadata_suggestions);
+        components.push(SkillQualityScoreComponent {
+            id: "metadata_completeness",
+            label: "Metadata completeness",
+            score: metadata_score,
+            max_score: 25,
+            summary: metadata_summary,
+            evidence_refs: vec![skill_evidence_id.clone(), definition_evidence_id],
+        });
+
+        let (permission_score, permission_summary, permission_risks, permission_suggestions) =
+            quality_permission_component(&skill);
+        reasons.push(permission_summary.clone());
+        risk_notes.extend(permission_risks);
+        suggestions.extend(permission_suggestions);
+        components.push(SkillQualityScoreComponent {
+            id: "permission_clarity",
+            label: "Permission clarity",
+            score: permission_score,
+            max_score: 20,
+            summary: permission_summary,
+            evidence_refs: vec![skill_evidence_id.clone()],
+        });
+
+        let mut finding_refs = Vec::new();
+        for finding in &findings {
+            let evidence_id = push_quality_evidence(
+                &mut evidence,
+                "finding",
+                &finding.id,
+                format!(
+                    "{} finding `{}`: {}",
+                    redact_for_llm_preview(&finding.effective_severity),
+                    redact_for_llm_preview(&finding.rule_id),
+                    redact_for_llm_preview(&finding.message)
+                ),
+                Some(finding.effective_severity.clone()),
+                finding.instance_id.clone(),
+            );
+            finding_refs.push(evidence_id.clone());
+            if let Some(suggestion) = finding.suggestion.as_deref() {
+                suggestions.push(SkillQualitySuggestion {
+                    priority: quality_priority_for_severity(&finding.effective_severity),
+                    title: format!("Address `{}`", redact_for_llm_preview(&finding.rule_id)),
+                    detail: redact_for_llm_preview(suggestion),
+                    evidence_refs: vec![evidence_id],
+                });
+            }
+        }
+        let (risk_score, risk_summary, finding_risks, body_suggestions) =
+            quality_risk_component(&skill, &findings);
+        reasons.push(risk_summary.clone());
+        risk_notes.extend(finding_risks);
+        suggestions.extend(body_suggestions);
+        components.push(SkillQualityScoreComponent {
+            id: "risk_findings",
+            label: "Findings and risky signals",
+            score: risk_score,
+            max_score: 25,
+            summary: risk_summary,
+            evidence_refs: quality_refs_or_skill(&finding_refs, &skill_evidence_id),
+        });
+
+        let mut conflict_refs = Vec::new();
+        for conflict in &conflicts {
+            let evidence_id = push_quality_evidence(
+                &mut evidence,
+                "conflict",
+                &conflict.id,
+                format!(
+                    "Same-agent conflict `{}` covers {} instance(s)",
+                    redact_for_llm_preview(&conflict.reason),
+                    conflict.instance_ids.len()
+                ),
+                Some("warning".to_string()),
+                Some(skill.id.clone()),
+            );
+            conflict_refs.push(evidence_id);
+        }
+        for group in &related_analysis {
+            let evidence_id = push_quality_evidence(
+                &mut evidence,
+                "analysis",
+                &group.id,
+                format!(
+                    "{} analysis `{}`: {}",
+                    redact_for_llm_preview(&group.severity),
+                    redact_for_llm_preview(&group.kind),
+                    redact_for_llm_preview(&group.title)
+                ),
+                Some(group.severity.clone()),
+                Some(skill.id.clone()),
+            );
+            conflict_refs.push(evidence_id);
+        }
+        let (conflict_score, conflict_summary, conflict_suggestions) =
+            quality_conflict_component(&conflicts, &related_analysis);
+        reasons.push(conflict_summary.clone());
+        suggestions.extend(conflict_suggestions);
+        components.push(SkillQualityScoreComponent {
+            id: "conflict_and_overlap",
+            label: "Conflicts and overlap",
+            score: conflict_score,
+            max_score: 15,
+            summary: conflict_summary,
+            evidence_refs: quality_refs_or_skill(&conflict_refs, &skill_evidence_id),
+        });
+
+        let adapter_evidence_id = adapter_diagnostics.as_ref().map(|diagnostic| {
+            push_quality_evidence(
+                &mut evidence,
+                "adapter_diagnostics",
+                diagnostic.agent,
+                format!(
+                    "{} adapter diagnostics: status={}, writable_status={}, install_status={}",
+                    diagnostic.display_name,
+                    diagnostic.status,
+                    diagnostic.access.writable_status,
+                    diagnostic.access.install_status
+                ),
+                None,
+                Some(skill.id.clone()),
+            )
+        });
+        let (adapter_score, adapter_summary, adapter_suggestions) =
+            quality_adapter_component(&skill, adapter_diagnostics.as_ref());
+        reasons.push(adapter_summary.clone());
+        suggestions.extend(adapter_suggestions);
+        components.push(SkillQualityScoreComponent {
+            id: "adapter_state",
+            label: "Adapter state",
+            score: adapter_score,
+            max_score: 15,
+            summary: adapter_summary,
+            evidence_refs: adapter_evidence_id
+                .map(|evidence_id| vec![evidence_id])
+                .unwrap_or_else(|| vec![skill_evidence_id]),
+        });
+
+        let score = components
+            .iter()
+            .map(|component| u16::from(component.score))
+            .sum::<u16>()
+            .min(100) as u8;
+        let (grade, band) = quality_grade_and_band(score);
+        dedupe_quality_suggestions(&mut suggestions);
+        suggestions.truncate(8);
+        if risk_notes.is_empty() {
+            risk_notes.push(
+                "No high-risk local rule findings or execution/network/body signals were associated with this skill."
+                    .to_string(),
+            );
+        }
+
+        Ok(SkillQualityScoreResult {
+            instance_id: skill.id.clone(),
+            definition_id: skill.definition_id,
+            agent: skill.agent,
+            scope: skill.scope,
+            skill_name: redact_for_llm_preview(&skill.name),
+            score,
+            grade,
+            band,
+            generated_by: "deterministic-service",
+            components,
+            reasons,
+            risk_notes,
+            evidence_references: evidence,
+            suggested_improvements: suggestions,
+            prompt_request: SkillQualityPromptRequest {
+                available: true,
+                preview_method: "llm.previewPrompt",
+                confirm_method: "llm.confirmPromptAndSend",
+                action: "quality_score",
+                request: LlmPreviewPromptParams {
+                    action: LlmPromptActionKind::QualityScore,
+                    profile_id: None,
+                    skill_instance_id: Some(params.instance_id),
+                    instance_ids: Vec::new(),
+                    analysis_kind: None,
+                    user_intent: Some(
+                        "Explain this deterministic local quality score using only the included redacted evidence."
+                            .to_string(),
+                    ),
+                },
+                note: "Optional provider-backed reasoning must be requested through prompt preview and explicit confirmation; this scoring method never sends provider traffic."
+                    .to_string(),
+            },
+            safety_flags: skill_quality_safety_flags(),
+        })
+    }
+
     pub fn script_execution_status(&self) -> ScriptExecutionStatus {
         ScriptExecutionStatus {
             enabled: false,
@@ -2172,6 +2557,44 @@ impl ServiceHost {
                 sections.push(format!("Analysis kind: {}", analysis_kind.as_str()));
                 sections.push(self.render_skill_analysis_prompt_sections(params, &mut redactor)?);
             }
+            LlmPromptActionKind::QualityScore => {
+                let instance_id = params.skill_instance_id.as_deref().ok_or_else(|| {
+                    ServiceError::InvalidRequest(
+                        "llm.previewPrompt quality_score requires skill_instance_id".to_string(),
+                    )
+                })?;
+                let score = self.score_skill_quality(ScoreSkillQualityParams {
+                    instance_id: instance_id.to_string(),
+                    agent: None,
+                    definition_id: None,
+                })?;
+                prompt_scope.extend([
+                    "deterministic quality score".to_string(),
+                    "score components".to_string(),
+                    "evidence reference summaries".to_string(),
+                    "suggested improvements".to_string(),
+                    "safety flags".to_string(),
+                ]);
+                included_fields.extend([
+                    "skill id".to_string(),
+                    "skill name".to_string(),
+                    "agent".to_string(),
+                    "scope".to_string(),
+                    "quality score".to_string(),
+                    "quality grade and band".to_string(),
+                    "component scores and summaries".to_string(),
+                    "finding/conflict/analysis evidence ids and labels".to_string(),
+                    "suggested improvement titles and details".to_string(),
+                    "read-only safety flags".to_string(),
+                ]);
+                excluded_fields.extend([
+                    "raw skill body".to_string(),
+                    "raw frontmatter".to_string(),
+                    "raw source paths".to_string(),
+                    "raw provider response".to_string(),
+                ]);
+                sections.push(render_quality_score_prompt_section(&score, &mut redactor));
+            }
         }
 
         sections.push("Required output: concise draft guidance with evidence notes, uncertainty, and safe next steps. Mark all suggestions copy-only.".to_string());
@@ -2184,6 +2607,7 @@ impl ServiceHost {
                 .analysis_kind
                 .unwrap_or(LlmSkillAnalysisKind::Overview)
                 .output_token_estimate(),
+            LlmPromptActionKind::QualityScore => 650,
         };
         let prompt_preview = sections.join("\n\n");
         let redaction = redactor.summary();
@@ -3598,6 +4022,426 @@ fn llm_review_redaction() -> LlmReviewRedaction {
     }
 }
 
+fn skill_quality_safety_flags() -> SkillQualitySafetyFlags {
+    SkillQualitySafetyFlags {
+        read_only: true,
+        provider_request_sent: false,
+        write_back_allowed: false,
+        script_execution_allowed: false,
+        config_mutation_allowed: false,
+        snapshot_created: false,
+        triage_mutation_allowed: false,
+        credential_accessed: false,
+        raw_secret_returned: false,
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+    }
+}
+
+fn quality_metadata_component(
+    skill: &SkillDetailRecord,
+) -> (u8, String, Vec<SkillQualitySuggestion>) {
+    let mut score = 25i16;
+    let mut missing = Vec::new();
+    let mut suggestions = Vec::new();
+    if skill.name.trim().is_empty() {
+        score -= 8;
+        missing.push("name");
+        suggestions.push(SkillQualitySuggestion {
+            priority: "high",
+            title: "Add a clear skill name".to_string(),
+            detail:
+                "Provide a stable, canonical name so agents and reviewers can identify the skill."
+                    .to_string(),
+            evidence_refs: Vec::new(),
+        });
+    }
+    if skill.description.trim().is_empty() {
+        score -= 8;
+        missing.push("description");
+        suggestions.push(SkillQualitySuggestion {
+            priority: "high",
+            title: "Add a concise description".to_string(),
+            detail:
+                "Describe the task fit, expected inputs, and safe usage boundaries in metadata."
+                    .to_string(),
+            evidence_refs: Vec::new(),
+        });
+    }
+    if skill.frontmatter_raw.trim().is_empty() {
+        score -= 5;
+        missing.push("frontmatter");
+        suggestions.push(SkillQualitySuggestion {
+            priority: "medium",
+            title: "Restore frontmatter metadata".to_string(),
+            detail: "Use structured frontmatter so deterministic rules can evaluate the skill."
+                .to_string(),
+            evidence_refs: Vec::new(),
+        });
+    }
+    if skill.body.trim().chars().count() < 40 {
+        score -= 4;
+        missing.push("body detail");
+        suggestions.push(SkillQualitySuggestion {
+            priority: "medium",
+            title: "Expand the skill guidance".to_string(),
+            detail: "Add enough task-specific instructions for an agent to understand when and how to use the skill."
+                .to_string(),
+            evidence_refs: Vec::new(),
+        });
+    }
+    let summary = if missing.is_empty() {
+        "Metadata has the expected local name, description, frontmatter, and body guidance."
+            .to_string()
+    } else {
+        format!("Metadata needs attention for: {}.", missing.join(", "))
+    };
+    (score.clamp(0, 25) as u8, summary, suggestions)
+}
+
+fn quality_permission_component(
+    skill: &SkillDetailRecord,
+) -> (u8, String, Vec<String>, Vec<SkillQualitySuggestion>) {
+    let mut score = 20i16;
+    let mut risks = Vec::new();
+    let mut suggestions = Vec::new();
+    let permissions = &skill.permissions;
+    let normalized = permissions.get("normalized").unwrap_or(permissions);
+    if permissions
+        .as_object()
+        .is_none_or(|object| object.is_empty())
+    {
+        score -= 8;
+        risks.push("Permission metadata is empty or unavailable.".to_string());
+        suggestions.push(SkillQualitySuggestion {
+            priority: "high",
+            title: "Declare permission intent".to_string(),
+            detail: "Add explicit tools/files/network/exec expectations so risk checks do not rely on unknown-safe defaults."
+                .to_string(),
+            evidence_refs: Vec::new(),
+        });
+    }
+    let tools = normalized
+        .get("tools")
+        .and_then(Value::as_array)
+        .map(Vec::len)
+        .unwrap_or(0);
+    if tools == 0 {
+        score -= 4;
+        risks.push("No explicit tool allow-list was found in normalized permissions.".to_string());
+    }
+    if normalized
+        .get("network")
+        .and_then(Value::as_str)
+        .is_none_or(|network| network == "unknown")
+    {
+        score -= 3;
+        risks.push("Network access intent is unknown.".to_string());
+    }
+    let exec = normalized
+        .get("exec")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let requires_human = normalized
+        .get("requires_human")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if exec && !requires_human {
+        score -= 8;
+        risks.push(
+            "Execution permission is declared without a human-review requirement.".to_string(),
+        );
+        suggestions.push(SkillQualitySuggestion {
+            priority: "high",
+            title: "Require human review for execution".to_string(),
+            detail: "Execution-like skills should declare an explicit human confirmation boundary."
+                .to_string(),
+            evidence_refs: Vec::new(),
+        });
+    }
+    let summary = if risks.is_empty() {
+        "Permission metadata is explicit enough for local risk checks.".to_string()
+    } else {
+        format!("Permission clarity deductions: {}", risks.join(" "))
+    };
+    (score.clamp(0, 20) as u8, summary, risks, suggestions)
+}
+
+fn quality_risk_component(
+    skill: &SkillDetailRecord,
+    findings: &[RuleFindingRecord],
+) -> (u8, String, Vec<String>, Vec<SkillQualitySuggestion>) {
+    let mut deduction = 0i16;
+    let mut risks = Vec::new();
+    for finding in findings {
+        let points = match finding.effective_severity.as_str() {
+            "critical" => 15,
+            "error" => 10,
+            "warning" | "warn" => 6,
+            "info" => 2,
+            _ => 1,
+        };
+        deduction += points;
+        risks.push(format!(
+            "{} finding `{}` affects this score.",
+            redact_for_llm_preview(&finding.effective_severity),
+            redact_for_llm_preview(&finding.rule_id)
+        ));
+    }
+    let combined = format!("{}\n{}", skill.frontmatter_raw, skill.body).to_lowercase();
+    let mut suggestions = Vec::new();
+    if combined.contains("#!") || combined.contains("exec") || combined.contains("command") {
+        deduction += 5;
+        risks.push(
+            "Skill text contains execution-related terms; this service still exposes no execution path."
+                .to_string(),
+        );
+        suggestions.push(SkillQualitySuggestion {
+            priority: "medium",
+            title: "Clarify execution boundaries".to_string(),
+            detail:
+                "Document whether command-like instructions are examples, manual steps, or blocked automation."
+                    .to_string(),
+            evidence_refs: Vec::new(),
+        });
+    }
+    if combined.contains("http") || combined.contains("api") || combined.contains("network") {
+        deduction += 4;
+        risks.push("Skill text contains network/API-related terms.".to_string());
+    }
+    if combined.contains("key") || combined.contains("token") || combined.contains("secret") {
+        deduction += 4;
+        risks.push(
+            "Skill text contains secret-like terms; responses redact such tokens.".to_string(),
+        );
+    }
+    let score = (25i16 - deduction.min(25)).clamp(0, 25) as u8;
+    let summary = if findings.is_empty() && risks.is_empty() {
+        "No related findings or high-risk body signals were detected locally.".to_string()
+    } else {
+        format!(
+            "{} related finding(s) and local text signals reduced the risk component.",
+            findings.len()
+        )
+    };
+    (score, summary, risks, suggestions)
+}
+
+fn quality_conflict_component(
+    conflicts: &[ConflictGroupRecord],
+    analysis_groups: &[CrossAgentAnalysisGroup],
+) -> (u8, String, Vec<SkillQualitySuggestion>) {
+    let conflict_deduction = (conflicts.len() as i16 * 12).min(15);
+    let analysis_deduction = (analysis_groups.len() as i16 * 5).min(10);
+    let score = (15i16 - (conflict_deduction + analysis_deduction).min(15)).clamp(0, 15) as u8;
+    let mut suggestions = Vec::new();
+    if !conflicts.is_empty() {
+        suggestions.push(SkillQualitySuggestion {
+            priority: "high",
+            title: "Review same-agent conflicts".to_string(),
+            detail: "Resolve current-agent name/runtime collisions through the existing conflict review flow."
+                .to_string(),
+            evidence_refs: Vec::new(),
+        });
+    }
+    if !analysis_groups.is_empty() {
+        suggestions.push(SkillQualitySuggestion {
+            priority: "medium",
+            title: "Compare cross-agent overlap".to_string(),
+            detail: "Use read-only comparison to decide whether similar skills improve coverage or create routing ambiguity."
+                .to_string(),
+            evidence_refs: Vec::new(),
+        });
+    }
+    let summary = if conflicts.is_empty() && analysis_groups.is_empty() {
+        "No same-agent conflict or cross-agent overlap currently involves this skill.".to_string()
+    } else {
+        format!(
+            "{} same-agent conflict(s) and {} cross-agent analysis group(s) involve this skill.",
+            conflicts.len(),
+            analysis_groups.len()
+        )
+    };
+    (score, summary, suggestions)
+}
+
+fn quality_adapter_component(
+    skill: &SkillDetailRecord,
+    diagnostic: Option<&AdapterDiagnosticsRecord>,
+) -> (u8, String, Vec<SkillQualitySuggestion>) {
+    let mut score = 15i16;
+    let mut notes = Vec::new();
+    let mut suggestions = Vec::new();
+    if !skill.enabled {
+        score -= 8;
+        notes.push("Skill is disabled in the catalog state.".to_string());
+        suggestions.push(SkillQualitySuggestion {
+            priority: "medium",
+            title: "Review enablement state".to_string(),
+            detail:
+                "If this skill is expected to route tasks, review enablement through the existing safe toggle flow."
+                    .to_string(),
+            evidence_refs: Vec::new(),
+        });
+    }
+    if skill.state != "loaded" {
+        score -= 10;
+        notes.push(format!(
+            "Skill state is `{}` instead of loaded.",
+            redact_for_llm_preview(&skill.state)
+        ));
+    }
+    match diagnostic {
+        Some(diagnostic) => {
+            if diagnostic.status != "available" {
+                score -= 3;
+                notes.push(format!(
+                    "Adapter diagnostic status is `{}`.",
+                    diagnostic.status
+                ));
+            }
+            if diagnostic.roots.iter().all(|root| !root.exists) {
+                score -= 3;
+                notes.push(
+                    "Adapter diagnostics found no existing scanned root for this agent."
+                        .to_string(),
+                );
+            }
+        }
+        None => {
+            score -= 3;
+            notes.push("No adapter diagnostics entry matched this skill agent.".to_string());
+        }
+    }
+    let summary = if notes.is_empty() {
+        "Adapter diagnostics and catalog state support read-only analysis for this skill."
+            .to_string()
+    } else {
+        notes.join(" ")
+    };
+    (score.clamp(0, 15) as u8, summary, suggestions)
+}
+
+fn quality_grade_and_band(score: u8) -> (&'static str, &'static str) {
+    match score {
+        90..=100 => ("A", "excellent"),
+        75..=89 => ("B", "good"),
+        60..=74 => ("C", "fair"),
+        40..=59 => ("D", "poor"),
+        _ => ("F", "blocked"),
+    }
+}
+
+fn quality_priority_for_severity(severity: &str) -> &'static str {
+    match severity {
+        "critical" | "error" => "high",
+        "warning" | "warn" => "medium",
+        _ => "low",
+    }
+}
+
+fn push_quality_evidence(
+    evidence: &mut Vec<SkillQualityEvidenceReference>,
+    source_type: &'static str,
+    source_id: &str,
+    label: String,
+    severity: Option<String>,
+    related_instance_id: Option<String>,
+) -> String {
+    let id = format!("{source_type}:{source_id}");
+    evidence.push(SkillQualityEvidenceReference {
+        id: id.clone(),
+        source_type,
+        source_id: redact_for_llm_preview(source_id),
+        label,
+        severity,
+        related_instance_id,
+    });
+    id
+}
+
+fn quality_refs_or_skill(refs: &[String], skill_ref: &str) -> Vec<String> {
+    if refs.is_empty() {
+        vec![skill_ref.to_string()]
+    } else {
+        refs.to_vec()
+    }
+}
+
+fn dedupe_quality_suggestions(suggestions: &mut Vec<SkillQualitySuggestion>) {
+    let mut seen = BTreeMap::new();
+    suggestions.retain(|suggestion| {
+        let key = format!("{}\x1f{}", suggestion.title, suggestion.detail);
+        if let std::collections::btree_map::Entry::Vacant(entry) = seen.entry(key) {
+            entry.insert(());
+            true
+        } else {
+            false
+        }
+    });
+}
+
+fn render_quality_score_prompt_section(
+    score: &SkillQualityScoreResult,
+    redactor: &mut PromptRedactor<'_>,
+) -> String {
+    let components = score
+        .components
+        .iter()
+        .map(|component| {
+            format!(
+                "- {}: {}/{}; {}",
+                component.id,
+                component.score,
+                component.max_score,
+                redactor.redact(&component.summary)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let evidence = score
+        .evidence_references
+        .iter()
+        .take(12)
+        .map(|reference| {
+            format!(
+                "- {} {} {}",
+                reference.source_type,
+                redactor.redact(&reference.source_id),
+                redactor.redact(&reference.label)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let suggestions = score
+        .suggested_improvements
+        .iter()
+        .take(8)
+        .map(|suggestion| {
+            format!(
+                "- {}: {} - {}",
+                suggestion.priority,
+                redactor.redact(&suggestion.title),
+                redactor.redact(&suggestion.detail)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "Quality score evidence:\n- skill id: {}\n- name: {}\n- agent: {}\n- scope: {}\n- score: {} / 100\n- grade: {}\n- band: {}\n\nComponents:\n{}\n\nEvidence references:\n{}\n\nSuggested improvements:\n{}\n\nSafety flags: read_only=true, provider_request_sent=false, write_back_allowed=false, script_execution_allowed=false, config_mutation_allowed=false, snapshot_created=false, triage_mutation_allowed=false, credential_accessed=false, raw_prompt_persisted=false, raw_response_persisted=false.",
+        redactor.redact(&score.instance_id),
+        redactor.redact(&score.skill_name),
+        redactor.redact(&score.agent),
+        redactor.redact(&score.scope),
+        score.score,
+        score.grade,
+        score.band,
+        if components.is_empty() { "none" } else { &components },
+        if evidence.is_empty() { "none" } else { &evidence },
+        if suggestions.is_empty() { "none" } else { &suggestions },
+    )
+}
+
 fn llm_skill_analysis_safety_flags() -> LlmSkillAnalysisSafetyFlags {
     LlmSkillAnalysisSafetyFlags {
         write_back_enabled: false,
@@ -3827,6 +4671,7 @@ mod tests {
         assert!(methods.contains(&Value::String("app.version".to_string())));
         assert!(methods.contains(&Value::String("app.stateSnapshot".to_string())));
         assert!(methods.contains(&Value::String("adapter.listDiagnostics".to_string())));
+        assert!(methods.contains(&Value::String("analysis.scoreSkillQuality".to_string())));
         assert!(methods.contains(&Value::String("llm.status".to_string())));
         assert!(methods.contains(&Value::String("llm.listProviderProfiles".to_string())));
         assert!(methods.contains(&Value::String("llm.saveProviderProfile".to_string())));
@@ -5055,6 +5900,226 @@ mod tests {
 
         let _ = fs::remove_dir_all(app_data_dir);
         let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn analysis_score_skill_quality_returns_local_read_only_score() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-quality-score-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-quality-score-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        let skill_path = app_data_dir.join("fixture-skill").join("SKILL.md");
+        seed_catalog_with_llm_skill(&host, &skill_path);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("quality-score".to_string()),
+            method: "analysis.scoreSkillQuality".to_string(),
+            params: json!({ "instance_id": "llm-skill-id" }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("quality score result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("deterministic-service")
+        );
+        assert!(result
+            .get("score")
+            .and_then(Value::as_u64)
+            .is_some_and(|score| score <= 100));
+        assert_eq!(
+            result
+                .pointer("/safety_flags/read_only")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/write_back_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/script_execution_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/config_mutation_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/snapshot_created")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/triage_mutation_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/prompt_request/action")
+                .and_then(Value::as_str),
+            Some("quality_score")
+        );
+        assert_eq!(
+            result
+                .pointer("/prompt_request/request/action")
+                .and_then(Value::as_str),
+            Some("quality_score")
+        );
+        assert!(result
+            .get("components")
+            .and_then(Value::as_array)
+            .is_some_and(|components| components.len() == 5));
+        assert!(result
+            .get("evidence_references")
+            .and_then(Value::as_array)
+            .is_some_and(|evidence| !evidence.is_empty()));
+        assert!(result
+            .get("suggested_improvements")
+            .and_then(Value::as_array)
+            .is_some_and(|suggestions| !suggestions.is_empty()));
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let serialized = serde_json::to_string(&result).expect("serialize quality result");
+        assert!(!serialized.contains("OPENAI_API_KEY=<redacted>"));
+        assert!(!serialized.contains("Analyze local skill posture"));
+        assert!(!serialized.contains("fixture-redacted-value"));
+        assert!(!serialized.contains(&skill_path.to_string_lossy().to_string()));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn analysis_score_skill_quality_missing_skill_does_not_create_catalog() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-quality-score-missing-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("quality-score-missing".to_string()),
+            method: "analysis.scoreSkillQuality".to_string(),
+            params: json!({ "instance_id": "missing-skill-id" }),
+        });
+
+        assert!(!response.ok);
+        let error = response.error.expect("missing quality score error");
+        assert_eq!(error.code, "skill_not_found");
+        assert!(error.message.contains("missing-skill-id"));
+        assert!(
+            !app_data_dir.exists(),
+            "quality scoring must not initialize app data when there is no catalog"
+        );
+    }
+
+    #[test]
+    fn llm_preview_prompt_accepts_quality_score_action_without_sending_provider_request() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-quality-score-preview-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+        let skill_path = app_data_dir.join("fixture-skill").join("SKILL.md");
+        seed_catalog_with_llm_skill(&host, &skill_path);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("quality-score-preview".to_string()),
+            method: "llm.previewPrompt".to_string(),
+            params: json!({
+                "action": "quality_score",
+                "skill_instance_id": "llm-skill-id",
+                "user_intent": "explain quality without leaking token=fixture-redacted-value"
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("quality score preview result");
+        assert_eq!(
+            result.get("action").and_then(Value::as_str),
+            Some("quality_score")
+        );
+        assert_eq!(
+            result.get("provider_request_sent").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("write_back_allowed").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert!(result
+            .get("requires_confirmation")
+            .and_then(Value::as_bool)
+            .unwrap_or(false));
+        let serialized = serde_json::to_string(&result).expect("serialize quality preview");
+        assert!(serialized.contains("Quality score evidence"));
+        assert!(serialized.contains("<redacted>"));
+        assert!(!serialized.contains("fixture-redacted-value"));
+        assert!(!serialized.contains("OPENAI_API_KEY"));
+        assert!(!serialized.contains(&skill_path.to_string_lossy().to_string()));
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
     }
 
     #[test]
@@ -6809,6 +7874,31 @@ mod tests {
                         && scenario.writes_confined_to_disposable_root
                 }));
             }
+            "analysis.scoreSkillQuality" => {
+                let score: WireSkillQualityScoreResult =
+                    decode_fixture_result(method, result, path);
+                assert!(score.score <= 100);
+                assert!(!score.components.is_empty());
+                assert!(!score.evidence_references.is_empty());
+                assert!(score.prompt_request.available);
+                assert_eq!(score.prompt_request.action, "quality_score");
+                assert_eq!(score.prompt_request.preview_method, "llm.previewPrompt");
+                assert_eq!(
+                    score.prompt_request.request.action,
+                    LlmPromptActionKind::QualityScore
+                );
+                assert!(score.safety_flags.read_only);
+                assert!(!score.safety_flags.provider_request_sent);
+                assert!(!score.safety_flags.write_back_allowed);
+                assert!(!score.safety_flags.script_execution_allowed);
+                assert!(!score.safety_flags.config_mutation_allowed);
+                assert!(!score.safety_flags.snapshot_created);
+                assert!(!score.safety_flags.triage_mutation_allowed);
+                assert!(!score.safety_flags.credential_accessed);
+                assert!(!score.safety_flags.raw_secret_returned);
+                assert!(!score.safety_flags.raw_prompt_persisted);
+                assert!(!score.safety_flags.raw_response_persisted);
+            }
             "llm.status" => {
                 let status: WireLlmStatus = decode_fixture_result(method, result, path);
                 assert!(!status.enabled);
@@ -7299,6 +8389,7 @@ mod tests {
             "llm.prepareSkillAnalysis" => {
                 json!({ "instance_ids": ["missing-skill"], "analysis_kind": "overview" })
             }
+            "analysis.scoreSkillQuality" => json!({ "instance_id": "missing-skill" }),
             "evidence.piWritableHarness" => json!({ "run_label": "dispatch-fixture" }),
             "report.exportLocal" => json!({ "formats": ["json"] }),
             "script.previewExecution" => json!({
@@ -7548,6 +8639,91 @@ mod tests {
         credential_accessed: bool,
         install_performed: bool,
         production_config_mutated: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireSkillQualityScoreResult {
+        instance_id: String,
+        definition_id: String,
+        agent: String,
+        scope: String,
+        skill_name: String,
+        score: u8,
+        grade: String,
+        band: String,
+        generated_by: String,
+        components: Vec<WireSkillQualityScoreComponent>,
+        reasons: Vec<String>,
+        risk_notes: Vec<String>,
+        evidence_references: Vec<WireSkillQualityEvidenceReference>,
+        suggested_improvements: Vec<WireSkillQualitySuggestion>,
+        prompt_request: WireSkillQualityPromptRequest,
+        safety_flags: WireSkillQualitySafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireSkillQualityScoreComponent {
+        id: String,
+        label: String,
+        score: u8,
+        max_score: u8,
+        summary: String,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireSkillQualityEvidenceReference {
+        id: String,
+        source_type: String,
+        source_id: String,
+        label: String,
+        severity: Option<String>,
+        related_instance_id: Option<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireSkillQualitySuggestion {
+        priority: String,
+        title: String,
+        detail: String,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireSkillQualityPromptRequest {
+        available: bool,
+        preview_method: String,
+        confirm_method: String,
+        action: String,
+        request: LlmPreviewPromptParams,
+        note: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireSkillQualitySafetyFlags {
+        read_only: bool,
+        provider_request_sent: bool,
+        write_back_allowed: bool,
+        script_execution_allowed: bool,
+        config_mutation_allowed: bool,
+        snapshot_created: bool,
+        triage_mutation_allowed: bool,
+        credential_accessed: bool,
+        raw_secret_returned: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
     }
 
     #[allow(dead_code)]

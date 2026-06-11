@@ -136,6 +136,28 @@ struct DetailView: View {
                             isLoadingComparisons: store.isLoadingCrossAgentComparisons,
                             agentTitle: store.agentFilter.title,
                             llmStatus: store.llmStatus,
+                            qualityScore: { skill in store.skillQualityScore(for: skill) },
+                            isScoringQuality: { skill in store.isScoringSkillQuality(for: skill) },
+                            qualityPromptPreview: { skill in store.skillQualityPromptPreview(for: skill) },
+                            isPreviewingQualityPrompt: { skill in store.isPreviewingSkillQualityPrompt(for: skill) },
+                            isSendingQualityPrompt: { skill in store.isSendingSkillQualityPrompt(for: skill) },
+                            qualityPromptSendResult: { skill in store.skillQualityPromptSendResult(for: skill) },
+                            canSendQualityPrompt: { skill in store.canSendSkillQualityPrompt(for: skill) },
+                            onScoreQuality: {
+                                Task {
+                                    await store.scoreSelectedSkillQuality()
+                                }
+                            },
+                            onPreviewQualityPrompt: {
+                                Task {
+                                    await store.previewPromptForSelectedSkillQuality()
+                                }
+                            },
+                            onSendQualityPrompt: {
+                                Task {
+                                    await store.confirmPromptForSelectedSkillQuality()
+                                }
+                            },
                             isPreparing: { action in store.isPreparingLLMAction(action) },
                             result: { action in store.llmPrepareResult(for: action) },
                             promptPreview: { action in store.llmPromptPreview(for: action) },
@@ -672,6 +694,16 @@ private struct AnalysisSection: View {
     let isLoadingComparisons: Bool
     let agentTitle: String
     let llmStatus: LLMStatus
+    let qualityScore: (SkillRecord) -> SkillQualityScoreResult?
+    let isScoringQuality: (SkillRecord) -> Bool
+    let qualityPromptPreview: (SkillRecord) -> LLMPromptPreview?
+    let isPreviewingQualityPrompt: (SkillRecord) -> Bool
+    let isSendingQualityPrompt: (SkillRecord) -> Bool
+    let qualityPromptSendResult: (SkillRecord) -> LLMPromptSendResult?
+    let canSendQualityPrompt: (SkillRecord) -> Bool
+    let onScoreQuality: () -> Void
+    let onPreviewQualityPrompt: () -> Void
+    let onSendQualityPrompt: () -> Void
     let isPreparing: (LLMAction) -> Bool
     let result: (LLMAction) -> LLMPrepareResult?
     let promptPreview: (LLMAction) -> LLMPromptPreview?
@@ -718,6 +750,20 @@ private struct AnalysisSection: View {
                 selectedGroup: selectedComparisonGroup,
                 isLoading: isLoadingComparisons,
                 agentTitle: agentTitle
+            )
+
+            SkillQualityScorePanel(
+                skill: skill,
+                result: qualityScore(skill),
+                isScoring: isScoringQuality(skill),
+                promptPreview: qualityPromptPreview(skill),
+                isPreviewingPrompt: isPreviewingQualityPrompt(skill),
+                isSendingPrompt: isSendingQualityPrompt(skill),
+                promptSendResult: qualityPromptSendResult(skill),
+                canSendPrompt: canSendQualityPrompt(skill),
+                onScore: onScoreQuality,
+                onPreviewPrompt: onPreviewQualityPrompt,
+                onSendPrompt: onSendQualityPrompt
             )
 
             SkillAnalysisPreparePanel(
@@ -937,6 +983,262 @@ private struct CrossAgentComparisonMemberRow: View {
         }
         .padding(10)
         .background(isSelected ? Color.accentColor.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct SkillQualityScorePanel: View {
+    let skill: SkillRecord
+    let result: SkillQualityScoreResult?
+    let isScoring: Bool
+    let promptPreview: LLMPromptPreview?
+    let isPreviewingPrompt: Bool
+    let isSendingPrompt: Bool
+    let promptSendResult: LLMPromptSendResult?
+    let canSendPrompt: Bool
+    let onScore: () -> Void
+    let onPreviewPrompt: () -> Void
+    let onSendPrompt: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.skillQualityTitle, systemImage: "gauge.medium")
+                    .font(.headline)
+                Spacer()
+                Label(UIStrings.readOnlyPreview, systemImage: "lock.shield")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(UIStrings.skillQualityBoundary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+
+            HStack(spacing: 8) {
+                Button {
+                    onScore()
+                } label: {
+                    Label(UIStrings.skillQualityScoreAction, systemImage: "gauge.medium")
+                }
+                .disabled(isScoring)
+                .help(UIStrings.skillQualityBoundary)
+
+                if isScoring {
+                    Label(UIStrings.llmPreparing, systemImage: "hourglass")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if let result {
+                SkillQualityScoreResultView(result: result)
+            } else {
+                Label(UIStrings.text("quality.empty.prompt", "Run Score Quality to evaluate this skill from local catalog evidence."), systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            PromptPreviewControls(
+                preview: promptPreview,
+                sendResult: promptSendResult,
+                isPreviewing: isPreviewingPrompt,
+                isSending: isSendingPrompt,
+                canSend: canSendPrompt,
+                onPreview: onPreviewPrompt,
+                onSend: onSendPrompt
+            )
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct SkillQualityScoreResultView: View {
+    let result: SkillQualityScoreResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 14) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(result.score)")
+                        .font(.system(size: 34, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                    Text(UIStrings.skillQualityScore)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(result.displayBand)
+                        .font(.subheadline.bold())
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(scoreTint.opacity(0.16), in: Capsule())
+                        .foregroundStyle(scoreTint)
+                    if !result.summary.isEmpty {
+                        Text(result.summary)
+                            .font(.callout)
+                            .textSelection(.enabled)
+                    }
+                    if let fallbackReason = result.fallbackReason, !fallbackReason.isEmpty {
+                        Label(fallbackReason, systemImage: "info.circle")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                MetadataRow(label: UIStrings.skillQualityBand, value: result.displayBand)
+                MetadataRow(label: UIStrings.skillQualityProviderNotSent, value: result.safety.providerRequestSent ? UIStrings.llmSkillAnalysisEnabledUnsafe : UIStrings.llmDisabled)
+                MetadataRow(label: UIStrings.skillQualityWritesBlocked, value: readOnlyValue(!result.safety.writeBackAllowed && !result.safety.writeActionsAvailable))
+                MetadataRow(label: UIStrings.skillQualityScriptsBlocked, value: readOnlyValue(!result.safety.scriptExecutionAllowed && !result.safety.executionActionsAvailable))
+                MetadataRow(label: UIStrings.skillQualityMutationsBlocked, value: readOnlyValue(!result.safety.configMutationAllowed && !result.safety.snapshotCreated && !result.safety.triageMutationAllowed))
+                MetadataRow(label: UIStrings.skillQualityCredentialsBlocked, value: readOnlyValue(!result.safety.credentialAccessed && !result.safety.rawSecretReturned))
+            }
+
+            SkillQualityComponentList(components: result.components)
+            SkillQualityEvidenceList(evidence: result.evidence)
+            SkillQualityStringList(title: UIStrings.skillQualityRiskNotes, empty: UIStrings.skillQualityNoRisks, values: result.riskNotes, systemImage: "exclamationmark.triangle")
+            SkillQualityStringList(title: UIStrings.skillQualitySuggestions, empty: UIStrings.skillQualityNoSuggestions, values: result.suggestedImprovements, systemImage: "wand.and.stars")
+
+            Label(UIStrings.llmReviewNoActions, systemImage: "nosign")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var scoreTint: Color {
+        switch result.score {
+        case 85...100:
+            return .green
+        case 65..<85:
+            return .blue
+        case 45..<65:
+            return .orange
+        default:
+            return .red
+        }
+    }
+
+    private func readOnlyValue(_ isBlocked: Bool) -> String {
+        isBlocked ? UIStrings.llmSkillAnalysisBlocked : UIStrings.llmSkillAnalysisEnabledUnsafe
+    }
+}
+
+private struct SkillQualityComponentList: View {
+    let components: [SkillQualityComponent]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(UIStrings.skillQualityComponents)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if components.isEmpty {
+                Text(UIStrings.skillQualityNoComponents)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(components) { component in
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(component.label)
+                                    .font(.caption.bold())
+                                Spacer()
+                                Text(componentScore(component))
+                                    .font(.caption.monospacedDigit().bold())
+                            }
+                            if let status = component.status, !status.isEmpty {
+                                Text(status)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if !component.summary.isEmpty {
+                                Text(component.summary)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(3)
+                            }
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+            }
+        }
+    }
+
+    private func componentScore(_ component: SkillQualityComponent) -> String {
+        if let maxScore = component.maxScore {
+            return "\(component.score)/\(maxScore)"
+        }
+        return "\(component.score)"
+    }
+}
+
+private struct SkillQualityEvidenceList: View {
+    let evidence: [SkillQualityEvidenceItem]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(UIStrings.skillQualityEvidence)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if evidence.isEmpty {
+                Text(UIStrings.skillQualityNoEvidence)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(evidence.prefix(6)) { item in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Label(item.title, systemImage: "checklist")
+                            .font(.callout)
+                        Text(item.detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                        if let source = item.source, !source.isEmpty {
+                            Text(source)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct SkillQualityStringList: View {
+    let title: String
+    let empty: String
+    let values: [String]
+    let systemImage: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if values.isEmpty {
+                Text(empty)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(values, id: \.self) { value in
+                    Label(value, systemImage: systemImage)
+                        .font(.callout)
+                        .textSelection(.enabled)
+                }
+            }
+        }
     }
 }
 

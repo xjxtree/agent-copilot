@@ -37,6 +37,7 @@ struct SkillStoreTests {
         try await prepareLLMActionStoresEstimateWithoutProviderCall()
         try await prepareSkillAnalysisUsesReadOnlyPrepareContract()
         try await prepareSkillAnalysisFallsBackWhenMethodUnavailable()
+        try await scoreSkillQualityUsesReadOnlyAnalysisContract()
         try await llmPreparePreviewIsScopedToSelectedSkillAndReadOnly()
         try await promptPreviewRequiresConfiguredProviderAndExplicitSend()
         try await previewScriptExecutionSafetyStoresBlockedPreviewWithoutExecute()
@@ -778,6 +779,49 @@ struct SkillStoreTests {
         try expectContains(result?.summaryDraft, "Disabled fallback preview only", "Unavailable skill analysis should provide read-only preview copy.")
     }
 
+    private func scoreSkillQualityUsesReadOnlyAnalysisContract() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+        await store.scoreSelectedSkillQuality()
+
+        guard let skill = store.selectedSkill else {
+            throw NativeModelTestFailure(description: "Fixture should select beta for quality scoring.")
+        }
+        let result = store.skillQualityScore(for: skill)
+        try expectEqual(result?.score, 82, "Quality score should store the service score for the selected skill.")
+        try expectEqual(result?.displayBand, "Good", "Quality score should expose the band/grade.")
+        try expectEqual(result?.components.map(\.key), ["metadata", "permissions"], "Quality score should expose component keys.")
+        try expectFalse(result?.safety.providerRequestSent ?? true, "Local quality score must not send a provider request.")
+        try expectFalse(result?.safety.writeBackAllowed ?? true, "Quality score must not allow write-back.")
+        try expectFalse(result?.safety.scriptExecutionAllowed ?? true, "Quality score must not allow script execution.")
+        try expectFalse(result?.safety.configMutationAllowed ?? true, "Quality score must not allow config mutation.")
+        try expectFalse(result?.safety.credentialAccessed ?? true, "Quality score must not access credentials.")
+
+        await store.previewPromptForSelectedSkillQuality()
+        let preview = store.skillQualityPromptPreview(for: skill)
+        try expectEqual(preview?.previewID, "quality-preview-beta", "Quality prompt preview should be stored for the selected skill.")
+        try expectEqual(store.canSendSkillQualityPrompt(for: skill), true, "Configured provider and current quality preview should allow explicit send.")
+
+        await store.confirmPromptForSelectedSkillQuality()
+        let sendResult = store.skillQualityPromptSendResult(for: skill)
+        try expectEqual(sendResult?.success, true, "Confirmed quality prompt should store provider result.")
+        try expectFalse(sendResult?.writeBackAllowed ?? true, "Quality prompt output must not enable write-back.")
+        try expectFalse(sendResult?.scriptExecutionAllowed ?? true, "Quality prompt output must not enable script execution.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "analysis.scoreSkillQuality", "Quality score should use the V2.43 analysis method.")
+        try expectContains(calls, "\"request_kind\":\"quality_score\"", "Quality prompt preview should identify the quality_score prompt action.")
+        try expectContains(calls, "\"preview_id\":\"quality-preview-beta\"", "Quality confirm should send the quality preview id.")
+        try expectContains(calls, "llm.confirmPromptAndSend", "Quality provider path should require explicit confirmation.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Quality scoring must not call write paths.")
+        try expectFalse(calls.contains("script.execute"), "Quality scoring must not call execution paths.")
+    }
+
     private func llmPreparePreviewIsScopedToSelectedSkillAndReadOnly() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -1100,6 +1144,12 @@ private final class FakeServiceScript {
               respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: llm.prepareSkillAnalysis"}}'
             fi
             ;;
+          *\\"analysis.scoreSkillQuality\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"instance_id":"beta","score":82,"band":"Good","summary":"Beta has usable metadata, one permission clarity gap, and no same-agent conflict.","components":[{"key":"metadata","label":"Metadata completeness","score":92,"summary":"Name and description are present."},{"key":"permissions","label":"Permission clarity","score":70,"summary":"Network access needs explicit declaration."}],"evidence":[{"title":"Metadata","detail":"Description is present.","source":"catalog"},{"title":"Findings","detail":"One permission warning.","source":"permissions.network-declared"}],"risk_notes":["Network access is not declared."],"suggested_improvements":["Declare network access explicitly."],"safety":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_secret_returned":false}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: analysis.scoreSkillQuality"}}'
+            ;;
           *\\"llm.prepareAction\\"*)
             if [ "$scenario" = "old-service" ]; then
               respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: llm.prepareAction"}}'
@@ -1118,12 +1168,18 @@ private final class FakeServiceScript {
             ;;
           *\\"llm.previewPrompt\\"*)
             if [ "$scenario" = "prompt-ready" ]; then
+              if printf '%s' "$input" | grep -q '\\"request_kind\\":\\"quality_score\\"'; then
+                respond '{"id":"test","ok":true,"result":{"preview_id":"quality-preview-beta","request_kind":"quality_score","action":"quality_score","scope":"selected","prompt_scope":"Selected skill quality score for Beta","enabled":true,"provider":"openai-compatible","model":"gpt-5","destination_host":"llm.example.com","included_fields":["skill.metadata","findings.summary","conflicts.summary","adapter.diagnostics"],"excluded_fields":[{"name":"skill.body","reason":"raw body omitted"},{"name":"api_key","reason":"credential redacted"}],"redaction":{"status":"redacted","summary":"Secrets, raw body, and local paths removed.","redacted_fields":["api_key","path"],"placeholders":["<project-root>"]},"estimate":{"input_tokens":300,"output_tokens":140,"total_tokens":440,"estimated_cost_usd":0.005},"confirmation_required":true,"raw_prompt_persisted":false,"raw_response_persisted":false,"draft_copy_only":true,"redacted_prompt_preview":"Score Beta quality from redacted local evidence."}}'
+              fi
               respond '{"id":"test","ok":true,"result":{"preview_id":"prompt-preview-beta","request_kind":"action","action":"analyze","scope":"selected","prompt_scope":"Selected skill analysis for Beta","enabled":true,"provider":"openai-compatible","model":"gpt-5","destination_host":"llm.example.com","included_fields":["skill.name","findings.summary"],"excluded_fields":[{"name":"api_key","reason":"credential redacted"}],"redaction":{"status":"redacted","summary":"Secrets and local paths removed.","redacted_fields":["api_key"],"placeholders":["<project-root>"]},"estimate":{"input_tokens":240,"output_tokens":120,"total_tokens":360,"estimated_cost_usd":0.0042},"confirmation_required":true,"raw_prompt_persisted":false,"raw_response_persisted":false,"draft_copy_only":true,"redacted_prompt_preview":"Analyze Beta using catalog metadata and finding summaries only."}}'
             fi
             respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: llm.previewPrompt"}}'
             ;;
           *\\"llm.confirmPromptAndSend\\"*)
             if [ "$scenario" = "prompt-ready" ]; then
+              if printf '%s' "$input" | grep -q '\\"request_kind\\":\\"quality_score\\"'; then
+                respond '{"id":"test","ok":true,"result":{"preview_id":"quality-preview-beta","status":"succeeded","message":"Provider response received.","output_text":"Copy-only quality explanation for Beta.","draft_copy_only":true,"raw_prompt_persisted":false,"raw_response_persisted":false,"write_back_allowed":false,"script_execution_allowed":false,"audit_metadata":{"request_id":"audit-quality-1","status":"succeeded","provider":"openai-compatible","model":"gpt-5","destination_host":"llm.example.com","redaction_applied":true,"raw_prompt_persisted":false,"raw_response_persisted":false,"input_tokens":300,"output_tokens":90}}}'
+              fi
               respond '{"id":"test","ok":true,"result":{"preview_id":"prompt-preview-beta","status":"succeeded","message":"Provider response received.","output_text":"Read-only analysis for Beta.","draft_copy_only":true,"raw_prompt_persisted":false,"raw_response_persisted":false,"write_back_allowed":false,"script_execution_allowed":false,"audit_metadata":{"request_id":"audit-prompt-1","status":"succeeded","provider":"openai-compatible","model":"gpt-5","destination_host":"llm.example.com","redaction_applied":true,"raw_prompt_persisted":false,"raw_response_persisted":false,"input_tokens":240,"output_tokens":80}}}'
             fi
             respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: llm.confirmPromptAndSend"}}'

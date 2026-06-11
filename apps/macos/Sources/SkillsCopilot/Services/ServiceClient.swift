@@ -142,6 +142,18 @@ private struct PrepareSkillAnalysisParams: Encodable {
     }
 }
 
+private struct ScoreSkillQualityParams: Encodable {
+    let instanceId: String
+    let definitionId: String
+    let agent: String
+
+    enum CodingKeys: String, CodingKey {
+        case instanceId = "instance_id"
+        case definitionId = "definition_id"
+        case agent
+    }
+}
+
 private struct PrepareLLMActionParams: Encodable {
     let action: LLMAction
     let instanceId: String
@@ -513,6 +525,19 @@ final class ServiceClient {
         }
     }
 
+    func scoreSkillQuality(skill: SkillRecord) async throws -> SkillQualityScoreResult {
+        let params = ScoreSkillQualityParams(
+            instanceId: skill.id,
+            definitionId: skill.definitionId,
+            agent: skill.agent
+        )
+        do {
+            return try await call(method: "analysis.scoreSkillQuality", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable(skillID: skill.id)
+        }
+    }
+
     func previewPromptForLLMAction(action: LLMAction, skill: SkillRecord) async throws -> LLMPromptPreview {
         let params = PreviewLLMPromptParams(
             action: action.rawValue,
@@ -553,6 +578,24 @@ final class ServiceClient {
         }
     }
 
+    func previewPromptForSkillQuality(skill: SkillRecord) async throws -> LLMPromptPreview {
+        let params = PreviewLLMPromptParams(
+            action: "quality_score",
+            requestKind: "quality_score",
+            analysisKind: nil,
+            scope: "selected",
+            instanceIDs: [skill.id],
+            instanceId: skill.id,
+            definitionId: skill.definitionId,
+            agent: skill.agent
+        )
+        do {
+            return try await call(method: "llm.previewPrompt", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable(reason: UIStrings.skillQualityPromptUnavailable)
+        }
+    }
+
     func confirmPromptAndSendForLLMAction(previewID: String, action: LLMAction, skill: SkillRecord) async throws -> LLMPromptSendResult {
         let request = PreviewLLMPromptParams(
             action: action.rawValue,
@@ -582,6 +625,20 @@ final class ServiceClient {
             instanceId: nil,
             definitionId: nil,
             agent: nil
+        )
+        return try await confirmPromptAndSend(previewID: previewID, request: request)
+    }
+
+    func confirmPromptAndSendForSkillQuality(previewID: String, skill: SkillRecord) async throws -> LLMPromptSendResult {
+        let request = PreviewLLMPromptParams(
+            action: "quality_score",
+            requestKind: "quality_score",
+            analysisKind: nil,
+            scope: "selected",
+            instanceIDs: [skill.id],
+            instanceId: skill.id,
+            definitionId: skill.definitionId,
+            agent: skill.agent
         )
         return try await confirmPromptAndSend(previewID: previewID, request: request)
     }

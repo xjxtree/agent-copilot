@@ -216,6 +216,19 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
 - AI 输出永远是 untrusted suggestion；写入仍必须走已有 safe write path：preview-first、explicit confirm、snapshot、atomic write、readback verify、rollback。
 - AI 不能成为 `ExecutionRequester`，不能创建 `Completed` execution record，不能确认脚本执行。
 
+### 2.4.3.1 V2.43 AI quality score / V2.44-V2.70 routing planning
+
+- V2.43 质量评分已实现为用户显式触发、默认只读的本地 deterministic scoring；本地默认不做周期性或后台评分。
+- 本地证据仍是事实来源：`metadata` / `findings` / `conflicts` / `analysis` / `adapter diagnostics`。
+- Provider 辅助解释是 optional path，仍需经过：
+  - prompt preview
+  - redaction summary
+  - `included` / `excluded` 字段展示
+  - token/cost 估算
+  - destination 预览
+  - 用户显式确认。
+- provider 辅助输出仍为 copy/display-only，不直接触发 `config.toggleSkill` / `snapshot.*` / triage 变更 / script execution / new credentials write。V2.44+ readiness/routing 仍是 planning。
+
 ### 2.4.3 Finding triage persistence 边界（V2.29）
 
 - Finding triage 持久化只发生在 app-local catalog/app data 层，目标是降低重复噪音并提示用户复核；不参与 agent 配置写入，也不改写 skill 内容。

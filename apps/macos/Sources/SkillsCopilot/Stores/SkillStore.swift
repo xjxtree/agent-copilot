@@ -26,6 +26,8 @@ final class SkillStore: ObservableObject {
     @Published private(set) var preparingLLMActions: Set<LLMAction> = []
     @Published private(set) var skillAnalysisPrepareResults: [String: LLMSkillAnalysisPrepareResult] = [:]
     @Published private(set) var preparingSkillAnalysisKeys: Set<String> = []
+    @Published private(set) var skillQualityScores: [SkillRecord.ID: SkillQualityScoreResult] = [:]
+    @Published private(set) var scoringSkillQualityIDs: Set<SkillRecord.ID> = []
     @Published private(set) var llmPromptPreviews: [String: LLMPromptPreview] = [:]
     @Published private(set) var previewingLLMPromptKeys: Set<String> = []
     @Published private(set) var sendingLLMPromptKeys: Set<String> = []
@@ -98,7 +100,7 @@ final class SkillStore: ObservableObject {
     }
 
     private var isLLMPromptBusy: Bool {
-        !previewingLLMPromptKeys.isEmpty || !sendingLLMPromptKeys.isEmpty
+        !previewingLLMPromptKeys.isEmpty || !sendingLLMPromptKeys.isEmpty || !scoringSkillQualityIDs.isEmpty
     }
 
     private func toggleDisabledReason(for skill: SkillRecord) -> String? {
@@ -361,6 +363,35 @@ final class SkillStore: ObservableObject {
 
     func canSendSkillAnalysisPrompt(kind: LLMSkillAnalysisKind, scope: LLMSkillAnalysisRequestScope) -> Bool {
         guard let preview = skillAnalysisPromptPreview(kind: kind, scope: scope) else { return false }
+        return canSendLLMPrompt(preview)
+    }
+
+    func skillQualityScore(for skill: SkillRecord) -> SkillQualityScoreResult? {
+        skillQualityScores[skill.id]
+    }
+
+    func isScoringSkillQuality(for skill: SkillRecord) -> Bool {
+        scoringSkillQualityIDs.contains(skill.id)
+    }
+
+    func skillQualityPromptPreview(for skill: SkillRecord) -> LLMPromptPreview? {
+        llmPromptPreviews[skillQualityPromptKey(skillID: skill.id)]
+    }
+
+    func isPreviewingSkillQualityPrompt(for skill: SkillRecord) -> Bool {
+        previewingLLMPromptKeys.contains(skillQualityPromptKey(skillID: skill.id))
+    }
+
+    func isSendingSkillQualityPrompt(for skill: SkillRecord) -> Bool {
+        sendingLLMPromptKeys.contains(skillQualityPromptKey(skillID: skill.id))
+    }
+
+    func skillQualityPromptSendResult(for skill: SkillRecord) -> LLMPromptSendResult? {
+        llmPromptSendResults[skillQualityPromptKey(skillID: skill.id)]
+    }
+
+    func canSendSkillQualityPrompt(for skill: SkillRecord) -> Bool {
+        guard let preview = skillQualityPromptPreview(for: skill) else { return false }
         return canSendLLMPrompt(preview)
     }
 
@@ -899,6 +930,38 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func scoreSelectedSkillQuality() async {
+        guard let skill = selectedSkill else { return }
+        await scoreSkillQuality(for: skill)
+    }
+
+    func previewPromptForSelectedSkillQuality() async {
+        guard let skill = selectedSkill else { return }
+        let key = skillQualityPromptKey(skillID: skill.id)
+        guard !isRefreshBusy else {
+            llmPromptPreviews[key] = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        previewingLLMPromptKeys.insert(key)
+        llmPromptSendResults.removeValue(forKey: key)
+        defer { previewingLLMPromptKeys.remove(key) }
+
+        do {
+            llmPromptPreviews[key] = try await service.previewPromptForSkillQuality(skill: skill)
+        } catch {
+            llmPromptPreviews[key] = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
+    func confirmPromptForSelectedSkillQuality() async {
+        guard let skill = selectedSkill else { return }
+        let key = skillQualityPromptKey(skillID: skill.id)
+        await confirmLLMPrompt(key: key) { previewID in
+            try await service.confirmPromptAndSendForSkillQuality(previewID: previewID, skill: skill)
+        }
+    }
+
     func previewScriptExecutionSafety(for skill: SkillRecord) async {
         guard !isRefreshBusy else {
             scriptExecutionPreviews[skill.id] = .unavailable(skill: skill, reason: UIStrings.operationUnavailableBusy)
@@ -1164,6 +1227,8 @@ final class SkillStore: ObservableObject {
         self.agentConfigSnapshots = try await agentConfigSnapshots
         let currentSkillIDs = Set(snapshot.skills.map(\.id))
         scriptExecutionPreviews = scriptExecutionPreviews.filter { currentSkillIDs.contains($0.key) }
+        skillQualityScores = skillQualityScores.filter { currentSkillIDs.contains($0.key) }
+        scoringSkillQualityIDs = scoringSkillQualityIDs.filter { currentSkillIDs.contains($0) }
         skillEventsByID = skillEventsByID.filter { currentSkillIDs.contains($0.key) }
         skillAnalysisPrepareResults.removeAll()
         preparingSkillAnalysisKeys.removeAll()
@@ -1232,6 +1297,22 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    private func scoreSkillQuality(for skill: SkillRecord) async {
+        guard !isRefreshBusy else {
+            skillQualityScores[skill.id] = .unavailable(skillID: skill.id, reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        scoringSkillQualityIDs.insert(skill.id)
+        defer { scoringSkillQualityIDs.remove(skill.id) }
+
+        do {
+            skillQualityScores[skill.id] = try await service.scoreSkillQuality(skill: skill)
+        } catch {
+            skillQualityScores[skill.id] = .unavailable(skillID: skill.id, reason: error.localizedDescription)
+        }
+    }
+
     private func skillAnalysisKey(kind: LLMSkillAnalysisKind, scope: LLMSkillAnalysisRequestScope) -> String {
         "\(scope.key):\(kind.rawValue)"
     }
@@ -1255,6 +1336,10 @@ final class SkillStore: ObservableObject {
         instanceIDs: [String]
     ) -> String {
         "skill-analysis:\(scope.key):\(kind.rawValue):\(instanceIDs.joined(separator: ","))"
+    }
+
+    private func skillQualityPromptKey(skillID: SkillRecord.ID) -> String {
+        "quality-score:\(skillID)"
     }
 
     private func canSendLLMPrompt(_ preview: LLMPromptPreview) -> Bool {

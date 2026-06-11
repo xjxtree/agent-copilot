@@ -226,8 +226,7 @@ struct LLMPromptPreview: Decodable, Identifiable, Hashable {
         analysisKind = try Self.decodeAnalysisKind(from: container, keys: [.analysisKind, .kind])
         requestKind = try container.decodeIfPresent(String.self, forKey: .requestKind)
         scope = try container.decodeIfPresent(String.self, forKey: .scope)
-        promptScope = try container.decodeIfPresent(String.self, forKey: .promptScope)
-            ?? container.decodeIfPresent(String.self, forKey: .scopeLabel)
+        promptScope = try Self.decodeFlexibleString(from: container, keys: [.promptScope, .scopeLabel])
             ?? scope
             ?? UIStrings.unknown
         enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled)
@@ -319,6 +318,21 @@ struct LLMPromptPreview: Decodable, Identifiable, Hashable {
             if let value = try container.decodeIfPresent(String.self, forKey: key),
                let action = LLMAction(rawValue: value) {
                 return action
+            }
+        }
+        return nil
+    }
+
+    private static func decodeFlexibleString(
+        from container: KeyedDecodingContainer<CodingKeys>,
+        keys: [CodingKeys]
+    ) throws -> String? {
+        for key in keys {
+            if let value = try? container.decodeIfPresent(String.self, forKey: key) {
+                return value
+            }
+            if let values = try? container.decodeIfPresent([String].self, forKey: key) {
+                return values.joined(separator: ", ")
             }
         }
         return nil
