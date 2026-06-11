@@ -301,12 +301,12 @@ private struct SimilarSkillGroupingParams: Encodable {
 private struct CapabilityTaxonomyParams: Encodable {
     let agent: String?
     let limit: Int?
-    let includeGaps: Bool
+    let includeSingleSkillDomains: Bool
 
     enum CodingKeys: String, CodingKey {
         case agent
         case limit
-        case includeGaps = "include_gaps"
+        case includeSingleSkillDomains = "include_single_skill_domains"
     }
 }
 
@@ -917,9 +917,13 @@ final class ServiceClient {
     func buildCapabilityTaxonomy(
         agent: String? = nil,
         limit: Int? = 20,
-        includeGaps: Bool = true
+        includeSingleSkillDomains: Bool = true
     ) async throws -> CapabilityTaxonomyResult {
-        let params = CapabilityTaxonomyParams(agent: agent, limit: limit, includeGaps: includeGaps)
+        let params = CapabilityTaxonomyParams(
+            agent: agent,
+            limit: limit,
+            includeSingleSkillDomains: includeSingleSkillDomains
+        )
         do {
             return try await call(method: "knowledge.buildCapabilityTaxonomy", params: params)
         } catch ClientError.service(let error) where error.code == "unknown_method" {

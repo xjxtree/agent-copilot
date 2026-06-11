@@ -5,6 +5,7 @@ struct CapabilityTaxonomyModelTests {
     func run() throws {
         try decodesFlexibleCapabilityTaxonomyPayload()
         try decodesAliasDomainsAndCoverage()
+        try decodesCommittedServiceCapabilityTaxonomyShape()
     }
 
     private func decodesFlexibleCapabilityTaxonomyPayload() throws {
@@ -186,5 +187,120 @@ struct CapabilityTaxonomyModelTests {
         try expectEqual(result.blockerNotes, ["None."], "String blocker should decode.")
         try expectEqual(result.evidenceReferences.first?.title, "Catalog", "Evidence aliases should decode.")
         try expectFalse(result.safetyFlags.providerRequestSent, "String safety notes should keep provider flag false.")
+    }
+
+    private func decodesCommittedServiceCapabilityTaxonomyShape() throws {
+        let json = """
+        {
+          "generated_by": "deterministic-service",
+          "catalog_available": true,
+          "filters": {"agent":"claude-code","limit":20,"include_single_skill_domains":true},
+          "summary": {
+            "indexed_skill_count": 3,
+            "candidate_skill_count": 2,
+            "domain_count": 1,
+            "returned_domain_count": 1,
+            "total_representative_skill_count": 2,
+            "agent_count": 1,
+            "workspace_count": 1,
+            "duplicate_or_redundant_domain_count": 1,
+            "routing_ambiguity_domain_count": 1,
+            "gap_count": 1,
+            "summary": "Capability taxonomy built from local evidence."
+          },
+          "coverage_rows": [
+            {
+              "domain_key": "release-validation",
+              "domain_name": "Release & Validation",
+              "coverage_level": "covered",
+              "skill_count": 2,
+              "enabled_skill_count": 2,
+              "agent_count": 1,
+              "workspace_count": 1,
+              "agents": {"claude-code": 2},
+              "gaps": ["No benchmark separates duplicate release skills."],
+              "duplicates_redundancy": "high",
+              "routing_ambiguity": "medium",
+              "evidence_refs": ["capability-domain:release-validation"]
+            }
+          ],
+          "domains": [
+            {
+              "domain_id": "cap-domain-release-validation",
+              "domain_key": "release-validation",
+              "domain_name": "Release & Validation",
+              "coverage_level": "covered",
+              "coverage_score": 82,
+              "skill_count": 2,
+              "enabled_skill_count": 2,
+              "agent_count": 1,
+              "workspace_count": 1,
+              "agents": {"claude-code": 2},
+              "workspaces": {"agent-project": 2},
+              "duplicate_or_redundant_count": 1,
+              "routing_ambiguity_count": 1,
+              "representative_skills": [
+                {
+                  "instance_id": "beta",
+                  "definition_id": "def.beta",
+                  "skill_name": "Beta",
+                  "agent": "claude-code",
+                  "scope": "agent-project",
+                  "enabled": true,
+                  "state": "loaded",
+                  "quality_context": {"score": 84, "grade": "B", "band": "Good"},
+                  "similarity_group_ids": ["sim-1"],
+                  "match_reasons": ["Classified from release validation evidence."],
+                  "evidence_refs": ["skill:beta"]
+                }
+              ],
+              "capability_tags": ["release-validation"],
+              "risk_tags": ["risk-medium"],
+              "tools": ["rg"],
+              "rules": ["permissions.network-declared"],
+              "keywords": ["release","validation"],
+              "gap_notes": ["No benchmark separates duplicate release skills."],
+              "blocker_notes": [],
+              "evidence_refs": ["capability-domain:release-validation"],
+              "safety_flags": {"provider_request_sent": false, "write_back_allowed": false}
+            }
+          ],
+          "gap_notes": ["No benchmark separates duplicate release skills."],
+          "blocker_notes": [],
+          "evidence_references": [{"title":"Capability taxonomy","detail":"Domain generated locally.","source":"knowledge.buildCapabilityTaxonomy"}],
+          "prompt_request": {"available":true,"action":"capability_taxonomy","note":"Preview gated."},
+          "safety_flags": {
+            "provider_request_sent": false,
+            "write_back_allowed": false,
+            "write_actions_available": false,
+            "script_execution_allowed": false,
+            "execution_actions_available": false,
+            "config_mutation_allowed": false,
+            "snapshot_created": false,
+            "triage_mutation_allowed": false,
+            "credential_accessed": false,
+            "raw_prompt_persisted": false,
+            "raw_response_persisted": false,
+            "raw_trace_persisted": false,
+            "cloud_sync_enabled": false,
+            "telemetry_enabled": false,
+            "raw_secret_returned": false
+          }
+        }
+        """
+
+        let result = try JSONDecoder().decode(CapabilityTaxonomyResult.self, from: Data(json.utf8))
+        try expectEqual(result.generatedBy, "deterministic-service", "Service generator should decode.")
+        try expectEqual(result.summary.skillCount, 2, "Service representative skill count should drive summary skill count.")
+        try expectEqual(result.coverageByAgent.first?.agent, "Release & Validation", "Service coverage rows should decode as coverage chips.")
+        try expectEqual(result.coverageByAgent.first?.coverageState, "covered", "Service coverage level should decode.")
+        try expectEqual(result.domains.first?.name, "Release & Validation", "Service domain_name should decode.")
+        try expectEqual(result.domains.first?.coverageByAgent.first?.agent, "agent-project", "Service workspace coverage maps should decode.")
+        try expectEqual(result.domains.first?.capabilities.first?.name, "Release & Validation", "Service domain-level skills should synthesize a capability row.")
+        try expectEqual(result.domains.first?.capabilities.first?.tools, ["rg"], "Service domain tools should feed synthesized capability row.")
+        try expectEqual(result.domains.first?.capabilities.first?.representativeSkills.first?.qualityScore, 84, "Service quality_context should decode.")
+        try expectEqual(result.domains.first?.capabilities.first?.representativeSkills.first?.reasons, ["Classified from release validation evidence."], "Service match_reasons should decode.")
+        try expectFalse(result.safetyFlags.providerRequestSent, "Service safety flags should keep provider false.")
+        try expectFalse(result.safetyFlags.writeBackAllowed, "Service safety flags should keep writes false.")
     }
 }

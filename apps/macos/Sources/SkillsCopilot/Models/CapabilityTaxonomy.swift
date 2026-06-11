@@ -46,6 +46,9 @@ struct CapabilityTaxonomySummary: Decodable, Hashable {
         case capabilityCount = "capability_count"
         case capabilities
         case skillCount = "skill_count"
+        case totalRepresentativeSkillCount = "total_representative_skill_count"
+        case candidateSkillCount = "candidate_skill_count"
+        case indexedSkillCount = "indexed_skill_count"
         case skills
         case agentCount = "agent_count"
         case agents
@@ -91,7 +94,9 @@ struct CapabilityTaxonomySummary: Decodable, Hashable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         domainCount = try container.decodeFlexibleCapabilityInt(keys: [.domainCount, .domains]) ?? 0
         capabilityCount = try container.decodeFlexibleCapabilityInt(keys: [.capabilityCount, .capabilities]) ?? 0
-        skillCount = try container.decodeFlexibleCapabilityInt(keys: [.skillCount, .skills]) ?? 0
+        skillCount = try container.decodeFlexibleCapabilityInt(
+            keys: [.skillCount, .totalRepresentativeSkillCount, .candidateSkillCount, .indexedSkillCount, .skills]
+        ) ?? 0
         agentCount = try container.decodeFlexibleCapabilityInt(keys: [.agentCount, .agents]) ?? 0
         gapCount = try container.decodeFlexibleCapabilityInt(keys: [.gapCount, .gaps]) ?? 0
         blockerCount = try container.decodeFlexibleCapabilityInt(keys: [.blockerCount, .blockers]) ?? 0
@@ -134,11 +139,14 @@ struct CapabilityTaxonomySkill: Decodable, Hashable, Identifiable {
         case qualityScore = "quality_score"
         case qualityScoreAlt = "qualityScore"
         case quality
+        case qualityContext = "quality_context"
         case readinessScore = "readiness_score"
         case readinessScoreAlt = "readinessScore"
         case readiness
+        case readinessContext = "readiness_context"
         case reasons
         case reason
+        case matchReasons = "match_reasons"
         case evidenceRefs = "evidence_refs"
         case evidenceRefsAlt = "evidenceRefs"
         case evidence
@@ -167,7 +175,9 @@ struct CapabilityTaxonomySkill: Decodable, Hashable, Identifiable {
 
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let qualityContext = try container.decodeIfPresent(CapabilityScoreContext.self, forKey: .quality)
+            ?? container.decodeIfPresent(CapabilityScoreContext.self, forKey: .qualityContext)
         let readinessContext = try container.decodeIfPresent(CapabilityScoreContext.self, forKey: .readiness)
+            ?? container.decodeIfPresent(CapabilityScoreContext.self, forKey: .readinessContext)
         instanceID = try container.decodeIfPresent(String.self, forKey: .instanceID)
             ?? container.decodeIfPresent(String.self, forKey: .instanceId)
             ?? container.decodeIfPresent(String.self, forKey: .id)
@@ -185,7 +195,7 @@ struct CapabilityTaxonomySkill: Decodable, Hashable, Identifiable {
         state = try container.decodeIfPresent(String.self, forKey: .state)
         qualityScore = try container.decodeFlexibleCapabilityDouble(keys: [.qualityScore, .qualityScoreAlt]) ?? qualityContext?.score
         readinessScore = try container.decodeFlexibleCapabilityDouble(keys: [.readinessScore, .readinessScoreAlt]) ?? readinessContext?.score
-        reasons = try container.decodeFlexibleCapabilityStringArray(keys: [.reasons, .reason])
+        reasons = try container.decodeFlexibleCapabilityStringArray(keys: [.reasons, .reason, .matchReasons])
         evidenceRefs = try container.decodeFlexibleCapabilityStringArray(keys: [.evidenceRefs, .evidenceRefsAlt, .evidence])
         safetyFlags = try container.decodeFlexibleCapabilityStringArray(keys: [.safetyFlags, .safety, .flags])
         id = try container.decodeIfPresent(String.self, forKey: .id)
@@ -212,6 +222,8 @@ struct CapabilityTaxonomyCoverage: Decodable, Hashable, Identifiable {
         case agent
         case displayName = "display_name"
         case displayNameAlt = "displayName"
+        case domainName = "domain_name"
+        case domainKey = "domain_key"
         case skillCount = "skill_count"
         case skillCountAlt = "skillCount"
         case skills
@@ -220,6 +232,7 @@ struct CapabilityTaxonomyCoverage: Decodable, Hashable, Identifiable {
         case capabilities
         case coverageState = "coverage_state"
         case coverageStateAlt = "coverageState"
+        case coverageLevel = "coverage_level"
         case state
         case status
         case notes
@@ -242,11 +255,14 @@ struct CapabilityTaxonomyCoverage: Decodable, Hashable, Identifiable {
         agent = try container.decodeIfPresent(String.self, forKey: .agent)
             ?? container.decodeIfPresent(String.self, forKey: .displayName)
             ?? container.decodeIfPresent(String.self, forKey: .displayNameAlt)
+            ?? container.decodeIfPresent(String.self, forKey: .domainName)
+            ?? container.decodeIfPresent(String.self, forKey: .domainKey)
             ?? UIStrings.unknown
         skillCount = try container.decodeFlexibleCapabilityInt(keys: [.skillCount, .skillCountAlt, .skills]) ?? 0
         capabilityCount = try container.decodeFlexibleCapabilityInt(keys: [.capabilityCount, .capabilityCountAlt, .capabilities]) ?? 0
         coverageState = try container.decodeIfPresent(String.self, forKey: .coverageState)
             ?? container.decodeIfPresent(String.self, forKey: .coverageStateAlt)
+            ?? container.decodeIfPresent(String.self, forKey: .coverageLevel)
             ?? container.decodeIfPresent(String.self, forKey: .state)
             ?? container.decodeIfPresent(String.self, forKey: .status)
             ?? UIStrings.unknown
@@ -293,6 +309,30 @@ struct CapabilityTaxonomyCapability: Decodable, Hashable, Identifiable {
         case safetyFlags = "safety_flags"
         case safety
         case flags
+    }
+
+    init(
+        id: String,
+        name: String,
+        summary: String,
+        keywords: [String],
+        tools: [String],
+        rules: [String],
+        riskTags: [String],
+        representativeSkills: [CapabilityTaxonomySkill],
+        evidenceRefs: [String],
+        safetyFlags: [String]
+    ) {
+        self.id = id
+        self.name = name
+        self.summary = summary
+        self.keywords = keywords
+        self.tools = tools
+        self.rules = rules
+        self.riskTags = riskTags
+        self.representativeSkills = representativeSkills
+        self.evidenceRefs = evidenceRefs
+        self.safetyFlags = safetyFlags
     }
 
     init(from decoder: Decoder) throws {
@@ -353,6 +393,8 @@ struct CapabilityTaxonomyDomain: Decodable, Hashable, Identifiable {
         case id
         case domainID = "domain_id"
         case domainId = "domainId"
+        case domainKey = "domain_key"
+        case domainName = "domain_name"
         case name
         case title
         case domain
@@ -364,11 +406,22 @@ struct CapabilityTaxonomyDomain: Decodable, Hashable, Identifiable {
         case skillCountAlt = "skillCount"
         case coverageByAgent = "coverage_by_agent"
         case coverageByAgentAlt = "coverageByAgent"
+        case coverageRows = "coverage_rows"
+        case coverageRowsAlt = "coverageRows"
         case agentCoverage = "agent_coverage"
         case coverage
+        case agents
+        case workspaces
         case capabilities
         case rows
         case skills
+        case representativeSkills = "representative_skills"
+        case representativeSkillsAlt = "representativeSkills"
+        case keywords
+        case tools
+        case rules
+        case capabilityTags = "capability_tags"
+        case riskTags = "risk_tags"
         case gapNotes = "gap_notes"
         case gapNotesAlt = "gapNotes"
         case gaps
@@ -402,11 +455,21 @@ struct CapabilityTaxonomyDomain: Decodable, Hashable, Identifiable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         name = try container.decodeIfPresent(String.self, forKey: .name)
             ?? container.decodeIfPresent(String.self, forKey: .title)
+            ?? container.decodeIfPresent(String.self, forKey: .domainName)
             ?? container.decodeIfPresent(String.self, forKey: .domain)
+            ?? container.decodeIfPresent(String.self, forKey: .domainKey)
             ?? UIStrings.capabilityTaxonomyDomain
         summary = try container.decodeIfPresent(String.self, forKey: .summary)
             ?? container.decodeIfPresent(String.self, forKey: .description)
             ?? ""
+        let domainKey = try container.decodeIfPresent(String.self, forKey: .domainKey)
+            ?? container.decodeIfPresent(String.self, forKey: .domainID)
+            ?? container.decodeIfPresent(String.self, forKey: .domainId)
+            ?? name
+        let representativeSkills = try container.decodeIfPresent([CapabilityTaxonomySkill].self, forKey: .representativeSkills)
+            ?? container.decodeIfPresent([CapabilityTaxonomySkill].self, forKey: .representativeSkillsAlt)
+            ?? container.decodeIfPresent([CapabilityTaxonomySkill].self, forKey: .skills)
+            ?? []
         let coverageRows = (try? container.decodeIfPresent([CapabilityTaxonomyCoverage].self, forKey: .coverageByAgent)) ?? nil
         let coverageRowsAlt = (try? container.decodeIfPresent([CapabilityTaxonomyCoverage].self, forKey: .coverageByAgentAlt)) ?? nil
         let agentCoverageRows = (try? container.decodeIfPresent([CapabilityTaxonomyCoverage].self, forKey: .agentCoverage)) ?? nil
@@ -415,16 +478,36 @@ struct CapabilityTaxonomyDomain: Decodable, Hashable, Identifiable {
             ?? coverageRowsAlt
             ?? agentCoverageRows
             ?? genericCoverageRows
+            ?? CapabilityTaxonomyDomain.decodeCoverageMaps(container: container)
             ?? CapabilityTaxonomyDomain.decodeCoverageAliases(container: container)
             ?? []
-        capabilities = try container.decodeIfPresent([CapabilityTaxonomyCapability].self, forKey: .capabilities)
+        let decodedCapabilities = try container.decodeIfPresent([CapabilityTaxonomyCapability].self, forKey: .capabilities)
             ?? container.decodeIfPresent([CapabilityTaxonomyCapability].self, forKey: .rows)
             ?? []
-        let directSkills = try container.decodeIfPresent([CapabilityTaxonomySkill].self, forKey: .skills) ?? []
+        if decodedCapabilities.isEmpty, !representativeSkills.isEmpty {
+            let capabilityTags = try container.decodeFlexibleCapabilityStringArray(keys: [.capabilityTags])
+            let keywords = try container.decodeFlexibleCapabilityStringArray(keys: [.keywords])
+            capabilities = [
+                CapabilityTaxonomyCapability(
+                    id: domainKey,
+                    name: name,
+                    summary: summary,
+                    keywords: Array((keywords + capabilityTags).prefix(12)),
+                    tools: try container.decodeFlexibleCapabilityStringArray(keys: [.tools]),
+                    rules: try container.decodeFlexibleCapabilityStringArray(keys: [.rules]),
+                    riskTags: try container.decodeFlexibleCapabilityStringArray(keys: [.riskTags]),
+                    representativeSkills: representativeSkills,
+                    evidenceRefs: try container.decodeFlexibleCapabilityStringArray(keys: [.evidenceRefs, .evidenceRefsAlt, .evidence]),
+                    safetyFlags: try container.decodeFlexibleCapabilityStringArray(keys: [.safetyFlags, .safety, .flags])
+                )
+            ]
+        } else {
+            capabilities = decodedCapabilities
+        }
         capabilityCount = try container.decodeFlexibleCapabilityInt(keys: [.capabilityCount, .capabilityCountAlt])
             ?? capabilities.count
         skillCount = try container.decodeFlexibleCapabilityInt(keys: [.skillCount, .skillCountAlt])
-            ?? capabilities.reduce(directSkills.count) { $0 + $1.representativeSkills.count }
+            ?? capabilities.reduce(representativeSkills.count) { $0 + $1.representativeSkills.count }
         gapNotes = try container.decodeFlexibleCapabilityStringArray(keys: [.gapNotes, .gapNotesAlt, .gaps])
         blockerNotes = try container.decodeFlexibleCapabilityStringArray(keys: [.blockerNotes, .blockerNotesAlt, .blockers])
         evidenceRefs = try container.decodeFlexibleCapabilityStringArray(keys: [.evidenceRefs, .evidenceRefsAlt, .evidence])
@@ -432,7 +515,32 @@ struct CapabilityTaxonomyDomain: Decodable, Hashable, Identifiable {
         id = try container.decodeIfPresent(String.self, forKey: .id)
             ?? container.decodeIfPresent(String.self, forKey: .domainID)
             ?? container.decodeIfPresent(String.self, forKey: .domainId)
+            ?? container.decodeIfPresent(String.self, forKey: .domainKey)
             ?? name
+    }
+
+    private static func decodeCoverageMaps(container: KeyedDecodingContainer<CodingKeys>) -> [CapabilityTaxonomyCoverage]? {
+        let agentCounts = (try? container.decode([String: Int].self, forKey: .agents)) ?? [:]
+        let workspaceCounts = (try? container.decode([String: Int].self, forKey: .workspaces)) ?? [:]
+        let rows = agentCounts.map { agent, count in
+            CapabilityTaxonomyCoverage(
+                agent: agent,
+                skillCount: count,
+                capabilityCount: 1,
+                coverageState: count > 0 ? UIStrings.stateEnabled : UIStrings.unknown,
+                notes: []
+            )
+        } + workspaceCounts.map { workspace, count in
+            CapabilityTaxonomyCoverage(
+                agent: workspace,
+                skillCount: count,
+                capabilityCount: 1,
+                coverageState: count > 0 ? UIStrings.stateEnabled : UIStrings.unknown,
+                notes: []
+            )
+        }
+        guard !rows.isEmpty else { return nil }
+        return rows.sorted { $0.agent < $1.agent }
     }
 
     private static func decodeCoverageAliases(container: KeyedDecodingContainer<CodingKeys>) -> [CapabilityTaxonomyCoverage]? {
@@ -474,6 +582,8 @@ struct CapabilityTaxonomyResult: Decodable, Hashable {
         case taxonomy
         case coverageByAgent = "coverage_by_agent"
         case coverageByAgentAlt = "coverageByAgent"
+        case coverageRows = "coverage_rows"
+        case coverageRowsAlt = "coverageRows"
         case agentCoverage = "agent_coverage"
         case coverage
         case gapNotes = "gap_notes"
@@ -537,10 +647,14 @@ struct CapabilityTaxonomyResult: Decodable, Hashable {
             ?? []
         let coverageRows = (try? container.decodeIfPresent([CapabilityTaxonomyCoverage].self, forKey: .coverageByAgent)) ?? nil
         let coverageRowsAlt = (try? container.decodeIfPresent([CapabilityTaxonomyCoverage].self, forKey: .coverageByAgentAlt)) ?? nil
+        let serviceCoverageRows = (try? container.decodeIfPresent([CapabilityTaxonomyCoverage].self, forKey: .coverageRows)) ?? nil
+        let serviceCoverageRowsAlt = (try? container.decodeIfPresent([CapabilityTaxonomyCoverage].self, forKey: .coverageRowsAlt)) ?? nil
         let agentCoverageRows = (try? container.decodeIfPresent([CapabilityTaxonomyCoverage].self, forKey: .agentCoverage)) ?? nil
         let genericCoverageRows = (try? container.decodeIfPresent([CapabilityTaxonomyCoverage].self, forKey: .coverage)) ?? nil
         coverageByAgent = coverageRows
             ?? coverageRowsAlt
+            ?? serviceCoverageRows
+            ?? serviceCoverageRowsAlt
             ?? agentCoverageRows
             ?? genericCoverageRows
             ?? []
@@ -587,6 +701,21 @@ private extension CapabilityTaxonomyCoverage {
         self.capabilityCount = 0
         self.coverageState = UIStrings.unknown
         self.notes = []
+    }
+
+    init(
+        agent: String,
+        skillCount: Int,
+        capabilityCount: Int,
+        coverageState: String,
+        notes: [String]
+    ) {
+        self.id = agent
+        self.agent = agent
+        self.skillCount = skillCount
+        self.capabilityCount = capabilityCount
+        self.coverageState = coverageState
+        self.notes = notes
     }
 }
 

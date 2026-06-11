@@ -1498,7 +1498,7 @@ final class SkillStore: ObservableObject {
             capabilityTaxonomyResult = try await service.buildCapabilityTaxonomy(
                 agent: agent,
                 limit: 20,
-                includeGaps: true
+                includeSingleSkillDomains: true
             )
         } catch {
             capabilityTaxonomyResult = .unavailable(reason: error.localizedDescription)

@@ -1465,7 +1465,7 @@ struct SkillStoreTests {
         try expectContains(calls, "knowledge.buildCapabilityTaxonomy", "Capability taxonomy should call the V2.54 taxonomy method.")
         try expectContains(calls, "\"agent\":\"claude-code\"", "Capability taxonomy should pass the current agent filter.")
         try expectContains(calls, "\"limit\":20", "Capability taxonomy should pass the domain limit.")
-        try expectContains(calls, "\"include_gaps\":true", "Capability taxonomy should request gap context.")
+        try expectContains(calls, "\"include_single_skill_domains\":true", "Capability taxonomy should request single-skill domain coverage.")
         try expectFalse(calls.contains("llm.previewPrompt"), "Capability taxonomy must not prepare provider prompts.")
         try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Capability taxonomy must not send to provider.")
         try expectFalse(calls.contains("config.toggleSkill"), "Capability taxonomy must not call config write paths.")

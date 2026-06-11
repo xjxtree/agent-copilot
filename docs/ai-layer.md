@@ -4,7 +4,7 @@
 >
 > Scanner / rules / catalog 始终是事实来源；LLM/AI provider 是 AI agent skills 的核心分析增强，用于质量、任务可用性、routing 置信度、trace 分析、remediation 和治理总结。
 >
-> 当前实现边界（V2.53 baseline；V2.54 Capability Taxonomy 仍处于 docs-prep 规划，尚未实现）：
+> 当前实现边界（V2.54 baseline；V2.55 Workspace Readiness 仍未实现）：
 >
 > - 已落地 disabled-by-default 的 service/UI gate 和 request prepare/estimate 能力。
 > - 已落地用户显式配置的 OpenAI-compatible / Claude-compatible provider profile 基础：`llm.listProviderProfiles`、`llm.saveProviderProfile`、`llm.deleteProviderProfile`、`llm.testProviderConnection`、macOS Keychain-first API key storage、预算字段、disabled/unconfigured state，以及 test connection 的最小 redacted call metadata。
@@ -70,11 +70,11 @@
 > - 已实现 service protocol 与 native Analysis UI：把 similar / confusable skills 区分为 coverage redundancy 与 routing ambiguity 两类解释，并输出 summary、groups、members、gap/blocker notes、evidence refs、prompt request metadata 与 safety flags。
 > - 该版本仍不写 skill 文件、agent config、group artifact、snapshot、triage 或 raw trace；如果未来存在 provider 说明，仍必须走 V2.42 preview/redaction/confirmation 并保持 copy-only，不影响 deterministic grouping 结果。
 
-> V2.54（规划中，未验证）：
+> V2.54（已完成）：
 >
-> - 预期方法名：`knowledge.buildCapabilityTaxonomy`。
-> - 预期行为：只基于 existing catalog evidence、derived tags、source/name/tool/rule/capability/risk overlaps、quality/readiness/stale-drift context 构建 capability-domain 视图，用于解释覆盖、缺口、重复和 agent 间差异。
-> - 预期边界：user-triggered、local-only、deterministic、read-only by default；不写 skill 文件、不改 agent config、不建 artifact、不改 triage、不执行脚本、不读凭据、不持久化 raw prompt/response/trace；可选 provider 说明若未来出现，仍必须走 V2.42 preview/redaction/confirmation 且仅 copy-only。
+> - `knowledge.buildCapabilityTaxonomy` 是本地 only、read-only、user-triggered 的 capability taxonomy surface；它只围绕 existing catalog evidence、V2.52 derived tags、V2.53 similar groups、agent/workspace/source/tool/rule/risk/capability signals、quality 与 stale-drift context 构建 capability-domain 视图。
+> - 已实现 service protocol 与 native Analysis UI：输出 summary、domains、coverage rows、representative skills、gap/blocker notes、evidence refs、prompt request metadata 与 safety flags，并显式区分 coverage redundancy 与 routing ambiguity。
+> - 该版本仍不写 skill 文件、agent config、taxonomy artifact、snapshot、triage 或 raw trace；不默认 provider / network；可选 provider 说明仍必须走 V2.42 preview/redaction/confirmation 且保持 copy-only，不影响 deterministic taxonomy 结果。
 
 ## 1. 双层分工
 
@@ -128,7 +128,8 @@ Provider 配置原则：
 | V2.51（实现） | stale/drift detection（`analysis.detectStaleDrift`） | fingerprints、mtime、finding/conflict/analysis drift、source/root provenance、readiness impact、local evidence-first、optional V2.42 copy-only provider explanation |
 | V2.52（实现） | knowledge index / `knowledge.search` | existing catalog evidence、derived tags、quality/readiness/stale-drift context、local-only read-only search |
 | V2.53（实现） | similar grouping / `knowledge.groupSimilarSkills` | existing catalog evidence、V2.52 tags、source/name/tool/rule/capability/risk overlaps、quality/readiness/stale-drift context、local-only deterministic grouping |
-| V2.54-V2.55（planned） | taxonomy、workspace readiness | future derived groupings/readiness views；预期沿用 `knowledge.buildCapabilityTaxonomy` / `workspace.checkReadiness`，但当前未实现、未验证 |
+| V2.54（实现） | capability taxonomy / `knowledge.buildCapabilityTaxonomy` | existing catalog evidence、V2.52 tags、V2.53 similar groups、quality/stale-drift context、agent/workspace coverage、local-only deterministic taxonomy |
+| V2.55（planned） | workspace readiness | future derived workspace readiness view；预期沿用 `workspace.checkReadiness`，当前未实现、未验证 |
 | V2.56-V2.60 | remediation planner、fix drafts、impact preview、batch review、history | findings、triage、policy, snapshots, writable capability matrix |
 | V2.61-V2.70 | review session、governance report、policy packs、skill map、full provider observability、safe write planning | local reports, policy profiles, V2.41-V2.42 call metadata, evidence gates |
 

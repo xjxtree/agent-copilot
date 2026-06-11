@@ -10159,8 +10159,8 @@ fn capability_domains_from_candidates(
     }
 
     by_domain
-        .into_iter()
-        .filter_map(|(_, mut candidates)| {
+        .into_values()
+        .filter_map(|mut candidates| {
             if !include_single_skill_domains && candidates.len() == 1 {
                 return None;
             }
