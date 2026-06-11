@@ -143,7 +143,7 @@ Provider 配置原则：
 | V2.54（实现） | capability taxonomy / `knowledge.buildCapabilityTaxonomy` | existing catalog evidence、V2.52 tags、V2.53 similar groups、quality/stale-drift context、agent/workspace coverage、local-only deterministic taxonomy |
 | V2.55（实现） | workspace readiness（`workspace.checkReadiness`） | catalog、taxonomy、task readiness/routing、cross-agent readiness、stale/drift、adapter diagnostics、findings/conflicts/analysis；local-only deterministic readiness |
 | V2.56（实现） | remediation planner（`remediation.plan`） | findings、cleanup queue、stale/drift、similar groups、taxonomy、workspace readiness、task readiness/routing、adapter diagnostics；local-only deterministic read-only plan |
-| V2.57 | preview drafts | user-triggered local-only deterministic copy/edit-ready drafts for frontmatter、description、permissions、dependency、policy；no direct apply/write path；provider wording still follows V2.42 preview/redaction/confirmation |
+| V2.57（实现） | preview drafts（`remediation.previewDrafts`） | user-triggered local-only deterministic copy/edit-ready drafts for frontmatter、description、permissions、dependency、policy；no direct apply/write path；provider wording still follows V2.42 preview/redaction/confirmation |
 | V2.58-V2.60 | impact preview、batch review、history | future work; remains constrained by findings、triage、policy、snapshots and the writable capability matrix |
 | V2.61-V2.70 | review session、governance report、policy packs、skill map、full provider observability、safe write planning | local reports, policy profiles, V2.41-V2.42 call metadata, evidence gates |
 

@@ -309,12 +309,12 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
 - Output shape should remain explanatory: summary, plan rows, gap notes, blocker notes, evidence references, prompt request metadata, and safety flags. Plan rows should include priority, issue type, affected instances, next step, confidence, and writable-path requirement notes.
 - Any optional provider explanation, if ever added, must remain V2.42 preview/redaction/confirmation-gated and copy-only; it must not change the deterministic plan or become an execution trigger.
 
-### 2.4.3.1.10 V2.57 Fix Preview Drafts（planned）
+### 2.4.3.1.10 V2.57 Fix Preview Drafts（completed）
 
-- `remediation.previewDrafts` is user-triggered and local-only by default. It deterministically derives copy/edit-ready draft suggestions for frontmatter, description, permissions, dependency, and policy from local catalog evidence, findings, triage, policy, snapshots, and writable capability context.
+- `remediation.previewDrafts` is user-triggered and local-only by default. It deterministically derives copy/edit-ready draft suggestions for frontmatter, description, permissions, dependency, and policy from local catalog evidence, findings, skill metadata/frontmatter/body snippets, remediation plan signals, conflicts, analysis, rules, adapter diagnostics, writable capability context, and source provenance.
 - The method must not provide a direct apply/write path. It must not write skill files, agent config, snapshots, triage, scripts, or credentials; it must not default to provider or network usage; it must not persist raw prompt/response/trace.
 - Output safety flags must default false: `provider_request_sent`, `write_back_allowed`, `config_mutation_allowed`, `artifact_written`, `snapshot_created`, `triage_mutation_allowed`, `script_execution_allowed`, `credential_accessed`, `raw_prompt_persisted`, `raw_response_persisted`, `raw_trace_persisted`, `cloud_sync_performed`, `telemetry_emitted`.
-- Output shape should remain explanatory and copy/edit oriented: summary, draft groups, draft rows, gap notes, blocker notes, evidence references, prompt request metadata, and safety flags. Draft rows should expose issue type, affected instances, suggested wording, and whether the suggestion is safe for the existing edit flow.
+- Output shape remains explanatory and copy/edit oriented: summary, `draft_items`, gap notes, blocker notes, evidence references, prompt request metadata, and safety flags. Draft items expose issue type, affected instances, current/proposed text, confidence, copy labels, edit guidance, and whether the suggestion is safe for manual review in an existing edit flow.
 - Any optional provider wording, if ever added, must remain V2.42 preview/redaction/confirmation-gated and copy-only; it must not change the deterministic drafts or become an execution trigger.
 
 ### 2.4.3 Finding triage persistence 边界（V2.29）

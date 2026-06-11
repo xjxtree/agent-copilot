@@ -6062,24 +6062,24 @@ impl ServiceHost {
                     Some("warning".to_string()),
                     skill.map(|skill| skill.id.clone()),
                 );
-                draft_items.push(remediation_policy_draft_item(
-                    "Clarify duplicate skill policy",
-                    "policy",
+                draft_items.push(remediation_policy_draft_item(RemediationPolicyDraftInput {
+                    title: "Clarify duplicate skill policy".to_string(),
+                    draft_type: "policy",
                     skill,
-                    Some(conflict.id.clone()),
-                    None,
-                    format!(
+                    finding_id: Some(conflict.id.clone()),
+                    rule_id: None,
+                    proposed_text: format!(
                         "Prefer the reviewed active skill for `{}` and keep duplicate/confusable variants disabled or clearly scoped until their provenance is reconciled.",
                         skill
                             .map(|skill| redact_for_llm_preview(&skill.name))
                             .unwrap_or_else(|| "the affected skill group".to_string())
                     ),
-                    format!(
+                    rationale: format!(
                         "Conflict `{}` indicates ambiguous runtime selection.",
                         redact_for_llm_preview(&conflict.reason)
                     ),
-                    vec![evidence_id],
-                ));
+                    evidence_refs: vec![evidence_id],
+                }));
             }
 
             for group in &analysis.groups {
@@ -6111,21 +6111,21 @@ impl ServiceHost {
                     Some(group.severity.clone()),
                     skill.map(|skill| skill.id.clone()),
                 );
-                draft_items.push(remediation_policy_draft_item(
-                    &group.title,
-                    "policy",
+                draft_items.push(remediation_policy_draft_item(RemediationPolicyDraftInput {
+                    title: group.title.clone(),
+                    draft_type: "policy",
                     skill,
-                    None,
-                    Some(group.id.clone()),
-                    format!(
+                    finding_id: None,
+                    rule_id: Some(group.id.clone()),
+                    proposed_text: format!(
                         "Document whether `{}` is intentionally shared across agents or should be narrowed by agent/scope before enabling it for task routing.",
                         skill
                             .map(|skill| redact_for_llm_preview(&skill.name))
                             .unwrap_or_else(|| "this skill group".to_string())
                     ),
-                    redact_for_llm_preview(&group.explanation),
-                    vec![evidence_id],
-                ));
+                    rationale: redact_for_llm_preview(&group.explanation),
+                    evidence_refs: vec![evidence_id],
+                }));
             }
         }
 
@@ -13667,45 +13667,55 @@ fn remediation_draft_item_for_finding(
     }
 }
 
-fn remediation_policy_draft_item(
-    title: &str,
+struct RemediationPolicyDraftInput<'a> {
+    title: String,
     draft_type: &'static str,
-    skill: Option<&SkillDetailRecord>,
+    skill: Option<&'a SkillDetailRecord>,
     finding_id: Option<String>,
     rule_id: Option<String>,
     proposed_text: String,
     rationale: String,
     evidence_refs: Vec<String>,
-) -> RemediationDraftItem {
-    let current_text = skill.map(|skill| redacted_snippet(&skill.frontmatter_raw, 700));
-    let patch_like_snippet =
-        remediation_patch_like_snippet(draft_type, current_text.as_deref(), &proposed_text);
+}
+
+fn remediation_policy_draft_item(input: RemediationPolicyDraftInput<'_>) -> RemediationDraftItem {
+    let current_text = input
+        .skill
+        .map(|skill| redacted_snippet(&skill.frontmatter_raw, 700));
+    let patch_like_snippet = remediation_patch_like_snippet(
+        input.draft_type,
+        current_text.as_deref(),
+        &input.proposed_text,
+    );
     RemediationDraftItem {
         id: stable_remediation_draft_id(
-            draft_type,
-            skill.map(|skill| skill.id.as_str()).unwrap_or("workspace-policy"),
-            finding_id.as_deref(),
-            rule_id.as_deref(),
-            &proposed_text,
+            input.draft_type,
+            input
+                .skill
+                .map(|skill| skill.id.as_str())
+                .unwrap_or("workspace-policy"),
+            input.finding_id.as_deref(),
+            input.rule_id.as_deref(),
+            &input.proposed_text,
         ),
         rank: 0,
-        title: redact_for_llm_preview(title),
-        draft_type,
-        agent: skill.map(|skill| skill.agent.clone()),
-        affected_skill: skill.map(remediation_affected_skill),
-        finding_id: finding_id.map(|id| redact_for_llm_preview(&id)),
-        rule_id: rule_id.map(|id| redact_for_llm_preview(&id)),
+        title: redact_for_llm_preview(&input.title),
+        draft_type: input.draft_type,
+        agent: input.skill.map(|skill| skill.agent.clone()),
+        affected_skill: input.skill.map(remediation_affected_skill),
+        finding_id: input.finding_id.map(|id| redact_for_llm_preview(&id)),
+        rule_id: input.rule_id.map(|id| redact_for_llm_preview(&id)),
         current_text,
-        proposed_text: redact_for_llm_preview(&proposed_text),
+        proposed_text: redact_for_llm_preview(&input.proposed_text),
         patch_like_snippet,
-        rationale: redact_for_llm_preview(&rationale),
+        rationale: redact_for_llm_preview(&input.rationale),
         confidence: 58,
         confidence_band: "medium",
         copy_label: "Copy policy draft".to_string(),
         edit_guidance:
             "Use this as copy-only policy guidance in skill metadata or review notes; no config or skill file is changed by this preview."
                 .to_string(),
-        evidence_refs,
+        evidence_refs: input.evidence_refs,
         blocker_notes: vec![
             "Policy draft is advisory and must be reviewed before any existing write flow."
                 .to_string(),
