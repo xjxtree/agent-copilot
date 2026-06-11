@@ -4,11 +4,11 @@
 >
 > 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.45 AI Routing Confidence complete**。V2.21-V2.45 已完成范围保持不变（scan accuracy/dedupe、finding/conflict 语义、Health/Adapter Capability UX、single-skill Detail 诊断口径、Agent-config timeline、Finding explainability、Skill identity/provenance dedupe、Conflict semantic closeout、Finding triage persistence、AI skill analysis workflow、Cleanup Queue、Rule tuning / suppression、Safe batch actions、Cross-agent comparison view、Local report export、Pi writable evidence harness、Pi guarded writable toggle、Hermes external roots、OpenClaw workspace 深化、Adapter diagnostics、AI Provider Foundation、Prompt Preview / Redaction、AI Skill Quality Score、AI Task Readiness Check、AI Routing Confidence）。V2.42+ provider-backed 分析仍必须 preview/redact/estimate/destination-visible/explicit-confirm 后才发送；随后接续 V2.46+ benchmark/regression/trace/governance 能力线。
+> 当前阶段：**V2.46 Task Benchmark Set complete**。V2.21-V2.46 已完成范围保持不变（scan accuracy/dedupe、finding/conflict 语义、Health/Adapter Capability UX、single-skill Detail 诊断口径、Agent-config timeline、Finding explainability、Skill identity/provenance dedupe、Conflict semantic closeout、Finding triage persistence、AI skill analysis workflow、Cleanup Queue、Rule tuning / suppression、Safe batch actions、Cross-agent comparison view、Local report export、Pi writable evidence harness、Pi guarded toggle、Hermes external roots、OpenClaw workspace 深化、Adapter diagnostics、AI Provider Foundation、Prompt Preview / Redaction、AI Skill Quality Score、AI Task Readiness Check、AI Routing Confidence、Task Benchmark Set）。V2.42+ provider-backed 分析仍必须 preview/redact/estimate/destination-visible/explicit-confirm 后才发送；随后接续 V2.47+ regression/trace/governance 能力线。
 >
-> 近期主线：继续围绕 AI agent skills 的管理、检查、分析和配置审计打磨体验。V2.41 Provider Foundation、V2.42 Prompt Preview / Redaction、V2.43 AI Skill Quality Score、V2.44 AI Task Readiness Check 与 V2.45 AI Routing Confidence 已完成，后续版本线继续为 **V2.46-V2.70 AI-native Task-centered Skills Governance**：本地 scanner/rules/catalog 提供事实层，用户自配 OpenAI-compatible / Claude-compatible 大模型负责 benchmark/regression、trace 分析、remediation、policy 与治理报告。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
+> 近期主线：继续围绕 AI agent skills 的管理、检查、分析和配置审计打磨体验。V2.41 Provider Foundation、V2.42 Prompt Preview / Redaction、V2.43 AI Skill Quality Score、V2.44 AI Task Readiness Check、V2.45 AI Routing Confidence 与 V2.46 Task Benchmark Set 已完成，后续版本线继续为 **V2.47-V2.70 AI-native Task-centered Skills Governance**：本地 scanner/rules/catalog/benchmark 提供事实层，用户自配 OpenAI-compatible / Claude-compatible 大模型负责 regression、trace 分析、remediation、policy 与治理报告。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
 
-> V2.45 已完成：`task.rankSkillRoutes` 将 task-to-skill 候选升级为 ranking 输出，附带 `confidence`、`match_reasons`、`ambiguity/collision warnings`、`likely wrong-pick/miss` 风险解释，并保持 read-only 与 provider preview/confirm-only 的安全边界。
+> V2.46 已完成：`task.listBenchmarks` / `task.saveBenchmark` / `task.deleteBenchmark` / `task.evaluateBenchmarks` 将任务路由检查升级为 app-local benchmark set，可保存 task、expected skill refs/names、acceptable agent/scope 与成功标准，并用 V2.44/V2.45 本地 readiness/routing evidence 进行 deterministic read-only 评估；本地评估不发起 provider 请求。
 >
 > 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.25 各阶段能力、V2.9 Tool-global skill pool、V2.11 Adapter capability matrix、V2.16-V2.25 management/analysis/history line。后续候选变更仍需重新验证。
 >
@@ -992,7 +992,7 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 2. 用户显式配置 OpenAI-compatible 或 Claude-compatible provider 后，AI 参与复杂判断：quality、task readiness、routing confidence、capability gap、trace accuracy、remediation、policy explanation。
 3. 用户围绕真实任务和工作区进行 review session，形成本地治理报告和可追溯处理历史。
 
-当前代码检查结论：主线已有 `llm.status` / `llm.prepareAction` / `llm.prepareSkillAnalysis`、provider/model DTO、token/cost estimate、macOS read-only preview UI、V2.41 provider profile 配置/Keychain-first API key storage/显式 Test Connection/预算字段/最小 redacted test-call metadata、V2.42 `llm.previewPrompt` / `llm.confirmPromptAndSend` provider-backed prompt preview/redaction/confirmed draft output、V2.43 `analysis.scoreSkillQuality` deterministic read-only skill quality score、V2.44 `task.checkReadiness` deterministic read-only task readiness，以及 V2.45 `task.rankSkillRoutes` deterministic read-only routing confidence。尚未实现 V2.46+ benchmark / trace 能力，也尚未实现 full provider observability。
+当前代码检查结论：主线已有 `llm.status` / `llm.prepareAction` / `llm.prepareSkillAnalysis`、provider/model DTO、token/cost estimate、macOS read-only preview UI、V2.41 provider profile 配置/Keychain-first API key storage/显式 Test Connection/预算字段/最小 redacted test-call metadata、V2.42 `llm.previewPrompt` / `llm.confirmPromptAndSend` provider-backed prompt preview/redaction/confirmed draft output、V2.43 `analysis.scoreSkillQuality` deterministic read-only skill quality score、V2.44 `task.checkReadiness` deterministic read-only task readiness、V2.45 `task.rankSkillRoutes` deterministic read-only routing confidence，以及 V2.46 `task.listBenchmarks` / `task.saveBenchmark` / `task.deleteBenchmark` / `task.evaluateBenchmarks` app-local deterministic task benchmark set。尚未实现 V2.47+ routing regression / trace 能力，也尚未实现 full provider observability。
 
 | Version | Goal | Completion signal |
 | --- | --- | --- |
@@ -1001,7 +1001,7 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 | V2.43 | AI Skill Quality Score | 已完成：基于本地 metadata/findings/conflicts/analysis/adapter diagnostics 给出 deterministic quality score、分项理由、风险说明和改进建议；optional provider explanation 走 V2.42 preview/redaction/confirmation，copy-only。 |
 | V2.44 | AI Task Readiness Check | 已完成：用户输入真实任务，基于本地 evidence 评估 candidate skills 的可用性、启用/scope/risk 状态、缺口、blocker、证据引用和 safety flags；optional provider explanation 仍走 V2.42 preview/confirmation。 |
 | V2.45 | AI Routing Confidence | 已完成：对 task-to-skill 候选进行排序并输出 ranking + confidence、match reasons、ambiguity/collision warnings、likely wrong-pick / likely miss 风险；排序输入来自 read-only local evidence，并保持可选 provider explanation 的 prompt preview/redaction/确认路径。 |
-| V2.46 | Task Benchmark Set | 用户维护常见任务、期望 skills、可接受 agent/scope 和成功标准，用于长期 readiness 回归。 |
+| V2.46 | Task Benchmark Set | 已完成：用户维护 app-local 常见任务、期望 skill refs/names、可接受 agent/scope 和成功标准；service 提供 `task.listBenchmarks` / `task.saveBenchmark` / `task.deleteBenchmark` / `task.evaluateBenchmarks`，native Analysis UI 可保存、加载、删除和评估 benchmark；本地评估复用 V2.44/V2.45 evidence，保持 read-only/no-provider/no-write。 |
 | V2.47 | Routing Regression Detection | skills 改动、禁用、漂移、finding 增减后，检测任务命中率或 routing confidence 是否下降。 |
 | V2.48 | Agent Behavior Trace Import | 导入本地 transcript/log，先脱敏，再分析 agent 实际选 skill 是否命中、漏选、错选或被重复 skill 干扰。 |
 | V2.49 | Routing Accuracy Dashboard | 展示 hit/miss/wrong-pick/ambiguity/gap 指标，按 agent、workspace、task benchmark 和时间维度汇总。 |
@@ -1091,6 +1091,22 @@ Closeout status: completed. V2.43 integrates protocol + service + UI closeout an
 8. 复核 provider 辅助路径：仍需 `llm.previewPrompt` + `llm.confirmPromptAndSend`，发送前用户确认且输出 copy/display-only。
 
 **Closeout status**: completed. V2.45 integrates `task.rankSkillRoutes`, deterministic local route ranking, native Analysis UI, routing prompt preview compatibility, focused Rust/Swift tests, `pnpm check:macos`, real local Computer Use validation against the current bundle path, fixture screenshot inspection, and `pnpm check:privacy`.
+
+### V2.46 Verification Checklist（完成）
+
+1. Focused Rust/Swift checks：`cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features`、`swift test --package-path apps/macos`。
+2. `pnpm check:macos`。
+3. Real local launch (`./script/build_and_run.sh run` / `pnpm dev:macos`) 并对当前 `dist/SkillsCopilot.app` bundle 进行 V2.46 目标流程的 `Computer Use`/AX 验证；若窗口不可见，记录 blocker。
+4. `pnpm check:privacy`。
+5. App-window-only 截图并手工复核路径/凭据占位符脱敏。
+6. 复核 V2.46 口径：
+   - 用户可维护 app-local task benchmark set（task、expected skill refs/names、acceptable agent/scope、成功标准）；
+   - 已实现 `task.listBenchmarks` / `task.saveBenchmark` / `task.deleteBenchmark` / `task.evaluateBenchmarks`；
+   - benchmark 评估以 `metadata` / `findings` / `conflicts` / `analysis` / `adapter diagnostics` / `quality_score` / `task.checkReadiness` / `task.rankSkillRoutes` 为主；
+   - 可选 provider 说明依旧走 V2.42 `llm.previewPrompt` + `llm.confirmPromptAndSend`，保持 preview/redaction/确认和 copy-only。
+7. 复核关闭边界：本地 benchmark 不得发起 provider 请求、不得改 triage，不得读 credentials，不得变更 agent config，不得创建 snapshot，不得执行脚本。
+
+**Closeout status**: completed with explicit Computer Use blocker. V2.46 integrates app-local task benchmark CRUD/evaluation in the Rust service, native Analysis benchmark UI, tolerant Swift models, protocol fixtures, focused Rust/Swift tests, and `pnpm check:macos`. Real local app launch against the current `dist/SkillsCopilot.app` bundle succeeded and direct window capture found the app window, but Computer Use returned `cgWindowNotFound` for the absolute bundle path and `timeoutReached` for the app name even after stale same-bundle-id processes were removed. The captured real-local screenshot exposed local paths and was not committed. `pnpm check:privacy` remains required before commit.
 
 ## V2.35 Local report export (completed)
 

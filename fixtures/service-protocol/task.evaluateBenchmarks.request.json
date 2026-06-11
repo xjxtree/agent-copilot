@@ -1,0 +1,9 @@
+{
+  "id": "fixture-task-evaluate-benchmarks",
+  "method": "task.evaluateBenchmarks",
+  "params": {
+    "ids": [
+      "fixture-benchmark"
+    ]
+  }
+}

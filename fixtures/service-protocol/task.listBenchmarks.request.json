@@ -1,0 +1,5 @@
+{
+  "id": "fixture-task-list-benchmarks",
+  "method": "task.listBenchmarks",
+  "params": {}
+}

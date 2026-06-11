@@ -11,6 +11,7 @@ struct LLMModelTests {
         try skillQualityScoreDecodesV243ServicePayload()
         try taskReadinessDecodesFlexiblePayload()
         try routingConfidenceDecodesFlexiblePayload()
+        try taskBenchmarkDecodesFlexiblePayload()
         try promptPreviewDecodesV242Payload()
         try promptPreviewDecodesServiceArrayScopePayload()
         try promptSendResultDecodesCopyOnlyAuditPayload()
@@ -491,6 +492,84 @@ struct LLMModelTests {
         try expectFalse(result.safety.scriptExecutionAllowed, "Routing confidence must not allow script execution.")
         try expectFalse(result.safety.configMutationAllowed, "Routing confidence must not mutate config.")
         try expectFalse(result.safety.credentialAccessed, "Routing confidence must not access credentials.")
+    }
+
+    private func taskBenchmarkDecodesFlexiblePayload() throws {
+        let data = Data(
+            """
+            {
+              "benchmarks": [
+                {
+                  "benchmark_id": "bench-1",
+                  "task_text": "Route a local audit release note task.",
+                  "expected_skill": {"instance_id":"beta","name":"Beta","agent":"claude-code"},
+                  "acceptable_instance_ids": ["beta", "alpha"]
+                }
+              ]
+            }
+            """.utf8
+        )
+        let list = try JSONDecoder().decode(TaskBenchmarkListResult.self, from: data)
+        try expectEqual(list.benchmarks.count, 1, "Benchmark list should decode object payload.")
+        try expectEqual(list.benchmarks.first?.id, "bench-1", "Benchmark should decode benchmark id alias.")
+        try expectEqual(list.benchmarks.first?.expectedSkill?.name, "Beta", "Benchmark should decode expected skill.")
+        try expectEqual(list.benchmarks.first?.acceptableSkills.map(\.instanceID), ["beta", "alpha"], "Benchmark should decode acceptable instance aliases.")
+
+        let evaluationData = Data(
+            """
+            {
+              "evaluated_count": 1,
+              "matched_count": 1,
+              "acceptable_count": 1,
+              "average_score": "88",
+              "evaluations": [
+                {
+                  "benchmark_id": "bench-1",
+                  "task": "Route a local audit release note task.",
+                  "match_status": "matched",
+                  "top_route": {
+                    "instance_id": "beta",
+                    "name": "Beta",
+                    "agent": "claude-code",
+                    "confidence_score": 88,
+                    "band": "High",
+                    "match_reasons": ["Description matches local audit."]
+                  },
+                  "expected_covered": true,
+                  "acceptable_covered": true,
+                  "blockers": [],
+                  "missing_capabilities": ["No release-note examples."],
+                  "safety_flags": ["provider not sent"],
+                  "evidence_references": [{"title":"Routing","detail":"Beta ranked first.","source":"local"}]
+                }
+              ],
+              "safety_flags": {
+                "provider_request_sent": false,
+                "write_back_allowed": false,
+                "write_actions_available": false,
+                "script_execution_allowed": false,
+                "execution_actions_available": false,
+                "config_mutation_allowed": false,
+                "snapshot_created": false,
+                "triage_mutation_allowed": false,
+                "credential_accessed": false,
+                "raw_secret_returned": false
+              }
+            }
+            """.utf8
+        )
+        let evaluation = try JSONDecoder().decode(TaskBenchmarkEvaluationResult.self, from: evaluationData)
+        try expectEqual(evaluation.evaluatedCount, 1, "Benchmark evaluation should decode count.")
+        try expectEqual(evaluation.averageScore, 88, "Benchmark evaluation should decode average score.")
+        try expectEqual(evaluation.evaluations.first?.topRoute?.name, "Beta", "Benchmark evaluation should decode top route.")
+        try expectEqual(evaluation.evaluations.first?.gaps, ["No release-note examples."], "Benchmark evaluation should decode gap aliases.")
+        try expectEqual(evaluation.evaluations.first?.safetyFlags, ["provider not sent"], "Benchmark evaluation should decode safety flag notes.")
+        try expectEqual(evaluation.evaluations.first?.evidence.map(\.detail), ["Beta ranked first."], "Benchmark evaluation should decode evidence references.")
+        try expectFalse(evaluation.safety.providerRequestSent, "Local benchmark evaluation must not send provider requests.")
+        try expectFalse(evaluation.safety.writeBackAllowed, "Benchmark evaluation must not allow write-back.")
+        try expectFalse(evaluation.safety.scriptExecutionAllowed, "Benchmark evaluation must not allow script execution.")
+        try expectFalse(evaluation.safety.configMutationAllowed, "Benchmark evaluation must not mutate config.")
+        try expectFalse(evaluation.safety.credentialAccessed, "Benchmark evaluation must not access credentials.")
     }
 
     private func promptSendResultDecodesCopyOnlyAuditPayload() throws {

@@ -19,6 +19,12 @@
 > - 当前已完成本地 deterministic ranking 与 native Analysis UI 集成；默认仅 read-only，不写 skill、不改 agent config、不执行脚本、不改 triage、不直接发送 provider 请求。
 > - 每次真实 provider 调用前必须展示 prompt preview、redaction summary、token/cost estimate 和 network destination。
 > - AI 输出默认 read-only，不直接写 skill、不改 agent config、不执行脚本、不改变 triage 或 policy 状态。
+>
+> V2.46（已完成）：
+>
+> - 本地 benchmark（任务集合）已落地：用户自定义 benchmark case（任务文本、预期 skill refs/names、可接受 agent / scope、成功标准）并本地持久化在 app-local `task-benchmarks.json`；执行过程 deterministic，基于 V2.44/V2.45 本地证据进行 expected/acceptable route match 评估。
+> - 已实现 `task.listBenchmarks` / `task.saveBenchmark` / `task.deleteBenchmark` / `task.evaluateBenchmarks`；`task.evaluateBenchmarks` 默认不发起 provider 请求，不改 triage，不改 config，不改 snapshot，不执行脚本。
+> - 可选 provider 辅助解释仅通过现有 V2.42 `llm.previewPrompt` + `llm.confirmPromptAndSend` 提供 copy-only 的展示草案，不参与主排序/回归判定。
 
 ## 1. 双层分工
 
@@ -64,7 +70,8 @@ Provider 配置原则：
 | V2.43（实现） | Deterministic skill quality score plus optional preview-confirmed provider explanation | metadata、findings、conflicts、analysis、adapter diagnostics |
 | V2.44（实现） | Deterministic task readiness plus optional preview-confirmed provider explanation | task text、metadata、findings、conflicts、analysis、adapter diagnostics、quality score |
 | V2.45（实现） | Routing confidence（ranking + risk + ambiguity） | task text、readiness candidates、metadata、findings、conflicts、analysis、adapter diagnostics、quality score |
-| V2.46-V2.50 | benchmark、regression、trace import、routing dashboard、cross-agent task readiness | benchmark set、catalog snapshots、imported trace evidence |
+| V2.46（实现） | Task benchmark set | app-local `task-benchmarks.json`、expected/acceptable route match、local evidence-first + optional AI 说明 |
+| V2.47-V2.50 | regression、trace import、routing dashboard、cross-agent task readiness（规划） | benchmark results + catalog snapshots + imported trace evidence；local evidence-first + optional AI 说明 |
 | V2.51-V2.55 | stale/drift、knowledge index、similar grouping、taxonomy、workspace readiness | fingerprints、mtime、source/root provenance、local index |
 | V2.56-V2.60 | remediation planner、fix drafts、impact preview、batch review、history | findings、triage、policy, snapshots, writable capability matrix |
 | V2.61-V2.70 | review session、governance report、policy packs、skill map、full provider observability、safe write planning | local reports, policy profiles, V2.41-V2.42 call metadata, evidence gates |

@@ -180,6 +180,52 @@ private struct TaskRoutingConfidenceParams: Encodable {
     }
 }
 
+private struct TaskBenchmarkListParams: Encodable {
+    let limit: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case limit
+    }
+}
+
+private struct TaskBenchmarkSaveParams: Encodable {
+    let task: String
+    let title: String?
+    let expectedSkillRefs: [String]
+    let expectedSkillNames: [String]
+    let acceptableAgents: [String]
+    let acceptableScopes: [String]
+    let successCriteria: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case task
+        case title
+        case expectedSkillRefs = "expected_skill_refs"
+        case expectedSkillNames = "expected_skill_names"
+        case acceptableAgents = "acceptable_agents"
+        case acceptableScopes = "acceptable_scopes"
+        case successCriteria = "success_criteria"
+    }
+}
+
+private struct TaskBenchmarkEvaluateParams: Encodable {
+    let benchmarkIDs: [String]?
+    let limit: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case benchmarkIDs = "benchmark_ids"
+        case limit
+    }
+}
+
+private struct TaskBenchmarkDeleteParams: Encodable {
+    let benchmarkId: String
+
+    enum CodingKeys: String, CodingKey {
+        case benchmarkId = "benchmark_id"
+    }
+}
+
 private struct PrepareLLMActionParams: Encodable {
     let action: LLMAction
     let instanceId: String
@@ -594,6 +640,52 @@ final class ServiceClient {
             return try await call(method: "task.rankSkillRoutes", params: params)
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .unavailable(taskText: taskText)
+        }
+    }
+
+    func listTaskBenchmarks(skill: SkillRecord?) async throws -> TaskBenchmarkListResult {
+        let params = TaskBenchmarkListParams(limit: nil)
+        do {
+            return try await call(method: "task.listBenchmarks", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func saveTaskBenchmark(taskText: String, skill: SkillRecord) async throws -> TaskBenchmarkSaveResult {
+        let params = TaskBenchmarkSaveParams(
+            task: taskText,
+            title: nil,
+            expectedSkillRefs: [skill.id, skill.definitionId],
+            expectedSkillNames: [skill.name],
+            acceptableAgents: [skill.agent],
+            acceptableScopes: [skill.scope],
+            successCriteria: [UIStrings.taskBenchmarkSuccessCriterion]
+        )
+        do {
+            return try await call(method: "task.saveBenchmark", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func evaluateTaskBenchmarks(skill: SkillRecord?, benchmarkIDs: [String]? = nil, limit: Int = 6) async throws -> TaskBenchmarkEvaluationResult {
+        let params = TaskBenchmarkEvaluateParams(
+            benchmarkIDs: benchmarkIDs,
+            limit: limit
+        )
+        do {
+            return try await call(method: "task.evaluateBenchmarks", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func deleteTaskBenchmark(benchmarkID: String) async throws -> TaskBenchmarkDeleteResult {
+        do {
+            return try await call(method: "task.deleteBenchmark", params: TaskBenchmarkDeleteParams(benchmarkId: benchmarkID))
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
         }
     }
 

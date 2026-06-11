@@ -216,11 +216,12 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
 - AI 输出永远是 untrusted suggestion；写入仍必须走已有 safe write path：preview-first、explicit confirm、snapshot、atomic write、readback verify、rollback。
 - AI 不能成为 `ExecutionRequester`，不能创建 `Completed` execution record，不能确认脚本执行。
 
-### 2.4.3.1 V2.43 AI quality score / V2.44 task readiness / V2.45 routing confidence
+### 2.4.3.1 V2.43 AI quality score / V2.44 task readiness / V2.45 routing confidence / V2.46 task benchmark set
 
 - V2.43 质量评分已实现为用户显式触发、默认只读的本地 deterministic scoring；本地默认不做周期性或后台评分。
 - V2.44 任务可用性评估已实现为用户显式触发、默认只读的本地 deterministic readiness check；用户输入任务文本后，service 只使用本地 catalog/finding/conflict/analysis/adapter diagnostics/V2.43 quality evidence 生成 score、候选 skill、gap/blocker、evidence references 与 safety flags。
 - V2.45 路由置信度已实现为用户显式触发、默认只读的本地 deterministic routing ranking；用户输入任务文本后，service 只使用本地 catalog/finding/conflict/analysis/adapter diagnostics/V2.43 quality/V2.44 readiness evidence 生成 route candidates、confidence、match reasons、ambiguity/collision warnings、likely wrong-pick/miss risk、evidence references 与 safety flags。
+- V2.46 任务基准集已实现为用户显式触发、app-local 的 deterministic benchmark evaluation；用户保存 task、expected skill refs/names、acceptable agent/scope 与成功标准后，service 仅在 app data `task-benchmarks.json` 持久化定义，并用 V2.44/V2.45 本地 readiness/routing evidence 生成 expected/acceptable match status、top route、score/band、gap/blocker notes、evidence refs 与 safety flags。
 - 本地证据仍是事实来源：`metadata` / `findings` / `conflicts` / `analysis` / `adapter diagnostics` / V2.43 `quality_score`。
 - Provider 辅助解释是 optional path，仍需经过：
   - prompt preview
@@ -229,8 +230,15 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
   - token/cost 估算
   - destination 预览
   - 用户显式确认。
-- `task.checkReadiness` 和 `task.rankSkillRoutes` 本身不得发起 provider 请求、不得读取 credentials、不得持久化 raw prompt/response、不得写 agent config、不得创建 snapshot、不得改变 triage、不得执行脚本。
+- `task.checkReadiness`、`task.rankSkillRoutes` 和 `task.evaluateBenchmarks` 本身不得发起 provider 请求、不得读取 credentials、不得持久化 raw prompt/response、不得写 agent config、不得创建 snapshot、不得改变 triage、不得执行脚本。
 - provider 辅助输出仍为 copy/display-only，不直接触发 `config.toggleSkill` / `snapshot.*` / triage 变更 / script execution / new credentials write。
+
+### 2.4.3.1.1 V2.47 Routing Regression Planning（planned）
+
+- 规划目标是在 V2.46 app-local benchmark set 上做 routing regression 检测：baseline 指标、阈值与重跑结果都保留在 app-local 数据中。
+- `task.detectRoutingRegression`（V2.47 计划）默认不发起 provider 请求；本地评估是 deterministic-first，输入来源为 `TaskReadiness`/`TaskBenchmark` 相关本地证据与 `V2.43`~`V2.46` 已有本地评分/ranking/benchmark evaluation。
+- 本地流程不得读取 credentials、不得触达 config/snapshot/skill 文件写路径、不得改变 triage、不得执行脚本、不得发起 `raw` prompt/response 持久化；可选解释性 provider 输出仍受 `llm.previewPrompt` + `llm.confirmPromptAndSend` 的 V2.42 红线预览、确认、copy-only 限制。
+- 这一级别的输出仍属于 judgment output；只能用于 review/decision 辅助，不得作为任何自动写回、auto-run、auto-config 的触发信号。
 
 ### 2.4.3 Finding triage persistence 边界（V2.29）
 

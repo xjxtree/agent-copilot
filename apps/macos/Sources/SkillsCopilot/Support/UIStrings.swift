@@ -459,6 +459,39 @@ enum UIStrings {
     static var routingConfidenceNoAmbiguity: String { text("routingConfidence.empty.ambiguity", "No ambiguity warnings returned.") }
     static var routingConfidenceNoWrongPick: String { text("routingConfidence.empty.wrongPick", "No wrong-pick or miss risks returned.") }
     static var routingConfidenceNoEvidence: String { text("routingConfidence.empty.evidence", "No evidence items returned.") }
+    static var taskBenchmarkTitle: String { text("taskBenchmark.title", "Task Benchmark Set") }
+    static var taskBenchmarkBoundary: String { text("taskBenchmark.boundary", "User-triggered, local benchmark evaluation for task routing. Local evaluation does not call a provider and cannot write skill files, mutate agent config, create snapshots, change triage, execute scripts, or read credentials.") }
+    static var taskBenchmarkTaskPlaceholder: String { text("taskBenchmark.task.placeholder", "Optional benchmark task text; otherwise the current readiness/routing task is used") }
+    static var taskBenchmarkSaveAction: String { text("taskBenchmark.action.save", "Save Benchmark") }
+    static var taskBenchmarkLoadAction: String { text("taskBenchmark.action.load", "Load Benchmarks") }
+    static var taskBenchmarkEvaluateAction: String { text("taskBenchmark.action.evaluate", "Evaluate Set") }
+    static var taskBenchmarkDeleteAction: String { text("taskBenchmark.action.delete", "Delete benchmark") }
+    static var taskBenchmarkTaskRequired: String { text("taskBenchmark.taskRequired", "Enter a task before saving a benchmark.") }
+    static var taskBenchmarkUnavailable: String { text("taskBenchmark.unavailable", "Task benchmark set is unavailable in this service build.") }
+    static var taskBenchmarkDeleteUnavailable: String { text("taskBenchmark.deleteUnavailable", "Deleting benchmarks is unavailable in this service build.") }
+    static var taskBenchmarkSuccessCriterion: String { text("taskBenchmark.successCriterion", "Top route should match the selected expected skill or an acceptable local agent/scope route.") }
+    static var taskBenchmarkListTitle: String { text("taskBenchmark.list", "Benchmarks") }
+    static var taskBenchmarkNoBenchmarks: String { text("taskBenchmark.empty.benchmarks", "No benchmarks returned.") }
+    static var taskBenchmarkEvaluationTitle: String { text("taskBenchmark.evaluation", "Benchmark evaluation") }
+    static var taskBenchmarkAverageScore: String { text("taskBenchmark.averageScore", "Average") }
+    static var taskBenchmarkEvaluated: String { text("taskBenchmark.evaluated", "Evaluated") }
+    static var taskBenchmarkMatched: String { text("taskBenchmark.matched", "Expected matched") }
+    static var taskBenchmarkAcceptableMatched: String { text("taskBenchmark.acceptableMatched", "Acceptable matched") }
+    static var taskBenchmarkPerBenchmark: String { text("taskBenchmark.perBenchmark", "Per-benchmark results") }
+    static var taskBenchmarkNoEvaluations: String { text("taskBenchmark.empty.evaluations", "No benchmark evaluations returned.") }
+    static var taskBenchmarkTopRoute: String { text("taskBenchmark.topRoute", "Top route") }
+    static var taskBenchmarkExpected: String { text("taskBenchmark.expected", "Expected") }
+    static var taskBenchmarkAcceptable: String { text("taskBenchmark.acceptable", "Acceptable") }
+    static var taskBenchmarkExpectedCovered: String { text("taskBenchmark.expected.covered", "Expected covered") }
+    static var taskBenchmarkExpectedMissed: String { text("taskBenchmark.expected.missed", "Expected missed") }
+    static var taskBenchmarkAcceptableCovered: String { text("taskBenchmark.acceptable.covered", "Acceptable covered") }
+    static var taskBenchmarkAcceptableMissed: String { text("taskBenchmark.acceptable.missed", "Acceptable missed") }
+    static var taskBenchmarkBlockers: String { text("taskBenchmark.blockers", "Blockers") }
+    static var taskBenchmarkGaps: String { text("taskBenchmark.gaps", "Gaps") }
+    static var taskBenchmarkSafetyFlags: String { text("taskBenchmark.safetyFlags", "Safety flags") }
+    static var taskBenchmarkNoBlockers: String { text("taskBenchmark.empty.blockers", "No blockers returned.") }
+    static var taskBenchmarkNoGaps: String { text("taskBenchmark.empty.gaps", "No gaps returned.") }
+    static var taskBenchmarkNoSafetyFlags: String { text("taskBenchmark.empty.safetyFlags", "No safety flags returned.") }
     static var llmAssist: String { text("llm.assist", "LLM Assist") }
     static var llmEnabled: String { text("llm.enabled", "Enabled") }
     static var llmDisabled: String { text("llm.disabled", "Disabled") }
@@ -567,6 +600,10 @@ enum UIStrings {
 
     static func agentConfigTimelineMore(_ count: Int) -> String {
         format("sidebar.agentConfigTimeline.more", "%d older rollback points hidden to keep the sidebar quiet.", count)
+    }
+
+    static func taskBenchmarkExpectedCurrentSkill(_ skill: String, _ agent: String) -> String {
+        format("taskBenchmark.expectedCurrentSkill", "Expected and acceptable route: %@ (%@)", skill, agent)
     }
 
     static func agentConfigTimelineRollbackConfirm(_ target: String) -> String {

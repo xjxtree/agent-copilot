@@ -64,6 +64,10 @@ const SUPPORTED_METHODS: &[&str] = &[
     "analysis.scoreSkillQuality",
     "task.checkReadiness",
     "task.rankSkillRoutes",
+    "task.listBenchmarks",
+    "task.saveBenchmark",
+    "task.deleteBenchmark",
+    "task.evaluateBenchmarks",
     "llm.status",
     "llm.listProviderProfiles",
     "llm.saveProviderProfile",
@@ -636,6 +640,163 @@ pub struct RoutingConfidencePromptRequest {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct RoutingConfidenceSafetyFlags {
+    pub read_only: bool,
+    pub provider_request_sent: bool,
+    pub write_back_allowed: bool,
+    pub script_execution_allowed: bool,
+    pub config_mutation_allowed: bool,
+    pub snapshot_created: bool,
+    pub triage_mutation_allowed: bool,
+    pub credential_accessed: bool,
+    pub raw_secret_returned: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskBenchmarkRecord {
+    pub id: String,
+    pub title: String,
+    #[serde(alias = "task_text", alias = "user_intent")]
+    pub task: String,
+    #[serde(default)]
+    pub expected_skill_refs: Vec<String>,
+    #[serde(default)]
+    pub expected_skill_names: Vec<String>,
+    #[serde(default)]
+    pub acceptable_agents: Vec<String>,
+    #[serde(default)]
+    pub acceptable_scopes: Vec<String>,
+    #[serde(default)]
+    pub success_criteria: Vec<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct ListTaskBenchmarksParams {
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SaveTaskBenchmarkParams {
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(default, alias = "name")]
+    pub title: Option<String>,
+    #[serde(alias = "task_text", alias = "user_intent")]
+    pub task: String,
+    #[serde(default)]
+    pub expected_skill_refs: Vec<String>,
+    #[serde(default)]
+    pub expected_skill_names: Vec<String>,
+    #[serde(default)]
+    pub acceptable_agents: Vec<String>,
+    #[serde(default)]
+    pub acceptable_scopes: Vec<String>,
+    #[serde(default)]
+    pub success_criteria: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DeleteTaskBenchmarkParams {
+    #[serde(alias = "benchmark_id")]
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct EvaluateTaskBenchmarksParams {
+    #[serde(default, alias = "benchmark_ids")]
+    pub ids: Vec<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskBenchmarkListResult {
+    pub benchmarks: Vec<TaskBenchmarkRecord>,
+    pub count: usize,
+    pub app_local_only: bool,
+    pub provider_request_sent: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SaveTaskBenchmarkResult {
+    pub benchmark: TaskBenchmarkRecord,
+    pub created: bool,
+    pub app_local_only: bool,
+    pub provider_request_sent: bool,
+    pub agent_config_mutated: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DeleteTaskBenchmarkResult {
+    pub benchmark_id: String,
+    pub deleted: bool,
+    pub remaining_count: usize,
+    pub app_local_only: bool,
+    pub provider_request_sent: bool,
+    pub agent_config_mutated: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskBenchmarkEvaluationResult {
+    pub generated_by: &'static str,
+    pub catalog_available: bool,
+    pub evaluated_count: usize,
+    pub summary: String,
+    pub benchmark_results: Vec<TaskBenchmarkEvaluationItem>,
+    pub blocker_notes: Vec<String>,
+    pub prompt_request: TaskBenchmarkPromptRequest,
+    pub safety_flags: TaskBenchmarkSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskBenchmarkEvaluationItem {
+    pub benchmark_id: String,
+    pub title: String,
+    pub task: String,
+    pub score: u8,
+    pub band: &'static str,
+    pub expected_match_status: &'static str,
+    pub expected_match_reasons: Vec<String>,
+    pub top_route: Option<TaskBenchmarkRouteSummary>,
+    pub route_confidence_score: u8,
+    pub route_confidence_band: &'static str,
+    pub gap_notes: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub safety_flags: TaskBenchmarkSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskBenchmarkRouteSummary {
+    pub instance_id: String,
+    pub definition_id: String,
+    pub skill_name: String,
+    pub agent: String,
+    pub scope: String,
+    pub confidence_score: u8,
+    pub confidence_band: &'static str,
+    pub readiness_score: u8,
+    pub readiness_band: &'static str,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskBenchmarkPromptRequest {
+    pub available: bool,
+    pub preview_method: &'static str,
+    pub confirm_method: &'static str,
+    pub action: &'static str,
+    pub request: LlmPreviewPromptParams,
+    pub note: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct TaskBenchmarkSafetyFlags {
     pub read_only: bool,
     pub provider_request_sent: bool,
     pub write_back_allowed: bool,
@@ -1242,6 +1403,30 @@ impl ServiceHost {
             "task.rankSkillRoutes" => {
                 let params: RankSkillRoutesParams = serde_json::from_value(request.params)?;
                 serde_json::to_value(self.rank_skill_routes(params)?).map_err(Into::into)
+            }
+            "task.listBenchmarks" => {
+                let params: ListTaskBenchmarksParams = if request.params.is_null() {
+                    ListTaskBenchmarksParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.list_task_benchmarks(params)?).map_err(Into::into)
+            }
+            "task.saveBenchmark" => {
+                let params: SaveTaskBenchmarkParams = serde_json::from_value(request.params)?;
+                serde_json::to_value(self.save_task_benchmark(params)?).map_err(Into::into)
+            }
+            "task.deleteBenchmark" => {
+                let params: DeleteTaskBenchmarkParams = serde_json::from_value(request.params)?;
+                serde_json::to_value(self.delete_task_benchmark(params)?).map_err(Into::into)
+            }
+            "task.evaluateBenchmarks" => {
+                let params: EvaluateTaskBenchmarksParams = if request.params.is_null() {
+                    EvaluateTaskBenchmarksParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.evaluate_task_benchmarks(params)?).map_err(Into::into)
             }
             "llm.status" => serde_json::to_value(self.llm_status()).map_err(Into::into),
             "llm.listProviderProfiles" => {
@@ -2806,6 +2991,165 @@ impl ServiceHost {
         Ok(skill_route_ranking_from_readiness(readiness))
     }
 
+    pub fn list_task_benchmarks(
+        &self,
+        params: ListTaskBenchmarksParams,
+    ) -> Result<TaskBenchmarkListResult, ServiceError> {
+        let mut benchmarks = self.load_task_benchmarks()?;
+        if let Some(limit) = params.limit {
+            benchmarks.truncate(limit);
+        }
+        Ok(TaskBenchmarkListResult {
+            count: benchmarks.len(),
+            benchmarks,
+            app_local_only: true,
+            provider_request_sent: false,
+            raw_prompt_persisted: false,
+            raw_response_persisted: false,
+        })
+    }
+
+    pub fn save_task_benchmark(
+        &self,
+        params: SaveTaskBenchmarkParams,
+    ) -> Result<SaveTaskBenchmarkResult, ServiceError> {
+        let task = params.task.trim();
+        if task.is_empty() {
+            return Err(ServiceError::InvalidRequest(
+                "task.saveBenchmark requires a non-empty task".to_string(),
+            ));
+        }
+        let title = params
+            .title
+            .as_deref()
+            .map(str::trim)
+            .filter(|title| !title.is_empty())
+            .map(ToOwned::to_owned)
+            .unwrap_or_else(|| task.chars().take(72).collect::<String>());
+        let id = params
+            .id
+            .as_deref()
+            .map(str::trim)
+            .filter(|id| !id.is_empty())
+            .map(sanitize_benchmark_id)
+            .unwrap_or_else(|| generated_benchmark_id(&title, task));
+        if id.is_empty() {
+            return Err(ServiceError::InvalidRequest(
+                "task.saveBenchmark requires a benchmark id containing letters, numbers, '-' or '_'"
+                    .to_string(),
+            ));
+        }
+
+        let mut benchmarks = self.load_task_benchmarks()?;
+        let now = unix_timestamp_millis();
+        let existing_index = benchmarks.iter().position(|benchmark| benchmark.id == id);
+        let created_at = existing_index
+            .and_then(|index| benchmarks.get(index).map(|benchmark| benchmark.created_at))
+            .unwrap_or(now);
+        let benchmark = TaskBenchmarkRecord {
+            id: id.clone(),
+            title,
+            task: task.to_string(),
+            expected_skill_refs: normalize_string_list(params.expected_skill_refs),
+            expected_skill_names: normalize_string_list(params.expected_skill_names),
+            acceptable_agents: normalize_string_list(params.acceptable_agents),
+            acceptable_scopes: normalize_string_list(params.acceptable_scopes),
+            success_criteria: normalize_string_list(params.success_criteria),
+            created_at,
+            updated_at: now,
+        };
+        let created = if let Some(index) = existing_index {
+            benchmarks[index] = benchmark.clone();
+            false
+        } else {
+            benchmarks.push(benchmark.clone());
+            true
+        };
+        self.save_task_benchmarks(&benchmarks)?;
+        Ok(SaveTaskBenchmarkResult {
+            benchmark,
+            created,
+            app_local_only: true,
+            provider_request_sent: false,
+            agent_config_mutated: false,
+        })
+    }
+
+    pub fn delete_task_benchmark(
+        &self,
+        params: DeleteTaskBenchmarkParams,
+    ) -> Result<DeleteTaskBenchmarkResult, ServiceError> {
+        let id = sanitize_benchmark_id(params.id.trim());
+        if id.is_empty() {
+            return Err(ServiceError::InvalidRequest(
+                "task.deleteBenchmark requires a benchmark id".to_string(),
+            ));
+        }
+        let mut benchmarks = self.load_task_benchmarks()?;
+        let before = benchmarks.len();
+        benchmarks.retain(|benchmark| benchmark.id != id);
+        let deleted = benchmarks.len() != before;
+        if deleted {
+            self.save_task_benchmarks(&benchmarks)?;
+        }
+        Ok(DeleteTaskBenchmarkResult {
+            benchmark_id: id,
+            deleted,
+            remaining_count: benchmarks.len(),
+            app_local_only: true,
+            provider_request_sent: false,
+            agent_config_mutated: false,
+        })
+    }
+
+    pub fn evaluate_task_benchmarks(
+        &self,
+        params: EvaluateTaskBenchmarksParams,
+    ) -> Result<TaskBenchmarkEvaluationResult, ServiceError> {
+        let requested_ids = params
+            .ids
+            .iter()
+            .map(|id| sanitize_benchmark_id(id.trim()))
+            .filter(|id| !id.is_empty())
+            .collect::<Vec<_>>();
+        let mut benchmarks = self.load_task_benchmarks()?;
+        if !requested_ids.is_empty() {
+            benchmarks.retain(|benchmark| requested_ids.contains(&benchmark.id));
+        }
+        if let Some(limit) = params.limit {
+            benchmarks.truncate(limit);
+        }
+
+        let mut benchmark_results = Vec::new();
+        let mut catalog_available = self.catalog_path().exists();
+        for benchmark in &benchmarks {
+            let ranking = self.rank_skill_routes(RankSkillRoutesParams {
+                task: benchmark.task.clone(),
+                agent: None,
+                candidate_instance_ids: Vec::new(),
+                limit: Some(8),
+            })?;
+            catalog_available &= ranking.catalog_available;
+            benchmark_results.push(task_benchmark_evaluation_item(benchmark, ranking));
+        }
+        if benchmarks.is_empty() {
+            catalog_available = self.catalog_path().exists();
+        }
+
+        let blocker_notes = task_benchmark_blocker_notes(&benchmark_results, catalog_available);
+        let prompt_request = task_benchmark_prompt_request(&benchmark_results);
+        Ok(TaskBenchmarkEvaluationResult {
+            generated_by: "deterministic-service",
+            catalog_available,
+            evaluated_count: benchmark_results.len(),
+            summary: task_benchmark_summary(&benchmark_results, catalog_available),
+            benchmark_results,
+            blocker_notes,
+            prompt_request,
+            safety_flags: task_benchmark_safety_flags(),
+        })
+    }
+
     pub fn script_execution_status(&self) -> ScriptExecutionStatus {
         ScriptExecutionStatus {
             enabled: false,
@@ -3661,6 +4005,33 @@ impl ServiceHost {
         self.app_data_dir
             .join("audit")
             .join("script-execution.jsonl")
+    }
+
+    fn task_benchmarks_path(&self) -> PathBuf {
+        self.app_data_dir.join("task-benchmarks.json")
+    }
+
+    fn load_task_benchmarks(&self) -> Result<Vec<TaskBenchmarkRecord>, ServiceError> {
+        let path = self.task_benchmarks_path();
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        let content = fs::read_to_string(path)?;
+        let mut benchmarks: Vec<TaskBenchmarkRecord> = serde_json::from_str(&content)?;
+        benchmarks.sort_by(|left, right| {
+            left.title
+                .cmp(&right.title)
+                .then_with(|| left.id.cmp(&right.id))
+        });
+        Ok(benchmarks)
+    }
+
+    fn save_task_benchmarks(&self, benchmarks: &[TaskBenchmarkRecord]) -> Result<(), ServiceError> {
+        fs::create_dir_all(&self.app_data_dir)?;
+        let path = self.task_benchmarks_path();
+        let content = serde_json::to_string_pretty(benchmarks)?;
+        fs::write(path, content)?;
+        Ok(())
     }
 
     fn tool_global_staging_root(&self) -> PathBuf {
@@ -5032,6 +5403,305 @@ fn routing_confidence_safety_flags() -> RoutingConfidenceSafetyFlags {
     }
 }
 
+fn task_benchmark_safety_flags() -> TaskBenchmarkSafetyFlags {
+    TaskBenchmarkSafetyFlags {
+        read_only: true,
+        provider_request_sent: false,
+        write_back_allowed: false,
+        script_execution_allowed: false,
+        config_mutation_allowed: false,
+        snapshot_created: false,
+        triage_mutation_allowed: false,
+        credential_accessed: false,
+        raw_secret_returned: false,
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+    }
+}
+
+fn task_benchmark_evaluation_item(
+    benchmark: &TaskBenchmarkRecord,
+    ranking: SkillRouteRankingResult,
+) -> TaskBenchmarkEvaluationItem {
+    let top_route = ranking.route_candidates.first();
+    let (expected_match_status, expected_match_reasons) =
+        task_benchmark_match_status(benchmark, top_route);
+    let route_confidence_score = top_route
+        .map(|candidate| candidate.confidence_score)
+        .unwrap_or(ranking.overall_confidence_score);
+    let route_confidence_band = top_route
+        .map(|candidate| candidate.confidence_band)
+        .unwrap_or(ranking.overall_confidence_band);
+    let score = task_benchmark_score(route_confidence_score, expected_match_status);
+    let mut gap_notes = ranking.likely_miss_risks.clone();
+    if gap_notes.is_empty() {
+        gap_notes.push(
+            "No benchmark-level miss risk was detected from local routing evidence.".to_string(),
+        );
+    }
+    let mut blocker_notes = ranking.likely_wrong_pick_risks.clone();
+    blocker_notes.extend(ranking.ambiguity_warnings.clone());
+    if blocker_notes.is_empty() {
+        blocker_notes.push(
+            "No benchmark-level blocker was detected from local routing evidence.".to_string(),
+        );
+    }
+    let evidence_refs = top_route
+        .map(|candidate| candidate.evidence_refs.clone())
+        .unwrap_or_default();
+    TaskBenchmarkEvaluationItem {
+        benchmark_id: benchmark.id.clone(),
+        title: benchmark.title.clone(),
+        task: ranking.task,
+        score,
+        band: task_benchmark_band(score),
+        expected_match_status,
+        expected_match_reasons,
+        top_route: top_route.map(task_benchmark_route_summary),
+        route_confidence_score,
+        route_confidence_band,
+        gap_notes,
+        blocker_notes,
+        evidence_refs,
+        safety_flags: task_benchmark_safety_flags(),
+    }
+}
+
+fn task_benchmark_match_status(
+    benchmark: &TaskBenchmarkRecord,
+    top_route: Option<&SkillRouteCandidate>,
+) -> (&'static str, Vec<String>) {
+    let Some(route) = top_route else {
+        return (
+            "blocked_no_route",
+            vec!["No local route candidate was available for this benchmark.".to_string()],
+        );
+    };
+    let expected_refs = benchmark
+        .expected_skill_refs
+        .iter()
+        .map(|value| value.to_ascii_lowercase())
+        .collect::<Vec<_>>();
+    let expected_names = benchmark
+        .expected_skill_names
+        .iter()
+        .map(|value| value.to_ascii_lowercase())
+        .collect::<Vec<_>>();
+    let acceptable_agents = benchmark
+        .acceptable_agents
+        .iter()
+        .map(|value| value.to_ascii_lowercase())
+        .collect::<Vec<_>>();
+    let acceptable_scopes = benchmark
+        .acceptable_scopes
+        .iter()
+        .map(|value| value.to_ascii_lowercase())
+        .collect::<Vec<_>>();
+
+    let route_refs = [
+        route.instance_id.to_ascii_lowercase(),
+        route.definition_id.to_ascii_lowercase(),
+    ];
+    if expected_refs
+        .iter()
+        .any(|expected| route_refs.iter().any(|actual| actual == expected))
+    {
+        return (
+            "expected_match",
+            vec![format!(
+                "Top route `{}` matched an expected skill reference.",
+                route.skill_name
+            )],
+        );
+    }
+    if expected_names
+        .iter()
+        .any(|expected| expected == &route.skill_name.to_ascii_lowercase())
+    {
+        return (
+            "expected_match",
+            vec![format!(
+                "Top route `{}` matched an expected skill name.",
+                route.skill_name
+            )],
+        );
+    }
+
+    let agent_ok = acceptable_agents.is_empty()
+        || acceptable_agents
+            .iter()
+            .any(|agent| agent == &route.agent.to_ascii_lowercase());
+    let scope_ok = acceptable_scopes.is_empty()
+        || acceptable_scopes
+            .iter()
+            .any(|scope| scope == &route.scope.to_ascii_lowercase());
+    if (agent_ok && scope_ok) && (!acceptable_agents.is_empty() || !acceptable_scopes.is_empty()) {
+        return (
+            "acceptable_match",
+            vec![format!(
+                "Top route `{}` matched acceptable agent/scope constraints.",
+                route.skill_name
+            )],
+        );
+    }
+    if expected_refs.is_empty()
+        && expected_names.is_empty()
+        && acceptable_agents.is_empty()
+        && acceptable_scopes.is_empty()
+    {
+        return (
+            "no_expectation",
+            vec![
+                "Benchmark has no expected skill refs/names or acceptable agent/scope constraints."
+                    .to_string(),
+            ],
+        );
+    }
+
+    (
+        "mismatch",
+        vec![format!(
+            "Top route `{}` ({}, {}) did not match benchmark expectations.",
+            route.skill_name, route.agent, route.scope
+        )],
+    )
+}
+
+fn task_benchmark_route_summary(candidate: &SkillRouteCandidate) -> TaskBenchmarkRouteSummary {
+    TaskBenchmarkRouteSummary {
+        instance_id: candidate.instance_id.clone(),
+        definition_id: candidate.definition_id.clone(),
+        skill_name: candidate.skill_name.clone(),
+        agent: candidate.agent.clone(),
+        scope: candidate.scope.clone(),
+        confidence_score: candidate.confidence_score,
+        confidence_band: candidate.confidence_band,
+        readiness_score: candidate.readiness_score,
+        readiness_band: candidate.readiness_band,
+    }
+}
+
+fn task_benchmark_score(route_confidence_score: u8, expected_match_status: &str) -> u8 {
+    match expected_match_status {
+        "expected_match" => route_confidence_score,
+        "acceptable_match" => route_confidence_score.saturating_sub(8),
+        "no_expectation" => route_confidence_score.min(60),
+        "mismatch" => route_confidence_score / 2,
+        _ => 0,
+    }
+}
+
+fn task_benchmark_band(score: u8) -> &'static str {
+    match score {
+        80..=100 => "pass",
+        60..=79 => "mostly_pass",
+        35..=59 => "partial",
+        1..=34 => "fail",
+        _ => "blocked",
+    }
+}
+
+fn task_benchmark_summary(
+    results: &[TaskBenchmarkEvaluationItem],
+    catalog_available: bool,
+) -> String {
+    if results.is_empty() {
+        if catalog_available {
+            return "No task benchmarks are saved in app-local storage.".to_string();
+        }
+        return "No task benchmarks were evaluated and no local catalog is available.".to_string();
+    }
+    let passing = results
+        .iter()
+        .filter(|result| {
+            matches!(
+                result.expected_match_status,
+                "expected_match" | "acceptable_match"
+            )
+        })
+        .count();
+    let average = results
+        .iter()
+        .map(|result| u16::from(result.score))
+        .sum::<u16>()
+        / u16::try_from(results.len()).unwrap_or(1);
+    format!(
+        "Evaluated {} app-local task benchmark(s); {} matched expected or acceptable routes with average score {}/100.",
+        results.len(),
+        passing,
+        average
+    )
+}
+
+fn task_benchmark_blocker_notes(
+    results: &[TaskBenchmarkEvaluationItem],
+    catalog_available: bool,
+) -> Vec<String> {
+    let mut notes = Vec::new();
+    if !catalog_available {
+        notes.push(
+            "No local catalog is available; run a local scan before relying on benchmark results."
+                .to_string(),
+        );
+    }
+    if results.is_empty() {
+        notes.push("No app-local benchmarks were selected for evaluation.".to_string());
+    }
+    notes.extend(
+        results
+            .iter()
+            .filter(|result| result.expected_match_status != "expected_match")
+            .map(|result| {
+                format!(
+                    "Benchmark `{}` status is {}.",
+                    result.title, result.expected_match_status
+                )
+            }),
+    );
+    notes.sort();
+    notes.dedup();
+    notes
+}
+
+fn task_benchmark_prompt_request(
+    results: &[TaskBenchmarkEvaluationItem],
+) -> TaskBenchmarkPromptRequest {
+    let first = results.iter().find(|result| result.top_route.is_some());
+    let (available, instance_ids, task, note) = match first {
+        Some(result) => (
+            true,
+            result
+                .top_route
+                .as_ref()
+                .map(|route| vec![route.instance_id.clone()])
+                .unwrap_or_default(),
+            Some(result.task.clone()),
+            "Optional provider-backed explanation must be requested through prompt preview and explicit confirmation; task.evaluateBenchmarks never sends provider traffic.".to_string(),
+        ),
+        None => (
+            false,
+            Vec::new(),
+            None,
+            "Prompt preview is unavailable until local benchmark evaluation produces a route candidate.".to_string(),
+        ),
+    };
+    TaskBenchmarkPromptRequest {
+        available,
+        preview_method: "llm.previewPrompt",
+        confirm_method: "llm.confirmPromptAndSend",
+        action: "routing_confidence",
+        request: LlmPreviewPromptParams {
+            action: LlmPromptActionKind::RoutingConfidence,
+            profile_id: None,
+            skill_instance_id: None,
+            instance_ids,
+            analysis_kind: None,
+            user_intent: task,
+        },
+        note,
+    }
+}
+
 fn skill_route_ranking_from_readiness(readiness: TaskReadinessResult) -> SkillRouteRankingResult {
     let top_score = readiness
         .candidate_skills
@@ -6082,6 +6752,45 @@ fn supported_methods() -> Vec<&'static str> {
     SUPPORTED_METHODS.to_vec()
 }
 
+fn generated_benchmark_id(title: &str, task: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(title.as_bytes());
+    hasher.update(b"\0");
+    hasher.update(task.as_bytes());
+    let digest = hasher.finalize();
+    format!("bench-{}", hex_prefix(&digest, 12))
+}
+
+fn sanitize_benchmark_id(id: &str) -> String {
+    id.chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
+        .take(96)
+        .collect()
+}
+
+fn normalize_string_list(values: Vec<String>) -> Vec<String> {
+    let mut normalized = values
+        .into_iter()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    normalized.sort();
+    normalized.dedup();
+    normalized
+}
+
+fn hex_prefix(bytes: &[u8], chars: usize) -> String {
+    bytes
+        .iter()
+        .flat_map(|byte| {
+            let high = b"0123456789abcdef"[(byte >> 4) as usize] as char;
+            let low = b"0123456789abcdef"[(byte & 0x0f) as usize] as char;
+            [high, low]
+        })
+        .take(chars)
+        .collect()
+}
+
 fn sanitize_harness_label(label: &str) -> String {
     label
         .chars()
@@ -6226,6 +6935,10 @@ mod tests {
         assert!(methods.contains(&Value::String("analysis.scoreSkillQuality".to_string())));
         assert!(methods.contains(&Value::String("task.checkReadiness".to_string())));
         assert!(methods.contains(&Value::String("task.rankSkillRoutes".to_string())));
+        assert!(methods.contains(&Value::String("task.listBenchmarks".to_string())));
+        assert!(methods.contains(&Value::String("task.saveBenchmark".to_string())));
+        assert!(methods.contains(&Value::String("task.deleteBenchmark".to_string())));
+        assert!(methods.contains(&Value::String("task.evaluateBenchmarks".to_string())));
         assert!(methods.contains(&Value::String("llm.status".to_string())));
         assert!(methods.contains(&Value::String("llm.listProviderProfiles".to_string())));
         assert!(methods.contains(&Value::String("llm.saveProviderProfile".to_string())));
@@ -8101,6 +8814,369 @@ mod tests {
             "missing-catalog routing must not initialize catalog.sqlite"
         );
         assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    }
+
+    #[test]
+    fn task_benchmark_save_list_delete_roundtrip_is_app_local() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-benchmark-roundtrip-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-benchmark-roundtrip-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+
+        let save = host.handle(ServiceRequest {
+            id: Some("benchmark-save".to_string()),
+            method: "task.saveBenchmark".to_string(),
+            params: json!({
+                "id": "local-routing-fixture",
+                "title": "Local routing fixture",
+                "task": "Analyze local skill posture and execution safety",
+                "expected_skill_refs": ["llm-skill-id"],
+                "expected_skill_names": ["llm-fixture"],
+                "acceptable_agents": ["claude-code"],
+                "acceptable_scopes": ["agent-global"],
+                "success_criteria": ["Top deterministic route matches the fixture skill."]
+            }),
+        });
+        assert!(save.ok, "{:?}", save.error);
+        let saved = save.result.expect("save benchmark result");
+        assert_eq!(
+            saved.pointer("/benchmark/id").and_then(Value::as_str),
+            Some("local-routing-fixture")
+        );
+        assert_eq!(saved.get("created").and_then(Value::as_bool), Some(true));
+        assert_eq!(
+            saved.get("provider_request_sent").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            saved.get("agent_config_mutated").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert!(app_data_dir.join("task-benchmarks.json").exists());
+        assert!(!host.catalog_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let list = host.handle(ServiceRequest {
+            id: Some("benchmark-list".to_string()),
+            method: "task.listBenchmarks".to_string(),
+            params: json!({}),
+        });
+        assert!(list.ok, "{:?}", list.error);
+        let listed = list.result.expect("list benchmark result");
+        assert_eq!(listed.get("count").and_then(Value::as_u64), Some(1));
+        assert_eq!(
+            listed.pointer("/benchmarks/0/id").and_then(Value::as_str),
+            Some("local-routing-fixture")
+        );
+        assert_eq!(
+            listed.pointer("/benchmarks/0/task").and_then(Value::as_str),
+            Some("Analyze local skill posture and execution safety")
+        );
+        assert_eq!(
+            listed.get("provider_request_sent").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            listed.get("raw_prompt_persisted").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            listed
+                .get("raw_response_persisted")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let delete = host.handle(ServiceRequest {
+            id: Some("benchmark-delete".to_string()),
+            method: "task.deleteBenchmark".to_string(),
+            params: json!({ "id": "local-routing-fixture" }),
+        });
+        assert!(delete.ok, "{:?}", delete.error);
+        let deleted = delete.result.expect("delete benchmark result");
+        assert_eq!(deleted.get("deleted").and_then(Value::as_bool), Some(true));
+        assert_eq!(
+            deleted.get("remaining_count").and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            deleted
+                .get("provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            deleted.get("agent_config_mutated").and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn task_benchmark_evaluate_returns_deterministic_read_only_results() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-benchmark-evaluate-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-benchmark-evaluate-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        let skill_path = app_data_dir.join("fixture-skill").join("SKILL.md");
+        seed_catalog_with_llm_skill(&host, &skill_path);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let save = host.handle(ServiceRequest {
+            id: Some("benchmark-save".to_string()),
+            method: "task.saveBenchmark".to_string(),
+            params: json!({
+                "id": "local-routing-fixture",
+                "title": "Local routing fixture",
+                "task": "Analyze local skill posture and execution safety",
+                "expected_skill_refs": ["llm-skill-id"],
+                "acceptable_agents": ["claude-code"],
+                "acceptable_scopes": ["agent-global"]
+            }),
+        });
+        assert!(save.ok, "{:?}", save.error);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("benchmark-evaluate".to_string()),
+            method: "task.evaluateBenchmarks".to_string(),
+            params: json!({ "ids": ["local-routing-fixture"] }),
+        });
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("benchmark evaluation result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("deterministic-service")
+        );
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result.get("evaluated_count").and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            result
+                .pointer("/benchmark_results/0/expected_match_status")
+                .and_then(Value::as_str),
+            Some("expected_match")
+        );
+        assert_eq!(
+            result
+                .pointer("/benchmark_results/0/top_route/instance_id")
+                .and_then(Value::as_str),
+            Some("llm-skill-id")
+        );
+        assert!(result
+            .pointer("/benchmark_results/0/score")
+            .and_then(Value::as_u64)
+            .is_some_and(|score| score <= 100));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/request/action")
+                .and_then(Value::as_str),
+            Some("routing_confidence")
+        );
+        for path in [
+            "/safety_flags/read_only",
+            "/benchmark_results/0/safety_flags/read_only",
+        ] {
+            assert_eq!(result.pointer(path).and_then(Value::as_bool), Some(true));
+        }
+        for path in [
+            "/safety_flags/provider_request_sent",
+            "/safety_flags/write_back_allowed",
+            "/safety_flags/script_execution_allowed",
+            "/safety_flags/config_mutation_allowed",
+            "/safety_flags/snapshot_created",
+            "/safety_flags/triage_mutation_allowed",
+            "/safety_flags/credential_accessed",
+            "/safety_flags/raw_prompt_persisted",
+            "/safety_flags/raw_response_persisted",
+            "/benchmark_results/0/safety_flags/provider_request_sent",
+            "/benchmark_results/0/safety_flags/write_back_allowed",
+            "/benchmark_results/0/safety_flags/script_execution_allowed",
+            "/benchmark_results/0/safety_flags/config_mutation_allowed",
+            "/benchmark_results/0/safety_flags/snapshot_created",
+            "/benchmark_results/0/safety_flags/triage_mutation_allowed",
+            "/benchmark_results/0/safety_flags/credential_accessed",
+            "/benchmark_results/0/safety_flags/raw_prompt_persisted",
+            "/benchmark_results/0/safety_flags/raw_response_persisted",
+        ] {
+            assert_eq!(result.pointer(path).and_then(Value::as_bool), Some(false));
+        }
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let serialized = serde_json::to_string(&result).expect("serialize benchmark result");
+        assert!(!serialized.contains("OPENAI_API_KEY=<redacted>"));
+        assert!(!serialized.contains("fixture-redacted-value"));
+        assert!(!serialized.contains(&skill_path.to_string_lossy().to_string()));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn task_benchmark_evaluate_missing_catalog_returns_safe_blocker_result() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-benchmark-missing-catalog-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let save = host.handle(ServiceRequest {
+            id: Some("benchmark-save".to_string()),
+            method: "task.saveBenchmark".to_string(),
+            params: json!({
+                "id": "missing-catalog-fixture",
+                "title": "Missing catalog fixture",
+                "task": "Prepare a release readiness report",
+                "expected_skill_refs": ["missing-skill-id"]
+            }),
+        });
+        assert!(save.ok, "{:?}", save.error);
+        assert!(!host.catalog_path().exists());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("benchmark-evaluate".to_string()),
+            method: "task.evaluateBenchmarks".to_string(),
+            params: json!({}),
+        });
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("missing catalog benchmark result");
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("evaluated_count").and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            result
+                .pointer("/benchmark_results/0/expected_match_status")
+                .and_then(Value::as_str),
+            Some("blocked_no_route")
+        );
+        assert_eq!(
+            result
+                .pointer("/benchmark_results/0/score")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            result
+                .pointer("/prompt_request/available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/write_back_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/script_execution_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/config_mutation_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/snapshot_created")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/triage_mutation_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/credential_accessed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert!(!host.catalog_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
     }
 
     #[test]
@@ -10081,6 +11157,67 @@ mod tests {
                 assert!(!ranking.safety_flags.raw_prompt_persisted);
                 assert!(!ranking.safety_flags.raw_response_persisted);
             }
+            "task.listBenchmarks" => {
+                let benchmarks: WireTaskBenchmarkListResult =
+                    decode_fixture_result(method, result, path);
+                assert_eq!(benchmarks.count, benchmarks.benchmarks.len());
+                assert!(benchmarks.app_local_only);
+                assert!(!benchmarks.provider_request_sent);
+                assert!(!benchmarks.raw_prompt_persisted);
+                assert!(!benchmarks.raw_response_persisted);
+            }
+            "task.saveBenchmark" => {
+                let saved: WireSaveTaskBenchmarkResult =
+                    decode_fixture_result(method, result, path);
+                assert!(!saved.benchmark.id.is_empty());
+                assert!(saved.app_local_only);
+                assert!(!saved.provider_request_sent);
+                assert!(!saved.agent_config_mutated);
+            }
+            "task.deleteBenchmark" => {
+                let deleted: WireDeleteTaskBenchmarkResult =
+                    decode_fixture_result(method, result, path);
+                assert!(!deleted.benchmark_id.is_empty());
+                assert!(deleted.app_local_only);
+                assert!(!deleted.provider_request_sent);
+                assert!(!deleted.agent_config_mutated);
+            }
+            "task.evaluateBenchmarks" => {
+                let evaluation: WireTaskBenchmarkEvaluationResult =
+                    decode_fixture_result(method, result, path);
+                assert_eq!(
+                    evaluation.evaluated_count,
+                    evaluation.benchmark_results.len()
+                );
+                assert!(evaluation.safety_flags.read_only);
+                assert!(!evaluation.safety_flags.provider_request_sent);
+                assert!(!evaluation.safety_flags.write_back_allowed);
+                assert!(!evaluation.safety_flags.script_execution_allowed);
+                assert!(!evaluation.safety_flags.config_mutation_allowed);
+                assert!(!evaluation.safety_flags.snapshot_created);
+                assert!(!evaluation.safety_flags.triage_mutation_allowed);
+                assert!(!evaluation.safety_flags.credential_accessed);
+                assert!(!evaluation.safety_flags.raw_secret_returned);
+                assert!(!evaluation.safety_flags.raw_prompt_persisted);
+                assert!(!evaluation.safety_flags.raw_response_persisted);
+                assert_eq!(
+                    evaluation.prompt_request.request.action,
+                    LlmPromptActionKind::RoutingConfidence
+                );
+                for item in &evaluation.benchmark_results {
+                    assert!(item.score <= 100);
+                    assert!(item.safety_flags.read_only);
+                    assert!(!item.safety_flags.provider_request_sent);
+                    assert!(!item.safety_flags.write_back_allowed);
+                    assert!(!item.safety_flags.script_execution_allowed);
+                    assert!(!item.safety_flags.config_mutation_allowed);
+                    assert!(!item.safety_flags.snapshot_created);
+                    assert!(!item.safety_flags.triage_mutation_allowed);
+                    assert!(!item.safety_flags.credential_accessed);
+                    assert!(!item.safety_flags.raw_prompt_persisted);
+                    assert!(!item.safety_flags.raw_response_persisted);
+                }
+            }
             "llm.status" => {
                 let status: WireLlmStatus = decode_fixture_result(method, result, path);
                 assert!(!status.enabled);
@@ -10574,6 +11711,15 @@ mod tests {
             "analysis.scoreSkillQuality" => json!({ "instance_id": "missing-skill" }),
             "task.checkReadiness" => json!({ "task": "fixture task readiness check" }),
             "task.rankSkillRoutes" => json!({ "task": "fixture routing confidence check" }),
+            "task.listBenchmarks" => json!({}),
+            "task.saveBenchmark" => json!({
+                "id": "fixture-benchmark",
+                "title": "Fixture benchmark",
+                "task": "fixture task benchmark check",
+                "expected_skill_refs": ["fixture-skill-id"]
+            }),
+            "task.deleteBenchmark" => json!({ "id": "fixture-benchmark" }),
+            "task.evaluateBenchmarks" => json!({}),
             "evidence.piWritableHarness" => json!({ "run_label": "dispatch-fixture" }),
             "report.exportLocal" => json!({ "formats": ["json"] }),
             "script.previewExecution" => json!({
@@ -11075,6 +12221,135 @@ mod tests {
     #[derive(Debug, Deserialize)]
     #[serde(deny_unknown_fields)]
     struct WireRoutingConfidenceSafetyFlags {
+        read_only: bool,
+        provider_request_sent: bool,
+        write_back_allowed: bool,
+        script_execution_allowed: bool,
+        config_mutation_allowed: bool,
+        snapshot_created: bool,
+        triage_mutation_allowed: bool,
+        credential_accessed: bool,
+        raw_secret_returned: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTaskBenchmarkRecord {
+        id: String,
+        title: String,
+        task: String,
+        expected_skill_refs: Vec<String>,
+        expected_skill_names: Vec<String>,
+        acceptable_agents: Vec<String>,
+        acceptable_scopes: Vec<String>,
+        success_criteria: Vec<String>,
+        created_at: i64,
+        updated_at: i64,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTaskBenchmarkListResult {
+        benchmarks: Vec<WireTaskBenchmarkRecord>,
+        count: usize,
+        app_local_only: bool,
+        provider_request_sent: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireSaveTaskBenchmarkResult {
+        benchmark: WireTaskBenchmarkRecord,
+        created: bool,
+        app_local_only: bool,
+        provider_request_sent: bool,
+        agent_config_mutated: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireDeleteTaskBenchmarkResult {
+        benchmark_id: String,
+        deleted: bool,
+        remaining_count: usize,
+        app_local_only: bool,
+        provider_request_sent: bool,
+        agent_config_mutated: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTaskBenchmarkEvaluationResult {
+        generated_by: String,
+        catalog_available: bool,
+        evaluated_count: usize,
+        summary: String,
+        benchmark_results: Vec<WireTaskBenchmarkEvaluationItem>,
+        blocker_notes: Vec<String>,
+        prompt_request: WireTaskBenchmarkPromptRequest,
+        safety_flags: WireTaskBenchmarkSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTaskBenchmarkEvaluationItem {
+        benchmark_id: String,
+        title: String,
+        task: String,
+        score: u8,
+        band: String,
+        expected_match_status: String,
+        expected_match_reasons: Vec<String>,
+        top_route: Option<WireTaskBenchmarkRouteSummary>,
+        route_confidence_score: u8,
+        route_confidence_band: String,
+        gap_notes: Vec<String>,
+        blocker_notes: Vec<String>,
+        evidence_refs: Vec<String>,
+        safety_flags: WireTaskBenchmarkSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTaskBenchmarkRouteSummary {
+        instance_id: String,
+        definition_id: String,
+        skill_name: String,
+        agent: String,
+        scope: String,
+        confidence_score: u8,
+        confidence_band: String,
+        readiness_score: u8,
+        readiness_band: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTaskBenchmarkPromptRequest {
+        available: bool,
+        preview_method: String,
+        confirm_method: String,
+        action: String,
+        request: LlmPreviewPromptParams,
+        note: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTaskBenchmarkSafetyFlags {
         read_only: bool,
         provider_request_sent: bool,
         write_back_allowed: bool,

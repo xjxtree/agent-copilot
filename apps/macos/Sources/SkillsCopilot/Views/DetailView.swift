@@ -204,6 +204,35 @@ struct DetailView: View {
                                     await store.confirmPromptForSelectedRoutingConfidence()
                                 }
                             },
+                            taskBenchmarkText: $store.taskBenchmarkText,
+                            taskBenchmarkInput: store.selectedTaskBenchmarkInput,
+                            taskBenchmarkList: store.taskBenchmarkList,
+                            taskBenchmarkEvaluation: store.taskBenchmarkEvaluation,
+                            taskBenchmarkDeleteResult: store.taskBenchmarkDeleteResult,
+                            isLoadingTaskBenchmarks: store.isLoadingTaskBenchmarks,
+                            isSavingTaskBenchmark: store.isSavingTaskBenchmark,
+                            isEvaluatingTaskBenchmarks: store.isEvaluatingTaskBenchmarks,
+                            isDeletingTaskBenchmark: { benchmark in store.isDeletingTaskBenchmark(benchmark) },
+                            onLoadTaskBenchmarks: {
+                                Task {
+                                    await store.loadTaskBenchmarks()
+                                }
+                            },
+                            onSaveTaskBenchmark: {
+                                Task {
+                                    await store.saveSelectedTaskBenchmark()
+                                }
+                            },
+                            onEvaluateTaskBenchmarks: {
+                                Task {
+                                    await store.evaluateTaskBenchmarks()
+                                }
+                            },
+                            onDeleteTaskBenchmark: { benchmark in
+                                Task {
+                                    await store.deleteTaskBenchmark(benchmark)
+                                }
+                            },
                             isPreparing: { action in store.isPreparingLLMAction(action) },
                             result: { action in store.llmPrepareResult(for: action) },
                             promptPreview: { action in store.llmPromptPreview(for: action) },
@@ -772,6 +801,19 @@ private struct AnalysisSection: View {
     let onRankRoutingConfidence: () -> Void
     let onPreviewRoutingConfidencePrompt: () -> Void
     let onSendRoutingConfidencePrompt: () -> Void
+    @Binding var taskBenchmarkText: String
+    let taskBenchmarkInput: String
+    let taskBenchmarkList: TaskBenchmarkListResult
+    let taskBenchmarkEvaluation: TaskBenchmarkEvaluationResult?
+    let taskBenchmarkDeleteResult: TaskBenchmarkDeleteResult?
+    let isLoadingTaskBenchmarks: Bool
+    let isSavingTaskBenchmark: Bool
+    let isEvaluatingTaskBenchmarks: Bool
+    let isDeletingTaskBenchmark: (TaskBenchmarkRecord) -> Bool
+    let onLoadTaskBenchmarks: () -> Void
+    let onSaveTaskBenchmark: () -> Void
+    let onEvaluateTaskBenchmarks: () -> Void
+    let onDeleteTaskBenchmark: (TaskBenchmarkRecord) -> Void
     let isPreparing: (LLMAction) -> Bool
     let result: (LLMAction) -> LLMPrepareResult?
     let promptPreview: (LLMAction) -> LLMPromptPreview?
@@ -862,6 +904,23 @@ private struct AnalysisSection: View {
                 onRank: onRankRoutingConfidence,
                 onPreviewPrompt: onPreviewRoutingConfidencePrompt,
                 onSendPrompt: onSendRoutingConfidencePrompt
+            )
+
+            TaskBenchmarkPanel(
+                skill: skill,
+                taskText: $taskBenchmarkText,
+                currentTaskText: taskBenchmarkInput,
+                listResult: taskBenchmarkList,
+                evaluation: taskBenchmarkEvaluation,
+                deleteResult: taskBenchmarkDeleteResult,
+                isLoading: isLoadingTaskBenchmarks,
+                isSaving: isSavingTaskBenchmark,
+                isEvaluating: isEvaluatingTaskBenchmarks,
+                isDeleting: isDeletingTaskBenchmark,
+                onLoad: onLoadTaskBenchmarks,
+                onSave: onSaveTaskBenchmark,
+                onEvaluate: onEvaluateTaskBenchmarks,
+                onDelete: onDeleteTaskBenchmark
             )
 
             SkillAnalysisPreparePanel(
@@ -1843,6 +1902,307 @@ private struct RoutingEvidenceList: View {
                     }
                 }
             }
+        }
+    }
+}
+
+private struct TaskBenchmarkPanel: View {
+    let skill: SkillRecord
+    @Binding var taskText: String
+    let currentTaskText: String
+    let listResult: TaskBenchmarkListResult
+    let evaluation: TaskBenchmarkEvaluationResult?
+    let deleteResult: TaskBenchmarkDeleteResult?
+    let isLoading: Bool
+    let isSaving: Bool
+    let isEvaluating: Bool
+    let isDeleting: (TaskBenchmarkRecord) -> Bool
+    let onLoad: () -> Void
+    let onSave: () -> Void
+    let onEvaluate: () -> Void
+    let onDelete: (TaskBenchmarkRecord) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.taskBenchmarkTitle, systemImage: "checklist.unchecked")
+                    .font(.headline)
+                Spacer()
+                Label(UIStrings.readOnlyPreview, systemImage: "lock.shield")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(UIStrings.taskBenchmarkBoundary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+
+            VStack(alignment: .leading, spacing: 8) {
+                TextField(UIStrings.taskBenchmarkTaskPlaceholder, text: $taskText, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(2...4)
+                    .labelsHidden()
+                HStack(spacing: 8) {
+                    Button {
+                        onSave()
+                    } label: {
+                        Label(UIStrings.taskBenchmarkSaveAction, systemImage: "plus.square.on.square")
+                    }
+                    .disabled(isSaving || currentTaskText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .help(UIStrings.taskBenchmarkExpectedCurrentSkill(skill.name, DisplayText.agent(skill.agent)))
+
+                    Button {
+                        onLoad()
+                    } label: {
+                        Label(UIStrings.taskBenchmarkLoadAction, systemImage: "arrow.clockwise")
+                    }
+                    .disabled(isLoading)
+
+                    Button {
+                        onEvaluate()
+                    } label: {
+                        Label(UIStrings.taskBenchmarkEvaluateAction, systemImage: "chart.bar.xaxis")
+                    }
+                    .disabled(isEvaluating)
+                    Spacer()
+                }
+            }
+
+            Label(UIStrings.taskBenchmarkExpectedCurrentSkill(skill.name, DisplayText.agent(skill.agent)), systemImage: "target")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            if isLoading || isSaving || isEvaluating {
+                Label(UIStrings.llmPreparing, systemImage: "hourglass")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            TaskBenchmarkListView(
+                result: listResult,
+                deleteResult: deleteResult,
+                isDeleting: isDeleting,
+                onDelete: onDelete
+            )
+
+            if let evaluation {
+                TaskBenchmarkEvaluationView(result: evaluation)
+            }
+
+            Label(UIStrings.llmReviewNoActions, systemImage: "nosign")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct TaskBenchmarkListView: View {
+    let result: TaskBenchmarkListResult
+    let deleteResult: TaskBenchmarkDeleteResult?
+    let isDeleting: (TaskBenchmarkRecord) -> Bool
+    let onDelete: (TaskBenchmarkRecord) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(UIStrings.taskBenchmarkListTitle)
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(result.benchmarks.count)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            if let fallbackReason = result.fallbackReason, !fallbackReason.isEmpty {
+                Label(fallbackReason, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            if result.benchmarks.isEmpty {
+                Text(UIStrings.taskBenchmarkNoBenchmarks)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(result.benchmarks) { benchmark in
+                        VStack(alignment: .leading, spacing: 7) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(benchmark.taskText.isEmpty ? UIStrings.unknown : benchmark.taskText)
+                                    .font(.caption.bold())
+                                    .lineLimit(2)
+                                    .textSelection(.enabled)
+                                Spacer()
+                                Button {
+                                    onDelete(benchmark)
+                                } label: {
+                                    Image(systemName: "trash")
+                                }
+                                .buttonStyle(.borderless)
+                                .disabled(isDeleting(benchmark))
+                                .help(UIStrings.taskBenchmarkDeleteAction)
+                            }
+                            if let expected = benchmark.expectedSkill {
+                                Text("\(UIStrings.taskBenchmarkExpected): \(expected.name) (\(DisplayText.agent(expected.agent)))")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+                            if !benchmark.acceptableSkills.isEmpty {
+                                Text("\(UIStrings.taskBenchmarkAcceptable): \(benchmark.acceptableSkills.map(\.name).joined(separator: ", "))")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                            }
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+            }
+
+            if let deleteResult, let reason = deleteResult.fallbackReason, !reason.isEmpty {
+                Label(reason, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+private struct TaskBenchmarkEvaluationView: View {
+    let result: TaskBenchmarkEvaluationResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 14) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(result.averageScore)")
+                        .font(.system(size: 34, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                    Text(UIStrings.taskBenchmarkAverageScore)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(UIStrings.taskBenchmarkEvaluationTitle)
+                        .font(.subheadline.bold())
+                    if let fallbackReason = result.fallbackReason, !fallbackReason.isEmpty {
+                        Label(fallbackReason, systemImage: "info.circle")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                MetadataRow(label: UIStrings.taskBenchmarkEvaluated, value: "\(result.evaluatedCount)")
+                MetadataRow(label: UIStrings.taskBenchmarkMatched, value: "\(result.matchedCount)")
+                MetadataRow(label: UIStrings.taskBenchmarkAcceptableMatched, value: "\(result.acceptableCount)")
+                MetadataRow(label: UIStrings.skillQualityProviderNotSent, value: result.safety.providerRequestSent ? UIStrings.llmSkillAnalysisEnabledUnsafe : UIStrings.llmDisabled)
+                MetadataRow(label: UIStrings.skillQualityWritesBlocked, value: readOnlyValue(!result.safety.writeBackAllowed && !result.safety.writeActionsAvailable))
+                MetadataRow(label: UIStrings.skillQualityScriptsBlocked, value: readOnlyValue(!result.safety.scriptExecutionAllowed && !result.safety.executionActionsAvailable))
+                MetadataRow(label: UIStrings.skillQualityMutationsBlocked, value: readOnlyValue(!result.safety.configMutationAllowed && !result.safety.snapshotCreated && !result.safety.triageMutationAllowed))
+                MetadataRow(label: UIStrings.skillQualityCredentialsBlocked, value: readOnlyValue(!result.safety.credentialAccessed && !result.safety.rawSecretReturned))
+            }
+
+            TaskBenchmarkEvaluationList(evaluations: result.evaluations)
+            SkillQualityStringList(title: UIStrings.taskBenchmarkBlockers, empty: UIStrings.taskBenchmarkNoBlockers, values: result.blockers, systemImage: "exclamationmark.octagon")
+            SkillQualityStringList(title: UIStrings.taskBenchmarkGaps, empty: UIStrings.taskBenchmarkNoGaps, values: result.gaps, systemImage: "puzzlepiece.extension")
+            RoutingEvidenceList(evidence: result.evidence)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private func readOnlyValue(_ isBlocked: Bool) -> String {
+        isBlocked ? UIStrings.llmSkillAnalysisBlocked : UIStrings.llmSkillAnalysisEnabledUnsafe
+    }
+}
+
+private struct TaskBenchmarkEvaluationList: View {
+    let evaluations: [TaskBenchmarkEvaluationItem]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(UIStrings.taskBenchmarkPerBenchmark)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if evaluations.isEmpty {
+                Text(UIStrings.taskBenchmarkNoEvaluations)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 240), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(evaluations) { item in
+                        VStack(alignment: .leading, spacing: 7) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(item.taskText.isEmpty ? UIStrings.unknown : item.taskText)
+                                    .font(.caption.bold())
+                                    .lineLimit(2)
+                                    .textSelection(.enabled)
+                                Spacer()
+                                Text("\(item.score)")
+                                    .font(.caption.monospacedDigit().bold())
+                            }
+                            HStack(spacing: 6) {
+                                Text(item.matchStatus)
+                                    .font(.caption2.bold())
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(scoreTint(item.score).opacity(0.16), in: Capsule())
+                                    .foregroundStyle(scoreTint(item.score))
+                                Text(item.band)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if let topRoute = item.topRoute {
+                                Text("\(UIStrings.taskBenchmarkTopRoute): \(topRoute.name) (\(DisplayText.agent(topRoute.agent)))")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+                            HStack(spacing: 8) {
+                                Label(item.expectedCovered ? UIStrings.taskBenchmarkExpectedCovered : UIStrings.taskBenchmarkExpectedMissed, systemImage: item.expectedCovered ? "checkmark.circle" : "xmark.circle")
+                                Label(item.acceptableCovered ? UIStrings.taskBenchmarkAcceptableCovered : UIStrings.taskBenchmarkAcceptableMissed, systemImage: item.acceptableCovered ? "checkmark.circle" : "xmark.circle")
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            RoutingInlineList(title: UIStrings.taskBenchmarkBlockers, empty: UIStrings.taskBenchmarkNoBlockers, values: item.blockers, systemImage: "exclamationmark.octagon")
+                            RoutingInlineList(title: UIStrings.taskBenchmarkGaps, empty: UIStrings.taskBenchmarkNoGaps, values: item.gaps, systemImage: "puzzlepiece.extension")
+                            RoutingInlineList(title: UIStrings.taskBenchmarkSafetyFlags, empty: UIStrings.taskBenchmarkNoSafetyFlags, values: item.safetyFlags, systemImage: "lock.shield")
+                            RoutingEvidenceList(evidence: item.evidence)
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+            }
+        }
+    }
+
+    private func scoreTint(_ score: Int) -> Color {
+        switch score {
+        case 85...100:
+            return .green
+        case 65..<85:
+            return .blue
+        case 40..<65:
+            return .orange
+        default:
+            return .red
         }
     }
 }

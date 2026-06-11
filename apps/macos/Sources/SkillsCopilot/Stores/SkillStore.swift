@@ -32,6 +32,13 @@ final class SkillStore: ObservableObject {
     @Published private(set) var checkingTaskReadinessSkillIDs: Set<SkillRecord.ID> = []
     @Published private(set) var routingConfidenceResult: SkillRoutingConfidenceResult?
     @Published private(set) var rankingRoutingSkillIDs: Set<SkillRecord.ID> = []
+    @Published private(set) var taskBenchmarkList = TaskBenchmarkListResult(benchmarks: [])
+    @Published private(set) var taskBenchmarkEvaluation: TaskBenchmarkEvaluationResult?
+    @Published private(set) var taskBenchmarkDeleteResult: TaskBenchmarkDeleteResult?
+    @Published private(set) var isLoadingTaskBenchmarks = false
+    @Published private(set) var isSavingTaskBenchmark = false
+    @Published private(set) var isEvaluatingTaskBenchmarks = false
+    @Published private(set) var deletingTaskBenchmarkIDs: Set<String> = []
     @Published private(set) var llmPromptPreviews: [String: LLMPromptPreview] = [:]
     @Published private(set) var previewingLLMPromptKeys: Set<String> = []
     @Published private(set) var sendingLLMPromptKeys: Set<String> = []
@@ -102,6 +109,7 @@ final class SkillStore: ObservableObject {
             }
         }
     }
+    @Published var taskBenchmarkText = ""
     @Published var errorMessage: String?
 
     private let service: ServiceClient
@@ -116,7 +124,11 @@ final class SkillStore: ObservableObject {
     }
 
     var isRefreshBusy: Bool {
-        isLoading || isScanning || isWriting || isProjectUpdating || isSavingSettings || isSavingAIProvider || isTestingAIProvider || isApplyingBatchToggle || isExportingLocalReport || isLLMPromptBusy
+        isLoading || isScanning || isWriting || isProjectUpdating || isSavingSettings || isSavingAIProvider || isTestingAIProvider || isApplyingBatchToggle || isExportingLocalReport || isTaskBenchmarkBusy || isLLMPromptBusy
+    }
+
+    private var isTaskBenchmarkBusy: Bool {
+        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || !deletingTaskBenchmarkIDs.isEmpty
     }
 
     private var isLLMPromptBusy: Bool {
@@ -493,6 +505,22 @@ final class SkillStore: ObservableObject {
     func canSendRoutingConfidencePrompt(for skill: SkillRecord) -> Bool {
         guard let preview = routingConfidencePromptPreview(for: skill) else { return false }
         return canSendLLMPrompt(preview)
+    }
+
+    var selectedTaskBenchmarkInput: String {
+        let trimmedBenchmark = normalizedTaskBenchmarkText
+        if !trimmedBenchmark.isEmpty {
+            return trimmedBenchmark
+        }
+        let trimmedRouting = normalizedRoutingConfidenceText
+        if !trimmedRouting.isEmpty {
+            return trimmedRouting
+        }
+        return normalizedTaskReadinessText
+    }
+
+    func isDeletingTaskBenchmark(_ benchmark: TaskBenchmarkRecord) -> Bool {
+        deletingTaskBenchmarkIDs.contains(benchmark.id)
     }
 
     func scriptExecutionPreview(for skill: SkillRecord) -> ScriptExecutionPreview? {
@@ -1192,6 +1220,88 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func loadTaskBenchmarks() async {
+        guard !isLoadingTaskBenchmarks else { return }
+        isLoadingTaskBenchmarks = true
+        defer { isLoadingTaskBenchmarks = false }
+
+        do {
+            taskBenchmarkList = try await service.listTaskBenchmarks(skill: selectedSkill)
+        } catch {
+            taskBenchmarkList = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
+    func saveSelectedTaskBenchmark() async {
+        guard let skill = selectedSkill else { return }
+        let taskText = selectedTaskBenchmarkInput
+        guard !taskText.isEmpty else {
+            taskBenchmarkEvaluation = .unavailable(reason: UIStrings.taskBenchmarkTaskRequired)
+            return
+        }
+        guard !isRefreshBusy else {
+            taskBenchmarkEvaluation = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        isSavingTaskBenchmark = true
+        defer { isSavingTaskBenchmark = false }
+
+        do {
+            let result = try await service.saveTaskBenchmark(taskText: taskText, skill: skill)
+            if let benchmark = result.benchmark {
+                upsertTaskBenchmark(benchmark)
+                taskBenchmarkDeleteResult = nil
+            } else if let reason = result.fallbackReason {
+                taskBenchmarkList = .unavailable(reason: reason)
+            }
+        } catch {
+            taskBenchmarkList = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
+    func evaluateTaskBenchmarks() async {
+        guard !isRefreshBusy else {
+            taskBenchmarkEvaluation = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        isEvaluatingTaskBenchmarks = true
+        defer { isEvaluatingTaskBenchmarks = false }
+
+        do {
+            taskBenchmarkEvaluation = try await service.evaluateTaskBenchmarks(
+                skill: selectedSkill,
+                benchmarkIDs: taskBenchmarkList.benchmarks.isEmpty ? nil : taskBenchmarkList.benchmarks.map(\.id)
+            )
+        } catch {
+            taskBenchmarkEvaluation = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
+    func deleteTaskBenchmark(_ benchmark: TaskBenchmarkRecord) async {
+        guard !isRefreshBusy else {
+            taskBenchmarkDeleteResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        deletingTaskBenchmarkIDs.insert(benchmark.id)
+        defer { deletingTaskBenchmarkIDs.remove(benchmark.id) }
+
+        do {
+            let result = try await service.deleteTaskBenchmark(benchmarkID: benchmark.id)
+            taskBenchmarkDeleteResult = result
+            guard result.deleted else { return }
+            taskBenchmarkList = TaskBenchmarkListResult(
+                benchmarks: taskBenchmarkList.benchmarks.filter { $0.id != benchmark.id },
+                fallbackReason: taskBenchmarkList.fallbackReason
+            )
+            taskBenchmarkEvaluation = nil
+        } catch {
+            taskBenchmarkDeleteResult = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
     func previewScriptExecutionSafety(for skill: SkillRecord) async {
         guard !isRefreshBusy else {
             scriptExecutionPreviews[skill.id] = .unavailable(skill: skill, reason: UIStrings.operationUnavailableBusy)
@@ -1469,6 +1579,10 @@ final class SkillStore: ObservableObject {
             routingConfidenceRankedSkillID = nil
         }
         rankingRoutingSkillIDs = rankingRoutingSkillIDs.filter { currentSkillIDs.contains($0) }
+        deletingTaskBenchmarkIDs.removeAll()
+        if taskBenchmarkList.isUnavailable {
+            taskBenchmarkEvaluation = nil
+        }
         skillEventsByID = skillEventsByID.filter { currentSkillIDs.contains($0.key) }
         skillAnalysisPrepareResults.removeAll()
         preparingSkillAnalysisKeys.removeAll()
@@ -1598,6 +1712,16 @@ final class SkillStore: ObservableObject {
         "routing-confidence:\(skillID):\(taskText)"
     }
 
+    private var normalizedTaskBenchmarkText: String {
+        taskBenchmarkText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func upsertTaskBenchmark(_ benchmark: TaskBenchmarkRecord) {
+        var benchmarks = taskBenchmarkList.benchmarks.filter { $0.id != benchmark.id }
+        benchmarks.insert(benchmark, at: 0)
+        taskBenchmarkList = TaskBenchmarkListResult(benchmarks: benchmarks, fallbackReason: nil)
+    }
+
     private func canSendLLMPrompt(_ preview: LLMPromptPreview) -> Bool {
         aiProviderStatus.serviceAvailable
             && aiProviderStatus.configured
@@ -1667,6 +1791,8 @@ final class SkillStore: ObservableObject {
         taskReadinessCheckedSkillID = nil
         routingConfidenceResult = nil
         routingConfidenceRankedSkillID = nil
+        taskBenchmarkEvaluation = nil
+        taskBenchmarkDeleteResult = nil
         Task { @MainActor [weak self] in
             await self?.loadSelectedDetail()
             await self?.loadCrossAgentComparisons()

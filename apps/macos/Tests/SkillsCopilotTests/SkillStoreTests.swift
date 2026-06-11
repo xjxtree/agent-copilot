@@ -42,6 +42,8 @@ struct SkillStoreTests {
         try await taskReadinessPromptSendRequiresConfiguredProvider()
         try await routingConfidenceUsesReadOnlyRankContract()
         try await routingConfidencePromptSendRequiresConfiguredProvider()
+        try await taskBenchmarkUsesLocalServiceContract()
+        try await taskBenchmarkFallsBackWhenMethodUnavailable()
         try await routingConfidenceClearsStaleSelection()
         try await llmPreparePreviewIsScopedToSelectedSkillAndReadOnly()
         try await promptPreviewRequiresConfiguredProviderAndExplicitSend()
@@ -994,6 +996,73 @@ struct SkillStoreTests {
         try expectFalse(calls.contains("script.execute"), "No-provider routing path must not call execution paths.")
     }
 
+    private func taskBenchmarkUsesLocalServiceContract() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        store.routingConfidenceText = "Route a local audit release note task."
+        await store.reload()
+        await store.loadTaskBenchmarks()
+        await store.saveSelectedTaskBenchmark()
+        await store.evaluateTaskBenchmarks()
+
+        try expectEqual(store.taskBenchmarkList.benchmarks.first?.id, "bench-2", "Saved benchmark should be inserted at the front of the local list.")
+        try expectEqual(store.taskBenchmarkList.benchmarks.first?.expectedSkill?.name, "Beta", "Saved benchmark should retain selected expected skill context.")
+        try expectEqual(store.taskBenchmarkEvaluation?.evaluatedCount, 2, "Benchmark evaluation should expose evaluated count.")
+        try expectEqual(store.taskBenchmarkEvaluation?.matchedCount, 1, "Benchmark evaluation should expose expected matches.")
+        try expectEqual(store.taskBenchmarkEvaluation?.acceptableCount, 2, "Benchmark evaluation should expose acceptable matches.")
+        try expectEqual(store.taskBenchmarkEvaluation?.evaluations.first?.topRoute?.name, "Beta", "Benchmark evaluation should expose top route.")
+        try expectFalse(store.taskBenchmarkEvaluation?.safety.providerRequestSent ?? true, "Local benchmark evaluation must not send a provider request.")
+        try expectFalse(store.taskBenchmarkEvaluation?.safety.writeBackAllowed ?? true, "Benchmark evaluation must not allow write-back.")
+        try expectFalse(store.taskBenchmarkEvaluation?.safety.scriptExecutionAllowed ?? true, "Benchmark evaluation must not allow script execution.")
+        try expectFalse(store.taskBenchmarkEvaluation?.safety.configMutationAllowed ?? true, "Benchmark evaluation must not mutate config.")
+        try expectFalse(store.taskBenchmarkEvaluation?.safety.credentialAccessed ?? true, "Benchmark evaluation must not access credentials.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "task.listBenchmarks", "Benchmark UI should list benchmarks through the V2.46 task list method.")
+        try expectContains(calls, "task.saveBenchmark", "Benchmark UI should save benchmarks through the V2.46 task save method.")
+        try expectContains(calls, "task.evaluateBenchmarks", "Benchmark UI should evaluate benchmarks through the V2.46 task evaluation method.")
+        try expectContains(calls, "\"task\":\"Route a local audit release note task.\"", "Benchmark save should use the current routing/readiness task text.")
+        try expectContains(calls, "\"expected_skill_refs\":[\"beta\",\"def.beta\"]", "Benchmark save should carry selected expected skill references.")
+        try expectContains(calls, "\"expected_skill_names\":[\"Beta\"]", "Benchmark save should carry selected expected skill name.")
+        try expectContains(calls, "\"acceptable_agents\":[\"claude-code\"]", "Benchmark save should carry acceptable agent context.")
+        try expectContains(calls, "\"acceptable_scopes\":[\"agent-project\"]", "Benchmark save should carry acceptable scope context.")
+        try expectFalse(calls.contains("llm.previewPrompt"), "Local benchmark evaluation must not prepare provider prompts.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Local benchmark evaluation must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Benchmark flow must not call config write paths.")
+        try expectFalse(calls.contains("script.execute"), "Benchmark flow must not call execution paths.")
+    }
+
+    private func taskBenchmarkFallsBackWhenMethodUnavailable() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "old-service")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        store.taskBenchmarkText = "Route a local audit release note task."
+        await store.reload()
+        await store.loadTaskBenchmarks()
+        await store.saveSelectedTaskBenchmark()
+        await store.evaluateTaskBenchmarks()
+
+        try expectEqual(store.taskBenchmarkList.isUnavailable, true, "Unknown benchmark methods should expose an unavailable benchmark list.")
+        try expectEqual(store.taskBenchmarkEvaluation?.isUnavailable, true, "Unknown benchmark evaluation should expose an unavailable result.")
+        try expectContains(store.taskBenchmarkList.fallbackReason, "unavailable", "Unavailable benchmark list should expose quiet fallback reason.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "task.listBenchmarks", "Fallback test should still attempt the V2.46 list method.")
+        try expectContains(calls, "task.saveBenchmark", "Fallback test should still attempt the V2.46 save method.")
+        try expectContains(calls, "task.evaluateBenchmarks", "Fallback test should still attempt the V2.46 evaluate method.")
+        try expectFalse(calls.contains("llm.previewPrompt"), "Unavailable benchmark flow must not fall back to provider prompt preview.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Unavailable benchmark flow must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Unavailable benchmark flow must not call config write paths.")
+        try expectFalse(calls.contains("script.execute"), "Unavailable benchmark flow must not call execution paths.")
+    }
+
     private func routingConfidenceClearsStaleSelection() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -1362,6 +1431,30 @@ private final class FakeServiceScript {
               respond '{"id":"test","ok":true,"result":{"task":"Route a local audit release note task.","confidence_score":88,"band":"High","summary":"Beta is the strongest selected route; Alpha is a nearby alternate.","candidate_routes":[{"instance_id":"beta","name":"Beta","agent":"claude-code","confidence_score":88,"band":"High","summary":"Best project-scoped local audit fit.","match_reasons":["Description matches local audit.","Selected skill is enabled."],"ambiguity_warnings":["Alpha has overlapping audit wording."],"wrong_pick_risks":["Could miss release-note-specific examples."],"evidence_references":[{"title":"Metadata","detail":"Description mentions local audit.","source":"catalog"}]},{"instance_id":"alpha","name":"Alpha","agent":"claude-code","score":69,"band":"Medium","summary":"Nearby fallback with weaker task wording.","match_reasons":["Same agent and enabled."],"ambiguity_warnings":[],"wrong_pick_risks":["Less project-specific."],"evidence":["Enabled fallback"]}],"ambiguity_warnings":["Alpha has overlapping audit wording."],"wrong_pick_risks":["Choosing Alpha may miss project-scoped evidence."],"evidence_references":[{"title":"Comparison","detail":"Same-agent candidates reviewed.","source":"analysis"}],"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_secret_returned":false}}}'
             fi
             respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: task.rankSkillRoutes"}}'
+            ;;
+          *\\"task.listBenchmarks\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"benchmarks":[{"benchmark_id":"bench-1","task_text":"Route a local audit task.","expected_skill":{"instance_id":"beta","name":"Beta","agent":"claude-code"},"acceptable_skills":[{"instance_id":"beta","name":"Beta","agent":"claude-code"},{"instance_id":"alpha","name":"Alpha","agent":"claude-code"}]}]}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: task.listBenchmarks"}}'
+            ;;
+          *\\"task.saveBenchmark\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"benchmark":{"benchmark_id":"bench-2","task_text":"Route a local audit release note task.","expected_skill":{"instance_id":"beta","name":"Beta","agent":"claude-code"},"acceptable_skills":[{"instance_id":"beta","name":"Beta","agent":"claude-code"}]}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: task.saveBenchmark"}}'
+            ;;
+          *\\"task.evaluateBenchmarks\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"evaluated_count":2,"matched_count":1,"acceptable_count":2,"average_score":82,"evaluations":[{"benchmark_id":"bench-2","task":"Route a local audit release note task.","match_status":"matched","top_route":{"instance_id":"beta","name":"Beta","agent":"claude-code","confidence_score":88,"band":"High","match_reasons":["Description matches local audit."]},"expected_covered":true,"acceptable_covered":true,"blockers":[],"gaps":["No release-note-specific examples."],"safety_flags":["provider not sent"],"evidence_references":[{"title":"Routing","detail":"Beta ranked first.","source":"local"}]},{"benchmark_id":"bench-1","task":"Route a local audit task.","match_status":"acceptable","top_route":{"instance_id":"alpha","name":"Alpha","agent":"claude-code","confidence_score":76,"band":"Medium","match_reasons":["Same-agent fallback."]},"expected_covered":false,"acceptable_covered":true,"blockers":[],"gaps":[],"safety_flags":["provider not sent"],"evidence":["Alpha is acceptable."]}],"blockers":[],"gaps":["One benchmark missed exact expected route."],"evidence_references":[{"title":"Benchmark","detail":"Two local tasks evaluated.","source":"task.evaluateBenchmarks"}],"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_secret_returned":false}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: task.evaluateBenchmarks"}}'
+            ;;
+          *\\"task.deleteBenchmark\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"deleted":true,"benchmark_id":"bench-1"}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: task.deleteBenchmark"}}'
             ;;
           *\\"llm.prepareAction\\"*)
             if [ "$scenario" = "old-service" ]; then
