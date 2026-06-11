@@ -28,6 +28,8 @@
 >
 > V2.41+ 将 AI 大模型介入提升为核心分析能力，但只能在用户显式配置 provider 并确认 prompt preview 后调用。Provider 支持方向是 OpenAI-compatible 与 Claude-compatible 接口标准；endpoint/API key/model 均由用户配置。API key 优先存入 Keychain；任何 fallback 必须显式 opt-in、权限检查，并且不得把 secret 写入 SQLite、项目目录、日志、报告、截图或 prompt artifacts。
 >
+> V2.58 Impact Preview 仍然是 local-only、deterministic-by-default 的只读预览层：`remediation.previewImpact` 只能在用户显式触发后计算影响，展示受影响的 task/agent/skill、风险变化、snapshot/rollback plan、writable capability/filtering/blockers 与 evidence refs；它不能应用任何动作、写 skill 文件、改 agent config、创建或回滚 snapshot、变更 triage、执行脚本、读取 credentials、持久化 raw prompt/response/trace、同步云端、发 telemetry，或默认发起 provider traffic。任何 provider wording 仍必须通过 V2.42 prompt preview/redaction/confirmation，并保持 copy-only。
+>
 > V2.10 skill execution safety 当前是 default-deny 边界：
 >
 > - 没有真实执行能力默认开启。

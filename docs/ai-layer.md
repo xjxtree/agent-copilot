@@ -144,7 +144,8 @@ Provider 配置原则：
 | V2.55（实现） | workspace readiness（`workspace.checkReadiness`） | catalog、taxonomy、task readiness/routing、cross-agent readiness、stale/drift、adapter diagnostics、findings/conflicts/analysis；local-only deterministic readiness |
 | V2.56（实现） | remediation planner（`remediation.plan`） | findings、cleanup queue、stale/drift、similar groups、taxonomy、workspace readiness、task readiness/routing、adapter diagnostics；local-only deterministic read-only plan |
 | V2.57（实现） | preview drafts（`remediation.previewDrafts`） | user-triggered local-only deterministic copy/edit-ready drafts for frontmatter、description、permissions、dependency、policy；no direct apply/write path；provider wording still follows V2.42 preview/redaction/confirmation |
-| V2.58-V2.60 | impact preview、batch review、history | future work; remains constrained by findings、triage、policy、snapshots and the writable capability matrix |
+| V2.58（planned） | impact preview / `remediation.previewImpact` | User-triggered, local-only, deterministic impact preview before enable/disable/edit/remediation actions; previews impacted tasks、agents、skills、risk deltas、snapshot/rollback plan、writable capability/filtering/blockers、evidence refs; no apply/write/snapshot mutation/triage/script/credential/cloud/telemetry/default-provider side effects; any provider wording stays V2.42 gated copy-only |
+| V2.59-V2.60（future） | batch review、history | future work; remains constrained by findings、triage、policy、snapshots and the writable capability matrix |
 | V2.61-V2.70 | review session、governance report、policy packs、skill map、full provider observability、safe write planning | local reports, policy profiles, V2.41-V2.42 call metadata, evidence gates |
 
 V2.57 的 preview drafts 只生成可复制/可编辑的草稿建议，不提供直接 apply/write；任何 provider wording 都必须经过 V2.42 的 prompt preview / redaction / confirmation，并继续作为 copy-only 输出。
