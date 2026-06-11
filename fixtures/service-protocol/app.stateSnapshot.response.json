@@ -21,6 +21,7 @@
         "knowledge.groupSimilarSkills",
         "knowledge.buildCapabilityTaxonomy",
         "workspace.checkReadiness",
+        "remediation.plan",
         "task.checkReadiness",
         "task.rankSkillRoutes",
         "task.compareAgentReadiness",

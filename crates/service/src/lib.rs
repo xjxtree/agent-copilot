@@ -67,6 +67,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "knowledge.groupSimilarSkills",
     "knowledge.buildCapabilityTaxonomy",
     "workspace.checkReadiness",
+    "remediation.plan",
     "task.checkReadiness",
     "task.rankSkillRoutes",
     "task.compareAgentReadiness",
@@ -1249,6 +1250,117 @@ pub type WorkspaceReadinessPromptRequest = AgentReadinessPromptRequest;
 pub type WorkspaceReadinessSafetyFlags = AgentReadinessSafetyFlags;
 
 #[derive(Debug, Clone, Default, Deserialize)]
+pub struct RemediationPlanParams {
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default, alias = "task_text", alias = "user_intent")]
+    pub task: Option<String>,
+    #[serde(default, alias = "workspace_path")]
+    pub project_root: Option<String>,
+    #[serde(default)]
+    pub focus: Option<String>,
+    #[serde(default)]
+    pub focus_areas: Vec<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+    #[serde(default, alias = "instance_ids")]
+    pub candidate_instance_ids: Vec<String>,
+    #[serde(default)]
+    pub include_deferred: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationPlanResult {
+    pub generated_by: &'static str,
+    pub catalog_available: bool,
+    pub filters: RemediationPlanFilters,
+    pub summary: RemediationPlanSummary,
+    pub plan_items: Vec<RemediationPlanItem>,
+    pub priority_rows: Vec<RemediationPriorityRow>,
+    pub gap_notes: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub evidence_references: Vec<TaskReadinessEvidenceReference>,
+    pub prompt_request: RemediationPlanPromptRequest,
+    pub safety_flags: RemediationPlanSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationPlanFilters {
+    pub agent: Option<String>,
+    pub task: Option<String>,
+    pub project_root: Option<String>,
+    pub focus_areas: Vec<String>,
+    pub limit: usize,
+    pub candidate_instance_ids: Vec<String>,
+    pub include_deferred: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationPlanSummary {
+    pub total_item_count: usize,
+    pub returned_item_count: usize,
+    pub high_priority_count: usize,
+    pub medium_priority_count: usize,
+    pub low_priority_count: usize,
+    pub deferred_count: usize,
+    pub finding_item_count: usize,
+    pub gap_item_count: usize,
+    pub ambiguity_item_count: usize,
+    pub drift_item_count: usize,
+    pub readiness_item_count: usize,
+    pub policy_item_count: usize,
+    pub blocker_count: usize,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationPlanItem {
+    pub id: String,
+    pub rank: usize,
+    pub priority: &'static str,
+    pub severity: &'static str,
+    pub category: &'static str,
+    pub title: String,
+    pub summary: String,
+    pub detail: String,
+    pub affected_agent: Option<String>,
+    pub affected_skill: Option<RemediationAffectedSkill>,
+    pub affected_capability: Option<String>,
+    pub affected_task: Option<String>,
+    pub affected_instance_ids: Vec<String>,
+    pub suggested_safe_next_action: String,
+    pub prerequisites: Vec<String>,
+    pub blockers: Vec<String>,
+    pub deferred: bool,
+    pub evidence_refs: Vec<String>,
+    pub side_effect_flags: Vec<&'static str>,
+    pub safety_flags: RemediationPlanSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationAffectedSkill {
+    pub instance_id: String,
+    pub definition_id: String,
+    pub skill_name: String,
+    pub agent: String,
+    pub scope: String,
+    pub enabled: bool,
+    pub state: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationPriorityRow {
+    pub priority: &'static str,
+    pub severity: &'static str,
+    pub item_count: usize,
+    pub category_counts: BTreeMap<String, usize>,
+    pub top_item_ids: Vec<String>,
+}
+
+pub type RemediationPlanPromptRequest = AgentReadinessPromptRequest;
+pub type RemediationPlanSafetyFlags = AgentReadinessSafetyFlags;
+
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct DetectStaleDriftParams {
     #[serde(default)]
     pub agent: Option<String>,
@@ -2031,6 +2143,7 @@ pub enum LlmPromptActionKind {
     SimilarSkillGrouping,
     CapabilityTaxonomy,
     WorkspaceReadiness,
+    RemediationPlan,
     TaskReadiness,
     RoutingConfidence,
 }
@@ -2049,6 +2162,7 @@ impl LlmPromptActionKind {
             Self::SimilarSkillGrouping => "similar_skill_grouping",
             Self::CapabilityTaxonomy => "capability_taxonomy",
             Self::WorkspaceReadiness => "workspace_readiness",
+            Self::RemediationPlan => "remediation_plan",
             Self::TaskReadiness => "task_readiness",
             Self::RoutingConfidence => "routing_confidence",
         }
@@ -2603,6 +2717,14 @@ impl ServiceHost {
                     serde_json::from_value(request.params)?
                 };
                 serde_json::to_value(self.check_workspace_readiness(params)?).map_err(Into::into)
+            }
+            "remediation.plan" => {
+                let params: RemediationPlanParams = if request.params.is_null() {
+                    RemediationPlanParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.plan_remediation(params)?).map_err(Into::into)
             }
             "task.checkReadiness" => {
                 let params: TaskReadinessParams = serde_json::from_value(request.params)?;
@@ -5066,6 +5188,657 @@ impl ServiceHost {
         })
     }
 
+    pub fn plan_remediation(
+        &self,
+        params: RemediationPlanParams,
+    ) -> Result<RemediationPlanResult, ServiceError> {
+        if matches!(params.limit, Some(0)) {
+            return Err(ServiceError::InvalidRequest(
+                "remediation.plan limit must be greater than zero".to_string(),
+            ));
+        }
+
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let roots = self.redaction_roots(&adapter_ctx);
+        let filters = remediation_plan_filters(&params, &roots);
+        let Some(catalog) = self.open_existing_catalog_read_only()? else {
+            return Ok(empty_remediation_plan_result(filters, false));
+        };
+
+        let skills = self.list_visible_skill_records(&catalog)?;
+        let skill_ids = skills
+            .iter()
+            .map(|skill| skill.id.as_str())
+            .collect::<BTreeSet<_>>();
+        let details = skills
+            .iter()
+            .filter(|skill| {
+                agent_matches(filters.agent.as_deref(), Some(skill.agent.as_str()))
+                    && (filters.candidate_instance_ids.is_empty()
+                        || filters.candidate_instance_ids.contains(&skill.id))
+            })
+            .filter_map(|skill| catalog.get_skill_detail(&skill.id).ok().flatten())
+            .filter(|detail| {
+                workspace_detail_matches(params.project_root.as_deref().map(Path::new), detail)
+            })
+            .collect::<Vec<_>>();
+        let detail_by_id = details
+            .iter()
+            .map(|detail| (detail.id.as_str(), detail))
+            .collect::<BTreeMap<_, _>>();
+        let candidate_instance_ids = if filters.candidate_instance_ids.is_empty() {
+            details
+                .iter()
+                .map(|detail| detail.id.clone())
+                .collect::<Vec<_>>()
+        } else {
+            filters.candidate_instance_ids.clone()
+        };
+
+        let findings = list_findings(&catalog)?;
+        let conflicts = list_conflicts(&catalog)?;
+        let analysis = analyze_catalog(&catalog, &adapter_ctx)?;
+        let diagnostics = list_adapter_diagnostics(&adapter_ctx);
+        let cleanup = self.cleanup_list_queue(CleanupListQueueParams {
+            agent: filters.agent.clone(),
+            limit: Some(filters.limit.saturating_mul(2).max(filters.limit)),
+        })?;
+        let taxonomy = self.build_capability_taxonomy(CapabilityTaxonomyParams {
+            agent: filters.agent.clone(),
+            limit: Some(filters.limit),
+            include_single_skill_domains: true,
+            candidate_instance_ids: candidate_instance_ids.clone(),
+        })?;
+        let stale_drift = self.detect_stale_drift(DetectStaleDriftParams {
+            agent: filters.agent.clone(),
+            candidate_instance_ids: candidate_instance_ids.clone(),
+            limit: Some(filters.limit),
+            stale_days: None,
+            thresholds: StaleDriftThresholds::default(),
+        })?;
+        let similar = self.group_similar_skills(SimilarSkillGroupingParams {
+            agent: filters.agent.clone(),
+            limit: Some(filters.limit),
+            min_score: Some(45.0),
+            include_singletons: false,
+            candidate_instance_ids: candidate_instance_ids.clone(),
+        })?;
+        let workspace = self.check_workspace_readiness(WorkspaceReadinessParams {
+            agent: filters.agent.clone(),
+            task: filters.task.clone(),
+            project_root: params.project_root.clone(),
+            expected_capabilities: filters.focus_areas.clone(),
+            limit: Some(filters.limit),
+            candidate_instance_ids: candidate_instance_ids.clone(),
+        })?;
+        let task_readiness = filters
+            .task
+            .as_ref()
+            .map(|task| {
+                self.check_task_readiness(TaskReadinessParams {
+                    task: task.clone(),
+                    agent: filters.agent.clone(),
+                    candidate_instance_ids: candidate_instance_ids.clone(),
+                    limit: Some(filters.limit.min(20)),
+                })
+            })
+            .transpose()?;
+        let route_ranking = filters
+            .task
+            .as_ref()
+            .map(|task| {
+                self.rank_skill_routes(RankSkillRoutesParams {
+                    task: task.clone(),
+                    agent: filters.agent.clone(),
+                    candidate_instance_ids: candidate_instance_ids.clone(),
+                    limit: Some(filters.limit.min(20)),
+                })
+            })
+            .transpose()?;
+
+        let mut evidence_by_id = BTreeMap::new();
+        for evidence in taxonomy
+            .evidence_references
+            .iter()
+            .chain(stale_drift.evidence_references.iter())
+            .chain(similar.evidence_references.iter())
+            .chain(workspace.evidence_references.iter())
+        {
+            evidence_by_id
+                .entry(evidence.id.clone())
+                .or_insert_with(|| evidence.clone());
+        }
+        for readiness in task_readiness.iter() {
+            for evidence in &readiness.evidence_references {
+                evidence_by_id
+                    .entry(evidence.id.clone())
+                    .or_insert_with(|| evidence.clone());
+            }
+        }
+        for ranking in route_ranking.iter() {
+            for evidence in &ranking.evidence_references {
+                evidence_by_id
+                    .entry(evidence.id.clone())
+                    .or_insert_with(|| evidence.clone());
+            }
+        }
+
+        let mut items = Vec::new();
+        for finding in &findings {
+            if finding.suppressed || finding.triage_status.eq_ignore_ascii_case("ignored") {
+                continue;
+            }
+            let related = remediation_related_instances_for_finding(finding, &skill_ids);
+            if !remediation_matches_filter(&filters, finding.instance_id.as_deref(), &related) {
+                continue;
+            }
+            let skill = finding
+                .instance_id
+                .as_deref()
+                .and_then(|id| detail_by_id.get(id).copied());
+            if finding.instance_id.is_some() && skill.is_none() {
+                continue;
+            }
+            if filters.agent.is_some() && skill.is_none() {
+                continue;
+            }
+            let evidence_id = remediation_insert_evidence(
+                &mut evidence_by_id,
+                "finding",
+                &finding.id,
+                format!(
+                    "{} finding `{}`: {}",
+                    redact_for_llm_preview(&finding.effective_severity),
+                    redact_for_llm_preview(&finding.rule_id),
+                    redact_for_llm_preview(&finding.message)
+                ),
+                Some(finding.effective_severity.clone()),
+                finding.instance_id.clone(),
+            );
+            items.push(remediation_item(RemediationItemInput {
+                category: "finding",
+                priority_score: remediation_score_for_severity(&finding.effective_severity),
+                severity: remediation_severity(&finding.effective_severity),
+                title: format!("Review `{}` finding", redact_for_llm_preview(&finding.rule_id)),
+                summary: redact_for_llm_preview(&finding.message),
+                detail: finding
+                    .suggestion
+                    .as_deref()
+                    .map(redact_for_llm_preview)
+                    .unwrap_or_else(|| "Review this finding in the existing finding/detail surfaces before choosing any safe write path.".to_string()),
+                affected_agent: skill.map(|skill| skill.agent.clone()),
+                affected_skill: skill.map(remediation_affected_skill),
+                affected_capability: None,
+                affected_task: filters.task.clone(),
+                affected_instance_ids: related,
+                suggested_safe_next_action:
+                    "Open the finding or skill detail and decide whether an existing reviewed flow is appropriate; this plan does not apply changes."
+                        .to_string(),
+                prerequisites: vec!["Confirm the finding is still relevant in the current local scan.".to_string()],
+                blockers: remediation_blockers_for_finding(finding),
+                deferred: false,
+                evidence_refs: vec![evidence_id],
+            }));
+        }
+
+        for conflict in &conflicts {
+            let related = conflict
+                .instance_ids
+                .iter()
+                .filter(|id| detail_by_id.contains_key(id.as_str()))
+                .cloned()
+                .collect::<Vec<_>>();
+            if !remediation_matches_filter(&filters, None, &related) {
+                continue;
+            }
+            let skill = related
+                .first()
+                .and_then(|id| detail_by_id.get(id.as_str()).copied());
+            let evidence_id = remediation_insert_evidence(
+                &mut evidence_by_id,
+                "conflict",
+                &conflict.id,
+                format!(
+                    "Same-agent conflict `{}` affects {} local instance(s).",
+                    redact_for_llm_preview(&conflict.reason),
+                    conflict.instance_ids.len()
+                ),
+                Some("warning".to_string()),
+                skill.map(|skill| skill.id.clone()),
+            );
+            items.push(remediation_item(RemediationItemInput {
+                category: "ambiguity",
+                priority_score: 78,
+                severity: "warning",
+                title: "Resolve same-agent skill ambiguity".to_string(),
+                summary: format!(
+                    "Conflict `{}` can make runtime skill selection ambiguous.",
+                    redact_for_llm_preview(&conflict.reason)
+                ),
+                detail:
+                    "Compare the affected instances in the conflict/detail view before using any existing toggle or rollback flow."
+                        .to_string(),
+                affected_agent: skill.map(|skill| skill.agent.clone()),
+                affected_skill: skill.map(remediation_affected_skill),
+                affected_capability: None,
+                affected_task: filters.task.clone(),
+                affected_instance_ids: related,
+                suggested_safe_next_action:
+                    "Open the conflict comparison and choose a manual review path; this planner does not toggle, merge, or delete skills."
+                        .to_string(),
+                prerequisites: vec!["Inspect winner/source provenance and content drift evidence.".to_string()],
+                blockers: vec!["Automatic conflict resolution is not enabled.".to_string()],
+                deferred: false,
+                evidence_refs: vec![evidence_id],
+            }));
+        }
+
+        for group in &analysis.groups {
+            let related = group
+                .instance_ids
+                .iter()
+                .filter(|id| detail_by_id.contains_key(id.as_str()))
+                .cloned()
+                .collect::<Vec<_>>();
+            if !remediation_matches_filter(&filters, None, &related) {
+                continue;
+            }
+            let category = if group.kind.contains("enabled") {
+                "policy"
+            } else {
+                "ambiguity"
+            };
+            let skill = related
+                .first()
+                .and_then(|id| detail_by_id.get(id.as_str()).copied());
+            let evidence_id = remediation_insert_evidence(
+                &mut evidence_by_id,
+                "analysis",
+                &group.id,
+                format!(
+                    "{} analysis `{}`: {}",
+                    redact_for_llm_preview(&group.severity),
+                    redact_for_llm_preview(&group.kind),
+                    redact_for_llm_preview(&group.title)
+                ),
+                Some(group.severity.clone()),
+                skill.map(|skill| skill.id.clone()),
+            );
+            items.push(remediation_item(RemediationItemInput {
+                category,
+                priority_score: remediation_score_for_severity(&group.severity).saturating_sub(8),
+                severity: remediation_severity(&group.severity),
+                title: redact_for_llm_preview(&group.title),
+                summary: redact_for_llm_preview(&group.explanation),
+                detail:
+                    "Use the cross-agent comparison and source provenance views to decide whether documentation, naming, or existing guarded toggles need review."
+                        .to_string(),
+                affected_agent: skill.map(|skill| skill.agent.clone()),
+                affected_skill: skill.map(remediation_affected_skill),
+                affected_capability: None,
+                affected_task: filters.task.clone(),
+                affected_instance_ids: related,
+                suggested_safe_next_action:
+                    "Review the cross-agent analysis group; no agent configuration is mutated by this plan."
+                        .to_string(),
+                prerequisites: vec!["Confirm whether this is an intentional cross-agent duplicate or mismatch.".to_string()],
+                blockers: vec!["Cross-agent analysis is advisory and not a write affordance.".to_string()],
+                deferred: !filters.include_deferred && group.severity == "info",
+                evidence_refs: vec![evidence_id],
+            }));
+        }
+
+        for row in &stale_drift.stale_drift_rows {
+            if !remediation_matches_filter(
+                &filters,
+                Some(row.instance_id.as_str()),
+                std::slice::from_ref(&row.instance_id),
+            ) {
+                continue;
+            }
+            let skill = detail_by_id.get(row.instance_id.as_str()).copied();
+            items.push(remediation_item(RemediationItemInput {
+                category: "drift",
+                priority_score: row.stale_drift_score,
+                severity: if row.stale_drift_score >= 80 {
+                    "error"
+                } else {
+                    "warning"
+                },
+                title: format!("Review stale/drift signals for `{}`", row.skill_name),
+                summary: if row.reasons.is_empty() {
+                    format!(
+                        "Stale/drift score is {} ({}) from local catalog evidence.",
+                        row.stale_drift_score, row.stale_drift_band
+                    )
+                } else {
+                    row.reasons.join(" ")
+                },
+                detail:
+                    "Re-scan, inspect fingerprint/source drift evidence, and decide whether existing manual review paths are needed."
+                        .to_string(),
+                affected_agent: Some(row.agent.clone()),
+                affected_skill: skill.map(remediation_affected_skill),
+                affected_capability: None,
+                affected_task: filters.task.clone(),
+                affected_instance_ids: vec![row.instance_id.clone()],
+                suggested_safe_next_action:
+                    "Open stale/drift evidence and refresh local catalog if needed; this planner does not write files or snapshots."
+                        .to_string(),
+                prerequisites: vec!["Confirm the latest scan reflects the current workspace.".to_string()],
+                blockers: row.gap_notes.clone(),
+                deferred: false,
+                evidence_refs: row.evidence_refs.clone(),
+            }));
+        }
+
+        for group in &similar.groups {
+            if group.routing_ambiguity == "low" && group.coverage_redundancy == "low" {
+                continue;
+            }
+            let related = group
+                .members
+                .iter()
+                .map(|member| member.instance_id.clone())
+                .filter(|id| detail_by_id.contains_key(id.as_str()))
+                .collect::<Vec<_>>();
+            if !remediation_matches_filter(&filters, None, &related) {
+                continue;
+            }
+            let skill = related
+                .first()
+                .and_then(|id| detail_by_id.get(id.as_str()).copied());
+            items.push(remediation_item(RemediationItemInput {
+                category: "ambiguity",
+                priority_score: group.similarity_score.saturating_sub(10),
+                severity: if group.routing_ambiguity == "high" { "warning" } else { "info" },
+                title: group.title.clone(),
+                summary: group.summary.clone(),
+                detail:
+                    "Review similar/confusable skills before changing names, descriptions, or enablement through existing safe flows."
+                        .to_string(),
+                affected_agent: skill.map(|skill| skill.agent.clone()),
+                affected_skill: skill.map(remediation_affected_skill),
+                affected_capability: Some(group.canonical_name.clone()),
+                affected_task: filters.task.clone(),
+                affected_instance_ids: related,
+                suggested_safe_next_action:
+                    "Open similar skill grouping evidence and decide whether clearer metadata or routing guidance is needed."
+                        .to_string(),
+                prerequisites: group.why_grouped.iter().take(3).cloned().collect(),
+                blockers: vec!["No merge, delete, or auto-disable action is available from remediation.plan.".to_string()],
+                deferred: false,
+                evidence_refs: group.evidence_refs.clone(),
+            }));
+        }
+
+        for row in &workspace.readiness_rows {
+            if row.status == "ready" {
+                continue;
+            }
+            if !remediation_focus_matches(&filters, "readiness") {
+                continue;
+            }
+            items.push(remediation_item(RemediationItemInput {
+                category: "readiness",
+                priority_score: 100u8.saturating_sub(row.score),
+                severity: if row.status == "blocked" { "error" } else { "warning" },
+                title: row.title.clone(),
+                summary: row.detail.clone(),
+                detail:
+                    "Use workspace readiness evidence to choose a manual review path; planner output stays read-only."
+                        .to_string(),
+                affected_agent: row.agent.clone(),
+                affected_skill: None,
+                affected_capability: row.capability.clone(),
+                affected_task: filters.task.clone(),
+                affected_instance_ids: Vec::new(),
+                suggested_safe_next_action:
+                    "Open workspace readiness details and review the relevant local evidence before taking existing guarded actions."
+                        .to_string(),
+                prerequisites: Vec::new(),
+                blockers: if row.status == "blocked" {
+                    vec!["Readiness row is blocked in deterministic local evidence.".to_string()]
+                } else {
+                    Vec::new()
+                },
+                deferred: false,
+                evidence_refs: row.evidence_refs.clone(),
+            }));
+        }
+
+        for row in &workspace.capability_rows {
+            if row.status == "ready" && row.gap_notes.is_empty() {
+                continue;
+            }
+            if !remediation_focus_matches(&filters, "gap") {
+                continue;
+            }
+            items.push(remediation_item(RemediationItemInput {
+                category: "gap",
+                priority_score: 100u8.saturating_sub(row.coverage_score),
+                severity: if row.status == "blocked" { "error" } else { "warning" },
+                title: format!("Close capability gap for `{}`", row.capability),
+                summary: if row.gap_notes.is_empty() {
+                    format!("Capability coverage is {}.", row.coverage_level)
+                } else {
+                    row.gap_notes.join(" ")
+                },
+                detail:
+                    "Review capability taxonomy/readiness evidence and decide whether existing skills need clearer metadata or a future safe write flow."
+                        .to_string(),
+                affected_agent: filters.agent.clone(),
+                affected_skill: None,
+                affected_capability: Some(row.capability.clone()),
+                affected_task: filters.task.clone(),
+                affected_instance_ids: Vec::new(),
+                suggested_safe_next_action:
+                    "Use capability taxonomy and workspace readiness views to inspect coverage; this planner does not create or edit skills."
+                        .to_string(),
+                prerequisites: vec!["Confirm the expected capability belongs in this workspace.".to_string()],
+                blockers: row.blocker_notes.clone(),
+                deferred: false,
+                evidence_refs: row.evidence_refs.clone(),
+            }));
+        }
+
+        for item in cleanup.items.iter().take(filters.limit) {
+            if !filters.include_deferred && item.priority == "low" {
+                continue;
+            }
+            if !remediation_focus_matches(&filters, "policy") {
+                continue;
+            }
+            let skill = item
+                .skill_id
+                .as_deref()
+                .and_then(|id| detail_by_id.get(id).copied());
+            items.push(remediation_item(RemediationItemInput {
+                category: "policy",
+                priority_score: remediation_score_for_priority(&item.priority),
+                severity: remediation_severity(&item.severity),
+                title: item.title.clone(),
+                summary: item.detail.clone(),
+                detail:
+                    "Cleanup queue evidence is included as planning context only; queue items remain read-only review entries."
+                        .to_string(),
+                affected_agent: item.agent.clone(),
+                affected_skill: skill.map(remediation_affected_skill),
+                affected_capability: None,
+                affected_task: filters.task.clone(),
+                affected_instance_ids: item.skill_id.iter().cloned().collect(),
+                suggested_safe_next_action: item.recommended_next_action_label.clone(),
+                prerequisites: vec!["Review the cleanup queue item and its source evidence.".to_string()],
+                blockers: vec!["Cleanup queue does not execute cleanup or writes.".to_string()],
+                deferred: item.priority == "low",
+                evidence_refs: vec![format!("cleanup:{}", item.source_id)],
+            }));
+        }
+
+        if let Some(readiness) = task_readiness.as_ref() {
+            for note in &readiness.missing_gap_notes {
+                if !remediation_focus_matches(&filters, "gap") {
+                    continue;
+                }
+                items.push(remediation_item(RemediationItemInput {
+                    category: "gap",
+                    priority_score: 68,
+                    severity: "warning",
+                    title: "Address task readiness gap".to_string(),
+                    summary: note.clone(),
+                    detail:
+                        "Task readiness gaps should be reviewed against local candidate evidence before changing skills or config."
+                            .to_string(),
+                    affected_agent: filters.agent.clone(),
+                    affected_skill: None,
+                    affected_capability: None,
+                    affected_task: filters.task.clone(),
+                    affected_instance_ids: Vec::new(),
+                    suggested_safe_next_action:
+                        "Open task readiness candidates and review missing coverage; no provider or write is triggered."
+                            .to_string(),
+                    prerequisites: vec!["Confirm task wording and candidate filters.".to_string()],
+                    blockers: Vec::new(),
+                    deferred: false,
+                    evidence_refs: readiness
+                        .evidence_references
+                        .iter()
+                        .take(4)
+                        .map(|evidence| evidence.id.clone())
+                        .collect(),
+                }));
+            }
+        }
+
+        if let Some(ranking) = route_ranking.as_ref() {
+            for warning in &ranking.ambiguity_warnings {
+                if !remediation_focus_matches(&filters, "ambiguity") {
+                    continue;
+                }
+                items.push(remediation_item(RemediationItemInput {
+                    category: "ambiguity",
+                    priority_score: 72,
+                    severity: "warning",
+                    title: "Reduce routing ambiguity".to_string(),
+                    summary: warning.clone(),
+                    detail:
+                        "Routing ambiguity is advisory; review candidate metadata and benchmark evidence before any manual action."
+                            .to_string(),
+                    affected_agent: filters.agent.clone(),
+                    affected_skill: None,
+                    affected_capability: None,
+                    affected_task: filters.task.clone(),
+                    affected_instance_ids: ranking
+                        .route_candidates
+                        .iter()
+                        .take(3)
+                        .map(|candidate| candidate.instance_id.clone())
+                        .collect(),
+                    suggested_safe_next_action:
+                        "Open routing confidence details and inspect top candidates; this planner cannot change routing."
+                            .to_string(),
+                    prerequisites: vec!["Confirm the intended route for this task.".to_string()],
+                    blockers: vec!["No automatic routing change is available.".to_string()],
+                    deferred: false,
+                    evidence_refs: ranking
+                        .evidence_references
+                        .iter()
+                        .take(4)
+                        .map(|evidence| evidence.id.clone())
+                        .collect(),
+                }));
+            }
+        }
+
+        let mut gap_notes = workspace.gap_notes.clone();
+        gap_notes.extend(taxonomy.gap_notes.iter().cloned());
+        gap_notes.extend(stale_drift.gap_notes.iter().cloned());
+        gap_notes.extend(similar.gap_notes.iter().cloned());
+        if details.is_empty() {
+            gap_notes.push("No visible local skills matched the remediation filters.".to_string());
+        }
+        gap_notes.sort();
+        gap_notes.dedup();
+        gap_notes.truncate(18);
+
+        let mut blocker_notes = workspace.blocker_notes.clone();
+        blocker_notes.extend(taxonomy.blocker_notes.iter().cloned());
+        blocker_notes.extend(stale_drift.blocker_notes.iter().cloned());
+        blocker_notes.extend(similar.blocker_notes.iter().cloned());
+        blocker_notes.extend(
+            diagnostics
+                .iter()
+                .filter(|diagnostic| {
+                    diagnostic.status == "blocked"
+                        || diagnostic.access.writable_status == "blocked"
+                })
+                .map(|diagnostic| {
+                    format!(
+                        "{} adapter has status={} and writable_status={}; remediation stays read-only.",
+                        diagnostic.display_name,
+                        diagnostic.status,
+                        diagnostic.access.writable_status
+                    )
+                }),
+        );
+        blocker_notes.sort();
+        blocker_notes.dedup();
+        blocker_notes.truncate(18);
+
+        let total_item_count = items.len();
+        let items = remediation_sorted_items(items, &filters);
+        let returned_item_count = items.len();
+        let summary = remediation_plan_summary(total_item_count, returned_item_count, &items);
+        let priority_rows = remediation_priority_rows(&items);
+        let prompt_instance_ids = items
+            .iter()
+            .flat_map(|item| item.affected_instance_ids.iter().cloned())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .take(12)
+            .collect::<Vec<_>>();
+        let prompt_available = !items.is_empty();
+
+        Ok(RemediationPlanResult {
+            generated_by: "deterministic-service",
+            catalog_available: true,
+            filters: filters.clone(),
+            summary,
+            plan_items: items,
+            priority_rows,
+            gap_notes,
+            blocker_notes,
+            evidence_references: evidence_by_id.into_values().collect(),
+            prompt_request: RemediationPlanPromptRequest {
+                available: prompt_available,
+                preview_method: "llm.previewPrompt",
+                confirm_method: "llm.confirmPromptAndSend",
+                action: "remediation_plan",
+                request: LlmPreviewPromptParams {
+                    action: LlmPromptActionKind::RemediationPlan,
+                    profile_id: None,
+                    skill_instance_id: None,
+                    instance_ids: prompt_instance_ids,
+                    analysis_kind: None,
+                    user_intent: filters.task.clone().or_else(|| {
+                        Some(
+                            "Explain deterministic remediation plan items using only local catalog evidence."
+                                .to_string(),
+                        )
+                    }),
+                },
+                note: if prompt_available {
+                    "Optional provider-backed remediation explanation must be requested through prompt preview and explicit confirmation; remediation.plan never sends provider traffic and remains copy-only."
+                        .to_string()
+                } else {
+                    "Prompt preview is unavailable until local evidence produces remediation plan items."
+                        .to_string()
+                },
+            },
+            safety_flags: remediation_plan_safety_flags(),
+        })
+    }
+
     pub fn check_task_readiness(
         &self,
         params: TaskReadinessParams,
@@ -6495,6 +7268,49 @@ impl ServiceHost {
                     &mut redactor,
                 ));
             }
+            LlmPromptActionKind::RemediationPlan => {
+                let result = self.plan_remediation(RemediationPlanParams {
+                    agent: None,
+                    task: params.user_intent.clone(),
+                    project_root: None,
+                    focus: None,
+                    focus_areas: Vec::new(),
+                    limit: Some(8),
+                    candidate_instance_ids: params.instance_ids.clone(),
+                    include_deferred: false,
+                })?;
+                prompt_scope.extend([
+                    "deterministic remediation plan items".to_string(),
+                    "prioritized local finding/gap/ambiguity/drift/readiness evidence".to_string(),
+                    "safe next-action guidance".to_string(),
+                    "local gap and blocker notes".to_string(),
+                    "evidence reference summaries".to_string(),
+                    "safety flags".to_string(),
+                ]);
+                included_fields.extend([
+                    "redacted task or remediation intent".to_string(),
+                    "plan item ids, ranks, priorities, severities, and categories".to_string(),
+                    "affected skill ids, names, agents, scopes, enabled states, and states"
+                        .to_string(),
+                    "affected capabilities and task refs".to_string(),
+                    "read-only suggested safe next actions".to_string(),
+                    "prerequisites, blockers, and evidence ids".to_string(),
+                    "read-only safety flags".to_string(),
+                ]);
+                excluded_fields.extend([
+                    "raw source paths".to_string(),
+                    "raw provider response".to_string(),
+                    "agent config contents".to_string(),
+                    "raw prompt or response persistence".to_string(),
+                    "raw skill body".to_string(),
+                    "raw frontmatter".to_string(),
+                    "write/apply instructions".to_string(),
+                ]);
+                sections.push(render_remediation_plan_prompt_section(
+                    &result,
+                    &mut redactor,
+                ));
+            }
             LlmPromptActionKind::TaskReadiness => {
                 let task = params.user_intent.as_deref().ok_or_else(|| {
                     ServiceError::InvalidRequest(
@@ -6600,6 +7416,7 @@ impl ServiceHost {
             LlmPromptActionKind::SimilarSkillGrouping => 850,
             LlmPromptActionKind::CapabilityTaxonomy => 850,
             LlmPromptActionKind::WorkspaceReadiness => 900,
+            LlmPromptActionKind::RemediationPlan => 900,
             LlmPromptActionKind::TaskReadiness => 750,
             LlmPromptActionKind::RoutingConfidence => 850,
         };
@@ -11719,6 +12536,470 @@ fn workspace_readiness_summary(
     }
 }
 
+fn remediation_plan_safety_flags() -> RemediationPlanSafetyFlags {
+    agent_readiness_safety_flags()
+}
+
+fn remediation_plan_filters(
+    params: &RemediationPlanParams,
+    redaction_roots: &[(String, &'static str)],
+) -> RemediationPlanFilters {
+    let mut focus_areas = Vec::new();
+    if let Some(focus) = params.focus.as_deref() {
+        focus_areas.extend(
+            focus
+                .split([',', ';'])
+                .filter_map(normalize_remediation_focus),
+        );
+    }
+    focus_areas.extend(
+        params
+            .focus_areas
+            .iter()
+            .filter_map(|focus| normalize_remediation_focus(focus)),
+    );
+    focus_areas.sort();
+    focus_areas.dedup();
+    let mut candidate_instance_ids = params
+        .candidate_instance_ids
+        .iter()
+        .map(|value| redact_for_llm_preview(value.trim()))
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    candidate_instance_ids.sort();
+    candidate_instance_ids.dedup();
+
+    RemediationPlanFilters {
+        agent: params.agent.as_deref().and_then(normalize_agent_label),
+        task: params
+            .task
+            .as_deref()
+            .map(str::trim)
+            .filter(|task| !task.is_empty())
+            .map(redact_for_llm_preview),
+        project_root: params
+            .project_root
+            .as_deref()
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+            .map(|path| redact_string(&redact_for_llm_preview(path), redaction_roots)),
+        focus_areas,
+        limit: params.limit.unwrap_or(12).clamp(1, 50),
+        candidate_instance_ids,
+        include_deferred: params.include_deferred,
+    }
+}
+
+fn normalize_remediation_focus(focus: &str) -> Option<String> {
+    let normalized = focus.trim().to_ascii_lowercase().replace(['_', ' '], "-");
+    let canonical = match normalized.as_str() {
+        "" => return None,
+        "finding" | "findings" | "rule" | "rules" => "finding",
+        "gap" | "gaps" | "coverage" | "capability-gap" => "gap",
+        "ambiguity" | "routing" | "routing-ambiguity" | "conflict" | "conflicts" => "ambiguity",
+        "drift" | "stale" | "stale-drift" => "drift",
+        "readiness" | "workspace" | "workspace-readiness" | "task-readiness" => "readiness",
+        "policy" | "cleanup" | "queue" => "policy",
+        other => other,
+    };
+    Some(canonical.to_string())
+}
+
+fn empty_remediation_plan_result(
+    filters: RemediationPlanFilters,
+    catalog_available: bool,
+) -> RemediationPlanResult {
+    RemediationPlanResult {
+        generated_by: "deterministic-service",
+        catalog_available,
+        filters,
+        summary: RemediationPlanSummary {
+            total_item_count: 0,
+            returned_item_count: 0,
+            high_priority_count: 0,
+            medium_priority_count: 0,
+            low_priority_count: 0,
+            deferred_count: 0,
+            finding_item_count: 0,
+            gap_item_count: 0,
+            ambiguity_item_count: 0,
+            drift_item_count: 0,
+            readiness_item_count: 0,
+            policy_item_count: 0,
+            blocker_count: 1,
+            summary:
+                "No local catalog is available, so remediation planning has no evidence."
+                    .to_string(),
+        },
+        plan_items: Vec::new(),
+        priority_rows: Vec::new(),
+        gap_notes: vec![
+            "Run a local scan before relying on remediation planning.".to_string(),
+        ],
+        blocker_notes: vec![
+            "No provider request was sent and no fallback network lookup was attempted."
+                .to_string(),
+        ],
+        evidence_references: Vec::new(),
+        prompt_request: RemediationPlanPromptRequest {
+            available: false,
+            preview_method: "llm.previewPrompt",
+            confirm_method: "llm.confirmPromptAndSend",
+            action: "remediation_plan",
+            request: LlmPreviewPromptParams {
+                action: LlmPromptActionKind::RemediationPlan,
+                profile_id: None,
+                skill_instance_id: None,
+                instance_ids: Vec::new(),
+                analysis_kind: None,
+                user_intent: Some(
+                    "Explain deterministic remediation plan items using only local catalog evidence."
+                        .to_string(),
+                ),
+            },
+            note: "Prompt preview is unavailable until local catalog evidence exists.".to_string(),
+        },
+        safety_flags: remediation_plan_safety_flags(),
+    }
+}
+
+struct RemediationItemInput {
+    category: &'static str,
+    priority_score: u8,
+    severity: &'static str,
+    title: String,
+    summary: String,
+    detail: String,
+    affected_agent: Option<String>,
+    affected_skill: Option<RemediationAffectedSkill>,
+    affected_capability: Option<String>,
+    affected_task: Option<String>,
+    affected_instance_ids: Vec<String>,
+    suggested_safe_next_action: String,
+    prerequisites: Vec<String>,
+    blockers: Vec<String>,
+    deferred: bool,
+    evidence_refs: Vec<String>,
+}
+
+fn remediation_item(input: RemediationItemInput) -> RemediationPlanItem {
+    let mut affected_instance_ids = input
+        .affected_instance_ids
+        .into_iter()
+        .map(|id| redact_for_llm_preview(&id))
+        .collect::<Vec<_>>();
+    affected_instance_ids.sort();
+    affected_instance_ids.dedup();
+    let id = stable_remediation_item_id(
+        input.category,
+        &input.title,
+        &affected_instance_ids,
+        &input.evidence_refs,
+    );
+    RemediationPlanItem {
+        id,
+        rank: 0,
+        priority: remediation_priority_for_score(input.priority_score),
+        severity: input.severity,
+        category: input.category,
+        title: input.title,
+        summary: input.summary,
+        detail: input.detail,
+        affected_agent: input.affected_agent,
+        affected_skill: input.affected_skill,
+        affected_capability: input.affected_capability,
+        affected_task: input.affected_task,
+        affected_instance_ids,
+        suggested_safe_next_action: input.suggested_safe_next_action,
+        prerequisites: input.prerequisites,
+        blockers: input.blockers,
+        deferred: input.deferred,
+        evidence_refs: input.evidence_refs,
+        side_effect_flags: remediation_side_effect_flags(),
+        safety_flags: remediation_plan_safety_flags(),
+    }
+}
+
+fn remediation_insert_evidence(
+    evidence_by_id: &mut BTreeMap<String, TaskReadinessEvidenceReference>,
+    source_type: &'static str,
+    source_id: &str,
+    label: String,
+    severity: Option<String>,
+    related_instance_id: Option<String>,
+) -> String {
+    let id = format!("{source_type}:{source_id}");
+    evidence_by_id
+        .entry(id.clone())
+        .or_insert_with(|| TaskReadinessEvidenceReference {
+            id: id.clone(),
+            source_type,
+            source_id: redact_for_llm_preview(source_id),
+            label,
+            severity,
+            related_instance_id,
+        });
+    id
+}
+
+fn remediation_affected_skill(skill: &SkillDetailRecord) -> RemediationAffectedSkill {
+    RemediationAffectedSkill {
+        instance_id: skill.id.clone(),
+        definition_id: skill.definition_id.clone(),
+        skill_name: redact_for_llm_preview(&skill.name),
+        agent: skill.agent.clone(),
+        scope: skill.scope.clone(),
+        enabled: skill.enabled,
+        state: skill.state.clone(),
+    }
+}
+
+fn remediation_related_instances_for_finding(
+    finding: &RuleFindingRecord,
+    visible_skill_ids: &BTreeSet<&str>,
+) -> Vec<String> {
+    finding
+        .instance_id
+        .iter()
+        .filter(|id| visible_skill_ids.contains(id.as_str()))
+        .cloned()
+        .collect()
+}
+
+fn remediation_matches_filter(
+    filters: &RemediationPlanFilters,
+    instance_id: Option<&str>,
+    affected_instance_ids: &[String],
+) -> bool {
+    let id_matches = filters.candidate_instance_ids.is_empty()
+        || instance_id.is_some_and(|id| {
+            filters
+                .candidate_instance_ids
+                .iter()
+                .any(|candidate| candidate == id)
+        })
+        || affected_instance_ids.iter().any(|id| {
+            filters
+                .candidate_instance_ids
+                .iter()
+                .any(|candidate| candidate == id)
+        });
+    id_matches
+}
+
+fn remediation_focus_matches(filters: &RemediationPlanFilters, category: &str) -> bool {
+    filters.focus_areas.is_empty()
+        || filters
+            .focus_areas
+            .iter()
+            .any(|focus| focus == category || (focus == "readiness" && category == "gap"))
+}
+
+fn remediation_score_for_severity(severity: &str) -> u8 {
+    match severity {
+        "critical" => 100,
+        "error" => 90,
+        "warning" | "warn" => 72,
+        "info" => 42,
+        _ => 35,
+    }
+}
+
+fn remediation_score_for_priority(priority: &str) -> u8 {
+    match priority {
+        "high" => 86,
+        "medium" => 62,
+        "low" => 34,
+        _ => 30,
+    }
+}
+
+fn remediation_priority_for_score(score: u8) -> &'static str {
+    match score {
+        75..=100 => "high",
+        45..=74 => "medium",
+        _ => "low",
+    }
+}
+
+fn remediation_severity(severity: &str) -> &'static str {
+    match severity {
+        "critical" => "critical",
+        "error" => "error",
+        "warning" | "warn" => "warning",
+        "info" => "info",
+        _ => "info",
+    }
+}
+
+fn remediation_blockers_for_finding(finding: &RuleFindingRecord) -> Vec<String> {
+    let mut blockers = Vec::new();
+    if matches!(finding.effective_severity.as_str(), "critical" | "error") {
+        blockers.push("High-severity local finding requires human review.".to_string());
+    }
+    if finding.suppressed {
+        blockers.push("Finding is suppressed; verify suppression before acting.".to_string());
+    }
+    if !matches!(finding.triage_status.as_str(), "open" | "needs-follow-up") {
+        blockers.push(format!(
+            "Finding triage status is `{}`.",
+            redact_for_llm_preview(&finding.triage_status)
+        ));
+    }
+    blockers
+}
+
+fn remediation_side_effect_flags() -> Vec<&'static str> {
+    vec![
+        "provider_request_sent=false",
+        "write_back_allowed=false",
+        "write_actions_available=false",
+        "skill_files_mutated=false",
+        "agent_config_mutated=false",
+        "script_execution_allowed=false",
+        "snapshot_created=false",
+        "triage_mutation_allowed=false",
+        "credential_accessed=false",
+        "cloud_sync_performed=false",
+        "telemetry_emitted=false",
+    ]
+}
+
+fn stable_remediation_item_id(
+    category: &str,
+    title: &str,
+    affected_instance_ids: &[String],
+    evidence_refs: &[String],
+) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(category.as_bytes());
+    hasher.update(b"\0");
+    hasher.update(title.as_bytes());
+    hasher.update(b"\0");
+    for id in affected_instance_ids {
+        hasher.update(id.as_bytes());
+        hasher.update(b"\0");
+    }
+    for evidence in evidence_refs {
+        hasher.update(evidence.as_bytes());
+        hasher.update(b"\0");
+    }
+    let digest = hasher.finalize();
+    format!("remediation-{}", hex_prefix(&digest, 12))
+}
+
+fn remediation_sorted_items(
+    mut items: Vec<RemediationPlanItem>,
+    filters: &RemediationPlanFilters,
+) -> Vec<RemediationPlanItem> {
+    items.retain(|item| filters.include_deferred || !item.deferred);
+    items.retain(|item| remediation_focus_matches(filters, item.category));
+    items.sort_by(|left, right| {
+        remediation_priority_rank(left.priority)
+            .cmp(&remediation_priority_rank(right.priority))
+            .then_with(|| {
+                severity_rank_for_queue(left.severity).cmp(&severity_rank_for_queue(right.severity))
+            })
+            .then_with(|| left.deferred.cmp(&right.deferred))
+            .then_with(|| left.category.cmp(right.category))
+            .then_with(|| left.title.cmp(&right.title))
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    items.truncate(filters.limit);
+    for (index, item) in items.iter_mut().enumerate() {
+        item.rank = index + 1;
+    }
+    items
+}
+
+fn remediation_priority_rank(priority: &str) -> u8 {
+    match priority {
+        "high" => 0,
+        "medium" => 1,
+        "low" => 2,
+        _ => 3,
+    }
+}
+
+fn remediation_plan_summary(
+    total_item_count: usize,
+    returned_item_count: usize,
+    items: &[RemediationPlanItem],
+) -> RemediationPlanSummary {
+    let high_priority_count = items.iter().filter(|item| item.priority == "high").count();
+    let medium_priority_count = items
+        .iter()
+        .filter(|item| item.priority == "medium")
+        .count();
+    let low_priority_count = items.iter().filter(|item| item.priority == "low").count();
+    let deferred_count = items.iter().filter(|item| item.deferred).count();
+    let category_count = |category: &str| {
+        items
+            .iter()
+            .filter(|item| item.category == category)
+            .count()
+    };
+    let blocker_count = items.iter().map(|item| item.blockers.len()).sum();
+    let summary = if returned_item_count == 0 {
+        "No remediation plan items matched the selected local filters.".to_string()
+    } else {
+        format!(
+            "Remediation planner returned {returned_item_count} of {total_item_count} local read-only item(s): {high_priority_count} high, {medium_priority_count} medium, {low_priority_count} low."
+        )
+    };
+    RemediationPlanSummary {
+        total_item_count,
+        returned_item_count,
+        high_priority_count,
+        medium_priority_count,
+        low_priority_count,
+        deferred_count,
+        finding_item_count: category_count("finding"),
+        gap_item_count: category_count("gap"),
+        ambiguity_item_count: category_count("ambiguity"),
+        drift_item_count: category_count("drift"),
+        readiness_item_count: category_count("readiness"),
+        policy_item_count: category_count("policy"),
+        blocker_count,
+        summary,
+    }
+}
+
+fn remediation_priority_rows(items: &[RemediationPlanItem]) -> Vec<RemediationPriorityRow> {
+    let mut rows = Vec::new();
+    for priority in ["high", "medium", "low"] {
+        let matching = items
+            .iter()
+            .filter(|item| item.priority == priority)
+            .collect::<Vec<_>>();
+        if matching.is_empty() {
+            continue;
+        }
+        let mut category_counts = BTreeMap::new();
+        for item in &matching {
+            *category_counts
+                .entry(item.category.to_string())
+                .or_insert(0) += 1;
+        }
+        rows.push(RemediationPriorityRow {
+            priority,
+            severity: matching
+                .iter()
+                .map(|item| item.severity)
+                .min_by_key(|severity| severity_rank_for_queue(severity))
+                .unwrap_or("info"),
+            item_count: matching.len(),
+            category_counts,
+            top_item_ids: matching
+                .iter()
+                .take(5)
+                .map(|item| item.id.clone())
+                .collect(),
+        });
+    }
+    rows
+}
+
 fn task_readiness_safety_flags() -> TaskReadinessSafetyFlags {
     TaskReadinessSafetyFlags {
         read_only: true,
@@ -15301,6 +16582,125 @@ fn render_workspace_readiness_prompt_section(
     )
 }
 
+fn render_remediation_plan_prompt_section(
+    result: &RemediationPlanResult,
+    redactor: &mut PromptRedactor<'_>,
+) -> String {
+    let items = result
+        .plan_items
+        .iter()
+        .take(10)
+        .map(|item| {
+            format!(
+                "- #{} {} priority={} severity={} category={} affected_agent={} affected_skill={} deferred={} summary={} safe_next_action={} blockers={}",
+                item.rank,
+                redactor.redact(&item.title),
+                item.priority,
+                item.severity,
+                item.category,
+                item.affected_agent
+                    .as_deref()
+                    .map(|value| redactor.redact(value))
+                    .unwrap_or_else(|| "n/a".to_string()),
+                item.affected_skill
+                    .as_ref()
+                    .map(|skill| redactor.redact(&skill.skill_name))
+                    .unwrap_or_else(|| "none".to_string()),
+                item.deferred,
+                redactor.redact(&item.summary),
+                redactor.redact(&item.suggested_safe_next_action),
+                item.blockers
+                    .iter()
+                    .take(3)
+                    .map(|blocker| redactor.redact(blocker))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let priority_rows = result
+        .priority_rows
+        .iter()
+        .map(|row| {
+            format!(
+                "- {} severity={} count={} categories={:?} top={}",
+                row.priority,
+                row.severity,
+                row.item_count,
+                row.category_counts,
+                row.top_item_ids
+                    .iter()
+                    .map(|id| redactor.redact(id))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let evidence = result
+        .evidence_references
+        .iter()
+        .take(16)
+        .map(|reference| {
+            format!(
+                "- {} {} {}",
+                reference.source_type,
+                redactor.redact(&reference.source_id),
+                redactor.redact(&reference.label)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "Remediation plan evidence:\n- catalog_available: {}\n- total_item_count: {}\n- returned_item_count: {}\n- high_priority_count: {}\n- medium_priority_count: {}\n- low_priority_count: {}\n- deferred_count: {}\n- finding_item_count: {}\n- gap_item_count: {}\n- ambiguity_item_count: {}\n- drift_item_count: {}\n- readiness_item_count: {}\n- policy_item_count: {}\n- blocker_count: {}\n- summary: {}\n\nPlan items:\n{}\n\nPriority rows:\n{}\n\nGap notes:\n{}\n\nBlocker notes:\n{}\n\nEvidence references:\n{}\n\nSafety flags: read_only=true, app_local_only=true, provider_request_sent=false, write_back_allowed=false, write_actions_available=false, skill_files_mutated=false, agent_config_mutated=false, script_execution_allowed=false, execution_actions_available=false, config_mutation_allowed=false, snapshot_created=false, triage_mutation_allowed=false, credential_accessed=false, raw_prompt_persisted=false, raw_response_persisted=false, raw_trace_persisted=false, cloud_sync_performed=false, telemetry_emitted=false.",
+        result.catalog_available,
+        result.summary.total_item_count,
+        result.summary.returned_item_count,
+        result.summary.high_priority_count,
+        result.summary.medium_priority_count,
+        result.summary.low_priority_count,
+        result.summary.deferred_count,
+        result.summary.finding_item_count,
+        result.summary.gap_item_count,
+        result.summary.ambiguity_item_count,
+        result.summary.drift_item_count,
+        result.summary.readiness_item_count,
+        result.summary.policy_item_count,
+        result.summary.blocker_count,
+        redactor.redact(&result.summary.summary),
+        if items.is_empty() { "none" } else { &items },
+        if priority_rows.is_empty() {
+            "none"
+        } else {
+            &priority_rows
+        },
+        if result.gap_notes.is_empty() {
+            "none".to_string()
+        } else {
+            result
+                .gap_notes
+                .iter()
+                .take(10)
+                .map(|note| redactor.redact(note))
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+        if result.blocker_notes.is_empty() {
+            "none".to_string()
+        } else {
+            result
+                .blocker_notes
+                .iter()
+                .take(10)
+                .map(|note| redactor.redact(note))
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+        if evidence.is_empty() { "none" } else { &evidence },
+    )
+}
+
 fn render_routing_confidence_prompt_section(
     ranking: &SkillRouteRankingResult,
     redactor: &mut PromptRedactor<'_>,
@@ -15672,6 +17072,7 @@ mod tests {
             "knowledge.buildCapabilityTaxonomy".to_string()
         )));
         assert!(methods.contains(&Value::String("workspace.checkReadiness".to_string())));
+        assert!(methods.contains(&Value::String("remediation.plan".to_string())));
         assert!(methods.contains(&Value::String("task.checkReadiness".to_string())));
         assert!(methods.contains(&Value::String("task.rankSkillRoutes".to_string())));
         assert!(methods.contains(&Value::String("task.compareAgentReadiness".to_string())));
@@ -22039,6 +23440,283 @@ mod tests {
     }
 
     #[test]
+    fn remediation_plan_returns_prioritized_local_read_only_items() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-remediation-plan-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_similar_grouping_fixture(&host);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let result = host
+            .plan_remediation(RemediationPlanParams {
+                agent: None,
+                task: Some("Validate release readiness and privacy evidence".to_string()),
+                project_root: None,
+                focus: None,
+                focus_areas: Vec::new(),
+                limit: Some(10),
+                candidate_instance_ids: Vec::new(),
+                include_deferred: true,
+            })
+            .expect("remediation plan");
+
+        assert_eq!(result.generated_by, "deterministic-service");
+        assert!(result.catalog_available);
+        assert!(!result.plan_items.is_empty());
+        assert_eq!(result.summary.returned_item_count, result.plan_items.len());
+        assert!(result.summary.total_item_count >= result.summary.returned_item_count);
+        assert!(result.summary.finding_item_count > 0);
+        assert!(result.summary.ambiguity_item_count > 0 || result.summary.drift_item_count > 0);
+        assert!(!result.priority_rows.is_empty());
+        assert_eq!(result.prompt_request.action, "remediation_plan");
+        assert_eq!(
+            result.prompt_request.request.action,
+            LlmPromptActionKind::RemediationPlan
+        );
+        assert_agent_readiness_safety_flags(&WireAgentReadinessSafetyFlags {
+            read_only: result.safety_flags.read_only,
+            app_local_only: result.safety_flags.app_local_only,
+            provider_request_sent: result.safety_flags.provider_request_sent,
+            write_back_allowed: result.safety_flags.write_back_allowed,
+            write_actions_available: result.safety_flags.write_actions_available,
+            skill_files_mutated: result.safety_flags.skill_files_mutated,
+            agent_config_mutated: result.safety_flags.agent_config_mutated,
+            script_execution_allowed: result.safety_flags.script_execution_allowed,
+            execution_actions_available: result.safety_flags.execution_actions_available,
+            config_mutation_allowed: result.safety_flags.config_mutation_allowed,
+            snapshot_created: result.safety_flags.snapshot_created,
+            triage_mutation_allowed: result.safety_flags.triage_mutation_allowed,
+            credential_accessed: result.safety_flags.credential_accessed,
+            raw_secret_returned: result.safety_flags.raw_secret_returned,
+            raw_prompt_persisted: result.safety_flags.raw_prompt_persisted,
+            raw_response_persisted: result.safety_flags.raw_response_persisted,
+            raw_trace_persisted: result.safety_flags.raw_trace_persisted,
+            cloud_sync_performed: result.safety_flags.cloud_sync_performed,
+            telemetry_emitted: result.safety_flags.telemetry_emitted,
+        });
+        assert!(result.plan_items.iter().all(|item| {
+            item.rank > 0
+                && item.safety_flags.read_only
+                && !item.safety_flags.provider_request_sent
+                && !item.safety_flags.write_back_allowed
+                && item
+                    .side_effect_flags
+                    .iter()
+                    .any(|flag| *flag == "skill_files_mutated=false")
+        }));
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn remediation_plan_missing_catalog_returns_safe_empty_result() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-remediation-empty-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let result = host
+            .plan_remediation(RemediationPlanParams::default())
+            .expect("empty remediation plan");
+
+        assert!(!result.catalog_available);
+        assert_eq!(result.summary.returned_item_count, 0);
+        assert!(result.plan_items.is_empty());
+        assert!(!result.prompt_request.available);
+        assert!(result.safety_flags.read_only);
+        assert!(result.safety_flags.app_local_only);
+        assert!(!result.safety_flags.provider_request_sent);
+        assert!(!result.safety_flags.write_back_allowed);
+        assert!(!result.safety_flags.skill_files_mutated);
+        assert!(!result.safety_flags.agent_config_mutated);
+        assert!(!result.safety_flags.script_execution_allowed);
+        assert!(!result.safety_flags.credential_accessed);
+        assert!(!host.catalog_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn remediation_plan_rejects_invalid_limit_without_writes() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-remediation-invalid-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("remediation-invalid".to_string()),
+            method: "remediation.plan".to_string(),
+            params: json!({ "limit": 0 }),
+        });
+
+        assert!(!response.ok);
+        let error = response.error.expect("invalid remediation error");
+        assert_eq!(error.code, "invalid_request");
+        assert!(error.message.contains("limit"));
+        assert!(
+            !app_data_dir.exists(),
+            "invalid remediation request must not initialize app data"
+        );
+    }
+
+    #[test]
+    fn remediation_plan_preserves_provider_write_and_privacy_boundaries() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-remediation-safety-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-remediation-safety-home-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_similar_grouping_fixture(&host);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("remediation-safety".to_string()),
+            method: "remediation.plan".to_string(),
+            params: json!({
+                "task_text": "release readiness token=fixture-redacted-value",
+                "focus_areas": ["finding", "drift", "ambiguity"],
+                "candidate_instance_ids": ["similar-claude-a", "similar-codex-a"],
+                "limit": 8
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("remediation safety result");
+        assert_agent_readiness_safety(&result);
+        assert_eq!(
+            result
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/write_actions_available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let serialized = serde_json::to_string(&result).expect("serialize remediation result");
+        assert!(!serialized.contains(&app_data_dir.to_string_lossy().to_string()));
+        assert!(!serialized.contains(&user_home.to_string_lossy().to_string()));
+        assert!(!serialized.contains("fixture-redacted-value"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn remediation_plan_prompt_preview_is_redacted_and_preview_only() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-remediation-prompt-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_similar_grouping_fixture(&host);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("remediation-preview".to_string()),
+            method: "llm.previewPrompt".to_string(),
+            params: json!({
+                "action": "remediation_plan",
+                "user_intent": "Plan local remediation for /tmp/home/private-project with secret-token=fixture-redacted-value",
+                "instance_ids": ["similar-claude-a", "similar-codex-a"]
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let preview: WireLlmPreviewPromptResult =
+            serde_json::from_value(response.result.expect("preview result"))
+                .expect("decode remediation prompt preview");
+        assert_eq!(preview.action, "remediation_plan");
+        assert!(preview.prompt_preview.contains("Remediation plan evidence"));
+        assert!(!preview.prompt_preview.contains("fixture-redacted-value"));
+        assert!(!preview.provider_request_sent);
+        assert!(!preview.write_back_allowed);
+        assert!(preview.draft_requires_user_copy);
+        assert!(!preview.raw_prompt_persisted);
+        assert!(!preview.raw_response_persisted);
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
     fn workspace_check_readiness_returns_local_read_only_checklist() {
         let app_data_dir = env::temp_dir().join(format!(
             "skills-copilot-workspace-readiness-test-{}-{}",
@@ -22469,6 +24147,33 @@ mod tests {
                     LlmPromptActionKind::WorkspaceReadiness
                 );
                 assert_agent_readiness_safety_flags(&readiness.safety_flags);
+            }
+            "remediation.plan" => {
+                let plan: WireRemediationPlanResult = decode_fixture_result(method, result, path);
+                assert_eq!(plan.generated_by, "deterministic-service");
+                assert!(plan.catalog_available);
+                assert_eq!(plan.summary.returned_item_count, plan.plan_items.len());
+                assert!(!plan.plan_items.is_empty());
+                assert!(!plan.priority_rows.is_empty());
+                assert_eq!(plan.prompt_request.action, "remediation_plan");
+                assert_eq!(plan.prompt_request.preview_method, "llm.previewPrompt");
+                assert_eq!(
+                    plan.prompt_request.request.action,
+                    LlmPromptActionKind::RemediationPlan
+                );
+                assert_agent_readiness_safety_flags(&plan.safety_flags);
+                for item in &plan.plan_items {
+                    assert!(item.rank > 0);
+                    assert_agent_readiness_safety_flags(&item.safety_flags);
+                    assert!(item
+                        .side_effect_flags
+                        .iter()
+                        .any(|flag| flag == "provider_request_sent=false"));
+                    assert!(item
+                        .side_effect_flags
+                        .iter()
+                        .any(|flag| flag == "write_back_allowed=false"));
+                }
             }
             "task.checkReadiness" => {
                 let readiness: WireTaskReadinessResult =
@@ -23346,6 +25051,11 @@ mod tests {
             "workspace.checkReadiness" => json!({
                 "task": "fixture workspace readiness check",
                 "expected_capabilities": ["Release & Validation", "Security & Privacy"],
+                "limit": 4
+            }),
+            "remediation.plan" => json!({
+                "task": "fixture remediation planning check",
+                "focus_areas": ["finding", "gap", "ambiguity", "drift", "readiness"],
                 "limit": 4
             }),
             "task.checkReadiness" => json!({ "task": "fixture task readiness check" }),
@@ -24266,6 +25976,106 @@ mod tests {
         gap_notes: Vec<String>,
         blocker_notes: Vec<String>,
         evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationPlanResult {
+        generated_by: String,
+        catalog_available: bool,
+        filters: WireRemediationPlanFilters,
+        summary: WireRemediationPlanSummary,
+        plan_items: Vec<WireRemediationPlanItem>,
+        priority_rows: Vec<WireRemediationPriorityRow>,
+        gap_notes: Vec<String>,
+        blocker_notes: Vec<String>,
+        evidence_references: Vec<WireTaskReadinessEvidenceReference>,
+        prompt_request: WireAgentReadinessPromptRequest,
+        safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationPlanFilters {
+        agent: Option<String>,
+        task: Option<String>,
+        project_root: Option<String>,
+        focus_areas: Vec<String>,
+        limit: usize,
+        candidate_instance_ids: Vec<String>,
+        include_deferred: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationPlanSummary {
+        total_item_count: usize,
+        returned_item_count: usize,
+        high_priority_count: usize,
+        medium_priority_count: usize,
+        low_priority_count: usize,
+        deferred_count: usize,
+        finding_item_count: usize,
+        gap_item_count: usize,
+        ambiguity_item_count: usize,
+        drift_item_count: usize,
+        readiness_item_count: usize,
+        policy_item_count: usize,
+        blocker_count: usize,
+        summary: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationPlanItem {
+        id: String,
+        rank: usize,
+        priority: String,
+        severity: String,
+        category: String,
+        title: String,
+        summary: String,
+        detail: String,
+        affected_agent: Option<String>,
+        affected_skill: Option<WireRemediationAffectedSkill>,
+        affected_capability: Option<String>,
+        affected_task: Option<String>,
+        affected_instance_ids: Vec<String>,
+        suggested_safe_next_action: String,
+        prerequisites: Vec<String>,
+        blockers: Vec<String>,
+        deferred: bool,
+        evidence_refs: Vec<String>,
+        side_effect_flags: Vec<String>,
+        safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationAffectedSkill {
+        instance_id: String,
+        definition_id: String,
+        skill_name: String,
+        agent: String,
+        scope: String,
+        enabled: bool,
+        state: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationPriorityRow {
+        priority: String,
+        severity: String,
+        item_count: usize,
+        category_counts: BTreeMap<String, usize>,
+        top_item_ids: Vec<String>,
     }
 
     #[allow(dead_code)]
