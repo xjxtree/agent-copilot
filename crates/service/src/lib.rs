@@ -63,6 +63,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "evidence.piWritableHarness",
     "analysis.scoreSkillQuality",
     "task.checkReadiness",
+    "task.rankSkillRoutes",
     "llm.status",
     "llm.listProviderProfiles",
     "llm.saveProviderProfile",
@@ -570,6 +571,85 @@ pub struct TaskReadinessSafetyFlags {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct RankSkillRoutesParams {
+    #[serde(alias = "user_intent", alias = "task_text")]
+    pub task: String,
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default, alias = "instance_ids")]
+    pub candidate_instance_ids: Vec<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SkillRouteRankingResult {
+    pub task: String,
+    pub overall_confidence_score: u8,
+    pub overall_confidence_band: &'static str,
+    pub summary: String,
+    pub generated_by: &'static str,
+    pub catalog_available: bool,
+    pub filters: TaskReadinessFilters,
+    pub route_candidates: Vec<SkillRouteCandidate>,
+    pub ambiguity_warnings: Vec<String>,
+    pub likely_wrong_pick_risks: Vec<String>,
+    pub likely_miss_risks: Vec<String>,
+    pub evidence_references: Vec<TaskReadinessEvidenceReference>,
+    pub prompt_request: RoutingConfidencePromptRequest,
+    pub safety_flags: RoutingConfidenceSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SkillRouteCandidate {
+    pub rank: usize,
+    pub instance_id: String,
+    pub definition_id: String,
+    pub skill_name: String,
+    pub agent: String,
+    pub scope: String,
+    pub enabled: bool,
+    pub state: String,
+    pub confidence_score: u8,
+    pub confidence_band: &'static str,
+    pub readiness_score: u8,
+    pub readiness_band: &'static str,
+    pub quality_score: Option<u8>,
+    pub match_reasons: Vec<String>,
+    pub confidence_rationale: Vec<String>,
+    pub ambiguity_warnings: Vec<String>,
+    pub likely_wrong_pick_risks: Vec<String>,
+    pub likely_miss_risks: Vec<String>,
+    pub enabled_scope_risk_state: TaskReadinessState,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RoutingConfidencePromptRequest {
+    pub available: bool,
+    pub preview_method: &'static str,
+    pub confirm_method: &'static str,
+    pub action: &'static str,
+    pub request: LlmPreviewPromptParams,
+    pub note: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RoutingConfidenceSafetyFlags {
+    pub read_only: bool,
+    pub provider_request_sent: bool,
+    pub write_back_allowed: bool,
+    pub script_execution_allowed: bool,
+    pub config_mutation_allowed: bool,
+    pub snapshot_created: bool,
+    pub triage_mutation_allowed: bool,
+    pub credential_accessed: bool,
+    pub raw_secret_returned: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct LlmPrepareActionParams {
     pub kind: LlmActionKind,
     #[serde(default, alias = "instance_id")]
@@ -628,6 +708,7 @@ pub enum LlmPromptActionKind {
     SkillAnalysis,
     QualityScore,
     TaskReadiness,
+    RoutingConfidence,
 }
 
 impl LlmPromptActionKind {
@@ -640,6 +721,7 @@ impl LlmPromptActionKind {
             Self::SkillAnalysis => "skill_analysis",
             Self::QualityScore => "quality_score",
             Self::TaskReadiness => "task_readiness",
+            Self::RoutingConfidence => "routing_confidence",
         }
     }
 }
@@ -1156,6 +1238,10 @@ impl ServiceHost {
             "task.checkReadiness" => {
                 let params: TaskReadinessParams = serde_json::from_value(request.params)?;
                 serde_json::to_value(self.check_task_readiness(params)?).map_err(Into::into)
+            }
+            "task.rankSkillRoutes" => {
+                let params: RankSkillRoutesParams = serde_json::from_value(request.params)?;
+                serde_json::to_value(self.rank_skill_routes(params)?).map_err(Into::into)
             }
             "llm.status" => serde_json::to_value(self.llm_status()).map_err(Into::into),
             "llm.listProviderProfiles" => {
@@ -2701,6 +2787,25 @@ impl ServiceHost {
         })
     }
 
+    pub fn rank_skill_routes(
+        &self,
+        params: RankSkillRoutesParams,
+    ) -> Result<SkillRouteRankingResult, ServiceError> {
+        let task = params.task.trim();
+        if task.is_empty() {
+            return Err(ServiceError::InvalidRequest(
+                "task.rankSkillRoutes requires a non-empty task".to_string(),
+            ));
+        }
+        let readiness = self.check_task_readiness(TaskReadinessParams {
+            task: task.to_string(),
+            agent: params.agent,
+            candidate_instance_ids: params.candidate_instance_ids,
+            limit: params.limit,
+        })?;
+        Ok(skill_route_ranking_from_readiness(readiness))
+    }
+
     pub fn script_execution_status(&self) -> ScriptExecutionStatus {
         ScriptExecutionStatus {
             enabled: false,
@@ -2938,6 +3043,52 @@ impl ServiceHost {
                     &mut redactor,
                 ));
             }
+            LlmPromptActionKind::RoutingConfidence => {
+                let task = params.user_intent.as_deref().ok_or_else(|| {
+                    ServiceError::InvalidRequest(
+                        "llm.previewPrompt routing_confidence requires user_intent/task"
+                            .to_string(),
+                    )
+                })?;
+                let ranking = self.rank_skill_routes(RankSkillRoutesParams {
+                    task: task.to_string(),
+                    agent: None,
+                    candidate_instance_ids: params.instance_ids.clone(),
+                    limit: Some(8),
+                })?;
+                prompt_scope.extend([
+                    "deterministic routing confidence score".to_string(),
+                    "ordered route candidates".to_string(),
+                    "confidence rationale".to_string(),
+                    "ambiguity and wrong-pick risks".to_string(),
+                    "miss risks".to_string(),
+                    "evidence reference summaries".to_string(),
+                    "safety flags".to_string(),
+                ]);
+                included_fields.extend([
+                    "redacted task intent".to_string(),
+                    "ranked candidate skill ids".to_string(),
+                    "skill names".to_string(),
+                    "agents".to_string(),
+                    "scopes".to_string(),
+                    "enabled states".to_string(),
+                    "routing confidence scores and bands".to_string(),
+                    "readiness and quality score summaries".to_string(),
+                    "ambiguity, wrong-pick, and miss risks".to_string(),
+                    "finding/conflict/analysis evidence ids and labels".to_string(),
+                    "read-only safety flags".to_string(),
+                ]);
+                excluded_fields.extend([
+                    "raw source paths".to_string(),
+                    "raw provider response".to_string(),
+                    "agent config contents".to_string(),
+                    "raw skill body".to_string(),
+                ]);
+                sections.push(render_routing_confidence_prompt_section(
+                    &ranking,
+                    &mut redactor,
+                ));
+            }
         }
 
         sections.push("Required output: concise draft guidance with evidence notes, uncertainty, and safe next steps. Mark all suggestions copy-only.".to_string());
@@ -2952,6 +3103,7 @@ impl ServiceHost {
                 .output_token_estimate(),
             LlmPromptActionKind::QualityScore => 650,
             LlmPromptActionKind::TaskReadiness => 750,
+            LlmPromptActionKind::RoutingConfidence => 850,
         };
         let prompt_preview = sections.join("\n\n");
         let redaction = redactor.summary();
@@ -4864,6 +5016,391 @@ fn task_readiness_blocker_notes(candidates: &[TaskReadinessCandidate]) -> Vec<St
     notes
 }
 
+fn routing_confidence_safety_flags() -> RoutingConfidenceSafetyFlags {
+    RoutingConfidenceSafetyFlags {
+        read_only: true,
+        provider_request_sent: false,
+        write_back_allowed: false,
+        script_execution_allowed: false,
+        config_mutation_allowed: false,
+        snapshot_created: false,
+        triage_mutation_allowed: false,
+        credential_accessed: false,
+        raw_secret_returned: false,
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+    }
+}
+
+fn skill_route_ranking_from_readiness(readiness: TaskReadinessResult) -> SkillRouteRankingResult {
+    let top_score = readiness
+        .candidate_skills
+        .first()
+        .map(|candidate| candidate.score)
+        .unwrap_or(0);
+    let mut route_candidates = Vec::new();
+    for (index, candidate) in readiness.candidate_skills.iter().enumerate() {
+        let next_score = readiness
+            .candidate_skills
+            .get(index + 1)
+            .map(|candidate| candidate.score);
+        let confidence_score = route_confidence_score(candidate, index, top_score, next_score);
+        let confidence_band = routing_confidence_band(confidence_score);
+        let confidence_rationale =
+            route_confidence_rationale(candidate, index, confidence_score, next_score);
+        let ambiguity_warnings =
+            route_candidate_ambiguity_warnings(candidate, index, top_score, next_score);
+        let likely_wrong_pick_risks =
+            route_candidate_wrong_pick_risks(candidate, index, next_score, &ambiguity_warnings);
+        let likely_miss_risks = route_candidate_miss_risks(candidate);
+        route_candidates.push(SkillRouteCandidate {
+            rank: index + 1,
+            instance_id: candidate.instance_id.clone(),
+            definition_id: candidate.definition_id.clone(),
+            skill_name: candidate.skill_name.clone(),
+            agent: candidate.agent.clone(),
+            scope: candidate.scope.clone(),
+            enabled: candidate.enabled,
+            state: candidate.state.clone(),
+            confidence_score,
+            confidence_band,
+            readiness_score: candidate.score,
+            readiness_band: candidate.band,
+            quality_score: candidate.quality_score,
+            match_reasons: candidate.match_reasons.clone(),
+            confidence_rationale,
+            ambiguity_warnings,
+            likely_wrong_pick_risks,
+            likely_miss_risks,
+            enabled_scope_risk_state: candidate.enabled_scope_risk_state.clone(),
+            evidence_refs: candidate.evidence_refs.clone(),
+        });
+    }
+
+    let ambiguity_warnings = routing_ambiguity_warnings(&route_candidates);
+    let likely_wrong_pick_risks = routing_wrong_pick_risks(&route_candidates);
+    let likely_miss_risks = routing_miss_risks(&route_candidates, &readiness);
+    let overall_confidence_score = routing_overall_confidence_score(&route_candidates);
+    let overall_confidence_band = routing_confidence_band(overall_confidence_score);
+    let prompt_instance_ids = route_candidates
+        .iter()
+        .take(8)
+        .map(|candidate| candidate.instance_id.clone())
+        .collect::<Vec<_>>();
+    let prompt_available = readiness.catalog_available && !route_candidates.is_empty();
+
+    SkillRouteRankingResult {
+        task: readiness.task.clone(),
+        overall_confidence_score,
+        overall_confidence_band,
+        summary: routing_confidence_summary(
+            overall_confidence_score,
+            overall_confidence_band,
+            &route_candidates,
+            &ambiguity_warnings,
+            &likely_miss_risks,
+        ),
+        generated_by: "deterministic-service",
+        catalog_available: readiness.catalog_available,
+        filters: readiness.filters,
+        route_candidates,
+        ambiguity_warnings,
+        likely_wrong_pick_risks,
+        likely_miss_risks,
+        evidence_references: readiness.evidence_references,
+        prompt_request: RoutingConfidencePromptRequest {
+            available: prompt_available,
+            preview_method: "llm.previewPrompt",
+            confirm_method: "llm.confirmPromptAndSend",
+            action: "routing_confidence",
+            request: LlmPreviewPromptParams {
+                action: LlmPromptActionKind::RoutingConfidence,
+                profile_id: None,
+                skill_instance_id: None,
+                instance_ids: prompt_instance_ids,
+                analysis_kind: None,
+                user_intent: Some(readiness.task),
+            },
+            note: if prompt_available {
+                "Optional provider-backed explanation must be requested through prompt preview and explicit confirmation; task.rankSkillRoutes never sends provider traffic."
+                    .to_string()
+            } else {
+                "Prompt preview is unavailable until local catalog evidence produces route candidates."
+                    .to_string()
+            },
+        },
+        safety_flags: routing_confidence_safety_flags(),
+    }
+}
+
+fn route_confidence_score(
+    candidate: &TaskReadinessCandidate,
+    index: usize,
+    top_score: u8,
+    next_score: Option<u8>,
+) -> u8 {
+    let quality_component = candidate.quality_score.unwrap_or(50) as i16 / 10;
+    let mut score = candidate.score as i16 + quality_component - 5;
+    if index == 0 {
+        let margin = candidate.score.saturating_sub(next_score.unwrap_or(0));
+        score += match margin {
+            20..=u8::MAX => 8,
+            10..=19 => 4,
+            6..=9 => 0,
+            1..=5 => -8,
+            0 => -12,
+        };
+    } else {
+        let gap = top_score.saturating_sub(candidate.score);
+        score -= (index as i16 * 5).min(20);
+        if gap <= 5 {
+            score += 4;
+        }
+    }
+    score -= match candidate.enabled_scope_risk_state.risk_level {
+        "blocked" => 18,
+        "high" => 12,
+        "medium" => 6,
+        _ => 0,
+    };
+    if !candidate.enabled {
+        score -= 12;
+    }
+    if candidate.state != "loaded" {
+        score -= 12;
+    }
+    score.clamp(0, 100) as u8
+}
+
+fn routing_confidence_band(score: u8) -> &'static str {
+    match score {
+        80..=100 => "high",
+        60..=79 => "medium",
+        35..=59 => "low",
+        1..=34 => "weak",
+        _ => "blocked",
+    }
+}
+
+fn route_confidence_rationale(
+    candidate: &TaskReadinessCandidate,
+    index: usize,
+    confidence_score: u8,
+    next_score: Option<u8>,
+) -> Vec<String> {
+    let mut rationale = vec![format!(
+        "Rank {} combines readiness score {} ({}) with local quality score {} and risk level {}.",
+        index + 1,
+        candidate.score,
+        candidate.band,
+        candidate
+            .quality_score
+            .map(|score| score.to_string())
+            .unwrap_or_else(|| "n/a".to_string()),
+        candidate.enabled_scope_risk_state.risk_level
+    )];
+    if index == 0 {
+        match next_score {
+            Some(next) => rationale.push(format!(
+                "Top route leads the next visible candidate by {} readiness point(s).",
+                candidate.score.saturating_sub(next)
+            )),
+            None => rationale.push("Only one visible route candidate was ranked.".to_string()),
+        }
+    }
+    if confidence_score < candidate.score {
+        rationale.push(
+            "Confidence is below readiness because ambiguity, risk, or enablement state reduces selection certainty."
+                .to_string(),
+        );
+    }
+    rationale
+}
+
+fn route_candidate_ambiguity_warnings(
+    candidate: &TaskReadinessCandidate,
+    index: usize,
+    top_score: u8,
+    next_score: Option<u8>,
+) -> Vec<String> {
+    let mut warnings = Vec::new();
+    if index == 0 {
+        if let Some(next) = next_score {
+            let margin = candidate.score.saturating_sub(next);
+            if margin <= 8 {
+                warnings.push(format!(
+                    "Top route is separated from the next candidate by only {margin} readiness point(s)."
+                ));
+            }
+        }
+    } else if top_score.saturating_sub(candidate.score) <= 8 {
+        warnings.push(
+            "This candidate is close enough to the top route to create deterministic routing ambiguity."
+                .to_string(),
+        );
+    }
+    if candidate
+        .blocker_risk_notes
+        .iter()
+        .any(|note| note.contains("conflict") || note.contains("duplicate_name"))
+    {
+        warnings.push(
+            "Conflict or duplicate-name evidence may make runtime route selection ambiguous."
+                .to_string(),
+        );
+    }
+    warnings
+}
+
+fn route_candidate_wrong_pick_risks(
+    candidate: &TaskReadinessCandidate,
+    index: usize,
+    next_score: Option<u8>,
+    ambiguity_warnings: &[String],
+) -> Vec<String> {
+    let mut risks = Vec::new();
+    if index == 0 && !ambiguity_warnings.is_empty() {
+        risks.push("The top local route has close or overlapping alternatives.".to_string());
+    }
+    if index == 0 && next_score.is_some_and(|score| candidate.score.saturating_sub(score) <= 5) {
+        risks.push(
+            "A small score margin means wording changes could pick a different skill.".to_string(),
+        );
+    }
+    if candidate.enabled_scope_risk_state.risk_level == "high" {
+        risks.push(
+            "High local risk evidence could make this route a poor default pick.".to_string(),
+        );
+    }
+    if candidate
+        .match_reasons
+        .iter()
+        .any(|reason| reason.contains("No direct lexical overlap"))
+    {
+        risks.push("Task fit is weak, so selecting this skill may be a wrong pick.".to_string());
+    }
+    risks
+}
+
+fn route_candidate_miss_risks(candidate: &TaskReadinessCandidate) -> Vec<String> {
+    let mut risks = candidate.missing_gap_notes.clone();
+    if !candidate.enabled {
+        risks.push("Disabled state means this skill may be missed by runtime routing.".to_string());
+    }
+    if candidate.state != "loaded" {
+        risks.push(format!(
+            "State `{}` means this skill may be unavailable when routing.",
+            redact_for_llm_preview(&candidate.state)
+        ));
+    }
+    risks
+}
+
+fn routing_overall_confidence_score(candidates: &[SkillRouteCandidate]) -> u8 {
+    let Some(best) = candidates.first() else {
+        return 0;
+    };
+    let second = candidates
+        .get(1)
+        .map(|candidate| candidate.confidence_score)
+        .unwrap_or(0);
+    let margin_bonus = best.confidence_score.saturating_sub(second).min(15) / 3;
+    ((u16::from(best.confidence_score) * 4 + u16::from(second)) / 5)
+        .saturating_add(u16::from(margin_bonus))
+        .min(100) as u8
+}
+
+fn routing_ambiguity_warnings(candidates: &[SkillRouteCandidate]) -> Vec<String> {
+    let mut warnings = candidates
+        .iter()
+        .flat_map(|candidate| candidate.ambiguity_warnings.iter().cloned())
+        .collect::<Vec<_>>();
+    if let (Some(first), Some(second)) = (candidates.first(), candidates.get(1)) {
+        let margin = first
+            .confidence_score
+            .saturating_sub(second.confidence_score);
+        if margin <= 8 {
+            warnings.push(format!(
+                "Top two route candidates are within {margin} confidence point(s)."
+            ));
+        }
+    }
+    warnings.sort();
+    warnings.dedup();
+    warnings.truncate(10);
+    warnings
+}
+
+fn routing_wrong_pick_risks(candidates: &[SkillRouteCandidate]) -> Vec<String> {
+    let mut risks = candidates
+        .iter()
+        .flat_map(|candidate| candidate.likely_wrong_pick_risks.iter().cloned())
+        .collect::<Vec<_>>();
+    if risks.is_empty() && !candidates.is_empty() {
+        risks.push(
+            "No likely wrong-pick risk was detected beyond normal lexical matching uncertainty."
+                .to_string(),
+        );
+    }
+    risks.sort();
+    risks.dedup();
+    risks.truncate(10);
+    risks
+}
+
+fn routing_miss_risks(
+    candidates: &[SkillRouteCandidate],
+    readiness: &TaskReadinessResult,
+) -> Vec<String> {
+    let mut risks = candidates
+        .iter()
+        .flat_map(|candidate| candidate.likely_miss_risks.iter().cloned())
+        .collect::<Vec<_>>();
+    risks.extend(readiness.missing_gap_notes.iter().cloned());
+    if candidates.is_empty() {
+        risks.push("No route candidates were available from local catalog evidence.".to_string());
+    } else if candidates
+        .iter()
+        .all(|candidate| candidate.confidence_score < 60)
+    {
+        risks.push(
+            "All visible route candidates have low confidence, so the task may miss the intended skill."
+                .to_string(),
+        );
+    }
+    risks.sort();
+    risks.dedup();
+    risks.truncate(10);
+    risks
+}
+
+fn routing_confidence_summary(
+    score: u8,
+    band: &'static str,
+    candidates: &[SkillRouteCandidate],
+    ambiguity_warnings: &[String],
+    miss_risks: &[String],
+) -> String {
+    match candidates.first() {
+        Some(best) => format!(
+            "Routing confidence is {band} ({score}/100). Top route is #{} `{}` for {} with confidence {} and {} ambiguity warning(s).",
+            best.rank,
+            best.skill_name,
+            best.agent,
+            best.confidence_score,
+            ambiguity_warnings.len()
+        ),
+        None if miss_risks.is_empty() => {
+            "Routing confidence is blocked because no local route candidates were available."
+                .to_string()
+        }
+        None => format!(
+            "Routing confidence is blocked because no local route candidates were available. {}",
+            miss_risks.join(" ")
+        ),
+    }
+}
+
 fn push_task_readiness_evidence(
     evidence: &mut Vec<TaskReadinessEvidenceReference>,
     source_type: &'static str,
@@ -5364,6 +5901,99 @@ fn render_task_readiness_prompt_section(
     )
 }
 
+fn render_routing_confidence_prompt_section(
+    ranking: &SkillRouteRankingResult,
+    redactor: &mut PromptRedactor<'_>,
+) -> String {
+    let candidates = ranking
+        .route_candidates
+        .iter()
+        .take(8)
+        .map(|candidate| {
+            format!(
+                "- #{} {} ({}, {}, enabled={}, state={}): confidence={} band={} readiness={} quality={} risk={}; rationale={}; ambiguity={}",
+                candidate.rank,
+                redactor.redact(&candidate.skill_name),
+                redactor.redact(&candidate.agent),
+                redactor.redact(&candidate.scope),
+                candidate.enabled,
+                redactor.redact(&candidate.state),
+                candidate.confidence_score,
+                candidate.confidence_band,
+                candidate.readiness_score,
+                candidate
+                    .quality_score
+                    .map(|score| score.to_string())
+                    .unwrap_or_else(|| "n/a".to_string()),
+                candidate.enabled_scope_risk_state.risk_level,
+                candidate
+                    .confidence_rationale
+                    .iter()
+                    .take(3)
+                    .map(|rationale| redactor.redact(rationale))
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                candidate
+                    .ambiguity_warnings
+                    .iter()
+                    .take(2)
+                    .map(|warning| redactor.redact(warning))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let ambiguity = ranking
+        .ambiguity_warnings
+        .iter()
+        .take(8)
+        .map(|warning| format!("- {}", redactor.redact(warning)))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let wrong_pick = ranking
+        .likely_wrong_pick_risks
+        .iter()
+        .take(8)
+        .map(|risk| format!("- {}", redactor.redact(risk)))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let miss = ranking
+        .likely_miss_risks
+        .iter()
+        .take(8)
+        .map(|risk| format!("- {}", redactor.redact(risk)))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let evidence = ranking
+        .evidence_references
+        .iter()
+        .take(16)
+        .map(|reference| {
+            format!(
+                "- {} {} {}",
+                reference.source_type,
+                redactor.redact(&reference.source_id),
+                redactor.redact(&reference.label)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "Routing confidence evidence:\n- task: {}\n- overall_confidence_score: {} / 100\n- overall_confidence_band: {}\n- summary: {}\n- catalog_available: {}\n\nRoute candidates:\n{}\n\nAmbiguity warnings:\n{}\n\nLikely wrong-pick risks:\n{}\n\nLikely miss risks:\n{}\n\nEvidence references:\n{}\n\nSafety flags: read_only=true, provider_request_sent=false, write_back_allowed=false, script_execution_allowed=false, config_mutation_allowed=false, snapshot_created=false, triage_mutation_allowed=false, credential_accessed=false, raw_prompt_persisted=false, raw_response_persisted=false.",
+        redactor.redact(&ranking.task),
+        ranking.overall_confidence_score,
+        ranking.overall_confidence_band,
+        redactor.redact(&ranking.summary),
+        ranking.catalog_available,
+        if candidates.is_empty() { "none" } else { &candidates },
+        if ambiguity.is_empty() { "none" } else { &ambiguity },
+        if wrong_pick.is_empty() { "none" } else { &wrong_pick },
+        if miss.is_empty() { "none" } else { &miss },
+        if evidence.is_empty() { "none" } else { &evidence },
+    )
+}
+
 fn llm_skill_analysis_safety_flags() -> LlmSkillAnalysisSafetyFlags {
     LlmSkillAnalysisSafetyFlags {
         write_back_enabled: false,
@@ -5595,6 +6225,7 @@ mod tests {
         assert!(methods.contains(&Value::String("adapter.listDiagnostics".to_string())));
         assert!(methods.contains(&Value::String("analysis.scoreSkillQuality".to_string())));
         assert!(methods.contains(&Value::String("task.checkReadiness".to_string())));
+        assert!(methods.contains(&Value::String("task.rankSkillRoutes".to_string())));
         assert!(methods.contains(&Value::String("llm.status".to_string())));
         assert!(methods.contains(&Value::String("llm.listProviderProfiles".to_string())));
         assert!(methods.contains(&Value::String("llm.saveProviderProfile".to_string())));
@@ -7215,6 +7846,264 @@ mod tests {
     }
 
     #[test]
+    fn task_rank_skill_routes_returns_local_read_only_ranking() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-routing-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-routing-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        let skill_path = app_data_dir.join("fixture-skill").join("SKILL.md");
+        seed_catalog_with_llm_skill(&host, &skill_path);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("routing-rank".to_string()),
+            method: "task.rankSkillRoutes".to_string(),
+            params: json!({
+                "task": "Analyze local skill posture and execution safety",
+                "agent": "claude-code",
+                "candidate_instance_ids": ["llm-skill-id"],
+                "limit": 4
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("routing confidence result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("deterministic-service")
+        );
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert!(result
+            .get("overall_confidence_score")
+            .and_then(Value::as_u64)
+            .is_some_and(|score| score <= 100));
+        assert_eq!(
+            result
+                .pointer("/route_candidates/0/rank")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            result
+                .pointer("/route_candidates/0/instance_id")
+                .and_then(Value::as_str),
+            Some("llm-skill-id")
+        );
+        assert!(result
+            .pointer("/route_candidates/0/confidence_rationale")
+            .and_then(Value::as_array)
+            .is_some_and(|rationale| !rationale.is_empty()));
+        assert!(result
+            .get("likely_wrong_pick_risks")
+            .and_then(Value::as_array)
+            .is_some());
+        assert!(result
+            .get("likely_miss_risks")
+            .and_then(Value::as_array)
+            .is_some());
+        assert_eq!(
+            result
+                .pointer("/prompt_request/action")
+                .and_then(Value::as_str),
+            Some("routing_confidence")
+        );
+        assert_eq!(
+            result
+                .pointer("/prompt_request/request/action")
+                .and_then(Value::as_str),
+            Some("routing_confidence")
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/read_only")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/write_back_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/script_execution_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/config_mutation_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/snapshot_created")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/triage_mutation_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/credential_accessed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/raw_prompt_persisted")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/raw_response_persisted")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let serialized = serde_json::to_string(&result).expect("serialize routing result");
+        assert!(!serialized.contains("OPENAI_API_KEY=<redacted>"));
+        assert!(!serialized.contains("fixture-redacted-value"));
+        assert!(!serialized.contains(&skill_path.to_string_lossy().to_string()));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn task_rank_skill_routes_rejects_empty_task_without_creating_catalog() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-routing-empty-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("routing-empty".to_string()),
+            method: "task.rankSkillRoutes".to_string(),
+            params: json!({ "task": "   " }),
+        });
+
+        assert!(!response.ok);
+        let error = response.error.expect("empty routing error");
+        assert_eq!(error.code, "invalid_request");
+        assert!(error.message.contains("non-empty task"));
+        assert!(
+            !app_data_dir.exists(),
+            "empty routing request must not initialize app data"
+        );
+    }
+
+    #[test]
+    fn task_rank_skill_routes_missing_catalog_returns_empty_read_only_result() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-routing-missing-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("routing-missing".to_string()),
+            method: "task.rankSkillRoutes".to_string(),
+            params: json!({ "task": "Prepare a release readiness report" }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("missing catalog routing result");
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .get("overall_confidence_score")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert!(result
+            .get("route_candidates")
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert!(
+            !host.catalog_path().exists(),
+            "missing-catalog routing must not initialize catalog.sqlite"
+        );
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    }
+
+    #[test]
     fn llm_preview_prompt_accepts_task_readiness_action_with_redaction() {
         let app_data_dir = env::temp_dir().join(format!(
             "skills-copilot-readiness-preview-test-{}-{}",
@@ -7255,6 +8144,57 @@ mod tests {
             .unwrap_or(false));
         let serialized = serde_json::to_string(&result).expect("serialize readiness preview");
         assert!(serialized.contains("Task readiness evidence"));
+        assert!(serialized.contains("<redacted>"));
+        assert!(!serialized.contains("fixture-redacted-value"));
+        assert!(!serialized.contains("OPENAI_API_KEY"));
+        assert!(!serialized.contains(&skill_path.to_string_lossy().to_string()));
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn llm_preview_prompt_accepts_routing_confidence_action_with_redaction() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-routing-preview-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+        let skill_path = app_data_dir.join("fixture-skill").join("SKILL.md");
+        seed_catalog_with_llm_skill(&host, &skill_path);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("routing-preview".to_string()),
+            method: "llm.previewPrompt".to_string(),
+            params: json!({
+                "action": "routing_confidence",
+                "instance_ids": ["llm-skill-id"],
+                "user_intent": "Analyze local skill posture with token=fixture-redacted-value"
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("routing confidence preview result");
+        assert_eq!(
+            result.get("action").and_then(Value::as_str),
+            Some("routing_confidence")
+        );
+        assert_eq!(
+            result.get("provider_request_sent").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("write_back_allowed").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert!(result
+            .get("requires_confirmation")
+            .and_then(Value::as_bool)
+            .unwrap_or(false));
+        let serialized =
+            serde_json::to_string(&result).expect("serialize routing confidence preview");
+        assert!(serialized.contains("Routing confidence evidence"));
         assert!(serialized.contains("<redacted>"));
         assert!(!serialized.contains("fixture-redacted-value"));
         assert!(!serialized.contains("OPENAI_API_KEY"));
@@ -9116,6 +10056,31 @@ mod tests {
                 assert!(!readiness.safety_flags.raw_prompt_persisted);
                 assert!(!readiness.safety_flags.raw_response_persisted);
             }
+            "task.rankSkillRoutes" => {
+                let ranking: WireSkillRouteRankingResult =
+                    decode_fixture_result(method, result, path);
+                assert!(ranking.overall_confidence_score <= 100);
+                assert!(ranking.catalog_available);
+                assert!(!ranking.route_candidates.is_empty());
+                assert!(ranking.prompt_request.available);
+                assert_eq!(ranking.prompt_request.action, "routing_confidence");
+                assert_eq!(ranking.prompt_request.preview_method, "llm.previewPrompt");
+                assert_eq!(
+                    ranking.prompt_request.request.action,
+                    LlmPromptActionKind::RoutingConfidence
+                );
+                assert!(ranking.safety_flags.read_only);
+                assert!(!ranking.safety_flags.provider_request_sent);
+                assert!(!ranking.safety_flags.write_back_allowed);
+                assert!(!ranking.safety_flags.script_execution_allowed);
+                assert!(!ranking.safety_flags.config_mutation_allowed);
+                assert!(!ranking.safety_flags.snapshot_created);
+                assert!(!ranking.safety_flags.triage_mutation_allowed);
+                assert!(!ranking.safety_flags.credential_accessed);
+                assert!(!ranking.safety_flags.raw_secret_returned);
+                assert!(!ranking.safety_flags.raw_prompt_persisted);
+                assert!(!ranking.safety_flags.raw_response_persisted);
+            }
             "llm.status" => {
                 let status: WireLlmStatus = decode_fixture_result(method, result, path);
                 assert!(!status.enabled);
@@ -9608,6 +10573,7 @@ mod tests {
             }
             "analysis.scoreSkillQuality" => json!({ "instance_id": "missing-skill" }),
             "task.checkReadiness" => json!({ "task": "fixture task readiness check" }),
+            "task.rankSkillRoutes" => json!({ "task": "fixture routing confidence check" }),
             "evidence.piWritableHarness" => json!({ "run_label": "dispatch-fixture" }),
             "report.exportLocal" => json!({ "formats": ["json"] }),
             "script.previewExecution" => json!({
@@ -10034,6 +11000,81 @@ mod tests {
     #[derive(Debug, Deserialize)]
     #[serde(deny_unknown_fields)]
     struct WireTaskReadinessSafetyFlags {
+        read_only: bool,
+        provider_request_sent: bool,
+        write_back_allowed: bool,
+        script_execution_allowed: bool,
+        config_mutation_allowed: bool,
+        snapshot_created: bool,
+        triage_mutation_allowed: bool,
+        credential_accessed: bool,
+        raw_secret_returned: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireSkillRouteRankingResult {
+        task: String,
+        overall_confidence_score: u8,
+        overall_confidence_band: String,
+        summary: String,
+        generated_by: String,
+        catalog_available: bool,
+        filters: WireTaskReadinessFilters,
+        route_candidates: Vec<WireSkillRouteCandidate>,
+        ambiguity_warnings: Vec<String>,
+        likely_wrong_pick_risks: Vec<String>,
+        likely_miss_risks: Vec<String>,
+        evidence_references: Vec<WireTaskReadinessEvidenceReference>,
+        prompt_request: WireRoutingConfidencePromptRequest,
+        safety_flags: WireRoutingConfidenceSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireSkillRouteCandidate {
+        rank: usize,
+        instance_id: String,
+        definition_id: String,
+        skill_name: String,
+        agent: String,
+        scope: String,
+        enabled: bool,
+        state: String,
+        confidence_score: u8,
+        confidence_band: String,
+        readiness_score: u8,
+        readiness_band: String,
+        quality_score: Option<u8>,
+        match_reasons: Vec<String>,
+        confidence_rationale: Vec<String>,
+        ambiguity_warnings: Vec<String>,
+        likely_wrong_pick_risks: Vec<String>,
+        likely_miss_risks: Vec<String>,
+        enabled_scope_risk_state: WireTaskReadinessState,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRoutingConfidencePromptRequest {
+        available: bool,
+        preview_method: String,
+        confirm_method: String,
+        action: String,
+        request: LlmPreviewPromptParams,
+        note: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRoutingConfidenceSafetyFlags {
         read_only: bool,
         provider_request_sent: bool,
         write_back_allowed: bool,

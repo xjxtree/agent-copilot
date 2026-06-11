@@ -10,6 +10,7 @@ struct LLMModelTests {
         try skillQualityScoreDecodesFlexiblePayload()
         try skillQualityScoreDecodesV243ServicePayload()
         try taskReadinessDecodesFlexiblePayload()
+        try routingConfidenceDecodesFlexiblePayload()
         try promptPreviewDecodesV242Payload()
         try promptPreviewDecodesServiceArrayScopePayload()
         try promptSendResultDecodesCopyOnlyAuditPayload()
@@ -427,6 +428,69 @@ struct LLMModelTests {
         try expectFalse(result.safety.scriptExecutionAllowed, "Task readiness must not allow script execution.")
         try expectFalse(result.safety.configMutationAllowed, "Task readiness must not mutate config.")
         try expectFalse(result.safety.credentialAccessed, "Task readiness must not access credentials.")
+    }
+
+    private func routingConfidenceDecodesFlexiblePayload() throws {
+        let data = Data(
+            """
+            {
+              "task": "Pick a skill for local audit routing.",
+              "overall_confidence_score": "88",
+              "overall_confidence_band": "High",
+              "summary": "Beta is the best local audit route; Gamma is a plausible cross-agent fallback.",
+              "route_candidates": [
+                {
+                  "instance_id": "beta",
+                  "skill_name": "Beta",
+                  "agent": "claude-code",
+                  "score": 88,
+                  "confidence_band": "High",
+                  "summary": "Strong metadata and local evidence match.",
+                  "confidence_rationale": ["Description mentions local audit", "No same-agent runtime conflict"],
+                  "ambiguity_warnings": ["Gamma has similar audit wording"],
+                  "likely_miss_risks": ["Could miss report-export specialization"],
+                  "evidence_references": [{"title":"Metadata","detail":"Description match.","source":"catalog"}]
+                },
+                "Fallback route"
+              ],
+              "warnings": ["Duplicate audit wording across agents"],
+              "likely_miss_risks": ["A disabled skill may be more specific."],
+              "evidence_references": [
+                {"title":"Comparison","detail":"Cross-agent duplicate name reviewed.","source":"analysis"}
+              ],
+              "safety_flags": {
+                "provider_request_sent": false,
+                "write_back_allowed": false,
+                "write_actions_available": false,
+                "script_execution_allowed": false,
+                "execution_actions_available": false,
+                "config_mutation_allowed": false,
+                "snapshot_created": false,
+                "triage_mutation_allowed": false,
+                "credential_accessed": false,
+                "raw_secret_returned": false
+              }
+            }
+            """.utf8
+        )
+
+        let result = try JSONDecoder().decode(SkillRoutingConfidenceResult.self, from: data)
+
+        try expectEqual(result.taskText, "Pick a skill for local audit routing.", "Routing confidence should decode canonical task.")
+        try expectEqual(result.score, 88, "Routing confidence should decode flexible confidence score.")
+        try expectEqual(result.band, "High", "Routing confidence should decode confidence band.")
+        try expectEqual(result.routes.map(\.name), ["Beta", "Fallback route"], "Routing confidence should decode object and string routes.")
+        try expectEqual(result.routes.first?.matchReasons, ["Description mentions local audit", "No same-agent runtime conflict"], "Routing confidence should decode match reasons.")
+        try expectEqual(result.routes.first?.ambiguityWarnings, ["Gamma has similar audit wording"], "Routing confidence should decode per-route ambiguity warnings.")
+        try expectEqual(result.routes.first?.wrongPickRisks, ["Could miss report-export specialization"], "Routing confidence should decode wrong-pick risks.")
+        try expectEqual(result.ambiguityWarnings, ["Duplicate audit wording across agents"], "Routing confidence should decode top-level warnings aliases.")
+        try expectEqual(result.wrongPickRisks, ["A disabled skill may be more specific."], "Routing confidence should decode miss explanation aliases.")
+        try expectEqual(result.evidence.map(\.detail), ["Cross-agent duplicate name reviewed."], "Routing confidence should decode evidence references.")
+        try expectFalse(result.safety.providerRequestSent, "Local routing confidence must not send provider requests.")
+        try expectFalse(result.safety.writeBackAllowed, "Routing confidence must not allow write-back.")
+        try expectFalse(result.safety.scriptExecutionAllowed, "Routing confidence must not allow script execution.")
+        try expectFalse(result.safety.configMutationAllowed, "Routing confidence must not mutate config.")
+        try expectFalse(result.safety.credentialAccessed, "Routing confidence must not access credentials.")
     }
 
     private func promptSendResultDecodesCopyOnlyAuditPayload() throws {

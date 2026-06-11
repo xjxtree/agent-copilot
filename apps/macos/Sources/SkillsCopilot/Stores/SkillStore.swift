@@ -30,6 +30,8 @@ final class SkillStore: ObservableObject {
     @Published private(set) var scoringSkillQualityIDs: Set<SkillRecord.ID> = []
     @Published private(set) var taskReadinessResult: TaskReadinessResult?
     @Published private(set) var checkingTaskReadinessSkillIDs: Set<SkillRecord.ID> = []
+    @Published private(set) var routingConfidenceResult: SkillRoutingConfidenceResult?
+    @Published private(set) var rankingRoutingSkillIDs: Set<SkillRecord.ID> = []
     @Published private(set) var llmPromptPreviews: [String: LLMPromptPreview] = [:]
     @Published private(set) var previewingLLMPromptKeys: Set<String> = []
     @Published private(set) var sendingLLMPromptKeys: Set<String> = []
@@ -93,12 +95,20 @@ final class SkillStore: ObservableObject {
             }
         }
     }
+    @Published var routingConfidenceText = "" {
+        didSet {
+            if oldValue != routingConfidenceText {
+                routingConfidenceResult = nil
+            }
+        }
+    }
     @Published var errorMessage: String?
 
     private let service: ServiceClient
     private var lastRefreshAction: RefreshAction = .reload
     private var llmPreparedSkillID: SkillRecord.ID?
     private var taskReadinessCheckedSkillID: SkillRecord.ID?
+    private var routingConfidenceRankedSkillID: SkillRecord.ID?
     private var agentConfigSnapshotLoadGeneration = 0
 
     init(service: ServiceClient) {
@@ -110,7 +120,11 @@ final class SkillStore: ObservableObject {
     }
 
     private var isLLMPromptBusy: Bool {
-        !previewingLLMPromptKeys.isEmpty || !sendingLLMPromptKeys.isEmpty || !scoringSkillQualityIDs.isEmpty || !checkingTaskReadinessSkillIDs.isEmpty
+        !previewingLLMPromptKeys.isEmpty
+            || !sendingLLMPromptKeys.isEmpty
+            || !scoringSkillQualityIDs.isEmpty
+            || !checkingTaskReadinessSkillIDs.isEmpty
+            || !rankingRoutingSkillIDs.isEmpty
     }
 
     private func toggleDisabledReason(for skill: SkillRecord) -> String? {
@@ -440,6 +454,44 @@ final class SkillStore: ObservableObject {
 
     func canSendTaskReadinessPrompt(for skill: SkillRecord) -> Bool {
         guard let preview = taskReadinessPromptPreview(for: skill) else { return false }
+        return canSendLLMPrompt(preview)
+    }
+
+    func routingConfidence(for skill: SkillRecord) -> SkillRoutingConfidenceResult? {
+        guard routingConfidenceRankedSkillID == skill.id else { return nil }
+        return routingConfidenceResult
+    }
+
+    func isRankingRoutingConfidence(for skill: SkillRecord) -> Bool {
+        rankingRoutingSkillIDs.contains(skill.id)
+    }
+
+    func routingConfidencePromptPreview(for skill: SkillRecord) -> LLMPromptPreview? {
+        let taskText = normalizedRoutingConfidenceText
+        guard !taskText.isEmpty else { return nil }
+        return llmPromptPreviews[routingConfidencePromptKey(skillID: skill.id, taskText: taskText)]
+    }
+
+    func isPreviewingRoutingConfidencePrompt(for skill: SkillRecord) -> Bool {
+        let taskText = normalizedRoutingConfidenceText
+        guard !taskText.isEmpty else { return false }
+        return previewingLLMPromptKeys.contains(routingConfidencePromptKey(skillID: skill.id, taskText: taskText))
+    }
+
+    func isSendingRoutingConfidencePrompt(for skill: SkillRecord) -> Bool {
+        let taskText = normalizedRoutingConfidenceText
+        guard !taskText.isEmpty else { return false }
+        return sendingLLMPromptKeys.contains(routingConfidencePromptKey(skillID: skill.id, taskText: taskText))
+    }
+
+    func routingConfidencePromptSendResult(for skill: SkillRecord) -> LLMPromptSendResult? {
+        let taskText = normalizedRoutingConfidenceText
+        guard !taskText.isEmpty else { return nil }
+        return llmPromptSendResults[routingConfidencePromptKey(skillID: skill.id, taskText: taskText)]
+    }
+
+    func canSendRoutingConfidencePrompt(for skill: SkillRecord) -> Bool {
+        guard let preview = routingConfidencePromptPreview(for: skill) else { return false }
         return canSendLLMPrompt(preview)
     }
 
@@ -1075,6 +1127,71 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func rankSelectedSkillRoutes() async {
+        guard let skill = selectedSkill else { return }
+        let taskText = normalizedRoutingConfidenceText
+        guard !taskText.isEmpty else {
+            routingConfidenceResult = .unavailable(taskText: "", reason: UIStrings.routingConfidenceTaskRequired)
+            routingConfidenceRankedSkillID = skill.id
+            return
+        }
+        guard !isRefreshBusy else {
+            routingConfidenceResult = .unavailable(taskText: taskText, reason: UIStrings.operationUnavailableBusy)
+            routingConfidenceRankedSkillID = skill.id
+            return
+        }
+
+        rankingRoutingSkillIDs.insert(skill.id)
+        defer { rankingRoutingSkillIDs.remove(skill.id) }
+
+        do {
+            routingConfidenceResult = try await service.rankSkillRoutes(taskText: taskText, skill: skill)
+            routingConfidenceRankedSkillID = skill.id
+        } catch {
+            routingConfidenceResult = .unavailable(taskText: taskText, reason: error.localizedDescription)
+            routingConfidenceRankedSkillID = skill.id
+        }
+    }
+
+    func previewPromptForSelectedRoutingConfidence() async {
+        guard let skill = selectedSkill else { return }
+        let taskText = normalizedRoutingConfidenceText
+        guard !taskText.isEmpty else {
+            routingConfidenceResult = .unavailable(taskText: "", reason: UIStrings.routingConfidenceTaskRequired)
+            routingConfidenceRankedSkillID = skill.id
+            return
+        }
+        let key = routingConfidencePromptKey(skillID: skill.id, taskText: taskText)
+        guard !isRefreshBusy else {
+            llmPromptPreviews[key] = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        previewingLLMPromptKeys.insert(key)
+        llmPromptSendResults.removeValue(forKey: key)
+        defer { previewingLLMPromptKeys.remove(key) }
+
+        do {
+            llmPromptPreviews[key] = try await service.previewPromptForRoutingConfidence(taskText: taskText, skill: skill)
+        } catch {
+            llmPromptPreviews[key] = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
+    func confirmPromptForSelectedRoutingConfidence() async {
+        guard let skill = selectedSkill else { return }
+        let taskText = normalizedRoutingConfidenceText
+        guard !taskText.isEmpty else { return }
+        let key = routingConfidencePromptKey(skillID: skill.id, taskText: taskText)
+        await confirmLLMPrompt(key: key) { previewID in
+            try await service.confirmPromptAndSendForRoutingConfidence(
+                previewID: previewID,
+                taskText: taskText,
+                skill: skill
+            )
+        }
+    }
+
     func previewScriptExecutionSafety(for skill: SkillRecord) async {
         guard !isRefreshBusy else {
             scriptExecutionPreviews[skill.id] = .unavailable(skill: skill, reason: UIStrings.operationUnavailableBusy)
@@ -1347,6 +1464,11 @@ final class SkillStore: ObservableObject {
             taskReadinessCheckedSkillID = nil
         }
         checkingTaskReadinessSkillIDs = checkingTaskReadinessSkillIDs.filter { currentSkillIDs.contains($0) }
+        if let rankedSkillID = routingConfidenceRankedSkillID, !currentSkillIDs.contains(rankedSkillID) {
+            routingConfidenceResult = nil
+            routingConfidenceRankedSkillID = nil
+        }
+        rankingRoutingSkillIDs = rankingRoutingSkillIDs.filter { currentSkillIDs.contains($0) }
         skillEventsByID = skillEventsByID.filter { currentSkillIDs.contains($0.key) }
         skillAnalysisPrepareResults.removeAll()
         preparingSkillAnalysisKeys.removeAll()
@@ -1468,6 +1590,14 @@ final class SkillStore: ObservableObject {
         "task-readiness:\(skillID):\(taskText)"
     }
 
+    private var normalizedRoutingConfidenceText: String {
+        routingConfidenceText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func routingConfidencePromptKey(skillID: SkillRecord.ID, taskText: String) -> String {
+        "routing-confidence:\(skillID):\(taskText)"
+    }
+
     private func canSendLLMPrompt(_ preview: LLMPromptPreview) -> Bool {
         aiProviderStatus.serviceAvailable
             && aiProviderStatus.configured
@@ -1535,6 +1665,8 @@ final class SkillStore: ObservableObject {
         guard previousID != selectedSkillID else { return }
         taskReadinessResult = nil
         taskReadinessCheckedSkillID = nil
+        routingConfidenceResult = nil
+        routingConfidenceRankedSkillID = nil
         Task { @MainActor [weak self] in
             await self?.loadSelectedDetail()
             await self?.loadCrossAgentComparisons()

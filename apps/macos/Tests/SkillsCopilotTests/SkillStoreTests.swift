@@ -40,6 +40,9 @@ struct SkillStoreTests {
         try await scoreSkillQualityUsesReadOnlyAnalysisContract()
         try await taskReadinessUsesReadOnlyCheckContract()
         try await taskReadinessPromptSendRequiresConfiguredProvider()
+        try await routingConfidenceUsesReadOnlyRankContract()
+        try await routingConfidencePromptSendRequiresConfiguredProvider()
+        try await routingConfidenceClearsStaleSelection()
         try await llmPreparePreviewIsScopedToSelectedSkillAndReadOnly()
         try await promptPreviewRequiresConfiguredProviderAndExplicitSend()
         try await previewScriptExecutionSafetyStoresBlockedPreviewWithoutExecute()
@@ -902,6 +905,124 @@ struct SkillStoreTests {
         try expectFalse(calls.contains("script.execute"), "No-provider readiness path must not call execution paths.")
     }
 
+    private func routingConfidenceUsesReadOnlyRankContract() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        store.routingConfidenceText = "Route a local audit release note task."
+        await store.reload()
+        await store.rankSelectedSkillRoutes()
+
+        guard let skill = store.selectedSkill else {
+            throw NativeModelTestFailure(description: "Fixture should select beta for routing confidence.")
+        }
+        let result = store.routingConfidence(for: skill)
+        try expectEqual(result?.score, 88, "Routing confidence should store the service score for the selected task.")
+        try expectEqual(result?.band, "High", "Routing confidence should expose the confidence band.")
+        try expectEqual(result?.routes.map(\.name), ["Beta", "Alpha"], "Routing confidence should expose ordered candidate routes.")
+        try expectEqual(result?.routes.first?.matchReasons, ["Description matches local audit.", "Selected skill is enabled."], "Routing confidence should expose match reasons.")
+        try expectEqual(result?.ambiguityWarnings, ["Alpha has overlapping audit wording."], "Routing confidence should expose ambiguity warnings.")
+        try expectEqual(result?.wrongPickRisks, ["Choosing Alpha may miss project-scoped evidence."], "Routing confidence should expose likely wrong-pick risks.")
+        try expectFalse(result?.safety.providerRequestSent ?? true, "Local route ranking must not send a provider request.")
+        try expectFalse(result?.safety.writeBackAllowed ?? true, "Route ranking must not allow write-back.")
+        try expectFalse(result?.safety.scriptExecutionAllowed ?? true, "Route ranking must not allow script execution.")
+        try expectFalse(result?.safety.configMutationAllowed ?? true, "Route ranking must not allow config mutation.")
+        try expectFalse(result?.safety.credentialAccessed ?? true, "Route ranking must not access credentials.")
+        let localRankingCalls = fake.calls()
+        try expectContains(localRankingCalls, "task.rankSkillRoutes", "Routing confidence should use the V2.45 task.rankSkillRoutes method.")
+        try expectContains(localRankingCalls, "\"task\":\"Route a local audit release note task.\"", "Routing confidence should send canonical task text.")
+        try expectContains(localRankingCalls, "\"agent\":\"claude-code\"", "Routing confidence should send selected skill agent.")
+        try expectContains(localRankingCalls, "\"candidate_instance_ids\":[\"beta\"]", "Routing confidence should constrain candidate filters to the selected skill.")
+        try expectContains(localRankingCalls, "\"limit\":6", "Routing confidence should send a route limit.")
+        try expectFalse(localRankingCalls.contains("\"task_text\":\"Route a local audit release note task.\""), "Local route ranking must not send duplicate task_text aliases.")
+        try expectFalse(localRankingCalls.contains("\"user_intent\":\"Route a local audit release note task.\""), "Local route ranking must not send duplicate user_intent aliases.")
+
+        await store.previewPromptForSelectedRoutingConfidence()
+        let preview = store.routingConfidencePromptPreview(for: skill)
+        try expectEqual(preview?.previewID, "routing-preview-beta", "Routing prompt preview should be scoped to the selected task.")
+        try expectEqual(store.canSendRoutingConfidencePrompt(for: skill), true, "Configured provider and current routing preview should allow explicit send.")
+
+        await store.confirmPromptForSelectedRoutingConfidence()
+        let sendResult = store.routingConfidencePromptSendResult(for: skill)
+        try expectEqual(sendResult?.success, true, "Confirmed routing prompt should store provider result.")
+        try expectFalse(sendResult?.writeBackAllowed ?? true, "Routing prompt output must not enable write-back.")
+        try expectFalse(sendResult?.scriptExecutionAllowed ?? true, "Routing prompt output must not enable script execution.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "\"request_kind\":\"routing_confidence\"", "Routing prompt preview should identify the routing_confidence request kind.")
+        try expectContains(calls, "\"task_text\":\"Route a local audit release note task.\"", "Routing prompt preview/confirm should include the selected task text.")
+        try expectContains(calls, "\"user_intent\":\"Route a local audit release note task.\"", "Routing prompt preview/confirm should include the user intent required by the service.")
+        try expectFalse(countOccurrences("\"request_kind\":\"routing_confidence\"", in: calls) < 2, "Routing preview and confirmation should both carry the routing request kind.")
+        try expectFalse(countOccurrences("\"user_intent\":\"Route a local audit release note task.\"", in: calls) < 2, "Routing preview and confirmation should both carry user intent.")
+        try expectContains(calls, "\"preview_id\":\"routing-preview-beta\"", "Routing confirm should send the routing preview id.")
+        try expectContains(calls, "llm.confirmPromptAndSend", "Configured routing provider path should require explicit confirmation.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Routing confidence must not call write paths.")
+        try expectFalse(calls.contains("script.execute"), "Routing confidence must not call execution paths.")
+    }
+
+    private func routingConfidencePromptSendRequiresConfiguredProvider() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "llm-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        store.routingConfidenceText = "Route a local audit release note task."
+        await store.reload()
+        await store.rankSelectedSkillRoutes()
+
+        guard let skill = store.selectedSkill else {
+            throw NativeModelTestFailure(description: "Fixture should select beta for routing confidence gating.")
+        }
+
+        await store.previewPromptForSelectedRoutingConfidence()
+        try expectEqual(store.canSendRoutingConfidencePrompt(for: skill), false, "Unconfigured provider should keep routing Confirm & Send disabled.")
+
+        await store.confirmPromptForSelectedRoutingConfidence()
+        let sendResult = store.routingConfidencePromptSendResult(for: skill)
+        try expectEqual(sendResult?.success, false, "Blocked routing send should store an unavailable result, not throw.")
+        try expectContains(sendResult?.message, "Configure and save", "Blocked routing send should explain provider setup.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "task.rankSkillRoutes", "No-provider path should still allow local route ranking.")
+        try expectContains(calls, "llm.previewPrompt", "No-provider path may ask for a blocked routing preview.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "No-provider routing path must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "No-provider routing path must not call write paths.")
+        try expectFalse(calls.contains("script.execute"), "No-provider routing path must not call execution paths.")
+    }
+
+    private func routingConfidenceClearsStaleSelection() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        store.routingConfidenceText = "Route a local audit release note task."
+        await store.reload()
+        await store.rankSelectedSkillRoutes()
+
+        guard let beta = store.selectedSkill else {
+            throw NativeModelTestFailure(description: "Fixture should select beta before stale routing cleanup.")
+        }
+        guard store.routingConfidence(for: beta) != nil else {
+            throw NativeModelTestFailure(description: "Routing result should exist for beta before selection changes.")
+        }
+
+        store.agentFilter = .codex
+        try await waitUntil("Agent filter should move selection away from beta for route cleanup.") {
+            store.selectedSkillID == "gamma"
+        }
+
+        guard let gamma = store.selectedSkill else {
+            throw NativeModelTestFailure(description: "Fixture should select gamma after agent filter changes.")
+        }
+        try expectNil(store.routingConfidence(for: gamma), "Routing confidence prepared for beta must not be reused after selecting another agent skill.")
+    }
+
     private func llmPreparePreviewIsScopedToSelectedSkillAndReadOnly() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -1236,6 +1357,12 @@ private final class FakeServiceScript {
             fi
             respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: task.checkReadiness"}}'
             ;;
+          *\\"task.rankSkillRoutes\\"*)
+            if [ "$scenario" = "prompt-ready" ] || [ "$scenario" = "llm-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"task":"Route a local audit release note task.","confidence_score":88,"band":"High","summary":"Beta is the strongest selected route; Alpha is a nearby alternate.","candidate_routes":[{"instance_id":"beta","name":"Beta","agent":"claude-code","confidence_score":88,"band":"High","summary":"Best project-scoped local audit fit.","match_reasons":["Description matches local audit.","Selected skill is enabled."],"ambiguity_warnings":["Alpha has overlapping audit wording."],"wrong_pick_risks":["Could miss release-note-specific examples."],"evidence_references":[{"title":"Metadata","detail":"Description mentions local audit.","source":"catalog"}]},{"instance_id":"alpha","name":"Alpha","agent":"claude-code","score":69,"band":"Medium","summary":"Nearby fallback with weaker task wording.","match_reasons":["Same agent and enabled."],"ambiguity_warnings":[],"wrong_pick_risks":["Less project-specific."],"evidence":["Enabled fallback"]}],"ambiguity_warnings":["Alpha has overlapping audit wording."],"wrong_pick_risks":["Choosing Alpha may miss project-scoped evidence."],"evidence_references":[{"title":"Comparison","detail":"Same-agent candidates reviewed.","source":"analysis"}],"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_secret_returned":false}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: task.rankSkillRoutes"}}'
+            ;;
           *\\"llm.prepareAction\\"*)
             if [ "$scenario" = "old-service" ]; then
               respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: llm.prepareAction"}}'
@@ -1254,6 +1381,9 @@ private final class FakeServiceScript {
             ;;
           *\\"llm.previewPrompt\\"*)
             if [ "$scenario" = "prompt-ready" ]; then
+              if printf '%s' "$input" | grep -q '\\"request_kind\\":\\"routing_confidence\\"'; then
+                respond '{"id":"test","ok":true,"result":{"preview_id":"routing-preview-beta","request_kind":"routing_confidence","action":"routing_confidence","scope":"selected","prompt_scope":"Selected skill routing confidence for Beta","enabled":true,"provider":"openai-compatible","model":"gpt-5","destination_host":"llm.example.com","included_fields":["task.text","skill.metadata","routing.result","analysis.comparison"],"excluded_fields":[{"name":"api_key","reason":"credential redacted"},{"name":"skill.body","reason":"raw body omitted"}],"redaction":{"status":"redacted","summary":"Secrets, raw body, and local paths removed.","redacted_fields":["api_key","path"],"placeholders":["<project-root>"]},"estimate":{"input_tokens":360,"output_tokens":170,"total_tokens":530,"estimated_cost_usd":0.0065},"confirmation_required":true,"raw_prompt_persisted":false,"raw_response_persisted":false,"draft_copy_only":true,"redacted_prompt_preview":"Explain routing confidence for Beta from redacted local evidence."}}'
+              fi
               if printf '%s' "$input" | grep -q '\\"request_kind\\":\\"task_readiness\\"'; then
                 respond '{"id":"test","ok":true,"result":{"preview_id":"readiness-preview-beta","request_kind":"task_readiness","action":"task_readiness","scope":"selected","prompt_scope":"Selected skill task readiness for Beta","enabled":true,"provider":"openai-compatible","model":"gpt-5","destination_host":"llm.example.com","included_fields":["task.text","skill.metadata","readiness.result","findings.summary"],"excluded_fields":[{"name":"api_key","reason":"credential redacted"},{"name":"skill.body","reason":"raw body omitted"}],"redaction":{"status":"redacted","summary":"Secrets, raw body, and local paths removed.","redacted_fields":["api_key","path"],"placeholders":["<project-root>"]},"estimate":{"input_tokens":340,"output_tokens":160,"total_tokens":500,"estimated_cost_usd":0.006},"confirmation_required":true,"raw_prompt_persisted":false,"raw_response_persisted":false,"draft_copy_only":true,"redacted_prompt_preview":"Explain task readiness for Beta from redacted local evidence."}}'
               fi
@@ -1266,6 +1396,9 @@ private final class FakeServiceScript {
             ;;
           *\\"llm.confirmPromptAndSend\\"*)
             if [ "$scenario" = "prompt-ready" ]; then
+              if printf '%s' "$input" | grep -q '\\"request_kind\\":\\"routing_confidence\\"'; then
+                respond '{"id":"test","ok":true,"result":{"preview_id":"routing-preview-beta","status":"succeeded","message":"Provider response received.","output_text":"Copy-only routing confidence explanation for Beta.","draft_copy_only":true,"raw_prompt_persisted":false,"raw_response_persisted":false,"write_back_allowed":false,"script_execution_allowed":false,"audit_metadata":{"request_id":"audit-routing-1","status":"succeeded","provider":"openai-compatible","model":"gpt-5","destination_host":"llm.example.com","redaction_applied":true,"raw_prompt_persisted":false,"raw_response_persisted":false,"input_tokens":360,"output_tokens":100}}}'
+              fi
               if printf '%s' "$input" | grep -q '\\"request_kind\\":\\"task_readiness\\"'; then
                 respond '{"id":"test","ok":true,"result":{"preview_id":"readiness-preview-beta","status":"succeeded","message":"Provider response received.","output_text":"Copy-only task readiness explanation for Beta.","draft_copy_only":true,"raw_prompt_persisted":false,"raw_response_persisted":false,"write_back_allowed":false,"script_execution_allowed":false,"audit_metadata":{"request_id":"audit-readiness-1","status":"succeeded","provider":"openai-compatible","model":"gpt-5","destination_host":"llm.example.com","redaction_applied":true,"raw_prompt_persisted":false,"raw_response_persisted":false,"input_tokens":340,"output_tokens":95}}}'
               fi

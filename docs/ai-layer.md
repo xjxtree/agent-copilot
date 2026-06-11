@@ -13,9 +13,10 @@
 > - V2.43 已落地 `analysis.scoreSkillQuality`：基于 metadata、findings、conflicts、analysis、adapter diagnostics 生成 user-triggered/read-only deterministic local quality score；optional provider explanation 只走 V2.42 preview/redaction/confirmation。
 > - V2.44 已落地 `task.checkReadiness`：用户输入真实任务后，基于 metadata、findings、conflicts、analysis、adapter diagnostics 与 V2.43 quality score 生成 read-only readiness score、候选 skill、gap/blocker、evidence references 与 safety flags；本地 readiness 不发起 provider 请求。
 >
-> V2.45+ 规划边界（未实现）：
+> V2.45（已完成）：
 >
-> - V2.45 起在 V2.42-V2.44 基础上增加 routing confidence、benchmark/regression、trace analysis 等输出；当前仍为规划与验收同步阶段，尚未实现 ranked routing confidence。
+> - V2.45 在 V2.42-V2.44 基础上把 `task.checkReadiness` 输出升级为 `task.rankSkillRoutes` routing ranking：主候选 + 备选顺序、`confidence`、`match_reasons`、`ambiguity/collision warnings`、`likely wrong-pick`、`likely_miss`。
+> - 当前已完成本地 deterministic ranking 与 native Analysis UI 集成；默认仅 read-only，不写 skill、不改 agent config、不执行脚本、不改 triage、不直接发送 provider 请求。
 > - 每次真实 provider 调用前必须展示 prompt preview、redaction summary、token/cost estimate 和 network destination。
 > - AI 输出默认 read-only，不直接写 skill、不改 agent config、不执行脚本、不改变 triage 或 policy 状态。
 
@@ -62,7 +63,7 @@ Provider 配置原则：
 | V2.41-V2.42（实现） | Provider config、prompt preview/redaction/confirmed send 与最小审计 metadata | service status、settings、Keychain/fallback permission checks、confirmation id、redaction status |
 | V2.43（实现） | Deterministic skill quality score plus optional preview-confirmed provider explanation | metadata、findings、conflicts、analysis、adapter diagnostics |
 | V2.44（实现） | Deterministic task readiness plus optional preview-confirmed provider explanation | task text、metadata、findings、conflicts、analysis、adapter diagnostics、quality score |
-| V2.45（planned） | Routing confidence（未集成） | readiness candidates、metadata、findings、conflicts、analysis、adapter diagnostics、quality score |
+| V2.45（实现） | Routing confidence（ranking + risk + ambiguity） | task text、readiness candidates、metadata、findings、conflicts、analysis、adapter diagnostics、quality score |
 | V2.46-V2.50 | benchmark、regression、trace import、routing dashboard、cross-agent task readiness | benchmark set、catalog snapshots、imported trace evidence |
 | V2.51-V2.55 | stale/drift、knowledge index、similar grouping、taxonomy、workspace readiness | fingerprints、mtime、source/root provenance、local index |
 | V2.56-V2.60 | remediation planner、fix drafts、impact preview、batch review、history | findings、triage、policy, snapshots, writable capability matrix |

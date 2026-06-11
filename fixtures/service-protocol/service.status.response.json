@@ -16,6 +16,7 @@
       "evidence.piWritableHarness",
       "analysis.scoreSkillQuality",
       "task.checkReadiness",
+      "task.rankSkillRoutes",
       "llm.status",
       "llm.listProviderProfiles",
       "llm.saveProviderProfile",

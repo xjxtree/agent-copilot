@@ -166,6 +166,20 @@ private struct TaskReadinessParams: Encodable {
     }
 }
 
+private struct TaskRoutingConfidenceParams: Encodable {
+    let task: String
+    let agent: String?
+    let candidateInstanceIDs: [String]?
+    let limit: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case task
+        case agent
+        case candidateInstanceIDs = "candidate_instance_ids"
+        case limit
+    }
+}
+
 private struct PrepareLLMActionParams: Encodable {
     let action: LLMAction
     let instanceId: String
@@ -569,6 +583,20 @@ final class ServiceClient {
         }
     }
 
+    func rankSkillRoutes(taskText: String, skill: SkillRecord, limit: Int = 6) async throws -> SkillRoutingConfidenceResult {
+        let params = TaskRoutingConfidenceParams(
+            task: taskText,
+            agent: skill.agent,
+            candidateInstanceIDs: [skill.id],
+            limit: limit
+        )
+        do {
+            return try await call(method: "task.rankSkillRoutes", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable(taskText: taskText)
+        }
+    }
+
     func previewPromptForLLMAction(action: LLMAction, skill: SkillRecord) async throws -> LLMPromptPreview {
         let params = PreviewLLMPromptParams(
             action: action.rawValue,
@@ -657,6 +685,27 @@ final class ServiceClient {
         }
     }
 
+    func previewPromptForRoutingConfidence(taskText: String, skill: SkillRecord) async throws -> LLMPromptPreview {
+        let params = PreviewLLMPromptParams(
+            action: "routing_confidence",
+            requestKind: "routing_confidence",
+            analysisKind: nil,
+            scope: "selected",
+            instanceIDs: [skill.id],
+            instanceId: skill.id,
+            definitionId: skill.definitionId,
+            agent: skill.agent,
+            taskText: taskText,
+            userIntent: taskText,
+            candidateInstanceIDs: [skill.id]
+        )
+        do {
+            return try await call(method: "llm.previewPrompt", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable(reason: UIStrings.routingConfidencePromptUnavailable)
+        }
+    }
+
     func confirmPromptAndSendForLLMAction(previewID: String, action: LLMAction, skill: SkillRecord) async throws -> LLMPromptSendResult {
         let request = PreviewLLMPromptParams(
             action: action.rawValue,
@@ -717,6 +766,23 @@ final class ServiceClient {
         let request = PreviewLLMPromptParams(
             action: "task_readiness",
             requestKind: "task_readiness",
+            analysisKind: nil,
+            scope: "selected",
+            instanceIDs: [skill.id],
+            instanceId: skill.id,
+            definitionId: skill.definitionId,
+            agent: skill.agent,
+            taskText: taskText,
+            userIntent: taskText,
+            candidateInstanceIDs: [skill.id]
+        )
+        return try await confirmPromptAndSend(previewID: previewID, request: request)
+    }
+
+    func confirmPromptAndSendForRoutingConfidence(previewID: String, taskText: String, skill: SkillRecord) async throws -> LLMPromptSendResult {
+        let request = PreviewLLMPromptParams(
+            action: "routing_confidence",
+            requestKind: "routing_confidence",
             analysisKind: nil,
             scope: "selected",
             instanceIDs: [skill.id],
