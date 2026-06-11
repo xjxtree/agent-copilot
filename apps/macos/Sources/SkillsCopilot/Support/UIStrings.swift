@@ -1,512 +1,549 @@
 import Foundation
 
+enum AppLanguage: String, CaseIterable, Identifiable {
+    case english = "en"
+    case simplifiedChinese = "zh-Hans"
+
+    static let storageKey = "app.language"
+    static let defaultLanguage = AppLanguage.english
+
+    var id: String { rawValue }
+
+    var localeIdentifier: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .english:
+            return UIStrings.languageEnglish
+        case .simplifiedChinese:
+            return UIStrings.languageSimplifiedChinese
+        }
+    }
+
+    static func fromStorage(_ rawValue: String?) -> AppLanguage {
+        guard let rawValue, let language = AppLanguage(rawValue: rawValue) else {
+            return defaultLanguage
+        }
+        return language
+    }
+}
+
 enum UIStrings {
-    static let appTitle = text("app.title", "Skills Copilot")
-    static let appWindowTitle = text("app.windowTitle", "SkillsCopilot")
-    static let searchPrompt = text("search.prompt", "Search")
-    static let scan = text("action.scan", "Scan")
-    static let reload = text("action.reload", "Reload")
-    static let save = text("action.save", "Save")
-    static let done = text("action.done", "Done")
-    static let cancel = text("action.cancel", "Cancel")
-    static let enable = text("action.enable", "Enable")
-    static let disable = text("action.disable", "Disable")
-    static let preview = text("action.preview", "Preview")
-    static let previewGate = text("action.previewGate", "Preview Gate")
-    static let executionBlocked = text("action.executionBlocked", "Execution Blocked")
-    static let rollback = text("action.rollback", "Rollback")
-    static let installToAgent = text("action.installToAgent", "Install to Agent...")
-    static let confirmInstall = text("action.confirmInstall", "Confirm Install")
-    static let llmAnalyze = text("llm.action.analyze", "Analyze")
-    static let llmRecommend = text("llm.action.recommend", "Recommend")
-    static let llmExplainConflict = text("llm.action.explainConflict", "Explain Same-agent Conflict")
-    static let llmDraftFrontmatter = text("llm.action.draftFrontmatter", "Draft Frontmatter")
-    static let chooseProject = text("action.chooseProject", "Choose Project")
-    static let clearProject = text("action.clearProject", "Clear Project")
-    static let revealInFinder = text("action.revealInFinder", "Reveal in Finder")
-    static let skills = text("nav.skills", "Skills")
-    static let project = text("nav.project", "Project")
-    static let view = text("nav.view", "View")
-    static let agent = text("filter.agent", "Agent")
-    static let state = text("filter.state", "State")
-    static let sort = text("filter.sort", "Sort")
-    static let claudeCode = text("agent.claudeCode", "Claude Code")
-    static let codex = text("agent.codex", "Codex")
-    static let opencode = text("agent.opencode", "opencode")
-    static let pi = text("agent.pi", "Pi")
-    static let hermes = text("agent.hermes", "Hermes")
-    static let openclaw = text("agent.openclaw", "OpenClaw")
-    static let detailSection = text("detail.section", "Detail Section")
-    static let overview = text("detail.overview", "Overview")
-    static let findings = text("detail.findings", "Findings")
-    static let conflicts = text("detail.conflicts", "Conflicts")
-    static let cleanupQueue = text("cleanup.queue", "Cleanup Queue")
-    static let cleanupKindFinding = text("cleanup.kind.finding", "Findings")
-    static let cleanupKindIntegrity = text("cleanup.kind.integrity", "Integrity")
-    static let cleanupKindConflict = text("cleanup.kind.conflict", "Same-agent conflicts")
-    static let cleanupKindAnalysis = text("cleanup.kind.analysis", "Analysis insights")
-    static let cleanupPriorityCritical = text("cleanup.priority.critical", "Critical")
-    static let cleanupPriorityHigh = text("cleanup.priority.high", "High")
-    static let cleanupPriorityMedium = text("cleanup.priority.medium", "Medium")
-    static let cleanupPriorityLow = text("cleanup.priority.low", "Low")
-    static let cleanupPriorityInfo = text("cleanup.priority.info", "Info")
-    static let cleanupFilterKind = text("cleanup.filter.kind", "Kind")
-    static let cleanupFilterPriority = text("cleanup.filter.priority", "Priority")
-    static let cleanupFilterAllKinds = text("cleanup.filter.allKinds", "All kinds")
-    static let cleanupFilterAllPriorities = text("cleanup.filter.allPriorities", "All priorities")
-    static let cleanupFilterCriticalHigh = text("cleanup.filter.criticalHigh", "Critical / High")
-    static let cleanupFilterLowInfo = text("cleanup.filter.lowInfo", "Low / Info")
-    static let cleanupUntitledItem = text("cleanup.item.untitled", "Cleanup item")
-    static let cleanupDefaultNextAction = text("cleanup.item.nextAction", "Open detail")
-    static let cleanupUnavailableFallback = text("cleanup.unavailableFallback", "Cleanup Queue is unavailable in this service build. Showing a local empty read-only fallback; no writes, scripts, AI provider calls, or credentials are used.")
-    static let cleanupQueueReadOnlyBoundary = text("cleanup.readOnlyBoundary", "Work through open findings, integrity issues, same-agent conflicts, and analysis insights from one read-only queue. Actions only open existing detail views; they do not write agent config, edit skills, execute scripts, call an AI provider, or store credentials.")
-    static let cleanupEmptyTitle = text("cleanup.empty.title", "No Cleanup Queue items")
-    static let cleanupEmptyMessage = text("cleanup.empty.message", "There are no open cleanup items for the current service response.")
-    static let cleanupNoFilteredItems = text("cleanup.empty.filtered", "No queue items match the selected kind, priority, and agent filters.")
-    static let cleanupAIBlocked = text("cleanup.safety.aiBlocked", "AI blocked")
-    static let cleanupCredentialsBlocked = text("cleanup.safety.credentialsBlocked", "Credentials blocked")
-    static let cleanupOpenExistingDetailHelp = text("cleanup.action.openExistingDetail.help", "Open the existing read-only detail section for this item.")
-    static let crossAgentComparisonTitle = text("comparison.crossAgent.title", "Cross-agent Comparison")
-    static let crossAgentComparisonBoundary = text("comparison.crossAgent.boundary", "Compare same-name or similar skills across Claude Code, Codex, opencode, Pi, Hermes, and OpenClaw by state, source, scope/root, findings, writable capability, and differences. This view is read-only: it cannot write config, edit skills, create snapshots, execute scripts, call an AI provider, or read credentials.")
-    static let crossAgentComparisonGroups = text("comparison.crossAgent.groups", "Groups")
-    static let crossAgentComparisonAgents = text("comparison.crossAgent.agents", "Agents")
-    static let crossAgentComparisonRiskGroups = text("comparison.crossAgent.riskGroups", "Risk groups")
-    static let crossAgentComparisonWritableMismatch = text("comparison.crossAgent.writableMismatch", "Writable mismatch")
-    static let crossAgentComparisonDifferences = text("comparison.crossAgent.differences", "Differences")
-    static let crossAgentComparisonWritable = text("comparison.crossAgent.writable", "Writable verified")
-    static let crossAgentComparisonUntitled = text("comparison.crossAgent.untitled", "Comparison group")
-    static let crossAgentComparisonMatchName = text("comparison.crossAgent.match.name", "Same or similar name")
-    static let crossAgentComparisonMatchSimilarName = text("comparison.crossAgent.match.similarName", "Similar name with definition differences")
-    static let crossAgentComparisonNoSelectedGroup = text("comparison.crossAgent.empty.selected", "No selected-skill comparison group")
-    static let crossAgentComparisonNoSelectedGroupMessage = text("comparison.crossAgent.empty.selected.message", "The selected skill does not currently share a same-name or similar cross-agent group in this catalog/filter context.")
-    static let crossAgentComparisonLocalFallback = text("comparison.crossAgent.localFallback", "Comparison service is unavailable in this build. Showing a local read-only catalog comparison fallback.")
-    static let crossAgentComparisonDifferenceEnabled = text("comparison.crossAgent.difference.enabled", "Enabled state differs")
-    static let crossAgentComparisonDifferenceWritable = text("comparison.crossAgent.difference.writable", "Writable capability differs")
-    static let crossAgentComparisonDifferenceSource = text("comparison.crossAgent.difference.source", "Source/root differs")
-    static let crossAgentComparisonDifferenceFindings = text("comparison.crossAgent.difference.findings", "Finding counts differ")
-    static let crossAgentComparisonDifferenceDefinition = text("comparison.crossAgent.difference.definition", "Definition IDs differ")
-    static let batchToggleTitle = text("batchToggle.title", "Safe Batch")
-    static let batchToggleBoundary = text("batchToggle.boundary", "Preview-first enable/disable for visible skills only. Read-only adapters and unverified writable roots are skipped; no scripts, AI provider calls, credentials, skill-content writes, or public release actions are available.")
-    static let batchToggleTarget = text("batchToggle.target", "Batch target")
-    static let batchToggleSelected = text("batchToggle.selected", "Selected")
-    static let batchToggleWritable = text("batchToggle.writable", "Writable")
-    static let batchToggleSkipped = text("batchToggle.skipped", "Skipped")
-    static let batchToggleApply = text("batchToggle.apply", "Apply")
-    static let batchTogglePreviewing = text("batchToggle.previewing", "Preparing batch preview...")
-    static let batchToggleSnapshotPlan = text("batchToggle.snapshotPlan", "Snapshot / rollback plan")
-    static let batchToggleSnapshotPlanDefault = text("batchToggle.snapshotPlan.default", "Service will create agent-config snapshots for writable adapter targets before applying, then use existing rollback support for those config files.")
-    static let batchToggleSnapshotPlanUnavailable = text("batchToggle.snapshotPlan.unavailable", "Service batch preview is unavailable, so apply is disabled. No files were written.")
-    static let batchToggleServicePreviewUnavailable = text("batchToggle.servicePreviewUnavailable", "Service batch preview method is unavailable. This is a local read-only eligibility estimate; apply is disabled until batch.applySkillToggles or batch.applyToggle is available.")
-    static let batchToggleApplyUnavailable = text("batchToggle.applyUnavailable", "Batch apply is unavailable until a service preview/apply pair confirms the snapshot plan.")
-    static let batchToggleNoWritableChanges = text("batchToggle.noWritableChanges", "No writable skill changes are available in this preview.")
-    static let batchToggleNoAffectedSkills = text("batchToggle.noAffectedSkills", "No writable affected skills in this preview.")
-    static let batchToggleNoSkippedSkills = text("batchToggle.noSkippedSkills", "No skipped skills in this preview.")
-    static let batchTogglePreviewChanged = text("batchToggle.previewChanged", "Batch preview changed before confirmation. Preview again before applying.")
-    static let localReportTitle = text("localReport.title", "Local Report Export")
-    static let localReportBoundary = text("localReport.boundary", "User-triggered local redacted audit export only. No public distribution, provider calls, credentials, script execution, config mutation, or background sync.")
-    static let localReportFormat = text("localReport.format", "Format")
-    static let localReportFormatMarkdown = text("localReport.format.markdown", "Markdown")
-    static let localReportFormatJSON = text("localReport.format.json", "JSON")
-    static let localReportExport = text("localReport.export", "Export")
-    static let localReportExporting = text("localReport.exporting", "Exporting local report...")
-    static let localReportUnavailableFallback = text("localReport.unavailableFallback", "Local report export is unavailable in this service build. No file was written.")
-    static let localReportNoFile = text("localReport.noFile", "No local file")
-    static let localReportNoSections = text("localReport.noSections", "No section list returned")
-    static let localReportExportedSummary = text("localReport.exportedSummary", "Local redacted report exported.")
-    static let localReportSections = text("localReport.sections", "Sections")
-    static let localReportRedacted = text("localReport.redacted", "Redacted")
-    static let localReportNotRedactedWarning = text("localReport.notRedactedWarning", "Service did not mark this report as redacted. Review before sharing.")
-    static let noSkillsInCatalog = text("empty.noSkillsInCatalog", "No skills in catalog")
-    static let noSkillsMatchSearch = text("empty.noSkillsMatchSearch", "No skills match this search")
-    static let noProjectSelected = text("project.none", "No Project")
-    static let projectChoosePrompt = text("project.choosePrompt", "Choose a project or OpenClaw workspace directory to scan project-scoped Claude, Codex, opencode, and workspace-scoped OpenClaw skills.")
-    static let projectSelectedSource = text("project.source.selected", "Selected project")
-    static let projectGlobalRootsOnly = text("project.source.globalOnly", "No project: global roots only")
-    static let recentProjects = text("project.recent", "Recent Projects")
-    static let noRecentProjects = text("project.noRecent", "No Recent Projects")
-    static let projectValidation = text("project.validation", "Project Validation")
-    static let noProjectSkillsMessage = text("empty.noProjectSkills.message", "No skills were found in global roots. Choose a project to include project-scoped skills, then scan.")
-    static let noCodexProjectMessage = text("empty.noCodexProject.message", "No Codex skills match the current global roots. Choose a project to include project-scoped Codex skills.")
-    static let noCodexSkillsMessage = text("empty.noCodexSkills.message", "No Codex skills match the current search or filters.")
-    static let noOpenClawWorkspaceSkillsMessage = text("empty.noOpenClawWorkspace.message", "No OpenClaw workspace skills match this view. OpenClaw only scans confirmed workspace roots: <workspace>/skills and <workspace>/.agents/skills; generic repo roots are skipped rather than treated as missing skills.")
-    static let adapterCapabilities = text("sidebar.adapterCapabilities", "Adapter Capabilities")
-    static let adapterScan = text("adapter.capability.scan", "Scan")
-    static let adapterToggle = text("adapter.capability.toggle", "Toggle")
-    static let adapterInstall = text("adapter.capability.install", "Install")
-    static let loading = text("state.loading", "Loading...")
-    static let stateEnabled = text("state.enabled", "Enabled")
-    static let stateDisabled = text("state.disabled", "Disabled")
-    static let stateBroken = text("state.broken", "Broken")
-    static let stateMissing = text("state.missing", "Missing")
-    static let stateShadowed = text("state.shadowed", "Shadowed")
-    static let stateUnknown = text("state.unknown", "Unknown")
-    static let retryRefresh = text("action.retryRefresh", "Retry Refresh")
-    static let refreshLog = text("refresh.log", "Refresh Log")
-    static let refreshIdle = text("refresh.idle", "Ready to refresh")
-    static let refreshReloading = text("refresh.reloading", "Reloading catalog collections...")
-    static let refreshScanning = text("refresh.scanning", "Scanning skills across supported adapters and refreshing catalog...")
-    static let refreshWatcherManual = text("refresh.watcherManual", "Automatic watcher events are not active in this native sidecar yet. Use Reload or Scan to refresh.")
-    static let catalogNotLoaded = text("state.catalogNotLoaded", "Catalog not loaded")
-    static let noSkillSelected = text("empty.noSkillSelected", "No Skill Selected")
-    static let noSkillSelectedMessage = text("empty.noSkillSelected.message", "Reload the catalog or select a skill from the sidebar.")
-    static let noFindings = text("empty.noFindings", "No Findings")
-    static let noFindingsMessage = text("empty.noFindings.message", "No rule findings are associated with this skill.")
-    static let noMatchingFindings = text("empty.noMatchingFindings", "No Matching Findings")
-    static let noMatchingFindingsMessage = text("empty.noMatchingFindings.message", "Adjust the triage, severity, or rule filter to show findings.")
-    static let noConflicts = text("empty.noConflicts", "No Conflicts")
-    static let noConflictsMessage = text("empty.noConflicts.message", "No same-agent conflict currently references this skill in the current agent. Cross-agent duplicates are not shown as conflicts.")
-    static let noSnapshots = text("empty.noSnapshots", "No Agent Config History")
-    static let noSnapshotsMessage = text("empty.noSnapshots.message", "No agent config snapshots have been recorded for this agent yet.")
-    static let snapshotPreview = text("snapshot.preview", "Agent Config Preview")
-    static let rollbackSnapshotQuestion = text("snapshot.rollback.question", "Rollback Agent Config?")
-    static let current = text("snapshot.current", "Current Agent Config")
-    static let snapshot = text("snapshot.snapshot", "Snapshot Agent Config")
-    static let agentConfigHistory = text("sidebar.agentConfigHistory", "Agent Config History")
-    static let agentConfigHistorySummary = text("sidebar.agentConfigHistory.summary", "Preview or roll back saved configuration snapshots for the selected agent.")
-    static let agentConfigTimeline = text("sidebar.agentConfigTimeline", "Agent Config Timeline")
-    static let agentConfigTimelineBoundary = text("sidebar.agentConfigTimeline.boundary", "Config-level only: these rollback points capture agent configuration files, not SKILL.md content, and they do not mean every skill has its own snapshot.")
-    static let agentConfigTimelineSelectAgent = text("sidebar.agentConfigTimeline.selectAgent", "Choose one agent to view its config timeline. All Agents never mixes rollback points.")
-    static let agentConfigTimelineDefaultAction = text("sidebar.agentConfigTimeline.defaultAction", "Config snapshot")
-    static let agentConfigTimelineStatus = text("sidebar.agentConfigTimeline.status", "Rollback point")
-    static let previewDiff = text("action.previewDiff", "Preview diff")
-    static let recentActivity = text("detail.recentActivity", "Recent Activity")
-    static let noRecentActivity = text("detail.recentActivity.empty", "No enable or disable activity has been recorded for this skill yet.")
-    static let loadingRecentActivity = text("detail.recentActivity.loading", "Loading activity...")
-    static let activityPayload = text("detail.activity.payload", "Payload")
-    static let emptyPlaceholder = text("value.empty", "<empty>")
-    static let definition = text("metadata.definition", "Definition")
-    static let catalogID = text("metadata.catalogId", "Catalog ID")
-    static let source = text("metadata.source", "Source")
-    static let provenanceRoot = text("metadata.provenanceRoot", "Root")
-    static let provenanceKind = text("metadata.provenanceKind", "Kind")
-    static let provenanceNativeKind = text("metadata.provenance.kind.native", "Native")
-    static let provenanceCompatibilityKind = text("metadata.provenance.kind.compatibility", "Compatibility")
-    static let provenanceInferredKind = text("metadata.provenance.kind.inferred", "Inferred")
-    static let provenanceToolGlobalKind = text("metadata.provenance.kind.toolGlobal", "Tool-global")
-    static let provenanceReadOnlyKind = text("metadata.provenance.kind.readOnly", "Read-only")
-    static let provenanceExternalKind = text("metadata.provenance.kind.external", "External")
-    static let provenanceNativeRoot = text("metadata.provenance.root.native", "native root")
-    static let provenanceNativeOpencodeRoot = text("metadata.provenance.root.nativeOpencode", "Native opencode root")
-    static let provenanceClaudeCompatibilityRoot = text("metadata.provenance.root.claudeCompatibility", "Claude compatibility root")
-    static let provenanceAgentsCompatibilityRoot = text("metadata.provenance.root.agentsCompatibility", "Agents compatibility root")
-    static let provenanceToolGlobalRoot = text("metadata.provenance.root.toolGlobal", "Tool-global staging")
-    static let provenanceReadOnlyRoot = text("metadata.provenance.root.readOnly", "read-only root")
-    static let provenanceExternalRoot = text("metadata.provenance.root.external", "External root")
-    static let provenanceHermesHomeProfileRoot = text("metadata.provenance.root.hermesHomeProfile", "Hermes home/profile root")
-    static let provenanceHermesExternalRoot = text("metadata.provenance.root.hermesExternal", "Hermes explicit external root")
-    static let provenanceOpenClawWorkspaceRoot = text("metadata.provenance.root.openClawWorkspace", "OpenClaw workspace root")
-    static let provenanceOpenClawReadOnlyRoot = text("metadata.provenance.root.openClawReadOnly", "OpenClaw read-only root")
-    static let provenanceUnclassifiedRoot = text("metadata.provenance.root.unclassified", "Unclassified root")
-    static let fingerprint = text("metadata.fingerprint", "Fingerprint")
-    static let description = text("metadata.description", "Description")
-    static let noDescription = text("metadata.noDescription", "No description")
-    static let frontmatter = text("metadata.frontmatter", "Frontmatter")
-    static let body = text("metadata.body", "Body")
-    static let permissions = text("metadata.permissions", "Permissions")
-    static let winner = text("metadata.winner", "Winner")
-    static let none = text("value.none", "None")
-    static let findingSeverityFilter = text("findings.filter.severity", "Severity")
-    static let findingRuleFilter = text("findings.filter.rule", "Rule ID")
-    static let findingTriageFilter = text("findings.filter.triage", "Triage")
-    static let allSeverities = text("findings.filter.allSeverities", "All Severities")
-    static let allRuleIDs = text("findings.filter.allRules", "All Rule IDs")
-    static let findingTriageOpen = text("findings.triage.open", "Open")
-    static let findingTriageReviewed = text("findings.triage.reviewed", "Reviewed")
-    static let findingTriageIgnored = text("findings.triage.ignored", "Ignored")
-    static let findingTriageNeedsFollowUp = text("findings.triage.needsFollowUp", "Needs follow-up")
-    static let findingTriageFilterActive = text("findings.triage.filter.active", "Active")
-    static let findingTriageFilterAll = text("findings.triage.filter.all", "All triage")
-    static let findingTriageNoticeTitle = text("findings.triage.notice.title", "Local finding triage")
-    static let findingTriageNoticeBody = text("findings.triage.notice.body", "Triage labels are stored only in SkillsCopilot app data. They do not write agent config, skill content, toggle snapshots, scripts, or AI output. If a finding changes after rescan, it reopens as Open.")
-    static let findingTriageActionReviewed = text("findings.triage.action.reviewed", "Mark reviewed")
-    static let findingTriageActionIgnored = text("findings.triage.action.ignored", "Ignore")
-    static let findingTriageActionFollowUp = text("findings.triage.action.followUp", "Needs follow-up")
-    static let findingTriageActionReopen = text("findings.triage.action.reopen", "Reopen")
-    static let ruleTuningTitle = text("rules.tuning.title", "Rule Tuning / Suppression")
-    static let ruleTuningBoundary = text("rules.tuning.boundary", "App-local review state only. These controls never edit skill files, write agent config, create snapshots, execute scripts, call an AI provider, or store credentials.")
-    static let ruleTuningEffectiveState = text("rules.tuning.effectiveState", "Effective rule state")
-    static let ruleTuningSeverityOverride = text("rules.tuning.severityOverride", "Severity override")
-    static let ruleTuningClearSeverity = text("rules.tuning.clearSeverity", "Clear override")
-    static let ruleTuningSuppressGroup = text("rules.tuning.suppressGroup", "Suppress group")
-    static let ruleTuningUnsuppressGroup = text("rules.tuning.unsuppressGroup", "Unsuppress group")
-    static let ruleTuningSuppressRule = text("rules.tuning.suppressRule", "Suppress rule")
-    static let ruleTuningUnsuppressRule = text("rules.tuning.unsuppressRule", "Unsuppress rule")
-    static let ruleTuningSuppressed = text("rules.tuning.suppressed", "Suppressed locally")
-    static let ruleTuningRuleWide = text("rules.tuning.ruleWide", "Rule-wide")
-    static let ruleTuningFindingGroup = text("rules.tuning.findingGroup", "Finding group")
-    static let ruleTuningNoOverride = text("rules.tuning.noOverride", "No local override")
-    static let findingExplanation = text("findings.explanation", "Why this appears")
-    static let findingRuleID = text("findings.ruleId", "Rule ID")
-    static let findingRuleSource = text("findings.ruleSource", "Rule source")
-    static let findingCatalogTarget = text("findings.catalogTarget", "Catalog target")
-    static let findingTrigger = text("findings.trigger", "Trigger")
-    static let findingImpact = text("findings.impact", "Impact")
-    static let findingRiskRelated = text("findings.riskRelated", "Risk-related")
-    static let findingRiskRelatedHelp = text("findings.riskRelated.help", "This rule is part of the permission, script, dependency, or tool-risk subset.")
-    static let findingRemediation = text("findings.remediation", "Suggested remediation")
-    static let currentAgentConflictsOnly = text("conflicts.currentAgentOnly", "Current agent only. Cross-agent duplicates are omitted from conflicts.")
-    static let findingSourceFrontmatter = text("findings.source.frontmatter", "Frontmatter validation")
-    static let findingSourcePermission = text("findings.source.permission", "Permission analysis")
-    static let findingSourceScript = text("findings.source.script", "Script safety analysis")
-    static let findingSourceDependency = text("findings.source.dependency", "Dependency analysis")
-    static let findingSourcePath = text("findings.source.path", "Catalog path check")
-    static let findingSourceFingerprint = text("findings.source.fingerprint", "Catalog fingerprint check")
-    static let findingSourceCatalog = text("findings.source.catalog", "Catalog rule")
-    static let findingNoCatalogTarget = text("findings.catalogTarget.none", "No definition or instance ID reported")
-    static let remediationFrontmatterRequired = text("findings.remediation.frontmatterRequired", "Add the required frontmatter fields in SKILL.md, then rescan.")
-    static let remediationToolsNotEmpty = text("findings.remediation.toolsNotEmpty", "Declare the allowed tools the skill needs, or remove tool-dependent instructions.")
-    static let remediationPathExists = text("findings.remediation.pathExists", "Restore the source file or remove the stale catalog entry, then scan again.")
-    static let remediationFingerprintChanged = text("findings.remediation.fingerprintChanged", "Review the changed skill content and rescan once the catalog should trust the new fingerprint.")
-    static let remediationNetworkDeclared = text("findings.remediation.networkDeclared", "Declare the intended network access explicitly, or keep it undeclared only if the skill does not use network access.")
-    static let remediationExecNeedsHuman = text("findings.remediation.execNeedsHuman", "Require human confirmation for execution-capable behavior, or remove the execution request.")
-    static let remediationDependencyUnknown = text("findings.remediation.dependencyUnknown", "Replace or document the unknown dependency, then rescan.")
-    static let instances = text("metadata.instances", "Instances")
-    static let target = text("metadata.target", "Target")
-    static let scope = text("metadata.scope", "Scope")
-    static let access = text("metadata.access", "Access")
-    static let permissionTools = text("permissions.tools", "Tools")
-    static let permissionFiles = text("permissions.files", "Files")
-    static let permissionNetwork = text("permissions.network", "Network")
-    static let permissionExec = text("permissions.exec", "Execution")
-    static let permissionHumanReview = text("permissions.humanReview", "Human review")
-    static let permissionRaw = text("permissions.raw", "Raw permissions")
-    static let permissionUndeclared = text("permissions.undeclared", "Undeclared / unknown")
-    static let permissionNoneDeclared = text("permissions.noneDeclared", "None declared")
-    static let permissionUnknownPayload = text("permissions.unknownPayload", "Unknown payload")
-    static let permissionNetworkReadOnly = text("permissions.network.readOnly", "Read-only declared")
-    static let permissionNetworkFull = text("permissions.network.full", "Full declared")
-    static let permissionRequested = text("permissions.requested", "Requested")
-    static let permissionNotRequested = text("permissions.notRequested", "Not requested")
-    static let permissionRequired = text("permissions.required", "Required")
-    static let permissionNotDeclaredRequired = text("permissions.notDeclaredRequired", "Not declared as required")
-    static let permissionUndeclaredNote = text("permissions.undeclaredNote", "Permissions are undeclared or unavailable in the catalog payload; this is not a safe or unsafe verdict.")
-    static let permissionDeclarationNote = text("permissions.declarationNote", "These values are permission declarations from the catalog payload, not a safety verdict.")
-    static let service = text("settings.service", "Service")
-    static let version = text("settings.version", "Version")
-    static let protocolLabel = text("settings.protocol", "Protocol")
-    static let catalog = text("settings.catalog", "Catalog")
-    static let userHome = text("settings.userHome", "User Home")
-    static let methods = text("settings.methods", "Methods")
-    static let unknown = text("value.unknown", "Unknown")
-    static let notLoaded = text("value.notLoaded", "Not loaded")
-    static let aiProviderSettings = text("settings.aiProvider.title", "AI Provider")
-    static let aiProviderBoundary = text("settings.aiProvider.boundary", "Configure a user-owned provider profile for explicit AI requests. No analysis runs in the background, Test Connection is manual, and provider output cannot write skills, agent config, snapshots, or scripts.")
-    static let aiProviderUnavailable = text("settings.aiProvider.unavailable", "AI provider settings are unavailable in this service build.")
-    static let aiProviderOpenAICompatible = text("settings.aiProvider.kind.openai", "OpenAI-compatible")
-    static let aiProviderClaudeCompatible = text("settings.aiProvider.kind.claude", "Claude-compatible")
-    static let aiProviderEndpoint = text("settings.aiProvider.endpoint", "Endpoint")
-    static let aiProviderModel = text("settings.aiProvider.model", "Model")
-    static let aiProviderAPIVersion = text("settings.aiProvider.apiVersion", "API version")
-    static let aiProviderAPIKey = text("settings.aiProvider.apiKey", "API key")
-    static let aiProviderAPIKeyPlaceholder = text("settings.aiProvider.apiKey.placeholder", "Leave blank to keep existing Keychain item")
-    static let aiProviderKeychainFirst = text("settings.aiProvider.keychainFirst", "API keys are sent only to the service on Save or Test Connection. The service should store secrets in Keychain first; the native UI clears this field after each action and never displays saved keys.")
-    static let aiProviderBudget = text("settings.aiProvider.budget", "Budget")
-    static let aiProviderMonthlyBudget = text("settings.aiProvider.monthlyBudget", "Monthly budget")
-    static let aiProviderTokenLimit = text("settings.aiProvider.tokenLimit", "Single-request token limit")
-    static let aiProviderStorage = text("settings.aiProvider.storage", "Credential storage")
-    static let aiProviderConfigured = text("settings.aiProvider.configured", "Configured")
-    static let aiProviderUnconfigured = text("settings.aiProvider.unconfigured", "Unconfigured")
-    static let aiProviderSave = text("settings.aiProvider.save", "Save Provider")
-    static let aiProviderTest = text("settings.aiProvider.test", "Test Connection")
-    static let aiProviderSaving = text("settings.aiProvider.saving", "Saving provider...")
-    static let aiProviderTesting = text("settings.aiProvider.testing", "Testing connection...")
-    static let aiProviderSaved = text("settings.aiProvider.saved", "Provider settings saved. API key draft cleared.")
-    static let aiProviderTestResult = text("settings.aiProvider.testResult", "Test result")
-    static let aiProviderTestSucceeded = text("settings.aiProvider.testSucceeded", "Provider connection test succeeded.")
-    static let aiProviderTestFailed = text("settings.aiProvider.testFailed", "Provider connection test failed.")
-    static let aiProviderAuditMetadata = text("settings.aiProvider.audit", "Audit metadata")
-    static let aiProviderNoAudit = text("settings.aiProvider.noAudit", "No audit metadata returned.")
-    static let aiProviderAuditDuration = text("settings.aiProvider.audit.duration", "Duration")
-    static let aiProviderAuditRedaction = text("settings.aiProvider.audit.redaction", "Redaction")
-    static let aiProviderAuditPromptStored = text("settings.aiProvider.audit.promptStored", "Prompt stored")
-    static let aiProviderAuditResponseStored = text("settings.aiProvider.audit.responseStored", "Response stored")
-    static let aiProviderAuditErrorCode = text("settings.aiProvider.audit.errorCode", "Error code")
-    static let aiProviderEndpointRequired = text("settings.aiProvider.validation.endpointRequired", "Endpoint is required.")
-    static let aiProviderEndpointInvalid = text("settings.aiProvider.validation.endpointInvalid", "Endpoint must include a URL scheme such as https://.")
-    static let aiProviderModelRequired = text("settings.aiProvider.validation.modelRequired", "Model is required.")
-    static let aiProviderBudgetInvalid = text("settings.aiProvider.validation.budgetInvalid", "Monthly budget must be a number.")
-    static let aiProviderTokenLimitInvalid = text("settings.aiProvider.validation.tokenLimitInvalid", "Single-request token limit must be a whole number.")
-    static let claudeSettings = text("settings.claudeSettings", "Claude Settings")
-    static let existingFile = text("settings.existingFile", "Existing file")
-    static let willCreateFile = text("settings.willCreateFile", "Will create file")
-    static let settingsInvalidUTF8 = text("settings.invalidUtf8", "Settings content is not valid UTF-8.")
-    static let jsonValidSettingsWrite = text("settings.jsonValid", "JSON is valid. Save will create an agent config snapshot, write atomically, verify, and rescan.")
-    static let connectedProtocolNote = text("detail.protocolNote", "This native macOS shell is connected through the Rust service protocol. Scan, toggle, and agent config rollback actions use verified write paths with snapshots.")
-    static let loadingSkillDetail = text("detail.loading", "Loading skill detail...")
-    static let readOnlyPreview = text("detail.readOnlyPreview", "Read-only preview")
-    static let toolGlobalPreviewTitle = text("detail.toolGlobal.previewTitle", "Tool-global Preview")
-    static let toolGlobalPreviewNote = text("detail.toolGlobal.previewNote", "Tool-global skills are staged for review. They cannot be toggled here and must be copied into a specific agent after an explicit confirmation.")
-    static let toolGlobalTargetAgent = text("detail.toolGlobal.targetAgent", "Target Agent")
-    static let toolGlobalInstallPreviewTitle = text("detail.toolGlobal.installPreviewTitle", "Install Preview")
-    static let toolGlobalInstallReady = text("detail.toolGlobal.installReady", "Confirmed install writes through the target adapter verified path with snapshot and read-back verification.")
-    static let llmSkillAnalysis = text("llm.skillAnalysis", "AI Skill Analysis")
-    static let llmSkillAnalysisSelectedScope = text("llm.skillAnalysis.scope.selected", "Selected skill")
-    static let llmSkillAnalysisVisibleScope = text("llm.skillAnalysis.scope.visible", "Visible skills")
-    static let llmSkillAnalysisSafetyTitle = text("llm.skillAnalysis.safetyTitle", "Read-only prepare only")
-    static let llmSkillAnalysisSafetyCopy = text("llm.skillAnalysis.safetyCopy", "No provider call is made by default. This preview cannot write skill files or agent config, cannot execute scripts, and does not save credentials.")
-    static let llmSkillAnalysisPrepareSelected = text("llm.skillAnalysis.prepareSelected", "Prepare Selected")
-    static let llmSkillAnalysisPrepareVisible = text("llm.skillAnalysis.prepareVisible", "Prepare Visible")
-    static let llmSkillAnalysisUnavailable = text("llm.skillAnalysis.unavailable", "AI skill analysis prepare is unavailable in this service build; preview remains disabled and read-only.")
-    static let llmSkillAnalysisUnavailablePrompt = text("llm.skillAnalysis.unavailablePrompt", "Service method llm.prepareSkillAnalysis is unavailable. No provider request was prepared.")
-    static let llmSkillAnalysisUnavailableSummary = text("llm.skillAnalysis.unavailableSummary", "Disabled fallback preview only. No writes, no scripts, no credentials, and no provider call.")
-    static let llmSkillAnalysisPromptDraft = text("llm.skillAnalysis.promptDraft", "Prepared prompt draft")
-    static let llmSkillAnalysisSummaryDraft = text("llm.skillAnalysis.summaryDraft", "Summary draft")
-    static let llmSkillAnalysisIncludedSkills = text("llm.skillAnalysis.includedSkills", "Included skills")
-    static let llmSkillAnalysisExcludedMissing = text("llm.skillAnalysis.excludedMissing", "Excluded / missing")
-    static let llmSkillAnalysisNoDraft = text("llm.skillAnalysis.noDraft", "No draft text returned by the service.")
-    static let llmSkillAnalysisNoIncludedSkills = text("llm.skillAnalysis.noIncludedSkills", "No included skills returned.")
-    static let llmSkillAnalysisWriteBack = text("llm.skillAnalysis.writeBack", "Write-back")
-    static let llmSkillAnalysisScriptExecution = text("llm.skillAnalysis.scriptExecution", "Script execution")
-    static let llmSkillAnalysisCredentialStorage = text("llm.skillAnalysis.credentialStorage", "Credential storage")
-    static let llmSkillAnalysisConfirmation = text("llm.skillAnalysis.confirmation", "Confirmation")
-    static let llmSkillAnalysisBlocked = text("llm.skillAnalysis.blocked", "Blocked")
-    static let llmSkillAnalysisRequired = text("llm.skillAnalysis.required", "Required")
-    static let llmSkillAnalysisEnabledUnsafe = text("llm.skillAnalysis.enabledUnsafe", "Enabled by service")
-    static let skillQualityTitle = text("quality.title", "AI Skill Quality Score")
-    static let skillQualityBoundary = text("quality.boundary", "User-triggered, read-only scoring from local evidence. The score cannot write skill files, mutate agent config, create snapshots, change triage, execute scripts, or read credentials.")
-    static let skillQualityScoreAction = text("quality.action.score", "Score Quality")
-    static let skillQualityUnavailable = text("quality.unavailable", "Quality scoring is unavailable in this service build.")
-    static let skillQualityPromptUnavailable = text("quality.promptUnavailable", "Quality prompt preview is unavailable in this service build; no provider request was prepared.")
-    static let skillQualityScore = text("quality.score", "Score")
-    static let skillQualityBand = text("quality.band", "Band")
-    static let skillQualityComponents = text("quality.components", "Components")
-    static let skillQualityEvidence = text("quality.evidence", "Evidence")
-    static let skillQualityRiskNotes = text("quality.riskNotes", "Risk notes")
-    static let skillQualitySuggestions = text("quality.suggestions", "Suggested improvements")
-    static let skillQualityNoComponents = text("quality.empty.components", "No component scores returned.")
-    static let skillQualityNoEvidence = text("quality.empty.evidence", "No evidence items returned.")
-    static let skillQualityNoRisks = text("quality.empty.risks", "No risk notes returned.")
-    static let skillQualityNoSuggestions = text("quality.empty.suggestions", "No suggestions returned.")
-    static let skillQualitySafety = text("quality.safety", "Safety flags")
-    static let skillQualityProviderNotSent = text("quality.safety.providerNotSent", "Provider not sent")
-    static let skillQualityWritesBlocked = text("quality.safety.writesBlocked", "Writes blocked")
-    static let skillQualityScriptsBlocked = text("quality.safety.scriptsBlocked", "Scripts blocked")
-    static let skillQualityMutationsBlocked = text("quality.safety.mutationsBlocked", "Config/triage mutations blocked")
-    static let skillQualityCredentialsBlocked = text("quality.safety.credentialsBlocked", "Credentials blocked")
-    static let taskReadinessTitle = text("taskReadiness.title", "AI Task Readiness Check")
-    static let taskReadinessBoundary = text("taskReadiness.boundary", "User-triggered, read-only task fit check from local evidence. It cannot write skill files, mutate agent config, create snapshots, change triage, execute scripts, or read credentials.")
-    static let taskReadinessTask = text("taskReadiness.task", "Task")
-    static let taskReadinessTaskPlaceholder = text("taskReadiness.task.placeholder", "Describe the task to test against this skill")
-    static let taskReadinessCheckAction = text("taskReadiness.action.check", "Check Readiness")
-    static let taskReadinessTaskRequired = text("taskReadiness.taskRequired", "Enter a task before checking readiness.")
-    static let taskReadinessUnavailable = text("taskReadiness.unavailable", "Task readiness check is unavailable in this service build.")
-    static let taskReadinessPromptUnavailable = text("taskReadiness.promptUnavailable", "Task readiness prompt preview is unavailable in this service build; no provider request was prepared.")
-    static let taskReadinessScore = text("taskReadiness.score", "Readiness")
-    static let taskReadinessBand = text("taskReadiness.band", "Band")
-    static let taskReadinessCandidates = text("taskReadiness.candidates", "Candidate skills")
-    static let taskReadinessGaps = text("taskReadiness.gaps", "Gaps / missing capabilities")
-    static let taskReadinessBlockers = text("taskReadiness.blockers", "Blockers")
-    static let taskReadinessRiskNotes = text("taskReadiness.riskNotes", "Risk notes")
-    static let taskReadinessEvidence = text("taskReadiness.evidence", "Evidence")
-    static let taskReadinessNoCandidates = text("taskReadiness.empty.candidates", "No candidate skills returned.")
-    static let taskReadinessNoGaps = text("taskReadiness.empty.gaps", "No gaps returned.")
-    static let taskReadinessNoBlockers = text("taskReadiness.empty.blockers", "No blockers returned.")
-    static let taskReadinessNoRisks = text("taskReadiness.empty.risks", "No risk notes returned.")
-    static let taskReadinessNoEvidence = text("taskReadiness.empty.evidence", "No evidence items returned.")
-    static let routingConfidenceTitle = text("routingConfidence.title", "AI Routing Confidence")
-    static let routingConfidenceBoundary = text("routingConfidence.boundary", "User-triggered, read-only route ranking from local evidence. It cannot write skill files, mutate agent config, create snapshots, change triage, execute scripts, or read credentials.")
-    static let routingConfidenceTaskPlaceholder = text("routingConfidence.task.placeholder", "Describe the task to rank route fit")
-    static let routingConfidenceAction = text("routingConfidence.action.rank", "Rank Routes")
-    static let routingConfidenceTaskRequired = text("routingConfidence.taskRequired", "Enter a task before ranking routes.")
-    static let routingConfidenceUnavailable = text("routingConfidence.unavailable", "Routing confidence is unavailable in this service build.")
-    static let routingConfidencePromptUnavailable = text("routingConfidence.promptUnavailable", "Routing confidence prompt preview is unavailable in this service build; no provider request was prepared.")
-    static let routingConfidenceScore = text("routingConfidence.score", "Confidence")
-    static let routingConfidenceBand = text("routingConfidence.band", "Band")
-    static let routingConfidenceRoutes = text("routingConfidence.routes", "Candidate routes")
-    static let routingConfidenceMatchReasons = text("routingConfidence.matchReasons", "Match reasons")
-    static let routingConfidenceAmbiguity = text("routingConfidence.ambiguity", "Ambiguity / collision warnings")
-    static let routingConfidenceWrongPick = text("routingConfidence.wrongPick", "Wrong-pick / miss risks")
-    static let routingConfidenceEvidence = text("routingConfidence.evidence", "Evidence")
-    static let routingConfidenceNoRoutes = text("routingConfidence.empty.routes", "No candidate routes returned.")
-    static let routingConfidenceNoReasons = text("routingConfidence.empty.reasons", "No match reasons returned.")
-    static let routingConfidenceNoAmbiguity = text("routingConfidence.empty.ambiguity", "No ambiguity warnings returned.")
-    static let routingConfidenceNoWrongPick = text("routingConfidence.empty.wrongPick", "No wrong-pick or miss risks returned.")
-    static let routingConfidenceNoEvidence = text("routingConfidence.empty.evidence", "No evidence items returned.")
-    static let llmAssist = text("llm.assist", "LLM Assist")
-    static let llmEnabled = text("llm.enabled", "Enabled")
-    static let llmDisabled = text("llm.disabled", "Disabled")
-    static let llmPreparing = text("llm.preparing", "Preparing...")
-    static let llmPreparePrompt = text("llm.preparePrompt", "Choose an action to preview tokens and cost.")
-    static let llmDisabledFallback = text("llm.disabledFallback", "LLM assist is unavailable in this build.")
-    static let llmProvider = text("llm.provider", "Provider")
-    static let llmModel = text("llm.model", "Model")
-    static let llmTokens = text("llm.tokens", "Tokens")
-    static let llmCost = text("llm.cost", "Cost")
-    static let llmConfirmationRequired = text("llm.confirmationRequired", "Confirmation required before any LLM call.")
-    static let llmDraftCopyRequired = text("llm.draftCopyRequired", "Draft output requires user confirmation and copy.")
-    static let llmReviewPreview = text("llm.reviewPreview", "Read-only review preview")
-    static let llmReviewPurpose = text("llm.reviewPurpose", "Purpose")
-    static let llmReviewRisk = text("llm.reviewRisk", "Risk")
-    static let llmReviewSignals = text("llm.reviewSignals", "Signals")
-    static let llmReviewFindings = text("llm.reviewFindings", "Finding explanations")
-    static let llmReviewCrossAgentFit = text("llm.reviewCrossAgentFit", "Cross-agent fit")
-    static let llmReviewRedaction = text("llm.reviewRedaction", "Redaction")
-    static let llmReviewNoFindings = text("llm.reviewNoFindings", "No finding explanations in this preview.")
-    static let llmReviewNoSignals = text("llm.reviewNoSignals", "No risk signals in this preview.")
-    static let llmReviewNoActions = text("llm.reviewNoActions", "No provider request, write action, or execution action is available from this preview.")
-    static let llmPromptPreviewTitle = text("llm.promptPreview.title", "Prompt Preview")
-    static let llmPromptPreviewAction = text("llm.promptPreview.action", "Preview Prompt")
-    static let llmPromptConfirmSend = text("llm.promptPreview.confirmSend", "Confirm & Send")
-    static let llmPromptSending = text("llm.promptPreview.sending", "Sending provider request...")
-    static let llmPromptProviderRequired = text("llm.promptPreview.providerRequired", "Configure and save an AI provider before sending.")
-    static let llmPromptPreviewRequired = text("llm.promptPreview.previewRequired", "Preview the current prompt before sending.")
-    static let llmPromptSendSucceeded = text("llm.promptPreview.sendSucceeded", "Provider response received.")
-    static let llmPromptSendFailed = text("llm.promptPreview.sendFailed", "Provider request failed.")
-    static let llmPromptScope = text("llm.promptPreview.scope", "Prompt scope")
-    static let llmPromptDestination = text("llm.promptPreview.destination", "Destination")
-    static let llmPromptIncludedFields = text("llm.promptPreview.includedFields", "Included fields")
-    static let llmPromptExcludedFields = text("llm.promptPreview.excludedFields", "Excluded fields")
-    static let llmPromptRedactedPrompt = text("llm.promptPreview.redactedPrompt", "Redacted prompt")
-    static let llmPromptNoFields = text("llm.promptPreview.noFields", "No fields reported.")
-    static let llmPromptRawPromptStored = text("llm.promptPreview.rawPromptStored", "Raw prompt stored")
-    static let llmPromptRawResponseStored = text("llm.promptPreview.rawResponseStored", "Raw response stored")
-    static let llmPromptCopyOnly = text("llm.promptPreview.copyOnly", "Copy-only output")
-    static let llmPromptOutput = text("llm.promptPreview.output", "Provider output")
-    static let llmPromptCopyOutput = text("llm.promptPreview.copyOutput", "Copy Output")
-    static let scriptExecutionSafety = text("scriptExecution.safety", "Script Execution Safety")
-    static let scriptExecutionPreviewOnly = text("scriptExecution.previewOnly", "Preview-only")
-    static let scriptExecutionUnavailable = text("scriptExecution.unavailable", "Script execution preflight is unavailable in this service build. Scripts remain non-executable from the native UI.")
-    static let scriptExecutionBlockedNote = text("scriptExecution.blockedNote", "The native UI does not execute scripts. Use this panel only to inspect the safety gate data returned by the service.")
-    static let scriptExecutionPreviewSummary = text("scriptExecution.previewSummary", "Script execution is blocked by default until a separate confirmed service path is available.")
-    static let scriptExecutionNoCommand = text("scriptExecution.noCommand", "No command preview is available.")
-    static let scriptExecutionNoRisks = text("scriptExecution.noRisks", "No service risks were reported.")
-    static let scriptExecutionNoAudit = text("scriptExecution.noAudit", "No audit identifier reported.")
-    static let scriptExecutionAuditStatus = text("scriptExecution.auditStatus", "Audit status")
-    static let scriptExecutionAuditID = text("scriptExecution.auditId", "Audit ID")
-    static let scriptExecutionCommand = text("scriptExecution.command", "Command preview")
-    static let scriptExecutionCWD = text("scriptExecution.cwd", "CWD")
-    static let scriptExecutionEnv = text("scriptExecution.env", "Environment")
-    static let scriptExecutionNetwork = text("scriptExecution.network", "Network")
-    static let scriptExecutionFiles = text("scriptExecution.files", "Files")
-    static let scriptExecutionRisks = text("scriptExecution.risks", "Risks")
-    static let scriptExecutionConfirmationRequired = text("scriptExecution.confirmationRequired", "Human confirmation is required before any future execution service path.")
-    static let scriptExecutionEnvEmpty = text("scriptExecution.envEmpty", "No environment overrides")
-    static let scriptExecutionFilesEmpty = text("scriptExecution.filesEmpty", "No file scope declared")
-    static let toggleUnavailableBusy = text("detail.toggleUnavailable.busy", "A write is already in progress.")
-    static let toggleUnavailableBroken = text("detail.toggleUnavailable.broken", "Broken skills cannot be toggled until their SKILL.md can be parsed.")
-    static let toggleUnavailableMissing = text("detail.toggleUnavailable.missing", "Missing skills cannot be toggled because the source file was not found during the last scan.")
-    static let toggleUnavailableShadowed = text("detail.toggleUnavailable.shadowed", "Shadowed skills are read-only here; resolve the active copy before toggling.")
-    static let toggleUnavailableUnknown = text("detail.toggleUnavailable.unknown", "This skill has an unknown catalog state and is read-only in this build.")
-    static let toggleUnavailableToolGlobal = text("detail.toggleUnavailable.toolGlobal", "Tool-global skills are read-only previews. Install or copy to an agent requires a separate confirmed action.")
-    static let piGuardedToggle = text("detail.pi.guardedToggle", "Guarded toggle")
-    static let piGuardedToggleBoundary = text("detail.pi.guardedToggle.boundary", "Pi toggle is experimental and guarded by preview, config snapshot, and rollback. Install stays blocked; no AI, scripts, or credentials are used.")
-    static let operationUnavailableBusy = text("detail.operationUnavailable.busy", "Another catalog operation is already in progress.")
-    static let readOnly = text("detail.readOnly", "Read-only")
-    static let hermesHomeProfileAccess = text("detail.hermes.homeProfileAccess", "Hermes home/profile skills are read-only in this build. Toggle and install stay blocked.")
-    static let hermesExternalAccess = text("detail.hermes.externalAccess", "Hermes external dirs are explicit read-only roots, not project roots. Toggle and install stay blocked.")
-    static let openClawWorkspaceScope = text("scope.openClawWorkspace", "Workspace")
-    static let openClawWorkspaceBoundary = text("openClaw.workspace.boundary", "OpenClaw scans only workspace skill roots (<workspace>/skills and <workspace>/.agents/skills). Generic repository roots are skipped rather than shown as missing skills.")
-    static let openClawReadOnlyAccess = text("detail.openClaw.readOnlyAccess", "OpenClaw skills are read-only and workspace-scoped in this build. Toggle and install stay blocked; generic repo roots are skipped, not treated as missing skills.")
-    static let openClawToggleBlocked = text("detail.openClaw.toggleBlocked", "OpenClaw workspace skills are read-only in this build. Toggle and install remain blocked.")
-    static let currentMatchesSnapshot = text("snapshot.matches", "Current agent config already matches this snapshot.")
-    static let currentDiffersFromSnapshot = text("snapshot.differs", "Current agent config differs from this snapshot.")
-    static let menuScanSkills = text("menu.scanSkills", "Scan Skills")
-    static let menuReloadSkills = text("menu.reloadSkills", "Reload Skills")
-    static let menuSkills = text("menu.skills", "Skills")
-    static let menuShowOverview = text("menu.showOverview", "Show Overview")
-    static let menuShowFindings = text("menu.showFindings", "Show Findings")
-    static let menuShowConflicts = text("menu.showConflicts", "Show Same-agent Conflicts")
-    static let menuClearSearch = text("menu.clearSearch", "Clear Search")
+    static var appTitle: String { text("app.title", "Skills Copilot") }
+    static var appWindowTitle: String { text("app.windowTitle", "SkillsCopilot") }
+    static var searchPrompt: String { text("search.prompt", "Search") }
+    static var scan: String { text("action.scan", "Scan") }
+    static var reload: String { text("action.reload", "Reload") }
+    static var save: String { text("action.save", "Save") }
+    static var done: String { text("action.done", "Done") }
+    static var cancel: String { text("action.cancel", "Cancel") }
+    static var enable: String { text("action.enable", "Enable") }
+    static var disable: String { text("action.disable", "Disable") }
+    static var preview: String { text("action.preview", "Preview") }
+    static var previewGate: String { text("action.previewGate", "Preview Gate") }
+    static var executionBlocked: String { text("action.executionBlocked", "Execution Blocked") }
+    static var rollback: String { text("action.rollback", "Rollback") }
+    static var installToAgent: String { text("action.installToAgent", "Install to Agent...") }
+    static var confirmInstall: String { text("action.confirmInstall", "Confirm Install") }
+    static var llmAnalyze: String { text("llm.action.analyze", "Analyze") }
+    static var llmRecommend: String { text("llm.action.recommend", "Recommend") }
+    static var llmExplainConflict: String { text("llm.action.explainConflict", "Explain Same-agent Conflict") }
+    static var llmDraftFrontmatter: String { text("llm.action.draftFrontmatter", "Draft Frontmatter") }
+    static var chooseProject: String { text("action.chooseProject", "Choose Project") }
+    static var clearProject: String { text("action.clearProject", "Clear Project") }
+    static var revealInFinder: String { text("action.revealInFinder", "Reveal in Finder") }
+    static var skills: String { text("nav.skills", "Skills") }
+    static var project: String { text("nav.project", "Project") }
+    static var view: String { text("nav.view", "View") }
+    static var agent: String { text("filter.agent", "Agent") }
+    static var state: String { text("filter.state", "State") }
+    static var sort: String { text("filter.sort", "Sort") }
+    static var claudeCode: String { text("agent.claudeCode", "Claude Code") }
+    static var codex: String { text("agent.codex", "Codex") }
+    static var opencode: String { text("agent.opencode", "opencode") }
+    static var pi: String { text("agent.pi", "Pi") }
+    static var hermes: String { text("agent.hermes", "Hermes") }
+    static var openclaw: String { text("agent.openclaw", "OpenClaw") }
+    static var detailSection: String { text("detail.section", "Detail Section") }
+    static var overview: String { text("detail.overview", "Overview") }
+    static var findings: String { text("detail.findings", "Findings") }
+    static var conflicts: String { text("detail.conflicts", "Conflicts") }
+    static var cleanupQueue: String { text("cleanup.queue", "Cleanup Queue") }
+    static var cleanupKindFinding: String { text("cleanup.kind.finding", "Findings") }
+    static var cleanupKindIntegrity: String { text("cleanup.kind.integrity", "Integrity") }
+    static var cleanupKindConflict: String { text("cleanup.kind.conflict", "Same-agent conflicts") }
+    static var cleanupKindAnalysis: String { text("cleanup.kind.analysis", "Analysis insights") }
+    static var cleanupPriorityCritical: String { text("cleanup.priority.critical", "Critical") }
+    static var cleanupPriorityHigh: String { text("cleanup.priority.high", "High") }
+    static var cleanupPriorityMedium: String { text("cleanup.priority.medium", "Medium") }
+    static var cleanupPriorityLow: String { text("cleanup.priority.low", "Low") }
+    static var cleanupPriorityInfo: String { text("cleanup.priority.info", "Info") }
+    static var cleanupFilterKind: String { text("cleanup.filter.kind", "Kind") }
+    static var cleanupFilterPriority: String { text("cleanup.filter.priority", "Priority") }
+    static var cleanupFilterAllKinds: String { text("cleanup.filter.allKinds", "All kinds") }
+    static var cleanupFilterAllPriorities: String { text("cleanup.filter.allPriorities", "All priorities") }
+    static var cleanupFilterCriticalHigh: String { text("cleanup.filter.criticalHigh", "Critical / High") }
+    static var cleanupFilterLowInfo: String { text("cleanup.filter.lowInfo", "Low / Info") }
+    static var cleanupUntitledItem: String { text("cleanup.item.untitled", "Cleanup item") }
+    static var cleanupDefaultNextAction: String { text("cleanup.item.nextAction", "Open detail") }
+    static var cleanupUnavailableFallback: String { text("cleanup.unavailableFallback", "Cleanup Queue is unavailable in this service build. Showing a local empty read-only fallback; no writes, scripts, AI provider calls, or credentials are used.") }
+    static var cleanupQueueReadOnlyBoundary: String { text("cleanup.readOnlyBoundary", "Work through open findings, integrity issues, same-agent conflicts, and analysis insights from one read-only queue. Actions only open existing detail views; they do not write agent config, edit skills, execute scripts, call an AI provider, or store credentials.") }
+    static var cleanupEmptyTitle: String { text("cleanup.empty.title", "No Cleanup Queue items") }
+    static var cleanupEmptyMessage: String { text("cleanup.empty.message", "There are no open cleanup items for the current service response.") }
+    static var cleanupNoFilteredItems: String { text("cleanup.empty.filtered", "No queue items match the selected kind, priority, and agent filters.") }
+    static var cleanupAIBlocked: String { text("cleanup.safety.aiBlocked", "AI blocked") }
+    static var cleanupCredentialsBlocked: String { text("cleanup.safety.credentialsBlocked", "Credentials blocked") }
+    static var cleanupOpenExistingDetailHelp: String { text("cleanup.action.openExistingDetail.help", "Open the existing read-only detail section for this item.") }
+    static var crossAgentComparisonTitle: String { text("comparison.crossAgent.title", "Cross-agent Comparison") }
+    static var crossAgentComparisonBoundary: String { text("comparison.crossAgent.boundary", "Compare same-name or similar skills across Claude Code, Codex, opencode, Pi, Hermes, and OpenClaw by state, source, scope/root, findings, writable capability, and differences. This view is read-only: it cannot write config, edit skills, create snapshots, execute scripts, call an AI provider, or read credentials.") }
+    static var crossAgentComparisonGroups: String { text("comparison.crossAgent.groups", "Groups") }
+    static var crossAgentComparisonAgents: String { text("comparison.crossAgent.agents", "Agents") }
+    static var crossAgentComparisonRiskGroups: String { text("comparison.crossAgent.riskGroups", "Risk groups") }
+    static var crossAgentComparisonWritableMismatch: String { text("comparison.crossAgent.writableMismatch", "Writable mismatch") }
+    static var crossAgentComparisonDifferences: String { text("comparison.crossAgent.differences", "Differences") }
+    static var crossAgentComparisonWritable: String { text("comparison.crossAgent.writable", "Writable verified") }
+    static var crossAgentComparisonUntitled: String { text("comparison.crossAgent.untitled", "Comparison group") }
+    static var crossAgentComparisonMatchName: String { text("comparison.crossAgent.match.name", "Same or similar name") }
+    static var crossAgentComparisonMatchSimilarName: String { text("comparison.crossAgent.match.similarName", "Similar name with definition differences") }
+    static var crossAgentComparisonNoSelectedGroup: String { text("comparison.crossAgent.empty.selected", "No selected-skill comparison group") }
+    static var crossAgentComparisonNoSelectedGroupMessage: String { text("comparison.crossAgent.empty.selected.message", "The selected skill does not currently share a same-name or similar cross-agent group in this catalog/filter context.") }
+    static var crossAgentComparisonLocalFallback: String { text("comparison.crossAgent.localFallback", "Comparison service is unavailable in this build. Showing a local read-only catalog comparison fallback.") }
+    static var crossAgentComparisonDifferenceEnabled: String { text("comparison.crossAgent.difference.enabled", "Enabled state differs") }
+    static var crossAgentComparisonDifferenceWritable: String { text("comparison.crossAgent.difference.writable", "Writable capability differs") }
+    static var crossAgentComparisonDifferenceSource: String { text("comparison.crossAgent.difference.source", "Source/root differs") }
+    static var crossAgentComparisonDifferenceFindings: String { text("comparison.crossAgent.difference.findings", "Finding counts differ") }
+    static var crossAgentComparisonDifferenceDefinition: String { text("comparison.crossAgent.difference.definition", "Definition IDs differ") }
+    static var batchToggleTitle: String { text("batchToggle.title", "Safe Batch") }
+    static var batchToggleBoundary: String { text("batchToggle.boundary", "Preview-first enable/disable for visible skills only. Read-only adapters and unverified writable roots are skipped; no scripts, AI provider calls, credentials, skill-content writes, or public release actions are available.") }
+    static var batchToggleTarget: String { text("batchToggle.target", "Batch target") }
+    static var batchToggleSelected: String { text("batchToggle.selected", "Selected") }
+    static var batchToggleWritable: String { text("batchToggle.writable", "Writable") }
+    static var batchToggleSkipped: String { text("batchToggle.skipped", "Skipped") }
+    static var batchToggleApply: String { text("batchToggle.apply", "Apply") }
+    static var batchTogglePreviewing: String { text("batchToggle.previewing", "Preparing batch preview...") }
+    static var batchToggleSnapshotPlan: String { text("batchToggle.snapshotPlan", "Snapshot / rollback plan") }
+    static var batchToggleSnapshotPlanDefault: String { text("batchToggle.snapshotPlan.default", "Service will create agent-config snapshots for writable adapter targets before applying, then use existing rollback support for those config files.") }
+    static var batchToggleSnapshotPlanUnavailable: String { text("batchToggle.snapshotPlan.unavailable", "Service batch preview is unavailable, so apply is disabled. No files were written.") }
+    static var batchToggleServicePreviewUnavailable: String { text("batchToggle.servicePreviewUnavailable", "Service batch preview method is unavailable. This is a local read-only eligibility estimate; apply is disabled until batch.applySkillToggles or batch.applyToggle is available.") }
+    static var batchToggleApplyUnavailable: String { text("batchToggle.applyUnavailable", "Batch apply is unavailable until a service preview/apply pair confirms the snapshot plan.") }
+    static var batchToggleNoWritableChanges: String { text("batchToggle.noWritableChanges", "No writable skill changes are available in this preview.") }
+    static var batchToggleNoAffectedSkills: String { text("batchToggle.noAffectedSkills", "No writable affected skills in this preview.") }
+    static var batchToggleNoSkippedSkills: String { text("batchToggle.noSkippedSkills", "No skipped skills in this preview.") }
+    static var batchTogglePreviewChanged: String { text("batchToggle.previewChanged", "Batch preview changed before confirmation. Preview again before applying.") }
+    static var localReportTitle: String { text("localReport.title", "Local Report Export") }
+    static var localReportBoundary: String { text("localReport.boundary", "User-triggered local redacted audit export only. No public distribution, provider calls, credentials, script execution, config mutation, or background sync.") }
+    static var localReportFormat: String { text("localReport.format", "Format") }
+    static var localReportFormatMarkdown: String { text("localReport.format.markdown", "Markdown") }
+    static var localReportFormatJSON: String { text("localReport.format.json", "JSON") }
+    static var localReportExport: String { text("localReport.export", "Export") }
+    static var localReportExporting: String { text("localReport.exporting", "Exporting local report...") }
+    static var localReportUnavailableFallback: String { text("localReport.unavailableFallback", "Local report export is unavailable in this service build. No file was written.") }
+    static var localReportNoFile: String { text("localReport.noFile", "No local file") }
+    static var localReportNoSections: String { text("localReport.noSections", "No section list returned") }
+    static var localReportExportedSummary: String { text("localReport.exportedSummary", "Local redacted report exported.") }
+    static var localReportSections: String { text("localReport.sections", "Sections") }
+    static var localReportRedacted: String { text("localReport.redacted", "Redacted") }
+    static var localReportNotRedactedWarning: String { text("localReport.notRedactedWarning", "Service did not mark this report as redacted. Review before sharing.") }
+    static var noSkillsInCatalog: String { text("empty.noSkillsInCatalog", "No skills in catalog") }
+    static var noSkillsMatchSearch: String { text("empty.noSkillsMatchSearch", "No skills match this search") }
+    static var noProjectSelected: String { text("project.none", "No Project") }
+    static var projectChoosePrompt: String { text("project.choosePrompt", "Choose a project or OpenClaw workspace directory to scan project-scoped Claude, Codex, opencode, and workspace-scoped OpenClaw skills.") }
+    static var projectSelectedSource: String { text("project.source.selected", "Selected project") }
+    static var projectGlobalRootsOnly: String { text("project.source.globalOnly", "No project: global roots only") }
+    static var recentProjects: String { text("project.recent", "Recent Projects") }
+    static var noRecentProjects: String { text("project.noRecent", "No Recent Projects") }
+    static var projectValidation: String { text("project.validation", "Project Validation") }
+    static var noProjectSkillsMessage: String { text("empty.noProjectSkills.message", "No skills were found in global roots. Choose a project to include project-scoped skills, then scan.") }
+    static var noCodexProjectMessage: String { text("empty.noCodexProject.message", "No Codex skills match the current global roots. Choose a project to include project-scoped Codex skills.") }
+    static var noCodexSkillsMessage: String { text("empty.noCodexSkills.message", "No Codex skills match the current search or filters.") }
+    static var noOpenClawWorkspaceSkillsMessage: String { text("empty.noOpenClawWorkspace.message", "No OpenClaw workspace skills match this view. OpenClaw only scans confirmed workspace roots: <workspace>/skills and <workspace>/.agents/skills; generic repo roots are skipped rather than treated as missing skills.") }
+    static var adapterCapabilities: String { text("sidebar.adapterCapabilities", "Adapter Capabilities") }
+    static var adapterScan: String { text("adapter.capability.scan", "Scan") }
+    static var adapterToggle: String { text("adapter.capability.toggle", "Toggle") }
+    static var adapterInstall: String { text("adapter.capability.install", "Install") }
+    static var loading: String { text("state.loading", "Loading...") }
+    static var stateEnabled: String { text("state.enabled", "Enabled") }
+    static var stateDisabled: String { text("state.disabled", "Disabled") }
+    static var stateBroken: String { text("state.broken", "Broken") }
+    static var stateMissing: String { text("state.missing", "Missing") }
+    static var stateShadowed: String { text("state.shadowed", "Shadowed") }
+    static var stateUnknown: String { text("state.unknown", "Unknown") }
+    static var retryRefresh: String { text("action.retryRefresh", "Retry Refresh") }
+    static var refreshLog: String { text("refresh.log", "Refresh Log") }
+    static var refreshIdle: String { text("refresh.idle", "Ready to refresh") }
+    static var refreshReloading: String { text("refresh.reloading", "Reloading catalog collections...") }
+    static var refreshScanning: String { text("refresh.scanning", "Scanning skills across supported adapters and refreshing catalog...") }
+    static var refreshWatcherManual: String { text("refresh.watcherManual", "Automatic watcher events are not active in this native sidecar yet. Use Reload or Scan to refresh.") }
+    static var catalogNotLoaded: String { text("state.catalogNotLoaded", "Catalog not loaded") }
+    static var noSkillSelected: String { text("empty.noSkillSelected", "No Skill Selected") }
+    static var noSkillSelectedMessage: String { text("empty.noSkillSelected.message", "Reload the catalog or select a skill from the sidebar.") }
+    static var noFindings: String { text("empty.noFindings", "No Findings") }
+    static var noFindingsMessage: String { text("empty.noFindings.message", "No rule findings are associated with this skill.") }
+    static var noMatchingFindings: String { text("empty.noMatchingFindings", "No Matching Findings") }
+    static var noMatchingFindingsMessage: String { text("empty.noMatchingFindings.message", "Adjust the triage, severity, or rule filter to show findings.") }
+    static var noConflicts: String { text("empty.noConflicts", "No Conflicts") }
+    static var noConflictsMessage: String { text("empty.noConflicts.message", "No same-agent conflict currently references this skill in the current agent. Cross-agent duplicates are not shown as conflicts.") }
+    static var noSnapshots: String { text("empty.noSnapshots", "No Agent Config History") }
+    static var noSnapshotsMessage: String { text("empty.noSnapshots.message", "No agent config snapshots have been recorded for this agent yet.") }
+    static var snapshotPreview: String { text("snapshot.preview", "Agent Config Preview") }
+    static var rollbackSnapshotQuestion: String { text("snapshot.rollback.question", "Rollback Agent Config?") }
+    static var current: String { text("snapshot.current", "Current Agent Config") }
+    static var snapshot: String { text("snapshot.snapshot", "Snapshot Agent Config") }
+    static var agentConfigHistory: String { text("sidebar.agentConfigHistory", "Agent Config History") }
+    static var agentConfigHistorySummary: String { text("sidebar.agentConfigHistory.summary", "Preview or roll back saved configuration snapshots for the selected agent.") }
+    static var agentConfigTimeline: String { text("sidebar.agentConfigTimeline", "Agent Config Timeline") }
+    static var agentConfigTimelineBoundary: String { text("sidebar.agentConfigTimeline.boundary", "Config-level only: these rollback points capture agent configuration files, not SKILL.md content, and they do not mean every skill has its own snapshot.") }
+    static var agentConfigTimelineSelectAgent: String { text("sidebar.agentConfigTimeline.selectAgent", "Choose one agent to view its config timeline. All Agents never mixes rollback points.") }
+    static var agentConfigTimelineDefaultAction: String { text("sidebar.agentConfigTimeline.defaultAction", "Config snapshot") }
+    static var agentConfigTimelineStatus: String { text("sidebar.agentConfigTimeline.status", "Rollback point") }
+    static var previewDiff: String { text("action.previewDiff", "Preview diff") }
+    static var recentActivity: String { text("detail.recentActivity", "Recent Activity") }
+    static var noRecentActivity: String { text("detail.recentActivity.empty", "No enable or disable activity has been recorded for this skill yet.") }
+    static var loadingRecentActivity: String { text("detail.recentActivity.loading", "Loading activity...") }
+    static var activityPayload: String { text("detail.activity.payload", "Payload") }
+    static var emptyPlaceholder: String { text("value.empty", "<empty>") }
+    static var definition: String { text("metadata.definition", "Definition") }
+    static var catalogID: String { text("metadata.catalogId", "Catalog ID") }
+    static var source: String { text("metadata.source", "Source") }
+    static var provenanceRoot: String { text("metadata.provenanceRoot", "Root") }
+    static var provenanceKind: String { text("metadata.provenanceKind", "Kind") }
+    static var provenanceNativeKind: String { text("metadata.provenance.kind.native", "Native") }
+    static var provenanceCompatibilityKind: String { text("metadata.provenance.kind.compatibility", "Compatibility") }
+    static var provenanceInferredKind: String { text("metadata.provenance.kind.inferred", "Inferred") }
+    static var provenanceToolGlobalKind: String { text("metadata.provenance.kind.toolGlobal", "Tool-global") }
+    static var provenanceReadOnlyKind: String { text("metadata.provenance.kind.readOnly", "Read-only") }
+    static var provenanceExternalKind: String { text("metadata.provenance.kind.external", "External") }
+    static var provenanceNativeRoot: String { text("metadata.provenance.root.native", "native root") }
+    static var provenanceNativeOpencodeRoot: String { text("metadata.provenance.root.nativeOpencode", "Native opencode root") }
+    static var provenanceClaudeCompatibilityRoot: String { text("metadata.provenance.root.claudeCompatibility", "Claude compatibility root") }
+    static var provenanceAgentsCompatibilityRoot: String { text("metadata.provenance.root.agentsCompatibility", "Agents compatibility root") }
+    static var provenanceToolGlobalRoot: String { text("metadata.provenance.root.toolGlobal", "Tool-global staging") }
+    static var provenanceReadOnlyRoot: String { text("metadata.provenance.root.readOnly", "read-only root") }
+    static var provenanceExternalRoot: String { text("metadata.provenance.root.external", "External root") }
+    static var provenanceHermesHomeProfileRoot: String { text("metadata.provenance.root.hermesHomeProfile", "Hermes home/profile root") }
+    static var provenanceHermesExternalRoot: String { text("metadata.provenance.root.hermesExternal", "Hermes explicit external root") }
+    static var provenanceOpenClawWorkspaceRoot: String { text("metadata.provenance.root.openClawWorkspace", "OpenClaw workspace root") }
+    static var provenanceOpenClawReadOnlyRoot: String { text("metadata.provenance.root.openClawReadOnly", "OpenClaw read-only root") }
+    static var provenanceUnclassifiedRoot: String { text("metadata.provenance.root.unclassified", "Unclassified root") }
+    static var fingerprint: String { text("metadata.fingerprint", "Fingerprint") }
+    static var description: String { text("metadata.description", "Description") }
+    static var noDescription: String { text("metadata.noDescription", "No description") }
+    static var frontmatter: String { text("metadata.frontmatter", "Frontmatter") }
+    static var body: String { text("metadata.body", "Body") }
+    static var permissions: String { text("metadata.permissions", "Permissions") }
+    static var winner: String { text("metadata.winner", "Winner") }
+    static var none: String { text("value.none", "None") }
+    static var findingSeverityFilter: String { text("findings.filter.severity", "Severity") }
+    static var findingRuleFilter: String { text("findings.filter.rule", "Rule ID") }
+    static var findingTriageFilter: String { text("findings.filter.triage", "Triage") }
+    static var allSeverities: String { text("findings.filter.allSeverities", "All Severities") }
+    static var allRuleIDs: String { text("findings.filter.allRules", "All Rule IDs") }
+    static var findingTriageOpen: String { text("findings.triage.open", "Open") }
+    static var findingTriageReviewed: String { text("findings.triage.reviewed", "Reviewed") }
+    static var findingTriageIgnored: String { text("findings.triage.ignored", "Ignored") }
+    static var findingTriageNeedsFollowUp: String { text("findings.triage.needsFollowUp", "Needs follow-up") }
+    static var findingTriageFilterActive: String { text("findings.triage.filter.active", "Active") }
+    static var findingTriageFilterAll: String { text("findings.triage.filter.all", "All triage") }
+    static var findingTriageNoticeTitle: String { text("findings.triage.notice.title", "Local finding triage") }
+    static var findingTriageNoticeBody: String { text("findings.triage.notice.body", "Triage labels are stored only in SkillsCopilot app data. They do not write agent config, skill content, toggle snapshots, scripts, or AI output. If a finding changes after rescan, it reopens as Open.") }
+    static var findingTriageActionReviewed: String { text("findings.triage.action.reviewed", "Mark reviewed") }
+    static var findingTriageActionIgnored: String { text("findings.triage.action.ignored", "Ignore") }
+    static var findingTriageActionFollowUp: String { text("findings.triage.action.followUp", "Needs follow-up") }
+    static var findingTriageActionReopen: String { text("findings.triage.action.reopen", "Reopen") }
+    static var ruleTuningTitle: String { text("rules.tuning.title", "Rule Tuning / Suppression") }
+    static var ruleTuningBoundary: String { text("rules.tuning.boundary", "App-local review state only. These controls never edit skill files, write agent config, create snapshots, execute scripts, call an AI provider, or store credentials.") }
+    static var ruleTuningEffectiveState: String { text("rules.tuning.effectiveState", "Effective rule state") }
+    static var ruleTuningSeverityOverride: String { text("rules.tuning.severityOverride", "Severity override") }
+    static var ruleTuningClearSeverity: String { text("rules.tuning.clearSeverity", "Clear override") }
+    static var ruleTuningSuppressGroup: String { text("rules.tuning.suppressGroup", "Suppress group") }
+    static var ruleTuningUnsuppressGroup: String { text("rules.tuning.unsuppressGroup", "Unsuppress group") }
+    static var ruleTuningSuppressRule: String { text("rules.tuning.suppressRule", "Suppress rule") }
+    static var ruleTuningUnsuppressRule: String { text("rules.tuning.unsuppressRule", "Unsuppress rule") }
+    static var ruleTuningSuppressed: String { text("rules.tuning.suppressed", "Suppressed locally") }
+    static var ruleTuningRuleWide: String { text("rules.tuning.ruleWide", "Rule-wide") }
+    static var ruleTuningFindingGroup: String { text("rules.tuning.findingGroup", "Finding group") }
+    static var ruleTuningNoOverride: String { text("rules.tuning.noOverride", "No local override") }
+    static var findingExplanation: String { text("findings.explanation", "Why this appears") }
+    static var findingRuleID: String { text("findings.ruleId", "Rule ID") }
+    static var findingRuleSource: String { text("findings.ruleSource", "Rule source") }
+    static var findingCatalogTarget: String { text("findings.catalogTarget", "Catalog target") }
+    static var findingTrigger: String { text("findings.trigger", "Trigger") }
+    static var findingImpact: String { text("findings.impact", "Impact") }
+    static var findingRiskRelated: String { text("findings.riskRelated", "Risk-related") }
+    static var findingRiskRelatedHelp: String { text("findings.riskRelated.help", "This rule is part of the permission, script, dependency, or tool-risk subset.") }
+    static var findingRemediation: String { text("findings.remediation", "Suggested remediation") }
+    static var currentAgentConflictsOnly: String { text("conflicts.currentAgentOnly", "Current agent only. Cross-agent duplicates are omitted from conflicts.") }
+    static var findingSourceFrontmatter: String { text("findings.source.frontmatter", "Frontmatter validation") }
+    static var findingSourcePermission: String { text("findings.source.permission", "Permission analysis") }
+    static var findingSourceScript: String { text("findings.source.script", "Script safety analysis") }
+    static var findingSourceDependency: String { text("findings.source.dependency", "Dependency analysis") }
+    static var findingSourcePath: String { text("findings.source.path", "Catalog path check") }
+    static var findingSourceFingerprint: String { text("findings.source.fingerprint", "Catalog fingerprint check") }
+    static var findingSourceCatalog: String { text("findings.source.catalog", "Catalog rule") }
+    static var findingNoCatalogTarget: String { text("findings.catalogTarget.none", "No definition or instance ID reported") }
+    static var remediationFrontmatterRequired: String { text("findings.remediation.frontmatterRequired", "Add the required frontmatter fields in SKILL.md, then rescan.") }
+    static var remediationToolsNotEmpty: String { text("findings.remediation.toolsNotEmpty", "Declare the allowed tools the skill needs, or remove tool-dependent instructions.") }
+    static var remediationPathExists: String { text("findings.remediation.pathExists", "Restore the source file or remove the stale catalog entry, then scan again.") }
+    static var remediationFingerprintChanged: String { text("findings.remediation.fingerprintChanged", "Review the changed skill content and rescan once the catalog should trust the new fingerprint.") }
+    static var remediationNetworkDeclared: String { text("findings.remediation.networkDeclared", "Declare the intended network access explicitly, or keep it undeclared only if the skill does not use network access.") }
+    static var remediationExecNeedsHuman: String { text("findings.remediation.execNeedsHuman", "Require human confirmation for execution-capable behavior, or remove the execution request.") }
+    static var remediationDependencyUnknown: String { text("findings.remediation.dependencyUnknown", "Replace or document the unknown dependency, then rescan.") }
+    static var instances: String { text("metadata.instances", "Instances") }
+    static var target: String { text("metadata.target", "Target") }
+    static var scope: String { text("metadata.scope", "Scope") }
+    static var access: String { text("metadata.access", "Access") }
+    static var permissionTools: String { text("permissions.tools", "Tools") }
+    static var permissionFiles: String { text("permissions.files", "Files") }
+    static var permissionNetwork: String { text("permissions.network", "Network") }
+    static var permissionExec: String { text("permissions.exec", "Execution") }
+    static var permissionHumanReview: String { text("permissions.humanReview", "Human review") }
+    static var permissionRaw: String { text("permissions.raw", "Raw permissions") }
+    static var permissionUndeclared: String { text("permissions.undeclared", "Undeclared / unknown") }
+    static var permissionNoneDeclared: String { text("permissions.noneDeclared", "None declared") }
+    static var permissionUnknownPayload: String { text("permissions.unknownPayload", "Unknown payload") }
+    static var permissionNetworkReadOnly: String { text("permissions.network.readOnly", "Read-only declared") }
+    static var permissionNetworkFull: String { text("permissions.network.full", "Full declared") }
+    static var permissionRequested: String { text("permissions.requested", "Requested") }
+    static var permissionNotRequested: String { text("permissions.notRequested", "Not requested") }
+    static var permissionRequired: String { text("permissions.required", "Required") }
+    static var permissionNotDeclaredRequired: String { text("permissions.notDeclaredRequired", "Not declared as required") }
+    static var permissionUndeclaredNote: String { text("permissions.undeclaredNote", "Permissions are undeclared or unavailable in the catalog payload; this is not a safe or unsafe verdict.") }
+    static var permissionDeclarationNote: String { text("permissions.declarationNote", "These values are permission declarations from the catalog payload, not a safety verdict.") }
+    static var service: String { text("settings.service", "Service") }
+    static var languageSettings: String { text("settings.language.title", "Language") }
+    static var languageSelection: String { text("settings.language.selection", "App language") }
+    static var languageEnglish: String { text("settings.language.english", "English") }
+    static var languageSimplifiedChinese: String { text("settings.language.simplifiedChinese", "Simplified Chinese") }
+    static var languageBoundary: String { text("settings.language.boundary", "Language is stored as an app-local preference. It does not write agent config, skill files, provider settings, credentials, reports, or prompts.") }
+    static var languageAppliesImmediately: String { text("settings.language.appliesImmediately", "The main window and Settings update immediately after selection.") }
+    static var version: String { text("settings.version", "Version") }
+    static var protocolLabel: String { text("settings.protocol", "Protocol") }
+    static var catalog: String { text("settings.catalog", "Catalog") }
+    static var userHome: String { text("settings.userHome", "User Home") }
+    static var methods: String { text("settings.methods", "Methods") }
+    static var unknown: String { text("value.unknown", "Unknown") }
+    static var notLoaded: String { text("value.notLoaded", "Not loaded") }
+    static var aiProviderSettings: String { text("settings.aiProvider.title", "AI Provider") }
+    static var aiProviderBoundary: String { text("settings.aiProvider.boundary", "Configure a user-owned provider profile for explicit AI requests. No analysis runs in the background, Test Connection is manual, and provider output cannot write skills, agent config, snapshots, or scripts.") }
+    static var aiProviderUnavailable: String { text("settings.aiProvider.unavailable", "AI provider settings are unavailable in this service build.") }
+    static var aiProviderOpenAICompatible: String { text("settings.aiProvider.kind.openai", "OpenAI-compatible") }
+    static var aiProviderClaudeCompatible: String { text("settings.aiProvider.kind.claude", "Claude-compatible") }
+    static var aiProviderEndpoint: String { text("settings.aiProvider.endpoint", "Endpoint") }
+    static var aiProviderEndpointPlaceholder: String { text("settings.aiProvider.endpoint.placeholder", "https://api.example.com/v1") }
+    static var aiProviderModel: String { text("settings.aiProvider.model", "Model") }
+    static var aiProviderModelPlaceholder: String { text("settings.aiProvider.model.placeholder", "model") }
+    static var aiProviderAPIVersion: String { text("settings.aiProvider.apiVersion", "API version") }
+    static var aiProviderOptionalPlaceholder: String { text("settings.aiProvider.optional.placeholder", "optional") }
+    static var aiProviderAPIKey: String { text("settings.aiProvider.apiKey", "API key") }
+    static var aiProviderAPIKeyPlaceholder: String { text("settings.aiProvider.apiKey.placeholder", "Leave blank to keep existing Keychain item") }
+    static var aiProviderKeychainFirst: String { text("settings.aiProvider.keychainFirst", "API keys are sent only to the service on Save or Test Connection. The service should store secrets in Keychain first; the native UI clears this field after each action and never displays saved keys.") }
+    static var aiProviderBudget: String { text("settings.aiProvider.budget", "Budget") }
+    static var aiProviderMonthlyBudget: String { text("settings.aiProvider.monthlyBudget", "Monthly budget") }
+    static var aiProviderTokenLimit: String { text("settings.aiProvider.tokenLimit", "Single-request token limit") }
+    static var aiProviderStorage: String { text("settings.aiProvider.storage", "Credential storage") }
+    static var aiProviderConfigured: String { text("settings.aiProvider.configured", "Configured") }
+    static var aiProviderUnconfigured: String { text("settings.aiProvider.unconfigured", "Unconfigured") }
+    static var aiProviderSave: String { text("settings.aiProvider.save", "Save Provider") }
+    static var aiProviderTest: String { text("settings.aiProvider.test", "Test Connection") }
+    static var aiProviderSaving: String { text("settings.aiProvider.saving", "Saving provider...") }
+    static var aiProviderTesting: String { text("settings.aiProvider.testing", "Testing connection...") }
+    static var aiProviderSaved: String { text("settings.aiProvider.saved", "Provider settings saved. API key draft cleared.") }
+    static var aiProviderTestResult: String { text("settings.aiProvider.testResult", "Test result") }
+    static var aiProviderTestSucceeded: String { text("settings.aiProvider.testSucceeded", "Provider connection test succeeded.") }
+    static var aiProviderTestFailed: String { text("settings.aiProvider.testFailed", "Provider connection test failed.") }
+    static var aiProviderAuditMetadata: String { text("settings.aiProvider.audit", "Audit metadata") }
+    static var aiProviderNoAudit: String { text("settings.aiProvider.noAudit", "No audit metadata returned.") }
+    static var aiProviderAuditDuration: String { text("settings.aiProvider.audit.duration", "Duration") }
+    static var aiProviderAuditRedaction: String { text("settings.aiProvider.audit.redaction", "Redaction") }
+    static var aiProviderAuditPromptStored: String { text("settings.aiProvider.audit.promptStored", "Prompt stored") }
+    static var aiProviderAuditResponseStored: String { text("settings.aiProvider.audit.responseStored", "Response stored") }
+    static var aiProviderAuditErrorCode: String { text("settings.aiProvider.audit.errorCode", "Error code") }
+    static var aiProviderEndpointRequired: String { text("settings.aiProvider.validation.endpointRequired", "Endpoint is required.") }
+    static var aiProviderEndpointInvalid: String { text("settings.aiProvider.validation.endpointInvalid", "Endpoint must include a URL scheme such as https://.") }
+    static var aiProviderModelRequired: String { text("settings.aiProvider.validation.modelRequired", "Model is required.") }
+    static var aiProviderBudgetInvalid: String { text("settings.aiProvider.validation.budgetInvalid", "Monthly budget must be a number.") }
+    static var aiProviderTokenLimitInvalid: String { text("settings.aiProvider.validation.tokenLimitInvalid", "Single-request token limit must be a whole number.") }
+    static var claudeSettings: String { text("settings.claudeSettings", "Claude Settings") }
+    static var existingFile: String { text("settings.existingFile", "Existing file") }
+    static var willCreateFile: String { text("settings.willCreateFile", "Will create file") }
+    static var settingsInvalidUTF8: String { text("settings.invalidUtf8", "Settings content is not valid UTF-8.") }
+    static var jsonValidSettingsWrite: String { text("settings.jsonValid", "JSON is valid. Save will create an agent config snapshot, write atomically, verify, and rescan.") }
+    static var connectedProtocolNote: String { text("detail.protocolNote", "This native macOS shell is connected through the Rust service protocol. Scan, toggle, and agent config rollback actions use verified write paths with snapshots.") }
+    static var loadingSkillDetail: String { text("detail.loading", "Loading skill detail...") }
+    static var readOnlyPreview: String { text("detail.readOnlyPreview", "Read-only preview") }
+    static var toolGlobalPreviewTitle: String { text("detail.toolGlobal.previewTitle", "Tool-global Preview") }
+    static var toolGlobalPreviewNote: String { text("detail.toolGlobal.previewNote", "Tool-global skills are staged for review. They cannot be toggled here and must be copied into a specific agent after an explicit confirmation.") }
+    static var toolGlobalTargetAgent: String { text("detail.toolGlobal.targetAgent", "Target Agent") }
+    static var toolGlobalInstallPreviewTitle: String { text("detail.toolGlobal.installPreviewTitle", "Install Preview") }
+    static var toolGlobalInstallReady: String { text("detail.toolGlobal.installReady", "Confirmed install writes through the target adapter verified path with snapshot and read-back verification.") }
+    static var llmSkillAnalysis: String { text("llm.skillAnalysis", "AI Skill Analysis") }
+    static var llmSkillAnalysisSelectedScope: String { text("llm.skillAnalysis.scope.selected", "Selected skill") }
+    static var llmSkillAnalysisVisibleScope: String { text("llm.skillAnalysis.scope.visible", "Visible skills") }
+    static var llmSkillAnalysisSafetyTitle: String { text("llm.skillAnalysis.safetyTitle", "Read-only prepare only") }
+    static var llmSkillAnalysisSafetyCopy: String { text("llm.skillAnalysis.safetyCopy", "No provider call is made by default. This preview cannot write skill files or agent config, cannot execute scripts, and does not save credentials.") }
+    static var llmSkillAnalysisPrepareSelected: String { text("llm.skillAnalysis.prepareSelected", "Prepare Selected") }
+    static var llmSkillAnalysisPrepareVisible: String { text("llm.skillAnalysis.prepareVisible", "Prepare Visible") }
+    static var llmSkillAnalysisUnavailable: String { text("llm.skillAnalysis.unavailable", "AI skill analysis prepare is unavailable in this service build; preview remains disabled and read-only.") }
+    static var llmSkillAnalysisUnavailablePrompt: String { text("llm.skillAnalysis.unavailablePrompt", "Service method llm.prepareSkillAnalysis is unavailable. No provider request was prepared.") }
+    static var llmSkillAnalysisUnavailableSummary: String { text("llm.skillAnalysis.unavailableSummary", "Disabled fallback preview only. No writes, no scripts, no credentials, and no provider call.") }
+    static var llmSkillAnalysisPromptDraft: String { text("llm.skillAnalysis.promptDraft", "Prepared prompt draft") }
+    static var llmSkillAnalysisSummaryDraft: String { text("llm.skillAnalysis.summaryDraft", "Summary draft") }
+    static var llmSkillAnalysisIncludedSkills: String { text("llm.skillAnalysis.includedSkills", "Included skills") }
+    static var llmSkillAnalysisExcludedMissing: String { text("llm.skillAnalysis.excludedMissing", "Excluded / missing") }
+    static var llmSkillAnalysisNoDraft: String { text("llm.skillAnalysis.noDraft", "No draft text returned by the service.") }
+    static var llmSkillAnalysisNoIncludedSkills: String { text("llm.skillAnalysis.noIncludedSkills", "No included skills returned.") }
+    static var llmSkillAnalysisWriteBack: String { text("llm.skillAnalysis.writeBack", "Write-back") }
+    static var llmSkillAnalysisScriptExecution: String { text("llm.skillAnalysis.scriptExecution", "Script execution") }
+    static var llmSkillAnalysisCredentialStorage: String { text("llm.skillAnalysis.credentialStorage", "Credential storage") }
+    static var llmSkillAnalysisConfirmation: String { text("llm.skillAnalysis.confirmation", "Confirmation") }
+    static var llmSkillAnalysisBlocked: String { text("llm.skillAnalysis.blocked", "Blocked") }
+    static var llmSkillAnalysisRequired: String { text("llm.skillAnalysis.required", "Required") }
+    static var llmSkillAnalysisEnabledUnsafe: String { text("llm.skillAnalysis.enabledUnsafe", "Enabled by service") }
+    static var skillQualityTitle: String { text("quality.title", "AI Skill Quality Score") }
+    static var skillQualityBoundary: String { text("quality.boundary", "User-triggered, read-only scoring from local evidence. The score cannot write skill files, mutate agent config, create snapshots, change triage, execute scripts, or read credentials.") }
+    static var skillQualityScoreAction: String { text("quality.action.score", "Score Quality") }
+    static var skillQualityUnavailable: String { text("quality.unavailable", "Quality scoring is unavailable in this service build.") }
+    static var skillQualityPromptUnavailable: String { text("quality.promptUnavailable", "Quality prompt preview is unavailable in this service build; no provider request was prepared.") }
+    static var skillQualityScore: String { text("quality.score", "Score") }
+    static var skillQualityBand: String { text("quality.band", "Band") }
+    static var skillQualityComponents: String { text("quality.components", "Components") }
+    static var skillQualityEvidence: String { text("quality.evidence", "Evidence") }
+    static var skillQualityRiskNotes: String { text("quality.riskNotes", "Risk notes") }
+    static var skillQualitySuggestions: String { text("quality.suggestions", "Suggested improvements") }
+    static var skillQualityNoComponents: String { text("quality.empty.components", "No component scores returned.") }
+    static var skillQualityNoEvidence: String { text("quality.empty.evidence", "No evidence items returned.") }
+    static var skillQualityNoRisks: String { text("quality.empty.risks", "No risk notes returned.") }
+    static var skillQualityNoSuggestions: String { text("quality.empty.suggestions", "No suggestions returned.") }
+    static var skillQualitySafety: String { text("quality.safety", "Safety flags") }
+    static var skillQualityProviderNotSent: String { text("quality.safety.providerNotSent", "Provider not sent") }
+    static var skillQualityWritesBlocked: String { text("quality.safety.writesBlocked", "Writes blocked") }
+    static var skillQualityScriptsBlocked: String { text("quality.safety.scriptsBlocked", "Scripts blocked") }
+    static var skillQualityMutationsBlocked: String { text("quality.safety.mutationsBlocked", "Config/triage mutations blocked") }
+    static var skillQualityCredentialsBlocked: String { text("quality.safety.credentialsBlocked", "Credentials blocked") }
+    static var taskReadinessTitle: String { text("taskReadiness.title", "AI Task Readiness Check") }
+    static var taskReadinessBoundary: String { text("taskReadiness.boundary", "User-triggered, read-only task fit check from local evidence. It cannot write skill files, mutate agent config, create snapshots, change triage, execute scripts, or read credentials.") }
+    static var taskReadinessTask: String { text("taskReadiness.task", "Task") }
+    static var taskReadinessTaskPlaceholder: String { text("taskReadiness.task.placeholder", "Describe the task to test against this skill") }
+    static var taskReadinessCheckAction: String { text("taskReadiness.action.check", "Check Readiness") }
+    static var taskReadinessTaskRequired: String { text("taskReadiness.taskRequired", "Enter a task before checking readiness.") }
+    static var taskReadinessUnavailable: String { text("taskReadiness.unavailable", "Task readiness check is unavailable in this service build.") }
+    static var taskReadinessPromptUnavailable: String { text("taskReadiness.promptUnavailable", "Task readiness prompt preview is unavailable in this service build; no provider request was prepared.") }
+    static var taskReadinessScore: String { text("taskReadiness.score", "Readiness") }
+    static var taskReadinessBand: String { text("taskReadiness.band", "Band") }
+    static var taskReadinessCandidates: String { text("taskReadiness.candidates", "Candidate skills") }
+    static var taskReadinessGaps: String { text("taskReadiness.gaps", "Gaps / missing capabilities") }
+    static var taskReadinessBlockers: String { text("taskReadiness.blockers", "Blockers") }
+    static var taskReadinessRiskNotes: String { text("taskReadiness.riskNotes", "Risk notes") }
+    static var taskReadinessEvidence: String { text("taskReadiness.evidence", "Evidence") }
+    static var taskReadinessNoCandidates: String { text("taskReadiness.empty.candidates", "No candidate skills returned.") }
+    static var taskReadinessNoGaps: String { text("taskReadiness.empty.gaps", "No gaps returned.") }
+    static var taskReadinessNoBlockers: String { text("taskReadiness.empty.blockers", "No blockers returned.") }
+    static var taskReadinessNoRisks: String { text("taskReadiness.empty.risks", "No risk notes returned.") }
+    static var taskReadinessNoEvidence: String { text("taskReadiness.empty.evidence", "No evidence items returned.") }
+    static var routingConfidenceTitle: String { text("routingConfidence.title", "AI Routing Confidence") }
+    static var routingConfidenceBoundary: String { text("routingConfidence.boundary", "User-triggered, read-only route ranking from local evidence. It cannot write skill files, mutate agent config, create snapshots, change triage, execute scripts, or read credentials.") }
+    static var routingConfidenceTaskPlaceholder: String { text("routingConfidence.task.placeholder", "Describe the task to rank route fit") }
+    static var routingConfidenceAction: String { text("routingConfidence.action.rank", "Rank Routes") }
+    static var routingConfidenceTaskRequired: String { text("routingConfidence.taskRequired", "Enter a task before ranking routes.") }
+    static var routingConfidenceUnavailable: String { text("routingConfidence.unavailable", "Routing confidence is unavailable in this service build.") }
+    static var routingConfidencePromptUnavailable: String { text("routingConfidence.promptUnavailable", "Routing confidence prompt preview is unavailable in this service build; no provider request was prepared.") }
+    static var routingConfidenceScore: String { text("routingConfidence.score", "Confidence") }
+    static var routingConfidenceBand: String { text("routingConfidence.band", "Band") }
+    static var routingConfidenceRoutes: String { text("routingConfidence.routes", "Candidate routes") }
+    static var routingConfidenceMatchReasons: String { text("routingConfidence.matchReasons", "Match reasons") }
+    static var routingConfidenceAmbiguity: String { text("routingConfidence.ambiguity", "Ambiguity / collision warnings") }
+    static var routingConfidenceWrongPick: String { text("routingConfidence.wrongPick", "Wrong-pick / miss risks") }
+    static var routingConfidenceEvidence: String { text("routingConfidence.evidence", "Evidence") }
+    static var routingConfidenceNoRoutes: String { text("routingConfidence.empty.routes", "No candidate routes returned.") }
+    static var routingConfidenceNoReasons: String { text("routingConfidence.empty.reasons", "No match reasons returned.") }
+    static var routingConfidenceNoAmbiguity: String { text("routingConfidence.empty.ambiguity", "No ambiguity warnings returned.") }
+    static var routingConfidenceNoWrongPick: String { text("routingConfidence.empty.wrongPick", "No wrong-pick or miss risks returned.") }
+    static var routingConfidenceNoEvidence: String { text("routingConfidence.empty.evidence", "No evidence items returned.") }
+    static var llmAssist: String { text("llm.assist", "LLM Assist") }
+    static var llmEnabled: String { text("llm.enabled", "Enabled") }
+    static var llmDisabled: String { text("llm.disabled", "Disabled") }
+    static var llmPreparing: String { text("llm.preparing", "Preparing...") }
+    static var llmPreparePrompt: String { text("llm.preparePrompt", "Choose an action to preview tokens and cost.") }
+    static var llmDisabledFallback: String { text("llm.disabledFallback", "LLM assist is unavailable in this build.") }
+    static var llmProvider: String { text("llm.provider", "Provider") }
+    static var llmModel: String { text("llm.model", "Model") }
+    static var llmTokens: String { text("llm.tokens", "Tokens") }
+    static var llmCost: String { text("llm.cost", "Cost") }
+    static var llmConfirmationRequired: String { text("llm.confirmationRequired", "Confirmation required before any LLM call.") }
+    static var llmDraftCopyRequired: String { text("llm.draftCopyRequired", "Draft output requires user confirmation and copy.") }
+    static var llmReviewPreview: String { text("llm.reviewPreview", "Read-only review preview") }
+    static var llmReviewPurpose: String { text("llm.reviewPurpose", "Purpose") }
+    static var llmReviewRisk: String { text("llm.reviewRisk", "Risk") }
+    static var llmReviewSignals: String { text("llm.reviewSignals", "Signals") }
+    static var llmReviewFindings: String { text("llm.reviewFindings", "Finding explanations") }
+    static var llmReviewCrossAgentFit: String { text("llm.reviewCrossAgentFit", "Cross-agent fit") }
+    static var llmReviewRedaction: String { text("llm.reviewRedaction", "Redaction") }
+    static var llmReviewNoFindings: String { text("llm.reviewNoFindings", "No finding explanations in this preview.") }
+    static var llmReviewNoSignals: String { text("llm.reviewNoSignals", "No risk signals in this preview.") }
+    static var llmReviewNoActions: String { text("llm.reviewNoActions", "No provider request, write action, or execution action is available from this preview.") }
+    static var llmPromptPreviewTitle: String { text("llm.promptPreview.title", "Prompt Preview") }
+    static var llmPromptPreviewAction: String { text("llm.promptPreview.action", "Preview Prompt") }
+    static var llmPromptConfirmSend: String { text("llm.promptPreview.confirmSend", "Confirm & Send") }
+    static var llmPromptSending: String { text("llm.promptPreview.sending", "Sending provider request...") }
+    static var llmPromptProviderRequired: String { text("llm.promptPreview.providerRequired", "Configure and save an AI provider before sending.") }
+    static var llmPromptPreviewRequired: String { text("llm.promptPreview.previewRequired", "Preview the current prompt before sending.") }
+    static var llmPromptSendSucceeded: String { text("llm.promptPreview.sendSucceeded", "Provider response received.") }
+    static var llmPromptSendFailed: String { text("llm.promptPreview.sendFailed", "Provider request failed.") }
+    static var llmPromptScope: String { text("llm.promptPreview.scope", "Prompt scope") }
+    static var llmPromptDestination: String { text("llm.promptPreview.destination", "Destination") }
+    static var llmPromptIncludedFields: String { text("llm.promptPreview.includedFields", "Included fields") }
+    static var llmPromptExcludedFields: String { text("llm.promptPreview.excludedFields", "Excluded fields") }
+    static var llmPromptRedactedPrompt: String { text("llm.promptPreview.redactedPrompt", "Redacted prompt") }
+    static var llmPromptNoFields: String { text("llm.promptPreview.noFields", "No fields reported.") }
+    static var llmPromptRawPromptStored: String { text("llm.promptPreview.rawPromptStored", "Raw prompt stored") }
+    static var llmPromptRawResponseStored: String { text("llm.promptPreview.rawResponseStored", "Raw response stored") }
+    static var llmPromptCopyOnly: String { text("llm.promptPreview.copyOnly", "Copy-only output") }
+    static var llmPromptOutput: String { text("llm.promptPreview.output", "Provider output") }
+    static var llmPromptCopyOutput: String { text("llm.promptPreview.copyOutput", "Copy Output") }
+    static var scriptExecutionSafety: String { text("scriptExecution.safety", "Script Execution Safety") }
+    static var scriptExecutionPreviewOnly: String { text("scriptExecution.previewOnly", "Preview-only") }
+    static var scriptExecutionUnavailable: String { text("scriptExecution.unavailable", "Script execution preflight is unavailable in this service build. Scripts remain non-executable from the native UI.") }
+    static var scriptExecutionBlockedNote: String { text("scriptExecution.blockedNote", "The native UI does not execute scripts. Use this panel only to inspect the safety gate data returned by the service.") }
+    static var scriptExecutionPreviewSummary: String { text("scriptExecution.previewSummary", "Script execution is blocked by default until a separate confirmed service path is available.") }
+    static var scriptExecutionNoCommand: String { text("scriptExecution.noCommand", "No command preview is available.") }
+    static var scriptExecutionNoRisks: String { text("scriptExecution.noRisks", "No service risks were reported.") }
+    static var scriptExecutionNoAudit: String { text("scriptExecution.noAudit", "No audit identifier reported.") }
+    static var scriptExecutionAuditStatus: String { text("scriptExecution.auditStatus", "Audit status") }
+    static var scriptExecutionAuditID: String { text("scriptExecution.auditId", "Audit ID") }
+    static var scriptExecutionCommand: String { text("scriptExecution.command", "Command preview") }
+    static var scriptExecutionCWD: String { text("scriptExecution.cwd", "CWD") }
+    static var scriptExecutionEnv: String { text("scriptExecution.env", "Environment") }
+    static var scriptExecutionNetwork: String { text("scriptExecution.network", "Network") }
+    static var scriptExecutionFiles: String { text("scriptExecution.files", "Files") }
+    static var scriptExecutionRisks: String { text("scriptExecution.risks", "Risks") }
+    static var scriptExecutionConfirmationRequired: String { text("scriptExecution.confirmationRequired", "Human confirmation is required before any future execution service path.") }
+    static var scriptExecutionEnvEmpty: String { text("scriptExecution.envEmpty", "No environment overrides") }
+    static var scriptExecutionFilesEmpty: String { text("scriptExecution.filesEmpty", "No file scope declared") }
+    static var toggleUnavailableBusy: String { text("detail.toggleUnavailable.busy", "A write is already in progress.") }
+    static var toggleUnavailableBroken: String { text("detail.toggleUnavailable.broken", "Broken skills cannot be toggled until their SKILL.md can be parsed.") }
+    static var toggleUnavailableMissing: String { text("detail.toggleUnavailable.missing", "Missing skills cannot be toggled because the source file was not found during the last scan.") }
+    static var toggleUnavailableShadowed: String { text("detail.toggleUnavailable.shadowed", "Shadowed skills are read-only here; resolve the active copy before toggling.") }
+    static var toggleUnavailableUnknown: String { text("detail.toggleUnavailable.unknown", "This skill has an unknown catalog state and is read-only in this build.") }
+    static var toggleUnavailableToolGlobal: String { text("detail.toggleUnavailable.toolGlobal", "Tool-global skills are read-only previews. Install or copy to an agent requires a separate confirmed action.") }
+    static var piGuardedToggle: String { text("detail.pi.guardedToggle", "Guarded toggle") }
+    static var piGuardedToggleBoundary: String { text("detail.pi.guardedToggle.boundary", "Pi toggle is experimental and guarded by preview, config snapshot, and rollback. Install stays blocked; no AI, scripts, or credentials are used.") }
+    static var operationUnavailableBusy: String { text("detail.operationUnavailable.busy", "Another catalog operation is already in progress.") }
+    static var readOnly: String { text("detail.readOnly", "Read-only") }
+    static var hermesHomeProfileAccess: String { text("detail.hermes.homeProfileAccess", "Hermes home/profile skills are read-only in this build. Toggle and install stay blocked.") }
+    static var hermesExternalAccess: String { text("detail.hermes.externalAccess", "Hermes external dirs are explicit read-only roots, not project roots. Toggle and install stay blocked.") }
+    static var openClawWorkspaceScope: String { text("scope.openClawWorkspace", "Workspace") }
+    static var openClawWorkspaceBoundary: String { text("openClaw.workspace.boundary", "OpenClaw scans only workspace skill roots (<workspace>/skills and <workspace>/.agents/skills). Generic repository roots are skipped rather than shown as missing skills.") }
+    static var openClawReadOnlyAccess: String { text("detail.openClaw.readOnlyAccess", "OpenClaw skills are read-only and workspace-scoped in this build. Toggle and install stay blocked; generic repo roots are skipped, not treated as missing skills.") }
+    static var openClawToggleBlocked: String { text("detail.openClaw.toggleBlocked", "OpenClaw workspace skills are read-only in this build. Toggle and install remain blocked.") }
+    static var currentMatchesSnapshot: String { text("snapshot.matches", "Current agent config already matches this snapshot.") }
+    static var currentDiffersFromSnapshot: String { text("snapshot.differs", "Current agent config differs from this snapshot.") }
+    static var menuScanSkills: String { text("menu.scanSkills", "Scan Skills") }
+    static var menuReloadSkills: String { text("menu.reloadSkills", "Reload Skills") }
+    static var menuSkills: String { text("menu.skills", "Skills") }
+    static var menuShowOverview: String { text("menu.showOverview", "Show Overview") }
+    static var menuShowFindings: String { text("menu.showFindings", "Show Findings") }
+    static var menuShowConflicts: String { text("menu.showConflicts", "Show Same-agent Conflicts") }
+    static var menuClearSearch: String { text("menu.clearSearch", "Clear Search") }
 
     static func enabledSummary(enabled: Int, total: Int) -> String {
         format("sidebar.enabledSummary", "%d of %d enabled", enabled, total)
@@ -556,7 +593,7 @@ enum UIStrings {
         format("findings.triage.updated", "Set local finding triage to %@. No agent config or skill files were changed.", status)
     }
 
-    static let findingTriageReopened = text("findings.triage.reopened", "Reopened finding locally. No agent config or skill files were changed.")
+    static var findingTriageReopened: String { text("findings.triage.reopened", "Reopened finding locally. No agent config or skill files were changed.") }
 
     static func ruleTuningSetSeverity(_ severity: String) -> String {
         format("rules.tuning.setSeverity", "Set %@", severity)
@@ -566,9 +603,9 @@ enum UIStrings {
         format("rules.tuning.updated.severity", "Set app-local rule severity override to %@. No skill files, agent config, snapshots, scripts, AI provider calls, or credentials were touched.", severity)
     }
 
-    static let ruleTuningSeverityCleared = text("rules.tuning.cleared.severity", "Cleared app-local rule severity override. No skill files or agent config were changed.")
-    static let ruleTuningSuppressionUpdated = text("rules.tuning.updated.suppression", "Updated app-local rule suppression. No skill files, agent config, snapshots, scripts, AI provider calls, or credentials were touched.")
-    static let ruleTuningSuppressionCleared = text("rules.tuning.cleared.suppression", "Cleared app-local rule suppression. No skill files or agent config were changed.")
+    static var ruleTuningSeverityCleared: String { text("rules.tuning.cleared.severity", "Cleared app-local rule severity override. No skill files or agent config were changed.") }
+    static var ruleTuningSuppressionUpdated: String { text("rules.tuning.updated.suppression", "Updated app-local rule suppression. No skill files, agent config, snapshots, scripts, AI provider calls, or credentials were touched.") }
+    static var ruleTuningSuppressionCleared: String { text("rules.tuning.cleared.suppression", "Cleared app-local rule suppression. No skill files or agent config were changed.") }
 
     static func noFindingsForSkillMessage(_ agent: String) -> String {
         format("empty.noFindingsForSkill.message", "No rule findings are associated with this %@ skill.", agent)
@@ -717,19 +754,19 @@ enum UIStrings {
         return message
     }
 
-    static let codexRestartRequired = text("message.codexRestartRequired", "Codex runtime may need restart to read config.toml changes.")
+    static var codexRestartRequired: String { text("message.codexRestartRequired", "Codex runtime may need restart to read config.toml changes.") }
 
     static func rollbackRescanned(_ count: Int) -> String {
         format("message.rollbackRescanned", "Rolled back agent config snapshot and rescanned %d skills.", count)
     }
 
-    static let refreshAfterWrite = text("refresh.afterWrite", "Catalog refreshed after the settings write.")
+    static var refreshAfterWrite: String { text("refresh.afterWrite", "Catalog refreshed after the settings write.") }
 
     static func refreshAfterRollback(_ count: Int) -> String {
         format("refresh.afterRollback", "Catalog refreshed after agent config rollback with %d scanned skills.", count)
     }
 
-    static let refreshAfterSettingsSave = text("refresh.afterSettingsSave", "Catalog refreshed after saving settings.")
+    static var refreshAfterSettingsSave: String { text("refresh.afterSettingsSave", "Catalog refreshed after saving settings.") }
 
     static func charactersCaptured(_ count: Int) -> String {
         format("snapshot.charactersCaptured", "%d characters captured", count)
@@ -764,14 +801,14 @@ enum UIStrings {
         }
     }
 
-    static let savedSettings = text("message.savedSettings", "Saved settings and refreshed catalog.")
+    static var savedSettings: String { text("message.savedSettings", "Saved settings and refreshed catalog.") }
 
     static func projectSelectedAndScanned(_ name: String) -> String {
         format("message.projectSelectedAndScanned", "Selected %@ and refreshed catalog.", name)
     }
 
-    static let projectClearedAndScanned = text("message.projectClearedAndScanned", "Cleared project context and refreshed catalog.")
-    static let projectScanSkippedValidation = text("refresh.projectValidationSkipped", "Project context needs attention before scanning.")
+    static var projectClearedAndScanned: String { text("message.projectClearedAndScanned", "Cleared project context and refreshed catalog.") }
+    static var projectScanSkippedValidation: String { text("refresh.projectValidationSkipped", "Project context needs attention before scanning.") }
 
     static func projectValidationFailed(_ reason: String) -> String {
         format("project.validationFailed", "Project validation failed: %@.", reason)
@@ -781,11 +818,72 @@ enum UIStrings {
         format("cleanup.filter.agentNote", "Agent filter: %@", agent)
     }
 
+    private static var activeLanguage = AppLanguage.fromStorage(UserDefaults.standard.string(forKey: AppLanguage.storageKey))
+    private static var cachedLocalizedStrings: (language: AppLanguage, strings: [String: String])?
+
+    @discardableResult
+    static func use(_ language: AppLanguage) -> AppLanguage {
+        activeLanguage = language
+        if cachedLocalizedStrings?.language != language {
+            cachedLocalizedStrings = nil
+        }
+        return language
+    }
+
+    static var currentLanguage: AppLanguage {
+        activeLanguage
+    }
+
     static func text(_ key: String, _ defaultValue: String) -> String {
-        NSLocalizedString(key, tableName: nil, bundle: .main, value: defaultValue, comment: "")
+        localizedStrings()[key] ?? defaultValue
     }
 
     private static func format(_ key: String, _ defaultValue: String, _ arguments: CVarArg...) -> String {
         String(format: text(key, defaultValue), arguments: arguments)
     }
+
+    private static func localizedStrings() -> [String: String] {
+        if let cachedLocalizedStrings, cachedLocalizedStrings.language == activeLanguage {
+            return cachedLocalizedStrings.strings
+        }
+
+        #if SWIFT_PACKAGE
+        let strings = strings(for: activeLanguage, in: .module) ?? strings(for: activeLanguage, in: .main) ?? [:]
+        #else
+        let strings = strings(for: activeLanguage, in: .main) ?? [:]
+        #endif
+        cachedLocalizedStrings = (activeLanguage, strings)
+        return strings
+    }
+
+    private static func strings(for language: AppLanguage, in parent: Bundle) -> [String: String]? {
+        let resourceNames = [language.rawValue, language.rawValue.lowercased()]
+        guard
+            let path = resourceNames.lazy.compactMap({ parent.path(forResource: "Localizable", ofType: "strings", inDirectory: "\($0).lproj") }).first,
+            let dictionary = NSDictionary(contentsOfFile: path) as? [String: String]
+        else {
+            return nil
+        }
+        return dictionary
+    }
+
+    #if DEBUG
+    static func localizationResourceDiagnostics(for language: AppLanguage) -> (paths: [String], count: Int) {
+        let resourceNames = [language.rawValue, language.rawValue.lowercased()]
+        #if SWIFT_PACKAGE
+        let parents: [Bundle] = [.module, .main]
+        #else
+        let parents: [Bundle] = [.main]
+        #endif
+        let paths = parents.flatMap { parent in
+            resourceNames.compactMap { parent.path(forResource: "Localizable", ofType: "strings", inDirectory: "\($0).lproj") }
+        }
+        #if SWIFT_PACKAGE
+        let count = strings(for: language, in: .module)?.count ?? strings(for: language, in: .main)?.count ?? 0
+        #else
+        let count = strings(for: language, in: .main)?.count ?? 0
+        #endif
+        return (paths, count)
+    }
+    #endif
 }

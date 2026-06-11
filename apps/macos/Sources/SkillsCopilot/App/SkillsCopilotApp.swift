@@ -12,11 +12,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct SkillsCopilotApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store = SkillStore(service: ServiceClient())
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRawValue = AppLanguage.defaultLanguage.rawValue
 
     var body: some Scene {
+        let appLanguage = UIStrings.use(AppLanguage.fromStorage(appLanguageRawValue))
+
         WindowGroup(UIStrings.appWindowTitle) {
             ContentView()
                 .environmentObject(store)
+                .environment(\.locale, Locale(identifier: appLanguage.localeIdentifier))
+                .id(appLanguage.rawValue)
                 .frame(minWidth: 920, minHeight: 600)
         }
         .commands {
@@ -62,6 +67,8 @@ struct SkillsCopilotApp: App {
         Settings {
             SettingsView()
                 .environmentObject(store)
+                .environment(\.locale, Locale(identifier: appLanguage.localeIdentifier))
+                .id(appLanguage.rawValue)
         }
     }
 }

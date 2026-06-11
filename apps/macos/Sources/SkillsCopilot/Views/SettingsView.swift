@@ -4,6 +4,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var store: SkillStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRawValue = AppLanguage.defaultLanguage.rawValue
     @State private var draft = ""
     @State private var hasEditedDraft = false
     @State private var providerDraft = AIProviderSettingsDraft(status: .unavailable())
@@ -45,8 +46,22 @@ struct SettingsView: View {
             && store.aiProviderStatus.activeProfile != nil
     }
 
+    private var selectedLanguage: Binding<AppLanguage> {
+        Binding {
+            AppLanguage.fromStorage(appLanguageRawValue)
+        } set: { language in
+            appLanguageRawValue = language.rawValue
+            UIStrings.use(language)
+        }
+    }
+
     var body: some View {
         TabView {
+            languageSection
+                .tabItem {
+                    Label(UIStrings.languageSettings, systemImage: "globe")
+                }
+
             providerSection
                 .tabItem {
                     Label(UIStrings.aiProviderSettings, systemImage: "key")
@@ -90,6 +105,39 @@ struct SettingsView: View {
             if reduceMotion {
                 transaction.animation = nil
             }
+        }
+    }
+
+    private var languageSection: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(UIStrings.languageSettings)
+                        .font(.headline)
+                    Text(UIStrings.languageBoundary)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 12) {
+                    GridRow {
+                        Text(UIStrings.languageSelection)
+                            .foregroundStyle(.secondary)
+                        Picker(UIStrings.languageSelection, selection: selectedLanguage) {
+                            ForEach(AppLanguage.allCases) { language in
+                                Text(language.title).tag(language)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 280)
+                    }
+                }
+
+                SettingsBanner(message: UIStrings.languageAppliesImmediately, systemImage: "checkmark.circle.fill", color: .green)
+
+                Spacer(minLength: 0)
+            }
+            .padding(4)
         }
     }
 
@@ -170,21 +218,21 @@ struct SettingsView: View {
             GridRow {
                 Text(UIStrings.aiProviderEndpoint)
                     .foregroundStyle(.secondary)
-                TextField("https://api.example.com/v1", text: $providerDraft.endpoint)
+                TextField(UIStrings.aiProviderEndpointPlaceholder, text: $providerDraft.endpoint)
                     .textFieldStyle(.roundedBorder)
             }
 
             GridRow {
                 Text(UIStrings.aiProviderModel)
                     .foregroundStyle(.secondary)
-                TextField("model", text: $providerDraft.model)
+                TextField(UIStrings.aiProviderModelPlaceholder, text: $providerDraft.model)
                     .textFieldStyle(.roundedBorder)
             }
 
             GridRow {
                 Text(UIStrings.aiProviderAPIVersion)
                     .foregroundStyle(.secondary)
-                TextField("optional", text: $providerDraft.apiVersion)
+                TextField(UIStrings.aiProviderOptionalPlaceholder, text: $providerDraft.apiVersion)
                     .textFieldStyle(.roundedBorder)
             }
 

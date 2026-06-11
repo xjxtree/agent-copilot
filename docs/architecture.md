@@ -125,7 +125,9 @@ flowchart TD
 
 ## 8. 国际化 (i18n)
 
-- **当前产品目标**：macOS 原生壳通过 `UIStrings` + Swift `Localizable.strings` 管理平台内 i18n，并复用稳定错误码 / 文案 key
+- **当前产品状态**：macOS 原生壳通过 `UIStrings` + Swift `Localizable.strings` 管理平台内 i18n，当前支持 English (`en`) 与简体中文 (`zh-Hans`)
+- **语言设置**：`Settings` scene 提供 app-local 语言偏好；偏好只写入 `UserDefaults`，不会写 agent config、skill 文件、provider 设置、凭据、报告或 prompt artifact
+- **文案 key**：用户可见字符串应集中到 `UIStrings`，并复用稳定错误码 / 文案 key；带运行时值的文案优先使用 `format` 路径，避免本地化资源吞掉动态数量或名称
 - **LLM prompt**：始终英文 —— 多数模型在英文下指令遵循更稳
 - **错误码**：稳定不变；用户可见消息文案走 i18n；内部日志保持英文
 - 进度安排见 [roadmap.md](./roadmap.md)

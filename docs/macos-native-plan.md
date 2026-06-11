@@ -95,7 +95,7 @@ Use native structures as the default:
 - `Toolbar`: scan, refresh, enable/disable, analyze, search.
 - Sidebar catalog controls: search, state filter, visible count, and sort order.
 - `Table` or list-backed views for dense skill rows.
-- Native `Settings` scene for language, provider preferences, privacy, and future keychain-backed credentials.
+- Native `Settings` scene for app-local language selection, provider preferences, privacy, and future keychain-backed credentials.
 - `Inspector`-style right panel for metadata, findings, conflicts, config, and Analyze.
 - macOS menu commands for scan, refresh, search focus, and help.
 - Keyboard-first interactions: arrow selection, Return open, Command-F search, Command-R rescan, Escape close transient panels.
@@ -135,6 +135,7 @@ Use system-provided materials first; custom Liquid Glass is a sparing accent, no
 - [x] Add sidebar catalog filtering and sorting controls.
 - [x] Add native list model test, native 10k list benchmark, and native layout static check.
 - [x] Move primary native user-visible copy behind `UIStrings` and Swift `Localizable.strings` resources.
+- [x] Add English / Simplified Chinese localization resources and an app-local language selector in the native Settings scene.
 - Match MVP/V1 smoke coverage with native UI tests where practical.
 
 ### Phase C: UI Parity and Old UI Removal

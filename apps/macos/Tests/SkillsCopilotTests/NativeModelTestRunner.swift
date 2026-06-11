@@ -58,6 +58,7 @@ public func runNativeModelTests() {
         try ScriptExecutionModelTests().run()
         try ToolGlobalModelTests().run()
         try AgentConfigTimelineModelTests().run()
+        try LocalizationModelTests().run()
         try SkillListModelTests().run()
         try runAsyncTest {
             try await SkillStoreTests().run()
