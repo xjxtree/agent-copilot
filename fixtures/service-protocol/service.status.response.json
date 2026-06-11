@@ -22,6 +22,7 @@
       "workspace.checkReadiness",
       "remediation.plan",
       "remediation.previewDrafts",
+      "remediation.previewImpact",
       "task.checkReadiness",
       "task.rankSkillRoutes",
       "task.compareAgentReadiness",

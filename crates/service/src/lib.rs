@@ -69,6 +69,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "workspace.checkReadiness",
     "remediation.plan",
     "remediation.previewDrafts",
+    "remediation.previewImpact",
     "task.checkReadiness",
     "task.rankSkillRoutes",
     "task.compareAgentReadiness",
@@ -1448,6 +1449,178 @@ pub type RemediationPreviewDraftsPromptRequest = AgentReadinessPromptRequest;
 pub type RemediationPreviewDraftsSafetyFlags = AgentReadinessSafetyFlags;
 
 #[derive(Debug, Clone, Default, Deserialize)]
+pub struct RemediationPreviewImpactParams {
+    #[serde(default)]
+    pub action: Option<String>,
+    #[serde(default, alias = "task_text", alias = "user_intent")]
+    pub task: Option<String>,
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default, alias = "workspace_path")]
+    pub project_root: Option<String>,
+    #[serde(default, alias = "instance_ids")]
+    pub skill_ids: Vec<String>,
+    #[serde(default)]
+    pub candidate_instance_ids: Vec<String>,
+    #[serde(default)]
+    pub draft_ids: Vec<String>,
+    #[serde(default)]
+    pub plan_item_ids: Vec<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+    #[serde(default)]
+    pub include_snapshot_plan: bool,
+    #[serde(default)]
+    pub include_rollback_plan: bool,
+    #[serde(default)]
+    pub include_risk_impact: bool,
+    #[serde(default)]
+    pub include_task_impact: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationPreviewImpactResult {
+    pub generated_by: &'static str,
+    pub catalog_available: bool,
+    pub filters: RemediationPreviewImpactFilters,
+    pub summary: RemediationPreviewImpactSummary,
+    pub impact_rows: Vec<RemediationImpactRow>,
+    pub task_impact_rows: Vec<RemediationTaskImpactRow>,
+    pub agent_impact_rows: Vec<RemediationAgentImpactRow>,
+    pub skill_impact_rows: Vec<RemediationSkillImpactRow>,
+    pub risk_delta_rows: Vec<RemediationRiskDeltaRow>,
+    pub snapshot_rollback_plan_rows: Vec<RemediationSnapshotRollbackPlanRow>,
+    pub gap_notes: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub evidence_references: Vec<TaskReadinessEvidenceReference>,
+    pub prompt_request: RemediationPreviewImpactPromptRequest,
+    pub safety_flags: RemediationPreviewImpactSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationPreviewImpactFilters {
+    pub action: String,
+    pub task: Option<String>,
+    pub agent: Option<String>,
+    pub project_root: Option<String>,
+    pub skill_ids: Vec<String>,
+    pub candidate_instance_ids: Vec<String>,
+    pub draft_ids: Vec<String>,
+    pub plan_item_ids: Vec<String>,
+    pub limit: usize,
+    pub include_snapshot_plan: bool,
+    pub include_rollback_plan: bool,
+    pub include_risk_impact: bool,
+    pub include_task_impact: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationPreviewImpactSummary {
+    pub total_impact_count: usize,
+    pub returned_impact_count: usize,
+    pub task_impact_count: usize,
+    pub agent_impact_count: usize,
+    pub skill_impact_count: usize,
+    pub risk_delta_count: usize,
+    pub snapshot_plan_count: usize,
+    pub rollback_plan_count: usize,
+    pub blocker_count: usize,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationImpactRow {
+    pub id: String,
+    pub rank: usize,
+    pub area: &'static str,
+    pub title: String,
+    pub summary: String,
+    pub action_intent: String,
+    pub expected_direction: &'static str,
+    pub confidence: u8,
+    pub confidence_band: &'static str,
+    pub affected_agent: Option<String>,
+    pub affected_skill: Option<RemediationAffectedSkill>,
+    pub affected_task: Option<String>,
+    pub evidence_refs: Vec<String>,
+    pub blockers: Vec<String>,
+    pub side_effect_flags: Vec<&'static str>,
+    pub safety_flags: RemediationPreviewImpactSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationTaskImpactRow {
+    pub task: String,
+    pub action_intent: String,
+    pub expected_direction: &'static str,
+    pub readiness_score_before: Option<u8>,
+    pub readiness_score_after_estimate: Option<u8>,
+    pub routing_confidence_before: Option<u8>,
+    pub routing_confidence_after_estimate: Option<u8>,
+    pub notes: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationAgentImpactRow {
+    pub agent: String,
+    pub action_intent: String,
+    pub expected_direction: &'static str,
+    pub impacted_skill_count: usize,
+    pub enabled_before_count: usize,
+    pub enabled_after_estimate_count: usize,
+    pub writable_status: Option<String>,
+    pub blocker_notes: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationSkillImpactRow {
+    pub affected_skill: RemediationAffectedSkill,
+    pub action_intent: String,
+    pub expected_direction: &'static str,
+    pub enabled_before: bool,
+    pub enabled_after_estimate: bool,
+    pub finding_count: usize,
+    pub conflict_count: usize,
+    pub analysis_count: usize,
+    pub notes: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationRiskDeltaRow {
+    pub id: String,
+    pub source: &'static str,
+    pub severity: String,
+    pub title: String,
+    pub current_risk: &'static str,
+    pub expected_risk_after: &'static str,
+    pub expected_direction: &'static str,
+    pub affected_instance_ids: Vec<String>,
+    pub blockers: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationSnapshotRollbackPlanRow {
+    pub id: String,
+    pub agent: String,
+    pub instance_id: String,
+    pub skill_name: String,
+    pub action_intent: String,
+    pub snapshot_required: bool,
+    pub rollback_available: bool,
+    pub verified_writable: bool,
+    pub blocked_reason: Option<String>,
+    pub plan_only: bool,
+    pub evidence_refs: Vec<String>,
+}
+
+pub type RemediationPreviewImpactPromptRequest = AgentReadinessPromptRequest;
+pub type RemediationPreviewImpactSafetyFlags = AgentReadinessSafetyFlags;
+
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct DetectStaleDriftParams {
     #[serde(default)]
     pub agent: Option<String>,
@@ -2232,6 +2405,7 @@ pub enum LlmPromptActionKind {
     WorkspaceReadiness,
     RemediationPlan,
     RemediationPreviewDrafts,
+    RemediationPreviewImpact,
     TaskReadiness,
     RoutingConfidence,
 }
@@ -2252,6 +2426,7 @@ impl LlmPromptActionKind {
             Self::WorkspaceReadiness => "workspace_readiness",
             Self::RemediationPlan => "remediation_plan",
             Self::RemediationPreviewDrafts => "remediation_preview_drafts",
+            Self::RemediationPreviewImpact => "remediation_preview_impact",
             Self::TaskReadiness => "task_readiness",
             Self::RoutingConfidence => "routing_confidence",
         }
@@ -2822,6 +2997,14 @@ impl ServiceHost {
                     serde_json::from_value(request.params)?
                 };
                 serde_json::to_value(self.preview_remediation_drafts(params)?).map_err(Into::into)
+            }
+            "remediation.previewImpact" => {
+                let params: RemediationPreviewImpactParams = if request.params.is_null() {
+                    RemediationPreviewImpactParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.preview_remediation_impact(params)?).map_err(Into::into)
             }
             "task.checkReadiness" => {
                 let params: TaskReadinessParams = serde_json::from_value(request.params)?;
@@ -6224,6 +6407,339 @@ impl ServiceHost {
         })
     }
 
+    pub fn preview_remediation_impact(
+        &self,
+        params: RemediationPreviewImpactParams,
+    ) -> Result<RemediationPreviewImpactResult, ServiceError> {
+        if matches!(params.limit, Some(0)) {
+            return Err(ServiceError::InvalidRequest(
+                "remediation.previewImpact limit must be greater than zero".to_string(),
+            ));
+        }
+
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let roots = self.redaction_roots(&adapter_ctx);
+        let filters = remediation_preview_impact_filters(&params, &roots);
+        let Some(catalog) = self.open_existing_catalog_read_only()? else {
+            return Ok(empty_remediation_preview_impact_result(filters, false));
+        };
+
+        let skills = self.list_visible_skill_records(&catalog)?;
+        let mut selected_ids = filters
+            .skill_ids
+            .iter()
+            .chain(filters.candidate_instance_ids.iter())
+            .cloned()
+            .collect::<Vec<_>>();
+        selected_ids.sort();
+        selected_ids.dedup();
+        let details = skills
+            .iter()
+            .filter(|skill| {
+                agent_matches(filters.agent.as_deref(), Some(skill.agent.as_str()))
+                    && (selected_ids.is_empty() || selected_ids.contains(&skill.id))
+            })
+            .filter_map(|skill| catalog.get_skill_detail(&skill.id).ok().flatten())
+            .filter(|detail| {
+                workspace_detail_matches(params.project_root.as_deref().map(Path::new), detail)
+            })
+            .collect::<Vec<_>>();
+        let visible_ids = details
+            .iter()
+            .map(|detail| detail.id.as_str())
+            .collect::<BTreeSet<_>>();
+
+        let findings = list_findings(&catalog)?;
+        let conflicts = list_conflicts(&catalog)?;
+        let analysis = analyze_catalog(&catalog, &adapter_ctx)?;
+        let diagnostics = list_adapter_diagnostics(&adapter_ctx);
+        let plan = self.plan_remediation(RemediationPlanParams {
+            agent: filters.agent.clone(),
+            task: filters.task.clone(),
+            project_root: params.project_root.clone(),
+            focus: None,
+            focus_areas: Vec::new(),
+            limit: Some(filters.limit.saturating_mul(2).max(filters.limit)),
+            candidate_instance_ids: selected_ids.clone(),
+            include_deferred: true,
+        })?;
+        let drafts = self.preview_remediation_drafts(RemediationPreviewDraftsParams {
+            agent: filters.agent.clone(),
+            task: filters.task.clone(),
+            skill_ids: selected_ids.clone(),
+            finding_ids: Vec::new(),
+            draft_types: Vec::new(),
+            limit: Some(filters.limit.saturating_mul(2).max(filters.limit)),
+            include_policy_drafts: true,
+        })?;
+        let task_readiness = if filters.include_task_impact {
+            filters
+                .task
+                .as_ref()
+                .map(|task| {
+                    self.check_task_readiness(TaskReadinessParams {
+                        task: task.clone(),
+                        agent: filters.agent.clone(),
+                        candidate_instance_ids: selected_ids.clone(),
+                        limit: Some(filters.limit.min(20)),
+                    })
+                })
+                .transpose()?
+        } else {
+            None
+        };
+        let routing = if filters.include_task_impact {
+            filters
+                .task
+                .as_ref()
+                .map(|task| {
+                    self.rank_skill_routes(RankSkillRoutesParams {
+                        task: task.clone(),
+                        agent: filters.agent.clone(),
+                        candidate_instance_ids: selected_ids.clone(),
+                        limit: Some(filters.limit.min(20)),
+                    })
+                })
+                .transpose()?
+        } else {
+            None
+        };
+
+        let mut evidence_by_id = BTreeMap::new();
+        for evidence in plan
+            .evidence_references
+            .iter()
+            .chain(drafts.evidence_references.iter())
+        {
+            evidence_by_id
+                .entry(evidence.id.clone())
+                .or_insert_with(|| evidence.clone());
+        }
+        if let Some(readiness) = task_readiness.as_ref() {
+            for evidence in &readiness.evidence_references {
+                evidence_by_id
+                    .entry(evidence.id.clone())
+                    .or_insert_with(|| evidence.clone());
+            }
+        }
+        if let Some(routing) = routing.as_ref() {
+            for evidence in &routing.evidence_references {
+                evidence_by_id
+                    .entry(evidence.id.clone())
+                    .or_insert_with(|| evidence.clone());
+            }
+        }
+
+        let mut skill_rows = Vec::new();
+        for detail in &details {
+            let finding_count = findings
+                .iter()
+                .filter(|finding| finding.instance_id.as_deref() == Some(detail.id.as_str()))
+                .count();
+            let conflict_count = conflicts
+                .iter()
+                .filter(|conflict| conflict.instance_ids.iter().any(|id| id == &detail.id))
+                .count();
+            let analysis_count = analysis
+                .groups
+                .iter()
+                .filter(|group| group.instance_ids.iter().any(|id| id == &detail.id))
+                .count();
+            let evidence_id = remediation_insert_evidence(
+                &mut evidence_by_id,
+                "skill",
+                &detail.id,
+                format!(
+                    "{} skill `{}` impact preview candidate.",
+                    redact_for_llm_preview(&detail.agent),
+                    redact_for_llm_preview(&detail.name)
+                ),
+                None,
+                Some(detail.id.clone()),
+            );
+            skill_rows.push(RemediationSkillImpactRow {
+                affected_skill: remediation_affected_skill(detail),
+                action_intent: filters.action.clone(),
+                expected_direction: remediation_impact_direction_for_skill(&filters.action, detail),
+                enabled_before: detail.enabled,
+                enabled_after_estimate: remediation_estimated_enabled_after(
+                    &filters.action,
+                    detail,
+                ),
+                finding_count,
+                conflict_count,
+                analysis_count,
+                notes: remediation_skill_impact_notes(&filters.action, detail),
+                evidence_refs: vec![evidence_id],
+            });
+        }
+
+        let mut risk_delta_rows = Vec::new();
+        if filters.include_risk_impact {
+            for finding in &findings {
+                if finding.suppressed || finding.triage_status.eq_ignore_ascii_case("ignored") {
+                    continue;
+                }
+                let related = remediation_related_instances_for_finding(finding, &visible_ids);
+                if related.is_empty() {
+                    continue;
+                }
+                if !filters.plan_item_ids.is_empty()
+                    && !filters
+                        .plan_item_ids
+                        .iter()
+                        .any(|id| finding.id.contains(id))
+                {
+                    continue;
+                }
+                let evidence_id = remediation_insert_evidence(
+                    &mut evidence_by_id,
+                    "finding",
+                    &finding.id,
+                    format!(
+                        "{} finding `{}`: {}",
+                        redact_for_llm_preview(&finding.effective_severity),
+                        redact_for_llm_preview(&finding.rule_id),
+                        redact_for_llm_preview(&finding.message)
+                    ),
+                    Some(finding.effective_severity.clone()),
+                    finding.instance_id.clone(),
+                );
+                risk_delta_rows.push(RemediationRiskDeltaRow {
+                    id: format!("risk-delta-{}", finding.id),
+                    source: "finding",
+                    severity: finding.effective_severity.clone(),
+                    title: redact_for_llm_preview(&finding.message),
+                    current_risk: remediation_risk_band(&finding.effective_severity),
+                    expected_risk_after: remediation_expected_risk_after(
+                        &filters.action,
+                        &finding.effective_severity,
+                    ),
+                    expected_direction: remediation_impact_direction_for_action(&filters.action),
+                    affected_instance_ids: related,
+                    blockers: remediation_blockers_for_finding(finding),
+                    evidence_refs: vec![evidence_id],
+                });
+            }
+            risk_delta_rows.truncate(filters.limit);
+        }
+
+        let snapshot_rollback_plan_rows =
+            if filters.include_snapshot_plan || filters.include_rollback_plan {
+                remediation_snapshot_rollback_rows(
+                    &filters,
+                    &details,
+                    &diagnostics,
+                    &mut evidence_by_id,
+                )
+            } else {
+                Vec::new()
+            };
+        let agent_impact_rows = remediation_agent_impact_rows(&filters, &skill_rows, &diagnostics);
+        let task_impact_rows =
+            remediation_task_impact_rows(&filters, task_readiness.as_ref(), routing.as_ref());
+        let mut impact_rows = remediation_top_level_impact_rows(
+            &filters,
+            &skill_rows,
+            &agent_impact_rows,
+            &task_impact_rows,
+            &risk_delta_rows,
+            &snapshot_rollback_plan_rows,
+        );
+        impact_rows.truncate(filters.limit);
+
+        let mut gap_notes = plan.gap_notes.clone();
+        gap_notes.extend(drafts.gap_notes.clone());
+        if details.is_empty() {
+            gap_notes
+                .push("No visible local skills matched the impact preview filters.".to_string());
+        }
+        if impact_rows.is_empty() {
+            gap_notes.push(
+                "No deterministic local impact rows matched the requested preview.".to_string(),
+            );
+        }
+        gap_notes.sort();
+        gap_notes.dedup();
+        gap_notes.truncate(18);
+
+        let mut blocker_notes = plan.blocker_notes.clone();
+        blocker_notes.extend(drafts.blocker_notes.clone());
+        blocker_notes.push(
+            "Impact preview is plan-only; it does not apply actions, create snapshots, roll back configs, or edit skill files."
+                .to_string(),
+        );
+        blocker_notes.extend(
+            snapshot_rollback_plan_rows
+                .iter()
+                .filter_map(|row| row.blocked_reason.clone()),
+        );
+        blocker_notes.sort();
+        blocker_notes.dedup();
+        blocker_notes.truncate(18);
+
+        let summary = remediation_preview_impact_summary(
+            &impact_rows,
+            &task_impact_rows,
+            &agent_impact_rows,
+            &skill_rows,
+            &risk_delta_rows,
+            &snapshot_rollback_plan_rows,
+            blocker_notes.len(),
+        );
+        let prompt_instance_ids = skill_rows
+            .iter()
+            .map(|row| row.affected_skill.instance_id.clone())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .take(12)
+            .collect::<Vec<_>>();
+        let prompt_available = !impact_rows.is_empty();
+
+        Ok(RemediationPreviewImpactResult {
+            generated_by: "local-v2.58",
+            catalog_available: true,
+            filters: filters.clone(),
+            summary,
+            impact_rows,
+            task_impact_rows,
+            agent_impact_rows,
+            skill_impact_rows: skill_rows.into_iter().take(filters.limit).collect(),
+            risk_delta_rows,
+            snapshot_rollback_plan_rows,
+            gap_notes,
+            blocker_notes,
+            evidence_references: evidence_by_id.into_values().collect(),
+            prompt_request: RemediationPreviewImpactPromptRequest {
+                available: prompt_available,
+                preview_method: "llm.previewPrompt",
+                confirm_method: "llm.confirmPromptAndSend",
+                action: "remediation_preview_impact",
+                request: LlmPreviewPromptParams {
+                    action: LlmPromptActionKind::RemediationPreviewImpact,
+                    profile_id: None,
+                    skill_instance_id: None,
+                    instance_ids: prompt_instance_ids,
+                    analysis_kind: None,
+                    user_intent: filters.task.clone().or_else(|| {
+                        Some(
+                            "Explain deterministic remediation impact preview using only local catalog evidence."
+                                .to_string(),
+                        )
+                    }),
+                },
+                note: if prompt_available {
+                    "Optional provider-backed impact explanation must be requested through prompt preview and explicit confirmation; remediation.previewImpact never sends provider traffic and remains copy-only."
+                        .to_string()
+                } else {
+                    "Prompt preview is unavailable until local evidence produces impact rows."
+                        .to_string()
+                },
+            },
+            safety_flags: remediation_preview_impact_safety_flags(),
+        })
+    }
+
     pub fn check_task_readiness(
         &self,
         params: TaskReadinessParams,
@@ -7736,6 +8252,53 @@ impl ServiceHost {
                     &mut redactor,
                 ));
             }
+            LlmPromptActionKind::RemediationPreviewImpact => {
+                let result = self.preview_remediation_impact(RemediationPreviewImpactParams {
+                    action: Some("review".to_string()),
+                    task: params.user_intent.clone(),
+                    agent: None,
+                    project_root: None,
+                    skill_ids: params.instance_ids.clone(),
+                    candidate_instance_ids: Vec::new(),
+                    draft_ids: Vec::new(),
+                    plan_item_ids: Vec::new(),
+                    limit: Some(8),
+                    include_snapshot_plan: true,
+                    include_rollback_plan: true,
+                    include_risk_impact: true,
+                    include_task_impact: true,
+                })?;
+                prompt_scope.extend([
+                    "deterministic impact preview rows".to_string(),
+                    "task, agent, skill, risk, snapshot, and rollback impact summaries".to_string(),
+                    "plan-only snapshot and rollback rows".to_string(),
+                    "local gap and blocker notes".to_string(),
+                    "evidence reference summaries".to_string(),
+                    "safety flags".to_string(),
+                ]);
+                included_fields.extend([
+                    "redacted task or impact intent".to_string(),
+                    "impact row ids, areas, confidence, direction, and blockers".to_string(),
+                    "affected skill ids, names, agents, scopes, enabled states, and estimates"
+                        .to_string(),
+                    "task readiness and routing score estimates".to_string(),
+                    "plan-only snapshot and rollback statuses".to_string(),
+                    "risk delta rows and local evidence ids".to_string(),
+                    "read-only safety flags".to_string(),
+                ]);
+                excluded_fields.extend([
+                    "raw source paths".to_string(),
+                    "raw provider response".to_string(),
+                    "agent config contents".to_string(),
+                    "raw prompt or response persistence".to_string(),
+                    "write/apply instructions".to_string(),
+                    "snapshot creation or rollback commands".to_string(),
+                ]);
+                sections.push(render_remediation_preview_impact_prompt_section(
+                    &result,
+                    &mut redactor,
+                ));
+            }
             LlmPromptActionKind::TaskReadiness => {
                 let task = params.user_intent.as_deref().ok_or_else(|| {
                     ServiceError::InvalidRequest(
@@ -7843,6 +8406,7 @@ impl ServiceHost {
             LlmPromptActionKind::WorkspaceReadiness => 900,
             LlmPromptActionKind::RemediationPlan => 900,
             LlmPromptActionKind::RemediationPreviewDrafts => 850,
+            LlmPromptActionKind::RemediationPreviewImpact => 850,
             LlmPromptActionKind::TaskReadiness => 750,
             LlmPromptActionKind::RoutingConfidence => 850,
         };
@@ -12970,6 +13534,10 @@ fn remediation_preview_drafts_safety_flags() -> RemediationPreviewDraftsSafetyFl
     agent_readiness_safety_flags()
 }
 
+fn remediation_preview_impact_safety_flags() -> RemediationPreviewImpactSafetyFlags {
+    agent_readiness_safety_flags()
+}
+
 fn remediation_plan_filters(
     params: &RemediationPlanParams,
     redaction_roots: &[(String, &'static str)],
@@ -13543,6 +14111,525 @@ fn empty_remediation_preview_drafts_result(
             note: "Prompt preview is unavailable until local catalog evidence exists.".to_string(),
         },
         safety_flags: remediation_preview_drafts_safety_flags(),
+    }
+}
+
+fn remediation_preview_impact_filters(
+    params: &RemediationPreviewImpactParams,
+    redaction_roots: &[(String, &'static str)],
+) -> RemediationPreviewImpactFilters {
+    let skill_ids = normalized_redacted_ids(&params.skill_ids);
+    let candidate_instance_ids = normalized_redacted_ids(&params.candidate_instance_ids);
+    let draft_ids = normalized_redacted_ids(&params.draft_ids);
+    let plan_item_ids = normalized_redacted_ids(&params.plan_item_ids);
+    RemediationPreviewImpactFilters {
+        action: normalize_remediation_impact_action(params.action.as_deref()),
+        task: params
+            .task
+            .as_deref()
+            .map(str::trim)
+            .filter(|task| !task.is_empty())
+            .map(|task| redact_string(&redact_for_llm_preview(task), redaction_roots)),
+        agent: params.agent.as_deref().and_then(normalize_agent_label),
+        project_root: params
+            .project_root
+            .as_deref()
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+            .map(|path| redact_string(&redact_for_llm_preview(path), redaction_roots)),
+        skill_ids,
+        candidate_instance_ids,
+        draft_ids,
+        plan_item_ids,
+        limit: params.limit.unwrap_or(12).clamp(1, 50),
+        include_snapshot_plan: params.include_snapshot_plan,
+        include_rollback_plan: params.include_rollback_plan,
+        include_risk_impact: params.include_risk_impact || params.action.as_deref().is_none(),
+        include_task_impact: params.include_task_impact || params.task.is_some(),
+    }
+}
+
+fn normalized_redacted_ids(values: &[String]) -> Vec<String> {
+    let mut ids = values
+        .iter()
+        .map(|value| redact_for_llm_preview(value.trim()))
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
+fn normalize_remediation_impact_action(action: Option<&str>) -> String {
+    match action
+        .unwrap_or("review")
+        .trim()
+        .to_ascii_lowercase()
+        .replace(['_', ' '], "-")
+        .as_str()
+    {
+        "enable" | "on" => "enable",
+        "disable" | "off" => "disable",
+        "edit" | "draft" => "edit",
+        "remediate" | "fix" => "remediate",
+        _ => "review",
+    }
+    .to_string()
+}
+
+fn empty_remediation_preview_impact_result(
+    filters: RemediationPreviewImpactFilters,
+    catalog_available: bool,
+) -> RemediationPreviewImpactResult {
+    RemediationPreviewImpactResult {
+        generated_by: "local-v2.58",
+        catalog_available,
+        filters,
+        summary: RemediationPreviewImpactSummary {
+            total_impact_count: 0,
+            returned_impact_count: 0,
+            task_impact_count: 0,
+            agent_impact_count: 0,
+            skill_impact_count: 0,
+            risk_delta_count: 0,
+            snapshot_plan_count: 0,
+            rollback_plan_count: 0,
+            blocker_count: 1,
+            summary: "No local catalog is available, so impact preview has no evidence."
+                .to_string(),
+        },
+        impact_rows: Vec::new(),
+        task_impact_rows: Vec::new(),
+        agent_impact_rows: Vec::new(),
+        skill_impact_rows: Vec::new(),
+        risk_delta_rows: Vec::new(),
+        snapshot_rollback_plan_rows: Vec::new(),
+        gap_notes: vec!["Run a local scan before relying on impact preview.".to_string()],
+        blocker_notes: vec![
+            "No provider request was sent and no fallback network lookup was attempted."
+                .to_string(),
+        ],
+        evidence_references: Vec::new(),
+        prompt_request: RemediationPreviewImpactPromptRequest {
+            available: false,
+            preview_method: "llm.previewPrompt",
+            confirm_method: "llm.confirmPromptAndSend",
+            action: "remediation_preview_impact",
+            request: LlmPreviewPromptParams {
+                action: LlmPromptActionKind::RemediationPreviewImpact,
+                profile_id: None,
+                skill_instance_id: None,
+                instance_ids: Vec::new(),
+                analysis_kind: None,
+                user_intent: Some(
+                    "Explain deterministic remediation impact preview using only local catalog evidence."
+                        .to_string(),
+                ),
+            },
+            note: "Prompt preview is unavailable until local catalog evidence exists.".to_string(),
+        },
+        safety_flags: remediation_preview_impact_safety_flags(),
+    }
+}
+
+fn remediation_impact_direction_for_action(action: &str) -> &'static str {
+    match action {
+        "enable" | "remediate" | "edit" => "improve",
+        "disable" => "reduce",
+        _ => "neutral",
+    }
+}
+
+fn remediation_impact_direction_for_skill(
+    action: &str,
+    detail: &SkillDetailRecord,
+) -> &'static str {
+    match action {
+        "enable" if !detail.enabled => "improve",
+        "enable" => "neutral",
+        "disable" if detail.enabled => "reduce",
+        "disable" => "neutral",
+        "edit" | "remediate" => "improve",
+        _ => "neutral",
+    }
+}
+
+fn remediation_estimated_enabled_after(action: &str, detail: &SkillDetailRecord) -> bool {
+    match action {
+        "enable" => true,
+        "disable" => false,
+        _ => detail.enabled,
+    }
+}
+
+fn remediation_skill_impact_notes(action: &str, detail: &SkillDetailRecord) -> Vec<String> {
+    let mut notes = Vec::new();
+    match action {
+        "enable" if detail.enabled => notes.push("Skill is already enabled; enable impact is neutral.".to_string()),
+        "disable" if !detail.enabled => notes.push("Skill is already disabled; disable impact is neutral.".to_string()),
+        "edit" | "remediate" => notes.push("Edit/remediation impact is advisory until a separate safe write flow is explicitly confirmed.".to_string()),
+        "review" => notes.push("Review impact is informational and does not change runtime state.".to_string()),
+        _ => notes.push("Impact estimate is derived from current local enabled/state evidence.".to_string()),
+    }
+    if detail.state != "loaded" {
+        notes.push(format!(
+            "Current skill state is `{}`.",
+            redact_for_llm_preview(&detail.state)
+        ));
+    }
+    notes
+}
+
+fn remediation_risk_band(severity: &str) -> &'static str {
+    match severity {
+        "critical" | "error" => "high",
+        "warning" | "warn" => "medium",
+        _ => "low",
+    }
+}
+
+fn remediation_expected_risk_after(action: &str, severity: &str) -> &'static str {
+    match action {
+        "edit" | "remediate" => match remediation_risk_band(severity) {
+            "high" => "medium",
+            "medium" => "low",
+            other => other,
+        },
+        "disable" => "low",
+        _ => remediation_risk_band(severity),
+    }
+}
+
+fn remediation_snapshot_rollback_rows(
+    filters: &RemediationPreviewImpactFilters,
+    details: &[SkillDetailRecord],
+    diagnostics: &[AdapterDiagnosticsRecord],
+    evidence_by_id: &mut BTreeMap<String, TaskReadinessEvidenceReference>,
+) -> Vec<RemediationSnapshotRollbackPlanRow> {
+    details
+        .iter()
+        .take(filters.limit)
+        .map(|detail| {
+            let diagnostic = diagnostics
+                .iter()
+                .find(|diagnostic| diagnostic.agent == detail.agent);
+            let writable_status = diagnostic
+                .map(|diagnostic| diagnostic.access.writable_status)
+                .unwrap_or("unknown");
+            let verified_writable = matches!(
+                writable_status,
+                "verified" | "verified-writable" | "writable" | "partial"
+            );
+            let write_like_action = matches!(filters.action.as_str(), "enable" | "disable" | "edit" | "remediate");
+            let evidence_id = remediation_insert_evidence(
+                evidence_by_id,
+                "adapter_diagnostic",
+                &detail.agent,
+                format!(
+                    "{} writable status is `{}` for impact preview planning.",
+                    redact_for_llm_preview(&detail.agent),
+                    redact_for_llm_preview(writable_status)
+                ),
+                None,
+                Some(detail.id.clone()),
+            );
+            RemediationSnapshotRollbackPlanRow {
+                id: format!("snapshot-plan-{}", detail.id),
+                agent: detail.agent.clone(),
+                instance_id: detail.id.clone(),
+                skill_name: redact_for_llm_preview(&detail.name),
+                action_intent: filters.action.clone(),
+                snapshot_required: write_like_action && verified_writable && filters.include_snapshot_plan,
+                rollback_available: write_like_action && verified_writable && filters.include_rollback_plan,
+                verified_writable,
+                blocked_reason: if write_like_action && !verified_writable {
+                    Some(format!(
+                        "Adapter writable status is `{}`; impact preview cannot promise snapshot or rollback.",
+                        redact_for_llm_preview(writable_status)
+                    ))
+                } else {
+                    None
+                },
+                plan_only: true,
+                evidence_refs: vec![evidence_id],
+            }
+        })
+        .collect()
+}
+
+fn remediation_agent_impact_rows(
+    filters: &RemediationPreviewImpactFilters,
+    skill_rows: &[RemediationSkillImpactRow],
+    diagnostics: &[AdapterDiagnosticsRecord],
+) -> Vec<RemediationAgentImpactRow> {
+    let mut by_agent: BTreeMap<String, Vec<&RemediationSkillImpactRow>> = BTreeMap::new();
+    for row in skill_rows {
+        by_agent
+            .entry(row.affected_skill.agent.clone())
+            .or_default()
+            .push(row);
+    }
+    by_agent
+        .into_iter()
+        .map(|(agent, rows)| {
+            let enabled_before_count = rows.iter().filter(|row| row.enabled_before).count();
+            let enabled_after_estimate_count =
+                rows.iter().filter(|row| row.enabled_after_estimate).count();
+            let diagnostic = diagnostics
+                .iter()
+                .find(|diagnostic| diagnostic.agent == agent);
+            RemediationAgentImpactRow {
+                agent,
+                action_intent: filters.action.clone(),
+                expected_direction: remediation_impact_direction_for_action(&filters.action),
+                impacted_skill_count: rows.len(),
+                enabled_before_count,
+                enabled_after_estimate_count,
+                writable_status: diagnostic
+                    .map(|diagnostic| diagnostic.access.writable_status.to_string()),
+                blocker_notes: diagnostic
+                    .filter(|diagnostic| diagnostic.access.writable_status == "blocked")
+                    .map(|diagnostic| {
+                        vec![format!(
+                            "Adapter writable status is `{}`; this remains a read-only impact preview.",
+                            diagnostic.access.writable_status
+                        )]
+                    })
+                    .unwrap_or_default(),
+                evidence_refs: rows
+                    .iter()
+                    .flat_map(|row| row.evidence_refs.clone())
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .collect(),
+            }
+        })
+        .take(filters.limit)
+        .collect()
+}
+
+fn remediation_task_impact_rows(
+    filters: &RemediationPreviewImpactFilters,
+    readiness: Option<&TaskReadinessResult>,
+    routing: Option<&SkillRouteRankingResult>,
+) -> Vec<RemediationTaskImpactRow> {
+    let Some(task) = filters.task.clone() else {
+        return Vec::new();
+    };
+    let readiness_score = readiness.map(|readiness| readiness.score);
+    let routing_score = routing.map(|routing| routing.overall_confidence_score);
+    let after_readiness =
+        readiness_score.map(|score| remediation_estimated_score_after(&filters.action, score));
+    let after_routing =
+        routing_score.map(|score| remediation_estimated_score_after(&filters.action, score));
+    let mut evidence_refs = Vec::new();
+    if let Some(readiness) = readiness {
+        evidence_refs.extend(
+            readiness
+                .evidence_references
+                .iter()
+                .take(4)
+                .map(|e| e.id.clone()),
+        );
+    }
+    if let Some(routing) = routing {
+        evidence_refs.extend(
+            routing
+                .evidence_references
+                .iter()
+                .take(4)
+                .map(|e| e.id.clone()),
+        );
+    }
+    evidence_refs.sort();
+    evidence_refs.dedup();
+    vec![RemediationTaskImpactRow {
+        task,
+        action_intent: filters.action.clone(),
+        expected_direction: remediation_impact_direction_for_action(&filters.action),
+        readiness_score_before: readiness_score,
+        readiness_score_after_estimate: after_readiness,
+        routing_confidence_before: routing_score,
+        routing_confidence_after_estimate: after_routing,
+        notes: vec![
+            "Task impact is an estimate from deterministic local readiness/routing evidence; no provider request was sent.".to_string(),
+        ],
+        evidence_refs,
+    }]
+}
+
+fn remediation_estimated_score_after(action: &str, score: u8) -> u8 {
+    match action {
+        "enable" | "edit" | "remediate" => score.saturating_add(8).min(100),
+        "disable" => score.saturating_sub(12),
+        _ => score,
+    }
+}
+
+fn remediation_top_level_impact_rows(
+    filters: &RemediationPreviewImpactFilters,
+    skill_rows: &[RemediationSkillImpactRow],
+    agent_rows: &[RemediationAgentImpactRow],
+    task_rows: &[RemediationTaskImpactRow],
+    risk_rows: &[RemediationRiskDeltaRow],
+    snapshot_rows: &[RemediationSnapshotRollbackPlanRow],
+) -> Vec<RemediationImpactRow> {
+    let mut rows = Vec::new();
+    if !skill_rows.is_empty() {
+        rows.push(remediation_impact_row(
+            "skill",
+            1,
+            "Skill impact",
+            format!(
+                "{} local skill(s) are in scope for `{}`.",
+                skill_rows.len(),
+                filters.action
+            ),
+            filters,
+            Some(skill_rows[0].affected_skill.agent.clone()),
+            Some(skill_rows[0].affected_skill.clone()),
+            skill_rows[0].evidence_refs.clone(),
+            Vec::new(),
+        ));
+    }
+    if !agent_rows.is_empty() {
+        rows.push(remediation_impact_row(
+            "agent",
+            2,
+            "Agent impact",
+            format!(
+                "{} agent(s) have scoped skill impact rows.",
+                agent_rows.len()
+            ),
+            filters,
+            Some(agent_rows[0].agent.clone()),
+            None,
+            agent_rows[0].evidence_refs.clone(),
+            agent_rows[0].blocker_notes.clone(),
+        ));
+    }
+    if !task_rows.is_empty() {
+        rows.push(remediation_impact_row(
+            "task",
+            3,
+            "Task impact",
+            "Task readiness/routing impact is estimated from local evidence.".to_string(),
+            filters,
+            filters.agent.clone(),
+            None,
+            task_rows[0].evidence_refs.clone(),
+            Vec::new(),
+        ));
+    }
+    if !risk_rows.is_empty() {
+        rows.push(remediation_impact_row(
+            "risk",
+            4,
+            "Risk impact",
+            format!("{} local risk delta row(s) are in scope.", risk_rows.len()),
+            filters,
+            filters.agent.clone(),
+            None,
+            risk_rows[0].evidence_refs.clone(),
+            risk_rows
+                .iter()
+                .flat_map(|row| row.blockers.clone())
+                .collect(),
+        ));
+    }
+    if !snapshot_rows.is_empty() {
+        rows.push(remediation_impact_row(
+            "snapshot",
+            5,
+            "Snapshot and rollback plan",
+            format!(
+                "{} plan-only snapshot/rollback row(s) are in scope.",
+                snapshot_rows.len()
+            ),
+            filters,
+            Some(snapshot_rows[0].agent.clone()),
+            None,
+            snapshot_rows[0].evidence_refs.clone(),
+            snapshot_rows
+                .iter()
+                .filter_map(|row| row.blocked_reason.clone())
+                .collect(),
+        ));
+    }
+    rows
+}
+
+fn remediation_impact_row(
+    area: &'static str,
+    rank: usize,
+    title: &str,
+    summary: String,
+    filters: &RemediationPreviewImpactFilters,
+    affected_agent: Option<String>,
+    affected_skill: Option<RemediationAffectedSkill>,
+    evidence_refs: Vec<String>,
+    mut blockers: Vec<String>,
+) -> RemediationImpactRow {
+    blockers.sort();
+    blockers.dedup();
+    RemediationImpactRow {
+        id: stable_remediation_item_id(area, title, &Vec::new(), &evidence_refs),
+        rank,
+        area,
+        title: title.to_string(),
+        summary,
+        action_intent: filters.action.clone(),
+        expected_direction: remediation_impact_direction_for_action(&filters.action),
+        confidence: if blockers.is_empty() { 82 } else { 64 },
+        confidence_band: if blockers.is_empty() {
+            "high"
+        } else {
+            "medium"
+        },
+        affected_agent,
+        affected_skill,
+        affected_task: filters.task.clone(),
+        evidence_refs,
+        blockers,
+        side_effect_flags: remediation_side_effect_flags(),
+        safety_flags: remediation_preview_impact_safety_flags(),
+    }
+}
+
+fn remediation_preview_impact_summary(
+    impact_rows: &[RemediationImpactRow],
+    task_rows: &[RemediationTaskImpactRow],
+    agent_rows: &[RemediationAgentImpactRow],
+    skill_rows: &[RemediationSkillImpactRow],
+    risk_rows: &[RemediationRiskDeltaRow],
+    snapshot_rows: &[RemediationSnapshotRollbackPlanRow],
+    blocker_count: usize,
+) -> RemediationPreviewImpactSummary {
+    let snapshot_plan_count = snapshot_rows
+        .iter()
+        .filter(|row| row.snapshot_required)
+        .count();
+    let rollback_plan_count = snapshot_rows
+        .iter()
+        .filter(|row| row.rollback_available)
+        .count();
+    RemediationPreviewImpactSummary {
+        total_impact_count: impact_rows.len(),
+        returned_impact_count: impact_rows.len(),
+        task_impact_count: task_rows.len(),
+        agent_impact_count: agent_rows.len(),
+        skill_impact_count: skill_rows.len(),
+        risk_delta_count: risk_rows.len(),
+        snapshot_plan_count,
+        rollback_plan_count,
+        blocker_count,
+        summary: format!(
+            "Impact preview returned {} top-level row(s), {} skill row(s), {} risk delta row(s), and {} plan-only snapshot/rollback row(s).",
+            impact_rows.len(),
+            skill_rows.len(),
+            risk_rows.len(),
+            snapshot_rows.len()
+        ),
     }
 }
 
@@ -17811,6 +18898,134 @@ fn render_remediation_preview_drafts_prompt_section(
     )
 }
 
+fn render_remediation_preview_impact_prompt_section(
+    result: &RemediationPreviewImpactResult,
+    redactor: &mut PromptRedactor<'_>,
+) -> String {
+    let impacts = result
+        .impact_rows
+        .iter()
+        .take(10)
+        .map(|row| {
+            format!(
+                "- #{} area={} direction={} confidence={} band={} title={} summary={} blockers={}",
+                row.rank,
+                row.area,
+                row.expected_direction,
+                row.confidence,
+                row.confidence_band,
+                redactor.redact(&row.title),
+                redactor.redact(&row.summary),
+                row.blockers
+                    .iter()
+                    .take(3)
+                    .map(|blocker| redactor.redact(blocker))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let snapshots = result
+        .snapshot_rollback_plan_rows
+        .iter()
+        .take(8)
+        .map(|row| {
+            format!(
+                "- {} agent={} snapshot_required={} rollback_available={} verified_writable={} plan_only={} blocked={}",
+                redactor.redact(&row.skill_name),
+                redactor.redact(&row.agent),
+                row.snapshot_required,
+                row.rollback_available,
+                row.verified_writable,
+                row.plan_only,
+                row.blocked_reason
+                    .as_deref()
+                    .map(|reason| redactor.redact(reason))
+                    .unwrap_or_else(|| "none".to_string())
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let risks = result
+        .risk_delta_rows
+        .iter()
+        .take(8)
+        .map(|row| {
+            format!(
+                "- {} severity={} current={} expected_after={} direction={} blockers={}",
+                redactor.redact(&row.title),
+                redactor.redact(&row.severity),
+                row.current_risk,
+                row.expected_risk_after,
+                row.expected_direction,
+                row.blockers
+                    .iter()
+                    .take(3)
+                    .map(|blocker| redactor.redact(blocker))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let evidence = result
+        .evidence_references
+        .iter()
+        .take(16)
+        .map(|reference| {
+            format!(
+                "- {} {} {}",
+                reference.source_type,
+                redactor.redact(&reference.source_id),
+                redactor.redact(&reference.label)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "Impact preview evidence:\n- catalog_available: {}\n- action: {}\n- total_impact_count: {}\n- returned_impact_count: {}\n- task_impact_count: {}\n- agent_impact_count: {}\n- skill_impact_count: {}\n- risk_delta_count: {}\n- snapshot_plan_count: {}\n- rollback_plan_count: {}\n- blocker_count: {}\n- summary: {}\n\nImpact rows:\n{}\n\nSnapshot/rollback plans:\n{}\n\nRisk deltas:\n{}\n\nGap notes:\n{}\n\nBlocker notes:\n{}\n\nEvidence references:\n{}\n\nSafety flags: read_only=true, app_local_only=true, provider_request_sent=false, write_back_allowed=false, write_actions_available=false, skill_files_mutated=false, agent_config_mutated=false, script_execution_allowed=false, execution_actions_available=false, config_mutation_allowed=false, snapshot_created=false, triage_mutation_allowed=false, credential_accessed=false, raw_prompt_persisted=false, raw_response_persisted=false, raw_trace_persisted=false, cloud_sync_performed=false, telemetry_emitted=false.",
+        result.catalog_available,
+        result.filters.action,
+        result.summary.total_impact_count,
+        result.summary.returned_impact_count,
+        result.summary.task_impact_count,
+        result.summary.agent_impact_count,
+        result.summary.skill_impact_count,
+        result.summary.risk_delta_count,
+        result.summary.snapshot_plan_count,
+        result.summary.rollback_plan_count,
+        result.summary.blocker_count,
+        redactor.redact(&result.summary.summary),
+        if impacts.is_empty() { "none" } else { &impacts },
+        if snapshots.is_empty() { "none" } else { &snapshots },
+        if risks.is_empty() { "none" } else { &risks },
+        if result.gap_notes.is_empty() {
+            "none".to_string()
+        } else {
+            result
+                .gap_notes
+                .iter()
+                .take(10)
+                .map(|note| redactor.redact(note))
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+        if result.blocker_notes.is_empty() {
+            "none".to_string()
+        } else {
+            result
+                .blocker_notes
+                .iter()
+                .take(10)
+                .map(|note| redactor.redact(note))
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+        if evidence.is_empty() { "none" } else { &evidence },
+    )
+}
+
 fn render_routing_confidence_prompt_section(
     ranking: &SkillRouteRankingResult,
     redactor: &mut PromptRedactor<'_>,
@@ -18184,6 +19399,7 @@ mod tests {
         assert!(methods.contains(&Value::String("workspace.checkReadiness".to_string())));
         assert!(methods.contains(&Value::String("remediation.plan".to_string())));
         assert!(methods.contains(&Value::String("remediation.previewDrafts".to_string())));
+        assert!(methods.contains(&Value::String("remediation.previewImpact".to_string())));
         assert!(methods.contains(&Value::String("task.checkReadiness".to_string())));
         assert!(methods.contains(&Value::String("task.rankSkillRoutes".to_string())));
         assert!(methods.contains(&Value::String("task.compareAgentReadiness".to_string())));
@@ -25089,6 +26305,287 @@ mod tests {
     }
 
     #[test]
+    fn remediation_preview_impact_returns_local_read_only_rows() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-remediation-impact-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_similar_grouping_fixture(&host);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let result = host
+            .preview_remediation_impact(RemediationPreviewImpactParams {
+                action: Some("remediate".to_string()),
+                task: Some("Validate release readiness and privacy evidence".to_string()),
+                agent: None,
+                project_root: None,
+                skill_ids: Vec::new(),
+                candidate_instance_ids: vec![
+                    "similar-claude-a".to_string(),
+                    "similar-codex-a".to_string(),
+                ],
+                draft_ids: Vec::new(),
+                plan_item_ids: Vec::new(),
+                limit: Some(8),
+                include_snapshot_plan: true,
+                include_rollback_plan: true,
+                include_risk_impact: true,
+                include_task_impact: true,
+            })
+            .expect("impact preview");
+
+        assert_eq!(result.generated_by, "local-v2.58");
+        assert!(result.catalog_available);
+        assert_eq!(
+            result.summary.returned_impact_count,
+            result.impact_rows.len()
+        );
+        assert!(!result.impact_rows.is_empty());
+        assert!(!result.skill_impact_rows.is_empty());
+        assert!(!result.agent_impact_rows.is_empty());
+        assert!(!result.risk_delta_rows.is_empty());
+        assert!(!result.snapshot_rollback_plan_rows.is_empty());
+        assert!(result
+            .snapshot_rollback_plan_rows
+            .iter()
+            .all(|row| row.plan_only));
+        assert_eq!(result.prompt_request.action, "remediation_preview_impact");
+        assert_eq!(
+            result.prompt_request.request.action,
+            LlmPromptActionKind::RemediationPreviewImpact
+        );
+        assert!(result.safety_flags.read_only);
+        assert!(result.safety_flags.app_local_only);
+        assert!(!result.safety_flags.provider_request_sent);
+        assert!(!result.safety_flags.write_back_allowed);
+        assert!(!result.safety_flags.skill_files_mutated);
+        assert!(!result.safety_flags.agent_config_mutated);
+        assert!(!result.safety_flags.snapshot_created);
+        assert!(result.impact_rows.iter().all(|row| {
+            row.rank > 0
+                && row.safety_flags.read_only
+                && !row.safety_flags.provider_request_sent
+                && !row.safety_flags.write_back_allowed
+                && row
+                    .side_effect_flags
+                    .contains(&"provider_request_sent=false")
+                && row.side_effect_flags.contains(&"snapshot_created=false")
+        }));
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn remediation_preview_impact_missing_catalog_returns_safe_empty_result() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-remediation-impact-empty-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let result = host
+            .preview_remediation_impact(RemediationPreviewImpactParams::default())
+            .expect("empty impact preview");
+
+        assert!(!result.catalog_available);
+        assert_eq!(result.summary.returned_impact_count, 0);
+        assert!(result.impact_rows.is_empty());
+        assert!(!result.prompt_request.available);
+        assert!(result.safety_flags.read_only);
+        assert!(result.safety_flags.app_local_only);
+        assert!(!result.safety_flags.provider_request_sent);
+        assert!(!result.safety_flags.write_back_allowed);
+        assert!(!result.safety_flags.skill_files_mutated);
+        assert!(!result.safety_flags.agent_config_mutated);
+        assert!(!result.safety_flags.snapshot_created);
+        assert!(!host.catalog_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn remediation_preview_impact_rejects_invalid_limit_without_writes() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-remediation-impact-invalid-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("remediation-impact-invalid".to_string()),
+            method: "remediation.previewImpact".to_string(),
+            params: json!({ "limit": 0 }),
+        });
+
+        assert!(!response.ok);
+        let error = response.error.expect("invalid impact preview error");
+        assert_eq!(error.code, "invalid_request");
+        assert!(error.message.contains("limit"));
+        assert!(
+            !app_data_dir.exists(),
+            "invalid impact preview request must not initialize app data"
+        );
+    }
+
+    #[test]
+    fn remediation_preview_impact_preserves_provider_write_and_privacy_boundaries() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-remediation-impact-safety-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-remediation-impact-safety-home-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_similar_grouping_fixture(&host);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("remediation-impact-safety".to_string()),
+            method: "remediation.previewImpact".to_string(),
+            params: json!({
+                "action": "disable",
+                "task_text": "impact token=fixture-redacted-value",
+                "candidate_instance_ids": ["similar-claude-a", "similar-codex-a"],
+                "limit": 8,
+                "include_snapshot_plan": true,
+                "include_rollback_plan": true,
+                "include_risk_impact": true,
+                "include_task_impact": true
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("impact preview safety result");
+        assert_agent_readiness_safety(&result);
+        assert_eq!(
+            result
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/snapshot_created")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let serialized = serde_json::to_string(&result).expect("serialize impact preview result");
+        assert!(!serialized.contains(&app_data_dir.to_string_lossy().to_string()));
+        assert!(!serialized.contains(&user_home.to_string_lossy().to_string()));
+        assert!(!serialized.contains("fixture-redacted-value"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn remediation_preview_impact_prompt_preview_is_redacted_and_copy_only() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-remediation-impact-prompt-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_similar_grouping_fixture(&host);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("remediation-impact-preview".to_string()),
+            method: "llm.previewPrompt".to_string(),
+            params: json!({
+                "action": "remediation_preview_impact",
+                "user_intent": "Explain impact for /tmp/home/private-project with secret-token=fixture-redacted-value",
+                "instance_ids": ["similar-claude-a", "similar-codex-a"]
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let preview: WireLlmPreviewPromptResult =
+            serde_json::from_value(response.result.expect("preview result"))
+                .expect("decode remediation impact prompt preview");
+        assert_eq!(preview.action, "remediation_preview_impact");
+        assert!(preview.prompt_preview.contains("Impact preview evidence"));
+        assert!(!preview.prompt_preview.contains("fixture-redacted-value"));
+        assert!(!preview.provider_request_sent);
+        assert!(!preview.write_back_allowed);
+        assert!(preview.draft_requires_user_copy);
+        assert!(!preview.raw_prompt_persisted);
+        assert!(!preview.raw_response_persisted);
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
     fn workspace_check_readiness_returns_local_read_only_checklist() {
         let app_data_dir = env::temp_dir().join(format!(
             "skills-copilot-workspace-readiness-test-{}-{}",
@@ -25578,6 +27075,42 @@ mod tests {
                         .iter()
                         .any(|flag| flag == "write_back_allowed=false"));
                 }
+            }
+            "remediation.previewImpact" => {
+                let impact: WireRemediationPreviewImpactResult =
+                    decode_fixture_result(method, result, path);
+                assert_eq!(impact.generated_by, "local-v2.58");
+                assert!(impact.catalog_available);
+                assert_eq!(
+                    impact.summary.returned_impact_count,
+                    impact.impact_rows.len()
+                );
+                assert!(!impact.impact_rows.is_empty());
+                assert!(!impact.skill_impact_rows.is_empty());
+                assert!(!impact.agent_impact_rows.is_empty());
+                assert_eq!(impact.prompt_request.action, "remediation_preview_impact");
+                assert_eq!(impact.prompt_request.preview_method, "llm.previewPrompt");
+                assert_eq!(
+                    impact.prompt_request.request.action,
+                    LlmPromptActionKind::RemediationPreviewImpact
+                );
+                assert_agent_readiness_safety_flags(&impact.safety_flags);
+                for row in &impact.impact_rows {
+                    assert!(row.rank > 0);
+                    assert_agent_readiness_safety_flags(&row.safety_flags);
+                    assert!(row
+                        .side_effect_flags
+                        .iter()
+                        .any(|flag| flag == "provider_request_sent=false"));
+                    assert!(row
+                        .side_effect_flags
+                        .iter()
+                        .any(|flag| flag == "snapshot_created=false"));
+                }
+                assert!(impact
+                    .snapshot_rollback_plan_rows
+                    .iter()
+                    .all(|row| row.plan_only));
             }
             "task.checkReadiness" => {
                 let readiness: WireTaskReadinessResult =
@@ -26467,6 +28000,15 @@ mod tests {
                 "draft_types": ["permissions", "policy"],
                 "limit": 4,
                 "include_policy_drafts": true
+            }),
+            "remediation.previewImpact" => json!({
+                "action": "review",
+                "task": "fixture impact preview check",
+                "limit": 4,
+                "include_snapshot_plan": true,
+                "include_rollback_plan": true,
+                "include_risk_impact": true,
+                "include_task_impact": true
             }),
             "task.checkReadiness" => json!({ "task": "fixture task readiness check" }),
             "task.rankSkillRoutes" => json!({ "task": "fixture routing confidence check" }),
@@ -27559,6 +29101,163 @@ mod tests {
         blocker_notes: Vec<String>,
         side_effect_flags: Vec<String>,
         safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationPreviewImpactResult {
+        generated_by: String,
+        catalog_available: bool,
+        filters: WireRemediationPreviewImpactFilters,
+        summary: WireRemediationPreviewImpactSummary,
+        impact_rows: Vec<WireRemediationImpactRow>,
+        task_impact_rows: Vec<WireRemediationTaskImpactRow>,
+        agent_impact_rows: Vec<WireRemediationAgentImpactRow>,
+        skill_impact_rows: Vec<WireRemediationSkillImpactRow>,
+        risk_delta_rows: Vec<WireRemediationRiskDeltaRow>,
+        snapshot_rollback_plan_rows: Vec<WireRemediationSnapshotRollbackPlanRow>,
+        gap_notes: Vec<String>,
+        blocker_notes: Vec<String>,
+        evidence_references: Vec<WireTaskReadinessEvidenceReference>,
+        prompt_request: WireAgentReadinessPromptRequest,
+        safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationPreviewImpactFilters {
+        action: String,
+        task: Option<String>,
+        agent: Option<String>,
+        project_root: Option<String>,
+        skill_ids: Vec<String>,
+        candidate_instance_ids: Vec<String>,
+        draft_ids: Vec<String>,
+        plan_item_ids: Vec<String>,
+        limit: usize,
+        include_snapshot_plan: bool,
+        include_rollback_plan: bool,
+        include_risk_impact: bool,
+        include_task_impact: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationPreviewImpactSummary {
+        total_impact_count: usize,
+        returned_impact_count: usize,
+        task_impact_count: usize,
+        agent_impact_count: usize,
+        skill_impact_count: usize,
+        risk_delta_count: usize,
+        snapshot_plan_count: usize,
+        rollback_plan_count: usize,
+        blocker_count: usize,
+        summary: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationImpactRow {
+        id: String,
+        rank: usize,
+        area: String,
+        title: String,
+        summary: String,
+        action_intent: String,
+        expected_direction: String,
+        confidence: u8,
+        confidence_band: String,
+        affected_agent: Option<String>,
+        affected_skill: Option<WireRemediationAffectedSkill>,
+        affected_task: Option<String>,
+        evidence_refs: Vec<String>,
+        blockers: Vec<String>,
+        side_effect_flags: Vec<String>,
+        safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationTaskImpactRow {
+        task: String,
+        action_intent: String,
+        expected_direction: String,
+        readiness_score_before: Option<u8>,
+        readiness_score_after_estimate: Option<u8>,
+        routing_confidence_before: Option<u8>,
+        routing_confidence_after_estimate: Option<u8>,
+        notes: Vec<String>,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationAgentImpactRow {
+        agent: String,
+        action_intent: String,
+        expected_direction: String,
+        impacted_skill_count: usize,
+        enabled_before_count: usize,
+        enabled_after_estimate_count: usize,
+        writable_status: Option<String>,
+        blocker_notes: Vec<String>,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationSkillImpactRow {
+        affected_skill: WireRemediationAffectedSkill,
+        action_intent: String,
+        expected_direction: String,
+        enabled_before: bool,
+        enabled_after_estimate: bool,
+        finding_count: usize,
+        conflict_count: usize,
+        analysis_count: usize,
+        notes: Vec<String>,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationRiskDeltaRow {
+        id: String,
+        source: String,
+        severity: String,
+        title: String,
+        current_risk: String,
+        expected_risk_after: String,
+        expected_direction: String,
+        affected_instance_ids: Vec<String>,
+        blockers: Vec<String>,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationSnapshotRollbackPlanRow {
+        id: String,
+        agent: String,
+        instance_id: String,
+        skill_name: String,
+        action_intent: String,
+        snapshot_required: bool,
+        rollback_available: bool,
+        verified_writable: bool,
+        blocked_reason: Option<String>,
+        plan_only: bool,
+        evidence_refs: Vec<String>,
     }
 
     #[allow(dead_code)]
