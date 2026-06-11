@@ -182,6 +182,8 @@ struct DetailView: View {
                             isPreviewingRemediationDrafts: store.isPreviewingRemediationDrafts,
                             remediationImpactPreviewResult: store.remediationImpactPreviewResult,
                             isPreviewingRemediationImpact: store.isPreviewingRemediationImpact,
+                            remediationBatchReviewResult: store.remediationBatchReviewResult,
+                            isReviewingRemediationBatch: store.isReviewingRemediationBatch,
                             onScoreQuality: {
                                 Task {
                                     await store.scoreSelectedSkillQuality()
@@ -275,6 +277,11 @@ struct DetailView: View {
                             onPreviewRemediationImpact: {
                                 Task {
                                     await store.previewRemediationImpact()
+                                }
+                            },
+                            onReviewRemediationBatch: { options in
+                                Task {
+                                    await store.reviewRemediationBatch(options: options)
                                 }
                             },
                             taskBenchmarkText: $store.taskBenchmarkText,
@@ -928,6 +935,8 @@ private struct AnalysisSection: View {
     let isPreviewingRemediationDrafts: Bool
     let remediationImpactPreviewResult: RemediationImpactPreviewResult?
     let isPreviewingRemediationImpact: Bool
+    let remediationBatchReviewResult: RemediationBatchReviewResult?
+    let isReviewingRemediationBatch: Bool
     let onScoreQuality: () -> Void
     let onPreviewQualityPrompt: () -> Void
     let onSendQualityPrompt: () -> Void
@@ -947,6 +956,7 @@ private struct AnalysisSection: View {
     let onPlanRemediation: () -> Void
     let onPreviewRemediationDrafts: () -> Void
     let onPreviewRemediationImpact: () -> Void
+    let onReviewRemediationBatch: (RemediationBatchReviewOptions) -> Void
     @Binding var taskBenchmarkText: String
     let taskBenchmarkInput: String
     let taskBenchmarkList: TaskBenchmarkListResult
@@ -1126,6 +1136,12 @@ private struct AnalysisSection: View {
                 result: remediationImpactPreviewResult,
                 isPreviewing: isPreviewingRemediationImpact,
                 onPreview: onPreviewRemediationImpact
+            )
+
+            RemediationBatchReviewPanel(
+                result: remediationBatchReviewResult,
+                isReviewing: isReviewingRemediationBatch,
+                onReview: onReviewRemediationBatch
             )
 
             KnowledgeSearchPanel(
@@ -5190,6 +5206,403 @@ private struct RemediationImpactRowCard: View {
         if normalized.contains("task") { return "checklist" }
         return fallbackIcon
     }
+}
+
+private struct RemediationBatchReviewPanel: View {
+    let result: RemediationBatchReviewResult?
+    let isReviewing: Bool
+    let onReview: (RemediationBatchReviewOptions) -> Void
+    @State private var options = RemediationBatchReviewOptions()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.remediationBatchReviewTitle, systemImage: "rectangle.stack.badge.checkmark")
+                    .font(.headline)
+                Spacer()
+                Label(UIStrings.readOnlyPreview, systemImage: "lock.shield")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(UIStrings.remediationBatchReviewBoundary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+
+            RemediationBatchReviewControls(options: $options)
+
+            HStack(spacing: 8) {
+                Button {
+                    onReview(options)
+                } label: {
+                    Label(UIStrings.remediationBatchReviewAction, systemImage: "rectangle.stack.badge.checkmark")
+                }
+                .disabled(isReviewing || options.dimensions.isEmpty)
+
+                if isReviewing {
+                    Label(UIStrings.llmPreparing, systemImage: "hourglass")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if let result {
+                RemediationBatchReviewResultView(result: result)
+            } else {
+                Label(UIStrings.remediationBatchReviewNoResult, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Label(UIStrings.remediationBatchReviewNoWriteBoundary, systemImage: "nosign")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct RemediationBatchReviewControls: View {
+    @Binding var options: RemediationBatchReviewOptions
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(UIStrings.remediationBatchReviewControls, systemImage: "slider.horizontal.3")
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 128), spacing: 8)], alignment: .leading, spacing: 6) {
+                Toggle(UIStrings.remediationBatchReviewControlTask, isOn: $options.includeTask)
+                Toggle(UIStrings.remediationBatchReviewControlRisk, isOn: $options.includeRisk)
+                Toggle(UIStrings.remediationBatchReviewControlRule, isOn: $options.includeRule)
+                Toggle(UIStrings.remediationBatchReviewControlAgent, isOn: $options.includeAgent)
+                Toggle(UIStrings.remediationBatchReviewControlWorkspace, isOn: $options.includeWorkspace)
+                Toggle(UIStrings.remediationBatchReviewControlBlocked, isOn: $options.includeBlocked)
+            }
+            .toggleStyle(.checkbox)
+            .font(.callout)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 6))
+    }
+}
+
+private struct RemediationBatchReviewResultView: View {
+    let result: RemediationBatchReviewResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let fallbackReason = result.fallbackReason, !fallbackReason.isEmpty {
+                Label(fallbackReason, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+                SummaryChip(title: UIStrings.remediationBatchReviewItems, value: "\(itemCount)", systemImage: "checklist")
+                SummaryChip(title: UIStrings.remediationBatchReviewGroups, value: "\(groupCount)", systemImage: "rectangle.stack")
+                SummaryChip(title: UIStrings.remediationBatchReviewTaskRows, value: "\(taskCount)", systemImage: "text.badge.checkmark")
+                SummaryChip(title: UIStrings.remediationBatchReviewRiskRows, value: "\(riskCount)", systemImage: "exclamationmark.triangle")
+                SummaryChip(title: UIStrings.remediationBatchReviewRuleRows, value: "\(ruleCount)", systemImage: "ruler")
+                SummaryChip(title: UIStrings.remediationBatchReviewAgentRows, value: "\(agentCount)", systemImage: "person.2")
+                SummaryChip(title: UIStrings.remediationBatchReviewWorkspaceRows, value: "\(workspaceCount)", systemImage: "folder")
+                SummaryChip(title: UIStrings.knowledgeBlockerNotes, value: "\(blockerCount)", systemImage: "lock.trianglebadge.exclamationmark")
+                SummaryChip(title: UIStrings.remediationBatchReviewSafeNextSteps, value: "\(safeNextStepCount)", systemImage: "arrow.right.circle")
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                MetadataRow(label: UIStrings.routingAccuracyGeneratedBy, value: result.generatedBy)
+                MetadataRow(label: UIStrings.routingAccuracyCatalog, value: result.catalogAvailable ? UIStrings.routingAccuracyAvailable : UIStrings.routingAccuracyUnavailableShort)
+                MetadataRow(label: UIStrings.agent, value: agentFilterLabel)
+                if !result.filters.dimensions.isEmpty {
+                    MetadataRow(label: UIStrings.remediationBatchReviewDimensions, value: result.filters.dimensions.joined(separator: ", "))
+                }
+                if !result.filters.riskLevels.isEmpty {
+                    MetadataRow(label: UIStrings.remediationBatchReviewRiskLevels, value: result.filters.riskLevels.joined(separator: ", "))
+                }
+                if !result.filters.ruleIDs.isEmpty {
+                    MetadataRow(label: UIStrings.remediationBatchReviewRuleIDs, value: result.filters.ruleIDs.joined(separator: ", "))
+                }
+                if let projectRoot = result.filters.projectRoot, !projectRoot.isEmpty {
+                    MetadataRow(label: UIStrings.project, value: projectRoot)
+                }
+                if let workspace = result.filters.workspace, !workspace.isEmpty {
+                    MetadataRow(label: UIStrings.workspaceReadinessTitle, value: workspace)
+                }
+                if let taskText = result.filters.taskText, !taskText.isEmpty {
+                    MetadataRow(label: UIStrings.taskBenchmarkTaskPlaceholder, value: taskText)
+                }
+                if let limit = result.filters.limit {
+                    MetadataRow(label: UIStrings.text("filter.limit", "Limit"), value: "\(limit)")
+                }
+                MetadataRow(label: UIStrings.remediationBatchReviewControlBlocked, value: result.filters.includeBlocked ? UIStrings.stateEnabled : UIStrings.stateDisabled)
+                if let promptRequest = result.promptRequest {
+                    MetadataRow(label: UIStrings.routingAccuracyPromptRequest, value: promptRequestLabel(promptRequest))
+                }
+            }
+
+            if !result.summary.summaryText.isEmpty {
+                Text(result.summary.summaryText)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            RoutingInlineList(title: UIStrings.remediationBatchReviewSafeNextSteps, empty: UIStrings.remediationBatchReviewSafeNextStepFallback, values: result.safeNextStepLabels, systemImage: "arrow.right.circle")
+            RemediationBatchReviewGroupList(groups: result.groups)
+            RemediationBatchReviewItemList(title: UIStrings.remediationBatchReviewItems, items: result.items, empty: UIStrings.remediationBatchReviewNoItems)
+            RoutingInlineList(title: UIStrings.knowledgeGapNotes, empty: UIStrings.routingAccuracyNoGaps, values: result.gapNotes, systemImage: "puzzlepiece.extension")
+            RoutingInlineList(title: UIStrings.knowledgeBlockerNotes, empty: UIStrings.routingAccuracyNoBlockers, values: result.blockerNotes, systemImage: "exclamationmark.octagon")
+            CrossAgentReadinessEvidenceList(evidence: result.evidenceReferences)
+            StaleDriftSafetyList(safety: result.safetyFlags)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var allItems: [RemediationBatchReviewItem] {
+        result.items + result.groups.flatMap(\.items)
+    }
+
+    private var itemCount: Int {
+        result.summary.totalCount > 0 ? result.summary.totalCount : allItems.count
+    }
+
+    private var groupCount: Int {
+        result.summary.groupCount > 0 ? result.summary.groupCount : result.groups.count
+    }
+
+    private var taskCount: Int {
+        result.summary.taskCount > 0 ? result.summary.taskCount : countItems(matching: "task")
+    }
+
+    private var riskCount: Int {
+        result.summary.riskCount > 0 ? result.summary.riskCount : countItems(matching: "risk")
+    }
+
+    private var ruleCount: Int {
+        result.summary.ruleCount > 0 ? result.summary.ruleCount : allItems.filter { item in
+            !(item.ruleID ?? "").isEmpty || item.category.localizedCaseInsensitiveContains("rule")
+        }.count
+    }
+
+    private var agentCount: Int {
+        result.summary.agentCount > 0 ? result.summary.agentCount : allItems.filter { item in
+            !(item.agent ?? "").isEmpty || item.category.localizedCaseInsensitiveContains("agent")
+        }.count
+    }
+
+    private var workspaceCount: Int {
+        result.summary.workspaceCount > 0 ? result.summary.workspaceCount : allItems.filter { item in
+            !(item.workspace ?? "").isEmpty || item.category.localizedCaseInsensitiveContains("workspace")
+        }.count
+    }
+
+    private var blockerCount: Int {
+        result.summary.blockerCount > 0 ? result.summary.blockerCount : result.blockerNotes.count + allItems.reduce(0) { $0 + $1.blockerNotes.count }
+    }
+
+    private var safeNextStepCount: Int {
+        result.summary.safeNextStepCount > 0 ? result.summary.safeNextStepCount : result.safeNextStepLabels.count + allItems.filter { !$0.safeNextStepLabel.isEmpty }.count
+    }
+
+    private var agentFilterLabel: String {
+        if !result.filters.agents.isEmpty {
+            return result.filters.agents.map(DisplayText.agent).joined(separator: ", ")
+        }
+        return result.filters.agent.map(DisplayText.agent) ?? UIStrings.text("health.allAgents", "All Agents")
+    }
+
+    private func countItems(matching value: String) -> Int {
+        allItems.filter { item in
+            item.category.localizedCaseInsensitiveContains(value)
+                || (item.reviewArea ?? "").localizedCaseInsensitiveContains(value)
+        }.count
+    }
+
+    private func promptRequestLabel(_ promptRequest: RoutingAccuracyPromptRequest) -> String {
+        let state = promptRequest.enabled ? UIStrings.llmEnabled : UIStrings.llmDisabled
+        let copy = promptRequest.copyOnly ? UIStrings.llmPromptCopyOnly : UIStrings.llmSkillAnalysisEnabledUnsafe
+        return "\(promptRequest.requestKind) · \(state) · \(copy)"
+    }
+}
+
+private struct RemediationBatchReviewGroupList: View {
+    let groups: [RemediationBatchReviewGroup]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(UIStrings.remediationBatchReviewGroups)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if groups.isEmpty {
+                Text(UIStrings.remediationBatchReviewNoGroups)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 360), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(groups.prefix(8)) { group in
+                        RemediationBatchReviewGroupCard(group: group)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct RemediationBatchReviewGroupCard: View {
+    let group: RemediationBatchReviewGroup
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(group.title, systemImage: iconName)
+                    .font(.callout.bold())
+                    .lineLimit(1)
+                Spacer()
+                Text(group.priority)
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
+                MetadataRow(label: UIStrings.remediationPlanCategory, value: group.category)
+                MetadataRow(label: UIStrings.remediationBatchReviewItems, value: "\(group.items.count)")
+            }
+
+            if !group.summary.isEmpty {
+                Text(group.summary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            RoutingInlineList(title: UIStrings.remediationBatchReviewSafeNextSteps, empty: UIStrings.remediationBatchReviewSafeNextStepFallback, values: group.safeNextStepLabels, systemImage: "arrow.right.circle")
+            RemediationBatchReviewItemList(title: UIStrings.remediationBatchReviewItems, items: group.items, empty: UIStrings.remediationBatchReviewNoItems)
+            RoutingInlineList(title: UIStrings.knowledgeGapNotes, empty: UIStrings.routingAccuracyNoGaps, values: group.gapNotes, systemImage: "puzzlepiece.extension")
+            RoutingInlineList(title: UIStrings.knowledgeBlockerNotes, empty: UIStrings.routingAccuracyNoBlockers, values: group.blockerNotes, systemImage: "exclamationmark.octagon")
+            RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: group.evidenceRefs, systemImage: "checklist")
+            RoutingInlineList(title: UIStrings.knowledgeSafetyFlags, empty: UIStrings.taskBenchmarkNoSafetyFlags, values: group.safetyFlags, systemImage: "checkmark.shield")
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var iconName: String {
+        batchReviewIcon(for: group.category)
+    }
+}
+
+private struct RemediationBatchReviewItemList: View {
+    let title: String
+    let items: [RemediationBatchReviewItem]
+    let empty: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if items.isEmpty {
+                Text(empty)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(items.prefix(10)) { item in
+                        RemediationBatchReviewItemCard(item: item)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct RemediationBatchReviewItemCard: View {
+    let item: RemediationBatchReviewItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(item.title, systemImage: batchReviewIcon(for: item.category))
+                    .font(.callout.bold())
+                    .lineLimit(1)
+                Spacer()
+                Text(item.priority)
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
+                MetadataRow(label: UIStrings.remediationPlanCategory, value: item.category)
+                MetadataRow(label: UIStrings.state, value: item.status)
+                if let reviewArea = item.reviewArea, !reviewArea.isEmpty {
+                    MetadataRow(label: UIStrings.remediationBatchReviewReviewArea, value: reviewArea)
+                }
+                if let agent = item.agent, !agent.isEmpty {
+                    MetadataRow(label: UIStrings.agent, value: DisplayText.agent(agent))
+                }
+                if let workspace = item.workspace, !workspace.isEmpty {
+                    MetadataRow(label: UIStrings.workspaceReadinessTitle, value: workspace)
+                }
+                if let ruleID = item.ruleID, !ruleID.isEmpty {
+                    MetadataRow(label: UIStrings.remediationBatchReviewRuleIDs, value: ruleID)
+                }
+                if let riskLevel = item.riskLevel, !riskLevel.isEmpty {
+                    MetadataRow(label: UIStrings.remediationBatchReviewRiskLevels, value: riskLevel)
+                }
+            }
+
+            if let skill = item.skill {
+                CapabilitySkillList(skills: [skill])
+            }
+
+            if let taskText = item.taskText, !taskText.isEmpty {
+                Label(taskText, systemImage: "text.badge.checkmark")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            if !item.rationale.isEmpty {
+                Text(item.rationale)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            Label(item.safeNextStepLabel, systemImage: "arrow.right.circle")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+
+            RoutingInlineList(title: UIStrings.knowledgeGapNotes, empty: UIStrings.routingAccuracyNoGaps, values: item.gapNotes, systemImage: "puzzlepiece.extension")
+            RoutingInlineList(title: UIStrings.knowledgeBlockerNotes, empty: UIStrings.routingAccuracyNoBlockers, values: item.blockerNotes, systemImage: "exclamationmark.octagon")
+            RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: item.evidenceRefs, systemImage: "checklist")
+            RoutingInlineList(title: UIStrings.knowledgeSafetyFlags, empty: UIStrings.taskBenchmarkNoSafetyFlags, values: item.safetyFlags, systemImage: "checkmark.shield")
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private func batchReviewIcon(for category: String) -> String {
+    let normalized = category.lowercased()
+    if normalized.contains("risk") { return "exclamationmark.triangle" }
+    if normalized.contains("rule") { return "ruler" }
+    if normalized.contains("agent") { return "person.2" }
+    if normalized.contains("workspace") { return "folder" }
+    if normalized.contains("task") { return "text.badge.checkmark" }
+    if normalized.contains("block") { return "lock.trianglebadge.exclamationmark" }
+    return "checklist"
 }
 
 private struct KnowledgeSearchPanel: View {

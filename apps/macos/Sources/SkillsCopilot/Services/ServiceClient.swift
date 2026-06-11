@@ -414,6 +414,46 @@ private struct RemediationImpactPreviewParams: Encodable {
     }
 }
 
+private struct RemediationBatchReviewParams: Encodable {
+    let task: String?
+    let agent: String?
+    let projectRoot: String?
+    let currentCWD: String?
+    let workspace: String?
+    let selectedSkillID: String?
+    let selectedSkillName: String?
+    let selectedSkillAgent: String?
+    let selectedSkillPath: String?
+    let limit: Int?
+    let reviewDimensions: [String]
+    let includeTask: Bool
+    let includeRisk: Bool
+    let includeRule: Bool
+    let includeAgent: Bool
+    let includeWorkspace: Bool
+    let includeBlocked: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case task
+        case agent
+        case projectRoot = "project_root"
+        case currentCWD = "current_cwd"
+        case workspace
+        case selectedSkillID = "selected_skill_id"
+        case selectedSkillName = "selected_skill_name"
+        case selectedSkillAgent = "selected_skill_agent"
+        case selectedSkillPath = "selected_skill_path"
+        case limit
+        case reviewDimensions = "review_dimensions"
+        case includeTask = "include_task"
+        case includeRisk = "include_risk"
+        case includeRule = "include_rule"
+        case includeAgent = "include_agent"
+        case includeWorkspace = "include_workspace"
+        case includeBlocked = "include_blocked"
+    }
+}
+
 private struct TaskBenchmarkDeleteParams: Encodable {
     let benchmarkId: String
 
@@ -1148,6 +1188,41 @@ final class ServiceClient {
         )
         do {
             return try await call(method: "remediation.previewImpact", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func batchReviewRemediation(
+        taskText: String? = nil,
+        agent: String? = nil,
+        project: ProjectContext? = nil,
+        selectedSkill: SkillRecord? = nil,
+        limit: Int? = 30,
+        options: RemediationBatchReviewOptions = RemediationBatchReviewOptions()
+    ) async throws -> RemediationBatchReviewResult {
+        let normalizedTask = taskText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let params = RemediationBatchReviewParams(
+            task: normalizedTask?.isEmpty == true ? nil : normalizedTask,
+            agent: agent,
+            projectRoot: project?.rootPath,
+            currentCWD: project?.currentCWD,
+            workspace: project?.name,
+            selectedSkillID: selectedSkill?.id,
+            selectedSkillName: selectedSkill?.name,
+            selectedSkillAgent: selectedSkill?.agent,
+            selectedSkillPath: selectedSkill?.displayPath.isEmpty == false ? selectedSkill?.displayPath : selectedSkill?.path,
+            limit: limit,
+            reviewDimensions: options.dimensions,
+            includeTask: options.includeTask,
+            includeRisk: options.includeRisk,
+            includeRule: options.includeRule,
+            includeAgent: options.includeAgent,
+            includeWorkspace: options.includeWorkspace,
+            includeBlocked: options.includeBlocked
+        )
+        do {
+            return try await call(method: "remediation.batchReview", params: params)
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .unavailable()
         }

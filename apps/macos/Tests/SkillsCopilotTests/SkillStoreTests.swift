@@ -63,6 +63,8 @@ struct SkillStoreTests {
         try await remediationPreviewDraftsFallsBackWhenMethodUnavailable()
         try await remediationImpactPreviewUsesReadOnlyServiceContract()
         try await remediationImpactPreviewFallsBackWhenMethodUnavailable()
+        try await remediationBatchReviewUsesReadOnlyServiceContract()
+        try await remediationBatchReviewFallsBackWhenMethodUnavailable()
         try await crossAgentReadinessUsesReadOnlyServiceContract()
         try await routingConfidenceClearsStaleSelection()
         try await llmPreparePreviewIsScopedToSelectedSkillAndReadOnly()
@@ -1789,6 +1791,94 @@ struct SkillStoreTests {
         try expectContains(fake.calls(), "remediation.previewImpact", "Fallback should still prove the intended V2.58 method was attempted.")
     }
 
+    private func remediationBatchReviewUsesReadOnlyServiceContract() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        store.routingConfidenceText = "Prepare local release audit work."
+        await store.reload()
+        let snapshotCallsBeforeReview = countOccurrences("snapshot.", in: fake.calls())
+        await store.reviewRemediationBatch(
+            options: RemediationBatchReviewOptions(
+                includeTask: true,
+                includeRisk: true,
+                includeRule: true,
+                includeAgent: true,
+                includeWorkspace: true,
+                includeBlocked: true
+            )
+        )
+
+        let result = store.remediationBatchReviewResult
+        try expectEqual(result?.generatedBy, "local-v2.59", "Batch review should expose generator metadata.")
+        try expectEqual(result?.summary.totalCount, 3, "Batch review should expose total review item count.")
+        try expectEqual(result?.summary.groupCount, 2, "Batch review should expose group count.")
+        try expectEqual(result?.groups.first?.title, "Risk and rule review", "Batch review should expose review groups.")
+        try expectEqual(result?.groups.first?.items.first?.ruleID, "permissions.network-declared", "Batch review should expose nested rule review items.")
+        try expectEqual(result?.groups.first?.items.first?.skill?.skillName, "Beta", "Batch review should expose affected skill evidence.")
+        try expectEqual(result?.items.first?.reviewArea, "Workspace Readiness", "Batch review should expose safe review area labels.")
+        try expectEqual(result?.safeNextStepLabels.first, "Open Remediation Planner", "Batch review should expose top-level safe next steps.")
+        try expectEqual(result?.gapNotes.first, "Codex lacks project-scoped release audit coverage.", "Batch review should expose gap notes.")
+        try expectEqual(result?.blockerNotes.first, "No batch apply path is available from review.", "Batch review should expose blocker notes.")
+        try expectEqual(result?.evidenceReferences.first?.title, "Batch review", "Batch review should expose evidence references.")
+        try expectEqual(result?.promptRequest?.requestKind, "remediation_batch_review", "Batch review prompt metadata should use V2.59 request kind.")
+        try expectFalse(result?.safetyFlags.providerRequestSent ?? true, "Batch review must not send provider requests.")
+        try expectFalse(result?.safetyFlags.writeBackAllowed ?? true, "Batch review must not allow write-back.")
+        try expectFalse(result?.safetyFlags.writeActionsAvailable ?? true, "Batch review must not expose write actions.")
+        try expectFalse(result?.safetyFlags.scriptExecutionAllowed ?? true, "Batch review must not allow script execution.")
+        try expectFalse(result?.safetyFlags.executionActionsAvailable ?? true, "Batch review must not expose execution actions.")
+        try expectFalse(result?.safetyFlags.configMutationAllowed ?? true, "Batch review must not mutate config.")
+        try expectFalse(result?.safetyFlags.snapshotCreated ?? true, "Batch review must not create snapshots.")
+        try expectFalse(result?.safetyFlags.triageMutationAllowed ?? true, "Batch review must not mutate triage.")
+        try expectFalse(result?.safetyFlags.credentialAccessed ?? true, "Batch review must not access credentials.")
+        try expectFalse(result?.safetyFlags.rawPromptPersisted ?? true, "Batch review must not persist raw prompts.")
+        try expectFalse(result?.safetyFlags.rawResponsePersisted ?? true, "Batch review must not persist raw responses.")
+        try expectFalse(result?.safetyFlags.rawTracePersisted ?? true, "Batch review must not persist raw traces.")
+        try expectFalse(result?.safetyFlags.cloudSyncEnabled ?? true, "Batch review must not sync cloud data.")
+        try expectFalse(result?.safetyFlags.telemetryEnabled ?? true, "Batch review must not emit telemetry.")
+        try expectFalse(store.isReviewingRemediationBatch, "Batch review should reset loading state.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "remediation.batchReview", "Batch review UI should call the V2.59 batch review method.")
+        try expectContains(calls, "\"task\":\"Prepare local release audit work.\"", "Batch review should pass current task context when present.")
+        try expectContains(calls, "\"agent\":\"claude-code\"", "Batch review should pass the current agent filter.")
+        try expectContains(calls, "\"selected_skill_id\":\"beta\"", "Batch review should pass selected skill context.")
+        try expectContains(calls, "\"selected_skill_name\":\"Beta\"", "Batch review should pass selected skill name.")
+        try expectContains(calls, "\"limit\":30", "Batch review should pass the review limit.")
+        try expectContains(calls, "\"review_dimensions\":[\"task\",\"risk\",\"rule\",\"agent\",\"workspace\"]", "Batch review should pass selected review dimensions.")
+        try expectContains(calls, "\"include_task\":true", "Batch review should include task rows.")
+        try expectContains(calls, "\"include_risk\":true", "Batch review should include risk rows.")
+        try expectContains(calls, "\"include_rule\":true", "Batch review should include rule rows.")
+        try expectContains(calls, "\"include_agent\":true", "Batch review should include agent rows.")
+        try expectContains(calls, "\"include_workspace\":true", "Batch review should include workspace rows.")
+        try expectContains(calls, "\"include_blocked\":true", "Batch review should keep blockers visible.")
+        try expectFalse(calls.contains("llm.previewPrompt"), "Batch review must not prepare provider prompts.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Batch review must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Batch review must not call config write paths.")
+        try expectFalse(calls.contains("script.execute"), "Batch review must not call execution paths.")
+        try expectEqual(countOccurrences("snapshot.", in: calls), snapshotCallsBeforeReview, "Batch review must not call snapshot paths.")
+        try expectFalse(calls.contains("credential"), "Batch review must not call credential paths.")
+    }
+
+    private func remediationBatchReviewFallsBackWhenMethodUnavailable() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "normal")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+        await store.reviewRemediationBatch()
+
+        try expectEqual(store.remediationBatchReviewResult?.isUnavailable, true, "Batch review should expose unavailable fallback for older services.")
+        try expectEqual(store.remediationBatchReviewResult?.fallbackReason, UIStrings.remediationBatchReviewUnavailable, "Unknown method fallback should use the localized unavailable copy.")
+        try expectFalse(store.isReviewingRemediationBatch, "Unavailable batch review should reset loading state.")
+        try expectContains(fake.calls(), "remediation.batchReview", "Fallback should still prove the intended V2.59 method was attempted.")
+    }
+
     private func crossAgentReadinessUsesReadOnlyServiceContract() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -2267,6 +2357,12 @@ private final class FakeServiceScript {
               respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.58","catalog_available":true,"filters":{"task":"Prepare local release audit work.","agent":"claude-code","limit":20},"summary":{"total_count":6,"task_impact_count":1,"agent_impact_count":1,"skill_impact_count":1,"risk_delta_count":1,"snapshot_rollback_count":1,"blocker_count":1,"gap_count":1,"no_write_count":1,"summary":"Impact preview is read-only and shows where remediation would improve routing confidence."},"impact_rows":[{"row_id":"impact-overall","title":"Overall readiness improves","category":"overall","impact":"Improves release audit readiness without writing files.","rationale":"Derived from remediation plan and workspace readiness.","severity":"info","evidence_refs":["remediation:plan"],"safety_flags":["provider not sent","no write"]}],"task_impact_rows":[{"row_id":"task-release-audit","title":"Release audit route gets clearer","category":"task","before":"Partial","after":"Ready","delta":"+12 readiness","impact":"The selected task has a stronger local route.","rationale":"Routing confidence and workspace readiness both point to Beta.","severity":"medium","evidence_refs":["task:release-audit"]}],"agent_impact_rows":[{"row_id":"agent-claude","title":"Claude Code remains the recommended agent","category":"agent","agent":"claude-code","delta":"+8 comparison","impact":"No cross-agent write path is needed.","severity":"low"}],"skill_impact_rows":[{"row_id":"skill-beta","title":"Beta benefits from clearer permissions","category":"skill","agent":"claude-code","skill":{"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","readiness_score":78},"impact":"The permission finding would become easier to review.","severity":"medium"}],"risk_delta_rows":[{"row_id":"risk-network","title":"Network declaration risk drops","category":"risk_delta","before":"Medium","after":"Low","delta":"-1 risk band","impact":"Manual review remains required.","severity":"warning"}],"snapshot_rollback_rows":[{"row_id":"rollback-none","title":"No snapshot is created","category":"snapshot_rollback","impact":"Rollback remains a plan note only because no write happens.","severity":"info","safety_flags":["snapshot not created"]}],"gap_notes":["Codex still lacks project-scoped coverage."],"blocker_notes":["No apply/write path is exposed."],"evidence_references":[{"title":"Impact preview","detail":"Derived from local remediation evidence.","source":"remediation.previewImpact","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"remediation_preview_impact","summary":"Provider explanation is not sent.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent","preview only","no write"]}}}'
             fi
             respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: remediation.previewImpact"}}'
+            ;;
+          *\\"remediation.batchReview\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.59","catalog_available":true,"filters":{"task":"Prepare local release audit work.","agent":"claude-code","limit":30,"review_dimensions":["task","risk","rule","agent","workspace"],"risk_levels":["medium","high"],"rule_ids":["permissions.network-declared"],"include_blocked":true},"summary":{"total_count":3,"group_count":2,"task_count":1,"risk_count":1,"rule_count":1,"agent_count":1,"workspace_count":1,"blocker_count":1,"gap_count":1,"safe_next_step_count":2,"summary":"Batch review groups remediation candidates before any write-capable flow."},"review_groups":[{"group_id":"risk-rules","title":"Risk and rule review","category":"risk_rule","priority":"high","summary":"Review permission findings before any manual edit.","safe_next_step_labels":["Open Findings","Open Fix Preview Drafts"],"items":[{"item_id":"rule-network","title":"Network permission declaration","category":"rule","priority":"high","status":"preview_only","agent":"claude-code","workspace":"Fixture Project","rule_id":"permissions.network-declared","risk_level":"medium","task_text":"Prepare local release audit work.","skill":{"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","readiness_score":78},"rationale":"Finding and draft preview both point to manual permission review.","safe_next_step_label":"Open Fix Preview Drafts","review_area":"Fix Preview Drafts","evidence_refs":["finding:permissions.network-declared"],"gap_notes":["Codex route still lacks equivalent coverage."],"blocker_notes":["No apply/write path is exposed."],"safety_flags":["provider not sent","preview only","no write"]}],"evidence_refs":["finding:permissions.network-declared"],"gap_notes":["Codex route still lacks equivalent coverage."],"blocker_notes":["No apply/write path is exposed."],"safety_flags":["preview only"]}],"review_items":[{"item_id":"workspace-codex","title":"Codex workspace gap","category":"workspace","priority":"medium","status":"preview_only","agent":"codex","workspace":"Fixture Project","rationale":"Workspace readiness reports a partial Codex route.","safe_next_step_label":"Open Workspace Readiness","review_area":"Workspace Readiness","evidence_refs":["workspace:codex-gap"]}],"safe_next_step_labels":["Open Remediation Planner","Open Impact Preview"],"gap_notes":["Codex lacks project-scoped release audit coverage."],"blocker_notes":["No batch apply path is available from review."],"evidence_references":[{"title":"Batch review","detail":"Derived from local remediation evidence.","source":"remediation.batchReview","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"remediation_batch_review","summary":"Provider explanation is not sent.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent","preview only","no write"]}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: remediation.batchReview"}}'
             ;;
           *\\"task.listBenchmarks\\"*)
             if [ "$scenario" = "prompt-ready" ]; then

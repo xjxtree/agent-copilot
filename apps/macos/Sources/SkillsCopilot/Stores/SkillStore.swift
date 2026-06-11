@@ -48,6 +48,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var remediationPlanResult: RemediationPlanResult?
     @Published private(set) var remediationPreviewDraftsResult: RemediationPreviewDraftsResult?
     @Published private(set) var remediationImpactPreviewResult: RemediationImpactPreviewResult?
+    @Published private(set) var remediationBatchReviewResult: RemediationBatchReviewResult?
     @Published private(set) var traceImportList = AgentTraceImportListResult(imports: [])
     @Published private(set) var traceImportResult: AgentTraceImportResult?
     @Published private(set) var traceImportDeleteResult: AgentTraceImportDeleteResult?
@@ -65,6 +66,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var isPlanningRemediation = false
     @Published private(set) var isPreviewingRemediationDrafts = false
     @Published private(set) var isPreviewingRemediationImpact = false
+    @Published private(set) var isReviewingRemediationBatch = false
     @Published private(set) var isLoadingTraceImports = false
     @Published private(set) var isImportingTrace = false
     @Published private(set) var deletingTaskBenchmarkIDs: Set<String> = []
@@ -117,6 +119,7 @@ final class SkillStore: ObservableObject {
             remediationPlanResult = nil
             remediationPreviewDraftsResult = nil
             remediationImpactPreviewResult = nil
+            remediationBatchReviewResult = nil
             Task { await loadAgentConfigSnapshots() }
             Task { await loadCleanupQueue() }
             Task { await loadCrossAgentComparisons() }
@@ -191,7 +194,7 @@ final class SkillStore: ObservableObject {
     }
 
     private var isTaskBenchmarkBusy: Bool {
-        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isGroupingSimilarSkills || isBuildingCapabilityTaxonomy || isCheckingWorkspaceReadiness || isPlanningRemediation || isPreviewingRemediationDrafts || isPreviewingRemediationImpact || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty
+        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isGroupingSimilarSkills || isBuildingCapabilityTaxonomy || isCheckingWorkspaceReadiness || isPlanningRemediation || isPreviewingRemediationDrafts || isPreviewingRemediationImpact || isReviewingRemediationBatch || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty
     }
 
     private var isLLMPromptBusy: Bool {
@@ -1621,6 +1624,32 @@ final class SkillStore: ObservableObject {
             )
         } catch {
             remediationImpactPreviewResult = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
+    func reviewRemediationBatch(options: RemediationBatchReviewOptions = RemediationBatchReviewOptions()) async {
+        guard !isReviewingRemediationBatch else { return }
+        guard !isRefreshBusy else {
+            remediationBatchReviewResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        isReviewingRemediationBatch = true
+        defer { isReviewingRemediationBatch = false }
+
+        let agent = agentFilter == .all ? nil : agentFilter.rawValue
+        let taskText = selectedCrossAgentReadinessInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            remediationBatchReviewResult = try await service.batchReviewRemediation(
+                taskText: taskText.isEmpty ? nil : taskText,
+                agent: agent,
+                project: activeProjectContext,
+                selectedSkill: selectedSkill,
+                limit: 30,
+                options: options
+            )
+        } catch {
+            remediationBatchReviewResult = .unavailable(reason: error.localizedDescription)
         }
     }
 

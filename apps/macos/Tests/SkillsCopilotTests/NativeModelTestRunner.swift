@@ -62,6 +62,7 @@ public func runNativeModelTests() {
         try RemediationPlanModelTests().run()
         try RemediationPreviewDraftsModelTests().run()
         try RemediationImpactPreviewModelTests().run()
+        try RemediationBatchReviewModelTests().run()
         try AIProviderModelTests().run()
         try LLMModelTests().run()
         try ScriptExecutionModelTests().run()

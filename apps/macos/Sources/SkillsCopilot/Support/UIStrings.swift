@@ -685,6 +685,38 @@ enum UIStrings {
     static var impactPreviewBefore: String { text("impactPreview.before", "Before") }
     static var impactPreviewAfter: String { text("impactPreview.after", "After") }
     static var impactPreviewDelta: String { text("impactPreview.delta", "Delta") }
+    static var remediationBatchReviewTitle: String { text("batchReview.title", "Batch Review Workflow") }
+    static var remediationBatchReviewBoundary: String { text("batchReview.boundary", "User-triggered, local-only batch review workflow for remediation candidates. It groups task, risk, rule, agent, and workspace review items from deterministic local evidence; this panel cannot call a provider, write skill files, mutate agent config, create snapshots, change triage, execute scripts, read credentials, persist raw prompts/responses/traces, sync cloud data, or emit telemetry.") }
+    static var remediationBatchReviewNoWriteBoundary: String { text("batchReview.noWriteBoundary", "Review workflow only. No Apply, Confirm, Write, Snapshot, Rollback, Script, or Provider Send action is exposed here.") }
+    static var remediationBatchReviewAction: String { text("batchReview.action.review", "Review Batch") }
+    static var remediationBatchReviewUnavailable: String { text("batchReview.unavailable", "Batch review workflow is unavailable in this service build.") }
+    static var remediationBatchReviewNoResult: String { text("batchReview.empty.result", "No batch review loaded.") }
+    static var remediationBatchReviewControls: String { text("batchReview.controls", "Review controls") }
+    static var remediationBatchReviewControlTask: String { text("batchReview.control.task", "Task") }
+    static var remediationBatchReviewControlRisk: String { text("batchReview.control.risk", "Risk") }
+    static var remediationBatchReviewControlRule: String { text("batchReview.control.rule", "Rule") }
+    static var remediationBatchReviewControlAgent: String { text("batchReview.control.agent", "Agent") }
+    static var remediationBatchReviewControlWorkspace: String { text("batchReview.control.workspace", "Workspace") }
+    static var remediationBatchReviewControlBlocked: String { text("batchReview.control.blocked", "Show blockers") }
+    static var remediationBatchReviewGroups: String { text("batchReview.groups", "Review groups") }
+    static var remediationBatchReviewNoGroups: String { text("batchReview.empty.groups", "No review groups returned.") }
+    static var remediationBatchReviewItems: String { text("batchReview.items", "Review items") }
+    static var remediationBatchReviewNoItems: String { text("batchReview.empty.items", "No review items returned.") }
+    static var remediationBatchReviewGroup: String { text("batchReview.group", "Review group") }
+    static var remediationBatchReviewItem: String { text("batchReview.item", "Review item") }
+    static var remediationBatchReviewDimensions: String { text("batchReview.dimensions", "Dimensions") }
+    static var remediationBatchReviewRiskLevels: String { text("batchReview.riskLevels", "Risk levels") }
+    static var remediationBatchReviewRuleIDs: String { text("batchReview.ruleIDs", "Rules") }
+    static var remediationBatchReviewSafeNextSteps: String { text("batchReview.safeNextSteps", "Safe next steps") }
+    static var remediationBatchReviewSafeNextStep: String { text("batchReview.safeNextStep", "Safe next step") }
+    static var remediationBatchReviewSafeNextStepFallback: String { text("batchReview.safeNextStep.fallback", "Open the relevant existing safe review area") }
+    static var remediationBatchReviewPreviewOnly: String { text("batchReview.previewOnly", "Preview only") }
+    static var remediationBatchReviewReviewArea: String { text("batchReview.reviewArea", "Review area") }
+    static var remediationBatchReviewTaskRows: String { text("batchReview.taskRows", "Task rows") }
+    static var remediationBatchReviewRiskRows: String { text("batchReview.riskRows", "Risk rows") }
+    static var remediationBatchReviewRuleRows: String { text("batchReview.ruleRows", "Rule rows") }
+    static var remediationBatchReviewAgentRows: String { text("batchReview.agentRows", "Agent rows") }
+    static var remediationBatchReviewWorkspaceRows: String { text("batchReview.workspaceRows", "Workspace rows") }
     static var taskBenchmarkTitle: String { text("taskBenchmark.title", "Task Benchmark Set") }
     static var taskBenchmarkBoundary: String { text("taskBenchmark.boundary", "User-triggered, local benchmark evaluation for task routing. Local evaluation does not call a provider and cannot write skill files, mutate agent config, create snapshots, change triage, execute scripts, or read credentials.") }
     static var taskBenchmarkTaskPlaceholder: String { text("taskBenchmark.task.placeholder", "Optional benchmark task text; otherwise the current readiness/routing task is used") }
