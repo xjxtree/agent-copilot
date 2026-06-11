@@ -68,6 +68,8 @@ const SUPPORTED_METHODS: &[&str] = &[
     "task.saveBenchmark",
     "task.deleteBenchmark",
     "task.evaluateBenchmarks",
+    "task.saveRoutingBaseline",
+    "task.detectRoutingRegression",
     "llm.status",
     "llm.listProviderProfiles",
     "llm.saveProviderProfile",
@@ -810,6 +812,131 @@ pub struct TaskBenchmarkSafetyFlags {
     pub raw_response_persisted: bool,
 }
 
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct SaveRoutingBaselineParams {
+    #[serde(default, alias = "benchmark_ids")]
+    pub ids: Vec<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct DetectRoutingRegressionParams {
+    #[serde(default, alias = "benchmark_ids")]
+    pub ids: Vec<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+    #[serde(default)]
+    pub score_drop_threshold: Option<u8>,
+    #[serde(default)]
+    pub confidence_drop_threshold: Option<u8>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SaveRoutingBaselineResult {
+    pub generated_by: &'static str,
+    pub baseline: RoutingRegressionBaseline,
+    pub benchmark_count: usize,
+    pub app_local_only: bool,
+    pub baseline_file: &'static str,
+    pub provider_request_sent: bool,
+    pub agent_config_mutated: bool,
+    pub skill_files_mutated: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RoutingRegressionDetectionResult {
+    pub generated_by: &'static str,
+    pub status: &'static str,
+    pub baseline_available: bool,
+    pub catalog_available: bool,
+    pub baseline_evaluated_count: usize,
+    pub current_evaluated_count: usize,
+    pub regression_count: usize,
+    pub missing_benchmark_count: usize,
+    pub summary: String,
+    pub items: Vec<RoutingRegressionItem>,
+    pub blocker_notes: Vec<String>,
+    pub baseline: Option<RoutingRegressionBaseline>,
+    pub current_evaluation: TaskBenchmarkEvaluationResult,
+    pub safety_flags: TaskBenchmarkSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RoutingRegressionItem {
+    pub benchmark_id: String,
+    pub title: String,
+    pub status: &'static str,
+    pub regression: bool,
+    pub reasons: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub score_delta: Option<i16>,
+    pub confidence_delta: Option<i16>,
+    pub baseline: Option<RoutingRegressionComparisonFields>,
+    pub current: Option<RoutingRegressionComparisonFields>,
+    pub safety_flags: TaskBenchmarkSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoutingRegressionBaseline {
+    pub schema_version: u32,
+    pub generated_by: String,
+    pub generated_at: i64,
+    pub catalog_available: bool,
+    pub evaluated_count: usize,
+    pub benchmark_results: Vec<RoutingRegressionBaselineItem>,
+    pub safety_flags: TaskBenchmarkSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoutingRegressionBaselineItem {
+    pub benchmark_id: String,
+    pub title: String,
+    pub task: String,
+    pub score: u8,
+    pub band: String,
+    pub expected_match_status: String,
+    pub top_route: Option<RoutingRegressionRouteSnapshot>,
+    pub route_confidence_score: u8,
+    pub route_confidence_band: String,
+    pub gap_count: usize,
+    pub blocker_count: usize,
+    pub gap_notes: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RoutingRegressionRouteSnapshot {
+    pub instance_id: String,
+    pub definition_id: String,
+    pub skill_name: String,
+    pub agent: String,
+    pub scope: String,
+    pub confidence_score: u8,
+    pub confidence_band: String,
+    pub readiness_score: u8,
+    pub readiness_band: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RoutingRegressionComparisonFields {
+    pub task: String,
+    pub expected_match_status: String,
+    pub score: u8,
+    pub band: String,
+    pub top_route: Option<RoutingRegressionRouteSnapshot>,
+    pub route_confidence_score: u8,
+    pub route_confidence_band: String,
+    pub gap_count: usize,
+    pub blocker_count: usize,
+    pub gap_notes: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct LlmPrepareActionParams {
     pub kind: LlmActionKind,
@@ -1427,6 +1554,22 @@ impl ServiceHost {
                     serde_json::from_value(request.params)?
                 };
                 serde_json::to_value(self.evaluate_task_benchmarks(params)?).map_err(Into::into)
+            }
+            "task.saveRoutingBaseline" => {
+                let params: SaveRoutingBaselineParams = if request.params.is_null() {
+                    SaveRoutingBaselineParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.save_routing_baseline(params)?).map_err(Into::into)
+            }
+            "task.detectRoutingRegression" => {
+                let params: DetectRoutingRegressionParams = if request.params.is_null() {
+                    DetectRoutingRegressionParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.detect_routing_regression(params)?).map_err(Into::into)
             }
             "llm.status" => serde_json::to_value(self.llm_status()).map_err(Into::into),
             "llm.listProviderProfiles" => {
@@ -3150,6 +3293,116 @@ impl ServiceHost {
         })
     }
 
+    pub fn save_routing_baseline(
+        &self,
+        params: SaveRoutingBaselineParams,
+    ) -> Result<SaveRoutingBaselineResult, ServiceError> {
+        let evaluation = self.evaluate_task_benchmarks(EvaluateTaskBenchmarksParams {
+            ids: params.ids,
+            limit: params.limit,
+        })?;
+        let baseline = routing_regression_baseline_from_evaluation(evaluation);
+        self.save_routing_regression_baseline(&baseline)?;
+        Ok(SaveRoutingBaselineResult {
+            benchmark_count: baseline.evaluated_count,
+            baseline,
+            generated_by: "deterministic-service",
+            app_local_only: true,
+            baseline_file: "task-routing-baseline.json",
+            provider_request_sent: false,
+            agent_config_mutated: false,
+            skill_files_mutated: false,
+            raw_prompt_persisted: false,
+            raw_response_persisted: false,
+        })
+    }
+
+    pub fn detect_routing_regression(
+        &self,
+        params: DetectRoutingRegressionParams,
+    ) -> Result<RoutingRegressionDetectionResult, ServiceError> {
+        let current_evaluation = self.evaluate_task_benchmarks(EvaluateTaskBenchmarksParams {
+            ids: params.ids,
+            limit: params.limit,
+        })?;
+        let baseline = self.load_routing_regression_baseline()?;
+        let Some(baseline) = baseline else {
+            let blocker_notes = vec![
+                "No app-local routing baseline is saved; run task.saveRoutingBaseline before regression detection."
+                    .to_string(),
+            ];
+            return Ok(RoutingRegressionDetectionResult {
+                generated_by: "deterministic-service",
+                status: "baseline_missing",
+                baseline_available: false,
+                catalog_available: current_evaluation.catalog_available,
+                baseline_evaluated_count: 0,
+                current_evaluated_count: current_evaluation.evaluated_count,
+                regression_count: 0,
+                missing_benchmark_count: 0,
+                summary: format!(
+                    "No app-local routing baseline was available; evaluated {} current benchmark(s) without writing a baseline.",
+                    current_evaluation.evaluated_count
+                ),
+                items: Vec::new(),
+                blocker_notes,
+                baseline: None,
+                current_evaluation,
+                safety_flags: task_benchmark_safety_flags(),
+            });
+        };
+
+        let comparison = routing_regression_compare(
+            &baseline,
+            &current_evaluation,
+            params.score_drop_threshold.unwrap_or(10),
+            params.confidence_drop_threshold.unwrap_or(10),
+        );
+        let regression_count = comparison.iter().filter(|item| item.regression).count();
+        let missing_benchmark_count = comparison
+            .iter()
+            .filter(|item| item.status == "missing_current_benchmark")
+            .count();
+        let mut blocker_notes = current_evaluation.blocker_notes.clone();
+        if !current_evaluation.catalog_available {
+            blocker_notes.push(
+                "No local catalog is available; routing regression detection cannot verify current routes."
+                    .to_string(),
+            );
+        }
+        if baseline.benchmark_results.is_empty() {
+            blocker_notes.push("Saved routing baseline contains no benchmark results.".to_string());
+        }
+        blocker_notes.sort();
+        blocker_notes.dedup();
+        let status = routing_regression_status(
+            regression_count,
+            missing_benchmark_count,
+            current_evaluation.catalog_available,
+        );
+        Ok(RoutingRegressionDetectionResult {
+            generated_by: "deterministic-service",
+            status,
+            baseline_available: true,
+            catalog_available: current_evaluation.catalog_available,
+            baseline_evaluated_count: baseline.evaluated_count,
+            current_evaluated_count: current_evaluation.evaluated_count,
+            regression_count,
+            missing_benchmark_count,
+            summary: routing_regression_summary(
+                regression_count,
+                missing_benchmark_count,
+                comparison.len(),
+                current_evaluation.catalog_available,
+            ),
+            items: comparison,
+            blocker_notes,
+            baseline: Some(baseline),
+            current_evaluation,
+            safety_flags: task_benchmark_safety_flags(),
+        })
+    }
+
     pub fn script_execution_status(&self) -> ScriptExecutionStatus {
         ScriptExecutionStatus {
             enabled: false,
@@ -4011,6 +4264,10 @@ impl ServiceHost {
         self.app_data_dir.join("task-benchmarks.json")
     }
 
+    fn routing_regression_baseline_path(&self) -> PathBuf {
+        self.app_data_dir.join("task-routing-baseline.json")
+    }
+
     fn load_task_benchmarks(&self) -> Result<Vec<TaskBenchmarkRecord>, ServiceError> {
         let path = self.task_benchmarks_path();
         if !path.exists() {
@@ -4030,6 +4287,29 @@ impl ServiceHost {
         fs::create_dir_all(&self.app_data_dir)?;
         let path = self.task_benchmarks_path();
         let content = serde_json::to_string_pretty(benchmarks)?;
+        fs::write(path, content)?;
+        Ok(())
+    }
+
+    fn load_routing_regression_baseline(
+        &self,
+    ) -> Result<Option<RoutingRegressionBaseline>, ServiceError> {
+        let path = self.routing_regression_baseline_path();
+        if !path.exists() {
+            return Ok(None);
+        }
+        let content = fs::read_to_string(path)?;
+        let baseline: RoutingRegressionBaseline = serde_json::from_str(&content)?;
+        Ok(Some(baseline))
+    }
+
+    fn save_routing_regression_baseline(
+        &self,
+        baseline: &RoutingRegressionBaseline,
+    ) -> Result<(), ServiceError> {
+        fs::create_dir_all(&self.app_data_dir)?;
+        let path = self.routing_regression_baseline_path();
+        let content = serde_json::to_string_pretty(baseline)?;
         fs::write(path, content)?;
         Ok(())
     }
@@ -5702,6 +5982,363 @@ fn task_benchmark_prompt_request(
     }
 }
 
+fn routing_regression_baseline_from_evaluation(
+    evaluation: TaskBenchmarkEvaluationResult,
+) -> RoutingRegressionBaseline {
+    RoutingRegressionBaseline {
+        schema_version: 1,
+        generated_by: "deterministic-service".to_string(),
+        generated_at: unix_timestamp_millis(),
+        catalog_available: evaluation.catalog_available,
+        evaluated_count: evaluation.evaluated_count,
+        benchmark_results: evaluation
+            .benchmark_results
+            .iter()
+            .map(routing_regression_baseline_item)
+            .collect(),
+        safety_flags: task_benchmark_safety_flags(),
+    }
+}
+
+fn routing_regression_baseline_item(
+    item: &TaskBenchmarkEvaluationItem,
+) -> RoutingRegressionBaselineItem {
+    RoutingRegressionBaselineItem {
+        benchmark_id: item.benchmark_id.clone(),
+        title: item.title.clone(),
+        task: item.task.clone(),
+        score: item.score,
+        band: item.band.to_string(),
+        expected_match_status: item.expected_match_status.to_string(),
+        top_route: item
+            .top_route
+            .as_ref()
+            .map(routing_regression_route_snapshot),
+        route_confidence_score: item.route_confidence_score,
+        route_confidence_band: item.route_confidence_band.to_string(),
+        gap_count: item.gap_notes.len(),
+        blocker_count: item.blocker_notes.len(),
+        gap_notes: item.gap_notes.clone(),
+        blocker_notes: item.blocker_notes.clone(),
+        evidence_refs: item.evidence_refs.clone(),
+    }
+}
+
+fn routing_regression_route_snapshot(
+    route: &TaskBenchmarkRouteSummary,
+) -> RoutingRegressionRouteSnapshot {
+    RoutingRegressionRouteSnapshot {
+        instance_id: route.instance_id.clone(),
+        definition_id: route.definition_id.clone(),
+        skill_name: route.skill_name.clone(),
+        agent: route.agent.clone(),
+        scope: route.scope.clone(),
+        confidence_score: route.confidence_score,
+        confidence_band: route.confidence_band.to_string(),
+        readiness_score: route.readiness_score,
+        readiness_band: route.readiness_band.to_string(),
+    }
+}
+
+fn routing_regression_compare(
+    baseline: &RoutingRegressionBaseline,
+    current: &TaskBenchmarkEvaluationResult,
+    score_drop_threshold: u8,
+    confidence_drop_threshold: u8,
+) -> Vec<RoutingRegressionItem> {
+    let current_by_id = current
+        .benchmark_results
+        .iter()
+        .map(|item| (item.benchmark_id.as_str(), item))
+        .collect::<BTreeMap<_, _>>();
+    let baseline_by_id = baseline
+        .benchmark_results
+        .iter()
+        .map(|item| (item.benchmark_id.as_str(), item))
+        .collect::<BTreeMap<_, _>>();
+
+    let mut items = Vec::new();
+    for baseline_item in &baseline.benchmark_results {
+        let current_item = current_by_id
+            .get(baseline_item.benchmark_id.as_str())
+            .copied();
+        items.push(routing_regression_compare_item(
+            Some(baseline_item),
+            current_item,
+            score_drop_threshold,
+            confidence_drop_threshold,
+        ));
+    }
+    for current_item in &current.benchmark_results {
+        if !baseline_by_id.contains_key(current_item.benchmark_id.as_str()) {
+            items.push(routing_regression_compare_item(
+                None,
+                Some(current_item),
+                score_drop_threshold,
+                confidence_drop_threshold,
+            ));
+        }
+    }
+    items.sort_by(|left, right| {
+        left.title
+            .cmp(&right.title)
+            .then_with(|| left.benchmark_id.cmp(&right.benchmark_id))
+    });
+    items
+}
+
+fn routing_regression_compare_item(
+    baseline: Option<&RoutingRegressionBaselineItem>,
+    current: Option<&TaskBenchmarkEvaluationItem>,
+    score_drop_threshold: u8,
+    confidence_drop_threshold: u8,
+) -> RoutingRegressionItem {
+    let benchmark_id = baseline
+        .map(|item| item.benchmark_id.clone())
+        .or_else(|| current.map(|item| item.benchmark_id.clone()))
+        .unwrap_or_default();
+    let title = baseline
+        .map(|item| item.title.clone())
+        .or_else(|| current.map(|item| item.title.clone()))
+        .unwrap_or_else(|| benchmark_id.clone());
+    let mut reasons = Vec::new();
+    let mut evidence_refs = Vec::new();
+    let mut regression = false;
+
+    let status = match (baseline, current) {
+        (Some(baseline), Some(current)) => {
+            evidence_refs.extend(baseline.evidence_refs.clone());
+            evidence_refs.extend(current.evidence_refs.clone());
+            let score_drop = i16::from(baseline.score) - i16::from(current.score);
+            if score_drop > i16::from(score_drop_threshold) {
+                regression = true;
+                reasons.push(format!(
+                    "Benchmark score dropped by {} point(s), above the configured threshold of {}.",
+                    score_drop, score_drop_threshold
+                ));
+            }
+            let confidence_drop = i16::from(baseline.route_confidence_score)
+                - i16::from(current.route_confidence_score);
+            if confidence_drop > i16::from(confidence_drop_threshold) {
+                regression = true;
+                reasons.push(format!(
+                    "Route confidence dropped by {} point(s), above the configured threshold of {}.",
+                    confidence_drop, confidence_drop_threshold
+                ));
+            }
+            if routing_match_rank(current.expected_match_status)
+                < routing_match_rank(&baseline.expected_match_status)
+            {
+                regression = true;
+                reasons.push(format!(
+                    "Expected match status worsened from {} to {}.",
+                    baseline.expected_match_status, current.expected_match_status
+                ));
+            }
+            let current_route = current
+                .top_route
+                .as_ref()
+                .map(routing_regression_route_snapshot);
+            if baseline.top_route != current_route {
+                regression = true;
+                reasons.push(routing_route_change_reason(
+                    baseline.top_route.as_ref(),
+                    current_route.as_ref(),
+                ));
+            }
+            if current.gap_notes.len() > baseline.gap_count {
+                regression = true;
+                reasons.push(format!(
+                    "Gap note count increased from {} to {}.",
+                    baseline.gap_count,
+                    current.gap_notes.len()
+                ));
+            }
+            if current.blocker_notes.len() > baseline.blocker_count {
+                regression = true;
+                reasons.push(format!(
+                    "Blocker note count increased from {} to {}.",
+                    baseline.blocker_count,
+                    current.blocker_notes.len()
+                ));
+            }
+            if regression {
+                "regression"
+            } else {
+                reasons.push(
+                    "Current routing result matches the saved baseline within configured thresholds."
+                        .to_string(),
+                );
+                "unchanged"
+            }
+        }
+        (Some(baseline), None) => {
+            regression = true;
+            evidence_refs.extend(baseline.evidence_refs.clone());
+            reasons.push(
+                "Benchmark existed in the saved baseline but was not present in the current evaluation."
+                    .to_string(),
+            );
+            "missing_current_benchmark"
+        }
+        (None, Some(current)) => {
+            evidence_refs.extend(current.evidence_refs.clone());
+            reasons.push(
+                "Benchmark is present in the current evaluation but has no saved baseline."
+                    .to_string(),
+            );
+            "new_current_benchmark"
+        }
+        (None, None) => "unchanged",
+    };
+    evidence_refs.sort();
+    evidence_refs.dedup();
+
+    RoutingRegressionItem {
+        benchmark_id,
+        title,
+        status,
+        regression,
+        reasons,
+        evidence_refs,
+        score_delta: match (baseline, current) {
+            (Some(baseline), Some(current)) => {
+                Some(i16::from(current.score) - i16::from(baseline.score))
+            }
+            _ => None,
+        },
+        confidence_delta: match (baseline, current) {
+            (Some(baseline), Some(current)) => Some(
+                i16::from(current.route_confidence_score)
+                    - i16::from(baseline.route_confidence_score),
+            ),
+            _ => None,
+        },
+        baseline: baseline.map(routing_regression_baseline_fields),
+        current: current.map(routing_regression_current_fields),
+        safety_flags: task_benchmark_safety_flags(),
+    }
+}
+
+fn routing_regression_baseline_fields(
+    item: &RoutingRegressionBaselineItem,
+) -> RoutingRegressionComparisonFields {
+    RoutingRegressionComparisonFields {
+        task: item.task.clone(),
+        expected_match_status: item.expected_match_status.clone(),
+        score: item.score,
+        band: item.band.clone(),
+        top_route: item.top_route.clone(),
+        route_confidence_score: item.route_confidence_score,
+        route_confidence_band: item.route_confidence_band.clone(),
+        gap_count: item.gap_count,
+        blocker_count: item.blocker_count,
+        gap_notes: item.gap_notes.clone(),
+        blocker_notes: item.blocker_notes.clone(),
+        evidence_refs: item.evidence_refs.clone(),
+    }
+}
+
+fn routing_regression_current_fields(
+    item: &TaskBenchmarkEvaluationItem,
+) -> RoutingRegressionComparisonFields {
+    RoutingRegressionComparisonFields {
+        task: item.task.clone(),
+        expected_match_status: item.expected_match_status.to_string(),
+        score: item.score,
+        band: item.band.to_string(),
+        top_route: item
+            .top_route
+            .as_ref()
+            .map(routing_regression_route_snapshot),
+        route_confidence_score: item.route_confidence_score,
+        route_confidence_band: item.route_confidence_band.to_string(),
+        gap_count: item.gap_notes.len(),
+        blocker_count: item.blocker_notes.len(),
+        gap_notes: item.gap_notes.clone(),
+        blocker_notes: item.blocker_notes.clone(),
+        evidence_refs: item.evidence_refs.clone(),
+    }
+}
+
+fn routing_match_rank(status: &str) -> u8 {
+    match status {
+        "expected_match" => 4,
+        "acceptable_match" => 3,
+        "no_expectation" => 2,
+        "mismatch" => 1,
+        "blocked_no_route" => 0,
+        _ => 0,
+    }
+}
+
+fn routing_route_change_reason(
+    baseline: Option<&RoutingRegressionRouteSnapshot>,
+    current: Option<&RoutingRegressionRouteSnapshot>,
+) -> String {
+    match (baseline, current) {
+        (Some(baseline), Some(current)) => format!(
+            "Top route changed from `{}` ({}, {}) to `{}` ({}, {}).",
+            baseline.skill_name,
+            baseline.agent,
+            baseline.scope,
+            current.skill_name,
+            current.agent,
+            current.scope
+        ),
+        (Some(baseline), None) => format!(
+            "Top route `{}` ({}, {}) is no longer available.",
+            baseline.skill_name, baseline.agent, baseline.scope
+        ),
+        (None, Some(current)) => format!(
+            "Top route `{}` ({}, {}) is newly available.",
+            current.skill_name, current.agent, current.scope
+        ),
+        (None, None) => "Top route availability changed.".to_string(),
+    }
+}
+
+fn routing_regression_status(
+    regression_count: usize,
+    missing_benchmark_count: usize,
+    catalog_available: bool,
+) -> &'static str {
+    if !catalog_available {
+        return "catalog_missing";
+    }
+    if regression_count > 0 {
+        return "regressions_detected";
+    }
+    if missing_benchmark_count > 0 {
+        return "missing_benchmarks";
+    }
+    "no_regressions"
+}
+
+fn routing_regression_summary(
+    regression_count: usize,
+    missing_benchmark_count: usize,
+    compared_count: usize,
+    catalog_available: bool,
+) -> String {
+    if !catalog_available {
+        return format!(
+            "Compared {} benchmark(s), but no local catalog is available; {} regression item(s) require attention.",
+            compared_count, regression_count
+        );
+    }
+    if regression_count == 0 {
+        return format!(
+            "Compared {} benchmark(s) against the saved app-local baseline; no routing regressions were detected.",
+            compared_count
+        );
+    }
+    format!(
+        "Compared {} benchmark(s) against the saved app-local baseline; detected {} routing regression(s) and {} missing benchmark(s).",
+        compared_count, regression_count, missing_benchmark_count
+    )
+}
+
 fn skill_route_ranking_from_readiness(readiness: TaskReadinessResult) -> SkillRouteRankingResult {
     let top_score = readiness
         .candidate_skills
@@ -6939,6 +7576,8 @@ mod tests {
         assert!(methods.contains(&Value::String("task.saveBenchmark".to_string())));
         assert!(methods.contains(&Value::String("task.deleteBenchmark".to_string())));
         assert!(methods.contains(&Value::String("task.evaluateBenchmarks".to_string())));
+        assert!(methods.contains(&Value::String("task.saveRoutingBaseline".to_string())));
+        assert!(methods.contains(&Value::String("task.detectRoutingRegression".to_string())));
         assert!(methods.contains(&Value::String("llm.status".to_string())));
         assert!(methods.contains(&Value::String("llm.listProviderProfiles".to_string())));
         assert!(methods.contains(&Value::String("llm.saveProviderProfile".to_string())));
@@ -9180,6 +9819,381 @@ mod tests {
     }
 
     #[test]
+    fn routing_regression_detect_missing_baseline_is_read_only() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-routing-regression-missing-baseline-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-routing-regression-missing-baseline-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_llm_skill(&host, &app_data_dir.join("fixture-skill").join("SKILL.md"));
+        let save = host.handle(ServiceRequest {
+            id: Some("benchmark-save".to_string()),
+            method: "task.saveBenchmark".to_string(),
+            params: json!({
+                "id": "local-routing-fixture",
+                "title": "Local routing fixture",
+                "task": "Analyze local skill posture and execution safety",
+                "expected_skill_refs": ["llm-skill-id"]
+            }),
+        });
+        assert!(save.ok, "{:?}", save.error);
+
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("routing-regression-detect".to_string()),
+            method: "task.detectRoutingRegression".to_string(),
+            params: json!({}),
+        });
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("missing baseline detection result");
+        assert_eq!(
+            result.get("status").and_then(Value::as_str),
+            Some("baseline_missing")
+        );
+        assert_eq!(
+            result.get("baseline_available").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .get("current_evaluated_count")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            result.get("regression_count").and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/read_only")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert!(!host.routing_regression_baseline_path().exists());
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn routing_regression_baseline_save_is_app_local() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-routing-regression-save-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-routing-regression-save-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_llm_skill(&host, &app_data_dir.join("fixture-skill").join("SKILL.md"));
+        let save_benchmark = host.handle(ServiceRequest {
+            id: Some("benchmark-save".to_string()),
+            method: "task.saveBenchmark".to_string(),
+            params: json!({
+                "id": "local-routing-fixture",
+                "title": "Local routing fixture",
+                "task": "Analyze local skill posture and execution safety",
+                "expected_skill_refs": ["llm-skill-id"]
+            }),
+        });
+        assert!(save_benchmark.ok, "{:?}", save_benchmark.error);
+
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("routing-baseline-save".to_string()),
+            method: "task.saveRoutingBaseline".to_string(),
+            params: json!({ "ids": ["local-routing-fixture"] }),
+        });
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("baseline save result");
+        assert_eq!(
+            result.get("app_local_only").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result.get("baseline_file").and_then(Value::as_str),
+            Some("task-routing-baseline.json")
+        );
+        assert_eq!(
+            result.get("provider_request_sent").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("agent_config_mutated").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("skill_files_mutated").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/baseline/benchmark_results/0/benchmark_id")
+                .and_then(Value::as_str),
+            Some("local-routing-fixture")
+        );
+        assert!(host.routing_regression_baseline_path().exists());
+        assert!(app_data_dir.join("task-routing-baseline.json").exists());
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn routing_regression_detect_after_baseline_reports_no_regression_when_unchanged() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-routing-regression-unchanged-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_llm_skill(&host, &app_data_dir.join("fixture-skill").join("SKILL.md"));
+        let save_benchmark = host.handle(ServiceRequest {
+            id: Some("benchmark-save".to_string()),
+            method: "task.saveBenchmark".to_string(),
+            params: json!({
+                "id": "local-routing-fixture",
+                "title": "Local routing fixture",
+                "task": "Analyze local skill posture and execution safety",
+                "expected_skill_refs": ["llm-skill-id"]
+            }),
+        });
+        assert!(save_benchmark.ok, "{:?}", save_benchmark.error);
+        let save_baseline = host.handle(ServiceRequest {
+            id: Some("routing-baseline-save".to_string()),
+            method: "task.saveRoutingBaseline".to_string(),
+            params: json!({}),
+        });
+        assert!(save_baseline.ok, "{:?}", save_baseline.error);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("routing-regression-detect".to_string()),
+            method: "task.detectRoutingRegression".to_string(),
+            params: json!({}),
+        });
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("unchanged detection result");
+        assert_eq!(
+            result.get("status").and_then(Value::as_str),
+            Some("no_regressions")
+        );
+        assert_eq!(
+            result.get("baseline_available").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result.get("regression_count").and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            result.pointer("/items/0/status").and_then(Value::as_str),
+            Some("unchanged")
+        );
+        assert_eq!(
+            result
+                .pointer("/items/0/regression")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/read_only")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn routing_regression_detect_reports_worse_benchmark_expectation() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-routing-regression-worse-expectation-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_llm_skill(&host, &app_data_dir.join("fixture-skill").join("SKILL.md"));
+        let save_benchmark = host.handle(ServiceRequest {
+            id: Some("benchmark-save".to_string()),
+            method: "task.saveBenchmark".to_string(),
+            params: json!({
+                "id": "local-routing-fixture",
+                "title": "Local routing fixture",
+                "task": "Analyze local skill posture and execution safety",
+                "expected_skill_refs": ["llm-skill-id"]
+            }),
+        });
+        assert!(save_benchmark.ok, "{:?}", save_benchmark.error);
+        let save_baseline = host.handle(ServiceRequest {
+            id: Some("routing-baseline-save".to_string()),
+            method: "task.saveRoutingBaseline".to_string(),
+            params: json!({}),
+        });
+        assert!(save_baseline.ok, "{:?}", save_baseline.error);
+
+        let update_benchmark = host.handle(ServiceRequest {
+            id: Some("benchmark-update".to_string()),
+            method: "task.saveBenchmark".to_string(),
+            params: json!({
+                "id": "local-routing-fixture",
+                "title": "Local routing fixture",
+                "task": "Analyze local skill posture and execution safety",
+                "expected_skill_refs": ["other-skill-id"]
+            }),
+        });
+        assert!(update_benchmark.ok, "{:?}", update_benchmark.error);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("routing-regression-detect".to_string()),
+            method: "task.detectRoutingRegression".to_string(),
+            params: json!({ "score_drop_threshold": 1, "confidence_drop_threshold": 1 }),
+        });
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("regression detection result");
+        assert_eq!(
+            result.get("status").and_then(Value::as_str),
+            Some("regressions_detected")
+        );
+        assert_eq!(
+            result.get("regression_count").and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            result.pointer("/items/0/status").and_then(Value::as_str),
+            Some("regression")
+        );
+        assert_eq!(
+            result
+                .pointer("/items/0/regression")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/items/0/baseline/expected_match_status")
+                .and_then(Value::as_str),
+            Some("expected_match")
+        );
+        assert_eq!(
+            result
+                .pointer("/items/0/current/expected_match_status")
+                .and_then(Value::as_str),
+            Some("mismatch")
+        );
+        assert!(result
+            .pointer("/items/0/reasons")
+            .and_then(Value::as_array)
+            .is_some_and(|reasons| reasons.iter().any(|reason| reason
+                .as_str()
+                .is_some_and(|reason| reason.contains("Expected match status worsened")))));
+        assert_eq!(
+            result
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
     fn llm_preview_prompt_accepts_task_readiness_action_with_redaction() {
         let app_data_dir = env::temp_dir().join(format!(
             "skills-copilot-readiness-preview-test-{}-{}",
@@ -11218,6 +12232,51 @@ mod tests {
                     assert!(!item.safety_flags.raw_response_persisted);
                 }
             }
+            "task.saveRoutingBaseline" => {
+                let saved: WireSaveRoutingBaselineResult =
+                    decode_fixture_result(method, result, path);
+                assert_eq!(saved.benchmark_count, saved.baseline.evaluated_count);
+                assert!(saved.app_local_only);
+                assert_eq!(saved.baseline_file, "task-routing-baseline.json");
+                assert!(!saved.provider_request_sent);
+                assert!(!saved.agent_config_mutated);
+                assert!(!saved.skill_files_mutated);
+                assert!(!saved.raw_prompt_persisted);
+                assert!(!saved.raw_response_persisted);
+                assert!(saved.baseline.safety_flags.read_only);
+                assert!(!saved.baseline.safety_flags.provider_request_sent);
+            }
+            "task.detectRoutingRegression" => {
+                let detection: WireRoutingRegressionDetectionResult =
+                    decode_fixture_result(method, result, path);
+                assert!(detection.safety_flags.read_only);
+                assert!(!detection.safety_flags.provider_request_sent);
+                assert!(!detection.safety_flags.write_back_allowed);
+                assert!(!detection.safety_flags.script_execution_allowed);
+                assert!(!detection.safety_flags.config_mutation_allowed);
+                assert!(!detection.safety_flags.snapshot_created);
+                assert!(!detection.safety_flags.triage_mutation_allowed);
+                assert!(!detection.safety_flags.credential_accessed);
+                assert!(!detection.safety_flags.raw_secret_returned);
+                assert!(!detection.safety_flags.raw_prompt_persisted);
+                assert!(!detection.safety_flags.raw_response_persisted);
+                assert_eq!(
+                    detection.current_evaluation.evaluated_count,
+                    detection.current_evaluation.benchmark_results.len()
+                );
+                for item in &detection.items {
+                    assert!(item.safety_flags.read_only);
+                    assert!(!item.safety_flags.provider_request_sent);
+                    assert!(!item.safety_flags.write_back_allowed);
+                    assert!(!item.safety_flags.script_execution_allowed);
+                    assert!(!item.safety_flags.config_mutation_allowed);
+                    assert!(!item.safety_flags.snapshot_created);
+                    assert!(!item.safety_flags.triage_mutation_allowed);
+                    assert!(!item.safety_flags.credential_accessed);
+                    assert!(!item.safety_flags.raw_prompt_persisted);
+                    assert!(!item.safety_flags.raw_response_persisted);
+                }
+            }
             "llm.status" => {
                 let status: WireLlmStatus = decode_fixture_result(method, result, path);
                 assert!(!status.enabled);
@@ -11720,6 +12779,8 @@ mod tests {
             }),
             "task.deleteBenchmark" => json!({ "id": "fixture-benchmark" }),
             "task.evaluateBenchmarks" => json!({}),
+            "task.saveRoutingBaseline" => json!({}),
+            "task.detectRoutingRegression" => json!({}),
             "evidence.piWritableHarness" => json!({ "run_label": "dispatch-fixture" }),
             "report.exportLocal" => json!({ "formats": ["json"] }),
             "script.previewExecution" => json!({
@@ -12361,6 +13422,125 @@ mod tests {
         raw_secret_returned: bool,
         raw_prompt_persisted: bool,
         raw_response_persisted: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireSaveRoutingBaselineResult {
+        generated_by: String,
+        baseline: WireRoutingRegressionBaseline,
+        benchmark_count: usize,
+        app_local_only: bool,
+        baseline_file: String,
+        provider_request_sent: bool,
+        agent_config_mutated: bool,
+        skill_files_mutated: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRoutingRegressionDetectionResult {
+        generated_by: String,
+        status: String,
+        baseline_available: bool,
+        catalog_available: bool,
+        baseline_evaluated_count: usize,
+        current_evaluated_count: usize,
+        regression_count: usize,
+        missing_benchmark_count: usize,
+        summary: String,
+        items: Vec<WireRoutingRegressionItem>,
+        blocker_notes: Vec<String>,
+        baseline: Option<WireRoutingRegressionBaseline>,
+        current_evaluation: WireTaskBenchmarkEvaluationResult,
+        safety_flags: WireTaskBenchmarkSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRoutingRegressionItem {
+        benchmark_id: String,
+        title: String,
+        status: String,
+        regression: bool,
+        reasons: Vec<String>,
+        evidence_refs: Vec<String>,
+        score_delta: Option<i16>,
+        confidence_delta: Option<i16>,
+        baseline: Option<WireRoutingRegressionComparisonFields>,
+        current: Option<WireRoutingRegressionComparisonFields>,
+        safety_flags: WireTaskBenchmarkSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRoutingRegressionBaseline {
+        schema_version: u32,
+        generated_by: String,
+        generated_at: i64,
+        catalog_available: bool,
+        evaluated_count: usize,
+        benchmark_results: Vec<WireRoutingRegressionBaselineItem>,
+        safety_flags: WireTaskBenchmarkSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRoutingRegressionBaselineItem {
+        benchmark_id: String,
+        title: String,
+        task: String,
+        score: u8,
+        band: String,
+        expected_match_status: String,
+        top_route: Option<WireRoutingRegressionRouteSnapshot>,
+        route_confidence_score: u8,
+        route_confidence_band: String,
+        gap_count: usize,
+        blocker_count: usize,
+        gap_notes: Vec<String>,
+        blocker_notes: Vec<String>,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRoutingRegressionRouteSnapshot {
+        instance_id: String,
+        definition_id: String,
+        skill_name: String,
+        agent: String,
+        scope: String,
+        confidence_score: u8,
+        confidence_band: String,
+        readiness_score: u8,
+        readiness_band: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRoutingRegressionComparisonFields {
+        task: String,
+        expected_match_status: String,
+        score: u8,
+        band: String,
+        top_route: Option<WireRoutingRegressionRouteSnapshot>,
+        route_confidence_score: u8,
+        route_confidence_band: String,
+        gap_count: usize,
+        blocker_count: usize,
+        gap_notes: Vec<String>,
+        blocker_notes: Vec<String>,
+        evidence_refs: Vec<String>,
     }
 
     #[allow(dead_code)]

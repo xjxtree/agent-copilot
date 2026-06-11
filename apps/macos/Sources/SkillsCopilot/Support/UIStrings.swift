@@ -492,6 +492,29 @@ enum UIStrings {
     static var taskBenchmarkNoBlockers: String { text("taskBenchmark.empty.blockers", "No blockers returned.") }
     static var taskBenchmarkNoGaps: String { text("taskBenchmark.empty.gaps", "No gaps returned.") }
     static var taskBenchmarkNoSafetyFlags: String { text("taskBenchmark.empty.safetyFlags", "No safety flags returned.") }
+    static var routingRegressionTitle: String { text("routingRegression.title", "Routing Regression") }
+    static var routingRegressionBoundary: String { text("routingRegression.boundary", "User-triggered, app-local regression detection from saved benchmark baselines. Detection is deterministic and cannot call a provider, write skill files, mutate agent config, create snapshots, change triage, execute scripts, or read credentials.") }
+    static var routingRegressionSaveBaselineAction: String { text("routingRegression.action.saveBaseline", "Save Baseline") }
+    static var routingRegressionDetectAction: String { text("routingRegression.action.detect", "Detect Regressions") }
+    static var routingRegressionUnavailable: String { text("routingRegression.unavailable", "Routing regression detection is unavailable in this service build.") }
+    static var routingRegressionNoBaseline: String { text("routingRegression.empty.baseline", "No routing baseline shown yet.") }
+    static var routingRegressionBaselineStatus: String { text("routingRegression.baselineStatus", "Baseline status") }
+    static var routingRegressionDetectionTitle: String { text("routingRegression.detection", "Regression detection") }
+    static var routingRegressionCount: String { text("routingRegression.count", "Regressions") }
+    static var routingRegressionImproved: String { text("routingRegression.improved", "Improved") }
+    static var routingRegressionUnchanged: String { text("routingRegression.unchanged", "Unchanged") }
+    static var routingRegressionAverageScoreDelta: String { text("routingRegression.averageScoreDelta", "Average delta") }
+    static var routingRegressionMatchChanges: String { text("routingRegression.matchChanges", "Match changes") }
+    static var routingRegressionTopRouteChanges: String { text("routingRegression.topRouteChanges", "Top-route changes") }
+    static var routingRegressionItems: String { text("routingRegression.items", "Regression items") }
+    static var routingRegressionNoItems: String { text("routingRegression.empty.items", "No regressions returned.") }
+    static var routingRegressionNewBlockers: String { text("routingRegression.newBlockers", "New blockers") }
+    static var routingRegressionNoNewBlockers: String { text("routingRegression.empty.newBlockers", "No new blockers returned.") }
+    static var routingRegressionNewGaps: String { text("routingRegression.newGaps", "New gaps") }
+    static var routingRegressionNoNewGaps: String { text("routingRegression.empty.newGaps", "No new gaps returned.") }
+    static var routingRegressionTopRouteChanged: String { text("routingRegression.topRouteChanged", "Top route changed") }
+    static var routingRegressionMatchStatus: String { text("routingRegression.matchStatus", "Match status") }
+    static var routingRegressionTopRouteChange: String { text("routingRegression.topRouteChange", "Top route") }
     static var llmAssist: String { text("llm.assist", "LLM Assist") }
     static var llmEnabled: String { text("llm.enabled", "Enabled") }
     static var llmDisabled: String { text("llm.disabled", "Disabled") }

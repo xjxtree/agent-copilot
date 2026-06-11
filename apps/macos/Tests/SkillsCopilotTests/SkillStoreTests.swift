@@ -44,6 +44,8 @@ struct SkillStoreTests {
         try await routingConfidencePromptSendRequiresConfiguredProvider()
         try await taskBenchmarkUsesLocalServiceContract()
         try await taskBenchmarkFallsBackWhenMethodUnavailable()
+        try await routingRegressionUsesLocalBenchmarkServiceContract()
+        try await routingRegressionFallsBackWhenMethodUnavailable()
         try await routingConfidenceClearsStaleSelection()
         try await llmPreparePreviewIsScopedToSelectedSkillAndReadOnly()
         try await promptPreviewRequiresConfiguredProviderAndExplicitSend()
@@ -1063,6 +1065,72 @@ struct SkillStoreTests {
         try expectFalse(calls.contains("script.execute"), "Unavailable benchmark flow must not call execution paths.")
     }
 
+    private func routingRegressionUsesLocalBenchmarkServiceContract() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+        await store.loadTaskBenchmarks()
+        let snapshotCallsBeforeRegression = countOccurrences("snapshot.", in: fake.calls())
+        await store.saveRoutingBaseline()
+        await store.detectRoutingRegression()
+
+        try expectEqual(store.routingRegressionBaseline?.baselineID, "baseline-1", "Routing regression baseline should expose saved baseline id.")
+        try expectEqual(store.routingRegressionBaseline?.benchmarkCount, 1, "Routing baseline should use loaded benchmark scope.")
+        try expectEqual(store.routingRegressionDetection?.regressionCount, 1, "Routing regression detection should expose regression count.")
+        try expectEqual(store.routingRegressionDetection?.regressions.first?.currentTopRoute?.name, "Alpha", "Routing regression should expose changed top route.")
+        try expectEqual(store.routingRegressionDetection?.regressions.first?.scoreDelta, -16, "Routing regression should expose score delta.")
+        try expectFalse(store.routingRegressionDetection?.safety.providerRequestSent ?? true, "Local regression detection must not send a provider request.")
+        try expectFalse(store.routingRegressionDetection?.safety.writeBackAllowed ?? true, "Regression detection must not allow write-back.")
+        try expectFalse(store.routingRegressionDetection?.safety.scriptExecutionAllowed ?? true, "Regression detection must not allow script execution.")
+        try expectFalse(store.routingRegressionDetection?.safety.configMutationAllowed ?? true, "Regression detection must not mutate config.")
+        try expectFalse(store.routingRegressionDetection?.safety.snapshotCreated ?? true, "Regression detection must not create snapshots.")
+        try expectFalse(store.routingRegressionDetection?.safety.credentialAccessed ?? true, "Regression detection must not access credentials.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "task.listBenchmarks", "Regression flow may load the app-local benchmark set.")
+        try expectContains(calls, "task.saveRoutingBaseline", "Regression flow should save baseline through the V2.47 baseline method.")
+        try expectContains(calls, "task.detectRoutingRegression", "Regression flow should detect regressions through the V2.47 detection method.")
+        try expectContains(calls, "\"benchmark_ids\":[\"bench-1\"]", "Regression flow should pass loaded benchmark ids to local regression methods.")
+        try expectFalse(calls.contains("task.evaluateBenchmarks"), "Regression flow should not need benchmark evaluation service calls unless the user asks.")
+        try expectFalse(calls.contains("llm.previewPrompt"), "Local regression detection must not prepare provider prompts.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Local regression detection must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Regression flow must not call config write paths.")
+        try expectFalse(calls.contains("script.execute"), "Regression flow must not call execution paths.")
+        try expectEqual(countOccurrences("snapshot.", in: calls), snapshotCallsBeforeRegression, "Regression flow must not call snapshot paths.")
+        try expectFalse(calls.contains("credential"), "Regression flow must not call credential paths.")
+    }
+
+    private func routingRegressionFallsBackWhenMethodUnavailable() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "old-service")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+        let snapshotCallsBeforeRegression = countOccurrences("snapshot.", in: fake.calls())
+        await store.saveRoutingBaseline()
+        await store.detectRoutingRegression()
+
+        try expectEqual(store.routingRegressionBaseline?.isUnavailable, true, "Unknown baseline method should expose unavailable baseline status.")
+        try expectEqual(store.routingRegressionDetection?.isUnavailable, true, "Unknown detection method should expose unavailable detection status.")
+        try expectContains(store.routingRegressionDetection?.fallbackReason, "unavailable", "Unavailable regression detection should expose quiet fallback reason.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "task.saveRoutingBaseline", "Fallback test should still attempt the V2.47 baseline method.")
+        try expectContains(calls, "task.detectRoutingRegression", "Fallback test should still attempt the V2.47 detection method.")
+        try expectFalse(calls.contains("llm.previewPrompt"), "Unavailable regression flow must not fall back to provider prompt preview.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Unavailable regression flow must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Unavailable regression flow must not call config write paths.")
+        try expectFalse(calls.contains("script.execute"), "Unavailable regression flow must not call execution paths.")
+        try expectEqual(countOccurrences("snapshot.", in: calls), snapshotCallsBeforeRegression, "Unavailable regression flow must not call snapshot paths.")
+        try expectFalse(calls.contains("credential"), "Unavailable regression flow must not call credential paths.")
+    }
+
     private func routingConfidenceClearsStaleSelection() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -1449,6 +1517,18 @@ private final class FakeServiceScript {
               respond '{"id":"test","ok":true,"result":{"evaluated_count":2,"matched_count":1,"acceptable_count":2,"average_score":82,"evaluations":[{"benchmark_id":"bench-2","task":"Route a local audit release note task.","match_status":"matched","top_route":{"instance_id":"beta","name":"Beta","agent":"claude-code","confidence_score":88,"band":"High","match_reasons":["Description matches local audit."]},"expected_covered":true,"acceptable_covered":true,"blockers":[],"gaps":["No release-note-specific examples."],"safety_flags":["provider not sent"],"evidence_references":[{"title":"Routing","detail":"Beta ranked first.","source":"local"}]},{"benchmark_id":"bench-1","task":"Route a local audit task.","match_status":"acceptable","top_route":{"instance_id":"alpha","name":"Alpha","agent":"claude-code","confidence_score":76,"band":"Medium","match_reasons":["Same-agent fallback."]},"expected_covered":false,"acceptable_covered":true,"blockers":[],"gaps":[],"safety_flags":["provider not sent"],"evidence":["Alpha is acceptable."]}],"blockers":[],"gaps":["One benchmark missed exact expected route."],"evidence_references":[{"title":"Benchmark","detail":"Two local tasks evaluated.","source":"task.evaluateBenchmarks"}],"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_secret_returned":false}}}'
             fi
             respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: task.evaluateBenchmarks"}}'
+            ;;
+          *\\"task.saveRoutingBaseline\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"baseline_id":"baseline-1","benchmark_count":1,"average_score":88,"matched_count":1,"acceptable_count":1,"summary":"Saved local routing baseline from current benchmarks.","safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_secret_returned":false}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: task.saveRoutingBaseline"}}'
+            ;;
+          *\\"task.detectRoutingRegression\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"baseline_id":"baseline-1","benchmark_count":1,"regression_count":1,"improved_count":0,"unchanged_count":0,"average_score_delta":-16,"match_status_changed_count":1,"top_route_changed_count":1,"regressions":[{"benchmark_id":"bench-1","task":"Route a local audit task.","regression_type":"expected_to_acceptable","previous_match_status":"matched","current_match_status":"acceptable","previous_score":88,"current_score":72,"score_delta":-16,"previous_top_route":{"instance_id":"beta","name":"Beta","agent":"claude-code","confidence_score":88,"band":"High"},"current_top_route":{"instance_id":"alpha","name":"Alpha","agent":"claude-code","confidence_score":72,"band":"Medium"},"top_route_changed":true,"new_blockers":["Expected route dropped below top rank."],"new_gaps":["Release-note examples still missing."],"safety_flags":["provider not sent"],"evidence_references":[{"title":"Regression","detail":"Top route changed from Beta to Alpha.","source":"task.detectRoutingRegression"}]}],"new_blockers":["Expected route dropped below top rank."],"new_gaps":["Release-note examples still missing."],"evidence_references":[{"title":"Baseline","detail":"Compared against baseline-1.","source":"task.detectRoutingRegression"}],"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_secret_returned":false}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: task.detectRoutingRegression"}}'
             ;;
           *\\"task.deleteBenchmark\\"*)
             if [ "$scenario" = "prompt-ready" ]; then

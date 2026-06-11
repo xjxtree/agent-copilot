@@ -218,6 +218,16 @@ private struct TaskBenchmarkEvaluateParams: Encodable {
     }
 }
 
+private struct RoutingRegressionParams: Encodable {
+    let benchmarkIDs: [String]?
+    let limit: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case benchmarkIDs = "benchmark_ids"
+        case limit
+    }
+}
+
 private struct TaskBenchmarkDeleteParams: Encodable {
     let benchmarkId: String
 
@@ -676,6 +686,30 @@ final class ServiceClient {
         )
         do {
             return try await call(method: "task.evaluateBenchmarks", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func saveRoutingBaseline(skill: SkillRecord?, benchmarkIDs: [String]? = nil, limit: Int = 20) async throws -> RoutingRegressionBaselineResult {
+        let params = RoutingRegressionParams(
+            benchmarkIDs: benchmarkIDs,
+            limit: limit
+        )
+        do {
+            return try await call(method: "task.saveRoutingBaseline", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func detectRoutingRegression(skill: SkillRecord?, benchmarkIDs: [String]? = nil, limit: Int = 20) async throws -> RoutingRegressionDetectionResult {
+        let params = RoutingRegressionParams(
+            benchmarkIDs: benchmarkIDs,
+            limit: limit
+        )
+        do {
+            return try await call(method: "task.detectRoutingRegression", params: params)
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .unavailable()
         }

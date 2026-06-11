@@ -233,10 +233,10 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
 - `task.checkReadiness`、`task.rankSkillRoutes` 和 `task.evaluateBenchmarks` 本身不得发起 provider 请求、不得读取 credentials、不得持久化 raw prompt/response、不得写 agent config、不得创建 snapshot、不得改变 triage、不得执行脚本。
 - provider 辅助输出仍为 copy/display-only，不直接触发 `config.toggleSkill` / `snapshot.*` / triage 变更 / script execution / new credentials write。
 
-### 2.4.3.1.1 V2.47 Routing Regression Planning（planned）
+### 2.4.3.1.1 V2.47 Routing Regression Detection（completed）
 
-- 规划目标是在 V2.46 app-local benchmark set 上做 routing regression 检测：baseline 指标、阈值与重跑结果都保留在 app-local 数据中。
-- `task.detectRoutingRegression`（V2.47 计划）默认不发起 provider 请求；本地评估是 deterministic-first，输入来源为 `TaskReadiness`/`TaskBenchmark` 相关本地证据与 `V2.43`~`V2.46` 已有本地评分/ranking/benchmark evaluation。
+- 在 V2.46 app-local benchmark set 上做 routing regression 检测：baseline 指标、阈值与重跑结果都保留在 app-local 数据中。
+- `task.saveRoutingBaseline` + `task.detectRoutingRegression` 默认不发起 provider 请求；本地评估是 deterministic-first，输入来源为 `TaskReadiness`/`TaskBenchmark` 相关本地证据与 `V2.43`~`V2.46` 已有本地评分/ranking/benchmark evaluation。Baseline 仅写入 app-local `task-routing-baseline.json`，检测路径为 read-only。
 - 本地流程不得读取 credentials、不得触达 config/snapshot/skill 文件写路径、不得改变 triage、不得执行脚本、不得发起 `raw` prompt/response 持久化；可选解释性 provider 输出仍受 `llm.previewPrompt` + `llm.confirmPromptAndSend` 的 V2.42 红线预览、确认、copy-only 限制。
 - 这一级别的输出仍属于 judgment output；只能用于 review/decision 辅助，不得作为任何自动写回、auto-run、auto-config 的触发信号。
 

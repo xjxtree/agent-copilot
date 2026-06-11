@@ -1,0 +1,9 @@
+{
+  "id": "fixture-routing-save-baseline",
+  "method": "task.saveRoutingBaseline",
+  "params": {
+    "ids": [
+      "fixture-benchmark"
+    ]
+  }
+}

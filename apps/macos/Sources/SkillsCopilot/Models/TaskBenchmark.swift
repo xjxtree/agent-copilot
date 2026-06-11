@@ -562,6 +562,422 @@ struct TaskBenchmarkEvaluationResult: Decodable, Hashable {
     }
 }
 
+struct RoutingRegressionBaselineResult: Decodable, Hashable {
+    let baselineID: String?
+    let benchmarkCount: Int
+    let averageScore: Int?
+    let matchedCount: Int?
+    let acceptableCount: Int?
+    let savedAt: Int64?
+    let summary: String
+    let safety: TaskReadinessSafety
+    let fallbackReason: String?
+
+    var isUnavailable: Bool { fallbackReason != nil && baselineID == nil && benchmarkCount == 0 }
+
+    enum CodingKeys: String, CodingKey {
+        case baselineID = "baseline_id"
+        case baselineId = "baselineId"
+        case id
+        case benchmarkCount = "benchmark_count"
+        case benchmarkTotal = "benchmark_total"
+        case count
+        case averageScore = "average_score"
+        case score
+        case matchedCount = "matched_count"
+        case acceptableCount = "acceptable_count"
+        case savedAt = "saved_at"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case summary
+        case message
+        case safety
+        case safetyFlags = "safety_flags"
+        case fallbackReason = "fallback_reason"
+        case reason
+        case providerRequestSent = "provider_request_sent"
+        case writeBackAllowed = "write_back_allowed"
+        case writeActionsAvailable = "write_actions_available"
+        case scriptExecutionAllowed = "script_execution_allowed"
+        case executionActionsAvailable = "execution_actions_available"
+        case configMutationAllowed = "config_mutation_allowed"
+        case snapshotCreated = "snapshot_created"
+        case triageMutationAllowed = "triage_mutation_allowed"
+        case credentialAccessed = "credential_accessed"
+        case rawSecretReturned = "raw_secret_returned"
+    }
+
+    init(
+        baselineID: String?,
+        benchmarkCount: Int,
+        averageScore: Int?,
+        matchedCount: Int?,
+        acceptableCount: Int?,
+        savedAt: Int64?,
+        summary: String,
+        safety: TaskReadinessSafety,
+        fallbackReason: String? = nil
+    ) {
+        self.baselineID = baselineID
+        self.benchmarkCount = benchmarkCount
+        self.averageScore = averageScore.map { min(100, max(0, $0)) }
+        self.matchedCount = matchedCount
+        self.acceptableCount = acceptableCount
+        self.savedAt = savedAt
+        self.summary = summary
+        self.safety = safety
+        self.fallbackReason = fallbackReason
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        baselineID = try container.decodeIfPresent(String.self, forKey: .baselineID)
+            ?? container.decodeIfPresent(String.self, forKey: .baselineId)
+            ?? container.decodeIfPresent(String.self, forKey: .id)
+        benchmarkCount = try container.decodeFlexibleBenchmarkInt(keys: [.benchmarkCount, .benchmarkTotal, .count]) ?? 0
+        averageScore = try container.decodeFlexibleBenchmarkInt(keys: [.averageScore, .score]).map { min(100, max(0, $0)) }
+        matchedCount = try container.decodeFlexibleBenchmarkInt(keys: [.matchedCount])
+        acceptableCount = try container.decodeFlexibleBenchmarkInt(keys: [.acceptableCount])
+        savedAt = try container.decodeFlexibleBenchmarkInt64(keys: [.savedAt, .createdAt, .updatedAt])
+        summary = try container.decodeIfPresent(String.self, forKey: .summary)
+            ?? container.decodeIfPresent(String.self, forKey: .message)
+            ?? ""
+        if let decodedSafety = try container.decodeIfPresent(TaskReadinessSafety.self, forKey: .safety)
+            ?? container.decodeIfPresent(TaskReadinessSafety.self, forKey: .safetyFlags) {
+            safety = decodedSafety
+        } else {
+            safety = TaskReadinessSafety(
+                providerRequestSent: try container.decodeIfPresent(Bool.self, forKey: .providerRequestSent) ?? false,
+                writeBackAllowed: try container.decodeIfPresent(Bool.self, forKey: .writeBackAllowed) ?? false,
+                writeActionsAvailable: try container.decodeIfPresent(Bool.self, forKey: .writeActionsAvailable) ?? false,
+                scriptExecutionAllowed: try container.decodeIfPresent(Bool.self, forKey: .scriptExecutionAllowed) ?? false,
+                executionActionsAvailable: try container.decodeIfPresent(Bool.self, forKey: .executionActionsAvailable) ?? false,
+                configMutationAllowed: try container.decodeIfPresent(Bool.self, forKey: .configMutationAllowed) ?? false,
+                snapshotCreated: try container.decodeIfPresent(Bool.self, forKey: .snapshotCreated) ?? false,
+                triageMutationAllowed: try container.decodeIfPresent(Bool.self, forKey: .triageMutationAllowed) ?? false,
+                credentialAccessed: try container.decodeIfPresent(Bool.self, forKey: .credentialAccessed) ?? false,
+                rawSecretReturned: try container.decodeIfPresent(Bool.self, forKey: .rawSecretReturned) ?? false
+            )
+        }
+        fallbackReason = try container.decodeIfPresent(String.self, forKey: .fallbackReason)
+            ?? container.decodeIfPresent(String.self, forKey: .reason)
+    }
+
+    static func unavailable(reason: String = UIStrings.routingRegressionUnavailable) -> RoutingRegressionBaselineResult {
+        RoutingRegressionBaselineResult(
+            baselineID: nil,
+            benchmarkCount: 0,
+            averageScore: nil,
+            matchedCount: nil,
+            acceptableCount: nil,
+            savedAt: nil,
+            summary: "",
+            safety: TaskReadinessSafety(),
+            fallbackReason: reason
+        )
+    }
+}
+
+struct RoutingRegressionItem: Decodable, Hashable, Identifiable {
+    let id: String
+    let taskText: String
+    let regressionType: String
+    let previousMatchStatus: String
+    let currentMatchStatus: String
+    let previousScore: Int?
+    let currentScore: Int?
+    let scoreDelta: Int
+    let confidenceDelta: Int?
+    let previousTopRoute: SkillRouteCandidate?
+    let currentTopRoute: SkillRouteCandidate?
+    let topRouteChanged: Bool
+    let newBlockers: [String]
+    let newGaps: [String]
+    let safetyFlags: [String]
+    let evidence: [TaskReadinessEvidenceItem]
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case benchmarkID = "benchmark_id"
+        case benchmarkId = "benchmarkId"
+        case taskText = "task_text"
+        case task
+        case userIntent = "user_intent"
+        case regressionType = "regression_type"
+        case type
+        case status
+        case previousMatchStatus = "previous_match_status"
+        case baselineMatchStatus = "baseline_match_status"
+        case oldMatchStatus = "old_match_status"
+        case currentMatchStatus = "current_match_status"
+        case newMatchStatus = "new_match_status"
+        case matchStatusChange = "match_status_change"
+        case previousScore = "previous_score"
+        case baselineScore = "baseline_score"
+        case oldScore = "old_score"
+        case currentScore = "current_score"
+        case newScore = "new_score"
+        case scoreDelta = "score_delta"
+        case delta
+        case confidenceDelta = "confidence_delta"
+        case previousTopRoute = "previous_top_route"
+        case baselineTopRoute = "baseline_top_route"
+        case oldTopRoute = "old_top_route"
+        case currentTopRoute = "current_top_route"
+        case newTopRoute = "new_top_route"
+        case topRouteChanged = "top_route_changed"
+        case routeChanged = "route_changed"
+        case changed
+        case newBlockers = "new_blockers"
+        case blockers
+        case blockerNotes = "blocker_notes"
+        case newGaps = "new_gaps"
+        case gaps
+        case gapNotes = "gap_notes"
+        case missingCapabilities = "missing_capabilities"
+        case safetyFlags = "safety_flags"
+        case safety
+        case warnings
+        case evidence
+        case evidenceItems = "evidence_items"
+        case evidenceReferences = "evidence_references"
+        case evidenceRefs = "evidence_refs"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        taskText = try container.decodeIfPresent(String.self, forKey: .taskText)
+            ?? container.decodeIfPresent(String.self, forKey: .task)
+            ?? container.decodeIfPresent(String.self, forKey: .userIntent)
+            ?? ""
+        id = try container.decodeIfPresent(String.self, forKey: .id)
+            ?? container.decodeIfPresent(String.self, forKey: .benchmarkID)
+            ?? container.decodeIfPresent(String.self, forKey: .benchmarkId)
+            ?? taskText
+        regressionType = try container.decodeIfPresent(String.self, forKey: .regressionType)
+            ?? container.decodeIfPresent(String.self, forKey: .type)
+            ?? container.decodeIfPresent(String.self, forKey: .status)
+            ?? UIStrings.unknown
+        previousMatchStatus = try container.decodeIfPresent(String.self, forKey: .previousMatchStatus)
+            ?? container.decodeIfPresent(String.self, forKey: .baselineMatchStatus)
+            ?? container.decodeIfPresent(String.self, forKey: .oldMatchStatus)
+            ?? ""
+        currentMatchStatus = try container.decodeIfPresent(String.self, forKey: .currentMatchStatus)
+            ?? container.decodeIfPresent(String.self, forKey: .newMatchStatus)
+            ?? container.decodeIfPresent(String.self, forKey: .matchStatusChange)
+            ?? ""
+        previousScore = try container.decodeFlexibleBenchmarkInt(keys: [.previousScore, .baselineScore, .oldScore])
+        currentScore = try container.decodeFlexibleBenchmarkInt(keys: [.currentScore, .newScore])
+        let derivedDelta: Int
+        if let previousScore, let currentScore {
+            derivedDelta = currentScore - previousScore
+        } else {
+            derivedDelta = 0
+        }
+        scoreDelta = try container.decodeFlexibleBenchmarkInt(keys: [.scoreDelta, .delta]) ?? derivedDelta
+        confidenceDelta = try container.decodeFlexibleBenchmarkInt(keys: [.confidenceDelta])
+        previousTopRoute = try container.decodeIfPresent(SkillRouteCandidate.self, forKey: .previousTopRoute)
+            ?? container.decodeIfPresent(SkillRouteCandidate.self, forKey: .baselineTopRoute)
+            ?? container.decodeIfPresent(SkillRouteCandidate.self, forKey: .oldTopRoute)
+        currentTopRoute = try container.decodeIfPresent(SkillRouteCandidate.self, forKey: .currentTopRoute)
+            ?? container.decodeIfPresent(SkillRouteCandidate.self, forKey: .newTopRoute)
+        topRouteChanged = try container.decodeIfPresent(Bool.self, forKey: .topRouteChanged)
+            ?? container.decodeIfPresent(Bool.self, forKey: .routeChanged)
+            ?? container.decodeIfPresent(Bool.self, forKey: .changed)
+            ?? (previousTopRoute?.id != nil && currentTopRoute?.id != nil && previousTopRoute?.id != currentTopRoute?.id)
+        newBlockers = try container.decodeFlexibleBenchmarkStringArray(keys: [.newBlockers, .blockers, .blockerNotes])
+        newGaps = try container.decodeFlexibleBenchmarkStringArray(keys: [.newGaps, .gaps, .gapNotes, .missingCapabilities])
+        safetyFlags = try container.decodeFlexibleBenchmarkStringArray(keys: [.safetyFlags, .safety, .warnings])
+        evidence = try container.decodeIfPresent([TaskReadinessEvidenceItem].self, forKey: .evidence)
+            ?? container.decodeIfPresent([TaskReadinessEvidenceItem].self, forKey: .evidenceItems)
+            ?? container.decodeIfPresent([TaskReadinessEvidenceItem].self, forKey: .evidenceReferences)
+            ?? container.decodeIfPresent([TaskReadinessEvidenceItem].self, forKey: .evidenceRefs)
+            ?? []
+    }
+}
+
+struct RoutingRegressionDetectionResult: Decodable, Hashable {
+    let baselineID: String?
+    let benchmarkCount: Int
+    let regressionCount: Int
+    let improvedCount: Int
+    let unchangedCount: Int
+    let averageScoreDelta: Int
+    let matchStatusChangedCount: Int
+    let topRouteChangedCount: Int
+    let regressions: [RoutingRegressionItem]
+    let newBlockers: [String]
+    let newGaps: [String]
+    let evidence: [TaskReadinessEvidenceItem]
+    let safety: TaskReadinessSafety
+    let fallbackReason: String?
+
+    var isUnavailable: Bool { fallbackReason != nil && regressions.isEmpty && benchmarkCount == 0 }
+
+    enum CodingKeys: String, CodingKey {
+        case baselineID = "baseline_id"
+        case baselineId = "baselineId"
+        case id
+        case benchmarkCount = "benchmark_count"
+        case evaluatedCount = "evaluated_count"
+        case count
+        case regressionCount = "regression_count"
+        case regressionsDetected = "regressions_detected"
+        case improvedCount = "improved_count"
+        case unchangedCount = "unchanged_count"
+        case averageScoreDelta = "average_score_delta"
+        case scoreDelta = "score_delta"
+        case matchStatusChangedCount = "match_status_changed_count"
+        case matchChanges = "match_changes"
+        case topRouteChangedCount = "top_route_changed_count"
+        case routeChanges = "route_changes"
+        case regressions
+        case regressionItems = "regression_items"
+        case items
+        case results
+        case newBlockers = "new_blockers"
+        case blockers
+        case blockerNotes = "blocker_notes"
+        case newGaps = "new_gaps"
+        case gaps
+        case gapNotes = "gap_notes"
+        case missingCapabilities = "missing_capabilities"
+        case evidence
+        case evidenceItems = "evidence_items"
+        case evidenceReferences = "evidence_references"
+        case safety
+        case safetyFlags = "safety_flags"
+        case fallbackReason = "fallback_reason"
+        case reason
+        case providerRequestSent = "provider_request_sent"
+        case writeBackAllowed = "write_back_allowed"
+        case writeActionsAvailable = "write_actions_available"
+        case scriptExecutionAllowed = "script_execution_allowed"
+        case executionActionsAvailable = "execution_actions_available"
+        case configMutationAllowed = "config_mutation_allowed"
+        case snapshotCreated = "snapshot_created"
+        case triageMutationAllowed = "triage_mutation_allowed"
+        case credentialAccessed = "credential_accessed"
+        case rawSecretReturned = "raw_secret_returned"
+    }
+
+    init(
+        baselineID: String?,
+        benchmarkCount: Int,
+        regressionCount: Int,
+        improvedCount: Int,
+        unchangedCount: Int,
+        averageScoreDelta: Int,
+        matchStatusChangedCount: Int,
+        topRouteChangedCount: Int,
+        regressions: [RoutingRegressionItem],
+        newBlockers: [String],
+        newGaps: [String],
+        evidence: [TaskReadinessEvidenceItem],
+        safety: TaskReadinessSafety,
+        fallbackReason: String? = nil
+    ) {
+        self.baselineID = baselineID
+        self.benchmarkCount = benchmarkCount
+        self.regressionCount = regressionCount
+        self.improvedCount = improvedCount
+        self.unchangedCount = unchangedCount
+        self.averageScoreDelta = averageScoreDelta
+        self.matchStatusChangedCount = matchStatusChangedCount
+        self.topRouteChangedCount = topRouteChangedCount
+        self.regressions = regressions
+        self.newBlockers = newBlockers
+        self.newGaps = newGaps
+        self.evidence = evidence
+        self.safety = safety
+        self.fallbackReason = fallbackReason
+    }
+
+    init(from decoder: Decoder) throws {
+        if let values = try? decoder.singleValueContainer().decode([RoutingRegressionItem].self) {
+            baselineID = nil
+            benchmarkCount = values.count
+            regressionCount = values.count
+            improvedCount = 0
+            unchangedCount = 0
+            averageScoreDelta = values.isEmpty ? 0 : values.map(\.scoreDelta).reduce(0, +) / values.count
+            matchStatusChangedCount = values.filter { !$0.previousMatchStatus.isEmpty && !$0.currentMatchStatus.isEmpty && $0.previousMatchStatus != $0.currentMatchStatus }.count
+            topRouteChangedCount = values.filter(\.topRouteChanged).count
+            regressions = values
+            newBlockers = []
+            newGaps = []
+            evidence = []
+            safety = TaskReadinessSafety()
+            fallbackReason = nil
+            return
+        }
+
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        baselineID = try container.decodeIfPresent(String.self, forKey: .baselineID)
+            ?? container.decodeIfPresent(String.self, forKey: .baselineId)
+            ?? container.decodeIfPresent(String.self, forKey: .id)
+        regressions = try container.decodeIfPresent([RoutingRegressionItem].self, forKey: .regressions)
+            ?? container.decodeIfPresent([RoutingRegressionItem].self, forKey: .regressionItems)
+            ?? container.decodeIfPresent([RoutingRegressionItem].self, forKey: .items)
+            ?? container.decodeIfPresent([RoutingRegressionItem].self, forKey: .results)
+            ?? []
+        benchmarkCount = try container.decodeFlexibleBenchmarkInt(keys: [.benchmarkCount, .evaluatedCount, .count]) ?? regressions.count
+        regressionCount = try container.decodeFlexibleBenchmarkInt(keys: [.regressionCount, .regressionsDetected]) ?? regressions.count
+        improvedCount = try container.decodeFlexibleBenchmarkInt(keys: [.improvedCount]) ?? 0
+        unchangedCount = try container.decodeFlexibleBenchmarkInt(keys: [.unchangedCount]) ?? max(0, benchmarkCount - regressionCount - improvedCount)
+        averageScoreDelta = try container.decodeFlexibleBenchmarkInt(keys: [.averageScoreDelta, .scoreDelta])
+            ?? (regressions.isEmpty ? 0 : regressions.map(\.scoreDelta).reduce(0, +) / regressions.count)
+        matchStatusChangedCount = try container.decodeFlexibleBenchmarkInt(keys: [.matchStatusChangedCount, .matchChanges])
+            ?? regressions.filter { !$0.previousMatchStatus.isEmpty && !$0.currentMatchStatus.isEmpty && $0.previousMatchStatus != $0.currentMatchStatus }.count
+        topRouteChangedCount = try container.decodeFlexibleBenchmarkInt(keys: [.topRouteChangedCount, .routeChanges])
+            ?? regressions.filter(\.topRouteChanged).count
+        newBlockers = try container.decodeFlexibleBenchmarkStringArray(keys: [.newBlockers, .blockers, .blockerNotes])
+        newGaps = try container.decodeFlexibleBenchmarkStringArray(keys: [.newGaps, .gaps, .gapNotes, .missingCapabilities])
+        evidence = try container.decodeIfPresent([TaskReadinessEvidenceItem].self, forKey: .evidence)
+            ?? container.decodeIfPresent([TaskReadinessEvidenceItem].self, forKey: .evidenceItems)
+            ?? container.decodeIfPresent([TaskReadinessEvidenceItem].self, forKey: .evidenceReferences)
+            ?? []
+        if let decodedSafety = try container.decodeIfPresent(TaskReadinessSafety.self, forKey: .safety)
+            ?? container.decodeIfPresent(TaskReadinessSafety.self, forKey: .safetyFlags) {
+            safety = decodedSafety
+        } else {
+            safety = TaskReadinessSafety(
+                providerRequestSent: try container.decodeIfPresent(Bool.self, forKey: .providerRequestSent) ?? false,
+                writeBackAllowed: try container.decodeIfPresent(Bool.self, forKey: .writeBackAllowed) ?? false,
+                writeActionsAvailable: try container.decodeIfPresent(Bool.self, forKey: .writeActionsAvailable) ?? false,
+                scriptExecutionAllowed: try container.decodeIfPresent(Bool.self, forKey: .scriptExecutionAllowed) ?? false,
+                executionActionsAvailable: try container.decodeIfPresent(Bool.self, forKey: .executionActionsAvailable) ?? false,
+                configMutationAllowed: try container.decodeIfPresent(Bool.self, forKey: .configMutationAllowed) ?? false,
+                snapshotCreated: try container.decodeIfPresent(Bool.self, forKey: .snapshotCreated) ?? false,
+                triageMutationAllowed: try container.decodeIfPresent(Bool.self, forKey: .triageMutationAllowed) ?? false,
+                credentialAccessed: try container.decodeIfPresent(Bool.self, forKey: .credentialAccessed) ?? false,
+                rawSecretReturned: try container.decodeIfPresent(Bool.self, forKey: .rawSecretReturned) ?? false
+            )
+        }
+        fallbackReason = try container.decodeIfPresent(String.self, forKey: .fallbackReason)
+            ?? container.decodeIfPresent(String.self, forKey: .reason)
+    }
+
+    static func unavailable(reason: String = UIStrings.routingRegressionUnavailable) -> RoutingRegressionDetectionResult {
+        RoutingRegressionDetectionResult(
+            baselineID: nil,
+            benchmarkCount: 0,
+            regressionCount: 0,
+            improvedCount: 0,
+            unchangedCount: 0,
+            averageScoreDelta: 0,
+            matchStatusChangedCount: 0,
+            topRouteChangedCount: 0,
+            regressions: [],
+            newBlockers: [],
+            newGaps: [],
+            evidence: [],
+            safety: TaskReadinessSafety(),
+            fallbackReason: reason
+        )
+    }
+}
+
 private extension KeyedDecodingContainer {
     func decodeFlexibleBenchmarkDouble(keys: [Key]) throws -> Double? {
         for key in keys {

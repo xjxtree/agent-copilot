@@ -12,6 +12,7 @@ struct LLMModelTests {
         try taskReadinessDecodesFlexiblePayload()
         try routingConfidenceDecodesFlexiblePayload()
         try taskBenchmarkDecodesFlexiblePayload()
+        try routingRegressionDecodesFlexiblePayload()
         try promptPreviewDecodesV242Payload()
         try promptPreviewDecodesServiceArrayScopePayload()
         try promptSendResultDecodesCopyOnlyAuditPayload()
@@ -570,6 +571,100 @@ struct LLMModelTests {
         try expectFalse(evaluation.safety.scriptExecutionAllowed, "Benchmark evaluation must not allow script execution.")
         try expectFalse(evaluation.safety.configMutationAllowed, "Benchmark evaluation must not mutate config.")
         try expectFalse(evaluation.safety.credentialAccessed, "Benchmark evaluation must not access credentials.")
+    }
+
+    private func routingRegressionDecodesFlexiblePayload() throws {
+        let baselineData = Data(
+            """
+            {
+              "baseline_id": "baseline-1",
+              "benchmark_count": 2,
+              "average_score": 82,
+              "matched_count": 1,
+              "acceptable_count": 2,
+              "summary": "Saved local routing baseline.",
+              "safety_flags": {
+                "provider_request_sent": false,
+                "write_back_allowed": false,
+                "write_actions_available": false,
+                "script_execution_allowed": false,
+                "execution_actions_available": false,
+                "config_mutation_allowed": false,
+                "snapshot_created": false,
+                "triage_mutation_allowed": false,
+                "credential_accessed": false,
+                "raw_secret_returned": false
+              }
+            }
+            """.utf8
+        )
+        let baseline = try JSONDecoder().decode(RoutingRegressionBaselineResult.self, from: baselineData)
+        try expectEqual(baseline.baselineID, "baseline-1", "Routing baseline should decode baseline id.")
+        try expectEqual(baseline.benchmarkCount, 2, "Routing baseline should decode benchmark count.")
+        try expectEqual(baseline.averageScore, 82, "Routing baseline should decode score.")
+        try expectFalse(baseline.safety.providerRequestSent, "Routing baseline save must not send provider requests.")
+        try expectFalse(baseline.safety.writeBackAllowed, "Routing baseline save must not allow write-back.")
+        try expectFalse(baseline.safety.scriptExecutionAllowed, "Routing baseline save must not allow script execution.")
+        try expectFalse(baseline.safety.configMutationAllowed, "Routing baseline save must not mutate config.")
+        try expectFalse(baseline.safety.credentialAccessed, "Routing baseline save must not access credentials.")
+
+        let detectionData = Data(
+            """
+            {
+              "baseline_id": "baseline-1",
+              "benchmark_count": 2,
+              "regression_count": 1,
+              "improved_count": 0,
+              "unchanged_count": 1,
+              "average_score_delta": -9,
+              "match_status_changed_count": 1,
+              "top_route_changed_count": 1,
+              "regressions": [
+                {
+                  "benchmark_id": "bench-1",
+                  "task": "Route a local audit task.",
+                  "regression_type": "expected_to_acceptable",
+                  "previous_match_status": "matched",
+                  "current_match_status": "acceptable",
+                  "previous_score": 88,
+                  "current_score": 72,
+                  "score_delta": -16,
+                  "previous_top_route": {"instance_id":"beta","name":"Beta","agent":"claude-code","confidence_score":88,"band":"High"},
+                  "current_top_route": {"instance_id":"alpha","name":"Alpha","agent":"claude-code","confidence_score":72,"band":"Medium"},
+                  "top_route_changed": true,
+                  "new_blockers": ["Expected route dropped below top rank."],
+                  "new_gaps": ["Release-note examples still missing."],
+                  "safety_flags": ["provider not sent"],
+                  "evidence_references": [{"title":"Regression","detail":"Top route changed.","source":"task.detectRoutingRegression"}]
+                }
+              ],
+              "safety_flags": {
+                "provider_request_sent": false,
+                "write_back_allowed": false,
+                "write_actions_available": false,
+                "script_execution_allowed": false,
+                "execution_actions_available": false,
+                "config_mutation_allowed": false,
+                "snapshot_created": false,
+                "triage_mutation_allowed": false,
+                "credential_accessed": false,
+                "raw_secret_returned": false
+              }
+            }
+            """.utf8
+        )
+        let detection = try JSONDecoder().decode(RoutingRegressionDetectionResult.self, from: detectionData)
+        try expectEqual(detection.regressionCount, 1, "Routing regression should decode regression count.")
+        try expectEqual(detection.averageScoreDelta, -9, "Routing regression should decode score delta.")
+        try expectEqual(detection.regressions.first?.currentTopRoute?.name, "Alpha", "Routing regression should decode current top route.")
+        try expectEqual(detection.regressions.first?.newBlockers, ["Expected route dropped below top rank."], "Routing regression should decode new blockers.")
+        try expectEqual(detection.regressions.first?.evidence.map(\.detail), ["Top route changed."], "Routing regression should decode evidence references.")
+        try expectFalse(detection.safety.providerRequestSent, "Routing regression detection must not send provider requests.")
+        try expectFalse(detection.safety.writeBackAllowed, "Routing regression detection must not allow write-back.")
+        try expectFalse(detection.safety.scriptExecutionAllowed, "Routing regression detection must not allow script execution.")
+        try expectFalse(detection.safety.configMutationAllowed, "Routing regression detection must not mutate config.")
+        try expectFalse(detection.safety.snapshotCreated, "Routing regression detection must not create snapshots.")
+        try expectFalse(detection.safety.credentialAccessed, "Routing regression detection must not access credentials.")
     }
 
     private func promptSendResultDecodesCopyOnlyAuditPayload() throws {

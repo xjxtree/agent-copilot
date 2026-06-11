@@ -4,7 +4,7 @@
 >
 > Scanner / rules / catalog 始终是事实来源；LLM/AI provider 是 AI agent skills 的核心分析增强，用于质量、任务可用性、routing 置信度、trace 分析、remediation 和治理总结。
 >
-> 当前实现边界（V2.44 baseline）：
+> 当前实现边界（V2.47 baseline）：
 >
 > - 已落地 disabled-by-default 的 service/UI gate 和 request prepare/estimate 能力。
 > - 已落地用户显式配置的 OpenAI-compatible / Claude-compatible provider profile 基础：`llm.listProviderProfiles`、`llm.saveProviderProfile`、`llm.deleteProviderProfile`、`llm.testProviderConnection`、macOS Keychain-first API key storage、预算字段、disabled/unconfigured state，以及 test connection 的最小 redacted call metadata。
@@ -25,6 +25,12 @@
 > - 本地 benchmark（任务集合）已落地：用户自定义 benchmark case（任务文本、预期 skill refs/names、可接受 agent / scope、成功标准）并本地持久化在 app-local `task-benchmarks.json`；执行过程 deterministic，基于 V2.44/V2.45 本地证据进行 expected/acceptable route match 评估。
 > - 已实现 `task.listBenchmarks` / `task.saveBenchmark` / `task.deleteBenchmark` / `task.evaluateBenchmarks`；`task.evaluateBenchmarks` 默认不发起 provider 请求，不改 triage，不改 config，不改 snapshot，不执行脚本。
 > - 可选 provider 辅助解释仅通过现有 V2.42 `llm.previewPrompt` + `llm.confirmPromptAndSend` 提供 copy-only 的展示草案，不参与主排序/回归判定。
+
+> V2.47（已完成）：
+>
+> - 在 V2.46 基准集基础上做 routing regression；基线与回归结果保留在 app-local 数据，不读 credentials、不发 provider scoring 请求、不改 triage，不改 config，不改 snapshot，不执行脚本。
+> - 已实现 `task.saveRoutingBaseline`（保存基线）与 `task.detectRoutingRegression`（回归对比）；baseline 保存为 app-local `task-routing-baseline.json`，检测输出 score/confidence delta、match-status 变化、top-route 变化、gap/blocker 增量、missing benchmark 与 safety flags。
+> - 可选 provider 解释仍走 V2.42 `llm.previewPrompt` + `llm.confirmPromptAndSend`，仅 copy-only，不影响回归判定。
 
 ## 1. 双层分工
 
@@ -71,7 +77,8 @@ Provider 配置原则：
 | V2.44（实现） | Deterministic task readiness plus optional preview-confirmed provider explanation | task text、metadata、findings、conflicts、analysis、adapter diagnostics、quality score |
 | V2.45（实现） | Routing confidence（ranking + risk + ambiguity） | task text、readiness candidates、metadata、findings、conflicts、analysis、adapter diagnostics、quality score |
 | V2.46（实现） | Task benchmark set | app-local `task-benchmarks.json`、expected/acceptable route match、local evidence-first + optional AI 说明 |
-| V2.47-V2.50 | regression、trace import、routing dashboard、cross-agent task readiness（规划） | benchmark results + catalog snapshots + imported trace evidence；local evidence-first + optional AI 说明 |
+| V2.47（实现） | Routing regression detection | 基于 V2.46 benchmark 结果的 app-local baseline 对比（`task.saveRoutingBaseline` + `task.detectRoutingRegression`）；local evidence-first + optional AI 说明 |
+| V2.48-V2.50 | trace import、routing accuracy、cross-agent task readiness（规划） | benchmark results + catalog snapshots + imported trace evidence；local evidence-first + optional AI 说明 |
 | V2.51-V2.55 | stale/drift、knowledge index、similar grouping、taxonomy、workspace readiness | fingerprints、mtime、source/root provenance、local index |
 | V2.56-V2.60 | remediation planner、fix drafts、impact preview、batch review、history | findings、triage、policy, snapshots, writable capability matrix |
 | V2.61-V2.70 | review session、governance report、policy packs、skill map、full provider observability、safe write planning | local reports, policy profiles, V2.41-V2.42 call metadata, evidence gates |

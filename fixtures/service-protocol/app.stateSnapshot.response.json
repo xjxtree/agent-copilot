@@ -22,6 +22,8 @@
         "task.saveBenchmark",
         "task.deleteBenchmark",
         "task.evaluateBenchmarks",
+        "task.saveRoutingBaseline",
+        "task.detectRoutingRegression",
         "llm.status",
         "llm.listProviderProfiles",
         "llm.saveProviderProfile",

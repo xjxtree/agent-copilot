@@ -35,9 +35,13 @@ final class SkillStore: ObservableObject {
     @Published private(set) var taskBenchmarkList = TaskBenchmarkListResult(benchmarks: [])
     @Published private(set) var taskBenchmarkEvaluation: TaskBenchmarkEvaluationResult?
     @Published private(set) var taskBenchmarkDeleteResult: TaskBenchmarkDeleteResult?
+    @Published private(set) var routingRegressionBaseline: RoutingRegressionBaselineResult?
+    @Published private(set) var routingRegressionDetection: RoutingRegressionDetectionResult?
     @Published private(set) var isLoadingTaskBenchmarks = false
     @Published private(set) var isSavingTaskBenchmark = false
     @Published private(set) var isEvaluatingTaskBenchmarks = false
+    @Published private(set) var isSavingRoutingBaseline = false
+    @Published private(set) var isDetectingRoutingRegression = false
     @Published private(set) var deletingTaskBenchmarkIDs: Set<String> = []
     @Published private(set) var llmPromptPreviews: [String: LLMPromptPreview] = [:]
     @Published private(set) var previewingLLMPromptKeys: Set<String> = []
@@ -128,7 +132,7 @@ final class SkillStore: ObservableObject {
     }
 
     private var isTaskBenchmarkBusy: Bool {
-        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || !deletingTaskBenchmarkIDs.isEmpty
+        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || !deletingTaskBenchmarkIDs.isEmpty
     }
 
     private var isLLMPromptBusy: Bool {
@@ -1252,6 +1256,8 @@ final class SkillStore: ObservableObject {
             if let benchmark = result.benchmark {
                 upsertTaskBenchmark(benchmark)
                 taskBenchmarkDeleteResult = nil
+                routingRegressionBaseline = nil
+                routingRegressionDetection = nil
             } else if let reason = result.fallbackReason {
                 taskBenchmarkList = .unavailable(reason: reason)
             }
@@ -1279,6 +1285,45 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func saveRoutingBaseline() async {
+        guard !isRefreshBusy else {
+            routingRegressionBaseline = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        isSavingRoutingBaseline = true
+        defer { isSavingRoutingBaseline = false }
+
+        do {
+            routingRegressionBaseline = try await service.saveRoutingBaseline(
+                skill: selectedSkill,
+                benchmarkIDs: taskBenchmarkList.benchmarks.isEmpty ? nil : taskBenchmarkList.benchmarks.map(\.id)
+            )
+            routingRegressionDetection = nil
+        } catch {
+            routingRegressionBaseline = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
+    func detectRoutingRegression() async {
+        guard !isRefreshBusy else {
+            routingRegressionDetection = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        isDetectingRoutingRegression = true
+        defer { isDetectingRoutingRegression = false }
+
+        do {
+            routingRegressionDetection = try await service.detectRoutingRegression(
+                skill: selectedSkill,
+                benchmarkIDs: taskBenchmarkList.benchmarks.isEmpty ? nil : taskBenchmarkList.benchmarks.map(\.id)
+            )
+        } catch {
+            routingRegressionDetection = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
     func deleteTaskBenchmark(_ benchmark: TaskBenchmarkRecord) async {
         guard !isRefreshBusy else {
             taskBenchmarkDeleteResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
@@ -1297,6 +1342,8 @@ final class SkillStore: ObservableObject {
                 fallbackReason: taskBenchmarkList.fallbackReason
             )
             taskBenchmarkEvaluation = nil
+            routingRegressionBaseline = nil
+            routingRegressionDetection = nil
         } catch {
             taskBenchmarkDeleteResult = .unavailable(reason: error.localizedDescription)
         }
@@ -1582,6 +1629,8 @@ final class SkillStore: ObservableObject {
         deletingTaskBenchmarkIDs.removeAll()
         if taskBenchmarkList.isUnavailable {
             taskBenchmarkEvaluation = nil
+            routingRegressionBaseline = nil
+            routingRegressionDetection = nil
         }
         skillEventsByID = skillEventsByID.filter { currentSkillIDs.contains($0.key) }
         skillAnalysisPrepareResults.removeAll()
@@ -1793,6 +1842,8 @@ final class SkillStore: ObservableObject {
         routingConfidenceRankedSkillID = nil
         taskBenchmarkEvaluation = nil
         taskBenchmarkDeleteResult = nil
+        routingRegressionBaseline = nil
+        routingRegressionDetection = nil
         Task { @MainActor [weak self] in
             await self?.loadSelectedDetail()
             await self?.loadCrossAgentComparisons()
