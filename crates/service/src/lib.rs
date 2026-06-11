@@ -68,6 +68,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "knowledge.buildCapabilityTaxonomy",
     "workspace.checkReadiness",
     "remediation.plan",
+    "remediation.previewDrafts",
     "task.checkReadiness",
     "task.rankSkillRoutes",
     "task.compareAgentReadiness",
@@ -1361,6 +1362,92 @@ pub type RemediationPlanPromptRequest = AgentReadinessPromptRequest;
 pub type RemediationPlanSafetyFlags = AgentReadinessSafetyFlags;
 
 #[derive(Debug, Clone, Default, Deserialize)]
+pub struct RemediationPreviewDraftsParams {
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default, alias = "task_text", alias = "user_intent")]
+    pub task: Option<String>,
+    #[serde(default, alias = "instance_ids", alias = "candidate_instance_ids")]
+    pub skill_ids: Vec<String>,
+    #[serde(default)]
+    pub finding_ids: Vec<String>,
+    #[serde(default)]
+    pub draft_types: Vec<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+    #[serde(default)]
+    pub include_policy_drafts: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationPreviewDraftsResult {
+    pub generated_by: &'static str,
+    pub catalog_available: bool,
+    pub filters: RemediationPreviewDraftsFilters,
+    pub summary: RemediationPreviewDraftsSummary,
+    pub draft_items: Vec<RemediationDraftItem>,
+    pub gap_notes: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub evidence_references: Vec<TaskReadinessEvidenceReference>,
+    pub prompt_request: RemediationPreviewDraftsPromptRequest,
+    pub safety_flags: RemediationPreviewDraftsSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationPreviewDraftsFilters {
+    pub agent: Option<String>,
+    pub task: Option<String>,
+    pub skill_ids: Vec<String>,
+    pub finding_ids: Vec<String>,
+    pub draft_types: Vec<String>,
+    pub limit: usize,
+    pub include_policy_drafts: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationPreviewDraftsSummary {
+    pub total_draft_count: usize,
+    pub returned_draft_count: usize,
+    pub frontmatter_count: usize,
+    pub description_count: usize,
+    pub permissions_count: usize,
+    pub dependency_count: usize,
+    pub policy_count: usize,
+    pub high_confidence_count: usize,
+    pub medium_confidence_count: usize,
+    pub low_confidence_count: usize,
+    pub blocker_count: usize,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemediationDraftItem {
+    pub id: String,
+    pub rank: usize,
+    pub title: String,
+    pub draft_type: &'static str,
+    pub agent: Option<String>,
+    pub affected_skill: Option<RemediationAffectedSkill>,
+    pub finding_id: Option<String>,
+    pub rule_id: Option<String>,
+    pub current_text: Option<String>,
+    pub proposed_text: String,
+    pub patch_like_snippet: String,
+    pub rationale: String,
+    pub confidence: u8,
+    pub confidence_band: &'static str,
+    pub copy_label: String,
+    pub edit_guidance: String,
+    pub evidence_refs: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub side_effect_flags: Vec<&'static str>,
+    pub safety_flags: RemediationPreviewDraftsSafetyFlags,
+}
+
+pub type RemediationPreviewDraftsPromptRequest = AgentReadinessPromptRequest;
+pub type RemediationPreviewDraftsSafetyFlags = AgentReadinessSafetyFlags;
+
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct DetectStaleDriftParams {
     #[serde(default)]
     pub agent: Option<String>,
@@ -2144,6 +2231,7 @@ pub enum LlmPromptActionKind {
     CapabilityTaxonomy,
     WorkspaceReadiness,
     RemediationPlan,
+    RemediationPreviewDrafts,
     TaskReadiness,
     RoutingConfidence,
 }
@@ -2163,6 +2251,7 @@ impl LlmPromptActionKind {
             Self::CapabilityTaxonomy => "capability_taxonomy",
             Self::WorkspaceReadiness => "workspace_readiness",
             Self::RemediationPlan => "remediation_plan",
+            Self::RemediationPreviewDrafts => "remediation_preview_drafts",
             Self::TaskReadiness => "task_readiness",
             Self::RoutingConfidence => "routing_confidence",
         }
@@ -2725,6 +2814,14 @@ impl ServiceHost {
                     serde_json::from_value(request.params)?
                 };
                 serde_json::to_value(self.plan_remediation(params)?).map_err(Into::into)
+            }
+            "remediation.previewDrafts" => {
+                let params: RemediationPreviewDraftsParams = if request.params.is_null() {
+                    RemediationPreviewDraftsParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.preview_remediation_drafts(params)?).map_err(Into::into)
             }
             "task.checkReadiness" => {
                 let params: TaskReadinessParams = serde_json::from_value(request.params)?;
@@ -5839,6 +5936,294 @@ impl ServiceHost {
         })
     }
 
+    pub fn preview_remediation_drafts(
+        &self,
+        params: RemediationPreviewDraftsParams,
+    ) -> Result<RemediationPreviewDraftsResult, ServiceError> {
+        if matches!(params.limit, Some(0)) {
+            return Err(ServiceError::InvalidRequest(
+                "remediation.previewDrafts limit must be greater than zero".to_string(),
+            ));
+        }
+
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let roots = self.redaction_roots(&adapter_ctx);
+        let filters = remediation_preview_drafts_filters(&params, &roots);
+        let Some(catalog) = self.open_existing_catalog_read_only()? else {
+            return Ok(empty_remediation_preview_drafts_result(filters, false));
+        };
+
+        let skills = self.list_visible_skill_records(&catalog)?;
+        let details = skills
+            .iter()
+            .filter(|skill| {
+                agent_matches(filters.agent.as_deref(), Some(skill.agent.as_str()))
+                    && (filters.skill_ids.is_empty() || filters.skill_ids.contains(&skill.id))
+            })
+            .filter_map(|skill| catalog.get_skill_detail(&skill.id).ok().flatten())
+            .collect::<Vec<_>>();
+        let detail_by_id = details
+            .iter()
+            .map(|detail| (detail.id.as_str(), detail))
+            .collect::<BTreeMap<_, _>>();
+        let visible_skill_ids = details
+            .iter()
+            .map(|detail| detail.id.as_str())
+            .collect::<BTreeSet<_>>();
+
+        let findings = list_findings(&catalog)?;
+        let conflicts = list_conflicts(&catalog)?;
+        let analysis = analyze_catalog(&catalog, &adapter_ctx)?;
+        let plan = self.plan_remediation(RemediationPlanParams {
+            agent: filters.agent.clone(),
+            task: filters.task.clone(),
+            project_root: None,
+            focus: None,
+            focus_areas: Vec::new(),
+            limit: Some(filters.limit.saturating_mul(2).max(filters.limit)),
+            candidate_instance_ids: filters.skill_ids.clone(),
+            include_deferred: true,
+        })?;
+
+        let mut evidence_by_id = plan
+            .evidence_references
+            .iter()
+            .map(|evidence| (evidence.id.clone(), evidence.clone()))
+            .collect::<BTreeMap<_, _>>();
+        let mut draft_items = Vec::new();
+        for finding in &findings {
+            if finding.suppressed || finding.triage_status.eq_ignore_ascii_case("ignored") {
+                continue;
+            }
+            if !filters.finding_ids.is_empty() && !filters.finding_ids.contains(&finding.id) {
+                continue;
+            }
+            let Some(instance_id) = finding.instance_id.as_deref() else {
+                continue;
+            };
+            if !visible_skill_ids.contains(instance_id) {
+                continue;
+            }
+            let Some(skill) = detail_by_id.get(instance_id).copied() else {
+                continue;
+            };
+            let Some(draft_type) = remediation_draft_type_for_rule(&finding.rule_id) else {
+                continue;
+            };
+            if !remediation_preview_draft_type_matches(&filters, draft_type) {
+                continue;
+            }
+            let evidence_id = remediation_insert_evidence(
+                &mut evidence_by_id,
+                "finding",
+                &finding.id,
+                format!(
+                    "{} finding `{}`: {}",
+                    redact_for_llm_preview(&finding.effective_severity),
+                    redact_for_llm_preview(&finding.rule_id),
+                    redact_for_llm_preview(&finding.message)
+                ),
+                Some(finding.effective_severity.clone()),
+                Some(skill.id.clone()),
+            );
+            draft_items.push(remediation_draft_item_for_finding(
+                skill,
+                finding,
+                draft_type,
+                vec![evidence_id],
+            ));
+        }
+
+        if filters.include_policy_drafts
+            && remediation_preview_draft_type_matches(&filters, "policy")
+        {
+            for conflict in &conflicts {
+                let related = conflict
+                    .instance_ids
+                    .iter()
+                    .filter(|id| detail_by_id.contains_key(id.as_str()))
+                    .cloned()
+                    .collect::<Vec<_>>();
+                if related.is_empty() {
+                    continue;
+                }
+                let skill = related
+                    .first()
+                    .and_then(|id| detail_by_id.get(id.as_str()).copied());
+                let evidence_id = remediation_insert_evidence(
+                    &mut evidence_by_id,
+                    "conflict",
+                    &conflict.id,
+                    format!(
+                        "Same-agent conflict `{}` affects {} local instance(s).",
+                        redact_for_llm_preview(&conflict.reason),
+                        conflict.instance_ids.len()
+                    ),
+                    Some("warning".to_string()),
+                    skill.map(|skill| skill.id.clone()),
+                );
+                draft_items.push(remediation_policy_draft_item(
+                    "Clarify duplicate skill policy",
+                    "policy",
+                    skill,
+                    Some(conflict.id.clone()),
+                    None,
+                    format!(
+                        "Prefer the reviewed active skill for `{}` and keep duplicate/confusable variants disabled or clearly scoped until their provenance is reconciled.",
+                        skill
+                            .map(|skill| redact_for_llm_preview(&skill.name))
+                            .unwrap_or_else(|| "the affected skill group".to_string())
+                    ),
+                    format!(
+                        "Conflict `{}` indicates ambiguous runtime selection.",
+                        redact_for_llm_preview(&conflict.reason)
+                    ),
+                    vec![evidence_id],
+                ));
+            }
+
+            for group in &analysis.groups {
+                if !group.kind.contains("enabled") && !group.kind.contains("overlap") {
+                    continue;
+                }
+                let related = group
+                    .instance_ids
+                    .iter()
+                    .filter(|id| detail_by_id.contains_key(id.as_str()))
+                    .cloned()
+                    .collect::<Vec<_>>();
+                if related.is_empty() {
+                    continue;
+                }
+                let skill = related
+                    .first()
+                    .and_then(|id| detail_by_id.get(id.as_str()).copied());
+                let evidence_id = remediation_insert_evidence(
+                    &mut evidence_by_id,
+                    "analysis",
+                    &group.id,
+                    format!(
+                        "{} analysis `{}`: {}",
+                        redact_for_llm_preview(&group.severity),
+                        redact_for_llm_preview(&group.kind),
+                        redact_for_llm_preview(&group.title)
+                    ),
+                    Some(group.severity.clone()),
+                    skill.map(|skill| skill.id.clone()),
+                );
+                draft_items.push(remediation_policy_draft_item(
+                    &group.title,
+                    "policy",
+                    skill,
+                    None,
+                    Some(group.id.clone()),
+                    format!(
+                        "Document whether `{}` is intentionally shared across agents or should be narrowed by agent/scope before enabling it for task routing.",
+                        skill
+                            .map(|skill| redact_for_llm_preview(&skill.name))
+                            .unwrap_or_else(|| "this skill group".to_string())
+                    ),
+                    redact_for_llm_preview(&group.explanation),
+                    vec![evidence_id],
+                ));
+            }
+        }
+
+        if filters.include_policy_drafts
+            && remediation_preview_draft_type_matches(&filters, "policy")
+        {
+            for plan_item in &plan.plan_items {
+                if !matches!(plan_item.category, "policy" | "ambiguity") {
+                    continue;
+                }
+                draft_items.push(remediation_policy_draft_item_from_plan(plan_item));
+            }
+        }
+
+        let mut gap_notes = plan.gap_notes.clone();
+        if details.is_empty() {
+            gap_notes
+                .push("No visible local skills matched the draft preview filters.".to_string());
+        }
+        if draft_items.is_empty() {
+            gap_notes.push(
+                "No local findings or remediation signals matched the requested draft types."
+                    .to_string(),
+            );
+        }
+        gap_notes.sort();
+        gap_notes.dedup();
+        gap_notes.truncate(16);
+
+        let mut blocker_notes = plan.blocker_notes.clone();
+        blocker_notes.push(
+            "Draft previews are copy-only; no Apply path is available from remediation.previewDrafts."
+                .to_string(),
+        );
+        blocker_notes.sort();
+        blocker_notes.dedup();
+        blocker_notes.truncate(16);
+
+        let total_draft_count = draft_items.len();
+        let draft_items = remediation_sorted_draft_items(draft_items, &filters);
+        let returned_draft_count = draft_items.len();
+        let summary = remediation_preview_drafts_summary(
+            total_draft_count,
+            returned_draft_count,
+            &draft_items,
+        );
+        let prompt_instance_ids = draft_items
+            .iter()
+            .filter_map(|item| {
+                item.affected_skill
+                    .as_ref()
+                    .map(|skill| skill.instance_id.clone())
+            })
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .take(12)
+            .collect::<Vec<_>>();
+        let prompt_available = !draft_items.is_empty();
+
+        Ok(RemediationPreviewDraftsResult {
+            generated_by: "local-v2.57",
+            catalog_available: true,
+            filters: filters.clone(),
+            summary,
+            draft_items,
+            gap_notes,
+            blocker_notes,
+            evidence_references: evidence_by_id.into_values().collect(),
+            prompt_request: RemediationPreviewDraftsPromptRequest {
+                available: prompt_available,
+                preview_method: "llm.previewPrompt",
+                confirm_method: "llm.confirmPromptAndSend",
+                action: "remediation_preview_drafts",
+                request: LlmPreviewPromptParams {
+                    action: LlmPromptActionKind::RemediationPreviewDrafts,
+                    profile_id: None,
+                    skill_instance_id: None,
+                    instance_ids: prompt_instance_ids,
+                    analysis_kind: None,
+                    user_intent: filters.task.clone().or_else(|| {
+                        Some(
+                            "Explain deterministic fix preview drafts using only local catalog evidence."
+                                .to_string(),
+                        )
+                    }),
+                },
+                note: if prompt_available {
+                    "Optional provider-backed draft explanation must be requested through prompt preview and explicit confirmation; remediation.previewDrafts never sends provider traffic and remains copy-only."
+                        .to_string()
+                } else {
+                    "Prompt preview is unavailable until local evidence produces fix preview drafts."
+                        .to_string()
+                },
+            },
+            safety_flags: remediation_preview_drafts_safety_flags(),
+        })
+    }
+
     pub fn check_task_readiness(
         &self,
         params: TaskReadinessParams,
@@ -7311,6 +7696,46 @@ impl ServiceHost {
                     &mut redactor,
                 ));
             }
+            LlmPromptActionKind::RemediationPreviewDrafts => {
+                let result = self.preview_remediation_drafts(RemediationPreviewDraftsParams {
+                    agent: None,
+                    task: params.user_intent.clone(),
+                    skill_ids: params.instance_ids.clone(),
+                    finding_ids: Vec::new(),
+                    draft_types: Vec::new(),
+                    limit: Some(8),
+                    include_policy_drafts: true,
+                })?;
+                prompt_scope.extend([
+                    "deterministic fix preview drafts".to_string(),
+                    "copy-only proposed text and patch-like snippets".to_string(),
+                    "finding/rule and remediation evidence".to_string(),
+                    "local gap and blocker notes".to_string(),
+                    "evidence reference summaries".to_string(),
+                    "safety flags".to_string(),
+                ]);
+                included_fields.extend([
+                    "redacted task or draft intent".to_string(),
+                    "draft item ids, ranks, types, titles, and confidence bands".to_string(),
+                    "affected skill ids, names, agents, scopes, enabled states, and states"
+                        .to_string(),
+                    "finding ids and rule ids".to_string(),
+                    "copy-only current/proposed snippets".to_string(),
+                    "rationale, copy labels, edit guidance, blockers, and evidence ids".to_string(),
+                    "read-only safety flags".to_string(),
+                ]);
+                excluded_fields.extend([
+                    "raw source paths".to_string(),
+                    "raw provider response".to_string(),
+                    "agent config contents".to_string(),
+                    "raw prompt or response persistence".to_string(),
+                    "write/apply instructions".to_string(),
+                ]);
+                sections.push(render_remediation_preview_drafts_prompt_section(
+                    &result,
+                    &mut redactor,
+                ));
+            }
             LlmPromptActionKind::TaskReadiness => {
                 let task = params.user_intent.as_deref().ok_or_else(|| {
                     ServiceError::InvalidRequest(
@@ -7417,6 +7842,7 @@ impl ServiceHost {
             LlmPromptActionKind::CapabilityTaxonomy => 850,
             LlmPromptActionKind::WorkspaceReadiness => 900,
             LlmPromptActionKind::RemediationPlan => 900,
+            LlmPromptActionKind::RemediationPreviewDrafts => 850,
             LlmPromptActionKind::TaskReadiness => 750,
             LlmPromptActionKind::RoutingConfidence => 850,
         };
@@ -12540,6 +12966,10 @@ fn remediation_plan_safety_flags() -> RemediationPlanSafetyFlags {
     agent_readiness_safety_flags()
 }
 
+fn remediation_preview_drafts_safety_flags() -> RemediationPreviewDraftsSafetyFlags {
+    agent_readiness_safety_flags()
+}
+
 fn remediation_plan_filters(
     params: &RemediationPlanParams,
     redaction_roots: &[(String, &'static str)],
@@ -12998,6 +13428,580 @@ fn remediation_priority_rows(items: &[RemediationPlanItem]) -> Vec<RemediationPr
         });
     }
     rows
+}
+
+fn remediation_preview_drafts_filters(
+    params: &RemediationPreviewDraftsParams,
+    redaction_roots: &[(String, &'static str)],
+) -> RemediationPreviewDraftsFilters {
+    let mut skill_ids = params
+        .skill_ids
+        .iter()
+        .map(|value| redact_for_llm_preview(value.trim()))
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    skill_ids.sort();
+    skill_ids.dedup();
+    let mut finding_ids = params
+        .finding_ids
+        .iter()
+        .map(|value| redact_for_llm_preview(value.trim()))
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    finding_ids.sort();
+    finding_ids.dedup();
+    let mut draft_types = params
+        .draft_types
+        .iter()
+        .filter_map(|value| normalize_remediation_draft_type(value))
+        .collect::<Vec<_>>();
+    draft_types.sort();
+    draft_types.dedup();
+    RemediationPreviewDraftsFilters {
+        agent: params.agent.as_deref().and_then(normalize_agent_label),
+        task: params
+            .task
+            .as_deref()
+            .map(str::trim)
+            .filter(|task| !task.is_empty())
+            .map(|task| redact_string(&redact_for_llm_preview(task), redaction_roots)),
+        skill_ids,
+        finding_ids,
+        draft_types,
+        limit: params.limit.unwrap_or(12).clamp(1, 50),
+        include_policy_drafts: params.include_policy_drafts,
+    }
+}
+
+fn normalize_remediation_draft_type(value: &str) -> Option<String> {
+    let normalized = value.trim().to_ascii_lowercase().replace(['_', ' '], "-");
+    let canonical = match normalized.as_str() {
+        "" => return None,
+        "frontmatter" | "metadata" | "yaml" => "frontmatter",
+        "description" | "body" | "summary" => "description",
+        "permissions" | "permission" | "allowed-tools" | "tool" | "tools" => "permissions",
+        "dependency" | "dependencies" | "dep" | "deps" => "dependency",
+        "policy" | "governance" | "routing-policy" => "policy",
+        other => other,
+    };
+    Some(canonical.to_string())
+}
+
+fn remediation_preview_draft_type_matches(
+    filters: &RemediationPreviewDraftsFilters,
+    draft_type: &str,
+) -> bool {
+    filters.draft_types.is_empty() || filters.draft_types.iter().any(|value| value == draft_type)
+}
+
+fn empty_remediation_preview_drafts_result(
+    filters: RemediationPreviewDraftsFilters,
+    catalog_available: bool,
+) -> RemediationPreviewDraftsResult {
+    RemediationPreviewDraftsResult {
+        generated_by: "local-v2.57",
+        catalog_available,
+        filters,
+        summary: RemediationPreviewDraftsSummary {
+            total_draft_count: 0,
+            returned_draft_count: 0,
+            frontmatter_count: 0,
+            description_count: 0,
+            permissions_count: 0,
+            dependency_count: 0,
+            policy_count: 0,
+            high_confidence_count: 0,
+            medium_confidence_count: 0,
+            low_confidence_count: 0,
+            blocker_count: 1,
+            summary: "No local catalog is available, so fix preview drafts have no evidence."
+                .to_string(),
+        },
+        draft_items: Vec::new(),
+        gap_notes: vec!["Run a local scan before relying on fix preview drafts.".to_string()],
+        blocker_notes: vec![
+            "No provider request was sent and no fallback network lookup was attempted."
+                .to_string(),
+        ],
+        evidence_references: Vec::new(),
+        prompt_request: RemediationPreviewDraftsPromptRequest {
+            available: false,
+            preview_method: "llm.previewPrompt",
+            confirm_method: "llm.confirmPromptAndSend",
+            action: "remediation_preview_drafts",
+            request: LlmPreviewPromptParams {
+                action: LlmPromptActionKind::RemediationPreviewDrafts,
+                profile_id: None,
+                skill_instance_id: None,
+                instance_ids: Vec::new(),
+                analysis_kind: None,
+                user_intent: Some(
+                    "Explain deterministic fix preview drafts using only local catalog evidence."
+                        .to_string(),
+                ),
+            },
+            note: "Prompt preview is unavailable until local catalog evidence exists.".to_string(),
+        },
+        safety_flags: remediation_preview_drafts_safety_flags(),
+    }
+}
+
+fn remediation_draft_type_for_rule(rule_id: &str) -> Option<&'static str> {
+    let normalized = rule_id.to_ascii_lowercase();
+    if normalized.starts_with("frontmatter.")
+        || normalized == "name.canonical-case"
+        || normalized.contains("metadata")
+    {
+        Some("frontmatter")
+    } else if normalized.starts_with("permissions.") || normalized.starts_with("script.") {
+        Some("permissions")
+    } else if normalized.starts_with("dependency.") || normalized.contains("dependency") {
+        Some("dependency")
+    } else if normalized.starts_with("body.") || normalized.contains("description") {
+        Some("description")
+    } else {
+        None
+    }
+}
+
+fn remediation_draft_item_for_finding(
+    skill: &SkillDetailRecord,
+    finding: &RuleFindingRecord,
+    draft_type: &'static str,
+    evidence_refs: Vec<String>,
+) -> RemediationDraftItem {
+    let (title, current_text, proposed_text, edit_guidance, copy_label) = match draft_type {
+        "frontmatter" => {
+            let proposed = remediation_frontmatter_draft(skill);
+            (
+                format!("Draft frontmatter fix for `{}`", redact_for_llm_preview(&skill.name)),
+                Some(redacted_snippet(&skill.frontmatter_raw, 900)),
+                proposed,
+                "Review the YAML snippet, copy it into the normal editor if appropriate, and keep any agent-specific fields that are intentionally present."
+                    .to_string(),
+                "Copy frontmatter draft".to_string(),
+            )
+        }
+        "description" => {
+            let proposed = remediation_description_draft(skill, finding);
+            (
+                format!("Draft description fix for `{}`", redact_for_llm_preview(&skill.name)),
+                Some(redacted_snippet(&skill.description, 500)),
+                proposed,
+                "Use this as a replacement or starting point for the skill description; verify it still matches the body before editing."
+                    .to_string(),
+                "Copy description draft".to_string(),
+            )
+        }
+        "permissions" => {
+            let proposed = remediation_permissions_draft(skill, finding);
+            (
+                format!("Draft permission fix for `{}`", redact_for_llm_preview(&skill.name)),
+                Some(redacted_snippet(&skill.frontmatter_raw, 900)),
+                proposed,
+                "Copy the permission snippet only after reviewing whether the requested tools are still required; this preview does not edit files."
+                    .to_string(),
+                "Copy permission draft".to_string(),
+            )
+        }
+        "dependency" => {
+            let proposed = remediation_dependency_draft(skill, finding);
+            (
+                format!("Draft dependency note for `{}`", redact_for_llm_preview(&skill.name)),
+                Some(redacted_snippet(&skill.body, 700)),
+                proposed,
+                "Use this note to update dependency documentation or remove stale dependency references through an existing manual edit flow."
+                    .to_string(),
+                "Copy dependency draft".to_string(),
+            )
+        }
+        _ => {
+            let proposed = finding
+                .suggestion
+                .as_deref()
+                .map(redact_for_llm_preview)
+                .unwrap_or_else(|| redact_for_llm_preview(&finding.message));
+            (
+                format!("Draft fix for `{}`", redact_for_llm_preview(&skill.name)),
+                None,
+                proposed,
+                "Review and copy this draft manually; no write path is available here.".to_string(),
+                "Copy draft".to_string(),
+            )
+        }
+    };
+    let confidence = remediation_draft_confidence(finding);
+    let patch_like_snippet =
+        remediation_patch_like_snippet(draft_type, current_text.as_deref(), &proposed_text);
+    RemediationDraftItem {
+        id: stable_remediation_draft_id(
+            draft_type,
+            &skill.id,
+            Some(&finding.id),
+            Some(&finding.rule_id),
+            &proposed_text,
+        ),
+        rank: 0,
+        title,
+        draft_type,
+        agent: Some(skill.agent.clone()),
+        affected_skill: Some(remediation_affected_skill(skill)),
+        finding_id: Some(redact_for_llm_preview(&finding.id)),
+        rule_id: Some(redact_for_llm_preview(&finding.rule_id)),
+        current_text,
+        proposed_text,
+        patch_like_snippet,
+        rationale: finding
+            .suggestion
+            .as_deref()
+            .map(redact_for_llm_preview)
+            .unwrap_or_else(|| redact_for_llm_preview(&finding.message)),
+        confidence,
+        confidence_band: remediation_draft_confidence_band(confidence),
+        copy_label,
+        edit_guidance,
+        evidence_refs,
+        blocker_notes: remediation_blockers_for_finding(finding),
+        side_effect_flags: remediation_side_effect_flags(),
+        safety_flags: remediation_preview_drafts_safety_flags(),
+    }
+}
+
+fn remediation_policy_draft_item(
+    title: &str,
+    draft_type: &'static str,
+    skill: Option<&SkillDetailRecord>,
+    finding_id: Option<String>,
+    rule_id: Option<String>,
+    proposed_text: String,
+    rationale: String,
+    evidence_refs: Vec<String>,
+) -> RemediationDraftItem {
+    let current_text = skill.map(|skill| redacted_snippet(&skill.frontmatter_raw, 700));
+    let patch_like_snippet =
+        remediation_patch_like_snippet(draft_type, current_text.as_deref(), &proposed_text);
+    RemediationDraftItem {
+        id: stable_remediation_draft_id(
+            draft_type,
+            skill.map(|skill| skill.id.as_str()).unwrap_or("workspace-policy"),
+            finding_id.as_deref(),
+            rule_id.as_deref(),
+            &proposed_text,
+        ),
+        rank: 0,
+        title: redact_for_llm_preview(title),
+        draft_type,
+        agent: skill.map(|skill| skill.agent.clone()),
+        affected_skill: skill.map(remediation_affected_skill),
+        finding_id: finding_id.map(|id| redact_for_llm_preview(&id)),
+        rule_id: rule_id.map(|id| redact_for_llm_preview(&id)),
+        current_text,
+        proposed_text: redact_for_llm_preview(&proposed_text),
+        patch_like_snippet,
+        rationale: redact_for_llm_preview(&rationale),
+        confidence: 58,
+        confidence_band: "medium",
+        copy_label: "Copy policy draft".to_string(),
+        edit_guidance:
+            "Use this as copy-only policy guidance in skill metadata or review notes; no config or skill file is changed by this preview."
+                .to_string(),
+        evidence_refs,
+        blocker_notes: vec![
+            "Policy draft is advisory and must be reviewed before any existing write flow."
+                .to_string(),
+        ],
+        side_effect_flags: remediation_side_effect_flags(),
+        safety_flags: remediation_preview_drafts_safety_flags(),
+    }
+}
+
+fn remediation_policy_draft_item_from_plan(
+    plan_item: &RemediationPlanItem,
+) -> RemediationDraftItem {
+    let proposed_text = format!(
+        "{} Review note: {}",
+        redact_for_llm_preview(&plan_item.suggested_safe_next_action),
+        redact_for_llm_preview(&plan_item.summary)
+    );
+    let patch_like_snippet = remediation_patch_like_snippet("policy", None, &proposed_text);
+    RemediationDraftItem {
+        id: stable_remediation_draft_id(
+            "policy",
+            plan_item
+                .affected_skill
+                .as_ref()
+                .map(|skill| skill.instance_id.as_str())
+                .unwrap_or("remediation-plan-policy"),
+            Some(&plan_item.id),
+            Some(plan_item.category),
+            &proposed_text,
+        ),
+        rank: 0,
+        title: format!(
+            "Draft policy note from `{}`",
+            redact_for_llm_preview(&plan_item.title)
+        ),
+        draft_type: "policy",
+        agent: plan_item.affected_agent.clone(),
+        affected_skill: plan_item.affected_skill.clone(),
+        finding_id: None,
+        rule_id: Some(plan_item.category.to_string()),
+        current_text: None,
+        proposed_text,
+        patch_like_snippet,
+        rationale: redact_for_llm_preview(&plan_item.detail),
+        confidence: 55,
+        confidence_band: "medium",
+        copy_label: "Copy policy draft".to_string(),
+        edit_guidance:
+            "Use this copy-only policy note to clarify review expectations; this preview does not toggle, merge, delete, or write skills."
+                .to_string(),
+        evidence_refs: plan_item.evidence_refs.clone(),
+        blocker_notes: plan_item.blockers.clone(),
+        side_effect_flags: remediation_side_effect_flags(),
+        safety_flags: remediation_preview_drafts_safety_flags(),
+    }
+}
+
+fn remediation_frontmatter_draft(skill: &SkillDetailRecord) -> String {
+    let mut lines = vec![
+        format!("name: {}", redact_for_llm_preview(&skill.name)),
+        format!("description: {}", remediation_description_draft_text(skill)),
+    ];
+    let tools = remediation_permission_tools(skill);
+    if !tools.is_empty() {
+        lines.push("allowed-tools:".to_string());
+        for tool in tools {
+            lines.push(format!("  - {}", redact_for_llm_preview(&tool)));
+        }
+    }
+    lines.join("\n")
+}
+
+fn remediation_description_draft(skill: &SkillDetailRecord, finding: &RuleFindingRecord) -> String {
+    let base = remediation_description_draft_text(skill);
+    let finding_hint = finding
+        .suggestion
+        .as_deref()
+        .or(Some(finding.message.as_str()))
+        .map(redact_for_llm_preview)
+        .unwrap_or_default();
+    if finding_hint.is_empty() {
+        base
+    } else {
+        format!("{base} Review note: {finding_hint}")
+    }
+}
+
+fn remediation_description_draft_text(skill: &SkillDetailRecord) -> String {
+    let name = redact_for_llm_preview(&skill.name).replace('-', " ");
+    let body_hint = first_non_empty_line(&skill.body)
+        .map(redact_for_llm_preview)
+        .unwrap_or_else(|| "Use this skill for the documented local workflow.".to_string());
+    let mut text = format!("{name}: {body_hint}");
+    if text.len() > 220 {
+        text.truncate(217);
+        text.push_str("...");
+    }
+    text
+}
+
+fn remediation_permissions_draft(skill: &SkillDetailRecord, finding: &RuleFindingRecord) -> String {
+    let mut lines = Vec::new();
+    let tools = remediation_permission_tools(skill);
+    if tools.is_empty() {
+        lines.push("allowed-tools: []".to_string());
+    } else {
+        lines.push("allowed-tools:".to_string());
+        for tool in tools {
+            lines.push(format!("  - {}", redact_for_llm_preview(&tool)));
+        }
+    }
+    if finding.rule_id == "permissions.exec-needs-human" {
+        lines.push("requires-human-review: true".to_string());
+    }
+    lines.push("# Copy-only preview: verify each permission before editing.".to_string());
+    lines.join("\n")
+}
+
+fn remediation_dependency_draft(skill: &SkillDetailRecord, finding: &RuleFindingRecord) -> String {
+    format!(
+        "Dependency review for `{}`: {} If the dependency is intentional, document the exact local requirement and review path; otherwise remove the stale dependency reference.",
+        redact_for_llm_preview(&skill.name),
+        finding
+            .suggestion
+            .as_deref()
+            .map(redact_for_llm_preview)
+            .unwrap_or_else(|| redact_for_llm_preview(&finding.message))
+    )
+}
+
+fn remediation_permission_tools(skill: &SkillDetailRecord) -> Vec<String> {
+    skill
+        .permissions
+        .get("tools")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(str::trim)
+        .filter(|tool| !tool.is_empty())
+        .map(str::to_string)
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+fn first_non_empty_line(value: &str) -> Option<&str> {
+    value.lines().map(str::trim).find(|line| !line.is_empty())
+}
+
+fn redacted_snippet(value: &str, max_len: usize) -> String {
+    let mut snippet = redact_for_llm_preview(value.trim());
+    if snippet.len() > max_len {
+        snippet.truncate(max_len.saturating_sub(3));
+        snippet.push_str("...");
+    }
+    snippet
+}
+
+fn remediation_patch_like_snippet(
+    draft_type: &str,
+    current_text: Option<&str>,
+    proposed_text: &str,
+) -> String {
+    let mut lines = vec![format!("*** Copy-only {} draft ***", draft_type)];
+    if let Some(current) = current_text.filter(|value| !value.trim().is_empty()) {
+        lines.push("--- current".to_string());
+        lines.extend(current.lines().take(12).map(|line| format!("- {line}")));
+    }
+    lines.push("+++ proposed".to_string());
+    lines.extend(
+        proposed_text
+            .lines()
+            .take(20)
+            .map(|line| format!("+ {line}")),
+    );
+    lines.push("*** No apply action is available from this preview ***".to_string());
+    lines.join("\n")
+}
+
+fn remediation_draft_confidence(finding: &RuleFindingRecord) -> u8 {
+    match finding.effective_severity.as_str() {
+        "critical" | "error" => 82,
+        "warning" | "warn" => 68,
+        "info" => 52,
+        _ => 45,
+    }
+}
+
+fn remediation_draft_confidence_band(confidence: u8) -> &'static str {
+    match confidence {
+        75..=100 => "high",
+        50..=74 => "medium",
+        _ => "low",
+    }
+}
+
+fn stable_remediation_draft_id(
+    draft_type: &str,
+    skill_id: &str,
+    finding_id: Option<&str>,
+    rule_id: Option<&str>,
+    proposed_text: &str,
+) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(draft_type.as_bytes());
+    hasher.update(b"\0");
+    hasher.update(skill_id.as_bytes());
+    hasher.update(b"\0");
+    if let Some(finding_id) = finding_id {
+        hasher.update(finding_id.as_bytes());
+    }
+    hasher.update(b"\0");
+    if let Some(rule_id) = rule_id {
+        hasher.update(rule_id.as_bytes());
+    }
+    hasher.update(b"\0");
+    hasher.update(proposed_text.as_bytes());
+    let digest = hasher.finalize();
+    format!("draft-{}", hex_prefix(&digest, 12))
+}
+
+fn remediation_sorted_draft_items(
+    mut items: Vec<RemediationDraftItem>,
+    filters: &RemediationPreviewDraftsFilters,
+) -> Vec<RemediationDraftItem> {
+    items.sort_by(|left, right| {
+        remediation_draft_type_rank(left.draft_type)
+            .cmp(&remediation_draft_type_rank(right.draft_type))
+            .then_with(|| right.confidence.cmp(&left.confidence))
+            .then_with(|| left.title.cmp(&right.title))
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    items.truncate(filters.limit);
+    for (index, item) in items.iter_mut().enumerate() {
+        item.rank = index + 1;
+    }
+    items
+}
+
+fn remediation_draft_type_rank(draft_type: &str) -> u8 {
+    match draft_type {
+        "frontmatter" => 0,
+        "description" => 1,
+        "permissions" => 2,
+        "dependency" => 3,
+        "policy" => 4,
+        _ => 5,
+    }
+}
+
+fn remediation_preview_drafts_summary(
+    total_draft_count: usize,
+    returned_draft_count: usize,
+    items: &[RemediationDraftItem],
+) -> RemediationPreviewDraftsSummary {
+    let type_count = |draft_type: &str| {
+        items
+            .iter()
+            .filter(|item| item.draft_type == draft_type)
+            .count()
+    };
+    let high_confidence_count = items
+        .iter()
+        .filter(|item| item.confidence_band == "high")
+        .count();
+    let medium_confidence_count = items
+        .iter()
+        .filter(|item| item.confidence_band == "medium")
+        .count();
+    let low_confidence_count = items
+        .iter()
+        .filter(|item| item.confidence_band == "low")
+        .count();
+    let blocker_count = items.iter().map(|item| item.blocker_notes.len()).sum();
+    let summary = if returned_draft_count == 0 {
+        "No fix preview drafts matched the selected local filters.".to_string()
+    } else {
+        format!(
+            "Fix preview drafts returned {returned_draft_count} of {total_draft_count} copy-only draft(s): {high_confidence_count} high confidence, {medium_confidence_count} medium, {low_confidence_count} low."
+        )
+    };
+    RemediationPreviewDraftsSummary {
+        total_draft_count,
+        returned_draft_count,
+        frontmatter_count: type_count("frontmatter"),
+        description_count: type_count("description"),
+        permissions_count: type_count("permissions"),
+        dependency_count: type_count("dependency"),
+        policy_count: type_count("policy"),
+        high_confidence_count,
+        medium_confidence_count,
+        low_confidence_count,
+        blocker_count,
+        summary,
+    }
 }
 
 fn task_readiness_safety_flags() -> TaskReadinessSafetyFlags {
@@ -16701,6 +17705,102 @@ fn render_remediation_plan_prompt_section(
     )
 }
 
+fn render_remediation_preview_drafts_prompt_section(
+    result: &RemediationPreviewDraftsResult,
+    redactor: &mut PromptRedactor<'_>,
+) -> String {
+    let drafts = result
+        .draft_items
+        .iter()
+        .take(10)
+        .map(|item| {
+            format!(
+                "- #{} {} type={} confidence={} band={} affected_agent={} affected_skill={} rule={} proposed={} guidance={} blockers={}",
+                item.rank,
+                redactor.redact(&item.title),
+                item.draft_type,
+                item.confidence,
+                item.confidence_band,
+                item.agent
+                    .as_deref()
+                    .map(|value| redactor.redact(value))
+                    .unwrap_or_else(|| "n/a".to_string()),
+                item.affected_skill
+                    .as_ref()
+                    .map(|skill| redactor.redact(&skill.skill_name))
+                    .unwrap_or_else(|| "none".to_string()),
+                item.rule_id
+                    .as_deref()
+                    .map(|value| redactor.redact(value))
+                    .unwrap_or_else(|| "n/a".to_string()),
+                redactor.redact(&item.proposed_text),
+                redactor.redact(&item.edit_guidance),
+                item.blocker_notes
+                    .iter()
+                    .take(3)
+                    .map(|blocker| redactor.redact(blocker))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let evidence = result
+        .evidence_references
+        .iter()
+        .take(16)
+        .map(|reference| {
+            format!(
+                "- {} {} {}",
+                reference.source_type,
+                redactor.redact(&reference.source_id),
+                redactor.redact(&reference.label)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "Fix preview draft evidence:\n- catalog_available: {}\n- total_draft_count: {}\n- returned_draft_count: {}\n- frontmatter_count: {}\n- description_count: {}\n- permissions_count: {}\n- dependency_count: {}\n- policy_count: {}\n- high_confidence_count: {}\n- medium_confidence_count: {}\n- low_confidence_count: {}\n- blocker_count: {}\n- summary: {}\n\nDraft items:\n{}\n\nGap notes:\n{}\n\nBlocker notes:\n{}\n\nEvidence references:\n{}\n\nSafety flags: read_only=true, app_local_only=true, provider_request_sent=false, write_back_allowed=false, write_actions_available=false, skill_files_mutated=false, agent_config_mutated=false, script_execution_allowed=false, execution_actions_available=false, config_mutation_allowed=false, snapshot_created=false, triage_mutation_allowed=false, credential_accessed=false, raw_prompt_persisted=false, raw_response_persisted=false, raw_trace_persisted=false, cloud_sync_performed=false, telemetry_emitted=false.",
+        result.catalog_available,
+        result.summary.total_draft_count,
+        result.summary.returned_draft_count,
+        result.summary.frontmatter_count,
+        result.summary.description_count,
+        result.summary.permissions_count,
+        result.summary.dependency_count,
+        result.summary.policy_count,
+        result.summary.high_confidence_count,
+        result.summary.medium_confidence_count,
+        result.summary.low_confidence_count,
+        result.summary.blocker_count,
+        redactor.redact(&result.summary.summary),
+        if drafts.is_empty() { "none" } else { &drafts },
+        if result.gap_notes.is_empty() {
+            "none".to_string()
+        } else {
+            result
+                .gap_notes
+                .iter()
+                .take(10)
+                .map(|note| redactor.redact(note))
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+        if result.blocker_notes.is_empty() {
+            "none".to_string()
+        } else {
+            result
+                .blocker_notes
+                .iter()
+                .take(10)
+                .map(|note| redactor.redact(note))
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+        if evidence.is_empty() { "none" } else { &evidence },
+    )
+}
+
 fn render_routing_confidence_prompt_section(
     ranking: &SkillRouteRankingResult,
     redactor: &mut PromptRedactor<'_>,
@@ -17073,6 +18173,7 @@ mod tests {
         )));
         assert!(methods.contains(&Value::String("workspace.checkReadiness".to_string())));
         assert!(methods.contains(&Value::String("remediation.plan".to_string())));
+        assert!(methods.contains(&Value::String("remediation.previewDrafts".to_string())));
         assert!(methods.contains(&Value::String("task.checkReadiness".to_string())));
         assert!(methods.contains(&Value::String("task.rankSkillRoutes".to_string())));
         assert!(methods.contains(&Value::String("task.compareAgentReadiness".to_string())));
@@ -23716,6 +24817,268 @@ mod tests {
     }
 
     #[test]
+    fn remediation_preview_drafts_returns_copy_only_local_drafts() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-remediation-drafts-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_preview_draft_fixture(&host);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let result = host
+            .preview_remediation_drafts(RemediationPreviewDraftsParams {
+                agent: None,
+                task: Some("Draft release readiness fixes".to_string()),
+                skill_ids: Vec::new(),
+                finding_ids: Vec::new(),
+                draft_types: Vec::new(),
+                limit: Some(10),
+                include_policy_drafts: true,
+            })
+            .expect("preview drafts");
+
+        assert_eq!(result.generated_by, "local-v2.57");
+        assert!(result.catalog_available);
+        assert_eq!(
+            result.summary.returned_draft_count,
+            result.draft_items.len()
+        );
+        assert!(result.summary.frontmatter_count > 0);
+        assert!(result.summary.description_count > 0);
+        assert!(result.summary.permissions_count > 0);
+        assert!(result.summary.dependency_count > 0);
+        assert!(result.summary.policy_count > 0);
+        assert_eq!(result.prompt_request.action, "remediation_preview_drafts");
+        assert_eq!(
+            result.prompt_request.request.action,
+            LlmPromptActionKind::RemediationPreviewDrafts
+        );
+        assert!(result.safety_flags.read_only);
+        assert!(!result.safety_flags.provider_request_sent);
+        assert!(!result.safety_flags.write_back_allowed);
+        assert!(result.draft_items.iter().all(|item| {
+            item.rank > 0
+                && !item.proposed_text.is_empty()
+                && item.patch_like_snippet.contains("Copy-only")
+                && item.safety_flags.read_only
+                && !item.safety_flags.write_back_allowed
+                && item.side_effect_flags.contains(&"write_back_allowed=false")
+        }));
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn remediation_preview_drafts_missing_catalog_returns_safe_empty_result() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-remediation-drafts-empty-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let result = host
+            .preview_remediation_drafts(RemediationPreviewDraftsParams::default())
+            .expect("empty draft preview");
+
+        assert!(!result.catalog_available);
+        assert_eq!(result.summary.returned_draft_count, 0);
+        assert!(result.draft_items.is_empty());
+        assert!(!result.prompt_request.available);
+        assert!(result.safety_flags.read_only);
+        assert!(result.safety_flags.app_local_only);
+        assert!(!result.safety_flags.provider_request_sent);
+        assert!(!result.safety_flags.write_back_allowed);
+        assert!(!result.safety_flags.skill_files_mutated);
+        assert!(!result.safety_flags.agent_config_mutated);
+        assert!(!result.safety_flags.script_execution_allowed);
+        assert!(!result.safety_flags.credential_accessed);
+        assert!(!host.catalog_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn remediation_preview_drafts_rejects_invalid_limit_without_writes() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-remediation-drafts-invalid-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("remediation-drafts-invalid".to_string()),
+            method: "remediation.previewDrafts".to_string(),
+            params: json!({ "limit": 0 }),
+        });
+
+        assert!(!response.ok);
+        let error = response.error.expect("invalid draft preview error");
+        assert_eq!(error.code, "invalid_request");
+        assert!(error.message.contains("limit"));
+        assert!(
+            !app_data_dir.exists(),
+            "invalid draft preview request must not initialize app data"
+        );
+    }
+
+    #[test]
+    fn remediation_preview_drafts_preserves_provider_write_and_privacy_boundaries() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-remediation-drafts-safety-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-remediation-drafts-safety-home-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_preview_draft_fixture(&host);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("remediation-drafts-safety".to_string()),
+            method: "remediation.previewDrafts".to_string(),
+            params: json!({
+                "task_text": "draft fixes token=fixture-redacted-value",
+                "skill_ids": ["similar-claude-a", "similar-codex-a", "similar-codex-research"],
+                "draft_types": ["frontmatter", "permissions", "dependency", "policy"],
+                "limit": 8,
+                "include_policy_drafts": true
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("draft preview safety result");
+        assert_agent_readiness_safety(&result);
+        assert_eq!(
+            result
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/write_actions_available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let serialized = serde_json::to_string(&result).expect("serialize draft preview result");
+        assert!(!serialized.contains(&app_data_dir.to_string_lossy().to_string()));
+        assert!(!serialized.contains(&user_home.to_string_lossy().to_string()));
+        assert!(!serialized.contains("fixture-redacted-value"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn remediation_preview_drafts_prompt_preview_is_redacted_and_copy_only() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-remediation-drafts-prompt-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_preview_draft_fixture(&host);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("remediation-drafts-preview".to_string()),
+            method: "llm.previewPrompt".to_string(),
+            params: json!({
+                "action": "remediation_preview_drafts",
+                "user_intent": "Explain drafts for /tmp/home/private-project with secret-token=fixture-redacted-value",
+                "instance_ids": ["similar-claude-a", "similar-codex-a"]
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let preview: WireLlmPreviewPromptResult =
+            serde_json::from_value(response.result.expect("preview result"))
+                .expect("decode remediation draft prompt preview");
+        assert_eq!(preview.action, "remediation_preview_drafts");
+        assert!(preview
+            .prompt_preview
+            .contains("Fix preview draft evidence"));
+        assert!(!preview.prompt_preview.contains("fixture-redacted-value"));
+        assert!(!preview.provider_request_sent);
+        assert!(!preview.write_back_allowed);
+        assert!(preview.draft_requires_user_copy);
+        assert!(!preview.raw_prompt_persisted);
+        assert!(!preview.raw_response_persisted);
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
     fn workspace_check_readiness_returns_local_read_only_checklist() {
         let app_data_dir = env::temp_dir().join(format!(
             "skills-copilot-workspace-readiness-test-{}-{}",
@@ -24163,6 +25526,38 @@ mod tests {
                 assert_agent_readiness_safety_flags(&plan.safety_flags);
                 for item in &plan.plan_items {
                     assert!(item.rank > 0);
+                    assert_agent_readiness_safety_flags(&item.safety_flags);
+                    assert!(item
+                        .side_effect_flags
+                        .iter()
+                        .any(|flag| flag == "provider_request_sent=false"));
+                    assert!(item
+                        .side_effect_flags
+                        .iter()
+                        .any(|flag| flag == "write_back_allowed=false"));
+                }
+            }
+            "remediation.previewDrafts" => {
+                let drafts: WireRemediationPreviewDraftsResult =
+                    decode_fixture_result(method, result, path);
+                assert_eq!(drafts.generated_by, "local-v2.57");
+                assert!(drafts.catalog_available);
+                assert_eq!(
+                    drafts.summary.returned_draft_count,
+                    drafts.draft_items.len()
+                );
+                assert!(!drafts.draft_items.is_empty());
+                assert_eq!(drafts.prompt_request.action, "remediation_preview_drafts");
+                assert_eq!(drafts.prompt_request.preview_method, "llm.previewPrompt");
+                assert_eq!(
+                    drafts.prompt_request.request.action,
+                    LlmPromptActionKind::RemediationPreviewDrafts
+                );
+                assert_agent_readiness_safety_flags(&drafts.safety_flags);
+                for item in &drafts.draft_items {
+                    assert!(item.rank > 0);
+                    assert!(!item.proposed_text.is_empty());
+                    assert!(item.patch_like_snippet.contains("Copy-only"));
                     assert_agent_readiness_safety_flags(&item.safety_flags);
                     assert!(item
                         .side_effect_flags
@@ -25056,6 +26451,12 @@ mod tests {
                 "task": "fixture remediation planning check",
                 "focus_areas": ["finding", "gap", "ambiguity", "drift", "readiness"],
                 "limit": 4
+            }),
+            "remediation.previewDrafts" => json!({
+                "task": "fixture fix preview drafts check",
+                "draft_types": ["permissions", "policy"],
+                "limit": 4,
+                "include_policy_drafts": true
             }),
             "task.checkReadiness" => json!({ "task": "fixture task readiness check" }),
             "task.rankSkillRoutes" => json!({ "task": "fixture routing confidence check" }),
@@ -26075,6 +27476,79 @@ mod tests {
         item_count: usize,
         category_counts: BTreeMap<String, usize>,
         top_item_ids: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationPreviewDraftsResult {
+        generated_by: String,
+        catalog_available: bool,
+        filters: WireRemediationPreviewDraftsFilters,
+        summary: WireRemediationPreviewDraftsSummary,
+        draft_items: Vec<WireRemediationDraftItem>,
+        gap_notes: Vec<String>,
+        blocker_notes: Vec<String>,
+        evidence_references: Vec<WireTaskReadinessEvidenceReference>,
+        prompt_request: WireAgentReadinessPromptRequest,
+        safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationPreviewDraftsFilters {
+        agent: Option<String>,
+        task: Option<String>,
+        skill_ids: Vec<String>,
+        finding_ids: Vec<String>,
+        draft_types: Vec<String>,
+        limit: usize,
+        include_policy_drafts: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationPreviewDraftsSummary {
+        total_draft_count: usize,
+        returned_draft_count: usize,
+        frontmatter_count: usize,
+        description_count: usize,
+        permissions_count: usize,
+        dependency_count: usize,
+        policy_count: usize,
+        high_confidence_count: usize,
+        medium_confidence_count: usize,
+        low_confidence_count: usize,
+        blocker_count: usize,
+        summary: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireRemediationDraftItem {
+        id: String,
+        rank: usize,
+        title: String,
+        draft_type: String,
+        agent: Option<String>,
+        affected_skill: Option<WireRemediationAffectedSkill>,
+        finding_id: Option<String>,
+        rule_id: Option<String>,
+        current_text: Option<String>,
+        proposed_text: String,
+        patch_like_snippet: String,
+        rationale: String,
+        confidence: u8,
+        confidence_band: String,
+        copy_label: String,
+        edit_guidance: String,
+        evidence_refs: Vec<String>,
+        blocker_notes: Vec<String>,
+        side_effect_flags: Vec<String>,
+        safety_flags: WireAgentReadinessSafetyFlags,
     }
 
     #[allow(dead_code)]
@@ -28543,6 +30017,59 @@ mod tests {
                 }],
             )
             .expect("refresh similar grouping conflicts");
+    }
+
+    fn seed_catalog_with_preview_draft_fixture(host: &ServiceHost) {
+        seed_catalog_with_similar_grouping_fixture(host);
+        let catalog = Catalog::open(&host.catalog_path()).expect("open preview catalog");
+        catalog
+            .refresh_rule_findings(&[
+                RuleFindingDraft {
+                    id: "preview-frontmatter".to_string(),
+                    instance_id: Some("similar-claude-a".to_string()),
+                    definition_id: Some("similar-release-definition".to_string()),
+                    rule_id: "frontmatter.required-fields".to_string(),
+                    severity: "warning".to_string(),
+                    message: "Frontmatter needs normalized required fields.".to_string(),
+                    suggestion: Some("Add canonical name and clearer description.".to_string()),
+                    created_at: 1,
+                },
+                RuleFindingDraft {
+                    id: "preview-description".to_string(),
+                    instance_id: Some("similar-codex-a".to_string()),
+                    definition_id: Some("similar-release-definition".to_string()),
+                    rule_id: "body.too-long".to_string(),
+                    severity: "info".to_string(),
+                    message: "Description should summarize the long release guidance.".to_string(),
+                    suggestion: Some(
+                        "Use a concise task-centered release readiness description.".to_string(),
+                    ),
+                    created_at: 2,
+                },
+                RuleFindingDraft {
+                    id: "preview-permissions".to_string(),
+                    instance_id: Some("similar-claude-a".to_string()),
+                    definition_id: Some("similar-release-definition".to_string()),
+                    rule_id: "permissions.exec-needs-human".to_string(),
+                    severity: "error".to_string(),
+                    message:
+                        "Release readiness fixture requires human review; token=fixture-redacted-value."
+                            .to_string(),
+                    suggestion: Some("Keep release audit actions read-only.".to_string()),
+                    created_at: 3,
+                },
+                RuleFindingDraft {
+                    id: "preview-dependency".to_string(),
+                    instance_id: Some("similar-codex-research".to_string()),
+                    definition_id: Some("similar-research-definition".to_string()),
+                    rule_id: "dependency.unknown".to_string(),
+                    severity: "warning".to_string(),
+                    message: "Unknown dependency reference needs review.".to_string(),
+                    suggestion: Some("Document or remove the unknown dependency.".to_string()),
+                    created_at: 4,
+                },
+            ])
+            .expect("refresh preview draft findings");
     }
 
     fn cleanup_skill(
