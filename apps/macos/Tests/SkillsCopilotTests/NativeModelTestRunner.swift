@@ -57,6 +57,7 @@ public func runNativeModelTests() {
         try StaleDriftDetectionModelTests().run()
         try LocalKnowledgeIndexModelTests().run()
         try SimilarSkillGroupingModelTests().run()
+        try CapabilityTaxonomyModelTests().run()
         try AIProviderModelTests().run()
         try LLMModelTests().run()
         try ScriptExecutionModelTests().run()

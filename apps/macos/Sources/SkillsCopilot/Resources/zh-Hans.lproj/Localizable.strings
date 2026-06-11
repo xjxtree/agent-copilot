@@ -899,3 +899,15 @@
 "similarGrouping.quality" = "质量";
 "similarGrouping.readiness" = "就绪度";
 "similarGrouping.staleDrift" = "陈旧 / 漂移";
+"capabilityTaxonomy.title" = "能力分类";
+"capabilityTaxonomy.boundary" = "用户触发、只读的本地能力分类，覆盖能力领域、覆盖情况、差距、阻断、代表技能和证据。它不能调用提供方、写入技能文件、修改 agent 配置、创建快照、改变 triage、执行脚本、读取凭据、持久化 raw prompt/response/trace、同步云数据或发送遥测。";
+"capabilityTaxonomy.action.build" = "构建分类";
+"capabilityTaxonomy.unavailable" = "此服务构建不支持能力分类。";
+"capabilityTaxonomy.empty.result" = "尚未加载能力分类。";
+"capabilityTaxonomy.empty.domains" = "未返回能力领域。";
+"capabilityTaxonomy.domains" = "领域";
+"capabilityTaxonomy.domain" = "能力领域";
+"capabilityTaxonomy.capability" = "能力";
+"capabilityTaxonomy.coverage" = "覆盖";
+"capabilityTaxonomy.agentCoverage" = "Agent 覆盖";
+"capabilityTaxonomy.representativeSkills" = "代表技能";

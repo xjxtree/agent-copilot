@@ -593,6 +593,18 @@ enum UIStrings {
     static var similarGroupingQuality: String { text("similarGrouping.quality", "Quality") }
     static var similarGroupingReadiness: String { text("similarGrouping.readiness", "Readiness") }
     static var similarGroupingStaleDrift: String { text("similarGrouping.staleDrift", "Stale / drift") }
+    static var capabilityTaxonomyTitle: String { text("capabilityTaxonomy.title", "Capability Taxonomy") }
+    static var capabilityTaxonomyBoundary: String { text("capabilityTaxonomy.boundary", "User-triggered, read-only local taxonomy for capability domains, coverage, gaps, blockers, representative skills, and evidence. It cannot call a provider, write skill files, mutate agent config, create snapshots, change triage, execute scripts, read credentials, persist raw prompts/responses/traces, sync cloud data, or emit telemetry.") }
+    static var capabilityTaxonomyAction: String { text("capabilityTaxonomy.action.build", "Build Taxonomy") }
+    static var capabilityTaxonomyUnavailable: String { text("capabilityTaxonomy.unavailable", "Capability taxonomy is unavailable in this service build.") }
+    static var capabilityTaxonomyNoResult: String { text("capabilityTaxonomy.empty.result", "No capability taxonomy loaded.") }
+    static var capabilityTaxonomyNoDomains: String { text("capabilityTaxonomy.empty.domains", "No capability domains returned.") }
+    static var capabilityTaxonomyDomains: String { text("capabilityTaxonomy.domains", "Domains") }
+    static var capabilityTaxonomyDomain: String { text("capabilityTaxonomy.domain", "Capability domain") }
+    static var capabilityTaxonomyCapability: String { text("capabilityTaxonomy.capability", "Capability") }
+    static var capabilityTaxonomyCoverage: String { text("capabilityTaxonomy.coverage", "Coverage") }
+    static var capabilityTaxonomyAgentCoverage: String { text("capabilityTaxonomy.agentCoverage", "Agent coverage") }
+    static var capabilityTaxonomyRepresentativeSkills: String { text("capabilityTaxonomy.representativeSkills", "Representative skills") }
     static var taskBenchmarkTitle: String { text("taskBenchmark.title", "Task Benchmark Set") }
     static var taskBenchmarkBoundary: String { text("taskBenchmark.boundary", "User-triggered, local benchmark evaluation for task routing. Local evaluation does not call a provider and cannot write skill files, mutate agent config, create snapshots, change triage, execute scripts, or read credentials.") }
     static var taskBenchmarkTaskPlaceholder: String { text("taskBenchmark.task.placeholder", "Optional benchmark task text; otherwise the current readiness/routing task is used") }

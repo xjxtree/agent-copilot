@@ -172,6 +172,8 @@ struct DetailView: View {
                             isSearchingKnowledge: store.isSearchingKnowledge,
                             similarSkillGroupingResult: store.similarSkillGroupingResult,
                             isGroupingSimilarSkills: store.isGroupingSimilarSkills,
+                            capabilityTaxonomyResult: store.capabilityTaxonomyResult,
+                            isBuildingCapabilityTaxonomy: store.isBuildingCapabilityTaxonomy,
                             onScoreQuality: {
                                 Task {
                                     await store.scoreSelectedSkillQuality()
@@ -240,6 +242,11 @@ struct DetailView: View {
                             onGroupSimilarSkills: {
                                 Task {
                                     await store.groupSimilarSkills()
+                                }
+                            },
+                            onBuildCapabilityTaxonomy: {
+                                Task {
+                                    await store.buildCapabilityTaxonomy()
                                 }
                             },
                             taskBenchmarkText: $store.taskBenchmarkText,
@@ -883,6 +890,8 @@ private struct AnalysisSection: View {
     let isSearchingKnowledge: Bool
     let similarSkillGroupingResult: SimilarSkillGroupingResult?
     let isGroupingSimilarSkills: Bool
+    let capabilityTaxonomyResult: CapabilityTaxonomyResult?
+    let isBuildingCapabilityTaxonomy: Bool
     let onScoreQuality: () -> Void
     let onPreviewQualityPrompt: () -> Void
     let onSendQualityPrompt: () -> Void
@@ -897,6 +906,7 @@ private struct AnalysisSection: View {
     let onDetectStaleDrift: () -> Void
     let onSearchKnowledge: () -> Void
     let onGroupSimilarSkills: () -> Void
+    let onBuildCapabilityTaxonomy: () -> Void
     @Binding var taskBenchmarkText: String
     let taskBenchmarkInput: String
     let taskBenchmarkList: TaskBenchmarkListResult
@@ -1046,6 +1056,12 @@ private struct AnalysisSection: View {
                 result: similarSkillGroupingResult,
                 isGrouping: isGroupingSimilarSkills,
                 onGroup: onGroupSimilarSkills
+            )
+
+            CapabilityTaxonomyPanel(
+                result: capabilityTaxonomyResult,
+                isBuilding: isBuildingCapabilityTaxonomy,
+                onBuild: onBuildCapabilityTaxonomy
             )
 
             KnowledgeSearchPanel(
@@ -3521,6 +3537,327 @@ private struct SimilarSkillPill: View {
             .padding(.vertical, 3)
             .background(.quaternary.opacity(0.45), in: Capsule())
             .lineLimit(1)
+    }
+}
+
+private struct CapabilityTaxonomyPanel: View {
+    let result: CapabilityTaxonomyResult?
+    let isBuilding: Bool
+    let onBuild: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.capabilityTaxonomyTitle, systemImage: "square.grid.3x3.topleft.filled")
+                    .font(.headline)
+                Spacer()
+                Label(UIStrings.readOnlyPreview, systemImage: "lock.shield")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(UIStrings.capabilityTaxonomyBoundary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+
+            HStack(spacing: 8) {
+                Button {
+                    onBuild()
+                } label: {
+                    Label(UIStrings.capabilityTaxonomyAction, systemImage: "point.3.connected.trianglepath.dotted")
+                }
+                .disabled(isBuilding)
+
+                if isBuilding {
+                    Label(UIStrings.llmPreparing, systemImage: "hourglass")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if let result {
+                CapabilityTaxonomyResultView(result: result)
+            } else {
+                Label(UIStrings.capabilityTaxonomyNoResult, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Label(UIStrings.llmReviewNoActions, systemImage: "nosign")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct CapabilityTaxonomyResultView: View {
+    let result: CapabilityTaxonomyResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let fallbackReason = result.fallbackReason, !fallbackReason.isEmpty {
+                Label(fallbackReason, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+                SummaryChip(title: UIStrings.capabilityTaxonomyDomains, value: "\(domainCount)", systemImage: "square.grid.3x3")
+                SummaryChip(title: UIStrings.knowledgeCapabilities, value: "\(capabilityCount)", systemImage: "tag")
+                SummaryChip(title: UIStrings.similarGroupingMembers, value: "\(skillCount)", systemImage: "doc.text")
+                SummaryChip(title: UIStrings.agent, value: "\(agentCount)", systemImage: "person.2")
+                SummaryChip(title: UIStrings.knowledgeGapNotes, value: "\(gapCount)", systemImage: "puzzlepiece.extension")
+                SummaryChip(title: UIStrings.knowledgeBlockerNotes, value: "\(blockerCount)", systemImage: "exclamationmark.octagon")
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                MetadataRow(label: UIStrings.routingAccuracyGeneratedBy, value: result.generatedBy)
+                MetadataRow(label: UIStrings.routingAccuracyCatalog, value: result.catalogAvailable ? UIStrings.routingAccuracyAvailable : UIStrings.routingAccuracyUnavailableShort)
+                MetadataRow(label: UIStrings.agent, value: result.filters.agents.isEmpty ? (result.filters.agent.map(DisplayText.agent) ?? UIStrings.text("health.allAgents", "All Agents")) : result.filters.agents.map(DisplayText.agent).joined(separator: ", "))
+                if let limit = result.filters.limit {
+                    MetadataRow(label: UIStrings.text("filter.limit", "Limit"), value: "\(limit)")
+                }
+                MetadataRow(label: UIStrings.knowledgeGapNotes, value: result.filters.includeGaps ? UIStrings.stateEnabled : UIStrings.stateDisabled)
+                if let promptRequest = result.promptRequest {
+                    MetadataRow(label: UIStrings.routingAccuracyPromptRequest, value: promptRequestLabel(promptRequest))
+                }
+            }
+
+            if !result.summary.summaryText.isEmpty {
+                Text(result.summary.summaryText)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            CapabilityCoverageList(coverage: result.coverageByAgent)
+            CapabilityDomainList(domains: result.domains)
+            RoutingInlineList(title: UIStrings.knowledgeGapNotes, empty: UIStrings.routingAccuracyNoGaps, values: result.gapNotes, systemImage: "puzzlepiece.extension")
+            RoutingInlineList(title: UIStrings.knowledgeBlockerNotes, empty: UIStrings.routingAccuracyNoBlockers, values: result.blockerNotes, systemImage: "exclamationmark.octagon")
+            CrossAgentReadinessEvidenceList(evidence: result.evidenceReferences)
+            StaleDriftSafetyList(safety: result.safetyFlags)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var domainCount: Int {
+        result.summary.domainCount > 0 ? result.summary.domainCount : result.domains.count
+    }
+
+    private var capabilityCount: Int {
+        result.summary.capabilityCount > 0 ? result.summary.capabilityCount : result.domains.reduce(0) { $0 + $1.capabilityCount }
+    }
+
+    private var skillCount: Int {
+        result.summary.skillCount > 0 ? result.summary.skillCount : result.domains.reduce(0) { $0 + $1.skillCount }
+    }
+
+    private var agentCount: Int {
+        result.summary.agentCount > 0 ? result.summary.agentCount : Set(result.coverageByAgent.map(\.agent)).count
+    }
+
+    private var gapCount: Int {
+        result.summary.gapCount > 0 ? result.summary.gapCount : result.gapNotes.count + result.domains.reduce(0) { $0 + $1.gapNotes.count }
+    }
+
+    private var blockerCount: Int {
+        result.summary.blockerCount > 0 ? result.summary.blockerCount : result.blockerNotes.count + result.domains.reduce(0) { $0 + $1.blockerNotes.count }
+    }
+
+    private func promptRequestLabel(_ promptRequest: RoutingAccuracyPromptRequest) -> String {
+        let state = promptRequest.enabled ? UIStrings.llmEnabled : UIStrings.llmDisabled
+        let copy = promptRequest.copyOnly ? UIStrings.llmPromptCopyOnly : UIStrings.llmSkillAnalysisEnabledUnsafe
+        return "\(promptRequest.requestKind) · \(state) · \(copy)"
+    }
+}
+
+private struct CapabilityCoverageList: View {
+    let coverage: [CapabilityTaxonomyCoverage]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(UIStrings.capabilityTaxonomyAgentCoverage)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if coverage.isEmpty {
+                Text(UIStrings.routingAccuracyNoEvidence)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 210), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(coverage.prefix(8)) { row in
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(DisplayText.agent(row.agent))
+                                    .font(.caption.bold())
+                                Spacer()
+                                Text(row.coverageState)
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.secondary)
+                            }
+                            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 3) {
+                                MetadataRow(label: UIStrings.knowledgeCapabilities, value: "\(row.capabilityCount)")
+                                MetadataRow(label: UIStrings.similarGroupingMembers, value: "\(row.skillCount)")
+                            }
+                            RoutingInlineList(title: UIStrings.knowledgeGapNotes, empty: UIStrings.routingAccuracyNoGaps, values: row.notes, systemImage: "puzzlepiece.extension")
+                        }
+                        .padding(8)
+                        .background(.quaternary.opacity(0.32), in: RoundedRectangle(cornerRadius: 6))
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct CapabilityDomainList: View {
+    let domains: [CapabilityTaxonomyDomain]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(UIStrings.capabilityTaxonomyDomains)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if domains.isEmpty {
+                Text(UIStrings.capabilityTaxonomyNoDomains)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 360), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(domains.prefix(8)) { domain in
+                        CapabilityDomainCard(domain: domain)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct CapabilityDomainCard: View {
+    let domain: CapabilityTaxonomyDomain
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(domain.name, systemImage: "square.grid.3x3.topleft.filled")
+                    .font(.callout.bold())
+                    .lineLimit(1)
+                Spacer()
+                Text("\(domain.capabilityCount) / \(domain.skillCount)")
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            if !domain.summary.isEmpty {
+                Text(domain.summary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            CapabilityCoverageList(coverage: domain.coverageByAgent)
+            CapabilityList(capabilities: domain.capabilities)
+            RoutingInlineList(title: UIStrings.knowledgeGapNotes, empty: UIStrings.routingAccuracyNoGaps, values: domain.gapNotes, systemImage: "puzzlepiece.extension")
+            RoutingInlineList(title: UIStrings.knowledgeBlockerNotes, empty: UIStrings.routingAccuracyNoBlockers, values: domain.blockerNotes, systemImage: "exclamationmark.octagon")
+            RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: domain.evidenceRefs, systemImage: "checklist")
+            RoutingInlineList(title: UIStrings.knowledgeSafetyFlags, empty: UIStrings.taskBenchmarkNoSafetyFlags, values: domain.safetyFlags, systemImage: "checkmark.shield")
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct CapabilityList: View {
+    let capabilities: [CapabilityTaxonomyCapability]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(UIStrings.knowledgeCapabilities)
+                .font(.caption2.bold())
+                .foregroundStyle(.secondary)
+            if capabilities.isEmpty {
+                Text(UIStrings.knowledgeNoRows)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(capabilities.prefix(6)) { capability in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label(capability.name, systemImage: "tag")
+                            .font(.caption.bold())
+                            .lineLimit(1)
+                        if !capability.summary.isEmpty {
+                            Text(capability.summary)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                        }
+                        KnowledgeTokenFlow(title: UIStrings.knowledgeKeywords, values: capability.keywords)
+                        KnowledgeTokenFlow(title: UIStrings.knowledgeTools, values: capability.tools)
+                        KnowledgeTokenFlow(title: UIStrings.knowledgeRules, values: capability.rules)
+                        KnowledgeTokenFlow(title: UIStrings.knowledgeRisks, values: capability.riskTags)
+                        CapabilitySkillList(skills: capability.representativeSkills)
+                        RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: capability.evidenceRefs, systemImage: "checklist")
+                        RoutingInlineList(title: UIStrings.knowledgeSafetyFlags, empty: UIStrings.taskBenchmarkNoSafetyFlags, values: capability.safetyFlags, systemImage: "checkmark.shield")
+                    }
+                    .padding(8)
+                    .background(.quaternary.opacity(0.32), in: RoundedRectangle(cornerRadius: 6))
+                }
+            }
+        }
+    }
+}
+
+private struct CapabilitySkillList: View {
+    let skills: [CapabilityTaxonomySkill]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(UIStrings.capabilityTaxonomyRepresentativeSkills)
+                .font(.caption2.bold())
+                .foregroundStyle(.secondary)
+            if skills.isEmpty {
+                Text(UIStrings.knowledgeNoRows)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(skills.prefix(5)) { skill in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Label(skill.skillName, systemImage: "doc.text")
+                                .font(.caption2.bold())
+                                .lineLimit(1)
+                            Spacer()
+                            Text(skill.agent.map(DisplayText.agent) ?? UIStrings.unknown)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 3) {
+                            MetadataRow(label: UIStrings.scope, value: skill.scope ?? UIStrings.unknown)
+                            MetadataRow(label: UIStrings.state, value: skill.statusLabel)
+                            if let qualityScore = skill.qualityScore {
+                                MetadataRow(label: UIStrings.similarGroupingQuality, value: RoutingAccuracySummary.confidenceLabel(qualityScore))
+                            }
+                            if let readinessScore = skill.readinessScore {
+                                MetadataRow(label: UIStrings.similarGroupingReadiness, value: RoutingAccuracySummary.confidenceLabel(readinessScore))
+                            }
+                        }
+                        RoutingInlineList(title: UIStrings.routingConfidenceMatchReasons, empty: UIStrings.routingConfidenceNoReasons, values: skill.reasons, systemImage: "text.bubble")
+                        RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: skill.evidenceRefs, systemImage: "checklist")
+                        RoutingInlineList(title: UIStrings.knowledgeSafetyFlags, empty: UIStrings.taskBenchmarkNoSafetyFlags, values: skill.safetyFlags, systemImage: "checkmark.shield")
+                    }
+                    .padding(6)
+                    .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 6))
+                }
+            }
+        }
     }
 }
 

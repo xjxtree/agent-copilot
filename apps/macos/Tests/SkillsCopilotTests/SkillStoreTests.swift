@@ -53,6 +53,8 @@ struct SkillStoreTests {
         try await knowledgeSearchUsesReadOnlyServiceContract()
         try await similarSkillGroupingUsesReadOnlyServiceContract()
         try await similarSkillGroupingFallsBackWhenMethodUnavailable()
+        try await capabilityTaxonomyUsesReadOnlyServiceContract()
+        try await capabilityTaxonomyFallsBackWhenMethodUnavailable()
         try await crossAgentReadinessUsesReadOnlyServiceContract()
         try await routingConfidenceClearsStaleSelection()
         try await llmPreparePreviewIsScopedToSelectedSkillAndReadOnly()
@@ -1422,6 +1424,72 @@ struct SkillStoreTests {
         try expectContains(fake.calls(), "knowledge.groupSimilarSkills", "Fallback should still prove the intended V2.53 method was attempted.")
     }
 
+    private func capabilityTaxonomyUsesReadOnlyServiceContract() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+        let snapshotCallsBeforeBuild = countOccurrences("snapshot.", in: fake.calls())
+        await store.buildCapabilityTaxonomy()
+
+        let result = store.capabilityTaxonomyResult
+        try expectEqual(result?.generatedBy, "local-v2.54", "Capability taxonomy should expose generator metadata.")
+        try expectEqual(result?.summary.domainCount, 1, "Capability taxonomy should expose domain count.")
+        try expectEqual(result?.summary.capabilityCount, 2, "Capability taxonomy should expose capability count.")
+        try expectEqual(result?.coverageByAgent.first?.agent, "claude-code", "Capability taxonomy should expose agent coverage.")
+        try expectEqual(result?.domains.first?.name, "Audit workflows", "Capability taxonomy should expose domain title.")
+        try expectEqual(result?.domains.first?.capabilities.first?.name, "Release audit", "Capability taxonomy should expose capability rows.")
+        try expectEqual(result?.domains.first?.capabilities.first?.representativeSkills.first?.skillName, "Beta", "Capability taxonomy should expose representative skills.")
+        try expectEqual(result?.gapNotes.first, "Codex has no equivalent audit capability.", "Capability taxonomy should expose gap notes.")
+        try expectEqual(result?.evidenceReferences.first?.title, "Capability taxonomy", "Capability taxonomy should expose evidence references.")
+        try expectFalse(result?.safetyFlags.providerRequestSent ?? true, "Capability taxonomy must not send provider requests.")
+        try expectFalse(result?.safetyFlags.writeBackAllowed ?? true, "Capability taxonomy must not allow write-back.")
+        try expectFalse(result?.safetyFlags.writeActionsAvailable ?? true, "Capability taxonomy must not expose write actions.")
+        try expectFalse(result?.safetyFlags.scriptExecutionAllowed ?? true, "Capability taxonomy must not allow script execution.")
+        try expectFalse(result?.safetyFlags.executionActionsAvailable ?? true, "Capability taxonomy must not expose execution actions.")
+        try expectFalse(result?.safetyFlags.configMutationAllowed ?? true, "Capability taxonomy must not mutate config.")
+        try expectFalse(result?.safetyFlags.snapshotCreated ?? true, "Capability taxonomy must not create snapshots.")
+        try expectFalse(result?.safetyFlags.triageMutationAllowed ?? true, "Capability taxonomy must not mutate triage.")
+        try expectFalse(result?.safetyFlags.credentialAccessed ?? true, "Capability taxonomy must not access credentials.")
+        try expectFalse(result?.safetyFlags.rawPromptPersisted ?? true, "Capability taxonomy must not persist raw prompts.")
+        try expectFalse(result?.safetyFlags.rawResponsePersisted ?? true, "Capability taxonomy must not persist raw responses.")
+        try expectFalse(result?.safetyFlags.rawTracePersisted ?? true, "Capability taxonomy must not persist raw traces.")
+        try expectFalse(result?.safetyFlags.cloudSyncEnabled ?? true, "Capability taxonomy must not sync cloud data.")
+        try expectFalse(result?.safetyFlags.telemetryEnabled ?? true, "Capability taxonomy must not emit telemetry.")
+        try expectFalse(store.isBuildingCapabilityTaxonomy, "Capability taxonomy should reset loading state.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "knowledge.buildCapabilityTaxonomy", "Capability taxonomy should call the V2.54 taxonomy method.")
+        try expectContains(calls, "\"agent\":\"claude-code\"", "Capability taxonomy should pass the current agent filter.")
+        try expectContains(calls, "\"limit\":20", "Capability taxonomy should pass the domain limit.")
+        try expectContains(calls, "\"include_gaps\":true", "Capability taxonomy should request gap context.")
+        try expectFalse(calls.contains("llm.previewPrompt"), "Capability taxonomy must not prepare provider prompts.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Capability taxonomy must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Capability taxonomy must not call config write paths.")
+        try expectFalse(calls.contains("script.execute"), "Capability taxonomy must not call execution paths.")
+        try expectEqual(countOccurrences("snapshot.", in: calls), snapshotCallsBeforeBuild, "Capability taxonomy must not call snapshot paths.")
+        try expectFalse(calls.contains("credential"), "Capability taxonomy must not call credential paths.")
+    }
+
+    private func capabilityTaxonomyFallsBackWhenMethodUnavailable() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "normal")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+        await store.buildCapabilityTaxonomy()
+
+        try expectEqual(store.capabilityTaxonomyResult?.isUnavailable, true, "Capability taxonomy should expose unavailable fallback for older services.")
+        try expectEqual(store.capabilityTaxonomyResult?.fallbackReason, UIStrings.capabilityTaxonomyUnavailable, "Unknown method fallback should use the localized unavailable copy.")
+        try expectFalse(store.isBuildingCapabilityTaxonomy, "Unavailable capability taxonomy should reset loading state.")
+        try expectContains(fake.calls(), "knowledge.buildCapabilityTaxonomy", "Fallback should still prove the intended V2.54 method was attempted.")
+    }
+
     private func crossAgentReadinessUsesReadOnlyServiceContract() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -1870,6 +1938,12 @@ private final class FakeServiceScript {
               respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.53","catalog_available":true,"filters":{"agent":"claude-code","limit":20,"min_score":0.62,"include_singletons":false},"summary":{"group_count":1,"member_count":2,"duplicate_count":1,"similar_count":0,"confusable_count":0,"high_ambiguity_count":1,"coverage_redundancy_count":1,"routing_ambiguity_count":1,"summary":"Beta and Gamma overlap on audit routing."},"groups":[{"group_id":"grp-1","rank":1,"group_type":"duplicate","similarity_score":0.88,"ambiguity_risk":"high","coverage_redundancy":"substantial overlap","routing_ambiguity":"likely wrong-pick","title":"Audit release skills","summary":"Two skills cover the same audit release workflow.","why_grouped":["Same keywords and tool declarations."],"shared_terms":["audit","release"],"shared_tools":["rg"],"shared_rules":["permissions.network-declared"],"shared_capabilities":["analysis"],"shared_risks":["routing ambiguity"],"source_signals":["same project root"],"members":[{"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","source_kind":"project","source_root":"project","quality_score":82,"quality_band":"Good","readiness_score":74,"readiness_band":"Partial","stale_drift_state":"fresh","reasons":["Name and purpose overlap."],"evidence_refs":["catalog:beta"],"safety_flags":["provider not sent"]}],"evidence_refs":["catalog:beta","catalog:gamma"],"safety_flags":["provider not sent"]}],"gap_notes":["No benchmark separates the two skills."],"blocker_notes":[],"evidence_references":[{"title":"Similar grouping","detail":"Beta and Gamma grouped from local catalog evidence.","source":"knowledge.groupSimilarSkills","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"similar_skill_grouping","summary":"Provider explanation is copy-only and preview-gated.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent"]}}}'
             fi
             respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: knowledge.groupSimilarSkills"}}'
+            ;;
+          *\\"knowledge.buildCapabilityTaxonomy\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.54","catalog_available":true,"filters":{"agent":"claude-code","limit":20,"include_gaps":true},"summary":{"domain_count":1,"capability_count":2,"skill_count":3,"agent_count":1,"gap_count":1,"blocker_count":0,"summary":"Audit capabilities are covered but benchmark evidence is thin."},"coverage_by_agent":[{"agent":"claude-code","skill_count":3,"capability_count":2,"coverage_state":"covered","notes":["Release audit is covered."]}],"domains":[{"domain_id":"audit","name":"Audit workflows","summary":"Local audit and release review skills.","capability_count":2,"skill_count":3,"coverage_by_agent":[{"agent":"claude-code","skill_count":3,"capability_count":2,"coverage_state":"covered"}],"capabilities":[{"capability_id":"release-audit","name":"Release audit","summary":"Prepare local release audit evidence.","keywords":["audit","release"],"tools":["rg"],"rules":["permissions.network-declared"],"risk_tags":["local-only"],"representative_skills":[{"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","quality_score":82,"readiness_score":74,"reasons":["Purpose maps to release audit."],"evidence_refs":["catalog:beta"],"safety_flags":["provider not sent"]}],"evidence_refs":["catalog:beta"],"safety_flags":["provider not sent"]}],"gap_notes":["No imported trace covers release audit."],"blocker_notes":[],"evidence_refs":["domain:audit"],"safety_flags":["provider not sent"]}],"gap_notes":["Codex has no equivalent audit capability."],"blocker_notes":[],"evidence_references":[{"title":"Capability taxonomy","detail":"Capabilities derived from local catalog evidence.","source":"knowledge.buildCapabilityTaxonomy","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"capability_taxonomy","summary":"Provider explanation is copy-only and preview-gated.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent"]}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: knowledge.buildCapabilityTaxonomy"}}'
             ;;
           *\\"task.listBenchmarks\\"*)
             if [ "$scenario" = "prompt-ready" ]; then

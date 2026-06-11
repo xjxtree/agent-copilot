@@ -298,6 +298,18 @@ private struct SimilarSkillGroupingParams: Encodable {
     }
 }
 
+private struct CapabilityTaxonomyParams: Encodable {
+    let agent: String?
+    let limit: Int?
+    let includeGaps: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case agent
+        case limit
+        case includeGaps = "include_gaps"
+    }
+}
+
 private struct TaskBenchmarkDeleteParams: Encodable {
     let benchmarkId: String
 
@@ -897,6 +909,19 @@ final class ServiceClient {
         )
         do {
             return try await call(method: "knowledge.groupSimilarSkills", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func buildCapabilityTaxonomy(
+        agent: String? = nil,
+        limit: Int? = 20,
+        includeGaps: Bool = true
+    ) async throws -> CapabilityTaxonomyResult {
+        let params = CapabilityTaxonomyParams(agent: agent, limit: limit, includeGaps: includeGaps)
+        do {
+            return try await call(method: "knowledge.buildCapabilityTaxonomy", params: params)
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .unavailable()
         }

@@ -899,3 +899,15 @@
 "similarGrouping.quality" = "Quality";
 "similarGrouping.readiness" = "Readiness";
 "similarGrouping.staleDrift" = "Stale / drift";
+"capabilityTaxonomy.title" = "Capability Taxonomy";
+"capabilityTaxonomy.boundary" = "User-triggered, read-only local taxonomy for capability domains, coverage, gaps, blockers, representative skills, and evidence. It cannot call a provider, write skill files, mutate agent config, create snapshots, change triage, execute scripts, read credentials, persist raw prompts/responses/traces, sync cloud data, or emit telemetry.";
+"capabilityTaxonomy.action.build" = "Build Taxonomy";
+"capabilityTaxonomy.unavailable" = "Capability taxonomy is unavailable in this service build.";
+"capabilityTaxonomy.empty.result" = "No capability taxonomy loaded.";
+"capabilityTaxonomy.empty.domains" = "No capability domains returned.";
+"capabilityTaxonomy.domains" = "Domains";
+"capabilityTaxonomy.domain" = "Capability domain";
+"capabilityTaxonomy.capability" = "Capability";
+"capabilityTaxonomy.coverage" = "Coverage";
+"capabilityTaxonomy.agentCoverage" = "Agent coverage";
+"capabilityTaxonomy.representativeSkills" = "Representative skills";
