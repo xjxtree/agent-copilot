@@ -6606,7 +6606,7 @@ impl ServiceHost {
                     finding.instance_id.clone(),
                 );
                 risk_delta_rows.push(RemediationRiskDeltaRow {
-                    id: format!("risk-delta-{}", finding.id),
+                    id: format!("risk_delta:{}", finding.id),
                     source: "finding",
                     severity: finding.effective_severity.clone(),
                     title: redact_for_llm_preview(&finding.message),
@@ -14476,100 +14476,113 @@ fn remediation_top_level_impact_rows(
 ) -> Vec<RemediationImpactRow> {
     let mut rows = Vec::new();
     if !skill_rows.is_empty() {
-        rows.push(remediation_impact_row(
-            "skill",
-            1,
-            "Skill impact",
-            format!(
+        rows.push(remediation_impact_row(RemediationImpactRowInput {
+            area: "skill",
+            rank: 1,
+            title: "Skill impact",
+            summary: format!(
                 "{} local skill(s) are in scope for `{}`.",
                 skill_rows.len(),
                 filters.action
             ),
             filters,
-            Some(skill_rows[0].affected_skill.agent.clone()),
-            Some(skill_rows[0].affected_skill.clone()),
-            skill_rows[0].evidence_refs.clone(),
-            Vec::new(),
-        ));
+            affected_agent: Some(skill_rows[0].affected_skill.agent.clone()),
+            affected_skill: Some(skill_rows[0].affected_skill.clone()),
+            evidence_refs: skill_rows[0].evidence_refs.clone(),
+            blockers: Vec::new(),
+        }));
     }
     if !agent_rows.is_empty() {
-        rows.push(remediation_impact_row(
-            "agent",
-            2,
-            "Agent impact",
-            format!(
+        rows.push(remediation_impact_row(RemediationImpactRowInput {
+            area: "agent",
+            rank: 2,
+            title: "Agent impact",
+            summary: format!(
                 "{} agent(s) have scoped skill impact rows.",
                 agent_rows.len()
             ),
             filters,
-            Some(agent_rows[0].agent.clone()),
-            None,
-            agent_rows[0].evidence_refs.clone(),
-            agent_rows[0].blocker_notes.clone(),
-        ));
+            affected_agent: Some(agent_rows[0].agent.clone()),
+            affected_skill: None,
+            evidence_refs: agent_rows[0].evidence_refs.clone(),
+            blockers: agent_rows[0].blocker_notes.clone(),
+        }));
     }
     if !task_rows.is_empty() {
-        rows.push(remediation_impact_row(
-            "task",
-            3,
-            "Task impact",
-            "Task readiness/routing impact is estimated from local evidence.".to_string(),
+        rows.push(remediation_impact_row(RemediationImpactRowInput {
+            area: "task",
+            rank: 3,
+            title: "Task impact",
+            summary: "Task readiness/routing impact is estimated from local evidence.".to_string(),
             filters,
-            filters.agent.clone(),
-            None,
-            task_rows[0].evidence_refs.clone(),
-            Vec::new(),
-        ));
+            affected_agent: filters.agent.clone(),
+            affected_skill: None,
+            evidence_refs: task_rows[0].evidence_refs.clone(),
+            blockers: Vec::new(),
+        }));
     }
     if !risk_rows.is_empty() {
-        rows.push(remediation_impact_row(
-            "risk",
-            4,
-            "Risk impact",
-            format!("{} local risk delta row(s) are in scope.", risk_rows.len()),
+        rows.push(remediation_impact_row(RemediationImpactRowInput {
+            area: "risk",
+            rank: 4,
+            title: "Risk impact",
+            summary: format!("{} local risk delta row(s) are in scope.", risk_rows.len()),
             filters,
-            filters.agent.clone(),
-            None,
-            risk_rows[0].evidence_refs.clone(),
-            risk_rows
+            affected_agent: filters.agent.clone(),
+            affected_skill: None,
+            evidence_refs: risk_rows[0].evidence_refs.clone(),
+            blockers: risk_rows
                 .iter()
                 .flat_map(|row| row.blockers.clone())
                 .collect(),
-        ));
+        }));
     }
     if !snapshot_rows.is_empty() {
-        rows.push(remediation_impact_row(
-            "snapshot",
-            5,
-            "Snapshot and rollback plan",
-            format!(
+        rows.push(remediation_impact_row(RemediationImpactRowInput {
+            area: "snapshot",
+            rank: 5,
+            title: "Snapshot and rollback plan",
+            summary: format!(
                 "{} plan-only snapshot/rollback row(s) are in scope.",
                 snapshot_rows.len()
             ),
             filters,
-            Some(snapshot_rows[0].agent.clone()),
-            None,
-            snapshot_rows[0].evidence_refs.clone(),
-            snapshot_rows
+            affected_agent: Some(snapshot_rows[0].agent.clone()),
+            affected_skill: None,
+            evidence_refs: snapshot_rows[0].evidence_refs.clone(),
+            blockers: snapshot_rows
                 .iter()
                 .filter_map(|row| row.blocked_reason.clone())
                 .collect(),
-        ));
+        }));
     }
     rows
 }
 
-fn remediation_impact_row(
+struct RemediationImpactRowInput<'a> {
     area: &'static str,
     rank: usize,
-    title: &str,
+    title: &'static str,
     summary: String,
-    filters: &RemediationPreviewImpactFilters,
+    filters: &'a RemediationPreviewImpactFilters,
     affected_agent: Option<String>,
     affected_skill: Option<RemediationAffectedSkill>,
     evidence_refs: Vec<String>,
-    mut blockers: Vec<String>,
-) -> RemediationImpactRow {
+    blockers: Vec<String>,
+}
+
+fn remediation_impact_row(input: RemediationImpactRowInput<'_>) -> RemediationImpactRow {
+    let RemediationImpactRowInput {
+        area,
+        rank,
+        title,
+        summary,
+        filters,
+        affected_agent,
+        affected_skill,
+        evidence_refs,
+        mut blockers,
+    } = input;
     blockers.sort();
     blockers.dedup();
     RemediationImpactRow {

@@ -47,7 +47,7 @@ linux_home='/'home'/'
 var_folders='/'var'/folders/'
 private_var='/'private'/var/'
 
-text_pattern="(${mac_home}[^[:space:]\`\"<>)]*|(^|[[:space:]\`\"'=:,({[])\${linux_home}[A-Za-z0-9._-]+[^[:space:]\`\"<>)]*|${var_folders}[^[:space:]\`\"<>)]*|${private_var}[^[:space:]\`\"<>)]*|fixture[-]secret|PROXY[_-]MANAGED|ANTHROPIC_AUTH_TOKEN[=:][^<[:space:]]+|OPENAI_API_KEY[=:][^<[:space:]]+|DASHSCOPE_API_KEY[=:][^<[:space:]]+|API[_-]?KEY[=:][^<[:space:]]+|TOKEN[=:][^<[:space:]]+|SECRET[=:][^<[:space:]]+|PASSWORD[=:][^<[:space:]]+|sk-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9_]{20,}|BEGIN [A-Z ]*PRIVATE KEY|ssh-rsa[[:space:]])"
+text_pattern="(${mac_home}[^[:space:]\`\"<>)]*|(^|[[:space:]\`\"'=:,({[])\${linux_home}[A-Za-z0-9._-]+[^[:space:]\`\"<>)]*|${var_folders}[^[:space:]\`\"<>)]*|${private_var}[^[:space:]\`\"<>)]*|fixture[-]secret|PROXY[_-]MANAGED|ANTHROPIC_AUTH_TOKEN[=:][^<[:space:]]+|OPENAI_API_KEY[=:][^<[:space:]]+|DASHSCOPE_API_KEY[=:][^<[:space:]]+|API[_-]?KEY[=:][^<[:space:]]+|TOKEN[=:][^<[:space:]]+|SECRET[=:][^<[:space:]]+|PASSWORD[=:][^<[:space:]]+|(^|[^A-Za-z0-9_-])sk-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9_]{20,}|BEGIN [A-Z ]*PRIVATE KEY|ssh-rsa[[:space:]])"
 
 echo "privacy check: tracked text"
 if git grep -n -I -E "$text_pattern" -- . ':(exclude)dist' ':(exclude)target'; then

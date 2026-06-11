@@ -161,7 +161,7 @@
     ],
     "risk_delta_rows": [
       {
-        "id": "risk-delta-fixture-finding",
+        "id": "risk_delta:fixture-finding",
         "source": "finding",
         "severity": "error",
         "title": "Execution permission needs human review.",
