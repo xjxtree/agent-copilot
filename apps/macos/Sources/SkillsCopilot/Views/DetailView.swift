@@ -165,6 +165,8 @@ struct DetailView: View {
                             isComparingCrossAgentReadiness: store.isComparingCrossAgentReadiness,
                             routingAccuracyDashboard: store.routingAccuracyDashboard,
                             isLoadingRoutingAccuracyDashboard: store.isLoadingRoutingAccuracyDashboard,
+                            staleDriftDetection: store.staleDriftDetection,
+                            isDetectingStaleDrift: store.isDetectingStaleDrift,
                             onScoreQuality: {
                                 Task {
                                     await store.scoreSelectedSkillQuality()
@@ -218,6 +220,11 @@ struct DetailView: View {
                             onLoadRoutingAccuracyDashboard: {
                                 Task {
                                     await store.loadRoutingAccuracyDashboard()
+                                }
+                            },
+                            onDetectStaleDrift: {
+                                Task {
+                                    await store.detectStaleDrift()
                                 }
                             },
                             taskBenchmarkText: $store.taskBenchmarkText,
@@ -854,6 +861,8 @@ private struct AnalysisSection: View {
     let isComparingCrossAgentReadiness: Bool
     let routingAccuracyDashboard: RoutingAccuracyDashboard?
     let isLoadingRoutingAccuracyDashboard: Bool
+    let staleDriftDetection: StaleDriftDetectionResult?
+    let isDetectingStaleDrift: Bool
     let onScoreQuality: () -> Void
     let onPreviewQualityPrompt: () -> Void
     let onSendQualityPrompt: () -> Void
@@ -865,6 +874,7 @@ private struct AnalysisSection: View {
     let onSendRoutingConfidencePrompt: () -> Void
     let onCompareCrossAgentReadiness: () -> Void
     let onLoadRoutingAccuracyDashboard: () -> Void
+    let onDetectStaleDrift: () -> Void
     @Binding var taskBenchmarkText: String
     let taskBenchmarkInput: String
     let taskBenchmarkList: TaskBenchmarkListResult
@@ -1002,6 +1012,12 @@ private struct AnalysisSection: View {
                 dashboard: routingAccuracyDashboard,
                 isLoading: isLoadingRoutingAccuracyDashboard,
                 onLoad: onLoadRoutingAccuracyDashboard
+            )
+
+            StaleDriftDetectionPanel(
+                result: staleDriftDetection,
+                isDetecting: isDetectingStaleDrift,
+                onDetect: onDetectStaleDrift
             )
 
             TaskBenchmarkPanel(
@@ -2839,6 +2855,303 @@ private struct RoutingAccuracySafetyList: View {
             (UIStrings.skillQualityProviderNotSent, safety.providerRequestSent),
             (UIStrings.skillQualityWritesBlocked, safety.writeBackAllowed),
             (UIStrings.skillQualityScriptsBlocked, safety.scriptExecutionAllowed),
+            (UIStrings.skillQualityMutationsBlocked, safety.configMutationAllowed || safety.snapshotCreated || safety.triageMutationAllowed),
+            (UIStrings.skillQualityCredentialsBlocked, safety.credentialAccessed || safety.rawSecretReturned),
+            (UIStrings.llmPromptRawPromptStored, safety.rawPromptPersisted),
+            (UIStrings.llmPromptRawResponseStored, safety.rawResponsePersisted),
+            (UIStrings.routingAccuracyRawTraceStored, safety.rawTracePersisted),
+            (UIStrings.routingAccuracyCloudSync, safety.cloudSyncEnabled),
+            (UIStrings.routingAccuracyTelemetry, safety.telemetryEnabled)
+        ]
+    }
+}
+
+private struct StaleDriftDetectionPanel: View {
+    let result: StaleDriftDetectionResult?
+    let isDetecting: Bool
+    let onDetect: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.staleDriftTitle, systemImage: "clock.badge.exclamationmark")
+                    .font(.headline)
+                Spacer()
+                Label(UIStrings.readOnlyPreview, systemImage: "lock.shield")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(UIStrings.staleDriftBoundary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+
+            HStack(spacing: 8) {
+                Button {
+                    onDetect()
+                } label: {
+                    Label(UIStrings.staleDriftDetectAction, systemImage: "waveform.path.ecg.rectangle")
+                }
+                .disabled(isDetecting)
+
+                if isDetecting {
+                    Label(UIStrings.llmPreparing, systemImage: "hourglass")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+
+            if let result {
+                StaleDriftResultView(result: result)
+            } else {
+                Label(UIStrings.staleDriftNoResult, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Label(UIStrings.llmReviewNoActions, systemImage: "nosign")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct StaleDriftResultView: View {
+    let result: StaleDriftDetectionResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let fallbackReason = result.fallbackReason, !fallbackReason.isEmpty {
+                Label(fallbackReason, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+                SummaryChip(title: UIStrings.staleDriftStale, value: "\(result.summary.staleCount)", systemImage: "clock")
+                SummaryChip(title: UIStrings.staleDriftDrift, value: "\(result.summary.driftCount)", systemImage: "arrow.triangle.2.circlepath")
+                SummaryChip(title: UIStrings.staleDriftCandidates, value: "\(candidateCount)", systemImage: "rectangle.stack")
+                SummaryChip(title: UIStrings.staleDriftAffectedAgents, value: "\(result.summary.affectedAgentCount)", systemImage: "person.3")
+                SummaryChip(title: UIStrings.staleDriftReadinessImpact, value: "\(readinessImpactCount)", systemImage: "gauge.medium.badge.exclamationmark")
+                SummaryChip(title: UIStrings.staleDriftHighRisk, value: "\(result.summary.highRiskCount)", systemImage: "exclamationmark.triangle")
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                MetadataRow(label: UIStrings.routingAccuracyGeneratedBy, value: result.generatedBy)
+                MetadataRow(label: UIStrings.routingAccuracyCatalog, value: result.catalogAvailable ? UIStrings.routingAccuracyAvailable : UIStrings.routingAccuracyUnavailableShort)
+                MetadataRow(label: UIStrings.staleDriftCandidates, value: "\(candidateCount)")
+                MetadataRow(label: UIStrings.staleDriftReadinessImpact, value: "\(readinessImpactCount)")
+                MetadataRow(label: UIStrings.crossAgentReadinessGapsIssues, value: "\(gapIssueCount)")
+                if let promptRequest = result.promptRequest {
+                    MetadataRow(label: UIStrings.routingAccuracyPromptRequest, value: promptRequestLabel(promptRequest))
+                }
+            }
+
+            if !result.summary.summaryText.isEmpty {
+                Text(result.summary.summaryText)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            StaleDriftCandidateList(rows: result.staleDriftRows)
+            StaleDriftImpactList(title: UIStrings.staleDriftReadinessImpact, empty: UIStrings.staleDriftNoReadinessImpact, rows: result.readinessImpactRows, systemImage: "gauge.medium.badge.exclamationmark")
+            StaleDriftImpactList(title: UIStrings.crossAgentReadinessGapsIssues, empty: UIStrings.crossAgentReadinessNoGapsIssues, rows: result.gapIssueRows, systemImage: "puzzlepiece.extension")
+            CrossAgentReadinessEvidenceList(evidence: result.evidenceReferences)
+            StaleDriftSafetyList(safety: result.safetyFlags)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var candidateCount: Int {
+        result.summary.candidateCount > 0 ? result.summary.candidateCount : result.staleDriftRows.count
+    }
+
+    private var readinessImpactCount: Int {
+        result.summary.readinessImpactCount > 0 ? result.summary.readinessImpactCount : result.readinessImpactRows.count
+    }
+
+    private var gapIssueCount: Int {
+        result.summary.gapIssueCount > 0 ? result.summary.gapIssueCount : result.gapIssueRows.count
+    }
+
+    private func promptRequestLabel(_ promptRequest: RoutingAccuracyPromptRequest) -> String {
+        let state = promptRequest.enabled ? UIStrings.llmEnabled : UIStrings.llmDisabled
+        let copy = promptRequest.copyOnly ? UIStrings.llmPromptCopyOnly : UIStrings.llmSkillAnalysisEnabledUnsafe
+        return "\(promptRequest.requestKind) · \(state) · \(copy)"
+    }
+}
+
+private struct StaleDriftCandidateList: View {
+    let rows: [StaleDriftRow]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(UIStrings.staleDriftCandidates)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if rows.isEmpty {
+                Text(UIStrings.staleDriftNoCandidates)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(rows.prefix(8)) { row in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Label(row.title, systemImage: row.kind.localizedCaseInsensitiveContains("drift") ? "arrow.triangle.2.circlepath" : "clock")
+                                    .font(.callout.bold())
+                                    .lineLimit(1)
+                                Spacer()
+                                Text(row.kind)
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.secondary)
+                                if let severity = row.severity, !severity.isEmpty {
+                                    Text(severity)
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+
+                            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
+                                MetadataRow(label: UIStrings.agent, value: row.agent.map(DisplayText.agent) ?? row.skill?.agent.map(DisplayText.agent) ?? UIStrings.unknown)
+                                MetadataRow(label: UIStrings.crossAgentReadinessBestSkill, value: row.skill?.name ?? UIStrings.unknown)
+                                MetadataRow(label: UIStrings.scope, value: row.skill?.scope ?? UIStrings.unknown)
+                                MetadataRow(label: UIStrings.state, value: row.skill?.state ?? UIStrings.unknown)
+                                MetadataRow(label: UIStrings.staleDriftLastSeen, value: row.lastSeen ?? UIStrings.unknown)
+                                MetadataRow(label: UIStrings.routingAccuracyAvgConfidence, value: row.confidenceLabel)
+                            }
+
+                            Text(row.summary)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+
+                            if let current = row.currentSignal, !current.isEmpty {
+                                Label(current, systemImage: "waveform.path.ecg")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if let expected = row.expectedSignal, !expected.isEmpty {
+                                Label(expected, systemImage: "scope")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            RoutingInlineList(title: UIStrings.staleDriftReasons, empty: UIStrings.staleDriftNoReasons, values: row.reasons, systemImage: "text.bubble")
+                            RoutingInlineList(title: UIStrings.staleDriftSignals, empty: UIStrings.staleDriftNoSignals, values: row.signals, systemImage: "waveform.path.ecg")
+                            RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: row.evidenceRefs, systemImage: "checklist")
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct StaleDriftImpactList: View {
+    let title: String
+    let empty: String
+    let rows: [StaleDriftImpactRow]
+    let systemImage: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if rows.isEmpty {
+                Text(empty)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(rows.prefix(6)) { row in
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Label(row.title, systemImage: systemImage)
+                                .font(.callout)
+                            Spacer()
+                            if let severity = row.severity, !severity.isEmpty {
+                                Text(severity)
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        HStack(spacing: 8) {
+                            if let agent = row.agent, !agent.isEmpty {
+                                Text(DisplayText.agent(agent))
+                            }
+                            if let skillName = row.skillName, !skillName.isEmpty {
+                                Text(skillName)
+                            }
+                        }
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        Text(row.detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                        if !row.evidenceRefs.isEmpty {
+                            Text(row.evidenceRefs.joined(separator: ", "))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                                .textSelection(.enabled)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct StaleDriftSafetyList: View {
+    let safety: StaleDriftSafety
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(UIStrings.staleDriftSafetyFlags)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            Label(
+                safety.allReadOnlyFlagsClear ? UIStrings.routingAccuracySafetyClear : UIStrings.llmSkillAnalysisEnabledUnsafe,
+                systemImage: safety.allReadOnlyFlagsClear ? "checkmark.shield" : "exclamationmark.triangle"
+            )
+            .font(.callout)
+            .foregroundStyle(.secondary)
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 185), spacing: 8)], alignment: .leading, spacing: 8) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                    SafetyPill(label: row.label, isBlocked: !row.isUnsafe)
+                }
+            }
+
+            if !safety.notes.isEmpty {
+                ForEach(safety.notes.prefix(4), id: \.self) { note in
+                    Label(note, systemImage: "info.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private var rows: [(label: String, isUnsafe: Bool)] {
+        [
+            (UIStrings.skillQualityProviderNotSent, safety.providerRequestSent),
+            (UIStrings.skillQualityWritesBlocked, safety.writeBackAllowed || safety.writeActionsAvailable),
+            (UIStrings.skillQualityScriptsBlocked, safety.scriptExecutionAllowed || safety.executionActionsAvailable),
             (UIStrings.skillQualityMutationsBlocked, safety.configMutationAllowed || safety.snapshotCreated || safety.triageMutationAllowed),
             (UIStrings.skillQualityCredentialsBlocked, safety.credentialAccessed || safety.rawSecretReturned),
             (UIStrings.llmPromptRawPromptStored, safety.rawPromptPersisted),

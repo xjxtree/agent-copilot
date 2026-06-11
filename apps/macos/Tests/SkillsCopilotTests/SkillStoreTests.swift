@@ -49,6 +49,7 @@ struct SkillStoreTests {
         try await agentTraceImportUsesLocalServiceContract()
         try await agentTraceImportFallsBackWhenMethodUnavailable()
         try await routingAccuracyDashboardUsesReadOnlyServiceContract()
+        try await staleDriftDetectionUsesReadOnlyServiceContract()
         try await crossAgentReadinessUsesReadOnlyServiceContract()
         try await routingConfidenceClearsStaleSelection()
         try await llmPreparePreviewIsScopedToSelectedSkillAndReadOnly()
@@ -1254,6 +1255,55 @@ struct SkillStoreTests {
         try expectFalse(calls.contains("credential"), "Routing accuracy dashboard must not call credential paths.")
     }
 
+    private func staleDriftDetectionUsesReadOnlyServiceContract() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+        let snapshotCallsBeforeDetect = countOccurrences("snapshot.", in: fake.calls())
+        await store.detectStaleDrift()
+
+        let result = store.staleDriftDetection
+        try expectEqual(result?.generatedBy, "local-v2.51", "Stale drift detection should expose generator metadata.")
+        try expectEqual(result?.summary.staleCount, 2, "Stale drift detection should expose stale count.")
+        try expectEqual(result?.summary.driftCount, 1, "Stale drift detection should expose drift count.")
+        try expectEqual(result?.staleDriftRows.first?.title, "Beta appears stale", "Stale drift detection should expose candidate rows.")
+        try expectEqual(result?.staleDriftRows.first?.skill?.name, "Beta", "Stale drift detection should expose row skill refs.")
+        try expectEqual(result?.readinessImpactRows.first?.title, "Readiness lowered", "Stale drift detection should expose readiness impact rows.")
+        try expectEqual(result?.gapIssueRows.first?.title, "Missing fresh evidence", "Stale drift detection should expose gap rows.")
+        try expectEqual(result?.evidenceReferences.first?.title, "Catalog freshness", "Stale drift detection should expose evidence references.")
+        try expectFalse(result?.safetyFlags.providerRequestSent ?? true, "Stale drift detection must not send provider requests.")
+        try expectFalse(result?.safetyFlags.writeBackAllowed ?? true, "Stale drift detection must not allow write-back.")
+        try expectFalse(result?.safetyFlags.writeActionsAvailable ?? true, "Stale drift detection must not expose write actions.")
+        try expectFalse(result?.safetyFlags.scriptExecutionAllowed ?? true, "Stale drift detection must not allow script execution.")
+        try expectFalse(result?.safetyFlags.executionActionsAvailable ?? true, "Stale drift detection must not expose execution actions.")
+        try expectFalse(result?.safetyFlags.configMutationAllowed ?? true, "Stale drift detection must not mutate config.")
+        try expectFalse(result?.safetyFlags.snapshotCreated ?? true, "Stale drift detection must not create snapshots.")
+        try expectFalse(result?.safetyFlags.triageMutationAllowed ?? true, "Stale drift detection must not mutate triage.")
+        try expectFalse(result?.safetyFlags.credentialAccessed ?? true, "Stale drift detection must not access credentials.")
+        try expectFalse(result?.safetyFlags.rawPromptPersisted ?? true, "Stale drift detection must not persist raw prompts.")
+        try expectFalse(result?.safetyFlags.rawResponsePersisted ?? true, "Stale drift detection must not persist raw responses.")
+        try expectFalse(result?.safetyFlags.rawTracePersisted ?? true, "Stale drift detection must not persist raw traces.")
+        try expectFalse(result?.safetyFlags.cloudSyncEnabled ?? true, "Stale drift detection must not sync cloud data.")
+        try expectFalse(result?.safetyFlags.telemetryEnabled ?? true, "Stale drift detection must not emit telemetry.")
+        try expectFalse(store.isDetectingStaleDrift, "Stale drift detection should reset loading state.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "analysis.detectStaleDrift", "Stale drift UI should call the V2.51 detection method.")
+        try expectContains(calls, "\"agent\":\"claude-code\"", "Stale drift detection should pass the current agent filter.")
+        try expectContains(calls, "\"limit\":40", "Stale drift detection should pass the detection limit.")
+        try expectContains(calls, "\"include_readiness_impact\":true", "Stale drift detection should request readiness impact explicitly.")
+        try expectFalse(calls.contains("llm.previewPrompt"), "Stale drift detection must not prepare provider prompts.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Stale drift detection must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Stale drift detection must not call config write paths.")
+        try expectFalse(calls.contains("script.execute"), "Stale drift detection must not call execution paths.")
+        try expectEqual(countOccurrences("snapshot.", in: calls), snapshotCallsBeforeDetect, "Stale drift detection must not call snapshot paths.")
+        try expectFalse(calls.contains("credential"), "Stale drift detection must not call credential paths.")
+    }
+
     private func crossAgentReadinessUsesReadOnlyServiceContract() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -1726,6 +1776,12 @@ private final class FakeServiceScript {
               respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.49","catalog_available":true,"filters":{"agent":"claude-code","window_days":30,"limit":20,"include_history":true,"include_recent_evidence":true},"summary":{"trace_count":11,"hit_count":7,"miss_count":2,"wrong_pick_count":1,"ambiguous_count":1,"unknown_count":0,"benchmark_count":5,"benchmark_matched_count":4,"benchmark_gap_count":3,"regression_count":1,"missing_benchmark_count":2,"accuracy_rate":0.636,"known_outcome_rate":1.0,"summary":"Seven of eleven imported traces hit the expected route."},"agent_rows":[{"agent":"claude-code","trace_count":11,"outcomes":{"hit":7,"miss":2,"wrong_pick":1,"ambiguous":1,"unknown":0},"accuracy_rate":0.636,"benchmark_count":5,"benchmark_matched_count":4,"benchmark_gap_count":3,"regression_count":1,"recent_evidence_count":2,"notes":["One expected route has no benchmark."]}],"history_rows":[{"unix_day":1781136000,"trace_count":11,"outcomes":{"hit":7,"miss":2,"wrong_pick":1,"ambiguous":1,"unknown":0},"accuracy_rate":0.636}],"gap_issue_rows":[{"source":"trace","severity":"warning","agent":"openclaw","title":"Missing trace coverage","detail":"No OpenClaw traces in the selected window.","evidence_refs":["trace:none"]}],"recent_evidence_rows":[{"source":"trace.importLocal","agent":"claude-code","title":"Trace","outcome":"hit","detail":"Beta matched expected route in trace-1.","evidence_refs":["trace-1"],"observed_at":1781136000000}],"blocker_notes":["One expected route has no benchmark."],"prompt_request":{"enabled":false,"request_kind":"routing_accuracy","summary":"Provider explanation is copy-only and preview-gated.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"script_execution_allowed":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent"]}}}'
             fi
             respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: routing.accuracyDashboard"}}'
+            ;;
+          *\\"analysis.detectStaleDrift\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.51","catalog_available":true,"filters":{"agent":"claude-code","limit":40,"include_readiness_impact":true},"summary":{"stale_count":2,"drift_count":1,"candidate_count":3,"affected_agent_count":2,"readiness_impact_count":1,"gap_issue_count":1,"high_risk_count":1,"summary":"Beta appears stale and Gamma has routing drift evidence."},"stale_drift_rows":[{"id":"stale-beta","kind":"stale","severity":"warning","agent":"claude-code","skill":{"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","scope":"agent-project","state":"loaded","enabled":true},"title":"Beta appears stale","summary":"Beta has not appeared in recent trace or benchmark evidence.","last_seen":"2026-05-01","current_signal":"No recent trace hits.","expected_signal":"Expected route remains Beta.","confidence":82,"reasons":["No trace hits in the current window."],"signals":["Benchmark age exceeds threshold."],"evidence_refs":["catalog:beta","trace:none"]},{"id":"drift-gamma","kind":"drift","severity":"medium","agent":"codex","skill":{"instance_id":"gamma","definition_id":"codex:gamma","skill_name":"Gamma","scope":"agent-global","state":"loaded","enabled":true},"title":"Gamma routing drift","summary":"Imported trace wording no longer matches benchmark expectations.","current_signal":"Trace selected Gamma for a task that used to route to Beta.","expected_signal":"Benchmark expected Beta.","confidence":74,"reasons":["Top route changed in regression evidence."],"signals":["Regression baseline changed."],"evidence_refs":["regression:bench-1"]}],"readiness_impact_rows":[{"agent":"claude-code","skill_name":"Beta","severity":"warning","title":"Readiness lowered","detail":"Readiness is partial because evidence is stale.","evidence_refs":["readiness:beta"]}],"gap_issue_rows":[{"source":"trace","severity":"warning","agent":"claude-code","title":"Missing fresh evidence","detail":"No fresh trace confirms the expected route.","evidence_refs":["trace:none"]}],"evidence_references":[{"title":"Catalog freshness","detail":"Beta fingerprint is unchanged but not recently exercised.","source":"catalog","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"stale_drift_detection","summary":"Provider explanation is copy-only and preview-gated.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent"]}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: analysis.detectStaleDrift"}}'
             ;;
           *\\"task.deleteBenchmark\\"*)
             if [ "$scenario" = "prompt-ready" ]; then

@@ -521,7 +521,19 @@ Model families:
   - `routing_accuracy_context`: `{ trace_count, accuracy_rate, benchmark_count, benchmark_gap_count, regression_count, recent_evidence_count, notes }`；`benchmark_context`: `{ evaluated_count, matched_count, gap_count, regression_count, notes }`。
   - 数据来源：`TaskReadinessAssessment`, `TaskBenchmark`, `RoutingRegression`, `TraceImport`, `RoutingAccuracy`，以及 existing `SkillQualityScore`。
   - 与现有模型一致：默认不持久化 raw trace/raw prompt/raw response/raw skill body；可选 provider 辅助仍走 V2.42 preview/redaction/confirmation/copy-only。
-- `KnowledgeIndex` / `SimilarityGroup` / `CapabilityTaxonomy`（V2.51-V2.54）：local-only index and derived groupings; no default network dependency.
+- `StaleDriftAssessment`（V2.51 completed）
+
+  用于 `analysis.detectStaleDrift` 的只读 stale/drift 派生 response；默认 read-only、deterministic、本地 evidence-first，不持久化新的 stale/drift artifact。
+
+  - `analysis.detectStaleDrift` response: `{ generated_by, catalog_available, filters, summary, stale_drift_rows, readiness_impact_rows, gap_notes, blocker_notes, evidence_references, prompt_request, safety_flags }`。
+  - `filters`: `{ agent, candidate_instance_ids, limit, stale_days }`。
+  - `summary`: `{ scanned_skill_count, returned_row_count, stale_count, drift_count, high_risk_count, medium_risk_count, low_risk_count, missing_history_count, summary }`。
+  - `stale_drift_rows`: `[{ rank, instance_id, definition_id, skill_name, agent, scope, enabled, state, stale_drift_score, stale_drift_band, drift_signals, readiness_impact, reasons, gap_notes, evidence_refs, safety_flags }]`。
+  - `drift_signals`: `{ fingerprint_drift, finding_drift, source_drift, modified_age_days, stale_by_mtime, missing_mtime, missing_previous_scan, related_finding_count, related_conflict_count, related_analysis_count }`。
+  - `readiness_impact_rows`: `[{ instance_id, skill_name, agent, impact_level, stale_drift_score, notes, evidence_refs }]`。
+  - 数据来源：catalog fingerprint / `mtime` / state, `RuleFindingRecord`, same-agent conflicts, cross-agent analysis groups, source/root provenance, adapter diagnostics, and derived readiness impact notes。Previous-scan drift is only asserted when existing local evidence exists（例如 `fingerprint.changed` finding、conflict、analysis group）；missing timestamp/history is surfaced as gap evidence rather than live file I/O。
+  - 与现有模型一致：默认不持久化 raw trace/raw prompt/raw response/raw skill body；可选 provider 辅助仍走 V2.42 preview/redaction/confirmation/copy-only，且不得改变 deterministic stale/drift 结果。
+- `KnowledgeIndex` / `SimilarityGroup` / `CapabilityTaxonomy`（V2.52-V2.55）：local-only index and derived groupings; no default network dependency.
 - `ReviewSession` / `RemediationHistory`（V2.56-V2.61）：local review state, actions considered, decisions, reopened issues, and summary. AI suggestions remain untrusted and cannot directly mutate skill files or agent config.
 - `PolicyPack` / `PolicyProfile` / `ComplianceReport`（V2.63-V2.66）：local policy schema, import/export metadata, profile bindings, deterministic evidence, and optional AI explanation.
 - `ProviderObservabilityView`（V2.69）：derived UI/reporting layer over `ProviderCallMetadataMinimal`, adding call history, cost trends, provider errors, rate limits, availability, cleanup/retention controls, and optional redacted export. Do not persist API keys, raw prompts, raw responses, credentials, or local paths by default.

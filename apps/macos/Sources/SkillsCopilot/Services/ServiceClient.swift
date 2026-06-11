@@ -260,6 +260,18 @@ private struct RoutingAccuracyDashboardParams: Encodable {
     }
 }
 
+private struct StaleDriftDetectionParams: Encodable {
+    let agent: String?
+    let limit: Int?
+    let includeReadinessImpact: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case agent
+        case limit
+        case includeReadinessImpact = "include_readiness_impact"
+    }
+}
+
 private struct TaskBenchmarkDeleteParams: Encodable {
     let benchmarkId: String
 
@@ -814,6 +826,23 @@ final class ServiceClient {
         )
         do {
             return try await call(method: "routing.accuracyDashboard", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func detectStaleDrift(
+        agent: String? = nil,
+        limit: Int? = 40,
+        includeReadinessImpact: Bool = true
+    ) async throws -> StaleDriftDetectionResult {
+        let params = StaleDriftDetectionParams(
+            agent: agent,
+            limit: limit,
+            includeReadinessImpact: includeReadinessImpact
+        )
+        do {
+            return try await call(method: "analysis.detectStaleDrift", params: params)
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .unavailable()
         }

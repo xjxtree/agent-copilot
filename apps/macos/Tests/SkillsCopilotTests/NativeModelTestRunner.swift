@@ -54,6 +54,7 @@ public func runNativeModelTests() {
         try CleanupQueueModelTests().run()
         try CrossAgentComparisonModelTests().run()
         try CrossAgentReadinessModelTests().run()
+        try StaleDriftDetectionModelTests().run()
         try AIProviderModelTests().run()
         try LLMModelTests().run()
         try ScriptExecutionModelTests().run()

@@ -529,6 +529,26 @@ enum UIStrings {
     static var routingAccuracyPromptRequest: String { text("routingAccuracy.promptRequest", "Prompt request") }
     static var routingAccuracyNoDashboard: String { text("routingAccuracy.empty.dashboard", "No routing accuracy dashboard loaded.") }
     static var routingAccuracyDays: String { text("routingAccuracy.days", "%d days") }
+    static var staleDriftTitle: String { text("staleDrift.title", "Stale / Drift Detection") }
+    static var staleDriftBoundary: String { text("staleDrift.boundary", "User-triggered local stale and drift review from catalog, readiness, routing, benchmark, regression, and accuracy evidence. It cannot call a provider, write skill files, mutate agent config, create snapshots, change triage, execute scripts, read credentials, persist raw prompts/responses/traces, sync cloud data, or emit telemetry.") }
+    static var staleDriftDetectAction: String { text("staleDrift.action.detect", "Detect Stale / Drift") }
+    static var staleDriftUnavailable: String { text("staleDrift.unavailable", "Stale / drift detection is unavailable in this service build.") }
+    static var staleDriftNoResult: String { text("staleDrift.empty.result", "No stale / drift detection loaded.") }
+    static var staleDriftStale: String { text("staleDrift.stale", "Stale") }
+    static var staleDriftDrift: String { text("staleDrift.drift", "Drift") }
+    static var staleDriftCandidates: String { text("staleDrift.candidates", "Candidates") }
+    static var staleDriftCandidate: String { text("staleDrift.candidate", "Stale / drift candidate") }
+    static var staleDriftAffectedAgents: String { text("staleDrift.affectedAgents", "Affected agents") }
+    static var staleDriftReadinessImpact: String { text("staleDrift.readinessImpact", "Readiness impact") }
+    static var staleDriftHighRisk: String { text("staleDrift.highRisk", "High risk") }
+    static var staleDriftLastSeen: String { text("staleDrift.lastSeen", "Last seen") }
+    static var staleDriftReasons: String { text("staleDrift.reasons", "Reasons") }
+    static var staleDriftSignals: String { text("staleDrift.signals", "Signals") }
+    static var staleDriftNoCandidates: String { text("staleDrift.empty.candidates", "No stale or drift candidates returned.") }
+    static var staleDriftNoReadinessImpact: String { text("staleDrift.empty.readinessImpact", "No readiness impact rows returned.") }
+    static var staleDriftNoReasons: String { text("staleDrift.empty.reasons", "No reasons returned.") }
+    static var staleDriftNoSignals: String { text("staleDrift.empty.signals", "No signals returned.") }
+    static var staleDriftSafetyFlags: String { text("staleDrift.safetyFlags", "Safety flags") }
     static var taskBenchmarkTitle: String { text("taskBenchmark.title", "Task Benchmark Set") }
     static var taskBenchmarkBoundary: String { text("taskBenchmark.boundary", "User-triggered, local benchmark evaluation for task routing. Local evaluation does not call a provider and cannot write skill files, mutate agent config, create snapshots, change triage, execute scripts, or read credentials.") }
     static var taskBenchmarkTaskPlaceholder: String { text("taskBenchmark.task.placeholder", "Optional benchmark task text; otherwise the current readiness/routing task is used") }

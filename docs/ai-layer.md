@@ -4,7 +4,7 @@
 >
 > Scanner / rules / catalog 始终是事实来源；LLM/AI provider 是 AI agent skills 的核心分析增强，用于质量、任务可用性、routing 置信度、trace 分析、remediation 和治理总结。
 >
-> 当前实现边界（V2.50 baseline，V2.51 stale/drift detection 仍未实现）：
+> 当前实现边界（V2.51 baseline；V2.52 Local Knowledge Index 仍未实现）：
 >
 > - 已落地 disabled-by-default 的 service/UI gate 和 request prepare/estimate 能力。
 > - 已落地用户显式配置的 OpenAI-compatible / Claude-compatible provider profile 基础：`llm.listProviderProfiles`、`llm.saveProviderProfile`、`llm.deleteProviderProfile`、`llm.testProviderConnection`、macOS Keychain-first API key storage、预算字段、disabled/unconfigured state，以及 test connection 的最小 redacted call metadata。
@@ -51,6 +51,12 @@
 > - `task.compareAgentReadiness`：同一任务横向比较 Claude/Codex/opencode/Pi/Hermes/OpenClaw 的本地候选可见性、readiness/routing score、quality 传播信号、enabled/scope/risk state、benchmark/regression/accuracy context、gap/blocker 与 evidence refs。
 > - Cross-agent readiness 是 user-triggered/read-only，本地比较不写 comparison artifact、不发 provider 请求、不改 triage/config/snapshot/skill 文件、不读 credentials、不执行脚本。
 > - 可选 provider 说明仍走 V2.42 preview/redaction/confirmation，copy-only，不改变 deterministic 推荐 agent 或 per-agent 排序。
+
+> V2.51（已完成）：
+>
+> - `analysis.detectStaleDrift`：以 read-only、deterministic、本地 evidence-first 的方式检查 stale skills、fingerprint drift、scan/finding/source drift 与 readiness impact。
+> - 已实现 service protocol 与 native Analysis UI：输出 summary、stale/drift rows、readiness impact rows、gap/blocker notes、evidence refs、prompt request metadata 与 safety flags。
+> - 默认不写 skill / agent config / snapshot / triage，不执行脚本，不持久化 raw prompt/response/trace，也不默认发 provider 请求；可选 provider 说明仍必须走 V2.42 preview/redaction/confirmation 且保持 copy-only。
 
 ## 1. 双层分工
 
@@ -101,7 +107,8 @@ Provider 配置原则：
 | V2.48（实现） | Agent behavior trace import（`trace.importLocal`/`trace.listImports`/`trace.deleteImport`） | trace 文本先 redacted 后存元数据与可复查摘要；deterministic local 判读 hit/miss/wrong-pick/ambiguity；不落 raw trace；可选 provider 说明走 V2.42 |
 | V2.49（实现） | Routing accuracy dashboard（`routing.accuracyDashboard`） | V2.46 benchmark results + V2.47 regression evidence + V2.48 redacted trace imports；local evidence-first + optional AI 说明 |
 | V2.50（实现） | cross-agent task readiness（`task.compareAgentReadiness`） | 同一任务横向比较 Claude/Codex/opencode/Pi/Hermes/OpenClaw 的 skill 可见性、质量、路由置信度与 gap；输入来自 `task.checkReadiness` / `task.rankSkillRoutes` / benchmark / regression / trace import / accuracy evidence；read-only，本地 evidence-first，provider 仅在 V2.42 preview-confirmed copy-only |
-| V2.51-V2.55 | stale/drift、knowledge index、similar grouping、taxonomy、workspace readiness | fingerprints、mtime、source/root provenance、local index |
+| V2.51（实现） | stale/drift detection（`analysis.detectStaleDrift`） | fingerprints、mtime、finding/conflict/analysis drift、source/root provenance、readiness impact、local evidence-first、optional V2.42 copy-only provider explanation |
+| V2.52-V2.55 | knowledge index、similar grouping、taxonomy、workspace readiness | fingerprints、mtime、source/root provenance、local index |
 | V2.56-V2.60 | remediation planner、fix drafts、impact preview、batch review、history | findings、triage、policy, snapshots, writable capability matrix |
 | V2.61-V2.70 | review session、governance report、policy packs、skill map、full provider observability、safe write planning | local reports, policy profiles, V2.41-V2.42 call metadata, evidence gates |
 

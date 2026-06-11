@@ -32,7 +32,7 @@ use skills_copilot_commands::{
     SkillInstallPreviewRecord, SnapshotRollbackPreviewRecord, ToolGlobalImportResult,
     SCRIPT_EXECUTION_DISABLED_REASON,
 };
-use skills_copilot_core::{AdapterContext, AdapterRoot, AgentId, RootSource, Scope};
+use skills_copilot_core::{AdapterContext, AdapterRoot, AgentId, RootSource, Scope, SkillInstance};
 use thiserror::Error;
 
 mod project_context;
@@ -62,6 +62,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "adapter.listDiagnostics",
     "evidence.piWritableHarness",
     "analysis.scoreSkillQuality",
+    "analysis.detectStaleDrift",
     "task.checkReadiness",
     "task.rankSkillRoutes",
     "task.compareAgentReadiness",
@@ -781,6 +782,117 @@ pub struct AgentReadinessSafetyFlags {
     pub telemetry_emitted: bool,
 }
 
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct DetectStaleDriftParams {
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default, alias = "instance_ids")]
+    pub candidate_instance_ids: Vec<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+    #[serde(default)]
+    pub stale_days: Option<u32>,
+    #[serde(default)]
+    pub thresholds: StaleDriftThresholds,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct StaleDriftThresholds {
+    #[serde(default)]
+    pub stale_days: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct StaleDriftDetectionResult {
+    pub generated_by: &'static str,
+    pub catalog_available: bool,
+    pub filters: StaleDriftFilters,
+    pub summary: StaleDriftSummary,
+    pub stale_drift_rows: Vec<StaleDriftRow>,
+    pub readiness_impact_rows: Vec<StaleDriftReadinessImpactRow>,
+    pub gap_notes: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub evidence_references: Vec<TaskReadinessEvidenceReference>,
+    pub prompt_request: StaleDriftPromptRequest,
+    pub safety_flags: StaleDriftSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct StaleDriftFilters {
+    pub agent: Option<String>,
+    pub candidate_instance_ids: Vec<String>,
+    pub limit: usize,
+    pub stale_days: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct StaleDriftSummary {
+    pub scanned_skill_count: usize,
+    pub returned_row_count: usize,
+    pub stale_count: usize,
+    pub drift_count: usize,
+    pub high_risk_count: usize,
+    pub medium_risk_count: usize,
+    pub low_risk_count: usize,
+    pub missing_history_count: usize,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct StaleDriftRow {
+    pub rank: usize,
+    pub instance_id: String,
+    pub definition_id: String,
+    pub skill_name: String,
+    pub agent: String,
+    pub scope: String,
+    pub enabled: bool,
+    pub state: String,
+    pub stale_drift_score: u8,
+    pub stale_drift_band: &'static str,
+    pub drift_signals: StaleDriftSignals,
+    pub readiness_impact: Option<StaleDriftReadinessImpact>,
+    pub reasons: Vec<String>,
+    pub gap_notes: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub safety_flags: StaleDriftSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct StaleDriftSignals {
+    pub fingerprint_drift: bool,
+    pub finding_drift: bool,
+    pub source_drift: bool,
+    pub modified_age_days: Option<i64>,
+    pub stale_by_mtime: bool,
+    pub missing_mtime: bool,
+    pub missing_previous_scan: bool,
+    pub related_finding_count: usize,
+    pub related_conflict_count: usize,
+    pub related_analysis_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct StaleDriftReadinessImpact {
+    pub impact_level: &'static str,
+    pub readiness_risk_score: u8,
+    pub notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct StaleDriftReadinessImpactRow {
+    pub instance_id: String,
+    pub skill_name: String,
+    pub agent: String,
+    pub impact_level: &'static str,
+    pub stale_drift_score: u8,
+    pub notes: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+pub type StaleDriftPromptRequest = AgentReadinessPromptRequest;
+pub type StaleDriftSafetyFlags = AgentReadinessSafetyFlags;
+
 #[derive(Debug, Clone, Serialize)]
 pub struct SkillRouteCandidate {
     pub rank: usize,
@@ -1448,6 +1560,7 @@ pub enum LlmPromptActionKind {
     DraftFrontmatter,
     SkillAnalysis,
     QualityScore,
+    StaleDriftDetection,
     TaskReadiness,
     RoutingConfidence,
 }
@@ -1461,6 +1574,7 @@ impl LlmPromptActionKind {
             Self::DraftFrontmatter => "draft_frontmatter",
             Self::SkillAnalysis => "skill_analysis",
             Self::QualityScore => "quality_score",
+            Self::StaleDriftDetection => "stale_drift_detection",
             Self::TaskReadiness => "task_readiness",
             Self::RoutingConfidence => "routing_confidence",
         }
@@ -1975,6 +2089,14 @@ impl ServiceHost {
             "analysis.scoreSkillQuality" => {
                 let params: ScoreSkillQualityParams = serde_json::from_value(request.params)?;
                 serde_json::to_value(self.score_skill_quality(params)?).map_err(Into::into)
+            }
+            "analysis.detectStaleDrift" => {
+                let params: DetectStaleDriftParams = if request.params.is_null() {
+                    DetectStaleDriftParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.detect_stale_drift(params)?).map_err(Into::into)
             }
             "task.checkReadiness" => {
                 let params: TaskReadinessParams = serde_json::from_value(request.params)?;
@@ -3418,6 +3540,213 @@ impl ServiceHost {
         })
     }
 
+    pub fn detect_stale_drift(
+        &self,
+        params: DetectStaleDriftParams,
+    ) -> Result<StaleDriftDetectionResult, ServiceError> {
+        if matches!(params.limit, Some(0)) {
+            return Err(ServiceError::InvalidRequest(
+                "analysis.detectStaleDrift limit must be greater than zero".to_string(),
+            ));
+        }
+        let stale_days = params
+            .thresholds
+            .stale_days
+            .or(params.stale_days)
+            .unwrap_or(90);
+        if stale_days == 0 {
+            return Err(ServiceError::InvalidRequest(
+                "analysis.detectStaleDrift stale_days must be greater than zero".to_string(),
+            ));
+        }
+
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let limit = params.limit.unwrap_or(20).clamp(1, 100);
+        let filters = StaleDriftFilters {
+            agent: params.agent.clone(),
+            candidate_instance_ids: params.candidate_instance_ids.clone(),
+            limit,
+            stale_days,
+        };
+        let Some(catalog) = self.open_existing_catalog_read_only()? else {
+            return Ok(empty_stale_drift_result(filters, false));
+        };
+
+        let skills = catalog
+            .list_skill_instances_for_project_context(adapter_ctx.project_root.as_deref())?;
+        let skills = skills
+            .into_iter()
+            .filter(|skill| !is_pi_plain_markdown_instance_noise(skill))
+            .collect::<Vec<_>>();
+        let findings = list_findings(&catalog)?;
+        let conflicts = list_conflicts(&catalog)?;
+        let analysis = analyze_catalog(&catalog, &adapter_ctx)?;
+        let adapter_diagnostics = list_adapter_diagnostics(&adapter_ctx);
+        let agent_filter = params.agent.as_deref().filter(|agent| !agent.is_empty());
+        let requested_ids = params
+            .candidate_instance_ids
+            .iter()
+            .filter(|id| !id.trim().is_empty())
+            .map(|id| id.as_str())
+            .collect::<Vec<_>>();
+
+        let mut gap_notes = Vec::new();
+        let visible_by_id = skills
+            .iter()
+            .map(|skill| (skill.id.as_str(), skill))
+            .collect::<BTreeMap<_, _>>();
+        for requested_id in &requested_ids {
+            if !visible_by_id.contains_key(requested_id) {
+                gap_notes.push(format!(
+                    "Requested candidate `{}` is not visible in the current catalog/project scope.",
+                    redact_for_llm_preview(requested_id)
+                ));
+            }
+        }
+
+        let now_ms = unix_timestamp_millis();
+        let mut evidence = Vec::new();
+        let mut rows = Vec::new();
+        for skill in &skills {
+            if !agent_matches(agent_filter, Some(skill.agent.as_str())) {
+                continue;
+            }
+            if !requested_ids.is_empty() && !requested_ids.contains(&skill.id.as_str()) {
+                continue;
+            }
+            let related_findings = findings
+                .iter()
+                .filter(|finding| {
+                    finding.instance_id.as_deref() == Some(skill.id.as_str())
+                        || finding.definition_id.as_deref() == Some(skill.definition_id.as_str())
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            let related_conflicts = conflicts
+                .iter()
+                .filter(|conflict| {
+                    conflict.definition_id == skill.definition_id
+                        || conflict
+                            .instance_ids
+                            .iter()
+                            .any(|instance_id| instance_id == &skill.id)
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            let related_analysis = analysis
+                .groups
+                .iter()
+                .filter(|group| {
+                    group
+                        .instance_ids
+                        .iter()
+                        .any(|instance_id| instance_id == &skill.id)
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            let diagnostic = adapter_diagnostics
+                .iter()
+                .find(|diagnostic| diagnostic.agent == skill.agent.as_str());
+            rows.push(stale_drift_row(
+                skill,
+                StaleDriftRowSignals {
+                    findings: &related_findings,
+                    conflicts: &related_conflicts,
+                    analysis_groups: &related_analysis,
+                    diagnostic,
+                    stale_days,
+                    now_ms,
+                },
+                &mut evidence,
+            ));
+        }
+
+        rows.sort_by(|left, right| {
+            right
+                .stale_drift_score
+                .cmp(&left.stale_drift_score)
+                .then_with(|| left.agent.cmp(&right.agent))
+                .then_with(|| left.skill_name.cmp(&right.skill_name))
+                .then_with(|| left.instance_id.cmp(&right.instance_id))
+        });
+        rows.truncate(limit);
+        for (index, row) in rows.iter_mut().enumerate() {
+            row.rank = index + 1;
+        }
+        let readiness_impact_rows = rows
+            .iter()
+            .filter_map(stale_drift_readiness_impact_row)
+            .collect::<Vec<_>>();
+        if rows.is_empty() {
+            gap_notes.push(
+                "No visible skill rows matched the stale/drift detection filters.".to_string(),
+            );
+        }
+        if rows
+            .iter()
+            .any(|row| row.drift_signals.missing_previous_scan)
+        {
+            gap_notes.push(
+                "Some rows lack explicit previous-scan comparison evidence; drift is limited to current catalog findings, conflicts, and analysis groups."
+                    .to_string(),
+            );
+        }
+        if rows.iter().any(|row| row.drift_signals.missing_mtime) {
+            gap_notes.push(
+                "Some rows lack catalog mtime evidence; staleness age could not be derived without reading source files."
+                    .to_string(),
+            );
+        }
+        gap_notes.sort();
+        gap_notes.dedup();
+
+        let blocker_notes = stale_drift_blocker_notes(&rows);
+        let summary = stale_drift_summary(skills.len(), &rows);
+        let prompt_instance_ids = rows
+            .iter()
+            .take(8)
+            .map(|row| row.instance_id.clone())
+            .collect::<Vec<_>>();
+        let prompt_available = !prompt_instance_ids.is_empty();
+
+        Ok(StaleDriftDetectionResult {
+            generated_by: "deterministic-service",
+            catalog_available: true,
+            filters,
+            summary,
+            stale_drift_rows: rows,
+            readiness_impact_rows,
+            gap_notes,
+            blocker_notes,
+            evidence_references: evidence,
+            prompt_request: StaleDriftPromptRequest {
+                available: prompt_available,
+                preview_method: "llm.previewPrompt",
+                confirm_method: "llm.confirmPromptAndSend",
+                action: "stale_drift_detection",
+                request: LlmPreviewPromptParams {
+                    action: LlmPromptActionKind::StaleDriftDetection,
+                    profile_id: None,
+                    skill_instance_id: None,
+                    instance_ids: prompt_instance_ids,
+                    analysis_kind: None,
+                    user_intent: Some(
+                        "Explain deterministic stale/drift signals using only local catalog evidence."
+                            .to_string(),
+                    ),
+                },
+                note: if prompt_available {
+                    "Optional provider-backed explanation must be requested through prompt preview and explicit confirmation; analysis.detectStaleDrift never sends provider traffic."
+                        .to_string()
+                } else {
+                    "Prompt preview is unavailable until local catalog evidence produces stale/drift rows."
+                        .to_string()
+                },
+            },
+            safety_flags: stale_drift_safety_flags(),
+        })
+    }
+
     pub fn check_task_readiness(
         &self,
         params: TaskReadinessParams,
@@ -4651,6 +4980,43 @@ impl ServiceHost {
                 ]);
                 sections.push(render_quality_score_prompt_section(&score, &mut redactor));
             }
+            LlmPromptActionKind::StaleDriftDetection => {
+                let detection = self.detect_stale_drift(DetectStaleDriftParams {
+                    agent: None,
+                    candidate_instance_ids: params.instance_ids.clone(),
+                    limit: Some(8),
+                    stale_days: None,
+                    thresholds: StaleDriftThresholds::default(),
+                })?;
+                prompt_scope.extend([
+                    "deterministic stale and drift signals".to_string(),
+                    "skill identity summaries".to_string(),
+                    "readiness impact notes".to_string(),
+                    "local gap and blocker notes".to_string(),
+                    "evidence reference summaries".to_string(),
+                    "safety flags".to_string(),
+                ]);
+                included_fields.extend([
+                    "candidate skill ids".to_string(),
+                    "skill names".to_string(),
+                    "agents".to_string(),
+                    "scopes".to_string(),
+                    "enabled states".to_string(),
+                    "stale/drift scores and bands".to_string(),
+                    "fingerprint, finding, source, and mtime-derived signals".to_string(),
+                    "readiness impact summaries".to_string(),
+                    "finding/conflict/analysis evidence ids and labels".to_string(),
+                    "read-only safety flags".to_string(),
+                ]);
+                excluded_fields.extend([
+                    "raw source paths".to_string(),
+                    "raw provider response".to_string(),
+                    "agent config contents".to_string(),
+                    "raw skill body".to_string(),
+                    "raw frontmatter".to_string(),
+                ]);
+                sections.push(render_stale_drift_prompt_section(&detection, &mut redactor));
+            }
             LlmPromptActionKind::TaskReadiness => {
                 let task = params.user_intent.as_deref().ok_or_else(|| {
                     ServiceError::InvalidRequest(
@@ -4751,6 +5117,7 @@ impl ServiceHost {
                 .unwrap_or(LlmSkillAnalysisKind::Overview)
                 .output_token_estimate(),
             LlmPromptActionKind::QualityScore => 650,
+            LlmPromptActionKind::StaleDriftDetection => 750,
             LlmPromptActionKind::TaskReadiness => 750,
             LlmPromptActionKind::RoutingConfidence => 850,
         };
@@ -6140,6 +6507,16 @@ fn is_pi_plain_markdown_catalog_noise(skill: &SkillRecord) -> bool {
         && skill.path.file_name().and_then(|name| name.to_str()) != Some("SKILL.md")
 }
 
+fn is_pi_plain_markdown_instance_noise(skill: &SkillInstance) -> bool {
+    skill.agent == AgentId::Pi
+        && skill
+            .path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            == Some("md")
+        && skill.path.file_name().and_then(|name| name.to_str()) != Some("SKILL.md")
+}
+
 fn unix_timestamp_millis() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -6419,6 +6796,464 @@ fn skill_quality_safety_flags() -> SkillQualitySafetyFlags {
         raw_prompt_persisted: false,
         raw_response_persisted: false,
     }
+}
+
+fn stale_drift_safety_flags() -> StaleDriftSafetyFlags {
+    agent_readiness_safety_flags()
+}
+
+fn empty_stale_drift_result(
+    filters: StaleDriftFilters,
+    catalog_available: bool,
+) -> StaleDriftDetectionResult {
+    StaleDriftDetectionResult {
+        generated_by: "deterministic-service",
+        catalog_available,
+        filters,
+        summary: StaleDriftSummary {
+            scanned_skill_count: 0,
+            returned_row_count: 0,
+            stale_count: 0,
+            drift_count: 0,
+            high_risk_count: 0,
+            medium_risk_count: 0,
+            low_risk_count: 0,
+            missing_history_count: 0,
+            summary:
+                "No local catalog is available, so stale/drift detection has no skill evidence."
+                    .to_string(),
+        },
+        stale_drift_rows: Vec::new(),
+        readiness_impact_rows: Vec::new(),
+        gap_notes: vec![
+            "Run a local scan before relying on stale/drift detection for skill governance."
+                .to_string(),
+        ],
+        blocker_notes: vec![
+            "No provider request was sent and no fallback network lookup was attempted."
+                .to_string(),
+        ],
+        evidence_references: Vec::new(),
+        prompt_request: StaleDriftPromptRequest {
+            available: false,
+            preview_method: "llm.previewPrompt",
+            confirm_method: "llm.confirmPromptAndSend",
+            action: "stale_drift_detection",
+            request: LlmPreviewPromptParams {
+                action: LlmPromptActionKind::StaleDriftDetection,
+                profile_id: None,
+                skill_instance_id: None,
+                instance_ids: Vec::new(),
+                analysis_kind: None,
+                user_intent: Some(
+                    "Explain deterministic stale/drift signals using only local catalog evidence."
+                        .to_string(),
+                ),
+            },
+            note: "Prompt preview is unavailable until local catalog evidence exists.".to_string(),
+        },
+        safety_flags: stale_drift_safety_flags(),
+    }
+}
+
+struct StaleDriftRowSignals<'a> {
+    findings: &'a [RuleFindingRecord],
+    conflicts: &'a [ConflictGroupRecord],
+    analysis_groups: &'a [CrossAgentAnalysisGroup],
+    diagnostic: Option<&'a AdapterDiagnosticsRecord>,
+    stale_days: u32,
+    now_ms: i64,
+}
+
+fn stale_drift_row(
+    skill: &SkillInstance,
+    signals: StaleDriftRowSignals<'_>,
+    evidence: &mut Vec<TaskReadinessEvidenceReference>,
+) -> StaleDriftRow {
+    let skill_ref = push_task_readiness_evidence(
+        evidence,
+        "skill",
+        &skill.id,
+        format!(
+            "Catalog metadata for `{}` ({}, {}, enabled={}, state={})",
+            redact_for_llm_preview(&skill.name),
+            redact_for_llm_preview(skill.agent.as_str()),
+            redact_for_llm_preview(skill.scope.as_str()),
+            skill.enabled,
+            redact_for_llm_preview(skill.state.as_str())
+        ),
+        None,
+        Some(skill.id.clone()),
+    );
+    let modified_age_days = stale_drift_modified_age_days(skill.mtime, signals.now_ms);
+    let stale_by_mtime = modified_age_days
+        .map(|age| age >= i64::from(signals.stale_days))
+        .unwrap_or(false);
+    let missing_mtime = skill.mtime <= 0;
+    let fingerprint_drift = signals.findings.iter().any(|finding| {
+        finding.rule_id == "fingerprint.changed"
+            && !finding.suppressed
+            && finding.triage_status != "ignored"
+    });
+    let finding_drift = signals.findings.iter().any(|finding| {
+        !finding.suppressed
+            && finding.triage_status != "ignored"
+            && matches!(
+                finding.effective_severity.as_str(),
+                "critical" | "error" | "warn" | "warning"
+            )
+    });
+    let source_drift = signals.conflicts.iter().any(|conflict| {
+        conflict.reason.contains("drift")
+            || conflict.reason.contains("shadow")
+            || conflict.reason.contains("collision")
+    }) || signals.analysis_groups.iter().any(|group| {
+        matches!(
+            group.kind.as_str(),
+            "source_path_overlap"
+                | "enabled_mismatch"
+                | "duplicate_name"
+                | "canonical_name"
+                | "precedence"
+                | "malformed"
+        )
+    });
+    let missing_previous_scan = !fingerprint_drift
+        && skill.first_seen == skill.last_seen
+        && signals
+            .findings
+            .iter()
+            .all(|finding| finding.rule_id != "fingerprint.changed");
+
+    let mut reasons = Vec::new();
+    let mut gap_notes = Vec::new();
+    let mut evidence_refs = vec![skill_ref];
+    if fingerprint_drift {
+        reasons.push(
+            "Current local findings include explicit fingerprint drift evidence.".to_string(),
+        );
+    } else {
+        gap_notes.push(
+            "No explicit previous-scan fingerprint drift finding is available for this skill."
+                .to_string(),
+        );
+    }
+    if finding_drift {
+        reasons.push(format!(
+            "{} open warning/error finding(s) may indicate behavior or metadata drift.",
+            signals
+                .findings
+                .iter()
+                .filter(|finding| {
+                    !finding.suppressed
+                        && finding.triage_status != "ignored"
+                        && matches!(
+                            finding.effective_severity.as_str(),
+                            "critical" | "error" | "warn" | "warning"
+                        )
+                })
+                .count()
+        ));
+    }
+    if source_drift {
+        reasons.push(
+            "Current conflicts or cross-agent analysis indicate source/identity drift.".to_string(),
+        );
+    }
+    if stale_by_mtime {
+        if let Some(age) = modified_age_days {
+            reasons.push(format!(
+                "Catalog mtime is {age} day(s) old, meeting the {} day stale threshold.",
+                signals.stale_days
+            ));
+        }
+    } else if let Some(age) = modified_age_days {
+        reasons.push(format!(
+            "Catalog mtime age is {age} day(s), below the {} day stale threshold.",
+            signals.stale_days
+        ));
+    } else {
+        gap_notes
+            .push("Catalog mtime is unavailable, so staleness age is not derived.".to_string());
+    }
+    if missing_previous_scan {
+        gap_notes.push(
+            "Previous-scan comparison history is limited; drift is inferred only from current local evidence."
+                .to_string(),
+        );
+    }
+
+    for finding in signals.findings {
+        let evidence_id = push_task_readiness_evidence(
+            evidence,
+            "finding",
+            &finding.id,
+            format!(
+                "{} finding `{}`: {}",
+                redact_for_llm_preview(&finding.effective_severity),
+                redact_for_llm_preview(&finding.rule_id),
+                redact_for_llm_preview(&finding.message)
+            ),
+            Some(finding.effective_severity.clone()),
+            finding.instance_id.clone(),
+        );
+        evidence_refs.push(evidence_id);
+    }
+    for conflict in signals.conflicts {
+        let evidence_id = push_task_readiness_evidence(
+            evidence,
+            "conflict",
+            &conflict.id,
+            format!(
+                "Same-agent conflict `{}` covers {} instance(s)",
+                redact_for_llm_preview(&conflict.reason),
+                conflict.instance_ids.len()
+            ),
+            Some("warning".to_string()),
+            Some(skill.id.clone()),
+        );
+        evidence_refs.push(evidence_id);
+    }
+    for group in signals.analysis_groups {
+        let evidence_id = push_task_readiness_evidence(
+            evidence,
+            "analysis",
+            &group.id,
+            format!(
+                "{} analysis `{}`: {}",
+                redact_for_llm_preview(&group.severity),
+                redact_for_llm_preview(&group.kind),
+                redact_for_llm_preview(&group.title)
+            ),
+            Some(group.severity.clone()),
+            Some(skill.id.clone()),
+        );
+        evidence_refs.push(evidence_id);
+    }
+    if let Some(diagnostic) = signals.diagnostic {
+        let evidence_id = push_task_readiness_evidence(
+            evidence,
+            "adapter_diagnostics",
+            diagnostic.agent,
+            format!(
+                "{} adapter diagnostics: status={}, writable_status={}, install_status={}",
+                redact_for_llm_preview(diagnostic.display_name),
+                redact_for_llm_preview(diagnostic.status),
+                redact_for_llm_preview(diagnostic.access.writable_status),
+                redact_for_llm_preview(diagnostic.access.install_status)
+            ),
+            None,
+            Some(skill.id.clone()),
+        );
+        evidence_refs.push(evidence_id);
+    }
+    reasons.sort();
+    reasons.dedup();
+    gap_notes.sort();
+    gap_notes.dedup();
+
+    let drift_signals = StaleDriftSignals {
+        fingerprint_drift,
+        finding_drift,
+        source_drift,
+        modified_age_days,
+        stale_by_mtime,
+        missing_mtime,
+        missing_previous_scan,
+        related_finding_count: signals.findings.len(),
+        related_conflict_count: signals.conflicts.len(),
+        related_analysis_count: signals.analysis_groups.len(),
+    };
+    let score = stale_drift_score(&drift_signals, skill);
+    let readiness_impact = stale_drift_readiness_impact(score, &drift_signals, skill);
+
+    StaleDriftRow {
+        rank: 0,
+        instance_id: skill.id.clone(),
+        definition_id: skill.definition_id.clone(),
+        skill_name: redact_for_llm_preview(&skill.name),
+        agent: skill.agent.as_str().to_string(),
+        scope: skill.scope.as_str().to_string(),
+        enabled: skill.enabled,
+        state: skill.state.as_str().to_string(),
+        stale_drift_score: score,
+        stale_drift_band: stale_drift_band(score),
+        drift_signals,
+        readiness_impact,
+        reasons,
+        gap_notes,
+        evidence_refs,
+        safety_flags: stale_drift_safety_flags(),
+    }
+}
+
+fn stale_drift_modified_age_days(mtime: i64, now_ms: i64) -> Option<i64> {
+    if mtime <= 0 || now_ms <= 0 || mtime > now_ms {
+        return None;
+    }
+    Some((now_ms - mtime) / 86_400_000)
+}
+
+fn stale_drift_score(signals: &StaleDriftSignals, skill: &SkillInstance) -> u8 {
+    let mut score = 0i16;
+    if signals.fingerprint_drift {
+        score += 35;
+    }
+    if signals.finding_drift {
+        score += 20;
+    }
+    if signals.source_drift {
+        score += 25;
+    }
+    if signals.stale_by_mtime {
+        score += 20;
+    } else if signals.missing_mtime {
+        score += 6;
+    }
+    if !skill.enabled {
+        score += 4;
+    }
+    if skill.state.as_str() != "loaded" {
+        score += 10;
+    }
+    if signals.missing_previous_scan {
+        score += 4;
+    }
+    score.clamp(0, 100) as u8
+}
+
+fn stale_drift_band(score: u8) -> &'static str {
+    match score {
+        80..=100 => "high",
+        45..=79 => "medium",
+        1..=44 => "low",
+        _ => "clear",
+    }
+}
+
+fn stale_drift_readiness_impact(
+    score: u8,
+    signals: &StaleDriftSignals,
+    skill: &SkillInstance,
+) -> Option<StaleDriftReadinessImpact> {
+    let mut notes = Vec::new();
+    if signals.fingerprint_drift {
+        notes.push(
+            "Fingerprint drift should be reviewed before treating this skill as a stable routing target."
+                .to_string(),
+        );
+    }
+    if signals.source_drift {
+        notes.push("Source or identity drift may make cross-agent routing ambiguous.".to_string());
+    }
+    if signals.finding_drift {
+        notes.push(
+            "Open warning/error findings can reduce deterministic task readiness.".to_string(),
+        );
+    }
+    if signals.stale_by_mtime {
+        notes.push("Stale mtime may indicate skill instructions have not kept pace with current task expectations.".to_string());
+    }
+    if !skill.enabled || skill.state.as_str() != "loaded" {
+        notes.push(
+            "Disabled or non-loaded state can block readiness regardless of match quality."
+                .to_string(),
+        );
+    }
+    if notes.is_empty() {
+        return None;
+    }
+    Some(StaleDriftReadinessImpact {
+        impact_level: stale_drift_band(score),
+        readiness_risk_score: score,
+        notes,
+    })
+}
+
+fn stale_drift_readiness_impact_row(row: &StaleDriftRow) -> Option<StaleDriftReadinessImpactRow> {
+    row.readiness_impact
+        .as_ref()
+        .map(|impact| StaleDriftReadinessImpactRow {
+            instance_id: row.instance_id.clone(),
+            skill_name: row.skill_name.clone(),
+            agent: row.agent.clone(),
+            impact_level: impact.impact_level,
+            stale_drift_score: row.stale_drift_score,
+            notes: impact.notes.clone(),
+            evidence_refs: row.evidence_refs.clone(),
+        })
+}
+
+fn stale_drift_summary(scanned_skill_count: usize, rows: &[StaleDriftRow]) -> StaleDriftSummary {
+    let stale_count = rows
+        .iter()
+        .filter(|row| row.drift_signals.stale_by_mtime)
+        .count();
+    let drift_count = rows
+        .iter()
+        .filter(|row| {
+            row.drift_signals.fingerprint_drift
+                || row.drift_signals.finding_drift
+                || row.drift_signals.source_drift
+        })
+        .count();
+    let high_risk_count = rows
+        .iter()
+        .filter(|row| row.stale_drift_band == "high")
+        .count();
+    let medium_risk_count = rows
+        .iter()
+        .filter(|row| row.stale_drift_band == "medium")
+        .count();
+    let low_risk_count = rows
+        .iter()
+        .filter(|row| row.stale_drift_band == "low")
+        .count();
+    let missing_history_count = rows
+        .iter()
+        .filter(|row| row.drift_signals.missing_previous_scan || row.drift_signals.missing_mtime)
+        .count();
+    let summary = if rows.is_empty() {
+        "No visible skills matched the stale/drift detection filters.".to_string()
+    } else {
+        format!(
+            "Detected {stale_count} stale skill row(s), {drift_count} drift row(s), and {high_risk_count} high-risk row(s) from deterministic local catalog evidence."
+        )
+    };
+    StaleDriftSummary {
+        scanned_skill_count,
+        returned_row_count: rows.len(),
+        stale_count,
+        drift_count,
+        high_risk_count,
+        medium_risk_count,
+        low_risk_count,
+        missing_history_count,
+        summary,
+    }
+}
+
+fn stale_drift_blocker_notes(rows: &[StaleDriftRow]) -> Vec<String> {
+    let mut notes = Vec::new();
+    if rows.iter().any(|row| row.drift_signals.fingerprint_drift) {
+        notes.push(
+            "Fingerprint drift evidence is present; review before relying on affected skills for routing."
+                .to_string(),
+        );
+    }
+    if rows.iter().any(|row| row.drift_signals.source_drift) {
+        notes.push(
+            "Source or identity drift evidence is present; cross-agent routing may be ambiguous."
+                .to_string(),
+        );
+    }
+    if rows.iter().any(|row| row.stale_drift_band == "high") {
+        notes.push(
+            "High stale/drift risk is based on local evidence only and does not enable writes or automatic cleanup."
+                .to_string(),
+        );
+    }
+    notes
 }
 
 fn task_readiness_safety_flags() -> TaskReadinessSafetyFlags {
@@ -9335,6 +10170,112 @@ fn render_quality_score_prompt_section(
     )
 }
 
+fn render_stale_drift_prompt_section(
+    detection: &StaleDriftDetectionResult,
+    redactor: &mut PromptRedactor<'_>,
+) -> String {
+    let rows = detection
+        .stale_drift_rows
+        .iter()
+        .take(8)
+        .map(|row| {
+            format!(
+                "- #{} {} ({}, {}, enabled={}, state={}): score={} band={} fingerprint_drift={} finding_drift={} source_drift={} age_days={}; reasons={}",
+                row.rank,
+                redactor.redact(&row.skill_name),
+                redactor.redact(&row.agent),
+                redactor.redact(&row.scope),
+                row.enabled,
+                redactor.redact(&row.state),
+                row.stale_drift_score,
+                row.stale_drift_band,
+                row.drift_signals.fingerprint_drift,
+                row.drift_signals.finding_drift,
+                row.drift_signals.source_drift,
+                row.drift_signals
+                    .modified_age_days
+                    .map(|days| days.to_string())
+                    .unwrap_or_else(|| "n/a".to_string()),
+                row.reasons
+                    .iter()
+                    .take(3)
+                    .map(|reason| redactor.redact(reason))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let impacts = detection
+        .readiness_impact_rows
+        .iter()
+        .take(8)
+        .map(|row| {
+            format!(
+                "- {} impact={} score={}: {}",
+                redactor.redact(&row.skill_name),
+                row.impact_level,
+                row.stale_drift_score,
+                row.notes
+                    .iter()
+                    .take(2)
+                    .map(|note| redactor.redact(note))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let evidence = detection
+        .evidence_references
+        .iter()
+        .take(12)
+        .map(|reference| {
+            format!(
+                "- {} {} {}",
+                reference.source_type,
+                redactor.redact(&reference.source_id),
+                redactor.redact(&reference.label)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "Stale/drift detection evidence:\n- catalog_available: {}\n- scanned_skill_count: {}\n- returned_row_count: {}\n- stale_count: {}\n- drift_count: {}\n- high_risk_count: {}\n- stale_days_threshold: {}\n- summary: {}\n\nRows:\n{}\n\nReadiness impact:\n{}\n\nGap notes:\n{}\n\nBlocker notes:\n{}\n\nEvidence references:\n{}\n\nSafety flags: read_only=true, app_local_only=true, provider_request_sent=false, write_back_allowed=false, write_actions_available=false, skill_files_mutated=false, agent_config_mutated=false, script_execution_allowed=false, execution_actions_available=false, config_mutation_allowed=false, snapshot_created=false, triage_mutation_allowed=false, credential_accessed=false, raw_prompt_persisted=false, raw_response_persisted=false, raw_trace_persisted=false, cloud_sync_performed=false, telemetry_emitted=false.",
+        detection.catalog_available,
+        detection.summary.scanned_skill_count,
+        detection.summary.returned_row_count,
+        detection.summary.stale_count,
+        detection.summary.drift_count,
+        detection.summary.high_risk_count,
+        detection.filters.stale_days,
+        redactor.redact(&detection.summary.summary),
+        if rows.is_empty() { "none" } else { &rows },
+        if impacts.is_empty() { "none" } else { &impacts },
+        if detection.gap_notes.is_empty() {
+            "none".to_string()
+        } else {
+            detection
+                .gap_notes
+                .iter()
+                .map(|note| redactor.redact(note))
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+        if detection.blocker_notes.is_empty() {
+            "none".to_string()
+        } else {
+            detection
+                .blocker_notes
+                .iter()
+                .map(|note| redactor.redact(note))
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+        if evidence.is_empty() { "none" } else { &evidence },
+    )
+}
+
 fn render_task_readiness_prompt_section(
     readiness: &TaskReadinessResult,
     redactor: &mut PromptRedactor<'_>,
@@ -9773,6 +10714,7 @@ mod tests {
         assert!(methods.contains(&Value::String("app.stateSnapshot".to_string())));
         assert!(methods.contains(&Value::String("adapter.listDiagnostics".to_string())));
         assert!(methods.contains(&Value::String("analysis.scoreSkillQuality".to_string())));
+        assert!(methods.contains(&Value::String("analysis.detectStaleDrift".to_string())));
         assert!(methods.contains(&Value::String("task.checkReadiness".to_string())));
         assert!(methods.contains(&Value::String("task.rankSkillRoutes".to_string())));
         assert!(methods.contains(&Value::String("task.compareAgentReadiness".to_string())));
@@ -11184,6 +12126,213 @@ mod tests {
             !app_data_dir.exists(),
             "quality scoring must not initialize app data when there is no catalog"
         );
+    }
+
+    #[test]
+    fn analysis_detect_stale_drift_missing_catalog_returns_safe_empty_result() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-stale-drift-missing-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("stale-drift-missing".to_string()),
+            method: "analysis.detectStaleDrift".to_string(),
+            params: json!({ "agent": "claude-code" }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("missing catalog stale drift result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("deterministic-service")
+        );
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/returned_row_count")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert!(result
+            .get("stale_drift_rows")
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_agent_readiness_safety(&result);
+        assert!(
+            !host.catalog_path().exists(),
+            "missing-catalog stale/drift detection must not initialize catalog.sqlite"
+        );
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    }
+
+    #[test]
+    fn analysis_detect_stale_drift_rejects_invalid_threshold_without_writes() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-stale-drift-invalid-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("stale-drift-invalid".to_string()),
+            method: "analysis.detectStaleDrift".to_string(),
+            params: json!({ "stale_days": 0 }),
+        });
+
+        assert!(!response.ok);
+        let error = response.error.expect("invalid stale drift error");
+        assert_eq!(error.code, "invalid_request");
+        assert!(error.message.contains("stale_days"));
+        assert!(
+            !app_data_dir.exists(),
+            "invalid stale/drift request must not initialize app data"
+        );
+    }
+
+    #[test]
+    fn analysis_detect_stale_drift_returns_local_read_only_rows() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-stale-drift-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-stale-drift-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_stale_drift_fixture(&host);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("stale-drift".to_string()),
+            method: "analysis.detectStaleDrift".to_string(),
+            params: json!({
+                "agent": "claude-code",
+                "candidate_instance_ids": ["stale-drift-alpha"],
+                "limit": 4,
+                "thresholds": { "stale_days": 30 }
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("stale drift result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("deterministic-service")
+        );
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/returned_row_count")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            result
+                .pointer("/stale_drift_rows/0/instance_id")
+                .and_then(Value::as_str),
+            Some("stale-drift-alpha")
+        );
+        assert_eq!(
+            result
+                .pointer("/stale_drift_rows/0/drift_signals/fingerprint_drift")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/stale_drift_rows/0/drift_signals/stale_by_mtime")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert!(result
+            .pointer("/stale_drift_rows/0/stale_drift_score")
+            .and_then(Value::as_u64)
+            .is_some_and(|score| score > 0 && score <= 100));
+        assert!(result
+            .get("readiness_impact_rows")
+            .and_then(Value::as_array)
+            .is_some_and(|rows| !rows.is_empty()));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/action")
+                .and_then(Value::as_str),
+            Some("stale_drift_detection")
+        );
+        assert_eq!(
+            result
+                .pointer("/prompt_request/request/action")
+                .and_then(Value::as_str),
+            Some("stale_drift_detection")
+        );
+        assert_agent_readiness_safety(&result);
+        assert_eq!(
+            result
+                .pointer("/stale_drift_rows/0/safety_flags/read_only")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let serialized = serde_json::to_string(&result).expect("serialize stale drift result");
+        assert!(!serialized.contains("OPENAI_API_KEY=<redacted>"));
+        assert!(!serialized.contains("fixture-redacted-value"));
+        assert!(!serialized.contains("skills-copilot-stale-drift"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
     }
 
     #[test]
@@ -13368,6 +14517,55 @@ mod tests {
     }
 
     #[test]
+    fn llm_preview_prompt_accepts_stale_drift_action_with_redaction() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-stale-drift-preview-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_stale_drift_fixture(&host);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("stale-drift-preview".to_string()),
+            method: "llm.previewPrompt".to_string(),
+            params: json!({
+                "action": "stale_drift_detection",
+                "instance_ids": ["stale-drift-alpha"],
+                "user_intent": "explain stale drift without leaking token=fixture-redacted-value"
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("stale drift preview result");
+        assert_eq!(
+            result.get("action").and_then(Value::as_str),
+            Some("stale_drift_detection")
+        );
+        assert_eq!(
+            result.get("provider_request_sent").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("write_back_allowed").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert!(result
+            .get("requires_confirmation")
+            .and_then(Value::as_bool)
+            .unwrap_or(false));
+        let serialized = serde_json::to_string(&result).expect("serialize stale drift preview");
+        assert!(serialized.contains("Stale/drift detection evidence"));
+        assert!(serialized.contains("<redacted>"));
+        assert!(!serialized.contains("fixture-redacted-value"));
+        assert!(!serialized.contains("OPENAI_API_KEY"));
+        assert!(!serialized.contains("skills-copilot-stale-drift"));
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
     fn llm_preview_prompt_accepts_quality_score_action_without_sending_provider_request() {
         let app_data_dir = env::temp_dir().join(format!(
             "skills-copilot-quality-score-preview-test-{}-{}",
@@ -15194,6 +16392,31 @@ mod tests {
                 assert!(!score.safety_flags.raw_prompt_persisted);
                 assert!(!score.safety_flags.raw_response_persisted);
             }
+            "analysis.detectStaleDrift" => {
+                let detection: WireStaleDriftDetectionResult =
+                    decode_fixture_result(method, result, path);
+                assert_eq!(detection.generated_by, "deterministic-service");
+                assert!(detection.catalog_available);
+                assert_eq!(
+                    detection.summary.returned_row_count,
+                    detection.stale_drift_rows.len()
+                );
+                assert!(!detection.stale_drift_rows.is_empty());
+                assert!(detection
+                    .stale_drift_rows
+                    .iter()
+                    .all(|row| row.stale_drift_score <= 100));
+                assert_eq!(detection.prompt_request.action, "stale_drift_detection");
+                assert_eq!(detection.prompt_request.preview_method, "llm.previewPrompt");
+                assert_eq!(
+                    detection.prompt_request.request.action,
+                    LlmPromptActionKind::StaleDriftDetection
+                );
+                assert_agent_readiness_safety_flags(&detection.safety_flags);
+                for row in &detection.stale_drift_rows {
+                    assert_agent_readiness_safety_flags(&row.safety_flags);
+                }
+            }
             "task.checkReadiness" => {
                 let readiness: WireTaskReadinessResult =
                     decode_fixture_result(method, result, path);
@@ -15851,6 +17074,28 @@ mod tests {
         }
     }
 
+    fn assert_agent_readiness_safety_flags(flags: &WireAgentReadinessSafetyFlags) {
+        assert!(flags.read_only);
+        assert!(flags.app_local_only);
+        assert!(!flags.provider_request_sent);
+        assert!(!flags.write_back_allowed);
+        assert!(!flags.write_actions_available);
+        assert!(!flags.skill_files_mutated);
+        assert!(!flags.agent_config_mutated);
+        assert!(!flags.script_execution_allowed);
+        assert!(!flags.execution_actions_available);
+        assert!(!flags.config_mutation_allowed);
+        assert!(!flags.snapshot_created);
+        assert!(!flags.triage_mutation_allowed);
+        assert!(!flags.credential_accessed);
+        assert!(!flags.raw_secret_returned);
+        assert!(!flags.raw_prompt_persisted);
+        assert!(!flags.raw_response_persisted);
+        assert!(!flags.raw_trace_persisted);
+        assert!(!flags.cloud_sync_performed);
+        assert!(!flags.telemetry_emitted);
+    }
+
     fn assert_findings_cover_v28_contract(
         findings: &[WireRuleFindingRecord],
         expected_rule_ids: &[&str],
@@ -16040,6 +17285,7 @@ mod tests {
                 json!({ "instance_ids": ["missing-skill"], "analysis_kind": "overview" })
             }
             "analysis.scoreSkillQuality" => json!({ "instance_id": "missing-skill" }),
+            "analysis.detectStaleDrift" => json!({ "limit": 4, "stale_days": 30 }),
             "task.checkReadiness" => json!({ "task": "fixture task readiness check" }),
             "task.rankSkillRoutes" => json!({ "task": "fixture routing confidence check" }),
             "task.compareAgentReadiness" => json!({
@@ -16416,6 +17662,108 @@ mod tests {
         raw_secret_returned: bool,
         raw_prompt_persisted: bool,
         raw_response_persisted: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireStaleDriftDetectionResult {
+        generated_by: String,
+        catalog_available: bool,
+        filters: WireStaleDriftFilters,
+        summary: WireStaleDriftSummary,
+        stale_drift_rows: Vec<WireStaleDriftRow>,
+        readiness_impact_rows: Vec<WireStaleDriftReadinessImpactRow>,
+        gap_notes: Vec<String>,
+        blocker_notes: Vec<String>,
+        evidence_references: Vec<WireTaskReadinessEvidenceReference>,
+        prompt_request: WireAgentReadinessPromptRequest,
+        safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireStaleDriftFilters {
+        agent: Option<String>,
+        candidate_instance_ids: Vec<String>,
+        limit: usize,
+        stale_days: u32,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireStaleDriftSummary {
+        scanned_skill_count: usize,
+        returned_row_count: usize,
+        stale_count: usize,
+        drift_count: usize,
+        high_risk_count: usize,
+        medium_risk_count: usize,
+        low_risk_count: usize,
+        missing_history_count: usize,
+        summary: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireStaleDriftRow {
+        rank: usize,
+        instance_id: String,
+        definition_id: String,
+        skill_name: String,
+        agent: String,
+        scope: String,
+        enabled: bool,
+        state: String,
+        stale_drift_score: u8,
+        stale_drift_band: String,
+        drift_signals: WireStaleDriftSignals,
+        readiness_impact: Option<WireStaleDriftReadinessImpact>,
+        reasons: Vec<String>,
+        gap_notes: Vec<String>,
+        evidence_refs: Vec<String>,
+        safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireStaleDriftSignals {
+        fingerprint_drift: bool,
+        finding_drift: bool,
+        source_drift: bool,
+        modified_age_days: Option<i64>,
+        stale_by_mtime: bool,
+        missing_mtime: bool,
+        missing_previous_scan: bool,
+        related_finding_count: usize,
+        related_conflict_count: usize,
+        related_analysis_count: usize,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireStaleDriftReadinessImpact {
+        impact_level: String,
+        readiness_risk_score: u8,
+        notes: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireStaleDriftReadinessImpactRow {
+        instance_id: String,
+        skill_name: String,
+        agent: String,
+        impact_level: String,
+        stale_drift_score: u8,
+        notes: Vec<String>,
+        evidence_refs: Vec<String>,
     }
 
     #[allow(dead_code)]
@@ -18465,6 +19813,81 @@ mod tests {
             .expect("refresh cleanup conflicts");
     }
 
+    fn seed_catalog_with_stale_drift_fixture(host: &ServiceHost) {
+        fs::create_dir_all(&host.app_data_dir).expect("create app data");
+        let catalog = Catalog::open(&host.catalog_path()).expect("open catalog");
+        catalog.init().expect("init catalog");
+        let instances = vec![
+            stale_drift_skill(
+                "stale-drift-alpha",
+                AgentId::ClaudeCode,
+                Scope::AgentGlobal,
+                "stale-drift-definition",
+                "Stale Drift Alpha",
+                1,
+            ),
+            stale_drift_skill(
+                "stale-drift-beta",
+                AgentId::ClaudeCode,
+                Scope::AgentProject,
+                "stale-drift-definition",
+                "Stale Drift Alpha",
+                unix_timestamp_millis(),
+            ),
+        ];
+        catalog
+            .upsert_skill_instances(&instances)
+            .expect("upsert stale drift skills");
+        catalog
+            .refresh_rule_findings(&[
+                RuleFindingDraft {
+                    id: "stale-drift-fingerprint".to_string(),
+                    instance_id: Some("stale-drift-alpha".to_string()),
+                    definition_id: Some("stale-drift-definition".to_string()),
+                    rule_id: "fingerprint.changed".to_string(),
+                    severity: "warning".to_string(),
+                    message:
+                        "Skill content fingerprint changed since the previous scan; token=fixture-redacted-value."
+                            .to_string(),
+                    suggestion: Some("Review the changed skill before routing to it.".to_string()),
+                    created_at: 1,
+                },
+                RuleFindingDraft {
+                    id: "stale-drift-warning".to_string(),
+                    instance_id: Some("stale-drift-alpha".to_string()),
+                    definition_id: Some("stale-drift-definition".to_string()),
+                    rule_id: "body.too-long".to_string(),
+                    severity: "warn".to_string(),
+                    message: "Skill body is long enough to require review.".to_string(),
+                    suggestion: Some("Move durable details into references/.".to_string()),
+                    created_at: 2,
+                },
+            ])
+            .expect("refresh stale drift findings");
+        catalog
+            .refresh_definitions_and_conflicts(
+                &[SkillDefinitionDraft {
+                    id: "stale-drift-definition".to_string(),
+                    canonical_name: "stale-drift-alpha".to_string(),
+                    description: "Stale drift fixture definition.".to_string(),
+                    active_instance: Some("stale-drift-alpha".to_string()),
+                    has_multiple_instances: true,
+                    has_conflict: true,
+                }],
+                &[ConflictGroupDraft {
+                    id: "stale-drift-conflict".to_string(),
+                    definition_id: "stale-drift-definition".to_string(),
+                    reason: "content-drift".to_string(),
+                    winner_id: Some("stale-drift-alpha".to_string()),
+                    instance_ids: vec![
+                        "stale-drift-alpha".to_string(),
+                        "stale-drift-beta".to_string(),
+                    ],
+                }],
+            )
+            .expect("refresh stale drift conflicts");
+    }
+
     fn cleanup_skill(
         id: &str,
         agent: AgentId,
@@ -18496,6 +19919,39 @@ mod tests {
             mtime: 1,
             first_seen: 1,
             last_seen: 1,
+        }
+    }
+
+    fn stale_drift_skill(
+        id: &str,
+        agent: AgentId,
+        scope: Scope,
+        definition_id: &str,
+        name: &str,
+        mtime: i64,
+    ) -> SkillInstance {
+        SkillInstance {
+            id: id.to_string(),
+            agent,
+            scope,
+            project_root: None,
+            path: PathBuf::from(format!("/tmp/skills-copilot-stale-drift/{id}/SKILL.md")),
+            display_path: PathBuf::from(format!("/tmp/skills-copilot-stale-drift/{id}/SKILL.md")),
+            definition_id: definition_id.to_string(),
+            name: name.to_string(),
+            display_name: name.to_string(),
+            description: "Stale drift fixture skill.".to_string(),
+            version: None,
+            state: SkillState::Loaded,
+            enabled: true,
+            frontmatter_raw: format!("name: {name}\ndescription: Stale drift fixture\n"),
+            body: "Stale drift fixture body.".to_string(),
+            scripts: Vec::new(),
+            permissions: PermissionRequest::default(),
+            fingerprint: format!("fingerprint-{id}"),
+            mtime,
+            first_seen: 1,
+            last_seen: if mtime > 1 { mtime } else { 1 },
         }
     }
 
