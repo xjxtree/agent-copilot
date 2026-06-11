@@ -5013,16 +5013,16 @@ impl ServiceHost {
             .map(|detail| detail.id.clone())
             .collect::<Vec<_>>();
         let prompt_available = !prompt_instance_ids.is_empty();
-        let summary = workspace_readiness_summary(
-            raw_project_root.as_deref(),
-            &visible_details,
-            &taxonomy,
-            &readiness_rows,
-            &agent_rows,
-            &capability_rows,
-            &gap_notes,
-            &blocker_notes,
-        );
+        let summary = workspace_readiness_summary(WorkspaceReadinessSummaryInput {
+            project_root: raw_project_root.as_deref(),
+            visible_details: &visible_details,
+            taxonomy: &taxonomy,
+            readiness_rows: &readiness_rows,
+            agent_rows: &agent_rows,
+            capability_rows: &capability_rows,
+            gap_notes: &gap_notes,
+            blocker_notes: &blocker_notes,
+        });
 
         Ok(WorkspaceReadinessResult {
             generated_by: "deterministic-service",
@@ -11339,11 +11339,11 @@ fn workspace_checklist_rows(
             .collect(),
     });
 
-    let enabled_score = if visible_count == 0 {
-        0
-    } else {
-        ((enabled_count * 100) / visible_count).min(100) as u8
-    };
+    let enabled_score = enabled_count
+        .checked_mul(100)
+        .and_then(|score| score.checked_div(visible_count))
+        .unwrap_or(0)
+        .min(100) as u8;
     rows.push(WorkspaceReadinessChecklistRow {
         id: "workspace-readiness-enabled-scope".to_string(),
         category: "enabled_scoped_state",
@@ -11585,11 +11585,15 @@ fn workspace_agent_rows_from_catalog(
                 .iter()
                 .filter(|skill| skill.agent == agent && skill.scope == Scope::AgentProject.as_str())
                 .count();
+            let enabled_portion = enabled_skill_count
+                .checked_mul(45)
+                .and_then(|score| score.checked_div(visible_skill_count))
+                .unwrap_or(0)
+                .min(45) as i16;
             let mut score = if visible_skill_count == 0 {
                 0i16
             } else {
-                35 + ((enabled_skill_count * 45) / visible_skill_count).min(45) as i16
-                    + (project_skill_count.min(2) as i16 * 5)
+                35 + enabled_portion + (project_skill_count.min(2) as i16 * 5)
             };
             if diagnostic
                 .map(|diagnostic| diagnostic.status == "blocked")
@@ -11640,33 +11644,44 @@ fn workspace_agent_rows_from_catalog(
         .collect()
 }
 
+struct WorkspaceReadinessSummaryInput<'a> {
+    project_root: Option<&'a Path>,
+    visible_details: &'a [SkillDetailRecord],
+    taxonomy: &'a CapabilityTaxonomyResult,
+    readiness_rows: &'a [WorkspaceReadinessChecklistRow],
+    agent_rows: &'a [WorkspaceReadinessAgentRow],
+    capability_rows: &'a [WorkspaceReadinessCapabilityRow],
+    gap_notes: &'a [String],
+    blocker_notes: &'a [String],
+}
+
 fn workspace_readiness_summary(
-    project_root: Option<&Path>,
-    visible_details: &[SkillDetailRecord],
-    taxonomy: &CapabilityTaxonomyResult,
-    readiness_rows: &[WorkspaceReadinessChecklistRow],
-    agent_rows: &[WorkspaceReadinessAgentRow],
-    capability_rows: &[WorkspaceReadinessCapabilityRow],
-    gap_notes: &[String],
-    blocker_notes: &[String],
+    input: WorkspaceReadinessSummaryInput<'_>,
 ) -> WorkspaceReadinessSummary {
-    let agent_count = visible_details
+    let agent_count = input
+        .visible_details
         .iter()
         .filter_map(|skill| normalize_agent_label(&skill.agent))
         .collect::<BTreeSet<_>>()
         .len()
-        .max(agent_rows.len());
-    let visible_skill_count = visible_details.len();
-    let enabled_skill_count = visible_details.iter().filter(|skill| skill.enabled).count();
-    let statuses = readiness_rows
+        .max(input.agent_rows.len());
+    let visible_skill_count = input.visible_details.len();
+    let enabled_skill_count = input
+        .visible_details
+        .iter()
+        .filter(|skill| skill.enabled)
+        .count();
+    let statuses = input
+        .readiness_rows
         .iter()
         .map(|row| row.status)
-        .chain(agent_rows.iter().map(|row| row.status))
-        .chain(capability_rows.iter().map(|row| row.status))
+        .chain(input.agent_rows.iter().map(|row| row.status))
+        .chain(input.capability_rows.iter().map(|row| row.status))
         .collect::<Vec<_>>();
     let (ready_count, partial_count, blocked_count) = workspace_status_counts(statuses);
-    let project_available = project_root.is_some()
-        || visible_details
+    let project_available = input.project_root.is_some()
+        || input
+            .visible_details
             .iter()
             .any(|skill| skill.scope == Scope::AgentProject.as_str());
     let summary = if visible_skill_count == 0 {
@@ -11676,7 +11691,7 @@ fn workspace_readiness_summary(
         format!(
             "Workspace readiness is partial: {} visible skill(s), {} capability row(s), and {} blocker row(s) need review.",
             visible_skill_count,
-            capability_rows.len(),
+            input.capability_rows.len(),
             blocked_count
         )
     } else {
@@ -11684,7 +11699,7 @@ fn workspace_readiness_summary(
             "Workspace readiness is ready across {} visible skill(s), {} agent(s), and {} capability row(s).",
             visible_skill_count,
             agent_count,
-            capability_rows.len()
+            input.capability_rows.len()
         )
     };
     WorkspaceReadinessSummary {
@@ -11693,13 +11708,13 @@ fn workspace_readiness_summary(
         visible_skill_count,
         enabled_skill_count,
         agent_count,
-        domain_count: taxonomy.summary.domain_count,
-        capability_count: capability_rows.len(),
+        domain_count: input.taxonomy.summary.domain_count,
+        capability_count: input.capability_rows.len(),
         ready_count,
         partial_count,
         blocked_count,
-        gap_count: gap_notes.len(),
-        blocker_count: blocker_notes.len(),
+        gap_count: input.gap_notes.len(),
+        blocker_count: input.blocker_notes.len(),
         summary,
     }
 }

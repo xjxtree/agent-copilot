@@ -4,7 +4,7 @@
 >
 > Scanner / rules / catalog 始终是事实来源；LLM/AI provider 是 AI agent skills 的核心分析增强，用于质量、任务可用性、routing 置信度、trace 分析、remediation 和治理总结。
 >
-> 当前实现边界（V2.54 baseline；V2.55 Workspace Readiness 仍未实现，`workspace.checkReadiness` 仍在规划中）：
+> 当前实现边界（V2.55 baseline；V2.56 Remediation Planner 仍未实现）：
 >
 > - 已落地 disabled-by-default 的 service/UI gate 和 request prepare/estimate 能力。
 > - 已落地用户显式配置的 OpenAI-compatible / Claude-compatible provider profile 基础：`llm.listProviderProfiles`、`llm.saveProviderProfile`、`llm.deleteProviderProfile`、`llm.testProviderConnection`、macOS Keychain-first API key storage、预算字段、disabled/unconfigured state，以及 test connection 的最小 redacted call metadata。
@@ -76,11 +76,11 @@
 > - 已实现 service protocol 与 native Analysis UI：输出 summary、domains、coverage rows、representative skills、gap/blocker notes、evidence refs、prompt request metadata 与 safety flags，并显式区分 coverage redundancy 与 routing ambiguity。
 > - 该版本仍不写 skill 文件、agent config、taxonomy artifact、snapshot、triage 或 raw trace；不默认 provider / network；可选 provider 说明仍必须走 V2.42 preview/redaction/confirmation 且保持 copy-only，不影响 deterministic taxonomy 结果。
 
-> V2.55（planned）：
+> V2.55（已完成）：
 >
-> - `workspace.checkReadiness` 预计成为 workspace readiness 的入口，围绕 current workspace 的 catalog / taxonomy / task readiness evidence 做 local-only、user-triggered、deterministic、read-only by default 的评估。
-> - 规划中的输出应继续沿用现有只读风格：summary、readiness rows、gap/blocker notes、evidence refs、prompt request metadata 与 safety flags；默认不发 provider 请求、不写 skill/config/snapshot/triage、不执行脚本、不读 credentials、不持久化 raw prompt/response/trace，也不做 cloud sync 或 telemetry。
-> - 任何可选 provider 说明仍应受 V2.42 preview/redaction/confirmation 约束并保持 copy-only，且不能改变 deterministic readiness 结果。
+> - `workspace.checkReadiness` 是 workspace readiness 的入口，围绕 current workspace 的 catalog、V2.54 taxonomy、task readiness/routing、cross-agent readiness、stale/drift、findings/conflicts/analysis、adapter diagnostics 与 source provenance 做 local-only、user-triggered、deterministic、read-only by default 的评估。
+> - 已实现 service protocol 与 native Analysis UI：输出 summary、checklist/readiness rows、agent rows、capability rows、gap/blocker notes、evidence refs、prompt request metadata 与 safety flags。
+> - 该版本仍不发 provider 请求、不写 skill/config/snapshot/triage/readiness artifact、不执行脚本、不读 credentials、不持久化 raw prompt/response/trace，也不做 cloud sync 或 telemetry；任何可选 provider 说明仍受 V2.42 preview/redaction/confirmation 约束并保持 copy-only，且不能改变 deterministic readiness 结果。
 
 ## 1. 双层分工
 
@@ -135,7 +135,7 @@ Provider 配置原则：
 | V2.52（实现） | knowledge index / `knowledge.search` | existing catalog evidence、derived tags、quality/readiness/stale-drift context、local-only read-only search |
 | V2.53（实现） | similar grouping / `knowledge.groupSimilarSkills` | existing catalog evidence、V2.52 tags、source/name/tool/rule/capability/risk overlaps、quality/readiness/stale-drift context、local-only deterministic grouping |
 | V2.54（实现） | capability taxonomy / `knowledge.buildCapabilityTaxonomy` | existing catalog evidence、V2.52 tags、V2.53 similar groups、quality/stale-drift context、agent/workspace coverage、local-only deterministic taxonomy |
-| V2.55（planned） | workspace readiness | future derived workspace readiness view；预期沿用 `workspace.checkReadiness`，当前仍在规划中，未实现、未验证 |
+| V2.55（实现） | workspace readiness（`workspace.checkReadiness`） | catalog、taxonomy、task readiness/routing、cross-agent readiness、stale/drift、adapter diagnostics、findings/conflicts/analysis；local-only deterministic readiness |
 | V2.56-V2.60 | remediation planner、fix drafts、impact preview、batch review、history | findings、triage、policy, snapshots, writable capability matrix |
 | V2.61-V2.70 | review session、governance report、policy packs、skill map、full provider observability、safe write planning | local reports, policy profiles, V2.41-V2.42 call metadata, evidence gates |
 
