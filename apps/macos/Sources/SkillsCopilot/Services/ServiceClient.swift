@@ -454,6 +454,70 @@ private struct RemediationBatchReviewParams: Encodable {
     }
 }
 
+private struct RemediationHistoryListParams: Encodable {
+    let task: String?
+    let agent: String?
+    let projectRoot: String?
+    let currentCWD: String?
+    let workspace: String?
+    let selectedSkillID: String?
+    let selectedSkillName: String?
+    let selectedSkillAgent: String?
+    let selectedSkillPath: String?
+    let limit: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case task
+        case agent
+        case projectRoot = "project_root"
+        case currentCWD = "current_cwd"
+        case workspace
+        case selectedSkillID = "selected_skill_id"
+        case selectedSkillName = "selected_skill_name"
+        case selectedSkillAgent = "selected_skill_agent"
+        case selectedSkillPath = "selected_skill_path"
+        case limit
+    }
+}
+
+private struct RemediationHistoryRecordParams: Encodable {
+    let task: String?
+    let agent: String?
+    let projectRoot: String?
+    let currentCWD: String?
+    let workspace: String?
+    let selectedSkillID: String?
+    let selectedSkillName: String?
+    let selectedSkillAgent: String?
+    let selectedSkillPath: String?
+    let decision: String
+    let status: String
+    let sourceMethod: String
+    let reviewArea: String
+    let note: String
+    let evidenceRefs: [String]
+    let safetyFlags: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case task
+        case agent
+        case projectRoot = "project_root"
+        case currentCWD = "current_cwd"
+        case workspace
+        case selectedSkillID = "selected_skill_id"
+        case selectedSkillName = "selected_skill_name"
+        case selectedSkillAgent = "selected_skill_agent"
+        case selectedSkillPath = "selected_skill_path"
+        case decision
+        case status
+        case sourceMethod = "source_method"
+        case reviewArea = "review_area"
+        case note
+        case evidenceRefs = "evidence_refs"
+        case safetyFlags = "safety_flags"
+    }
+}
+
 private struct TaskBenchmarkDeleteParams: Encodable {
     let benchmarkId: String
 
@@ -1223,6 +1287,72 @@ final class ServiceClient {
         )
         do {
             return try await call(method: "remediation.batchReview", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func listRemediationHistory(
+        taskText: String? = nil,
+        agent: String? = nil,
+        project: ProjectContext? = nil,
+        selectedSkill: SkillRecord? = nil,
+        limit: Int? = 30
+    ) async throws -> RemediationHistoryResult {
+        let normalizedTask = taskText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let params = RemediationHistoryListParams(
+            task: normalizedTask?.isEmpty == true ? nil : normalizedTask,
+            agent: agent,
+            projectRoot: project?.rootPath,
+            currentCWD: project?.currentCWD,
+            workspace: project?.name,
+            selectedSkillID: selectedSkill?.id,
+            selectedSkillName: selectedSkill?.name,
+            selectedSkillAgent: selectedSkill?.agent,
+            selectedSkillPath: selectedSkill?.displayPath.isEmpty == false ? selectedSkill?.displayPath : selectedSkill?.path,
+            limit: limit
+        )
+        do {
+            return try await call(method: "remediation.listHistory", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func recordRemediationHistory(
+        taskText: String? = nil,
+        agent: String? = nil,
+        project: ProjectContext? = nil,
+        selectedSkill: SkillRecord? = nil,
+        decision: String = "reviewed",
+        status: String = "recorded",
+        sourceMethod: String = "analysis.remediationHistory.ui",
+        reviewArea: String = "Remediation History",
+        note: String = UIStrings.remediationHistoryRecordDefaultNote,
+        evidenceRefs: [String] = [],
+        safetyFlags: [String] = ["local audit only", "no write", "provider not sent"]
+    ) async throws -> RemediationHistoryRecordResult {
+        let normalizedTask = taskText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let params = RemediationHistoryRecordParams(
+            task: normalizedTask?.isEmpty == true ? nil : normalizedTask,
+            agent: agent,
+            projectRoot: project?.rootPath,
+            currentCWD: project?.currentCWD,
+            workspace: project?.name,
+            selectedSkillID: selectedSkill?.id,
+            selectedSkillName: selectedSkill?.name,
+            selectedSkillAgent: selectedSkill?.agent,
+            selectedSkillPath: selectedSkill?.displayPath.isEmpty == false ? selectedSkill?.displayPath : selectedSkill?.path,
+            decision: decision,
+            status: status,
+            sourceMethod: sourceMethod,
+            reviewArea: reviewArea,
+            note: note,
+            evidenceRefs: evidenceRefs,
+            safetyFlags: safetyFlags
+        )
+        do {
+            return try await call(method: "remediation.recordHistory", params: params)
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .unavailable()
         }

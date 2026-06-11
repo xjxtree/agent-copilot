@@ -184,6 +184,10 @@ struct DetailView: View {
                             isPreviewingRemediationImpact: store.isPreviewingRemediationImpact,
                             remediationBatchReviewResult: store.remediationBatchReviewResult,
                             isReviewingRemediationBatch: store.isReviewingRemediationBatch,
+                            remediationHistoryResult: store.remediationHistoryResult,
+                            remediationHistoryRecordResult: store.remediationHistoryRecordResult,
+                            isLoadingRemediationHistory: store.isLoadingRemediationHistory,
+                            isRecordingRemediationHistory: store.isRecordingRemediationHistory,
                             onScoreQuality: {
                                 Task {
                                     await store.scoreSelectedSkillQuality()
@@ -282,6 +286,16 @@ struct DetailView: View {
                             onReviewRemediationBatch: { options in
                                 Task {
                                     await store.reviewRemediationBatch(options: options)
+                                }
+                            },
+                            onLoadRemediationHistory: {
+                                Task {
+                                    await store.loadRemediationHistory()
+                                }
+                            },
+                            onRecordRemediationHistory: {
+                                Task {
+                                    await store.recordRemediationHistory()
                                 }
                             },
                             taskBenchmarkText: $store.taskBenchmarkText,
@@ -937,6 +951,10 @@ private struct AnalysisSection: View {
     let isPreviewingRemediationImpact: Bool
     let remediationBatchReviewResult: RemediationBatchReviewResult?
     let isReviewingRemediationBatch: Bool
+    let remediationHistoryResult: RemediationHistoryResult?
+    let remediationHistoryRecordResult: RemediationHistoryRecordResult?
+    let isLoadingRemediationHistory: Bool
+    let isRecordingRemediationHistory: Bool
     let onScoreQuality: () -> Void
     let onPreviewQualityPrompt: () -> Void
     let onSendQualityPrompt: () -> Void
@@ -957,6 +975,8 @@ private struct AnalysisSection: View {
     let onPreviewRemediationDrafts: () -> Void
     let onPreviewRemediationImpact: () -> Void
     let onReviewRemediationBatch: (RemediationBatchReviewOptions) -> Void
+    let onLoadRemediationHistory: () -> Void
+    let onRecordRemediationHistory: () -> Void
     @Binding var taskBenchmarkText: String
     let taskBenchmarkInput: String
     let taskBenchmarkList: TaskBenchmarkListResult
@@ -1142,6 +1162,15 @@ private struct AnalysisSection: View {
                 result: remediationBatchReviewResult,
                 isReviewing: isReviewingRemediationBatch,
                 onReview: onReviewRemediationBatch
+            )
+
+            RemediationHistoryPanel(
+                result: remediationHistoryResult,
+                recordResult: remediationHistoryRecordResult,
+                isLoading: isLoadingRemediationHistory,
+                isRecording: isRecordingRemediationHistory,
+                onLoad: onLoadRemediationHistory,
+                onRecord: onRecordRemediationHistory
             )
 
             KnowledgeSearchPanel(
@@ -5603,6 +5632,368 @@ private func batchReviewIcon(for category: String) -> String {
     if normalized.contains("task") { return "text.badge.checkmark" }
     if normalized.contains("block") { return "lock.trianglebadge.exclamationmark" }
     return "checklist"
+}
+
+private struct RemediationHistoryPanel: View {
+    let result: RemediationHistoryResult?
+    let recordResult: RemediationHistoryRecordResult?
+    let isLoading: Bool
+    let isRecording: Bool
+    let onLoad: () -> Void
+    let onRecord: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.remediationHistoryTitle, systemImage: "clock.arrow.circlepath")
+                    .font(.headline)
+                Spacer()
+                Label(UIStrings.remediationHistoryRecorded, systemImage: "archivebox")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(UIStrings.remediationHistoryBoundary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+
+            HStack(spacing: 8) {
+                Button {
+                    onLoad()
+                } label: {
+                    Label(UIStrings.remediationHistoryLoadAction, systemImage: "clock.arrow.circlepath")
+                }
+                .disabled(isLoading || isRecording)
+
+                Button {
+                    onRecord()
+                } label: {
+                    Label(UIStrings.remediationHistoryRecordAction, systemImage: "archivebox")
+                }
+                .disabled(isLoading || isRecording)
+
+                if isLoading || isRecording {
+                    Label(UIStrings.llmPreparing, systemImage: "hourglass")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if let recordResult {
+                RemediationHistoryRecordResultView(result: recordResult)
+            }
+
+            if let result {
+                RemediationHistoryResultView(result: result)
+            } else {
+                Label(UIStrings.remediationHistoryNoResult, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Label(UIStrings.remediationHistoryNoWriteBoundary, systemImage: "nosign")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct RemediationHistoryRecordResultView: View {
+    let result: RemediationHistoryRecordResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.remediationHistoryRecordResult, systemImage: result.recorded ? "checkmark.seal" : "info.circle")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(result.recorded ? UIStrings.remediationHistoryStatusRecorded : UIStrings.routingAccuracyUnavailableShort)
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            if let fallbackReason = result.fallbackReason, !fallbackReason.isEmpty {
+                Label(fallbackReason, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            if !result.message.isEmpty {
+                Text(result.message)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            if let record = result.record {
+                RemediationHistoryRecordCard(record: record)
+            } else if !result.records.isEmpty {
+                RemediationHistoryRecordList(records: result.records, title: UIStrings.remediationHistoryRecords)
+            }
+
+            CrossAgentReadinessEvidenceList(evidence: result.evidenceReferences)
+            StaleDriftSafetyList(safety: result.safetyFlags)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 6))
+    }
+}
+
+private struct RemediationHistoryResultView: View {
+    let result: RemediationHistoryResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let fallbackReason = result.fallbackReason, !fallbackReason.isEmpty {
+                Label(fallbackReason, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+                SummaryChip(title: UIStrings.remediationHistoryRecords, value: "\(recordCount)", systemImage: "archivebox")
+                SummaryChip(title: UIStrings.remediationHistoryRecorded, value: "\(recordedCount)", systemImage: "checkmark.seal")
+                SummaryChip(title: UIStrings.remediationHistoryRecurrence, value: "\(recurrenceCount)", systemImage: "arrow.triangle.2.circlepath")
+                SummaryChip(title: UIStrings.remediationHistoryReopened, value: "\(reopenedCount)", systemImage: "arrow.uturn.backward.circle")
+                SummaryChip(title: UIStrings.remediationHistoryReadinessImprovement, value: "\(readinessImprovementCount)", systemImage: "chart.line.uptrend.xyaxis")
+                SummaryChip(title: UIStrings.remediationHistoryDecisions, value: "\(decisionCount)", systemImage: "checklist.checked")
+                SummaryChip(title: UIStrings.remediationHistoryStatuses, value: "\(statusCount)", systemImage: "tag")
+                SummaryChip(title: UIStrings.knowledgeBlockerNotes, value: "\(blockerCount)", systemImage: "lock.trianglebadge.exclamationmark")
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                MetadataRow(label: UIStrings.routingAccuracyGeneratedBy, value: result.generatedBy)
+                MetadataRow(label: UIStrings.routingAccuracyCatalog, value: result.catalogAvailable ? UIStrings.routingAccuracyAvailable : UIStrings.routingAccuracyUnavailableShort)
+                MetadataRow(label: UIStrings.agent, value: agentFilterLabel)
+                if !result.filters.ruleIDs.isEmpty {
+                    MetadataRow(label: UIStrings.remediationBatchReviewRuleIDs, value: result.filters.ruleIDs.joined(separator: ", "))
+                }
+                if !result.filters.riskLevels.isEmpty {
+                    MetadataRow(label: UIStrings.remediationBatchReviewRiskLevels, value: result.filters.riskLevels.joined(separator: ", "))
+                }
+                if !result.filters.decisions.isEmpty {
+                    MetadataRow(label: UIStrings.remediationHistoryDecisions, value: result.filters.decisions.joined(separator: ", "))
+                }
+                if !result.filters.statuses.isEmpty {
+                    MetadataRow(label: UIStrings.remediationHistoryStatuses, value: result.filters.statuses.joined(separator: ", "))
+                }
+                if let projectRoot = result.filters.projectRoot, !projectRoot.isEmpty {
+                    MetadataRow(label: UIStrings.project, value: projectRoot)
+                }
+                if let workspace = result.filters.workspace, !workspace.isEmpty {
+                    MetadataRow(label: UIStrings.workspaceReadinessTitle, value: workspace)
+                }
+                if let taskText = result.filters.taskText, !taskText.isEmpty {
+                    MetadataRow(label: UIStrings.taskBenchmarkTaskPlaceholder, value: taskText)
+                }
+                if let limit = result.filters.limit {
+                    MetadataRow(label: UIStrings.text("filter.limit", "Limit"), value: "\(limit)")
+                }
+                if let promptRequest = result.promptRequest {
+                    MetadataRow(label: UIStrings.routingAccuracyPromptRequest, value: promptRequestLabel(promptRequest))
+                }
+            }
+
+            if !result.summary.summaryText.isEmpty {
+                Text(result.summary.summaryText)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            RoutingInlineList(title: UIStrings.remediationHistoryDecisions, empty: UIStrings.routingAccuracyNoGaps, values: result.decisions, systemImage: "checklist.checked")
+            RoutingInlineList(title: UIStrings.remediationHistoryStatuses, empty: UIStrings.routingAccuracyNoGaps, values: result.statuses, systemImage: "tag")
+            RemediationHistoryRecordList(records: result.records, title: UIStrings.remediationHistoryRecords)
+            RoutingInlineList(title: UIStrings.knowledgeGapNotes, empty: UIStrings.routingAccuracyNoGaps, values: result.gapNotes, systemImage: "puzzlepiece.extension")
+            RoutingInlineList(title: UIStrings.knowledgeBlockerNotes, empty: UIStrings.routingAccuracyNoBlockers, values: result.blockerNotes, systemImage: "exclamationmark.octagon")
+            CrossAgentReadinessEvidenceList(evidence: result.evidenceReferences)
+            StaleDriftSafetyList(safety: result.safetyFlags)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var recordCount: Int {
+        result.summary.totalCount > 0 ? result.summary.totalCount : result.records.count
+    }
+
+    private var recordedCount: Int {
+        result.summary.recordedCount > 0 ? result.summary.recordedCount : result.records.filter { $0.status.localizedCaseInsensitiveContains("record") }.count
+    }
+
+    private var recurrenceCount: Int {
+        result.summary.recurrenceCount > 0 ? result.summary.recurrenceCount : result.records.reduce(0) { $0 + $1.recurrenceCount }
+    }
+
+    private var reopenedCount: Int {
+        result.summary.reopenedCount > 0 ? result.summary.reopenedCount : result.records.reduce(0) { $0 + $1.reopenedCount }
+    }
+
+    private var readinessImprovementCount: Int {
+        result.summary.readinessImprovementCount > 0 ? result.summary.readinessImprovementCount : result.records.filter { record in
+            !(record.readinessImprovement ?? "").isEmpty
+        }.count
+    }
+
+    private var decisionCount: Int {
+        result.summary.decisionCount > 0 ? result.summary.decisionCount : Set(result.records.map(\.decision)).count
+    }
+
+    private var statusCount: Int {
+        result.summary.statusCount > 0 ? result.summary.statusCount : Set(result.records.map(\.status)).count
+    }
+
+    private var blockerCount: Int {
+        result.summary.blockerCount > 0 ? result.summary.blockerCount : result.blockerNotes.count + result.records.reduce(0) { $0 + $1.blockerNotes.count }
+    }
+
+    private var agentFilterLabel: String {
+        if !result.filters.agents.isEmpty {
+            return result.filters.agents.map(DisplayText.agent).joined(separator: ", ")
+        }
+        return result.filters.agent.map(DisplayText.agent) ?? UIStrings.text("health.allAgents", "All Agents")
+    }
+
+    private func promptRequestLabel(_ promptRequest: RoutingAccuracyPromptRequest) -> String {
+        let state = promptRequest.enabled ? UIStrings.llmEnabled : UIStrings.llmDisabled
+        let copy = promptRequest.copyOnly ? UIStrings.llmPromptCopyOnly : UIStrings.llmSkillAnalysisEnabledUnsafe
+        return "\(promptRequest.requestKind) · \(state) · \(copy)"
+    }
+}
+
+private struct RemediationHistoryRecordList: View {
+    let records: [RemediationHistoryRecord]
+    let title: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if records.isEmpty {
+                Text(UIStrings.remediationHistoryNoRecords)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(records.prefix(10)) { record in
+                        RemediationHistoryRecordCard(record: record)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct RemediationHistoryRecordCard: View {
+    let record: RemediationHistoryRecord
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(record.title, systemImage: historyIcon(for: record.category))
+                    .font(.callout.bold())
+                    .lineLimit(1)
+                Spacer()
+                Text(record.status)
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
+                MetadataRow(label: UIStrings.remediationPlanCategory, value: record.category)
+                MetadataRow(label: UIStrings.remediationHistoryDecision, value: record.decision)
+                MetadataRow(label: UIStrings.state, value: record.status)
+                if let reviewArea = record.reviewArea, !reviewArea.isEmpty {
+                    MetadataRow(label: UIStrings.remediationBatchReviewReviewArea, value: reviewArea)
+                }
+                if let sourceMethod = record.sourceMethod, !sourceMethod.isEmpty {
+                    MetadataRow(label: UIStrings.remediationHistorySourceMethod, value: sourceMethod)
+                }
+                if let agent = record.agent, !agent.isEmpty {
+                    MetadataRow(label: UIStrings.agent, value: DisplayText.agent(agent))
+                }
+                if let workspace = record.workspace, !workspace.isEmpty {
+                    MetadataRow(label: UIStrings.workspaceReadinessTitle, value: workspace)
+                }
+                if let ruleID = record.ruleID, !ruleID.isEmpty {
+                    MetadataRow(label: UIStrings.remediationBatchReviewRuleIDs, value: ruleID)
+                }
+                if let riskLevel = record.riskLevel, !riskLevel.isEmpty {
+                    MetadataRow(label: UIStrings.remediationBatchReviewRiskLevels, value: riskLevel)
+                }
+                if let recordedAt = record.recordedAt, !recordedAt.isEmpty {
+                    MetadataRow(label: UIStrings.remediationHistoryRecordedAt, value: recordedAt)
+                }
+                if let updatedAt = record.updatedAt, !updatedAt.isEmpty {
+                    MetadataRow(label: UIStrings.remediationHistoryUpdatedAt, value: updatedAt)
+                }
+                if record.recurrenceCount > 0 {
+                    MetadataRow(label: UIStrings.remediationHistoryRecurrence, value: "\(record.recurrenceCount)")
+                }
+                if record.reopenedCount > 0 {
+                    MetadataRow(label: UIStrings.remediationHistoryReopened, value: "\(record.reopenedCount)")
+                }
+                if let readinessImprovement = record.readinessImprovement, !readinessImprovement.isEmpty {
+                    MetadataRow(label: UIStrings.remediationHistoryReadinessImprovement, value: readinessImprovement)
+                }
+            }
+
+            if let skill = record.skill {
+                CapabilitySkillList(skills: [skill])
+            }
+
+            if let taskText = record.taskText, !taskText.isEmpty {
+                Label(taskText, systemImage: "text.badge.checkmark")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            if !record.rationale.isEmpty {
+                Text(record.rationale)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            if !record.note.isEmpty {
+                Label(record.note, systemImage: "note.text")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            RoutingInlineList(title: UIStrings.knowledgeGapNotes, empty: UIStrings.routingAccuracyNoGaps, values: record.gapNotes, systemImage: "puzzlepiece.extension")
+            RoutingInlineList(title: UIStrings.knowledgeBlockerNotes, empty: UIStrings.routingAccuracyNoBlockers, values: record.blockerNotes, systemImage: "exclamationmark.octagon")
+            RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: record.evidenceRefs, systemImage: "checklist")
+            RoutingInlineList(title: UIStrings.knowledgeSafetyFlags, empty: UIStrings.taskBenchmarkNoSafetyFlags, values: record.safetyFlags, systemImage: "checkmark.shield")
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func historyIcon(for category: String) -> String {
+        let normalized = category.lowercased()
+        if normalized.contains("reopen") { return "arrow.uturn.backward.circle" }
+        if normalized.contains("readiness") { return "chart.line.uptrend.xyaxis" }
+        if normalized.contains("risk") { return "exclamationmark.triangle" }
+        if normalized.contains("rule") { return "ruler" }
+        if normalized.contains("agent") { return "person.2" }
+        if normalized.contains("workspace") { return "folder" }
+        if normalized.contains("task") { return "text.badge.checkmark" }
+        return "archivebox"
+    }
 }
 
 private struct KnowledgeSearchPanel: View {

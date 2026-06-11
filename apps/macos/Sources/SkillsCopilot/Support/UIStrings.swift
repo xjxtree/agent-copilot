@@ -717,6 +717,31 @@ enum UIStrings {
     static var remediationBatchReviewRuleRows: String { text("batchReview.ruleRows", "Rule rows") }
     static var remediationBatchReviewAgentRows: String { text("batchReview.agentRows", "Agent rows") }
     static var remediationBatchReviewWorkspaceRows: String { text("batchReview.workspaceRows", "Workspace rows") }
+    static var remediationHistoryTitle: String { text("remediationHistory.title", "Remediation History") }
+    static var remediationHistoryBoundary: String { text("remediationHistory.boundary", "User-triggered, app-local remediation history for review/audit metadata only. Loading history is read-only; recording history stores local audit metadata through the service, but this panel cannot apply remediation, write skill files, mutate agent config, create or roll back snapshots, change triage, execute scripts, send provider requests, read credentials, persist raw prompts/responses/traces, sync cloud data, or emit telemetry.") }
+    static var remediationHistoryNoWriteBoundary: String { text("remediationHistory.noWriteBoundary", "Local audit only. No Apply, Remediate, Write, Snapshot, Rollback, Script, Provider Send, or Triage action is exposed here.") }
+    static var remediationHistoryLoadAction: String { text("remediationHistory.action.load", "Load History") }
+    static var remediationHistoryRecordAction: String { text("remediationHistory.action.record", "Record Local Audit") }
+    static var remediationHistoryUnavailable: String { text("remediationHistory.unavailable", "Remediation history is unavailable in this service build.") }
+    static var remediationHistoryRecordUnavailable: String { text("remediationHistory.record.unavailable", "Recording remediation history is unavailable in this service build.") }
+    static var remediationHistoryNoResult: String { text("remediationHistory.empty.result", "No remediation history loaded.") }
+    static var remediationHistoryRecords: String { text("remediationHistory.records", "History records") }
+    static var remediationHistoryNoRecords: String { text("remediationHistory.empty.records", "No remediation history records returned.") }
+    static var remediationHistoryRecord: String { text("remediationHistory.record", "History record") }
+    static var remediationHistoryRecorded: String { text("remediationHistory.recorded", "Recorded") }
+    static var remediationHistoryRecurrence: String { text("remediationHistory.recurrence", "Recurrence") }
+    static var remediationHistoryReopened: String { text("remediationHistory.reopened", "Reopened") }
+    static var remediationHistoryReadinessImprovement: String { text("remediationHistory.readinessImprovement", "Readiness improvement") }
+    static var remediationHistoryDecisions: String { text("remediationHistory.decisions", "Decisions") }
+    static var remediationHistoryStatuses: String { text("remediationHistory.statuses", "Statuses") }
+    static var remediationHistoryDecision: String { text("remediationHistory.decision", "Decision") }
+    static var remediationHistoryDecisionReviewed: String { text("remediationHistory.decision.reviewed", "Reviewed") }
+    static var remediationHistoryStatusRecorded: String { text("remediationHistory.status.recorded", "Recorded") }
+    static var remediationHistoryRecordedAt: String { text("remediationHistory.recordedAt", "Recorded at") }
+    static var remediationHistoryUpdatedAt: String { text("remediationHistory.updatedAt", "Updated at") }
+    static var remediationHistorySourceMethod: String { text("remediationHistory.sourceMethod", "Source method") }
+    static var remediationHistoryRecordResult: String { text("remediationHistory.record.result", "Record result") }
+    static var remediationHistoryRecordDefaultNote: String { text("remediationHistory.record.defaultNote", "Recorded from native Analysis as app-local remediation audit metadata only; no remediation was applied.") }
     static var taskBenchmarkTitle: String { text("taskBenchmark.title", "Task Benchmark Set") }
     static var taskBenchmarkBoundary: String { text("taskBenchmark.boundary", "User-triggered, local benchmark evaluation for task routing. Local evaluation does not call a provider and cannot write skill files, mutate agent config, create snapshots, change triage, execute scripts, or read credentials.") }
     static var taskBenchmarkTaskPlaceholder: String { text("taskBenchmark.task.placeholder", "Optional benchmark task text; otherwise the current readiness/routing task is used") }

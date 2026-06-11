@@ -49,6 +49,8 @@ final class SkillStore: ObservableObject {
     @Published private(set) var remediationPreviewDraftsResult: RemediationPreviewDraftsResult?
     @Published private(set) var remediationImpactPreviewResult: RemediationImpactPreviewResult?
     @Published private(set) var remediationBatchReviewResult: RemediationBatchReviewResult?
+    @Published private(set) var remediationHistoryResult: RemediationHistoryResult?
+    @Published private(set) var remediationHistoryRecordResult: RemediationHistoryRecordResult?
     @Published private(set) var traceImportList = AgentTraceImportListResult(imports: [])
     @Published private(set) var traceImportResult: AgentTraceImportResult?
     @Published private(set) var traceImportDeleteResult: AgentTraceImportDeleteResult?
@@ -67,6 +69,8 @@ final class SkillStore: ObservableObject {
     @Published private(set) var isPreviewingRemediationDrafts = false
     @Published private(set) var isPreviewingRemediationImpact = false
     @Published private(set) var isReviewingRemediationBatch = false
+    @Published private(set) var isLoadingRemediationHistory = false
+    @Published private(set) var isRecordingRemediationHistory = false
     @Published private(set) var isLoadingTraceImports = false
     @Published private(set) var isImportingTrace = false
     @Published private(set) var deletingTaskBenchmarkIDs: Set<String> = []
@@ -120,6 +124,8 @@ final class SkillStore: ObservableObject {
             remediationPreviewDraftsResult = nil
             remediationImpactPreviewResult = nil
             remediationBatchReviewResult = nil
+            remediationHistoryResult = nil
+            remediationHistoryRecordResult = nil
             Task { await loadAgentConfigSnapshots() }
             Task { await loadCleanupQueue() }
             Task { await loadCrossAgentComparisons() }
@@ -194,7 +200,7 @@ final class SkillStore: ObservableObject {
     }
 
     private var isTaskBenchmarkBusy: Bool {
-        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isGroupingSimilarSkills || isBuildingCapabilityTaxonomy || isCheckingWorkspaceReadiness || isPlanningRemediation || isPreviewingRemediationDrafts || isPreviewingRemediationImpact || isReviewingRemediationBatch || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty
+        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isGroupingSimilarSkills || isBuildingCapabilityTaxonomy || isCheckingWorkspaceReadiness || isPlanningRemediation || isPreviewingRemediationDrafts || isPreviewingRemediationImpact || isReviewingRemediationBatch || isLoadingRemediationHistory || isRecordingRemediationHistory || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty
     }
 
     private var isLLMPromptBusy: Bool {
@@ -1653,6 +1659,56 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func loadRemediationHistory() async {
+        guard !isLoadingRemediationHistory else { return }
+        guard !isRefreshBusy else {
+            remediationHistoryResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        isLoadingRemediationHistory = true
+        defer { isLoadingRemediationHistory = false }
+
+        let agent = agentFilter == .all ? nil : agentFilter.rawValue
+        let taskText = selectedCrossAgentReadinessInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            remediationHistoryResult = try await service.listRemediationHistory(
+                taskText: taskText.isEmpty ? nil : taskText,
+                agent: agent,
+                project: activeProjectContext,
+                selectedSkill: selectedSkill,
+                limit: 30
+            )
+        } catch {
+            remediationHistoryResult = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
+    func recordRemediationHistory() async {
+        guard !isRecordingRemediationHistory else { return }
+        guard !isRefreshBusy else {
+            remediationHistoryRecordResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        isRecordingRemediationHistory = true
+        defer { isRecordingRemediationHistory = false }
+
+        let agent = agentFilter == .all ? nil : agentFilter.rawValue
+        let taskText = selectedCrossAgentReadinessInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            remediationHistoryRecordResult = try await service.recordRemediationHistory(
+                taskText: taskText.isEmpty ? nil : taskText,
+                agent: agent,
+                project: activeProjectContext,
+                selectedSkill: selectedSkill,
+                evidenceRefs: remediationHistoryEvidenceRefs()
+            )
+        } catch {
+            remediationHistoryRecordResult = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
     func compareCrossAgentReadiness() async {
         let taskText = selectedCrossAgentReadinessInput
         guard !taskText.isEmpty else {
@@ -2317,9 +2373,30 @@ final class SkillStore: ObservableObject {
         taskBenchmarkDeleteResult = nil
         routingRegressionBaseline = nil
         routingRegressionDetection = nil
+        remediationHistoryResult = nil
+        remediationHistoryRecordResult = nil
         Task { @MainActor [weak self] in
             await self?.loadSelectedDetail()
             await self?.loadCrossAgentComparisons()
+        }
+    }
+
+    private func remediationHistoryEvidenceRefs() -> [String] {
+        var refs: [String] = []
+        refs.append(contentsOf: remediationBatchReviewResult?.evidenceReferences.map(\.detail) ?? [])
+        refs.append(contentsOf: remediationImpactPreviewResult?.evidenceReferences.map(\.detail) ?? [])
+        refs.append(contentsOf: remediationPreviewDraftsResult?.evidenceReferences.map(\.detail) ?? [])
+        refs.append(contentsOf: remediationPlanResult?.evidenceReferences.map(\.detail) ?? [])
+        refs.append(contentsOf: remediationBatchReviewResult?.safeNextStepLabels.map { "safe_next_step:\($0)" } ?? [])
+        if let selectedSkill {
+            refs.append("selected_skill:\(selectedSkill.id)")
+        }
+        var seen = Set<String>()
+        return refs.compactMap { value in
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, !seen.contains(trimmed) else { return nil }
+            seen.insert(trimmed)
+            return trimmed
         }
     }
 

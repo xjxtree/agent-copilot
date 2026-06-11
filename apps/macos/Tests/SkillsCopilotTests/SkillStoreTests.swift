@@ -65,6 +65,8 @@ struct SkillStoreTests {
         try await remediationImpactPreviewFallsBackWhenMethodUnavailable()
         try await remediationBatchReviewUsesReadOnlyServiceContract()
         try await remediationBatchReviewFallsBackWhenMethodUnavailable()
+        try await remediationHistoryUsesLocalServiceContract()
+        try await remediationHistoryFallsBackWhenMethodUnavailable()
         try await crossAgentReadinessUsesReadOnlyServiceContract()
         try await routingConfidenceClearsStaleSelection()
         try await llmPreparePreviewIsScopedToSelectedSkillAndReadOnly()
@@ -1879,6 +1881,95 @@ struct SkillStoreTests {
         try expectContains(fake.calls(), "remediation.batchReview", "Fallback should still prove the intended V2.59 method was attempted.")
     }
 
+    private func remediationHistoryUsesLocalServiceContract() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        store.routingConfidenceText = "Prepare local release audit work."
+        await store.reload()
+        await store.reviewRemediationBatch()
+        let snapshotCallsBeforeHistory = countOccurrences("snapshot.", in: fake.calls())
+        await store.loadRemediationHistory()
+        await store.recordRemediationHistory()
+
+        let history = store.remediationHistoryResult
+        try expectEqual(history?.generatedBy, "local-v2.60", "Remediation history should expose generator metadata.")
+        try expectEqual(history?.summary.totalCount, 2, "Remediation history should expose total record count.")
+        try expectEqual(history?.summary.recurrenceCount, 1, "Remediation history should expose recurrence count.")
+        try expectEqual(history?.summary.reopenedCount, 1, "Remediation history should expose reopened count.")
+        try expectEqual(history?.summary.readinessImprovementCount, 1, "Remediation history should expose readiness improvement count.")
+        try expectEqual(history?.records.first?.title, "Network permission reviewed", "Remediation history should expose record rows.")
+        try expectEqual(history?.records.first?.skill?.skillName, "Beta", "Remediation history should expose affected skill evidence.")
+        try expectEqual(history?.records.first?.sourceMethod, "remediation.previewDrafts", "Remediation history should expose source method context.")
+        try expectEqual(history?.evidenceReferences.first?.title, "History", "Remediation history should expose evidence references.")
+        try expectEqual(history?.promptRequest?.requestKind, "remediation_history", "Remediation history prompt metadata should use V2.60 request kind.")
+        try expectFalse(history?.safetyFlags.providerRequestSent ?? true, "Remediation history list must not send provider requests.")
+        try expectFalse(history?.safetyFlags.writeBackAllowed ?? true, "Remediation history list must not allow write-back.")
+        try expectFalse(history?.safetyFlags.writeActionsAvailable ?? true, "Remediation history list must not expose write actions.")
+        try expectFalse(history?.safetyFlags.scriptExecutionAllowed ?? true, "Remediation history list must not allow script execution.")
+        try expectFalse(history?.safetyFlags.executionActionsAvailable ?? true, "Remediation history list must not expose execution actions.")
+        try expectFalse(history?.safetyFlags.configMutationAllowed ?? true, "Remediation history list must not mutate config.")
+        try expectFalse(history?.safetyFlags.snapshotCreated ?? true, "Remediation history list must not create snapshots.")
+        try expectFalse(history?.safetyFlags.triageMutationAllowed ?? true, "Remediation history list must not mutate triage.")
+        try expectFalse(history?.safetyFlags.credentialAccessed ?? true, "Remediation history list must not access credentials.")
+        try expectFalse(history?.safetyFlags.rawPromptPersisted ?? true, "Remediation history list must not persist raw prompts.")
+        try expectFalse(history?.safetyFlags.rawResponsePersisted ?? true, "Remediation history list must not persist raw responses.")
+        try expectFalse(history?.safetyFlags.rawTracePersisted ?? true, "Remediation history list must not persist raw traces.")
+        try expectFalse(history?.safetyFlags.cloudSyncEnabled ?? true, "Remediation history list must not sync cloud data.")
+        try expectFalse(history?.safetyFlags.telemetryEnabled ?? true, "Remediation history list must not emit telemetry.")
+
+        let record = store.remediationHistoryRecordResult
+        try expectEqual(record?.recorded, true, "Record history should report local audit persistence.")
+        try expectEqual(record?.record?.sourceMethod, "analysis.remediationHistory.ui", "Record history should identify the native audit source.")
+        try expectFalse(record?.safetyFlags.providerRequestSent ?? true, "Record history must not send provider requests.")
+        try expectFalse(record?.safetyFlags.writeActionsAvailable ?? true, "Record history must not expose write actions.")
+        try expectFalse(record?.safetyFlags.snapshotCreated ?? true, "Record history must not create snapshots.")
+        try expectFalse(record?.safetyFlags.triageMutationAllowed ?? true, "Record history must not mutate triage.")
+        try expectFalse(store.isLoadingRemediationHistory, "Remediation history should reset loading state.")
+        try expectFalse(store.isRecordingRemediationHistory, "Record history should reset loading state.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "remediation.listHistory", "History UI should call the V2.60 list method.")
+        try expectContains(calls, "remediation.recordHistory", "History UI should call the V2.60 record method.")
+        try expectContains(calls, "\"task\":\"Prepare local release audit work.\"", "History should pass current task context when present.")
+        try expectContains(calls, "\"agent\":\"claude-code\"", "History should pass the current agent filter.")
+        try expectContains(calls, "\"selected_skill_id\":\"beta\"", "History should pass selected skill context.")
+        try expectContains(calls, "\"limit\":30", "History list should pass the history limit.")
+        try expectContains(calls, "\"decision\":\"reviewed\"", "Record history should store an audit decision label.")
+        try expectContains(calls, "\"status\":\"recorded\"", "Record history should store an audit status label.")
+        try expectContains(calls, "\"source_method\":\"analysis.remediationHistory.ui\"", "Record history should identify the native UI source.")
+        try expectFalse(calls.contains("llm.previewPrompt"), "Remediation history must not prepare provider prompts.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Remediation history must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Remediation history must not call config write paths.")
+        try expectFalse(calls.contains("script.execute"), "Remediation history must not call execution paths.")
+        try expectEqual(countOccurrences("snapshot.", in: calls), snapshotCallsBeforeHistory, "Remediation history must not call snapshot paths.")
+        try expectFalse(calls.contains("credential"), "Remediation history must not call credential paths.")
+    }
+
+    private func remediationHistoryFallsBackWhenMethodUnavailable() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "normal")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+        await store.loadRemediationHistory()
+        await store.recordRemediationHistory()
+
+        try expectEqual(store.remediationHistoryResult?.isUnavailable, true, "Remediation history should expose unavailable fallback for older services.")
+        try expectEqual(store.remediationHistoryResult?.fallbackReason, UIStrings.remediationHistoryUnavailable, "Unknown list method fallback should use localized unavailable copy.")
+        try expectEqual(store.remediationHistoryRecordResult?.isUnavailable, true, "Record history should expose unavailable fallback for older services.")
+        try expectEqual(store.remediationHistoryRecordResult?.fallbackReason, UIStrings.remediationHistoryRecordUnavailable, "Unknown record method fallback should use localized unavailable copy.")
+        try expectFalse(store.isLoadingRemediationHistory, "Unavailable history list should reset loading state.")
+        try expectFalse(store.isRecordingRemediationHistory, "Unavailable record history should reset loading state.")
+        try expectContains(fake.calls(), "remediation.listHistory", "Fallback should still prove the intended V2.60 list method was attempted.")
+        try expectContains(fake.calls(), "remediation.recordHistory", "Fallback should still prove the intended V2.60 record method was attempted.")
+    }
+
     private func crossAgentReadinessUsesReadOnlyServiceContract() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -2363,6 +2454,18 @@ private final class FakeServiceScript {
               respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.59","catalog_available":true,"filters":{"task":"Prepare local release audit work.","agent":"claude-code","limit":30,"review_dimensions":["task","risk","rule","agent","workspace"],"risk_levels":["medium","high"],"rule_ids":["permissions.network-declared"],"include_blocked":true},"summary":{"total_count":3,"group_count":2,"task_count":1,"risk_count":1,"rule_count":1,"agent_count":1,"workspace_count":1,"blocker_count":1,"gap_count":1,"safe_next_step_count":2,"summary":"Batch review groups remediation candidates before any write-capable flow."},"review_groups":[{"group_id":"risk-rules","title":"Risk and rule review","category":"risk_rule","priority":"high","summary":"Review permission findings before any manual edit.","safe_next_step_labels":["Open Findings","Open Fix Preview Drafts"],"items":[{"item_id":"rule-network","title":"Network permission declaration","category":"rule","priority":"high","status":"preview_only","agent":"claude-code","workspace":"Fixture Project","rule_id":"permissions.network-declared","risk_level":"medium","task_text":"Prepare local release audit work.","skill":{"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","readiness_score":78},"rationale":"Finding and draft preview both point to manual permission review.","safe_next_step_label":"Open Fix Preview Drafts","review_area":"Fix Preview Drafts","evidence_refs":["finding:permissions.network-declared"],"gap_notes":["Codex route still lacks equivalent coverage."],"blocker_notes":["No apply/write path is exposed."],"safety_flags":["provider not sent","preview only","no write"]}],"evidence_refs":["finding:permissions.network-declared"],"gap_notes":["Codex route still lacks equivalent coverage."],"blocker_notes":["No apply/write path is exposed."],"safety_flags":["preview only"]}],"review_items":[{"item_id":"workspace-codex","title":"Codex workspace gap","category":"workspace","priority":"medium","status":"preview_only","agent":"codex","workspace":"Fixture Project","rationale":"Workspace readiness reports a partial Codex route.","safe_next_step_label":"Open Workspace Readiness","review_area":"Workspace Readiness","evidence_refs":["workspace:codex-gap"]}],"safe_next_step_labels":["Open Remediation Planner","Open Impact Preview"],"gap_notes":["Codex lacks project-scoped release audit coverage."],"blocker_notes":["No batch apply path is available from review."],"evidence_references":[{"title":"Batch review","detail":"Derived from local remediation evidence.","source":"remediation.batchReview","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"remediation_batch_review","summary":"Provider explanation is not sent.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent","preview only","no write"]}}}'
             fi
             respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: remediation.batchReview"}}'
+            ;;
+          *\\"remediation.listHistory\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.60","catalog_available":true,"filters":{"task":"Prepare local release audit work.","agent":"claude-code","limit":30,"rule_ids":["permissions.network-declared"],"risk_levels":["medium"],"decisions":["reviewed"],"statuses":["recorded"]},"summary":{"total_count":2,"recorded_count":2,"recurrence_count":1,"reopened_count":1,"readiness_improvement_count":1,"decision_count":1,"status_count":1,"blocker_count":1,"gap_count":1,"summary":"Local remediation history shows one recurring permission review and one readiness improvement."},"records":[{"record_id":"hist-network","title":"Network permission reviewed","category":"rule","decision":"reviewed","status":"recorded","agent":"claude-code","workspace":"Fixture Project","rule_id":"permissions.network-declared","risk_level":"medium","task_text":"Prepare local release audit work.","review_area":"Fix Preview Drafts","source_method":"remediation.previewDrafts","skill":{"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","readiness_score":78},"recurrence_count":1,"reopened_count":1,"readiness_improvement":"+8 readiness","recorded_at":"2026-06-12T08:00:00Z","rationale":"Finding and copy-only draft were reviewed locally.","note":"Audit-only record; no remediation was applied.","evidence_refs":["finding:permissions.network-declared"],"gap_notes":["Codex route still lacks equivalent coverage."],"blocker_notes":["No apply/write path is exposed."],"safety_flags":["local audit only","no write","provider not sent"]}],"decisions":["reviewed"],"statuses":["recorded"],"gap_notes":["Workspace gap remains visible."],"blocker_notes":["No direct write/apply path is exposed."],"evidence_references":[{"title":"History","detail":"Derived from app-local remediation audit records.","source":"remediation.listHistory","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"remediation_history","summary":"Provider explanation is not sent.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["app-local history","provider not sent","no write"]}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: remediation.listHistory"}}'
+            ;;
+          *\\"remediation.recordHistory\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"recorded":true,"record":{"record_id":"hist-native-audit","title":"Native Analysis local audit","category":"audit","decision":"reviewed","status":"recorded","agent":"claude-code","workspace":"Fixture Project","task_text":"Prepare local release audit work.","review_area":"Remediation History","source_method":"analysis.remediationHistory.ui","skill":{"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","readiness_score":78},"recorded_at":"2026-06-12T08:05:00Z","rationale":"User recorded local remediation audit metadata from native Analysis.","note":"Recorded app-local audit metadata only; no remediation was applied.","evidence_refs":["selected_skill:beta"],"safety_flags":["local audit only","no write","provider not sent"]},"summary":{"total_count":1,"recorded_count":1,"summary":"Recorded one local remediation audit entry."},"message":"Local remediation history recorded.","evidence_references":[{"title":"History record","detail":"Stored app-local audit metadata only.","source":"remediation.recordHistory","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"remediation_history_record","summary":"Provider explanation is not sent.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["app-local history","provider not sent","no write"]}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: remediation.recordHistory"}}'
             ;;
           *\\"task.listBenchmarks\\"*)
             if [ "$scenario" = "prompt-ready" ]; then
