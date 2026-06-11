@@ -19,6 +19,7 @@
         "analysis.detectStaleDrift",
         "knowledge.search",
         "knowledge.groupSimilarSkills",
+        "knowledge.buildCapabilityTaxonomy",
         "task.checkReadiness",
         "task.rankSkillRoutes",
         "task.compareAgentReadiness",

@@ -65,6 +65,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "analysis.detectStaleDrift",
     "knowledge.search",
     "knowledge.groupSimilarSkills",
+    "knowledge.buildCapabilityTaxonomy",
     "task.checkReadiness",
     "task.rankSkillRoutes",
     "task.compareAgentReadiness",
@@ -1019,6 +1020,122 @@ pub type SimilarSkillGroupingPromptRequest = AgentReadinessPromptRequest;
 pub type SimilarSkillGroupingSafetyFlags = AgentReadinessSafetyFlags;
 
 #[derive(Debug, Clone, Default, Deserialize)]
+pub struct CapabilityTaxonomyParams {
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+    #[serde(default)]
+    pub include_single_skill_domains: bool,
+    #[serde(default, alias = "instance_ids")]
+    pub candidate_instance_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CapabilityTaxonomyResult {
+    pub generated_by: &'static str,
+    pub catalog_available: bool,
+    pub filters: CapabilityTaxonomyFilters,
+    pub summary: CapabilityTaxonomySummary,
+    pub domains: Vec<CapabilityDomainRow>,
+    pub coverage_rows: Vec<CapabilityCoverageRow>,
+    pub gap_notes: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub evidence_references: Vec<TaskReadinessEvidenceReference>,
+    pub prompt_request: CapabilityTaxonomyPromptRequest,
+    pub safety_flags: CapabilityTaxonomySafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CapabilityTaxonomyFilters {
+    pub agent: Option<String>,
+    pub limit: usize,
+    pub include_single_skill_domains: bool,
+    pub candidate_instance_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CapabilityTaxonomySummary {
+    pub indexed_skill_count: usize,
+    pub candidate_skill_count: usize,
+    pub domain_count: usize,
+    pub returned_domain_count: usize,
+    pub total_representative_skill_count: usize,
+    pub agent_count: usize,
+    pub workspace_count: usize,
+    pub duplicate_or_redundant_domain_count: usize,
+    pub routing_ambiguity_domain_count: usize,
+    pub gap_count: usize,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CapabilityDomainRow {
+    pub domain_id: String,
+    pub rank: usize,
+    pub domain_key: String,
+    pub domain_name: String,
+    pub coverage_level: &'static str,
+    pub coverage_score: u8,
+    pub skill_count: usize,
+    pub enabled_skill_count: usize,
+    pub disabled_skill_count: usize,
+    pub agent_count: usize,
+    pub workspace_count: usize,
+    pub agents: BTreeMap<String, usize>,
+    pub workspaces: BTreeMap<String, usize>,
+    pub duplicate_or_redundant_count: usize,
+    pub routing_ambiguity_count: usize,
+    pub representative_skills: Vec<CapabilityRepresentativeSkill>,
+    pub capability_tags: Vec<String>,
+    pub risk_tags: Vec<String>,
+    pub tools: Vec<String>,
+    pub rules: Vec<String>,
+    pub keywords: Vec<String>,
+    pub gap_notes: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub safety_flags: CapabilityTaxonomySafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CapabilityCoverageRow {
+    pub domain_key: String,
+    pub domain_name: String,
+    pub coverage_level: &'static str,
+    pub coverage_score: u8,
+    pub skill_count: usize,
+    pub enabled_skill_count: usize,
+    pub agent_count: usize,
+    pub workspace_count: usize,
+    pub agents: BTreeMap<String, usize>,
+    pub gaps: Vec<String>,
+    pub duplicates_redundancy: &'static str,
+    pub routing_ambiguity: &'static str,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CapabilityRepresentativeSkill {
+    pub instance_id: String,
+    pub definition_id: String,
+    pub skill_name: String,
+    pub agent: String,
+    pub scope: String,
+    pub enabled: bool,
+    pub state: String,
+    pub source: KnowledgeSearchSource,
+    pub quality_context: Option<KnowledgeQualityContext>,
+    pub stale_drift_context: Option<KnowledgeStaleDriftContext>,
+    pub similarity_group_ids: Vec<String>,
+    pub match_reasons: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+pub type CapabilityTaxonomyPromptRequest = AgentReadinessPromptRequest;
+pub type CapabilityTaxonomySafetyFlags = AgentReadinessSafetyFlags;
+
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct DetectStaleDriftParams {
     #[serde(default)]
     pub agent: Option<String>,
@@ -1799,6 +1916,7 @@ pub enum LlmPromptActionKind {
     StaleDriftDetection,
     KnowledgeSearch,
     SimilarSkillGrouping,
+    CapabilityTaxonomy,
     TaskReadiness,
     RoutingConfidence,
 }
@@ -1815,6 +1933,7 @@ impl LlmPromptActionKind {
             Self::StaleDriftDetection => "stale_drift_detection",
             Self::KnowledgeSearch => "knowledge_search",
             Self::SimilarSkillGrouping => "similar_skill_grouping",
+            Self::CapabilityTaxonomy => "capability_taxonomy",
             Self::TaskReadiness => "task_readiness",
             Self::RoutingConfidence => "routing_confidence",
         }
@@ -2353,6 +2472,14 @@ impl ServiceHost {
                     serde_json::from_value(request.params)?
                 };
                 serde_json::to_value(self.group_similar_skills(params)?).map_err(Into::into)
+            }
+            "knowledge.buildCapabilityTaxonomy" => {
+                let params: CapabilityTaxonomyParams = if request.params.is_null() {
+                    CapabilityTaxonomyParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.build_capability_taxonomy(params)?).map_err(Into::into)
             }
             "task.checkReadiness" => {
                 let params: TaskReadinessParams = serde_json::from_value(request.params)?;
@@ -4346,6 +4473,199 @@ impl ServiceHost {
         })
     }
 
+    pub fn build_capability_taxonomy(
+        &self,
+        params: CapabilityTaxonomyParams,
+    ) -> Result<CapabilityTaxonomyResult, ServiceError> {
+        if matches!(params.limit, Some(0)) {
+            return Err(ServiceError::InvalidRequest(
+                "knowledge.buildCapabilityTaxonomy limit must be greater than zero".to_string(),
+            ));
+        }
+
+        let filters = capability_taxonomy_filters(&params);
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let Some(catalog) = self.open_existing_catalog_read_only()? else {
+            return Ok(empty_capability_taxonomy_result(filters, false));
+        };
+
+        let skills = self.list_visible_skill_records(&catalog)?;
+        let findings = list_findings(&catalog)?;
+        let conflicts = list_conflicts(&catalog)?;
+        let analysis = analyze_catalog(&catalog, &adapter_ctx)?;
+        let adapter_diagnostics = list_adapter_diagnostics(&adapter_ctx);
+        let roots = self.redaction_roots(&adapter_ctx);
+        let agent_filter = filters.agent.as_deref().filter(|agent| !agent.is_empty());
+        let candidate_ids = filters
+            .candidate_instance_ids
+            .iter()
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        let stale_by_id = self
+            .detect_stale_drift(DetectStaleDriftParams {
+                agent: filters.agent.clone(),
+                candidate_instance_ids: filters.candidate_instance_ids.clone(),
+                limit: Some(100),
+                stale_days: None,
+                thresholds: StaleDriftThresholds::default(),
+            })?
+            .stale_drift_rows
+            .into_iter()
+            .map(|row| (row.instance_id.clone(), row))
+            .collect::<BTreeMap<_, _>>();
+        let similar = self.group_similar_skills(SimilarSkillGroupingParams {
+            agent: filters.agent.clone(),
+            limit: Some(100),
+            min_score: Some(45.0),
+            include_singletons: false,
+            candidate_instance_ids: filters.candidate_instance_ids.clone(),
+        })?;
+        let similar_by_member = capability_similarity_by_member(&similar.groups);
+
+        let mut gap_notes = Vec::new();
+        let mut evidence = Vec::new();
+        let mut candidates = Vec::new();
+        for skill in &skills {
+            if !agent_matches(agent_filter, Some(skill.agent.as_str())) {
+                continue;
+            }
+            if !candidate_ids.is_empty() && !candidate_ids.contains(&skill.id) {
+                continue;
+            }
+            let Some(detail) = catalog.get_skill_detail(&skill.id)? else {
+                gap_notes.push(format!(
+                    "Catalog row `{}` did not have detail evidence available.",
+                    redact_for_llm_preview(&skill.id)
+                ));
+                continue;
+            };
+            let related_findings = knowledge_related_findings(&findings, &detail);
+            let related_conflicts = knowledge_related_conflicts(&conflicts, &detail);
+            let related_analysis = knowledge_related_analysis(&analysis.groups, &detail);
+            let diagnostic = adapter_diagnostics
+                .iter()
+                .find(|diagnostic| diagnostic.agent == detail.agent);
+            let quality = self
+                .score_skill_quality(ScoreSkillQualityParams {
+                    instance_id: detail.id.clone(),
+                    agent: Some(detail.agent.clone()),
+                    definition_id: Some(detail.definition_id.clone()),
+                })
+                .ok();
+            let stale = stale_by_id.get(&detail.id);
+            let similar_candidate = similar_skill_candidate(
+                &detail,
+                SimilarSkillCandidateSignals {
+                    findings: &related_findings,
+                    conflicts: &related_conflicts,
+                    analysis_groups: &related_analysis,
+                    diagnostic,
+                    quality: quality.as_ref(),
+                    stale,
+                    redaction_roots: &roots,
+                },
+                &mut evidence,
+            );
+            candidates.push(capability_taxonomy_candidate(
+                similar_candidate,
+                &similar_by_member,
+                &roots,
+            ));
+        }
+
+        let candidate_skill_count = candidates.len();
+        let mut domains = capability_domains_from_candidates(
+            candidates,
+            filters.include_single_skill_domains,
+            &mut evidence,
+        );
+        let domain_count = domains.len();
+        domains.sort_by(|left, right| {
+            right
+                .coverage_score
+                .cmp(&left.coverage_score)
+                .then_with(|| right.skill_count.cmp(&left.skill_count))
+                .then_with(|| left.domain_key.cmp(&right.domain_key))
+        });
+        domains.truncate(filters.limit);
+        for (index, domain) in domains.iter_mut().enumerate() {
+            domain.rank = index + 1;
+        }
+
+        if candidate_skill_count == 0 {
+            gap_notes.push(
+                "No visible local skill evidence matched the capability taxonomy filters."
+                    .to_string(),
+            );
+        } else if domains.is_empty() {
+            gap_notes.push("No capability domain met the selected taxonomy filters.".to_string());
+        }
+        gap_notes.extend(
+            domains
+                .iter()
+                .flat_map(|domain| domain.gap_notes.iter().cloned()),
+        );
+        gap_notes.sort();
+        gap_notes.dedup();
+
+        let coverage_rows = capability_coverage_rows(&domains);
+        let blocker_notes = capability_taxonomy_blocker_notes(&domains);
+        let prompt_instance_ids = domains
+            .iter()
+            .flat_map(|domain| {
+                domain
+                    .representative_skills
+                    .iter()
+                    .map(|skill| skill.instance_id.clone())
+            })
+            .take(12)
+            .collect::<Vec<_>>();
+        let prompt_available = !prompt_instance_ids.is_empty();
+        let summary = capability_taxonomy_summary(
+            skills.len(),
+            candidate_skill_count,
+            domain_count,
+            &domains,
+        );
+
+        Ok(CapabilityTaxonomyResult {
+            generated_by: "deterministic-service",
+            catalog_available: true,
+            filters: filters.clone(),
+            summary,
+            domains,
+            coverage_rows,
+            gap_notes,
+            blocker_notes,
+            evidence_references: evidence,
+            prompt_request: CapabilityTaxonomyPromptRequest {
+                available: prompt_available,
+                preview_method: "llm.previewPrompt",
+                confirm_method: "llm.confirmPromptAndSend",
+                action: "capability_taxonomy",
+                request: LlmPreviewPromptParams {
+                    action: LlmPromptActionKind::CapabilityTaxonomy,
+                    profile_id: None,
+                    skill_instance_id: None,
+                    instance_ids: prompt_instance_ids,
+                    analysis_kind: None,
+                    user_intent: Some(
+                        "Explain deterministic capability taxonomy using only local catalog evidence."
+                            .to_string(),
+                    ),
+                },
+                note: if prompt_available {
+                    "Optional provider-backed explanation must be requested through prompt preview and explicit confirmation; knowledge.buildCapabilityTaxonomy never sends provider traffic."
+                        .to_string()
+                } else {
+                    "Prompt preview is unavailable until local catalog evidence produces capability domains."
+                        .to_string()
+                },
+            },
+            safety_flags: capability_taxonomy_safety_flags(),
+        })
+    }
+
     pub fn check_task_readiness(
         &self,
         params: TaskReadinessParams,
@@ -5698,6 +6018,44 @@ impl ServiceHost {
                     &mut redactor,
                 ));
             }
+            LlmPromptActionKind::CapabilityTaxonomy => {
+                let result = self.build_capability_taxonomy(CapabilityTaxonomyParams {
+                    agent: None,
+                    limit: Some(8),
+                    include_single_skill_domains: true,
+                    candidate_instance_ids: params.instance_ids.clone(),
+                })?;
+                prompt_scope.extend([
+                    "deterministic capability taxonomy domains".to_string(),
+                    "agent and workspace coverage summaries".to_string(),
+                    "duplicate/redundancy and routing ambiguity signals".to_string(),
+                    "local gap and blocker notes".to_string(),
+                    "evidence reference summaries".to_string(),
+                    "safety flags".to_string(),
+                ]);
+                included_fields.extend([
+                    "candidate skill ids".to_string(),
+                    "domain ids, keys, names, and coverage levels".to_string(),
+                    "agent and workspace coverage counts".to_string(),
+                    "representative skill names, agents, scopes, enabled states, and local contexts"
+                        .to_string(),
+                    "tools, rules, keywords, capability tags, and risk tags".to_string(),
+                    "similar-group duplicate/redundancy and routing ambiguity metadata".to_string(),
+                    "read-only safety flags".to_string(),
+                ]);
+                excluded_fields.extend([
+                    "raw source paths".to_string(),
+                    "raw provider response".to_string(),
+                    "agent config contents".to_string(),
+                    "raw prompt or response persistence".to_string(),
+                    "raw skill body".to_string(),
+                    "raw frontmatter".to_string(),
+                ]);
+                sections.push(render_capability_taxonomy_prompt_section(
+                    &result,
+                    &mut redactor,
+                ));
+            }
             LlmPromptActionKind::TaskReadiness => {
                 let task = params.user_intent.as_deref().ok_or_else(|| {
                     ServiceError::InvalidRequest(
@@ -5801,6 +6159,7 @@ impl ServiceHost {
             LlmPromptActionKind::StaleDriftDetection => 750,
             LlmPromptActionKind::KnowledgeSearch => 750,
             LlmPromptActionKind::SimilarSkillGrouping => 850,
+            LlmPromptActionKind::CapabilityTaxonomy => 850,
             LlmPromptActionKind::TaskReadiness => 750,
             LlmPromptActionKind::RoutingConfidence => 850,
         };
@@ -9456,6 +9815,720 @@ fn similar_skill_grouping_summary(
     }
 }
 
+fn capability_taxonomy_safety_flags() -> CapabilityTaxonomySafetyFlags {
+    agent_readiness_safety_flags()
+}
+
+fn capability_taxonomy_filters(params: &CapabilityTaxonomyParams) -> CapabilityTaxonomyFilters {
+    let mut candidate_instance_ids = params
+        .candidate_instance_ids
+        .iter()
+        .map(|value| redact_for_llm_preview(value.trim()))
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    candidate_instance_ids.sort();
+    candidate_instance_ids.dedup();
+    CapabilityTaxonomyFilters {
+        agent: params
+            .agent
+            .as_deref()
+            .map(str::trim)
+            .filter(|agent| !agent.is_empty())
+            .map(ToOwned::to_owned),
+        limit: params.limit.unwrap_or(25).clamp(1, 100),
+        include_single_skill_domains: params.include_single_skill_domains,
+        candidate_instance_ids,
+    }
+}
+
+fn empty_capability_taxonomy_result(
+    filters: CapabilityTaxonomyFilters,
+    catalog_available: bool,
+) -> CapabilityTaxonomyResult {
+    CapabilityTaxonomyResult {
+        generated_by: "deterministic-service",
+        catalog_available,
+        filters,
+        summary: CapabilityTaxonomySummary {
+            indexed_skill_count: 0,
+            candidate_skill_count: 0,
+            domain_count: 0,
+            returned_domain_count: 0,
+            total_representative_skill_count: 0,
+            agent_count: 0,
+            workspace_count: 0,
+            duplicate_or_redundant_domain_count: 0,
+            routing_ambiguity_domain_count: 0,
+            gap_count: 1,
+            summary: "No local catalog is available, so capability taxonomy has no skill evidence."
+                .to_string(),
+        },
+        domains: Vec::new(),
+        coverage_rows: Vec::new(),
+        gap_notes: vec![
+            "Run a local scan before relying on capability taxonomy for coverage review."
+                .to_string(),
+        ],
+        blocker_notes: vec![
+            "No provider request was sent and no fallback network lookup was attempted."
+                .to_string(),
+        ],
+        evidence_references: Vec::new(),
+        prompt_request: CapabilityTaxonomyPromptRequest {
+            available: false,
+            preview_method: "llm.previewPrompt",
+            confirm_method: "llm.confirmPromptAndSend",
+            action: "capability_taxonomy",
+            request: LlmPreviewPromptParams {
+                action: LlmPromptActionKind::CapabilityTaxonomy,
+                profile_id: None,
+                skill_instance_id: None,
+                instance_ids: Vec::new(),
+                analysis_kind: None,
+                user_intent: Some(
+                    "Explain deterministic capability taxonomy using only local catalog evidence."
+                        .to_string(),
+                ),
+            },
+            note: "Prompt preview is unavailable until local catalog evidence exists.".to_string(),
+        },
+        safety_flags: capability_taxonomy_safety_flags(),
+    }
+}
+
+#[derive(Debug, Clone)]
+struct CapabilityTaxonomyCandidate {
+    detail: SkillDetailRecord,
+    domain_key: String,
+    domain_name: String,
+    workspace: String,
+    representative: CapabilityRepresentativeSkill,
+    keywords: Vec<String>,
+    tools: Vec<String>,
+    rules: Vec<String>,
+    capability_tags: Vec<String>,
+    risk_tags: Vec<String>,
+    similarity_group_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct CapabilitySimilaritySignal {
+    group_id: String,
+    coverage_redundancy: &'static str,
+    routing_ambiguity: &'static str,
+}
+
+fn capability_similarity_by_member(
+    groups: &[SimilarSkillGroup],
+) -> BTreeMap<String, Vec<CapabilitySimilaritySignal>> {
+    let mut by_member: BTreeMap<String, Vec<CapabilitySimilaritySignal>> = BTreeMap::new();
+    for group in groups {
+        for member in &group.members {
+            by_member
+                .entry(member.instance_id.clone())
+                .or_default()
+                .push(CapabilitySimilaritySignal {
+                    group_id: group.group_id.clone(),
+                    coverage_redundancy: group.coverage_redundancy,
+                    routing_ambiguity: group.routing_ambiguity,
+                });
+        }
+    }
+    by_member
+}
+
+fn capability_taxonomy_candidate(
+    candidate: SimilarSkillCandidate,
+    similar_by_member: &BTreeMap<String, Vec<CapabilitySimilaritySignal>>,
+    redaction_roots: &[(String, &'static str)],
+) -> CapabilityTaxonomyCandidate {
+    let (domain_key, domain_name) = capability_domain_for_candidate(&candidate);
+    let workspace = capability_workspace_label(&candidate.detail, redaction_roots);
+    let similarity_signals = similar_by_member.get(&candidate.detail.id);
+    let similarity_group_ids = similarity_signals
+        .map(|signals| {
+            signals
+                .iter()
+                .map(|signal| signal.group_id.clone())
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let redundancy_signal_count = similarity_signals
+        .map(|signals| {
+            signals
+                .iter()
+                .filter(|signal| signal.coverage_redundancy != "low")
+                .count()
+        })
+        .unwrap_or(0);
+    let ambiguity_signal_count = similarity_signals
+        .map(|signals| {
+            signals
+                .iter()
+                .filter(|signal| signal.routing_ambiguity != "low")
+                .count()
+        })
+        .unwrap_or(0);
+    let mut match_reasons = vec![format!(
+        "Classified into `{}` from deterministic name, description, keyword, tool, rule, and capability-tag evidence.",
+        domain_name
+    )];
+    if !similarity_group_ids.is_empty() {
+        match_reasons.push(format!(
+            "Similar-group evidence contributes {} group(s), {} redundancy signal(s), and {} routing ambiguity signal(s).",
+            similarity_group_ids.len(),
+            redundancy_signal_count,
+            ambiguity_signal_count
+        ));
+    }
+    let representative = CapabilityRepresentativeSkill {
+        instance_id: candidate.member.instance_id.clone(),
+        definition_id: candidate.member.definition_id.clone(),
+        skill_name: candidate.member.skill_name.clone(),
+        agent: candidate.member.agent.clone(),
+        scope: candidate.member.scope.clone(),
+        enabled: candidate.member.enabled,
+        state: candidate.member.state.clone(),
+        source: candidate.member.source.clone(),
+        quality_context: candidate.member.quality_context.clone(),
+        stale_drift_context: candidate.member.stale_drift_context.clone(),
+        similarity_group_ids: similarity_group_ids.clone(),
+        match_reasons,
+        evidence_refs: candidate.member.evidence_refs.clone(),
+    };
+    CapabilityTaxonomyCandidate {
+        detail: candidate.detail,
+        domain_key,
+        domain_name,
+        workspace,
+        representative,
+        keywords: candidate.terms,
+        tools: candidate.tools,
+        rules: candidate.rules,
+        capability_tags: candidate.capability_tags,
+        risk_tags: candidate.risk_tags,
+        similarity_group_ids,
+    }
+}
+
+fn capability_domain_for_candidate(candidate: &SimilarSkillCandidate) -> (String, String) {
+    let searchable = format!(
+        "{} {} {} {} {} {} {}",
+        candidate.detail.name,
+        candidate.detail.description,
+        candidate.detail.frontmatter_raw,
+        candidate.detail.body,
+        candidate.terms.join(" "),
+        candidate.tools.join(" "),
+        candidate.rules.join(" ")
+    )
+    .to_ascii_lowercase();
+    let (key, name) = if contains_any(
+        &searchable,
+        &[
+            "research",
+            "knowledge",
+            "search",
+            "index",
+            "retrieval",
+            "rag",
+            "docs",
+            "documentation",
+        ],
+    ) {
+        ("research-knowledge", "Research & Knowledge")
+    } else if contains_any(
+        &searchable,
+        &[
+            "release",
+            "readiness",
+            "validation",
+            "smoke",
+            "test",
+            "regression",
+            "quality",
+            "benchmark",
+        ],
+    ) {
+        ("release-validation", "Release & Validation")
+    } else if contains_any(
+        &searchable,
+        &[
+            "security",
+            "privacy",
+            "credential",
+            "redaction",
+            "permission",
+            "risk",
+            "safety",
+            "audit",
+        ],
+    ) {
+        ("security-privacy", "Security & Privacy")
+    } else if contains_any(
+        &searchable,
+        &[
+            "agent",
+            "adapter",
+            "routing",
+            "skill",
+            "taxonomy",
+            "capability",
+            "governance",
+        ],
+    ) {
+        ("agent-skills-governance", "Agent Skills Governance")
+    } else if contains_any(
+        &searchable,
+        &[
+            "build", "code", "rust", "swift", "macos", "ios", "web", "frontend", "backend",
+        ],
+    ) {
+        ("software-delivery", "Software Delivery")
+    } else if contains_any(
+        &searchable,
+        &[
+            "data",
+            "analytics",
+            "sql",
+            "chart",
+            "dashboard",
+            "report",
+            "metric",
+        ],
+    ) {
+        ("data-analytics", "Data & Analytics")
+    } else if contains_any(
+        &searchable,
+        &[
+            "design",
+            "ui",
+            "ux",
+            "theme",
+            "visual",
+            "product",
+            "prototype",
+        ],
+    ) {
+        ("product-design", "Product Design")
+    } else if contains_any(
+        &searchable,
+        &["automation", "script", "ops", "cli", "workflow", "deploy"],
+    ) {
+        ("automation-ops", "Automation & Ops")
+    } else {
+        ("general-utility", "General Utility")
+    };
+    (key.to_string(), name.to_string())
+}
+
+fn contains_any(value: &str, needles: &[&str]) -> bool {
+    needles.iter().any(|needle| value.contains(needle))
+}
+
+fn capability_workspace_label(
+    skill: &SkillDetailRecord,
+    redaction_roots: &[(String, &'static str)],
+) -> String {
+    if skill.scope == Scope::ToolGlobal.as_str() {
+        "tool-global".to_string()
+    } else if skill.scope == Scope::AgentProject.as_str() {
+        let parent = Path::new(&skill.display_path)
+            .parent()
+            .map(|path| redact_path_string(path, redaction_roots))
+            .unwrap_or_else(|| "project".to_string());
+        format!("{}:project:{parent}", skill.agent)
+    } else {
+        format!("{}:global", skill.agent)
+    }
+}
+
+fn capability_domains_from_candidates(
+    candidates: Vec<CapabilityTaxonomyCandidate>,
+    include_single_skill_domains: bool,
+    evidence: &mut Vec<TaskReadinessEvidenceReference>,
+) -> Vec<CapabilityDomainRow> {
+    let mut by_domain: BTreeMap<String, Vec<CapabilityTaxonomyCandidate>> = BTreeMap::new();
+    for candidate in candidates {
+        by_domain
+            .entry(candidate.domain_key.clone())
+            .or_default()
+            .push(candidate);
+    }
+
+    by_domain
+        .into_iter()
+        .filter_map(|(_, mut candidates)| {
+            if !include_single_skill_domains && candidates.len() == 1 {
+                return None;
+            }
+            candidates.sort_by(|left, right| {
+                right
+                    .detail
+                    .enabled
+                    .cmp(&left.detail.enabled)
+                    .then_with(|| left.detail.agent.cmp(&right.detail.agent))
+                    .then_with(|| left.detail.name.cmp(&right.detail.name))
+                    .then_with(|| left.detail.id.cmp(&right.detail.id))
+            });
+            Some(capability_domain_from_candidates(candidates, evidence))
+        })
+        .collect()
+}
+
+fn capability_domain_from_candidates(
+    candidates: Vec<CapabilityTaxonomyCandidate>,
+    evidence: &mut Vec<TaskReadinessEvidenceReference>,
+) -> CapabilityDomainRow {
+    let domain_key = candidates
+        .first()
+        .map(|candidate| candidate.domain_key.clone())
+        .unwrap_or_else(|| "general-utility".to_string());
+    let domain_name = candidates
+        .first()
+        .map(|candidate| candidate.domain_name.clone())
+        .unwrap_or_else(|| "General Utility".to_string());
+    let domain_id = stable_capability_domain_id(&domain_key);
+    let mut agents = BTreeMap::new();
+    let mut workspaces = BTreeMap::new();
+    let mut tools = BTreeSet::new();
+    let mut rules = BTreeSet::new();
+    let mut keywords = BTreeSet::new();
+    let mut capability_tags = BTreeSet::new();
+    let mut risk_tags = BTreeSet::new();
+    let mut evidence_refs = BTreeSet::new();
+    let mut duplicate_or_redundant_count = 0usize;
+    let mut routing_ambiguity_count = 0usize;
+    let enabled_skill_count = candidates
+        .iter()
+        .filter(|candidate| candidate.detail.enabled)
+        .count();
+    for candidate in &candidates {
+        *agents.entry(candidate.detail.agent.clone()).or_insert(0) += 1;
+        *workspaces.entry(candidate.workspace.clone()).or_insert(0) += 1;
+        tools.extend(candidate.tools.iter().take(12).cloned());
+        rules.extend(candidate.rules.iter().take(12).cloned());
+        keywords.extend(candidate.keywords.iter().take(16).cloned());
+        capability_tags.extend(candidate.capability_tags.iter().take(16).cloned());
+        risk_tags.extend(candidate.risk_tags.iter().take(16).cloned());
+        evidence_refs.extend(candidate.representative.evidence_refs.iter().cloned());
+        if !candidate.similarity_group_ids.is_empty() {
+            duplicate_or_redundant_count += 1;
+        }
+    }
+    let mut seen_similarity_groups = BTreeSet::new();
+    for candidate in &candidates {
+        for group_id in &candidate.similarity_group_ids {
+            if seen_similarity_groups.insert(group_id.clone()) {
+                duplicate_or_redundant_count += 1;
+            }
+        }
+    }
+    routing_ambiguity_count += risk_tags
+        .iter()
+        .filter(|tag| tag.as_str() == "risk-high" || tag.as_str() == "risk-blocked")
+        .count();
+    routing_ambiguity_count += candidates
+        .iter()
+        .filter(|candidate| !candidate.detail.enabled || candidate.detail.state != "loaded")
+        .count();
+
+    let domain_ref = push_task_readiness_evidence(
+        evidence,
+        "capability_domain",
+        &domain_id,
+        format!(
+            "Capability domain `{}` has {} local skill member(s) across {} agent(s) and {} workspace(s)",
+            redact_for_llm_preview(&domain_name),
+            candidates.len(),
+            agents.len(),
+            workspaces.len()
+        ),
+        None,
+        candidates
+            .first()
+            .map(|candidate| candidate.detail.id.clone()),
+    );
+    evidence_refs.insert(domain_ref);
+
+    let representative_skills = candidates
+        .iter()
+        .take(8)
+        .map(|candidate| candidate.representative.clone())
+        .collect::<Vec<_>>();
+    let coverage_score = capability_coverage_score(
+        candidates.len(),
+        enabled_skill_count,
+        agents.len(),
+        workspaces.len(),
+        duplicate_or_redundant_count,
+        routing_ambiguity_count,
+    );
+    let coverage_level = capability_coverage_level(coverage_score);
+    let gap_notes = capability_domain_gap_notes(
+        &domain_name,
+        candidates.len(),
+        enabled_skill_count,
+        agents.len(),
+        workspaces.len(),
+    );
+    let blocker_notes = capability_domain_blocker_notes(
+        &domain_name,
+        &candidates,
+        duplicate_or_redundant_count,
+        routing_ambiguity_count,
+    );
+
+    CapabilityDomainRow {
+        domain_id,
+        rank: 0,
+        domain_key,
+        domain_name,
+        coverage_level,
+        coverage_score,
+        skill_count: candidates.len(),
+        enabled_skill_count,
+        disabled_skill_count: candidates.len().saturating_sub(enabled_skill_count),
+        agent_count: agents.len(),
+        workspace_count: workspaces.len(),
+        agents,
+        workspaces,
+        duplicate_or_redundant_count,
+        routing_ambiguity_count,
+        representative_skills,
+        capability_tags: capability_tags.into_iter().take(24).collect(),
+        risk_tags: risk_tags.into_iter().take(24).collect(),
+        tools: tools.into_iter().take(24).collect(),
+        rules: rules.into_iter().take(24).collect(),
+        keywords: keywords.into_iter().take(24).collect(),
+        gap_notes,
+        blocker_notes,
+        evidence_refs: evidence_refs.into_iter().collect(),
+        safety_flags: capability_taxonomy_safety_flags(),
+    }
+}
+
+fn capability_coverage_score(
+    skill_count: usize,
+    enabled_count: usize,
+    agent_count: usize,
+    workspace_count: usize,
+    duplicate_or_redundant_count: usize,
+    routing_ambiguity_count: usize,
+) -> u8 {
+    let mut score = 20i16;
+    score += (skill_count as i16 * 12).min(30);
+    score += (enabled_count as i16 * 12).min(24);
+    score += (agent_count as i16 * 10).min(24);
+    score += (workspace_count as i16 * 6).min(18);
+    score -= (duplicate_or_redundant_count as i16 * 5).min(20);
+    score -= (routing_ambiguity_count as i16 * 7).min(28);
+    score.clamp(0, 100) as u8
+}
+
+fn capability_coverage_level(score: u8) -> &'static str {
+    match score {
+        80..=100 => "broad",
+        55..=79 => "moderate",
+        25..=54 => "thin",
+        _ => "gap",
+    }
+}
+
+fn capability_domain_gap_notes(
+    domain_name: &str,
+    skill_count: usize,
+    enabled_count: usize,
+    agent_count: usize,
+    workspace_count: usize,
+) -> Vec<String> {
+    let mut notes = Vec::new();
+    if skill_count < 2 {
+        notes.push(format!(
+            "`{}` has only one visible local skill; coverage may be thin.",
+            redact_for_llm_preview(domain_name)
+        ));
+    }
+    if enabled_count == 0 {
+        notes.push(format!(
+            "`{}` has no enabled local skills.",
+            redact_for_llm_preview(domain_name)
+        ));
+    }
+    if agent_count < 2 {
+        notes.push(format!(
+            "`{}` is visible in fewer than two agents.",
+            redact_for_llm_preview(domain_name)
+        ));
+    }
+    if workspace_count < 2 {
+        notes.push(format!(
+            "`{}` is concentrated in one workspace/scope.",
+            redact_for_llm_preview(domain_name)
+        ));
+    }
+    notes
+}
+
+fn capability_domain_blocker_notes(
+    domain_name: &str,
+    candidates: &[CapabilityTaxonomyCandidate],
+    duplicate_or_redundant_count: usize,
+    routing_ambiguity_count: usize,
+) -> Vec<String> {
+    let mut notes = Vec::new();
+    if candidates
+        .iter()
+        .any(|candidate| !candidate.detail.enabled || candidate.detail.state != "loaded")
+    {
+        notes.push(format!(
+            "`{}` includes disabled or non-loaded skills; taxonomy does not make them routable.",
+            redact_for_llm_preview(domain_name)
+        ));
+    }
+    if duplicate_or_redundant_count > 0 {
+        notes.push(format!(
+            "`{}` has duplicate/redundancy signals from similar-skill grouping; no merge or delete action is enabled.",
+            redact_for_llm_preview(domain_name)
+        ));
+    }
+    if routing_ambiguity_count > 0 {
+        notes.push(format!(
+            "`{}` has routing ambiguity or high-risk signals and should be reviewed before use.",
+            redact_for_llm_preview(domain_name)
+        ));
+    }
+    notes
+}
+
+fn capability_coverage_rows(domains: &[CapabilityDomainRow]) -> Vec<CapabilityCoverageRow> {
+    domains
+        .iter()
+        .map(|domain| CapabilityCoverageRow {
+            domain_key: domain.domain_key.clone(),
+            domain_name: domain.domain_name.clone(),
+            coverage_level: domain.coverage_level,
+            coverage_score: domain.coverage_score,
+            skill_count: domain.skill_count,
+            enabled_skill_count: domain.enabled_skill_count,
+            agent_count: domain.agent_count,
+            workspace_count: domain.workspace_count,
+            agents: domain.agents.clone(),
+            gaps: domain.gap_notes.clone(),
+            duplicates_redundancy: if domain.duplicate_or_redundant_count > 0 {
+                "present"
+            } else {
+                "none"
+            },
+            routing_ambiguity: if domain.routing_ambiguity_count > 0 {
+                "present"
+            } else {
+                "none"
+            },
+            evidence_refs: domain.evidence_refs.clone(),
+        })
+        .collect()
+}
+
+fn capability_taxonomy_blocker_notes(domains: &[CapabilityDomainRow]) -> Vec<String> {
+    let mut notes = Vec::new();
+    if domains
+        .iter()
+        .any(|domain| domain.routing_ambiguity_count > 0)
+    {
+        notes.push(
+            "Routing ambiguity is advisory and does not trigger automatic route changes."
+                .to_string(),
+        );
+    }
+    if domains
+        .iter()
+        .any(|domain| domain.duplicate_or_redundant_count > 0)
+    {
+        notes.push(
+            "Duplicate or redundant capability coverage is reported for review only; no skills are merged, disabled, or deleted."
+                .to_string(),
+        );
+    }
+    if domains.iter().any(|domain| domain.disabled_skill_count > 0) {
+        notes.push(
+            "Disabled or non-loaded skills remain disabled/non-loaded; taxonomy is read-only."
+                .to_string(),
+        );
+    }
+    if notes.is_empty() {
+        notes.push(
+            "Capability taxonomy used local catalog evidence only and found no returned-domain blockers."
+                .to_string(),
+        );
+    }
+    notes
+}
+
+fn capability_taxonomy_summary(
+    indexed_skill_count: usize,
+    candidate_skill_count: usize,
+    domain_count: usize,
+    domains: &[CapabilityDomainRow],
+) -> CapabilityTaxonomySummary {
+    let total_representative_skill_count = domains
+        .iter()
+        .map(|domain| domain.representative_skills.len())
+        .sum();
+    let agents = domains
+        .iter()
+        .flat_map(|domain| domain.agents.keys().cloned())
+        .collect::<BTreeSet<_>>();
+    let workspaces = domains
+        .iter()
+        .flat_map(|domain| domain.workspaces.keys().cloned())
+        .collect::<BTreeSet<_>>();
+    let duplicate_or_redundant_domain_count = domains
+        .iter()
+        .filter(|domain| domain.duplicate_or_redundant_count > 0)
+        .count();
+    let routing_ambiguity_domain_count = domains
+        .iter()
+        .filter(|domain| domain.routing_ambiguity_count > 0)
+        .count();
+    let gap_count = domains.iter().map(|domain| domain.gap_notes.len()).sum();
+    let summary = if domains.is_empty() {
+        "No deterministic capability domains matched the selected filters.".to_string()
+    } else {
+        format!(
+            "Returned {} of {} capability domain(s) from {} candidate skill(s) across {} indexed visible skill(s); {} domain(s) have duplicate/redundancy signals and {} domain(s) have routing ambiguity.",
+            domains.len(),
+            domain_count,
+            candidate_skill_count,
+            indexed_skill_count,
+            duplicate_or_redundant_domain_count,
+            routing_ambiguity_domain_count
+        )
+    };
+    CapabilityTaxonomySummary {
+        indexed_skill_count,
+        candidate_skill_count,
+        domain_count,
+        returned_domain_count: domains.len(),
+        total_representative_skill_count,
+        agent_count: agents.len(),
+        workspace_count: workspaces.len(),
+        duplicate_or_redundant_domain_count,
+        routing_ambiguity_domain_count,
+        gap_count,
+        summary,
+    }
+}
+
+fn stable_capability_domain_id(domain_key: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(domain_key.as_bytes());
+    let digest = hasher.finalize();
+    format!("cap-domain-{}", hex_prefix(&digest, 12))
+}
+
 fn normalize_similarity_key(value: &str) -> String {
     task_readiness_terms(value).join("-")
 }
@@ -12755,6 +13828,137 @@ fn render_similar_skill_grouping_prompt_section(
     )
 }
 
+fn render_capability_taxonomy_prompt_section(
+    result: &CapabilityTaxonomyResult,
+    redactor: &mut PromptRedactor<'_>,
+) -> String {
+    let domains = result
+        .domains
+        .iter()
+        .take(8)
+        .map(|domain| {
+            let representatives = domain
+                .representative_skills
+                .iter()
+                .take(6)
+                .map(|skill| {
+                    format!(
+                        "{} ({}, {}, enabled={}, state={}, quality={}, stale_drift={}, groups={})",
+                        redactor.redact(&skill.skill_name),
+                        redactor.redact(&skill.agent),
+                        redactor.redact(&skill.scope),
+                        skill.enabled,
+                        redactor.redact(&skill.state),
+                        skill
+                            .quality_context
+                            .as_ref()
+                            .map(|context| format!("{} ({}/100)", context.band, context.score))
+                            .unwrap_or_else(|| "n/a".to_string()),
+                        skill
+                            .stale_drift_context
+                            .as_ref()
+                            .map(|context| format!("{} ({}/100)", context.band, context.score))
+                            .unwrap_or_else(|| "n/a".to_string()),
+                        if skill.similarity_group_ids.is_empty() {
+                            "none".to_string()
+                        } else {
+                            skill.similarity_group_ids.join(", ")
+                        }
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("; ");
+            format!(
+                "- #{} {} key={} coverage={} score={} skills={} agents={} workspaces={} duplicate_or_redundant={} routing_ambiguity={}; tools={}; rules={}; risk={}; gaps={}; blockers={}; representatives={}",
+                domain.rank,
+                redactor.redact(&domain.domain_name),
+                redactor.redact(&domain.domain_key),
+                domain.coverage_level,
+                domain.coverage_score,
+                domain.skill_count,
+                domain.agent_count,
+                domain.workspace_count,
+                domain.duplicate_or_redundant_count,
+                domain.routing_ambiguity_count,
+                domain.tools.iter().take(8).cloned().collect::<Vec<_>>().join(", "),
+                domain.rules.iter().take(8).cloned().collect::<Vec<_>>().join(", "),
+                domain.risk_tags.iter().take(8).cloned().collect::<Vec<_>>().join(", "),
+                domain
+                    .gap_notes
+                    .iter()
+                    .take(4)
+                    .map(|note| redactor.redact(note))
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                domain
+                    .blocker_notes
+                    .iter()
+                    .take(4)
+                    .map(|note| redactor.redact(note))
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                representatives
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let evidence = result
+        .evidence_references
+        .iter()
+        .take(16)
+        .map(|reference| {
+            format!(
+                "- {} {} {}",
+                reference.source_type,
+                redactor.redact(&reference.source_id),
+                redactor.redact(&reference.label)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "Capability taxonomy evidence:\n- catalog_available: {}\n- agent: {}\n- indexed_skill_count: {}\n- candidate_skill_count: {}\n- domain_count: {}\n- returned_domain_count: {}\n- agent_count: {}\n- workspace_count: {}\n- duplicate_or_redundant_domain_count: {}\n- routing_ambiguity_domain_count: {}\n- summary: {}\n\nDomains:\n{}\n\nGap notes:\n{}\n\nBlocker notes:\n{}\n\nEvidence references:\n{}\n\nSafety flags: read_only=true, app_local_only=true, provider_request_sent=false, write_back_allowed=false, write_actions_available=false, skill_files_mutated=false, agent_config_mutated=false, script_execution_allowed=false, execution_actions_available=false, config_mutation_allowed=false, snapshot_created=false, triage_mutation_allowed=false, credential_accessed=false, raw_prompt_persisted=false, raw_response_persisted=false, raw_trace_persisted=false, cloud_sync_performed=false, telemetry_emitted=false.",
+        result.catalog_available,
+        result
+            .filters
+            .agent
+            .as_deref()
+            .map(|agent| redactor.redact(agent))
+            .unwrap_or_else(|| "all".to_string()),
+        result.summary.indexed_skill_count,
+        result.summary.candidate_skill_count,
+        result.summary.domain_count,
+        result.summary.returned_domain_count,
+        result.summary.agent_count,
+        result.summary.workspace_count,
+        result.summary.duplicate_or_redundant_domain_count,
+        result.summary.routing_ambiguity_domain_count,
+        redactor.redact(&result.summary.summary),
+        if domains.is_empty() { "none" } else { &domains },
+        if result.gap_notes.is_empty() {
+            "none".to_string()
+        } else {
+            result
+                .gap_notes
+                .iter()
+                .map(|note| redactor.redact(note))
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+        if result.blocker_notes.is_empty() {
+            "none".to_string()
+        } else {
+            result
+                .blocker_notes
+                .iter()
+                .map(|note| redactor.redact(note))
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+        if evidence.is_empty() { "none" } else { &evidence },
+    )
+}
+
 fn render_task_readiness_prompt_section(
     readiness: &TaskReadinessResult,
     redactor: &mut PromptRedactor<'_>,
@@ -13197,6 +14401,10 @@ mod tests {
         assert!(methods.contains(&Value::String("analysis.scoreSkillQuality".to_string())));
         assert!(methods.contains(&Value::String("analysis.detectStaleDrift".to_string())));
         assert!(methods.contains(&Value::String("knowledge.search".to_string())));
+        assert!(methods.contains(&Value::String("knowledge.groupSimilarSkills".to_string())));
+        assert!(methods.contains(&Value::String(
+            "knowledge.buildCapabilityTaxonomy".to_string()
+        )));
         assert!(methods.contains(&Value::String("task.checkReadiness".to_string())));
         assert!(methods.contains(&Value::String("task.rankSkillRoutes".to_string())));
         assert!(methods.contains(&Value::String("task.compareAgentReadiness".to_string())));
@@ -15427,6 +16635,229 @@ mod tests {
         assert!(!user_home.join(".codex/config.toml").exists());
 
         let serialized = serde_json::to_string(&result).expect("serialize similar result");
+        assert!(!serialized.contains(&app_data_dir.to_string_lossy().to_string()));
+        assert!(!serialized.contains(&user_home.to_string_lossy().to_string()));
+        assert!(!serialized.contains("fixture-redacted-value"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn knowledge_build_capability_taxonomy_returns_domains_and_coverage() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-taxonomy-domain-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-taxonomy-domain-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_similar_grouping_fixture(&host);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("taxonomy-domain".to_string()),
+            method: "knowledge.buildCapabilityTaxonomy".to_string(),
+            params: json!({ "include_single_skill_domains": true, "limit": 10 }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("capability taxonomy result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("deterministic-service")
+        );
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/candidate_skill_count")
+                .and_then(Value::as_u64),
+            Some(4)
+        );
+        assert!(result
+            .get("domains")
+            .and_then(Value::as_array)
+            .is_some_and(|domains| domains.len() >= 2));
+        assert!(result
+            .get("coverage_rows")
+            .and_then(Value::as_array)
+            .is_some_and(|rows| !rows.is_empty()));
+        let domains = result
+            .get("domains")
+            .and_then(Value::as_array)
+            .expect("domains");
+        assert!(domains.iter().any(|domain| {
+            domain.get("domain_key").and_then(Value::as_str) == Some("release-validation")
+                && domain
+                    .get("representative_skills")
+                    .and_then(Value::as_array)
+                    .is_some_and(|skills| skills.len() >= 2)
+        }));
+        assert!(domains.iter().any(|domain| {
+            domain
+                .get("duplicate_or_redundant_count")
+                .and_then(Value::as_u64)
+                .is_some_and(|count| count > 0)
+        }));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/action")
+                .and_then(Value::as_str),
+            Some("capability_taxonomy")
+        );
+        assert_eq!(
+            result
+                .pointer("/prompt_request/request/action")
+                .and_then(Value::as_str),
+            Some("capability_taxonomy")
+        );
+        assert_agent_readiness_safety(&result);
+        for domain in domains {
+            assert_eq!(
+                domain
+                    .pointer("/safety_flags/read_only")
+                    .and_then(Value::as_bool),
+                Some(true)
+            );
+        }
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn knowledge_build_capability_taxonomy_missing_catalog_returns_safe_empty_result() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-taxonomy-missing-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("taxonomy-missing".to_string()),
+            method: "knowledge.buildCapabilityTaxonomy".to_string(),
+            params: json!({ "agent": "codex" }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("missing catalog taxonomy result");
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/returned_domain_count")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert!(result
+            .get("domains")
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_agent_readiness_safety(&result);
+        assert!(
+            !host.catalog_path().exists(),
+            "missing-catalog taxonomy must not initialize catalog.sqlite"
+        );
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    }
+
+    #[test]
+    fn knowledge_build_capability_taxonomy_preserves_provider_and_write_boundaries() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-taxonomy-safety-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-taxonomy-safety-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_similar_grouping_fixture(&host);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("taxonomy-safety".to_string()),
+            method: "knowledge.buildCapabilityTaxonomy".to_string(),
+            params: json!({ "include_single_skill_domains": true, "limit": 10 }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("taxonomy safety result");
+        assert_agent_readiness_safety(&result);
+        assert_eq!(
+            result
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/write_back_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let serialized = serde_json::to_string(&result).expect("serialize taxonomy result");
         assert!(!serialized.contains(&app_data_dir.to_string_lossy().to_string()));
         assert!(!serialized.contains(&user_home.to_string_lossy().to_string()));
         assert!(!serialized.contains("fixture-redacted-value"));
@@ -19556,6 +20987,30 @@ mod tests {
                     assert_agent_readiness_safety_flags(&group.safety_flags);
                 }
             }
+            "knowledge.buildCapabilityTaxonomy" => {
+                let taxonomy: WireCapabilityTaxonomyResult =
+                    decode_fixture_result(method, result, path);
+                assert_eq!(taxonomy.generated_by, "deterministic-service");
+                assert!(taxonomy.catalog_available);
+                assert_eq!(
+                    taxonomy.summary.returned_domain_count,
+                    taxonomy.domains.len()
+                );
+                assert_eq!(taxonomy.coverage_rows.len(), taxonomy.domains.len());
+                assert!(!taxonomy.domains.is_empty());
+                assert!(!taxonomy.domains[0].representative_skills.is_empty());
+                assert!(taxonomy.domains[0].coverage_score <= 100);
+                assert_eq!(taxonomy.prompt_request.action, "capability_taxonomy");
+                assert_eq!(taxonomy.prompt_request.preview_method, "llm.previewPrompt");
+                assert_eq!(
+                    taxonomy.prompt_request.request.action,
+                    LlmPromptActionKind::CapabilityTaxonomy
+                );
+                assert_agent_readiness_safety_flags(&taxonomy.safety_flags);
+                for domain in &taxonomy.domains {
+                    assert_agent_readiness_safety_flags(&domain.safety_flags);
+                }
+            }
             "task.checkReadiness" => {
                 let readiness: WireTaskReadinessResult =
                     decode_fixture_result(method, result, path);
@@ -20426,6 +21881,9 @@ mod tests {
             "analysis.scoreSkillQuality" => json!({ "instance_id": "missing-skill" }),
             "analysis.detectStaleDrift" => json!({ "limit": 4, "stale_days": 30 }),
             "knowledge.search" => json!({ "query": "fixture knowledge search", "limit": 4 }),
+            "knowledge.buildCapabilityTaxonomy" => {
+                json!({ "include_single_skill_domains": true, "limit": 4 })
+            }
             "task.checkReadiness" => json!({ "task": "fixture task readiness check" }),
             "task.rankSkillRoutes" => json!({ "task": "fixture routing confidence check" }),
             "task.compareAgentReadiness" => json!({
@@ -21125,6 +22583,119 @@ mod tests {
         stale_drift_context: Option<WireKnowledgeStaleDriftContext>,
         match_reasons: Vec<String>,
         similarity_reasons: Vec<String>,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireCapabilityTaxonomyResult {
+        generated_by: String,
+        catalog_available: bool,
+        filters: WireCapabilityTaxonomyFilters,
+        summary: WireCapabilityTaxonomySummary,
+        domains: Vec<WireCapabilityDomainRow>,
+        coverage_rows: Vec<WireCapabilityCoverageRow>,
+        gap_notes: Vec<String>,
+        blocker_notes: Vec<String>,
+        evidence_references: Vec<WireTaskReadinessEvidenceReference>,
+        prompt_request: WireAgentReadinessPromptRequest,
+        safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireCapabilityTaxonomyFilters {
+        agent: Option<String>,
+        limit: usize,
+        include_single_skill_domains: bool,
+        candidate_instance_ids: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireCapabilityTaxonomySummary {
+        indexed_skill_count: usize,
+        candidate_skill_count: usize,
+        domain_count: usize,
+        returned_domain_count: usize,
+        total_representative_skill_count: usize,
+        agent_count: usize,
+        workspace_count: usize,
+        duplicate_or_redundant_domain_count: usize,
+        routing_ambiguity_domain_count: usize,
+        gap_count: usize,
+        summary: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireCapabilityDomainRow {
+        domain_id: String,
+        rank: usize,
+        domain_key: String,
+        domain_name: String,
+        coverage_level: String,
+        coverage_score: u8,
+        skill_count: usize,
+        enabled_skill_count: usize,
+        disabled_skill_count: usize,
+        agent_count: usize,
+        workspace_count: usize,
+        agents: BTreeMap<String, usize>,
+        workspaces: BTreeMap<String, usize>,
+        duplicate_or_redundant_count: usize,
+        routing_ambiguity_count: usize,
+        representative_skills: Vec<WireCapabilityRepresentativeSkill>,
+        capability_tags: Vec<String>,
+        risk_tags: Vec<String>,
+        tools: Vec<String>,
+        rules: Vec<String>,
+        keywords: Vec<String>,
+        gap_notes: Vec<String>,
+        blocker_notes: Vec<String>,
+        evidence_refs: Vec<String>,
+        safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireCapabilityCoverageRow {
+        domain_key: String,
+        domain_name: String,
+        coverage_level: String,
+        coverage_score: u8,
+        skill_count: usize,
+        enabled_skill_count: usize,
+        agent_count: usize,
+        workspace_count: usize,
+        agents: BTreeMap<String, usize>,
+        gaps: Vec<String>,
+        duplicates_redundancy: String,
+        routing_ambiguity: String,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireCapabilityRepresentativeSkill {
+        instance_id: String,
+        definition_id: String,
+        skill_name: String,
+        agent: String,
+        scope: String,
+        enabled: bool,
+        state: String,
+        source: WireKnowledgeSearchSource,
+        quality_context: Option<WireKnowledgeQualityContext>,
+        stale_drift_context: Option<WireKnowledgeStaleDriftContext>,
+        similarity_group_ids: Vec<String>,
+        match_reasons: Vec<String>,
         evidence_refs: Vec<String>,
     }
 
