@@ -143,6 +143,14 @@ struct DetailView: View {
                             isSendingQualityPrompt: { skill in store.isSendingSkillQualityPrompt(for: skill) },
                             qualityPromptSendResult: { skill in store.skillQualityPromptSendResult(for: skill) },
                             canSendQualityPrompt: { skill in store.canSendSkillQualityPrompt(for: skill) },
+                            taskReadinessText: $store.taskReadinessText,
+                            taskReadinessResult: { skill in store.taskReadiness(for: skill) },
+                            isCheckingTaskReadiness: { skill in store.isCheckingTaskReadiness(for: skill) },
+                            taskReadinessPromptPreview: { skill in store.taskReadinessPromptPreview(for: skill) },
+                            isPreviewingTaskReadinessPrompt: { skill in store.isPreviewingTaskReadinessPrompt(for: skill) },
+                            isSendingTaskReadinessPrompt: { skill in store.isSendingTaskReadinessPrompt(for: skill) },
+                            taskReadinessPromptSendResult: { skill in store.taskReadinessPromptSendResult(for: skill) },
+                            canSendTaskReadinessPrompt: { skill in store.canSendTaskReadinessPrompt(for: skill) },
                             onScoreQuality: {
                                 Task {
                                     await store.scoreSelectedSkillQuality()
@@ -156,6 +164,21 @@ struct DetailView: View {
                             onSendQualityPrompt: {
                                 Task {
                                     await store.confirmPromptForSelectedSkillQuality()
+                                }
+                            },
+                            onCheckTaskReadiness: {
+                                Task {
+                                    await store.checkSelectedTaskReadiness()
+                                }
+                            },
+                            onPreviewTaskReadinessPrompt: {
+                                Task {
+                                    await store.previewPromptForSelectedTaskReadiness()
+                                }
+                            },
+                            onSendTaskReadinessPrompt: {
+                                Task {
+                                    await store.confirmPromptForSelectedTaskReadiness()
                                 }
                             },
                             isPreparing: { action in store.isPreparingLLMAction(action) },
@@ -701,9 +724,20 @@ private struct AnalysisSection: View {
     let isSendingQualityPrompt: (SkillRecord) -> Bool
     let qualityPromptSendResult: (SkillRecord) -> LLMPromptSendResult?
     let canSendQualityPrompt: (SkillRecord) -> Bool
+    @Binding var taskReadinessText: String
+    let taskReadinessResult: (SkillRecord) -> TaskReadinessResult?
+    let isCheckingTaskReadiness: (SkillRecord) -> Bool
+    let taskReadinessPromptPreview: (SkillRecord) -> LLMPromptPreview?
+    let isPreviewingTaskReadinessPrompt: (SkillRecord) -> Bool
+    let isSendingTaskReadinessPrompt: (SkillRecord) -> Bool
+    let taskReadinessPromptSendResult: (SkillRecord) -> LLMPromptSendResult?
+    let canSendTaskReadinessPrompt: (SkillRecord) -> Bool
     let onScoreQuality: () -> Void
     let onPreviewQualityPrompt: () -> Void
     let onSendQualityPrompt: () -> Void
+    let onCheckTaskReadiness: () -> Void
+    let onPreviewTaskReadinessPrompt: () -> Void
+    let onSendTaskReadinessPrompt: () -> Void
     let isPreparing: (LLMAction) -> Bool
     let result: (LLMAction) -> LLMPrepareResult?
     let promptPreview: (LLMAction) -> LLMPromptPreview?
@@ -764,6 +798,21 @@ private struct AnalysisSection: View {
                 onScore: onScoreQuality,
                 onPreviewPrompt: onPreviewQualityPrompt,
                 onSendPrompt: onSendQualityPrompt
+            )
+
+            TaskReadinessPanel(
+                skill: skill,
+                taskText: $taskReadinessText,
+                result: taskReadinessResult(skill),
+                isChecking: isCheckingTaskReadiness(skill),
+                promptPreview: taskReadinessPromptPreview(skill),
+                isPreviewingPrompt: isPreviewingTaskReadinessPrompt(skill),
+                isSendingPrompt: isSendingTaskReadinessPrompt(skill),
+                promptSendResult: taskReadinessPromptSendResult(skill),
+                canSendPrompt: canSendTaskReadinessPrompt(skill),
+                onCheck: onCheckTaskReadiness,
+                onPreviewPrompt: onPreviewTaskReadinessPrompt,
+                onSendPrompt: onSendTaskReadinessPrompt
             )
 
             SkillAnalysisPreparePanel(
@@ -1236,6 +1285,245 @@ private struct SkillQualityStringList: View {
                     Label(value, systemImage: systemImage)
                         .font(.callout)
                         .textSelection(.enabled)
+                }
+            }
+        }
+    }
+}
+
+private struct TaskReadinessPanel: View {
+    let skill: SkillRecord
+    @Binding var taskText: String
+    let result: TaskReadinessResult?
+    let isChecking: Bool
+    let promptPreview: LLMPromptPreview?
+    let isPreviewingPrompt: Bool
+    let isSendingPrompt: Bool
+    let promptSendResult: LLMPromptSendResult?
+    let canSendPrompt: Bool
+    let onCheck: () -> Void
+    let onPreviewPrompt: () -> Void
+    let onSendPrompt: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.taskReadinessTitle, systemImage: "checklist.checked")
+                    .font(.headline)
+                Spacer()
+                Label(UIStrings.readOnlyPreview, systemImage: "lock.shield")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(UIStrings.taskReadinessBoundary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                TextField(UIStrings.taskReadinessTaskPlaceholder, text: $taskText, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(2...4)
+                    .labelsHidden()
+
+                Button {
+                    onCheck()
+                } label: {
+                    Label(UIStrings.taskReadinessCheckAction, systemImage: "checklist")
+                }
+                .disabled(isChecking || taskText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .help(UIStrings.taskReadinessBoundary)
+            }
+
+            if isChecking {
+                Label(UIStrings.llmPreparing, systemImage: "hourglass")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let result {
+                TaskReadinessResultView(result: result)
+            } else {
+                Label(UIStrings.taskReadinessTaskRequired, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            PromptPreviewControls(
+                preview: promptPreview,
+                sendResult: promptSendResult,
+                isPreviewing: isPreviewingPrompt,
+                isSending: isSendingPrompt,
+                canSend: canSendPrompt,
+                onPreview: onPreviewPrompt,
+                onSend: onSendPrompt
+            )
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct TaskReadinessResultView: View {
+    let result: TaskReadinessResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 14) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(result.score)")
+                        .font(.system(size: 34, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                    Text(UIStrings.taskReadinessScore)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(result.band)
+                        .font(.subheadline.bold())
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(scoreTint.opacity(0.16), in: Capsule())
+                        .foregroundStyle(scoreTint)
+                    if !result.summary.isEmpty {
+                        Text(result.summary)
+                            .font(.callout)
+                            .textSelection(.enabled)
+                    }
+                    if let fallbackReason = result.fallbackReason, !fallbackReason.isEmpty {
+                        Label(fallbackReason, systemImage: "info.circle")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                MetadataRow(label: UIStrings.taskReadinessBand, value: result.band)
+                MetadataRow(label: UIStrings.skillQualityProviderNotSent, value: result.safety.providerRequestSent ? UIStrings.llmSkillAnalysisEnabledUnsafe : UIStrings.llmDisabled)
+                MetadataRow(label: UIStrings.skillQualityWritesBlocked, value: readOnlyValue(!result.safety.writeBackAllowed && !result.safety.writeActionsAvailable))
+                MetadataRow(label: UIStrings.skillQualityScriptsBlocked, value: readOnlyValue(!result.safety.scriptExecutionAllowed && !result.safety.executionActionsAvailable))
+                MetadataRow(label: UIStrings.skillQualityMutationsBlocked, value: readOnlyValue(!result.safety.configMutationAllowed && !result.safety.snapshotCreated && !result.safety.triageMutationAllowed))
+                MetadataRow(label: UIStrings.skillQualityCredentialsBlocked, value: readOnlyValue(!result.safety.credentialAccessed && !result.safety.rawSecretReturned))
+            }
+
+            TaskReadinessCandidateList(candidates: result.candidateSkills)
+            SkillQualityStringList(title: UIStrings.taskReadinessGaps, empty: UIStrings.taskReadinessNoGaps, values: result.gaps, systemImage: "puzzlepiece.extension")
+            SkillQualityStringList(title: UIStrings.taskReadinessBlockers, empty: UIStrings.taskReadinessNoBlockers, values: result.blockers, systemImage: "exclamationmark.octagon")
+            SkillQualityStringList(title: UIStrings.taskReadinessRiskNotes, empty: UIStrings.taskReadinessNoRisks, values: result.riskNotes, systemImage: "exclamationmark.triangle")
+            TaskReadinessEvidenceList(evidence: result.evidence)
+
+            Label(UIStrings.llmReviewNoActions, systemImage: "nosign")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var scoreTint: Color {
+        switch result.score {
+        case 85...100:
+            return .green
+        case 65..<85:
+            return .blue
+        case 40..<65:
+            return .orange
+        default:
+            return .red
+        }
+    }
+
+    private func readOnlyValue(_ isBlocked: Bool) -> String {
+        isBlocked ? UIStrings.llmSkillAnalysisBlocked : UIStrings.llmSkillAnalysisEnabledUnsafe
+    }
+}
+
+private struct TaskReadinessCandidateList: View {
+    let candidates: [TaskReadinessCandidateSkill]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(UIStrings.taskReadinessCandidates)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if candidates.isEmpty {
+                Text(UIStrings.taskReadinessNoCandidates)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(candidates) { candidate in
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(candidate.name)
+                                    .font(.caption.bold())
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Spacer()
+                                Text(candidateScore(candidate))
+                                    .font(.caption.monospacedDigit().bold())
+                            }
+                            Text(DisplayText.agent(candidate.agent))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            if let readiness = candidate.readiness, !readiness.isEmpty {
+                                Text(readiness)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if !candidate.rationale.isEmpty {
+                                Text(candidate.rationale)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(3)
+                            }
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+            }
+        }
+    }
+
+    private func candidateScore(_ candidate: TaskReadinessCandidateSkill) -> String {
+        candidate.score.map(String.init) ?? UIStrings.unknown
+    }
+}
+
+private struct TaskReadinessEvidenceList: View {
+    let evidence: [TaskReadinessEvidenceItem]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(UIStrings.taskReadinessEvidence)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if evidence.isEmpty {
+                Text(UIStrings.taskReadinessNoEvidence)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(evidence.prefix(6)) { item in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Label(item.title, systemImage: "checklist")
+                            .font(.callout)
+                        Text(item.detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                        if let source = item.source, !source.isEmpty {
+                            Text(source)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
             }
         }

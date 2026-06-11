@@ -38,6 +38,8 @@ struct SkillStoreTests {
         try await prepareSkillAnalysisUsesReadOnlyPrepareContract()
         try await prepareSkillAnalysisFallsBackWhenMethodUnavailable()
         try await scoreSkillQualityUsesReadOnlyAnalysisContract()
+        try await taskReadinessUsesReadOnlyCheckContract()
+        try await taskReadinessPromptSendRequiresConfiguredProvider()
         try await llmPreparePreviewIsScopedToSelectedSkillAndReadOnly()
         try await promptPreviewRequiresConfiguredProviderAndExplicitSend()
         try await previewScriptExecutionSafetyStoresBlockedPreviewWithoutExecute()
@@ -822,6 +824,84 @@ struct SkillStoreTests {
         try expectFalse(calls.contains("script.execute"), "Quality scoring must not call execution paths.")
     }
 
+    private func taskReadinessUsesReadOnlyCheckContract() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        store.taskReadinessText = "Audit local skills for a release note."
+        await store.reload()
+        await store.checkSelectedTaskReadiness()
+
+        guard let skill = store.selectedSkill else {
+            throw NativeModelTestFailure(description: "Fixture should select beta for task readiness.")
+        }
+        let result = store.taskReadiness(for: skill)
+        try expectEqual(result?.score, 74, "Task readiness should store the service score for the selected task.")
+        try expectEqual(result?.band, "Partial", "Task readiness should expose the readiness band.")
+        try expectEqual(result?.candidateSkills.map(\.name), ["Beta"], "Task readiness should expose candidate skills.")
+        try expectEqual(result?.gaps, ["No release-note-specific examples."], "Task readiness should expose missing capabilities.")
+        try expectFalse(result?.safety.providerRequestSent ?? true, "Local readiness check must not send a provider request.")
+        try expectFalse(result?.safety.writeBackAllowed ?? true, "Readiness check must not allow write-back.")
+        try expectFalse(result?.safety.scriptExecutionAllowed ?? true, "Readiness check must not allow script execution.")
+        try expectFalse(result?.safety.configMutationAllowed ?? true, "Readiness check must not allow config mutation.")
+        try expectFalse(result?.safety.credentialAccessed ?? true, "Readiness check must not access credentials.")
+
+        await store.previewPromptForSelectedTaskReadiness()
+        let preview = store.taskReadinessPromptPreview(for: skill)
+        try expectEqual(preview?.previewID, "readiness-preview-beta", "Task readiness prompt preview should be scoped to the selected task.")
+        try expectEqual(store.canSendTaskReadinessPrompt(for: skill), true, "Configured provider and current readiness preview should allow explicit send.")
+
+        await store.confirmPromptForSelectedTaskReadiness()
+        let sendResult = store.taskReadinessPromptSendResult(for: skill)
+        try expectEqual(sendResult?.success, true, "Confirmed task readiness prompt should store provider result.")
+        try expectFalse(sendResult?.writeBackAllowed ?? true, "Task readiness prompt output must not enable write-back.")
+        try expectFalse(sendResult?.scriptExecutionAllowed ?? true, "Task readiness prompt output must not enable script execution.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "task.checkReadiness", "Task readiness should use the V2.44 task.checkReadiness method.")
+        try expectContains(calls, "\"task\":\"Audit local skills for a release note.\"", "Task readiness should send task text.")
+        try expectContains(calls, "\"candidate_instance_ids\":[\"beta\"]", "Task readiness should constrain candidate filters to the selected skill.")
+        try expectContains(calls, "\"request_kind\":\"task_readiness\"", "Task readiness prompt preview should identify the task_readiness request kind.")
+        try expectContains(calls, "\"preview_id\":\"readiness-preview-beta\"", "Task readiness confirm should send the readiness preview id.")
+        try expectContains(calls, "llm.confirmPromptAndSend", "Configured task readiness provider path should require explicit confirmation.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Task readiness must not call write paths.")
+        try expectFalse(calls.contains("script.execute"), "Task readiness must not call execution paths.")
+    }
+
+    private func taskReadinessPromptSendRequiresConfiguredProvider() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "llm-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        store.taskReadinessText = "Audit local skills for a release note."
+        await store.reload()
+        await store.checkSelectedTaskReadiness()
+
+        guard let skill = store.selectedSkill else {
+            throw NativeModelTestFailure(description: "Fixture should select beta for task readiness gating.")
+        }
+
+        await store.previewPromptForSelectedTaskReadiness()
+        try expectEqual(store.canSendTaskReadinessPrompt(for: skill), false, "Unconfigured provider should keep Confirm & Send disabled.")
+
+        await store.confirmPromptForSelectedTaskReadiness()
+        let sendResult = store.taskReadinessPromptSendResult(for: skill)
+        try expectEqual(sendResult?.success, false, "Blocked task readiness send should store an unavailable result, not throw.")
+        try expectContains(sendResult?.message, "Configure and save", "Blocked task readiness send should explain provider setup.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "task.checkReadiness", "No-provider path should still allow local readiness check.")
+        try expectContains(calls, "llm.previewPrompt", "No-provider path may ask for a blocked preview.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "No-provider path must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "No-provider readiness path must not call write paths.")
+        try expectFalse(calls.contains("script.execute"), "No-provider readiness path must not call execution paths.")
+    }
+
     private func llmPreparePreviewIsScopedToSelectedSkillAndReadOnly() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -1150,6 +1230,12 @@ private final class FakeServiceScript {
             fi
             respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: analysis.scoreSkillQuality"}}'
             ;;
+          *\\"task.checkReadiness\\"*)
+            if [ "$scenario" = "prompt-ready" ] || [ "$scenario" = "llm-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"task_text":"Audit local skills for a release note.","score":74,"band":"Partial","summary":"Beta has local audit coverage but lacks release-note-specific examples.","candidate_skills":[{"instance_id":"beta","name":"Beta","agent":"claude-code","score":74,"band":"Partial","rationale":"Best selected-skill fit for local audit work.","evidence":["description match","catalog evidence available"]}],"gaps":["No release-note-specific examples."],"blockers":[],"risk_notes":["Permission clarity should be reviewed before routing."],"evidence":[{"title":"Metadata","detail":"Description mentions local audit.","source":"catalog"},{"title":"Findings","detail":"One permission warning remains.","source":"permissions.network-declared"}],"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_secret_returned":false}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: task.checkReadiness"}}'
+            ;;
           *\\"llm.prepareAction\\"*)
             if [ "$scenario" = "old-service" ]; then
               respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: llm.prepareAction"}}'
@@ -1168,6 +1254,9 @@ private final class FakeServiceScript {
             ;;
           *\\"llm.previewPrompt\\"*)
             if [ "$scenario" = "prompt-ready" ]; then
+              if printf '%s' "$input" | grep -q '\\"request_kind\\":\\"task_readiness\\"'; then
+                respond '{"id":"test","ok":true,"result":{"preview_id":"readiness-preview-beta","request_kind":"task_readiness","action":"task_readiness","scope":"selected","prompt_scope":"Selected skill task readiness for Beta","enabled":true,"provider":"openai-compatible","model":"gpt-5","destination_host":"llm.example.com","included_fields":["task.text","skill.metadata","readiness.result","findings.summary"],"excluded_fields":[{"name":"api_key","reason":"credential redacted"},{"name":"skill.body","reason":"raw body omitted"}],"redaction":{"status":"redacted","summary":"Secrets, raw body, and local paths removed.","redacted_fields":["api_key","path"],"placeholders":["<project-root>"]},"estimate":{"input_tokens":340,"output_tokens":160,"total_tokens":500,"estimated_cost_usd":0.006},"confirmation_required":true,"raw_prompt_persisted":false,"raw_response_persisted":false,"draft_copy_only":true,"redacted_prompt_preview":"Explain task readiness for Beta from redacted local evidence."}}'
+              fi
               if printf '%s' "$input" | grep -q '\\"request_kind\\":\\"quality_score\\"'; then
                 respond '{"id":"test","ok":true,"result":{"preview_id":"quality-preview-beta","request_kind":"quality_score","action":"quality_score","scope":"selected","prompt_scope":"Selected skill quality score for Beta","enabled":true,"provider":"openai-compatible","model":"gpt-5","destination_host":"llm.example.com","included_fields":["skill.metadata","findings.summary","conflicts.summary","adapter.diagnostics"],"excluded_fields":[{"name":"skill.body","reason":"raw body omitted"},{"name":"api_key","reason":"credential redacted"}],"redaction":{"status":"redacted","summary":"Secrets, raw body, and local paths removed.","redacted_fields":["api_key","path"],"placeholders":["<project-root>"]},"estimate":{"input_tokens":300,"output_tokens":140,"total_tokens":440,"estimated_cost_usd":0.005},"confirmation_required":true,"raw_prompt_persisted":false,"raw_response_persisted":false,"draft_copy_only":true,"redacted_prompt_preview":"Score Beta quality from redacted local evidence."}}'
               fi
@@ -1177,6 +1266,9 @@ private final class FakeServiceScript {
             ;;
           *\\"llm.confirmPromptAndSend\\"*)
             if [ "$scenario" = "prompt-ready" ]; then
+              if printf '%s' "$input" | grep -q '\\"request_kind\\":\\"task_readiness\\"'; then
+                respond '{"id":"test","ok":true,"result":{"preview_id":"readiness-preview-beta","status":"succeeded","message":"Provider response received.","output_text":"Copy-only task readiness explanation for Beta.","draft_copy_only":true,"raw_prompt_persisted":false,"raw_response_persisted":false,"write_back_allowed":false,"script_execution_allowed":false,"audit_metadata":{"request_id":"audit-readiness-1","status":"succeeded","provider":"openai-compatible","model":"gpt-5","destination_host":"llm.example.com","redaction_applied":true,"raw_prompt_persisted":false,"raw_response_persisted":false,"input_tokens":340,"output_tokens":95}}}'
+              fi
               if printf '%s' "$input" | grep -q '\\"request_kind\\":\\"quality_score\\"'; then
                 respond '{"id":"test","ok":true,"result":{"preview_id":"quality-preview-beta","status":"succeeded","message":"Provider response received.","output_text":"Copy-only quality explanation for Beta.","draft_copy_only":true,"raw_prompt_persisted":false,"raw_response_persisted":false,"write_back_allowed":false,"script_execution_allowed":false,"audit_metadata":{"request_id":"audit-quality-1","status":"succeeded","provider":"openai-compatible","model":"gpt-5","destination_host":"llm.example.com","redaction_applied":true,"raw_prompt_persisted":false,"raw_response_persisted":false,"input_tokens":300,"output_tokens":90}}}'
               fi

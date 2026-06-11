@@ -9,6 +9,7 @@ struct LLMModelTests {
         try skillAnalysisPrepareDecodesFlexiblePayload()
         try skillQualityScoreDecodesFlexiblePayload()
         try skillQualityScoreDecodesV243ServicePayload()
+        try taskReadinessDecodesFlexiblePayload()
         try promptPreviewDecodesV242Payload()
         try promptPreviewDecodesServiceArrayScopePayload()
         try promptSendResultDecodesCopyOnlyAuditPayload()
@@ -375,6 +376,57 @@ struct LLMModelTests {
         try expectFalse(result.safety.providerRequestSent, "V2.43 local score must not send provider requests.")
         try expectFalse(result.safety.configMutationAllowed, "V2.43 local score must not mutate config.")
         try expectFalse(result.safety.rawSecretReturned, "V2.43 local score must not return secrets.")
+    }
+
+    private func taskReadinessDecodesFlexiblePayload() throws {
+        let data = Data(
+            """
+            {
+              "task_text": "Summarize a local audit report.",
+              "readiness_score": "76",
+              "readiness_band": "Partial",
+              "summary": "Beta can inspect catalog evidence but lacks report export wording.",
+              "candidate_skills": [
+                {"instance_id":"beta","name":"Beta","agent":"claude-code","score":76,"band":"Partial","rationale":"Closest local audit fit.","evidence":["description match"]},
+                "Fallback skill"
+              ],
+              "missing_capabilities": ["Report export examples"],
+              "blockers": ["No configured provider for optional explanation"],
+              "risk_notes": ["Permission declaration is incomplete."],
+              "evidence": [
+                {"title":"Metadata","detail":"Description mentions local audit.","source":"catalog"},
+                "No same-agent conflict"
+              ],
+              "safety_flags": {
+                "provider_request_sent": false,
+                "write_back_allowed": false,
+                "write_actions_available": false,
+                "script_execution_allowed": false,
+                "execution_actions_available": false,
+                "config_mutation_allowed": false,
+                "snapshot_created": false,
+                "triage_mutation_allowed": false,
+                "credential_accessed": false,
+                "raw_secret_returned": false
+              }
+            }
+            """.utf8
+        )
+
+        let result = try JSONDecoder().decode(TaskReadinessResult.self, from: data)
+
+        try expectEqual(result.taskText, "Summarize a local audit report.", "Task readiness should decode task text.")
+        try expectEqual(result.score, 76, "Task readiness should decode flexible score.")
+        try expectEqual(result.band, "Partial", "Task readiness should decode band.")
+        try expectEqual(result.candidateSkills.map(\.name), ["Beta", "Fallback skill"], "Task readiness should decode object and string candidates.")
+        try expectEqual(result.gaps, ["Report export examples"], "Task readiness should decode missing capability aliases.")
+        try expectEqual(result.blockers, ["No configured provider for optional explanation"], "Task readiness should decode blockers.")
+        try expectEqual(result.evidence.map(\.detail), ["Description mentions local audit.", "No same-agent conflict"], "Task readiness should decode evidence.")
+        try expectFalse(result.safety.providerRequestSent, "Local task readiness must not send provider requests.")
+        try expectFalse(result.safety.writeBackAllowed, "Task readiness must not allow write-back.")
+        try expectFalse(result.safety.scriptExecutionAllowed, "Task readiness must not allow script execution.")
+        try expectFalse(result.safety.configMutationAllowed, "Task readiness must not mutate config.")
+        try expectFalse(result.safety.credentialAccessed, "Task readiness must not access credentials.")
     }
 
     private func promptSendResultDecodesCopyOnlyAuditPayload() throws {

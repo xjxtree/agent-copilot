@@ -62,6 +62,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "adapter.listDiagnostics",
     "evidence.piWritableHarness",
     "analysis.scoreSkillQuality",
+    "task.checkReadiness",
     "llm.status",
     "llm.listProviderProfiles",
     "llm.saveProviderProfile",
@@ -466,6 +467,109 @@ pub struct SkillQualitySafetyFlags {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct TaskReadinessParams {
+    #[serde(alias = "user_intent", alias = "task_text")]
+    pub task: String,
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default, alias = "instance_ids")]
+    pub candidate_instance_ids: Vec<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskReadinessResult {
+    pub task: String,
+    pub score: u8,
+    pub band: &'static str,
+    pub summary: String,
+    pub generated_by: &'static str,
+    pub catalog_available: bool,
+    pub filters: TaskReadinessFilters,
+    pub candidate_skills: Vec<TaskReadinessCandidate>,
+    pub missing_gap_notes: Vec<String>,
+    pub blocker_risk_notes: Vec<String>,
+    pub evidence_references: Vec<TaskReadinessEvidenceReference>,
+    pub prompt_request: TaskReadinessPromptRequest,
+    pub safety_flags: TaskReadinessSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskReadinessFilters {
+    pub agent: Option<String>,
+    pub candidate_instance_ids: Vec<String>,
+    pub limit: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskReadinessCandidate {
+    pub instance_id: String,
+    pub definition_id: String,
+    pub skill_name: String,
+    pub agent: String,
+    pub scope: String,
+    pub enabled: bool,
+    pub state: String,
+    pub score: u8,
+    pub band: &'static str,
+    pub quality_score: Option<u8>,
+    pub match_reasons: Vec<String>,
+    pub enabled_scope_risk_state: TaskReadinessState,
+    pub missing_gap_notes: Vec<String>,
+    pub blocker_risk_notes: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskReadinessState {
+    pub enabled: bool,
+    pub scope: String,
+    pub state: String,
+    pub risk_level: &'static str,
+    pub risk_summary: String,
+    pub writable_status: Option<String>,
+    pub adapter_status: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskReadinessEvidenceReference {
+    pub id: String,
+    pub source_type: &'static str,
+    pub source_id: String,
+    pub label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub severity: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub related_instance_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskReadinessPromptRequest {
+    pub available: bool,
+    pub preview_method: &'static str,
+    pub confirm_method: &'static str,
+    pub action: &'static str,
+    pub request: LlmPreviewPromptParams,
+    pub note: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskReadinessSafetyFlags {
+    pub read_only: bool,
+    pub provider_request_sent: bool,
+    pub write_back_allowed: bool,
+    pub script_execution_allowed: bool,
+    pub config_mutation_allowed: bool,
+    pub snapshot_created: bool,
+    pub triage_mutation_allowed: bool,
+    pub credential_accessed: bool,
+    pub raw_secret_returned: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct LlmPrepareActionParams {
     pub kind: LlmActionKind,
     #[serde(default, alias = "instance_id")]
@@ -523,6 +627,7 @@ pub enum LlmPromptActionKind {
     DraftFrontmatter,
     SkillAnalysis,
     QualityScore,
+    TaskReadiness,
 }
 
 impl LlmPromptActionKind {
@@ -534,6 +639,7 @@ impl LlmPromptActionKind {
             Self::DraftFrontmatter => "draft_frontmatter",
             Self::SkillAnalysis => "skill_analysis",
             Self::QualityScore => "quality_score",
+            Self::TaskReadiness => "task_readiness",
         }
     }
 }
@@ -1046,6 +1152,10 @@ impl ServiceHost {
             "analysis.scoreSkillQuality" => {
                 let params: ScoreSkillQualityParams = serde_json::from_value(request.params)?;
                 serde_json::to_value(self.score_skill_quality(params)?).map_err(Into::into)
+            }
+            "task.checkReadiness" => {
+                let params: TaskReadinessParams = serde_json::from_value(request.params)?;
+                serde_json::to_value(self.check_task_readiness(params)?).map_err(Into::into)
             }
             "llm.status" => serde_json::to_value(self.llm_status()).map_err(Into::into),
             "llm.listProviderProfiles" => {
@@ -2399,6 +2509,198 @@ impl ServiceHost {
         })
     }
 
+    pub fn check_task_readiness(
+        &self,
+        params: TaskReadinessParams,
+    ) -> Result<TaskReadinessResult, ServiceError> {
+        let task = params.task.trim();
+        if task.is_empty() {
+            return Err(ServiceError::InvalidRequest(
+                "task.checkReadiness requires a non-empty task".to_string(),
+            ));
+        }
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let task = redact_string(
+            &redact_for_llm_preview(task),
+            &self.redaction_roots(&adapter_ctx),
+        );
+        let limit = params.limit.unwrap_or(8).clamp(1, 20);
+        let filters = TaskReadinessFilters {
+            agent: params.agent.clone(),
+            candidate_instance_ids: params.candidate_instance_ids.clone(),
+            limit,
+        };
+        let Some(catalog) = self.open_existing_catalog_read_only()? else {
+            return Ok(empty_task_readiness_result(task, filters, false));
+        };
+
+        let skills = self.list_visible_skill_records(&catalog)?;
+        let findings = list_findings(&catalog)?;
+        let conflicts = list_conflicts(&catalog)?;
+        let analysis = analyze_catalog(&catalog, &adapter_ctx)?;
+        let adapter_diagnostics = list_adapter_diagnostics(&adapter_ctx);
+        let agent_filter = params.agent.as_deref().filter(|agent| !agent.is_empty());
+        let requested_ids = params
+            .candidate_instance_ids
+            .iter()
+            .filter(|id| !id.trim().is_empty())
+            .map(|id| id.as_str())
+            .collect::<Vec<_>>();
+        let task_terms = task_readiness_terms(&task);
+
+        let mut missing_gap_notes = Vec::new();
+        let visible_by_id = skills
+            .iter()
+            .map(|skill| (skill.id.as_str(), skill))
+            .collect::<BTreeMap<_, _>>();
+        for requested_id in &requested_ids {
+            if !visible_by_id.contains_key(requested_id) {
+                missing_gap_notes.push(format!(
+                    "Requested candidate `{}` is not visible in the current catalog/project scope.",
+                    redact_for_llm_preview(requested_id)
+                ));
+            }
+        }
+
+        let mut evidence = Vec::new();
+        let mut candidates = Vec::new();
+        for skill in skills {
+            if let Some(agent) = agent_filter {
+                if skill.agent != agent {
+                    continue;
+                }
+            }
+            if !requested_ids.is_empty() && !requested_ids.contains(&skill.id.as_str()) {
+                continue;
+            }
+            let Some(detail) = catalog.get_skill_detail(&skill.id)? else {
+                missing_gap_notes.push(format!(
+                    "Catalog row `{}` did not have detail evidence available.",
+                    redact_for_llm_preview(&skill.id)
+                ));
+                continue;
+            };
+            let related_findings = findings
+                .iter()
+                .filter(|finding| {
+                    finding.instance_id.as_deref() == Some(detail.id.as_str())
+                        || finding.definition_id.as_deref() == Some(detail.definition_id.as_str())
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            let related_conflicts = conflicts
+                .iter()
+                .filter(|conflict| {
+                    conflict.definition_id == detail.definition_id
+                        || conflict
+                            .instance_ids
+                            .iter()
+                            .any(|instance_id| instance_id == &detail.id)
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            let related_analysis = analysis
+                .groups
+                .iter()
+                .filter(|group| {
+                    group
+                        .instance_ids
+                        .iter()
+                        .any(|instance_id| instance_id == &detail.id)
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            let diagnostic = adapter_diagnostics
+                .iter()
+                .find(|diagnostic| diagnostic.agent == detail.agent);
+            let quality = self
+                .score_skill_quality(ScoreSkillQualityParams {
+                    instance_id: detail.id.clone(),
+                    agent: Some(detail.agent.clone()),
+                    definition_id: Some(detail.definition_id.clone()),
+                })
+                .ok();
+            let candidate = task_readiness_candidate(
+                &task_terms,
+                &detail,
+                TaskReadinessCandidateSignals {
+                    findings: &related_findings,
+                    conflicts: &related_conflicts,
+                    analysis_groups: &related_analysis,
+                    diagnostic,
+                    quality: quality.as_ref(),
+                },
+                &mut evidence,
+            );
+            candidates.push(candidate);
+        }
+
+        candidates.sort_by(|left, right| {
+            right
+                .score
+                .cmp(&left.score)
+                .then_with(|| left.agent.cmp(&right.agent))
+                .then_with(|| left.skill_name.cmp(&right.skill_name))
+                .then_with(|| left.instance_id.cmp(&right.instance_id))
+        });
+        candidates.truncate(limit);
+
+        if candidates.is_empty() {
+            if agent_filter.is_some() {
+                missing_gap_notes.push(
+                    "No visible skill candidates matched the requested agent/filter scope."
+                        .to_string(),
+                );
+            } else {
+                missing_gap_notes.push(
+                    "No visible skill candidates matched the task in the current catalog."
+                        .to_string(),
+                );
+            }
+        }
+
+        let blocker_risk_notes = task_readiness_blocker_notes(&candidates);
+        let score = task_readiness_overall_score(&candidates);
+        let band = task_readiness_band(score);
+        let summary = task_readiness_summary(score, band, &candidates, &missing_gap_notes);
+        let prompt_instance_ids = candidates
+            .iter()
+            .take(8)
+            .map(|candidate| candidate.instance_id.clone())
+            .collect::<Vec<_>>();
+
+        Ok(TaskReadinessResult {
+            task: task.clone(),
+            score,
+            band,
+            summary,
+            generated_by: "deterministic-service",
+            catalog_available: true,
+            filters,
+            candidate_skills: candidates,
+            missing_gap_notes,
+            blocker_risk_notes,
+            evidence_references: evidence,
+            prompt_request: TaskReadinessPromptRequest {
+                available: true,
+                preview_method: "llm.previewPrompt",
+                confirm_method: "llm.confirmPromptAndSend",
+                action: "task_readiness",
+                request: LlmPreviewPromptParams {
+                    action: LlmPromptActionKind::TaskReadiness,
+                    profile_id: None,
+                    skill_instance_id: None,
+                    instance_ids: prompt_instance_ids,
+                    analysis_kind: None,
+                    user_intent: Some(task.clone()),
+                },
+                note: "Optional provider-backed explanation must be requested through prompt preview and explicit confirmation; task.checkReadiness never sends provider traffic."
+                    .to_string(),
+            },
+            safety_flags: task_readiness_safety_flags(),
+        })
+    }
+
     pub fn script_execution_status(&self) -> ScriptExecutionStatus {
         ScriptExecutionStatus {
             enabled: false,
@@ -2595,6 +2897,47 @@ impl ServiceHost {
                 ]);
                 sections.push(render_quality_score_prompt_section(&score, &mut redactor));
             }
+            LlmPromptActionKind::TaskReadiness => {
+                let task = params.user_intent.as_deref().ok_or_else(|| {
+                    ServiceError::InvalidRequest(
+                        "llm.previewPrompt task_readiness requires user_intent/task".to_string(),
+                    )
+                })?;
+                let readiness = self.check_task_readiness(TaskReadinessParams {
+                    task: task.to_string(),
+                    agent: None,
+                    candidate_instance_ids: params.instance_ids.clone(),
+                    limit: Some(8),
+                })?;
+                prompt_scope.extend([
+                    "deterministic task readiness score".to_string(),
+                    "candidate skill summaries".to_string(),
+                    "local gap and blocker notes".to_string(),
+                    "evidence reference summaries".to_string(),
+                    "safety flags".to_string(),
+                ]);
+                included_fields.extend([
+                    "redacted task intent".to_string(),
+                    "candidate skill ids".to_string(),
+                    "skill names".to_string(),
+                    "agents".to_string(),
+                    "scopes".to_string(),
+                    "enabled states".to_string(),
+                    "readiness scores and bands".to_string(),
+                    "quality score summaries".to_string(),
+                    "finding/conflict/analysis evidence ids and labels".to_string(),
+                    "read-only safety flags".to_string(),
+                ]);
+                excluded_fields.extend([
+                    "raw source paths".to_string(),
+                    "raw provider response".to_string(),
+                    "agent config contents".to_string(),
+                ]);
+                sections.push(render_task_readiness_prompt_section(
+                    &readiness,
+                    &mut redactor,
+                ));
+            }
         }
 
         sections.push("Required output: concise draft guidance with evidence notes, uncertainty, and safe next steps. Mark all suggestions copy-only.".to_string());
@@ -2608,6 +2951,7 @@ impl ServiceHost {
                 .unwrap_or(LlmSkillAnalysisKind::Overview)
                 .output_token_estimate(),
             LlmPromptActionKind::QualityScore => 650,
+            LlmPromptActionKind::TaskReadiness => 750,
         };
         let prompt_preview = sections.join("\n\n");
         let redaction = redactor.summary();
@@ -3900,6 +4244,7 @@ fn llm_preview_id(
         "skill_instance_id": params.skill_instance_id,
         "instance_ids": params.instance_ids,
         "analysis_kind": params.analysis_kind.map(|kind| kind.as_str()),
+        "user_intent": params.user_intent.as_deref(),
         "prompt": prompt_preview,
         "estimated_input_tokens": estimated_input_tokens,
         "estimated_output_tokens": estimated_output_tokens
@@ -4036,6 +4381,507 @@ fn skill_quality_safety_flags() -> SkillQualitySafetyFlags {
         raw_prompt_persisted: false,
         raw_response_persisted: false,
     }
+}
+
+fn task_readiness_safety_flags() -> TaskReadinessSafetyFlags {
+    TaskReadinessSafetyFlags {
+        read_only: true,
+        provider_request_sent: false,
+        write_back_allowed: false,
+        script_execution_allowed: false,
+        config_mutation_allowed: false,
+        snapshot_created: false,
+        triage_mutation_allowed: false,
+        credential_accessed: false,
+        raw_secret_returned: false,
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+    }
+}
+
+fn empty_task_readiness_result(
+    task: String,
+    filters: TaskReadinessFilters,
+    catalog_available: bool,
+) -> TaskReadinessResult {
+    TaskReadinessResult {
+        task: task.clone(),
+        score: 0,
+        band: "blocked",
+        summary:
+            "No local catalog is available, so task readiness cannot identify candidate skills."
+                .to_string(),
+        generated_by: "deterministic-service",
+        catalog_available,
+        filters,
+        candidate_skills: Vec::new(),
+        missing_gap_notes: vec![
+            "Run a local scan before relying on task readiness for routing decisions.".to_string(),
+        ],
+        blocker_risk_notes: vec![
+            "No provider request was sent and no fallback network lookup was attempted."
+                .to_string(),
+        ],
+        evidence_references: Vec::new(),
+        prompt_request: TaskReadinessPromptRequest {
+            available: false,
+            preview_method: "llm.previewPrompt",
+            confirm_method: "llm.confirmPromptAndSend",
+            action: "task_readiness",
+            request: LlmPreviewPromptParams {
+                action: LlmPromptActionKind::TaskReadiness,
+                profile_id: None,
+                skill_instance_id: None,
+                instance_ids: Vec::new(),
+                analysis_kind: None,
+                user_intent: Some(task),
+            },
+            note: "Prompt preview is unavailable until local catalog evidence exists.".to_string(),
+        },
+        safety_flags: task_readiness_safety_flags(),
+    }
+}
+
+fn task_readiness_terms(task: &str) -> Vec<String> {
+    let mut seen = BTreeMap::new();
+    task.split(|ch: char| !ch.is_ascii_alphanumeric())
+        .map(str::trim)
+        .filter(|term| term.len() >= 3)
+        .map(|term| term.to_ascii_lowercase())
+        .filter(|term| {
+            !matches!(
+                term.as_str(),
+                "the"
+                    | "and"
+                    | "for"
+                    | "with"
+                    | "from"
+                    | "that"
+                    | "this"
+                    | "into"
+                    | "using"
+                    | "need"
+                    | "task"
+            )
+        })
+        .filter(|term| {
+            if let std::collections::btree_map::Entry::Vacant(entry) = seen.entry(term.clone()) {
+                entry.insert(());
+                true
+            } else {
+                false
+            }
+        })
+        .collect()
+}
+
+struct TaskReadinessCandidateSignals<'a> {
+    findings: &'a [RuleFindingRecord],
+    conflicts: &'a [ConflictGroupRecord],
+    analysis_groups: &'a [CrossAgentAnalysisGroup],
+    diagnostic: Option<&'a AdapterDiagnosticsRecord>,
+    quality: Option<&'a SkillQualityScoreResult>,
+}
+
+fn task_readiness_candidate(
+    task_terms: &[String],
+    skill: &SkillDetailRecord,
+    signals: TaskReadinessCandidateSignals<'_>,
+    evidence: &mut Vec<TaskReadinessEvidenceReference>,
+) -> TaskReadinessCandidate {
+    let skill_ref = push_task_readiness_evidence(
+        evidence,
+        "skill",
+        &skill.id,
+        format!(
+            "Catalog metadata for `{}` ({}, {}, enabled={}, state={})",
+            redact_for_llm_preview(&skill.name),
+            redact_for_llm_preview(&skill.agent),
+            redact_for_llm_preview(&skill.scope),
+            skill.enabled,
+            redact_for_llm_preview(&skill.state)
+        ),
+        None,
+        Some(skill.id.clone()),
+    );
+    let quality_ref = signals.quality.map(|score| {
+        push_task_readiness_evidence(
+            evidence,
+            "quality_score",
+            &skill.id,
+            format!("V2.43 quality score {} / 100 ({})", score.score, score.band),
+            None,
+            Some(skill.id.clone()),
+        )
+    });
+
+    let searchable = format!(
+        "{} {} {} {}",
+        skill.name, skill.description, skill.frontmatter_raw, skill.body
+    )
+    .to_ascii_lowercase();
+    let matched_terms = task_terms
+        .iter()
+        .filter(|term| searchable.contains(term.as_str()))
+        .cloned()
+        .collect::<Vec<_>>();
+    let mut match_reasons = Vec::new();
+    if matched_terms.is_empty() {
+        match_reasons.push(
+            "No direct lexical overlap with the task was found in local metadata/body evidence."
+                .to_string(),
+        );
+    } else {
+        match_reasons.push(format!(
+            "Matched task term(s): {}.",
+            matched_terms
+                .iter()
+                .take(8)
+                .map(|term| redact_for_llm_preview(term))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    if skill.description.trim().is_empty() {
+        match_reasons
+            .push("Description is empty, limiting deterministic task-fit evidence.".to_string());
+    } else {
+        match_reasons.push(format!(
+            "Description evidence: {}",
+            redact_for_llm_preview(&skill.description)
+        ));
+    }
+
+    let mut missing_gap_notes = Vec::new();
+    let mut blocker_risk_notes = Vec::new();
+    if !skill.enabled {
+        blocker_risk_notes.push("Skill is disabled and will not be a ready routing target until reviewed through the existing toggle flow.".to_string());
+    }
+    if skill.state != "loaded" {
+        blocker_risk_notes.push(format!(
+            "Skill state is `{}` instead of loaded.",
+            redact_for_llm_preview(&skill.state)
+        ));
+    }
+    if skill.scope == Scope::AgentProject.as_str() {
+        match_reasons
+            .push("Project-scoped skill is visible in the current project context.".to_string());
+    }
+    if matched_terms.is_empty() {
+        missing_gap_notes.push(
+            "Task wording did not clearly map to this skill; consider improving description keywords if it should route here."
+                .to_string(),
+        );
+    }
+
+    let mut risk_refs = Vec::new();
+    for finding in signals.findings {
+        let evidence_id = push_task_readiness_evidence(
+            evidence,
+            "finding",
+            &finding.id,
+            format!(
+                "{} finding `{}`: {}",
+                redact_for_llm_preview(&finding.effective_severity),
+                redact_for_llm_preview(&finding.rule_id),
+                redact_for_llm_preview(&finding.message)
+            ),
+            Some(finding.effective_severity.clone()),
+            finding.instance_id.clone(),
+        );
+        risk_refs.push(evidence_id);
+        if matches!(
+            finding.effective_severity.as_str(),
+            "critical" | "error" | "warning" | "warn"
+        ) {
+            blocker_risk_notes.push(format!(
+                "{} finding `{}` affects readiness.",
+                redact_for_llm_preview(&finding.effective_severity),
+                redact_for_llm_preview(&finding.rule_id)
+            ));
+        }
+    }
+    for conflict in signals.conflicts {
+        let evidence_id = push_task_readiness_evidence(
+            evidence,
+            "conflict",
+            &conflict.id,
+            format!(
+                "Same-agent conflict `{}` covers {} instance(s)",
+                redact_for_llm_preview(&conflict.reason),
+                conflict.instance_ids.len()
+            ),
+            Some("warning".to_string()),
+            Some(skill.id.clone()),
+        );
+        risk_refs.push(evidence_id);
+        blocker_risk_notes
+            .push("Same-agent conflict may make runtime selection ambiguous.".to_string());
+    }
+    for group in signals.analysis_groups {
+        let evidence_id = push_task_readiness_evidence(
+            evidence,
+            "analysis",
+            &group.id,
+            format!(
+                "{} analysis `{}`: {}",
+                redact_for_llm_preview(&group.severity),
+                redact_for_llm_preview(&group.kind),
+                redact_for_llm_preview(&group.title)
+            ),
+            Some(group.severity.clone()),
+            Some(skill.id.clone()),
+        );
+        risk_refs.push(evidence_id);
+        if group.kind == "enabled_mismatch" || group.kind == "duplicate_name" {
+            blocker_risk_notes.push(format!(
+                "Cross-agent analysis `{}` may affect routing clarity.",
+                redact_for_llm_preview(&group.kind)
+            ));
+        }
+    }
+
+    let diagnostic_ref = signals.diagnostic.map(|diagnostic| {
+        push_task_readiness_evidence(
+            evidence,
+            "adapter_diagnostics",
+            diagnostic.agent,
+            format!(
+                "{} adapter diagnostics: status={}, writable_status={}, install_status={}",
+                diagnostic.display_name,
+                diagnostic.status,
+                diagnostic.access.writable_status,
+                diagnostic.access.install_status
+            ),
+            None,
+            Some(skill.id.clone()),
+        )
+    });
+
+    let risk_level = task_readiness_risk_level(
+        signals.findings,
+        signals.conflicts,
+        signals.analysis_groups,
+        skill,
+    );
+    let risk_summary = task_readiness_risk_summary(
+        risk_level,
+        signals.findings,
+        signals.conflicts,
+        signals.analysis_groups,
+    );
+    let mut score = (matched_terms.len() as i16 * 12).min(40);
+    score += signals
+        .quality
+        .map(|quality| i16::from(quality.score) / 4)
+        .unwrap_or(0);
+    if skill.enabled {
+        score += 15;
+    }
+    if skill.state == "loaded" {
+        score += 10;
+    }
+    if !skill.description.trim().is_empty() {
+        score += 5;
+    }
+    score -= task_readiness_risk_deduction(
+        signals.findings,
+        signals.conflicts,
+        signals.analysis_groups,
+        skill,
+    );
+    let score = score.clamp(0, 100) as u8;
+    let mut evidence_refs = vec![skill_ref];
+    if let Some(quality_ref) = quality_ref {
+        evidence_refs.push(quality_ref);
+    }
+    evidence_refs.extend(risk_refs);
+    if let Some(diagnostic_ref) = diagnostic_ref {
+        evidence_refs.push(diagnostic_ref);
+    }
+
+    TaskReadinessCandidate {
+        instance_id: skill.id.clone(),
+        definition_id: skill.definition_id.clone(),
+        skill_name: redact_for_llm_preview(&skill.name),
+        agent: skill.agent.clone(),
+        scope: skill.scope.clone(),
+        enabled: skill.enabled,
+        state: skill.state.clone(),
+        score,
+        band: task_readiness_band(score),
+        quality_score: signals.quality.map(|quality| quality.score),
+        match_reasons,
+        enabled_scope_risk_state: TaskReadinessState {
+            enabled: skill.enabled,
+            scope: skill.scope.clone(),
+            state: skill.state.clone(),
+            risk_level,
+            risk_summary,
+            writable_status: signals
+                .diagnostic
+                .map(|diagnostic| diagnostic.access.writable_status.to_string()),
+            adapter_status: signals
+                .diagnostic
+                .map(|diagnostic| diagnostic.status.to_string()),
+        },
+        missing_gap_notes,
+        blocker_risk_notes,
+        evidence_refs,
+    }
+}
+
+fn task_readiness_risk_level(
+    findings: &[RuleFindingRecord],
+    conflicts: &[ConflictGroupRecord],
+    analysis_groups: &[CrossAgentAnalysisGroup],
+    skill: &SkillDetailRecord,
+) -> &'static str {
+    if !skill.enabled || skill.state != "loaded" {
+        return "blocked";
+    }
+    if findings
+        .iter()
+        .any(|finding| matches!(finding.effective_severity.as_str(), "critical" | "error"))
+        || !conflicts.is_empty()
+    {
+        return "high";
+    }
+    if findings
+        .iter()
+        .any(|finding| matches!(finding.effective_severity.as_str(), "warning" | "warn"))
+        || !analysis_groups.is_empty()
+    {
+        return "medium";
+    }
+    "low"
+}
+
+fn task_readiness_risk_summary(
+    risk_level: &'static str,
+    findings: &[RuleFindingRecord],
+    conflicts: &[ConflictGroupRecord],
+    analysis_groups: &[CrossAgentAnalysisGroup],
+) -> String {
+    if risk_level == "low" {
+        return "No high-risk local findings, same-agent conflicts, or cross-agent ambiguity were associated with this candidate.".to_string();
+    }
+    format!(
+        "Risk level {risk_level}: {} finding(s), {} same-agent conflict(s), and {} cross-agent analysis group(s) are associated with this candidate.",
+        findings.len(),
+        conflicts.len(),
+        analysis_groups.len()
+    )
+}
+
+fn task_readiness_risk_deduction(
+    findings: &[RuleFindingRecord],
+    conflicts: &[ConflictGroupRecord],
+    analysis_groups: &[CrossAgentAnalysisGroup],
+    skill: &SkillDetailRecord,
+) -> i16 {
+    let mut deduction = 0i16;
+    if !skill.enabled {
+        deduction += 25;
+    }
+    if skill.state != "loaded" {
+        deduction += 30;
+    }
+    for finding in findings {
+        deduction += match finding.effective_severity.as_str() {
+            "critical" => 25,
+            "error" => 18,
+            "warning" | "warn" => 10,
+            "info" => 3,
+            _ => 1,
+        };
+    }
+    deduction += (conflicts.len() as i16 * 18).min(30);
+    deduction += (analysis_groups.len() as i16 * 6).min(18);
+    deduction
+}
+
+fn task_readiness_overall_score(candidates: &[TaskReadinessCandidate]) -> u8 {
+    let Some(best) = candidates.first() else {
+        return 0;
+    };
+    let secondary = candidates
+        .get(1)
+        .map(|candidate| candidate.score)
+        .unwrap_or(0);
+    ((u16::from(best.score) * 3 + u16::from(secondary)) / 4).min(100) as u8
+}
+
+fn task_readiness_band(score: u8) -> &'static str {
+    match score {
+        80..=100 => "ready",
+        60..=79 => "mostly_ready",
+        35..=59 => "partial",
+        1..=34 => "weak",
+        _ => "blocked",
+    }
+}
+
+fn task_readiness_summary(
+    score: u8,
+    band: &'static str,
+    candidates: &[TaskReadinessCandidate],
+    missing_gap_notes: &[String],
+) -> String {
+    match candidates.first() {
+        Some(best) => format!(
+            "Task readiness is {band} ({score}/100). Top local candidate is `{}` for {} with score {} and risk {}.",
+            best.skill_name,
+            best.agent,
+            best.score,
+            best.enabled_scope_risk_state.risk_level
+        ),
+        None if missing_gap_notes.is_empty() => {
+            "Task readiness is blocked because no local candidate evidence was available."
+                .to_string()
+        }
+        None => format!(
+            "Task readiness is blocked because no local candidate evidence was available. {}",
+            missing_gap_notes.join(" ")
+        ),
+    }
+}
+
+fn task_readiness_blocker_notes(candidates: &[TaskReadinessCandidate]) -> Vec<String> {
+    let mut notes = candidates
+        .iter()
+        .flat_map(|candidate| candidate.blocker_risk_notes.iter().cloned())
+        .collect::<Vec<_>>();
+    if notes.is_empty() {
+        notes.push(
+            "No candidate-level blockers were found in local catalog/rule/conflict/analysis evidence."
+                .to_string(),
+        );
+    }
+    notes.sort();
+    notes.dedup();
+    notes.truncate(10);
+    notes
+}
+
+fn push_task_readiness_evidence(
+    evidence: &mut Vec<TaskReadinessEvidenceReference>,
+    source_type: &'static str,
+    source_id: &str,
+    label: String,
+    severity: Option<String>,
+    related_instance_id: Option<String>,
+) -> String {
+    let id = format!("{source_type}:{source_id}");
+    evidence.push(TaskReadinessEvidenceReference {
+        id: id.clone(),
+        source_type,
+        source_id: redact_for_llm_preview(source_id),
+        label,
+        severity,
+        related_instance_id,
+    });
+    id
 }
 
 fn quality_metadata_component(
@@ -4442,6 +5288,82 @@ fn render_quality_score_prompt_section(
     )
 }
 
+fn render_task_readiness_prompt_section(
+    readiness: &TaskReadinessResult,
+    redactor: &mut PromptRedactor<'_>,
+) -> String {
+    let candidates = readiness
+        .candidate_skills
+        .iter()
+        .take(8)
+        .map(|candidate| {
+            format!(
+                "- {} ({}, {}, enabled={}, state={}): score={} band={} risk={} quality={}; reasons={}",
+                redactor.redact(&candidate.skill_name),
+                redactor.redact(&candidate.agent),
+                redactor.redact(&candidate.scope),
+                candidate.enabled,
+                redactor.redact(&candidate.state),
+                candidate.score,
+                candidate.band,
+                candidate.enabled_scope_risk_state.risk_level,
+                candidate
+                    .quality_score
+                    .map(|score| score.to_string())
+                    .unwrap_or_else(|| "n/a".to_string()),
+                candidate
+                    .match_reasons
+                    .iter()
+                    .take(3)
+                    .map(|reason| redactor.redact(reason))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let gaps = readiness
+        .missing_gap_notes
+        .iter()
+        .take(8)
+        .map(|note| format!("- {}", redactor.redact(note)))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let blockers = readiness
+        .blocker_risk_notes
+        .iter()
+        .take(8)
+        .map(|note| format!("- {}", redactor.redact(note)))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let evidence = readiness
+        .evidence_references
+        .iter()
+        .take(16)
+        .map(|reference| {
+            format!(
+                "- {} {} {}",
+                reference.source_type,
+                redactor.redact(&reference.source_id),
+                redactor.redact(&reference.label)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "Task readiness evidence:\n- task: {}\n- score: {} / 100\n- band: {}\n- summary: {}\n- catalog_available: {}\n\nCandidate skills:\n{}\n\nMissing/gap notes:\n{}\n\nBlocker/risk notes:\n{}\n\nEvidence references:\n{}\n\nSafety flags: read_only=true, provider_request_sent=false, write_back_allowed=false, script_execution_allowed=false, config_mutation_allowed=false, snapshot_created=false, triage_mutation_allowed=false, credential_accessed=false, raw_prompt_persisted=false, raw_response_persisted=false.",
+        redactor.redact(&readiness.task),
+        readiness.score,
+        readiness.band,
+        redactor.redact(&readiness.summary),
+        readiness.catalog_available,
+        if candidates.is_empty() { "none" } else { &candidates },
+        if gaps.is_empty() { "none" } else { &gaps },
+        if blockers.is_empty() { "none" } else { &blockers },
+        if evidence.is_empty() { "none" } else { &evidence },
+    )
+}
+
 fn llm_skill_analysis_safety_flags() -> LlmSkillAnalysisSafetyFlags {
     LlmSkillAnalysisSafetyFlags {
         write_back_enabled: false,
@@ -4672,6 +5594,7 @@ mod tests {
         assert!(methods.contains(&Value::String("app.stateSnapshot".to_string())));
         assert!(methods.contains(&Value::String("adapter.listDiagnostics".to_string())));
         assert!(methods.contains(&Value::String("analysis.scoreSkillQuality".to_string())));
+        assert!(methods.contains(&Value::String("task.checkReadiness".to_string())));
         assert!(methods.contains(&Value::String("llm.status".to_string())));
         assert!(methods.contains(&Value::String("llm.listProviderProfiles".to_string())));
         assert!(methods.contains(&Value::String("llm.saveProviderProfile".to_string())));
@@ -6070,6 +6993,275 @@ mod tests {
             !app_data_dir.exists(),
             "quality scoring must not initialize app data when there is no catalog"
         );
+    }
+
+    #[test]
+    fn task_check_readiness_returns_local_read_only_candidates() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-readiness-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-readiness-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        let skill_path = app_data_dir.join("fixture-skill").join("SKILL.md");
+        seed_catalog_with_llm_skill(&host, &skill_path);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("readiness-check".to_string()),
+            method: "task.checkReadiness".to_string(),
+            params: json!({
+                "task": "Analyze local skill posture and execution safety",
+                "agent": "claude-code",
+                "candidate_instance_ids": ["llm-skill-id"],
+                "limit": 4
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("task readiness result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("deterministic-service")
+        );
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert!(result
+            .get("score")
+            .and_then(Value::as_u64)
+            .is_some_and(|score| score <= 100));
+        assert!(result
+            .get("candidate_skills")
+            .and_then(Value::as_array)
+            .is_some_and(|candidates| candidates.len() == 1));
+        assert_eq!(
+            result
+                .pointer("/candidate_skills/0/instance_id")
+                .and_then(Value::as_str),
+            Some("llm-skill-id")
+        );
+        assert!(result
+            .pointer("/candidate_skills/0/quality_score")
+            .and_then(Value::as_u64)
+            .is_some());
+        assert_eq!(
+            result
+                .pointer("/safety_flags/read_only")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/write_back_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/script_execution_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/config_mutation_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/snapshot_created")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/triage_mutation_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/prompt_request/action")
+                .and_then(Value::as_str),
+            Some("task_readiness")
+        );
+        assert_eq!(
+            result
+                .pointer("/prompt_request/request/action")
+                .and_then(Value::as_str),
+            Some("task_readiness")
+        );
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let serialized = serde_json::to_string(&result).expect("serialize readiness result");
+        assert!(!serialized.contains("OPENAI_API_KEY=<redacted>"));
+        assert!(!serialized.contains("fixture-redacted-value"));
+        assert!(!serialized.contains(&skill_path.to_string_lossy().to_string()));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn task_check_readiness_rejects_empty_task_without_creating_catalog() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-readiness-empty-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("readiness-empty".to_string()),
+            method: "task.checkReadiness".to_string(),
+            params: json!({ "task": "   " }),
+        });
+
+        assert!(!response.ok);
+        let error = response.error.expect("empty task error");
+        assert_eq!(error.code, "invalid_request");
+        assert!(error.message.contains("non-empty task"));
+        assert!(
+            !app_data_dir.exists(),
+            "empty readiness request must not initialize app data"
+        );
+    }
+
+    #[test]
+    fn task_check_readiness_missing_catalog_returns_empty_read_only_result() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-readiness-missing-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("readiness-missing".to_string()),
+            method: "task.checkReadiness".to_string(),
+            params: json!({ "task": "Prepare a release readiness report" }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("missing catalog readiness result");
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(result.get("score").and_then(Value::as_u64), Some(0));
+        assert!(result
+            .get("candidate_skills")
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty));
+        assert_eq!(
+            result
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert!(
+            !host.catalog_path().exists(),
+            "missing-catalog readiness must not initialize catalog.sqlite"
+        );
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    }
+
+    #[test]
+    fn llm_preview_prompt_accepts_task_readiness_action_with_redaction() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-readiness-preview-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+        let skill_path = app_data_dir.join("fixture-skill").join("SKILL.md");
+        seed_catalog_with_llm_skill(&host, &skill_path);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("readiness-preview".to_string()),
+            method: "llm.previewPrompt".to_string(),
+            params: json!({
+                "action": "task_readiness",
+                "instance_ids": ["llm-skill-id"],
+                "user_intent": "Analyze local skill posture with token=fixture-redacted-value"
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("task readiness preview result");
+        assert_eq!(
+            result.get("action").and_then(Value::as_str),
+            Some("task_readiness")
+        );
+        assert_eq!(
+            result.get("provider_request_sent").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("write_back_allowed").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert!(result
+            .get("requires_confirmation")
+            .and_then(Value::as_bool)
+            .unwrap_or(false));
+        let serialized = serde_json::to_string(&result).expect("serialize readiness preview");
+        assert!(serialized.contains("Task readiness evidence"));
+        assert!(serialized.contains("<redacted>"));
+        assert!(!serialized.contains("fixture-redacted-value"));
+        assert!(!serialized.contains("OPENAI_API_KEY"));
+        assert!(!serialized.contains(&skill_path.to_string_lossy().to_string()));
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
     }
 
     #[test]
@@ -7899,6 +9091,31 @@ mod tests {
                 assert!(!score.safety_flags.raw_prompt_persisted);
                 assert!(!score.safety_flags.raw_response_persisted);
             }
+            "task.checkReadiness" => {
+                let readiness: WireTaskReadinessResult =
+                    decode_fixture_result(method, result, path);
+                assert!(readiness.score <= 100);
+                assert!(readiness.catalog_available);
+                assert!(!readiness.candidate_skills.is_empty());
+                assert!(readiness.prompt_request.available);
+                assert_eq!(readiness.prompt_request.action, "task_readiness");
+                assert_eq!(readiness.prompt_request.preview_method, "llm.previewPrompt");
+                assert_eq!(
+                    readiness.prompt_request.request.action,
+                    LlmPromptActionKind::TaskReadiness
+                );
+                assert!(readiness.safety_flags.read_only);
+                assert!(!readiness.safety_flags.provider_request_sent);
+                assert!(!readiness.safety_flags.write_back_allowed);
+                assert!(!readiness.safety_flags.script_execution_allowed);
+                assert!(!readiness.safety_flags.config_mutation_allowed);
+                assert!(!readiness.safety_flags.snapshot_created);
+                assert!(!readiness.safety_flags.triage_mutation_allowed);
+                assert!(!readiness.safety_flags.credential_accessed);
+                assert!(!readiness.safety_flags.raw_secret_returned);
+                assert!(!readiness.safety_flags.raw_prompt_persisted);
+                assert!(!readiness.safety_flags.raw_response_persisted);
+            }
             "llm.status" => {
                 let status: WireLlmStatus = decode_fixture_result(method, result, path);
                 assert!(!status.enabled);
@@ -8390,6 +9607,7 @@ mod tests {
                 json!({ "instance_ids": ["missing-skill"], "analysis_kind": "overview" })
             }
             "analysis.scoreSkillQuality" => json!({ "instance_id": "missing-skill" }),
+            "task.checkReadiness" => json!({ "task": "fixture task readiness check" }),
             "evidence.piWritableHarness" => json!({ "run_label": "dispatch-fixture" }),
             "report.exportLocal" => json!({ "formats": ["json"] }),
             "script.previewExecution" => json!({
@@ -8713,6 +9931,109 @@ mod tests {
     #[derive(Debug, Deserialize)]
     #[serde(deny_unknown_fields)]
     struct WireSkillQualitySafetyFlags {
+        read_only: bool,
+        provider_request_sent: bool,
+        write_back_allowed: bool,
+        script_execution_allowed: bool,
+        config_mutation_allowed: bool,
+        snapshot_created: bool,
+        triage_mutation_allowed: bool,
+        credential_accessed: bool,
+        raw_secret_returned: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTaskReadinessResult {
+        task: String,
+        score: u8,
+        band: String,
+        summary: String,
+        generated_by: String,
+        catalog_available: bool,
+        filters: WireTaskReadinessFilters,
+        candidate_skills: Vec<WireTaskReadinessCandidate>,
+        missing_gap_notes: Vec<String>,
+        blocker_risk_notes: Vec<String>,
+        evidence_references: Vec<WireTaskReadinessEvidenceReference>,
+        prompt_request: WireTaskReadinessPromptRequest,
+        safety_flags: WireTaskReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTaskReadinessFilters {
+        agent: Option<String>,
+        candidate_instance_ids: Vec<String>,
+        limit: usize,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTaskReadinessCandidate {
+        instance_id: String,
+        definition_id: String,
+        skill_name: String,
+        agent: String,
+        scope: String,
+        enabled: bool,
+        state: String,
+        score: u8,
+        band: String,
+        quality_score: Option<u8>,
+        match_reasons: Vec<String>,
+        enabled_scope_risk_state: WireTaskReadinessState,
+        missing_gap_notes: Vec<String>,
+        blocker_risk_notes: Vec<String>,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTaskReadinessState {
+        enabled: bool,
+        scope: String,
+        state: String,
+        risk_level: String,
+        risk_summary: String,
+        writable_status: Option<String>,
+        adapter_status: Option<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTaskReadinessEvidenceReference {
+        id: String,
+        source_type: String,
+        source_id: String,
+        label: String,
+        severity: Option<String>,
+        related_instance_id: Option<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTaskReadinessPromptRequest {
+        available: bool,
+        preview_method: String,
+        confirm_method: String,
+        action: String,
+        request: LlmPreviewPromptParams,
+        note: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTaskReadinessSafetyFlags {
         read_only: bool,
         provider_request_sent: bool,
         write_back_allowed: bool,

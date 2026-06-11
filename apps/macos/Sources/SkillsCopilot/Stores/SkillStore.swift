@@ -28,6 +28,8 @@ final class SkillStore: ObservableObject {
     @Published private(set) var preparingSkillAnalysisKeys: Set<String> = []
     @Published private(set) var skillQualityScores: [SkillRecord.ID: SkillQualityScoreResult] = [:]
     @Published private(set) var scoringSkillQualityIDs: Set<SkillRecord.ID> = []
+    @Published private(set) var taskReadinessResult: TaskReadinessResult?
+    @Published private(set) var checkingTaskReadinessSkillIDs: Set<SkillRecord.ID> = []
     @Published private(set) var llmPromptPreviews: [String: LLMPromptPreview] = [:]
     @Published private(set) var previewingLLMPromptKeys: Set<String> = []
     @Published private(set) var sendingLLMPromptKeys: Set<String> = []
@@ -84,11 +86,19 @@ final class SkillStore: ObservableObject {
     @Published var sortOrder: SkillSortOrder = .name {
         didSet { handleListCriteriaChanged() }
     }
+    @Published var taskReadinessText = "" {
+        didSet {
+            if oldValue != taskReadinessText {
+                taskReadinessResult = nil
+            }
+        }
+    }
     @Published var errorMessage: String?
 
     private let service: ServiceClient
     private var lastRefreshAction: RefreshAction = .reload
     private var llmPreparedSkillID: SkillRecord.ID?
+    private var taskReadinessCheckedSkillID: SkillRecord.ID?
     private var agentConfigSnapshotLoadGeneration = 0
 
     init(service: ServiceClient) {
@@ -100,7 +110,7 @@ final class SkillStore: ObservableObject {
     }
 
     private var isLLMPromptBusy: Bool {
-        !previewingLLMPromptKeys.isEmpty || !sendingLLMPromptKeys.isEmpty || !scoringSkillQualityIDs.isEmpty
+        !previewingLLMPromptKeys.isEmpty || !sendingLLMPromptKeys.isEmpty || !scoringSkillQualityIDs.isEmpty || !checkingTaskReadinessSkillIDs.isEmpty
     }
 
     private func toggleDisabledReason(for skill: SkillRecord) -> String? {
@@ -392,6 +402,44 @@ final class SkillStore: ObservableObject {
 
     func canSendSkillQualityPrompt(for skill: SkillRecord) -> Bool {
         guard let preview = skillQualityPromptPreview(for: skill) else { return false }
+        return canSendLLMPrompt(preview)
+    }
+
+    func taskReadiness(for skill: SkillRecord) -> TaskReadinessResult? {
+        guard taskReadinessCheckedSkillID == skill.id else { return nil }
+        return taskReadinessResult
+    }
+
+    func isCheckingTaskReadiness(for skill: SkillRecord) -> Bool {
+        checkingTaskReadinessSkillIDs.contains(skill.id)
+    }
+
+    func taskReadinessPromptPreview(for skill: SkillRecord) -> LLMPromptPreview? {
+        let taskText = normalizedTaskReadinessText
+        guard !taskText.isEmpty else { return nil }
+        return llmPromptPreviews[taskReadinessPromptKey(skillID: skill.id, taskText: taskText)]
+    }
+
+    func isPreviewingTaskReadinessPrompt(for skill: SkillRecord) -> Bool {
+        let taskText = normalizedTaskReadinessText
+        guard !taskText.isEmpty else { return false }
+        return previewingLLMPromptKeys.contains(taskReadinessPromptKey(skillID: skill.id, taskText: taskText))
+    }
+
+    func isSendingTaskReadinessPrompt(for skill: SkillRecord) -> Bool {
+        let taskText = normalizedTaskReadinessText
+        guard !taskText.isEmpty else { return false }
+        return sendingLLMPromptKeys.contains(taskReadinessPromptKey(skillID: skill.id, taskText: taskText))
+    }
+
+    func taskReadinessPromptSendResult(for skill: SkillRecord) -> LLMPromptSendResult? {
+        let taskText = normalizedTaskReadinessText
+        guard !taskText.isEmpty else { return nil }
+        return llmPromptSendResults[taskReadinessPromptKey(skillID: skill.id, taskText: taskText)]
+    }
+
+    func canSendTaskReadinessPrompt(for skill: SkillRecord) -> Bool {
+        guard let preview = taskReadinessPromptPreview(for: skill) else { return false }
         return canSendLLMPrompt(preview)
     }
 
@@ -962,6 +1010,71 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func checkSelectedTaskReadiness() async {
+        guard let skill = selectedSkill else { return }
+        let taskText = normalizedTaskReadinessText
+        guard !taskText.isEmpty else {
+            taskReadinessResult = .unavailable(taskText: "", reason: UIStrings.taskReadinessTaskRequired)
+            taskReadinessCheckedSkillID = skill.id
+            return
+        }
+        guard !isRefreshBusy else {
+            taskReadinessResult = .unavailable(taskText: taskText, reason: UIStrings.operationUnavailableBusy)
+            taskReadinessCheckedSkillID = skill.id
+            return
+        }
+
+        checkingTaskReadinessSkillIDs.insert(skill.id)
+        defer { checkingTaskReadinessSkillIDs.remove(skill.id) }
+
+        do {
+            taskReadinessResult = try await service.checkTaskReadiness(taskText: taskText, skill: skill)
+            taskReadinessCheckedSkillID = skill.id
+        } catch {
+            taskReadinessResult = .unavailable(taskText: taskText, reason: error.localizedDescription)
+            taskReadinessCheckedSkillID = skill.id
+        }
+    }
+
+    func previewPromptForSelectedTaskReadiness() async {
+        guard let skill = selectedSkill else { return }
+        let taskText = normalizedTaskReadinessText
+        guard !taskText.isEmpty else {
+            taskReadinessResult = .unavailable(taskText: "", reason: UIStrings.taskReadinessTaskRequired)
+            taskReadinessCheckedSkillID = skill.id
+            return
+        }
+        let key = taskReadinessPromptKey(skillID: skill.id, taskText: taskText)
+        guard !isRefreshBusy else {
+            llmPromptPreviews[key] = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        previewingLLMPromptKeys.insert(key)
+        llmPromptSendResults.removeValue(forKey: key)
+        defer { previewingLLMPromptKeys.remove(key) }
+
+        do {
+            llmPromptPreviews[key] = try await service.previewPromptForTaskReadiness(taskText: taskText, skill: skill)
+        } catch {
+            llmPromptPreviews[key] = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
+    func confirmPromptForSelectedTaskReadiness() async {
+        guard let skill = selectedSkill else { return }
+        let taskText = normalizedTaskReadinessText
+        guard !taskText.isEmpty else { return }
+        let key = taskReadinessPromptKey(skillID: skill.id, taskText: taskText)
+        await confirmLLMPrompt(key: key) { previewID in
+            try await service.confirmPromptAndSendForTaskReadiness(
+                previewID: previewID,
+                taskText: taskText,
+                skill: skill
+            )
+        }
+    }
+
     func previewScriptExecutionSafety(for skill: SkillRecord) async {
         guard !isRefreshBusy else {
             scriptExecutionPreviews[skill.id] = .unavailable(skill: skill, reason: UIStrings.operationUnavailableBusy)
@@ -1229,6 +1342,11 @@ final class SkillStore: ObservableObject {
         scriptExecutionPreviews = scriptExecutionPreviews.filter { currentSkillIDs.contains($0.key) }
         skillQualityScores = skillQualityScores.filter { currentSkillIDs.contains($0.key) }
         scoringSkillQualityIDs = scoringSkillQualityIDs.filter { currentSkillIDs.contains($0) }
+        if let checkedSkillID = taskReadinessCheckedSkillID, !currentSkillIDs.contains(checkedSkillID) {
+            taskReadinessResult = nil
+            taskReadinessCheckedSkillID = nil
+        }
+        checkingTaskReadinessSkillIDs = checkingTaskReadinessSkillIDs.filter { currentSkillIDs.contains($0) }
         skillEventsByID = skillEventsByID.filter { currentSkillIDs.contains($0.key) }
         skillAnalysisPrepareResults.removeAll()
         preparingSkillAnalysisKeys.removeAll()
@@ -1342,6 +1460,14 @@ final class SkillStore: ObservableObject {
         "quality-score:\(skillID)"
     }
 
+    private var normalizedTaskReadinessText: String {
+        taskReadinessText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func taskReadinessPromptKey(skillID: SkillRecord.ID, taskText: String) -> String {
+        "task-readiness:\(skillID):\(taskText)"
+    }
+
     private func canSendLLMPrompt(_ preview: LLMPromptPreview) -> Bool {
         aiProviderStatus.serviceAvailable
             && aiProviderStatus.configured
@@ -1407,6 +1533,8 @@ final class SkillStore: ObservableObject {
         batchTogglePreview = nil
         normalizeSelectionToVisibleSkills()
         guard previousID != selectedSkillID else { return }
+        taskReadinessResult = nil
+        taskReadinessCheckedSkillID = nil
         Task { @MainActor [weak self] in
             await self?.loadSelectedDetail()
             await self?.loadCrossAgentComparisons()

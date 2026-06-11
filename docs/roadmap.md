@@ -4,15 +4,15 @@
 >
 > 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.42 Prompt Preview / Redaction 已完成**。V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout、V2.29 Finding triage persistence、V2.30 AI skill analysis workflow、V2.31 Cleanup Queue、V2.32 Rule tuning / suppression、V2.33 Safe batch actions、V2.34 Cross-agent comparison view、V2.35 Local report export、V2.36 Pi writable evidence harness、V2.37 Pi writable guarded slice、V2.38 Hermes external roots、V2.39 OpenClaw workspace 深化、V2.40 Adapter diagnostics、V2.41 AI Provider Foundation、V2.42 Prompt Preview / Redaction 均已收口。V2.42 provider-backed analysis 请求必须 preview/redact/estimate/destination-visible/explicit-confirm 后才发送；OpenClaw/Hermes writable/install 与 Pi install 继续 blocked。
+> 当前阶段：**V2.44 AI Task Readiness Check complete**。V2.44 已完成收口；V2.21 扫描准确性/去重/agent 维度统计、V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 单 skill 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout、V2.29 Finding triage persistence、V2.30 AI skill analysis workflow、V2.31 Cleanup Queue、V2.32 Rule tuning / suppression、V2.33 Safe batch actions、V2.34 Cross-agent comparison view、V2.35 Local report export、V2.36 Pi writable evidence harness、V2.37 Pi guarded writable toggle、V2.38 Hermes external roots、V2.39 OpenClaw workspace 深化、V2.40 Adapter diagnostics、V2.41 AI Provider Foundation、V2.42 Prompt Preview / Redaction、V2.43 AI Skill Quality Score、V2.44 AI Task Readiness Check 均已同步到主线。V2.42+ provider-backed 分析仍必须 preview/redact/estimate/destination-visible/explicit-confirm 后才发送；V2.45 routing confidence 目前仍为下一阶段。
 >
-> 近期主线：继续围绕 AI agent skills 的管理、检查、分析和配置审计打磨体验。V2.41 Provider Foundation、V2.42 Prompt Preview / Redaction 与 V2.43 AI Skill Quality Score 已完成，后续版本线统一为 **V2.44-V2.70 AI-native Task-centered Skills Governance**：本地 scanner/rules/catalog 提供事实层，用户自配 OpenAI-compatible / Claude-compatible 大模型负责复杂任务可用性、routing 置信度、trace 分析、remediation、policy 与治理报告。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
+> 近期主线：继续围绕 AI agent skills 的管理、检查、分析和配置审计打磨体验。V2.41 Provider Foundation、V2.42 Prompt Preview / Redaction、V2.43 AI Skill Quality Score 与 V2.44 AI Task Readiness Check 已完成，后续版本线统一为 **V2.45-V2.70 AI-native Task-centered Skills Governance**：本地 scanner/rules/catalog 提供事实层，用户自配 OpenAI-compatible / Claude-compatible 大模型负责 routing 置信度、trace 分析、remediation、policy 与治理报告。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
 >
 > 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.25 各阶段能力、V2.9 Tool-global skill pool、V2.11 Adapter capability matrix、V2.16-V2.25 management/analysis/history line。后续候选变更仍需重新验证。
 >
 > V2.10 安全边界：默认不真实执行 skill 脚本；任何未来执行请求必须逐次人工确认，并先展示 cwd/env/network/files preview；blocked/cancelled/failure attempts 必须审计；LLM 不能触发执行。
 >
-> 真实本机 app 的 Computer Use 操作验证已在 2026-06-11 对 V2.41 mainline 通过，验证时显式选择当前 `dist/SkillsCopilot.app` bundle 以避开同 bundle id 的旧 worktree 注册路径；按 app name 调用 Computer Use 仍可能误连到 stale worktree bundle。V2.41 已通过 focused Rust/Swift checks、`pnpm check:macos`、真实 app launch/Computer Use、`pnpm check:privacy` 与截图人工检查。后续用户可见、UI 或 service protocol 变更仍需重跑，且不能用 smoke 截图替代真实交互验证。
+> 真实本机 app 的 Computer Use 操作验证已在 2026-06-11 对 V2.44 mainline 通过，验证时显式选择当前 `dist/SkillsCopilot.app` bundle 以避开同 bundle id 的旧 worktree 注册路径；按 app name 调用 Computer Use 仍可能误连到 stale worktree bundle。V2.44 已通过 focused Rust/Swift checks、`pnpm check:macos`、真实 app launch/Computer Use、`pnpm check:privacy` 与截图人工检查。后续用户可见、UI 或 service protocol 变更仍需重跑，且不能用 smoke 截图替代真实交互验证。
 
 ## 0. 设计阶段（已完成）
 
@@ -252,7 +252,7 @@
 
 ## 4. V2 — "全 agent + 生态"
 
-**当前 V2 状态（2026-06-10）**：Codex adapter 首个实现切片、V2.1 Claude/Codex adapter experience、V2.2 project context、V2.3 adapter hardening、V2.4 opencode read-only adapter、V2.5 audit hardening、V2.6 manual readiness docs、V2.7 LLM local assist gate、V2.8 rules/permissions governance implementation、V2.9 Tool-global skill pool、V2.10 skill execution safety docs/release consistency、V2.11-V2.20 adapter/management/analysis line 已完成 closeout，且之前 mainline app 的真实本机 Computer Use 操作验证已在 2026-06-10 通过。产品重心保持在 skills 的管理、检查、分析和配置审计；真实 sandbox runner、GitHub clone import、script-file install 已从活动 backlog 删除。可执行任务清单见 [`development-tasks.md`](./development-tasks.md)。V2.10 已完成安全边界文档同步：default-deny，不真实执行；blocked/cancelled/failure attempt audit；LLM 不可触发执行。当前产品方向不规划 successful execution output log。V2.8 已完成 LLM status protocol compatibility、permissions roundtrip for V2.8 rules、explicit severity ordering、findings filtering/grouping UI、`app.stateSnapshot` refresh optimization，以及七条新本地规则：`frontmatter.tools-not-empty`、`permissions.network-declared`、`permissions.exec-needs-human`、`name.canonical-case`、`script.no-shebang`、`body.too-long`、`dependency.unknown`。Codex adapter core、commands/service、cwd→repo-root project discovery、macOS UI scan-all、agent filter、restart note、project context、config patch hardening、状态表达、安全回归、opencode native + compatibility root 扫描、guarded opencode permission writes、scanner/config/snapshot/service/UI/docs audit hardening、adapter changelog tracking、默认关闭的 LLM service/UI gate 和 request prepare/estimate 均已落地。V2.38 explicit external roots 已完成：`skills.external_dirs` 与 generic project roots 区分明确；Hermes writable/install 继续 blocked；本轮真实 Computer Use/AX/capture 窗口解析仍作为工具/窗口 blocker 保留。
+**当前 V2 状态（2026-06-11）**：Codex adapter 首个实现切片、V2.1 Claude/Codex adapter experience、V2.2 project context、V2.3 adapter hardening、V2.4 opencode read-only adapter、V2.5 audit hardening、V2.6 manual readiness docs、V2.7 LLM local assist gate、V2.8 rules/permissions governance implementation、V2.9 Tool-global skill pool、V2.10 skill execution safety docs/release consistency、V2.11-V2.20 adapter/management/analysis line 已完成 closeout，且之前 mainline app 的真实本机 Computer Use 操作验证已在 2026-06-10 通过。产品重心保持在 skills 的管理、检查、分析和配置审计；真实 sandbox runner、GitHub clone import、script-file install 已从活动 backlog 删除。可执行任务清单见 [`development-tasks.md`](./development-tasks.md)。V2.10 已完成安全边界文档同步：default-deny，不真实执行；blocked/cancelled/failure attempt audit；LLM 不可触发执行。当前产品方向不规划 successful execution output log。V2.8 已完成 LLM status protocol compatibility、permissions roundtrip for V2.8 rules、explicit severity ordering、findings filtering/grouping UI、`app.stateSnapshot` refresh optimization，以及七条新本地规则：`frontmatter.tools-not-empty`、`permissions.network-declared`、`permissions.exec-needs-human`、`name.canonical-case`、`script.no-shebang`、`body.too-long`、`dependency.unknown`。Codex adapter core、commands/service、cwd→repo-root project discovery、macOS UI scan-all、agent filter、restart note、project context、config patch hardening、状态表达、安全回归、opencode native + compatibility root 扫描、guarded opencode permission writes、scanner/config/snapshot/service/UI/docs audit hardening、adapter changelog tracking、默认关闭的 LLM service/UI gate 和 request prepare/estimate 均已落地。V2.38 explicit external roots 已完成：`skills.external_dirs` 与 generic project roots 区分明确；Hermes writable/install 继续 blocked。V2.44 任务可用性评估已完成：`task.checkReadiness` 与 native Analysis readiness UI 均保持 read-only/user-triggered。
 
 **V2 剩余开发判定**
 - 近期主线：Comprehensive Agent Adapter Support，优先补齐 Pi、opencode writable、Hermes、OpenClaw。
@@ -990,15 +990,15 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 2. 用户显式配置 OpenAI-compatible 或 Claude-compatible provider 后，AI 参与复杂判断：quality、task readiness、routing confidence、capability gap、trace accuracy、remediation、policy explanation。
 3. 用户围绕真实任务和工作区进行 review session，形成本地治理报告和可追溯处理历史。
 
-当前代码检查结论：主线已有 `llm.status` / `llm.prepareAction` / `llm.prepareSkillAnalysis`、provider/model DTO、token/cost estimate、macOS read-only preview UI、V2.41 provider profile 配置/Keychain-first API key storage/显式 Test Connection/预算字段/最小 redacted test-call metadata、V2.42 `llm.previewPrompt` / `llm.confirmPromptAndSend` provider-backed prompt preview/redaction/confirmed draft output，以及 V2.43 `analysis.scoreSkillQuality` deterministic read-only skill quality score。尚未实现 full provider observability，V2.44+ 任务可用性/路由能力仍为规划。
+当前代码检查结论：主线已有 `llm.status` / `llm.prepareAction` / `llm.prepareSkillAnalysis`、provider/model DTO、token/cost estimate、macOS read-only preview UI、V2.41 provider profile 配置/Keychain-first API key storage/显式 Test Connection/预算字段/最小 redacted test-call metadata、V2.42 `llm.previewPrompt` / `llm.confirmPromptAndSend` provider-backed prompt preview/redaction/confirmed draft output、V2.43 `analysis.scoreSkillQuality` deterministic read-only skill quality score，以及 V2.44 `task.checkReadiness` deterministic read-only task readiness。尚未实现 full provider observability，V2.45+ routing confidence / benchmark / trace 能力仍为规划。
 
 | Version | Goal | Completion signal |
 | --- | --- | --- |
 | V2.41 | AI Provider Foundation | 已完成：用户可配置 OpenAI-compatible / Claude-compatible endpoint、API key、model、headers/API version；Keychain-first；test connection、预算、disabled/unconfigured state 清晰可见；不自动分析、不写入、不执行；建立最小 provider test-call metadata schema（status/duration/error/redaction/token/cost，默认无 raw prompt/response）。 |
 | V2.42 | Prompt Preview / Redaction / Token Estimate | 已完成：每次 AI 调用前展示 prompt scope、included/excluded fields、脱敏摘要、token/cost estimate、provider/model、network destination；用户确认后才发送；确认后的调用必须写入最小审计 metadata，证明 redaction、confirmation 与 network destination。 |
 | V2.43 | AI Skill Quality Score | 已完成：基于本地 metadata/findings/conflicts/analysis/adapter diagnostics 给出 deterministic quality score、分项理由、风险说明和改进建议；optional provider explanation 走 V2.42 preview/redaction/confirmation，copy-only。 |
-| V2.44 | AI Task Readiness Check | 用户输入真实任务，评估当前 agent/skills 是否可用、启用、在正确 scope、风险可控，以及缺少什么。 |
-| V2.45 | AI Routing Confidence | 对 task-to-skill 候选排序，解释匹配证据、置信度、相似/歧义候选、错选/漏选风险。 |
+| V2.44 | AI Task Readiness Check | 已完成：用户输入真实任务，基于本地 evidence 评估 candidate skills 的可用性、启用/scope/risk 状态、缺口、blocker、证据引用和 safety flags；optional provider explanation 仍走 V2.42 preview/confirmation。 |
+| V2.45 | AI Routing Confidence | 规划：对 task-to-skill 候选排序，解释匹配证据、置信度、相似/歧义候选、错选/漏选风险。 |
 | V2.46 | Task Benchmark Set | 用户维护常见任务、期望 skills、可接受 agent/scope 和成功标准，用于长期 readiness 回归。 |
 | V2.47 | Routing Regression Detection | skills 改动、禁用、漂移、finding 增减后，检测任务命中率或 routing confidence 是否下降。 |
 | V2.48 | Agent Behavior Trace Import | 导入本地 transcript/log，先脱敏，再分析 agent 实际选 skill 是否命中、漏选、错选或被重复 skill 干扰。 |
@@ -1057,6 +1057,21 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 8. 复核数据源边界：评分解释输入仅为本地 evidence（metadata/findings/conflicts/analysis/adapter diagnostics）；prompt/raw prompt 或 response 不默认持久化。
 
 Closeout status: completed. V2.43 integrates protocol + service + UI closeout and evidence for the same boundaries: focused Rust/Swift checks, `pnpm check:macos`, real local Computer Use validation, fixture screenshot inspection, and `pnpm check:privacy`.
+
+### V2.44 Verification Checklist（完成）
+
+1. Focused Rust/Swift checks：`cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features`、`swift test --package-path apps/macos`。
+2. `pnpm check:macos`。
+3. Real local launch (`./script/build_and_run.sh run` / `pnpm dev:macos`) and explicit `SkillsCopilot` window Computer Use / AX attempt；若窗口不可见，记录 blocker。
+4. `pnpm check:privacy`。
+5. App-window-only 截图并手工核查路径/凭据占位符脱敏。
+6. 复核 V2.44 口径：当前主线已在 service/UI 中暴露 `task.checkReadiness`；用户输入真实任务后，本地 deterministic readiness 使用 metadata/findings/conflicts/analysis/adapter diagnostics/V2.43 quality 生成 read-only 结果；无 background readiness 轮询。
+7. 复核关闭边界：无 provider 触发脚本执行、无 triage mutation、无 config/snapshot mutation、无 new raw prompt/response 持久化。
+
+**Closeout status**: completed.
+
+- `docs/v2.44-verification-checklist.md` records the completed closure conditions.
+- `AGENTS.md`、`roadmap.md`、`development-tasks.md`、`ai-layer.md`、`service-protocol.md`、`security-model.md` 均将 V2.44 标记为 completed。
 
 ## V2.35 Local report export (completed)
 

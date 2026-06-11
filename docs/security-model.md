@@ -216,10 +216,11 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
 - AI 输出永远是 untrusted suggestion；写入仍必须走已有 safe write path：preview-first、explicit confirm、snapshot、atomic write、readback verify、rollback。
 - AI 不能成为 `ExecutionRequester`，不能创建 `Completed` execution record，不能确认脚本执行。
 
-### 2.4.3.1 V2.43 AI quality score / V2.44-V2.70 routing planning
+### 2.4.3.1 V2.43 AI quality score / V2.44 task readiness / V2.45-V2.70 routing planning
 
 - V2.43 质量评分已实现为用户显式触发、默认只读的本地 deterministic scoring；本地默认不做周期性或后台评分。
-- 本地证据仍是事实来源：`metadata` / `findings` / `conflicts` / `analysis` / `adapter diagnostics`。
+- V2.44 任务可用性评估已实现为用户显式触发、默认只读的本地 deterministic readiness check；用户输入任务文本后，service 只使用本地 catalog/finding/conflict/analysis/adapter diagnostics/V2.43 quality evidence 生成 score、候选 skill、gap/blocker、evidence references 与 safety flags。
+- 本地证据仍是事实来源：`metadata` / `findings` / `conflicts` / `analysis` / `adapter diagnostics` / V2.43 `quality_score`。
 - Provider 辅助解释是 optional path，仍需经过：
   - prompt preview
   - redaction summary
@@ -227,7 +228,8 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
   - token/cost 估算
   - destination 预览
   - 用户显式确认。
-- provider 辅助输出仍为 copy/display-only，不直接触发 `config.toggleSkill` / `snapshot.*` / triage 变更 / script execution / new credentials write。V2.44+ readiness/routing 仍是 planning。
+- `task.checkReadiness` 本身不得发起 provider 请求、不得读取 credentials、不得持久化 raw prompt/response、不得写 agent config、不得创建 snapshot、不得改变 triage、不得执行脚本。
+- provider 辅助输出仍为 copy/display-only，不直接触发 `config.toggleSkill` / `snapshot.*` / triage 变更 / script execution / new credentials write。V2.45+ routing confidence 仍是 planning。
 
 ### 2.4.3 Finding triage persistence 边界（V2.29）
 

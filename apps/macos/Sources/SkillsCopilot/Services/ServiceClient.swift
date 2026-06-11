@@ -154,6 +154,18 @@ private struct ScoreSkillQualityParams: Encodable {
     }
 }
 
+private struct TaskReadinessParams: Encodable {
+    let task: String
+    let agent: String?
+    let candidateInstanceIDs: [String]?
+
+    enum CodingKeys: String, CodingKey {
+        case task
+        case agent
+        case candidateInstanceIDs = "candidate_instance_ids"
+    }
+}
+
 private struct PrepareLLMActionParams: Encodable {
     let action: LLMAction
     let instanceId: String
@@ -177,6 +189,9 @@ private struct PreviewLLMPromptParams: Encodable {
     let instanceId: String?
     let definitionId: String?
     let agent: String?
+    let taskText: String?
+    let userIntent: String?
+    let candidateInstanceIDs: [String]?
 
     enum CodingKeys: String, CodingKey {
         case action
@@ -187,6 +202,9 @@ private struct PreviewLLMPromptParams: Encodable {
         case instanceId = "instance_id"
         case definitionId = "definition_id"
         case agent
+        case taskText = "task_text"
+        case userIntent = "user_intent"
+        case candidateInstanceIDs = "candidate_instance_ids"
     }
 }
 
@@ -538,6 +556,19 @@ final class ServiceClient {
         }
     }
 
+    func checkTaskReadiness(taskText: String, skill: SkillRecord) async throws -> TaskReadinessResult {
+        let params = TaskReadinessParams(
+            task: taskText,
+            agent: skill.agent,
+            candidateInstanceIDs: [skill.id]
+        )
+        do {
+            return try await call(method: "task.checkReadiness", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable(taskText: taskText)
+        }
+    }
+
     func previewPromptForLLMAction(action: LLMAction, skill: SkillRecord) async throws -> LLMPromptPreview {
         let params = PreviewLLMPromptParams(
             action: action.rawValue,
@@ -547,7 +578,10 @@ final class ServiceClient {
             instanceIDs: nil,
             instanceId: skill.id,
             definitionId: skill.definitionId,
-            agent: skill.agent
+            agent: skill.agent,
+            taskText: nil,
+            userIntent: nil,
+            candidateInstanceIDs: nil
         )
         do {
             return try await call(method: "llm.previewPrompt", params: params)
@@ -569,7 +603,10 @@ final class ServiceClient {
             instanceIDs: instanceIDs,
             instanceId: nil,
             definitionId: nil,
-            agent: nil
+            agent: nil,
+            taskText: nil,
+            userIntent: nil,
+            candidateInstanceIDs: nil
         )
         do {
             return try await call(method: "llm.previewPrompt", params: params)
@@ -587,12 +624,36 @@ final class ServiceClient {
             instanceIDs: [skill.id],
             instanceId: skill.id,
             definitionId: skill.definitionId,
-            agent: skill.agent
+            agent: skill.agent,
+            taskText: nil,
+            userIntent: nil,
+            candidateInstanceIDs: nil
         )
         do {
             return try await call(method: "llm.previewPrompt", params: params)
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .unavailable(reason: UIStrings.skillQualityPromptUnavailable)
+        }
+    }
+
+    func previewPromptForTaskReadiness(taskText: String, skill: SkillRecord) async throws -> LLMPromptPreview {
+        let params = PreviewLLMPromptParams(
+            action: "task_readiness",
+            requestKind: "task_readiness",
+            analysisKind: nil,
+            scope: "selected",
+            instanceIDs: [skill.id],
+            instanceId: skill.id,
+            definitionId: skill.definitionId,
+            agent: skill.agent,
+            taskText: taskText,
+            userIntent: taskText,
+            candidateInstanceIDs: [skill.id]
+        )
+        do {
+            return try await call(method: "llm.previewPrompt", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable(reason: UIStrings.taskReadinessPromptUnavailable)
         }
     }
 
@@ -605,7 +666,10 @@ final class ServiceClient {
             instanceIDs: nil,
             instanceId: skill.id,
             definitionId: skill.definitionId,
-            agent: skill.agent
+            agent: skill.agent,
+            taskText: nil,
+            userIntent: nil,
+            candidateInstanceIDs: nil
         )
         return try await confirmPromptAndSend(previewID: previewID, request: request)
     }
@@ -624,7 +688,10 @@ final class ServiceClient {
             instanceIDs: instanceIDs,
             instanceId: nil,
             definitionId: nil,
-            agent: nil
+            agent: nil,
+            taskText: nil,
+            userIntent: nil,
+            candidateInstanceIDs: nil
         )
         return try await confirmPromptAndSend(previewID: previewID, request: request)
     }
@@ -638,7 +705,27 @@ final class ServiceClient {
             instanceIDs: [skill.id],
             instanceId: skill.id,
             definitionId: skill.definitionId,
-            agent: skill.agent
+            agent: skill.agent,
+            taskText: nil,
+            userIntent: nil,
+            candidateInstanceIDs: nil
+        )
+        return try await confirmPromptAndSend(previewID: previewID, request: request)
+    }
+
+    func confirmPromptAndSendForTaskReadiness(previewID: String, taskText: String, skill: SkillRecord) async throws -> LLMPromptSendResult {
+        let request = PreviewLLMPromptParams(
+            action: "task_readiness",
+            requestKind: "task_readiness",
+            analysisKind: nil,
+            scope: "selected",
+            instanceIDs: [skill.id],
+            instanceId: skill.id,
+            definitionId: skill.definitionId,
+            agent: skill.agent,
+            taskText: taskText,
+            userIntent: taskText,
+            candidateInstanceIDs: [skill.id]
         )
         return try await confirmPromptAndSend(previewID: previewID, request: request)
     }
