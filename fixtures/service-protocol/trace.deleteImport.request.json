@@ -1,0 +1,7 @@
+{
+  "id": "fixture-trace-import-local-delete",
+  "method": "trace.deleteImport",
+  "params": {
+    "id": "trace-import-fixture-local"
+  }
+}

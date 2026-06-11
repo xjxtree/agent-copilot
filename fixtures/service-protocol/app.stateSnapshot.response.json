@@ -24,6 +24,9 @@
         "task.evaluateBenchmarks",
         "task.saveRoutingBaseline",
         "task.detectRoutingRegression",
+        "trace.importLocal",
+        "trace.listImports",
+        "trace.deleteImport",
         "llm.status",
         "llm.listProviderProfiles",
         "llm.saveProviderProfile",
@@ -329,6 +332,13 @@
         "call_metadata_path": "/tmp/skills-copilot-app-data/llm/provider-call-metadata.jsonl",
         "raw_prompt_persistence_allowed": false,
         "raw_response_persistence_allowed": false
+      },
+      "trace_imports": {
+        "count": 1,
+        "imports_path": "/tmp/skills-copilot-app-data/trace-imports.json",
+        "app_local_only": true,
+        "raw_trace_persistence_allowed": false,
+        "provider_request_allowed": false
       },
       "script_execution": {
         "enabled": false,

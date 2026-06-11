@@ -247,6 +247,32 @@ struct DetailView: View {
                                     await store.deleteTaskBenchmark(benchmark)
                                 }
                             },
+                            traceImportText: $store.traceImportText,
+                            traceImportTitle: $store.traceImportTitle,
+                            traceImportTask: $store.traceImportTask,
+                            traceImportExpectedSkills: $store.traceImportExpectedSkills,
+                            traceImportList: store.traceImportList,
+                            traceImportResult: store.traceImportResult,
+                            traceImportDeleteResult: store.traceImportDeleteResult,
+                            latestTraceImportRecord: store.latestTraceImportRecord,
+                            isLoadingTraceImports: store.isLoadingTraceImports,
+                            isImportingTrace: store.isImportingTrace,
+                            isDeletingTraceImport: { record in store.isDeletingTraceImport(record) },
+                            onLoadTraceImports: {
+                                Task {
+                                    await store.loadTraceImports()
+                                }
+                            },
+                            onImportTrace: {
+                                Task {
+                                    await store.importLocalTrace()
+                                }
+                            },
+                            onDeleteTraceImport: { record in
+                                Task {
+                                    await store.deleteTraceImport(record)
+                                }
+                            },
                             isPreparing: { action in store.isPreparingLLMAction(action) },
                             result: { action in store.llmPrepareResult(for: action) },
                             promptPreview: { action in store.llmPromptPreview(for: action) },
@@ -834,6 +860,20 @@ private struct AnalysisSection: View {
     let onSaveRoutingBaseline: () -> Void
     let onDetectRoutingRegression: () -> Void
     let onDeleteTaskBenchmark: (TaskBenchmarkRecord) -> Void
+    @Binding var traceImportText: String
+    @Binding var traceImportTitle: String
+    @Binding var traceImportTask: String
+    @Binding var traceImportExpectedSkills: String
+    let traceImportList: AgentTraceImportListResult
+    let traceImportResult: AgentTraceImportResult?
+    let traceImportDeleteResult: AgentTraceImportDeleteResult?
+    let latestTraceImportRecord: AgentTraceImportRecord?
+    let isLoadingTraceImports: Bool
+    let isImportingTrace: Bool
+    let isDeletingTraceImport: (AgentTraceImportRecord) -> Bool
+    let onLoadTraceImports: () -> Void
+    let onImportTrace: () -> Void
+    let onDeleteTraceImport: (AgentTraceImportRecord) -> Void
     let isPreparing: (LLMAction) -> Bool
     let result: (LLMAction) -> LLMPrepareResult?
     let promptPreview: (LLMAction) -> LLMPromptPreview?
@@ -947,6 +987,23 @@ private struct AnalysisSection: View {
                 onSaveRoutingBaseline: onSaveRoutingBaseline,
                 onDetectRoutingRegression: onDetectRoutingRegression,
                 onDelete: onDeleteTaskBenchmark
+            )
+
+            AgentTraceImportPanel(
+                traceText: $traceImportText,
+                title: $traceImportTitle,
+                taskText: $traceImportTask,
+                expectedSkills: $traceImportExpectedSkills,
+                listResult: traceImportList,
+                importResult: traceImportResult,
+                deleteResult: traceImportDeleteResult,
+                latestRecord: latestTraceImportRecord,
+                isLoading: isLoadingTraceImports,
+                isImporting: isImportingTrace,
+                isDeleting: isDeletingTraceImport,
+                onLoad: onLoadTraceImports,
+                onImport: onImportTrace,
+                onDelete: onDeleteTraceImport
             )
 
             SkillAnalysisPreparePanel(
@@ -2496,6 +2553,331 @@ private struct TaskBenchmarkEvaluationList: View {
             return .orange
         default:
             return .red
+        }
+    }
+}
+
+private struct AgentTraceImportPanel: View {
+    @Binding var traceText: String
+    @Binding var title: String
+    @Binding var taskText: String
+    @Binding var expectedSkills: String
+    let listResult: AgentTraceImportListResult
+    let importResult: AgentTraceImportResult?
+    let deleteResult: AgentTraceImportDeleteResult?
+    let latestRecord: AgentTraceImportRecord?
+    let isLoading: Bool
+    let isImporting: Bool
+    let isDeleting: (AgentTraceImportRecord) -> Bool
+    let onLoad: () -> Void
+    let onImport: () -> Void
+    let onDelete: (AgentTraceImportRecord) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.traceImportTitle, systemImage: "tray.and.arrow.down.fill")
+                    .font(.headline)
+                Spacer()
+                Label(UIStrings.readOnlyPreview, systemImage: "lock.shield")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(UIStrings.traceImportBoundary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+            Label(UIStrings.traceImportProviderBoundary, systemImage: "nosign")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 8) {
+                TextField(UIStrings.traceImportTitlePlaceholder, text: $title)
+                    .textFieldStyle(.roundedBorder)
+                TextField(UIStrings.traceImportTaskPlaceholder, text: $taskText, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(1...3)
+                TextField(UIStrings.traceImportExpectedPlaceholder, text: $expectedSkills, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(1...2)
+                ZStack(alignment: .topLeading) {
+                    if traceText.isEmpty {
+                        Text(UIStrings.traceImportTextPlaceholder)
+                            .font(.callout)
+                            .foregroundStyle(.tertiary)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 8)
+                    }
+                    TextEditor(text: $traceText)
+                        .font(.system(.callout, design: .monospaced))
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 82, maxHeight: 120)
+                        .background(.quaternary.opacity(0.22), in: RoundedRectangle(cornerRadius: 6))
+                }
+            }
+
+            HStack(spacing: 8) {
+                Button {
+                    onImport()
+                } label: {
+                    Label(UIStrings.traceImportImportAction, systemImage: "square.and.arrow.down")
+                }
+                .disabled(isImporting || traceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                Button {
+                    onLoad()
+                } label: {
+                    Label(UIStrings.traceImportLoadAction, systemImage: "arrow.clockwise")
+                }
+                .disabled(isLoading)
+
+                Spacer()
+            }
+
+            if isLoading || isImporting {
+                Label(UIStrings.llmPreparing, systemImage: "hourglass")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let reason = importResult?.fallbackReason, !reason.isEmpty {
+                Label(reason, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            if let latestRecord {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(UIStrings.traceImportLatest)
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
+                    AgentTraceImportRecordView(record: latestRecord, compact: false)
+                }
+            } else if listResult.imports.isEmpty {
+                Label(UIStrings.traceImportNoImports, systemImage: "clock.badge.questionmark")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            AgentTraceImportListView(
+                result: listResult,
+                deleteResult: deleteResult,
+                isDeleting: isDeleting,
+                onDelete: onDelete
+            )
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct AgentTraceImportListView: View {
+    let result: AgentTraceImportListResult
+    let deleteResult: AgentTraceImportDeleteResult?
+    let isDeleting: (AgentTraceImportRecord) -> Bool
+    let onDelete: (AgentTraceImportRecord) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(UIStrings.traceImportImports)
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(result.imports.count)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            if let fallbackReason = result.fallbackReason, !fallbackReason.isEmpty {
+                Label(fallbackReason, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            if result.imports.isEmpty {
+                Text(UIStrings.traceImportNoImports)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 250), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(result.imports) { record in
+                        VStack(alignment: .leading, spacing: 7) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(record.title.isEmpty ? (record.taskText.isEmpty ? record.id : record.taskText) : record.title)
+                                    .font(.caption.bold())
+                                    .lineLimit(2)
+                                    .textSelection(.enabled)
+                                Spacer()
+                                Button {
+                                    onDelete(record)
+                                } label: {
+                                    Image(systemName: "trash")
+                                }
+                                .buttonStyle(.borderless)
+                                .disabled(isDeleting(record))
+                                .help(UIStrings.traceImportDeleteAction)
+                            }
+                            AgentTraceImportRecordView(record: record, compact: true)
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+            }
+
+            if let deleteResult, let reason = deleteResult.fallbackReason, !reason.isEmpty {
+                Label(reason, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+private struct AgentTraceImportRecordView: View {
+    let record: AgentTraceImportRecord
+    let compact: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: compact ? 7 : 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(record.outcome.isEmpty ? UIStrings.unknown : record.outcome)
+                    .font(.caption2.bold())
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(outcomeTint.opacity(0.16), in: Capsule())
+                    .foregroundStyle(outcomeTint)
+                if !record.taskText.isEmpty {
+                    Text(record.taskText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(compact ? 1 : 2)
+                        .textSelection(.enabled)
+                }
+                Spacer()
+            }
+
+            if !compact {
+                Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                    MetadataRow(label: UIStrings.traceImportOutcome, value: record.outcome.isEmpty ? UIStrings.unknown : record.outcome)
+                    MetadataRow(label: UIStrings.skillQualityProviderNotSent, value: record.safety.providerRequestSent ? UIStrings.llmSkillAnalysisEnabledUnsafe : UIStrings.llmDisabled)
+                    MetadataRow(label: UIStrings.skillQualityWritesBlocked, value: readOnlyValue(!record.safety.writeBackAllowed && !record.safety.writeActionsAvailable))
+                    MetadataRow(label: UIStrings.skillQualityScriptsBlocked, value: readOnlyValue(!record.safety.scriptExecutionAllowed && !record.safety.executionActionsAvailable))
+                    MetadataRow(label: UIStrings.skillQualityMutationsBlocked, value: readOnlyValue(!record.safety.configMutationAllowed && !record.safety.snapshotCreated && !record.safety.triageMutationAllowed))
+                    MetadataRow(label: UIStrings.skillQualityCredentialsBlocked, value: readOnlyValue(!record.safety.credentialAccessed && !record.safety.rawSecretReturned))
+                }
+            }
+
+            AgentTraceSkillList(title: UIStrings.traceImportDetectedSkills, skills: record.detectedSkills)
+            AgentTraceSkillList(title: UIStrings.traceImportExpectedSkills, skills: record.expectedSkills)
+
+            if !compact || !record.redactedExcerpt.isEmpty {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(UIStrings.traceImportRedactedExcerpt)
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
+                    Text(record.redactedExcerpt.isEmpty ? UIStrings.traceImportNoExcerpt : record.redactedExcerpt)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(record.redactedExcerpt.isEmpty ? .secondary : .primary)
+                        .lineLimit(compact ? 3 : nil)
+                        .textSelection(.enabled)
+                }
+            }
+
+            AgentTraceRedactionView(redaction: record.redaction)
+            RoutingInlineList(title: UIStrings.traceImportReasons, empty: UIStrings.traceImportNoReasons, values: record.reasons, systemImage: "text.bubble")
+            RoutingInlineList(title: UIStrings.taskBenchmarkSafetyFlags, empty: UIStrings.taskBenchmarkNoSafetyFlags, values: record.safetyFlags, systemImage: "lock.shield")
+            RoutingEvidenceList(evidence: record.evidence)
+        }
+        .padding(compact ? 0 : 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(compact ? Color.clear : Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var outcomeTint: Color {
+        switch record.outcome.lowercased() {
+        case "hit", "matched", "expected_match":
+            return .green
+        case "miss", "wrong_pick", "wrong-pick":
+            return .red
+        case "ambiguous":
+            return .orange
+        default:
+            return .secondary
+        }
+    }
+
+    private func readOnlyValue(_ isBlocked: Bool) -> String {
+        isBlocked ? UIStrings.llmSkillAnalysisBlocked : UIStrings.llmSkillAnalysisEnabledUnsafe
+    }
+}
+
+private struct AgentTraceSkillList: View {
+    let title: String
+    let skills: [TaskBenchmarkSkillRef]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if skills.isEmpty {
+                Text(UIStrings.traceImportNoSkills)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text(skills.map(skillLabel).joined(separator: ", "))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .textSelection(.enabled)
+            }
+        }
+    }
+
+    private func skillLabel(_ skill: TaskBenchmarkSkillRef) -> String {
+        if skill.agent == UIStrings.unknown || skill.agent.isEmpty {
+            return skill.name
+        }
+        return "\(skill.name) (\(DisplayText.agent(skill.agent)))"
+    }
+}
+
+private struct AgentTraceRedactionView: View {
+    let redaction: AgentTraceRedactionSummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(UIStrings.traceImportRedactionSummary)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            Text(redaction.summary.isEmpty ? redaction.status : "\(redaction.status): \(redaction.summary)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+            if !redaction.redactedFields.isEmpty {
+                Text(redaction.redactedFields.joined(separator: ", "))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+            if !redaction.placeholders.isEmpty {
+                Text(redaction.placeholders.joined(separator: ", "))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+            ForEach(redaction.warnings, id: \.self) { warning in
+                Label(warning, systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
         }
     }
 }

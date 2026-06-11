@@ -70,6 +70,9 @@ const SUPPORTED_METHODS: &[&str] = &[
     "task.evaluateBenchmarks",
     "task.saveRoutingBaseline",
     "task.detectRoutingRegression",
+    "trace.importLocal",
+    "trace.listImports",
+    "trace.deleteImport",
     "llm.status",
     "llm.listProviderProfiles",
     "llm.saveProviderProfile",
@@ -155,6 +158,7 @@ pub struct ServiceStatus {
     pub adapter_capabilities: Vec<AdapterCapabilityRecord>,
     pub adapter_diagnostics: Vec<AdapterDiagnosticsRecord>,
     pub llm: LlmStatus,
+    pub trace_imports: TraceImportStatus,
     pub script_execution: ScriptExecutionStatus,
 }
 
@@ -262,6 +266,15 @@ pub struct ScriptExecutionStatus {
     pub audit_scope: String,
     pub audit_path: String,
     pub llm_initiation_allowed: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TraceImportStatus {
+    pub count: usize,
+    pub imports_path: String,
+    pub app_local_only: bool,
+    pub raw_trace_persistence_allowed: bool,
+    pub provider_request_allowed: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -937,6 +950,141 @@ pub struct RoutingRegressionComparisonFields {
     pub evidence_refs: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TraceImportRecord {
+    pub id: String,
+    pub title: String,
+    pub source_kind: String,
+    pub agent: Option<String>,
+    pub task: Option<String>,
+    pub expected_skill_refs: Vec<String>,
+    pub expected_skill_names: Vec<String>,
+    pub excerpt: String,
+    pub excerpt_char_count: usize,
+    #[serde(default = "trace_import_redaction_summary_default")]
+    pub redaction_summary: TraceImportRedactionSummary,
+    pub content_hash: String,
+    pub imported_at: i64,
+    pub analysis: TraceImportAnalysis,
+    pub safety_flags: TraceImportSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TraceImportRedactionSummary {
+    pub status: String,
+    pub redacted_value_count: usize,
+    pub redacted_fields: Vec<String>,
+    pub placeholders: Vec<String>,
+    pub raw_trace_persisted: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_secret_returned: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TraceImportAnalysis {
+    pub generated_by: String,
+    pub catalog_available: bool,
+    pub outcome: String,
+    pub reasons: Vec<String>,
+    pub detected_skills: Vec<TraceDetectedSkill>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TraceDetectedSkill {
+    pub instance_id: String,
+    pub definition_id: String,
+    pub skill_name: String,
+    pub agent: String,
+    pub scope: String,
+    pub evidence_refs: Vec<String>,
+    pub match_terms: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct TraceImportSafetyFlags {
+    pub read_only: bool,
+    pub app_local_only: bool,
+    pub provider_request_sent: bool,
+    pub write_back_allowed: bool,
+    pub skill_files_mutated: bool,
+    pub agent_config_mutated: bool,
+    pub script_execution_allowed: bool,
+    pub config_mutation_allowed: bool,
+    pub snapshot_created: bool,
+    pub triage_mutation_allowed: bool,
+    pub credential_accessed: bool,
+    pub raw_secret_returned: bool,
+    pub raw_trace_persisted: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub cloud_sync_performed: bool,
+    pub telemetry_emitted: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TraceImportLocalParams {
+    #[serde(default, alias = "trace_text", alias = "transcript")]
+    pub content: String,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub source_kind: Option<String>,
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default)]
+    pub task: Option<String>,
+    #[serde(default)]
+    pub expected_skill_refs: Vec<String>,
+    #[serde(default)]
+    pub expected_skill_names: Vec<String>,
+    #[serde(default)]
+    pub max_excerpt_chars: Option<usize>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct TraceListImportsParams {
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TraceDeleteImportParams {
+    #[serde(alias = "import_id")]
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TraceImportLocalResult {
+    pub generated_by: &'static str,
+    pub import: TraceImportRecord,
+    pub count: usize,
+    pub app_local_only: bool,
+    pub import_file: &'static str,
+    pub provider_request_sent: bool,
+    pub raw_trace_persisted: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TraceImportListResult {
+    pub imports: Vec<TraceImportRecord>,
+    pub count: usize,
+    pub app_local_only: bool,
+    pub provider_request_sent: bool,
+    pub raw_trace_persisted: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TraceDeleteImportResult {
+    pub import_id: String,
+    pub deleted: bool,
+    pub remaining_count: usize,
+    pub app_local_only: bool,
+    pub provider_request_sent: bool,
+    pub raw_trace_persisted: bool,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct LlmPrepareActionParams {
     pub kind: LlmActionKind,
@@ -1570,6 +1718,22 @@ impl ServiceHost {
                     serde_json::from_value(request.params)?
                 };
                 serde_json::to_value(self.detect_routing_regression(params)?).map_err(Into::into)
+            }
+            "trace.importLocal" => {
+                let params: TraceImportLocalParams = serde_json::from_value(request.params)?;
+                serde_json::to_value(self.import_local_trace(params)?).map_err(Into::into)
+            }
+            "trace.listImports" => {
+                let params: TraceListImportsParams = if request.params.is_null() {
+                    TraceListImportsParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.list_trace_imports(params)?).map_err(Into::into)
+            }
+            "trace.deleteImport" => {
+                let params: TraceDeleteImportParams = serde_json::from_value(request.params)?;
+                serde_json::to_value(self.delete_trace_import(params)?).map_err(Into::into)
             }
             "llm.status" => serde_json::to_value(self.llm_status()).map_err(Into::into),
             "llm.listProviderProfiles" => {
@@ -2373,6 +2537,7 @@ impl ServiceHost {
             adapter_capabilities: list_adapter_capabilities(&adapter_ctx),
             adapter_diagnostics: list_adapter_diagnostics(&adapter_ctx),
             llm: self.llm_status(),
+            trace_imports: self.trace_import_status(),
             script_execution: self.script_execution_status(),
         }
     }
@@ -2454,6 +2619,19 @@ impl ServiceHost {
             call_metadata_path: display_path(&provider_call_metadata_path(&self.app_data_dir)),
             raw_prompt_persistence_allowed: false,
             raw_response_persistence_allowed: false,
+        }
+    }
+
+    pub fn trace_import_status(&self) -> TraceImportStatus {
+        TraceImportStatus {
+            count: self
+                .load_trace_imports()
+                .map(|imports| imports.len())
+                .unwrap_or_default(),
+            imports_path: display_path(&self.trace_imports_path()),
+            app_local_only: true,
+            raw_trace_persistence_allowed: false,
+            provider_request_allowed: false,
         }
     }
 
@@ -3403,6 +3581,138 @@ impl ServiceHost {
         })
     }
 
+    pub fn import_local_trace(
+        &self,
+        params: TraceImportLocalParams,
+    ) -> Result<TraceImportLocalResult, ServiceError> {
+        let content = params.content.trim();
+        if content.is_empty() {
+            return Err(ServiceError::InvalidRequest(
+                "trace.importLocal requires non-empty trace content".to_string(),
+            ));
+        }
+
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let redaction_roots = self.trace_redaction_roots(&adapter_ctx);
+        let mut redactor = PromptRedactor::new(&redaction_roots);
+        let max_excerpt_chars = params.max_excerpt_chars.unwrap_or(800).clamp(80, 4_000);
+        let excerpt = truncate_chars(&redactor.redact(content), max_excerpt_chars);
+        let excerpt_char_count = excerpt.chars().count();
+        let expected_skill_refs =
+            redact_normalized_string_list(params.expected_skill_refs, &redaction_roots);
+        let expected_skill_names =
+            redact_normalized_string_list(params.expected_skill_names, &redaction_roots);
+        let task = params
+            .task
+            .as_deref()
+            .map(str::trim)
+            .filter(|task| !task.is_empty())
+            .map(|task| redactor.redact(task));
+        let title = params
+            .title
+            .as_deref()
+            .map(str::trim)
+            .filter(|title| !title.is_empty())
+            .map(|title| redactor.redact(title))
+            .or_else(|| task.clone())
+            .unwrap_or_else(|| "Imported local trace".to_string());
+        let source_kind = params
+            .source_kind
+            .as_deref()
+            .map(str::trim)
+            .filter(|source_kind| !source_kind.is_empty())
+            .map(|source_kind| redactor.redact(source_kind))
+            .unwrap_or_else(|| "local-transcript".to_string());
+        let agent = params
+            .agent
+            .as_deref()
+            .map(str::trim)
+            .filter(|agent| !agent.is_empty())
+            .map(|agent| redactor.redact(agent));
+        let redaction_summary = trace_import_redaction_summary_from(redactor.summary());
+        let content_hash = trace_content_hash(content);
+        let imported_at = unix_timestamp_millis();
+        let analysis = self.analyze_imported_trace(
+            content,
+            &expected_skill_refs,
+            &expected_skill_names,
+            agent.as_deref(),
+        )?;
+        let record = TraceImportRecord {
+            id: generated_trace_import_id(&title, &content_hash, imported_at),
+            title,
+            source_kind,
+            agent,
+            task,
+            expected_skill_refs,
+            expected_skill_names,
+            excerpt,
+            excerpt_char_count,
+            redaction_summary,
+            content_hash,
+            imported_at,
+            analysis,
+            safety_flags: trace_import_safety_flags(),
+        };
+
+        let mut imports = self.load_trace_imports()?;
+        imports.push(record.clone());
+        self.save_trace_imports(&imports)?;
+        Ok(TraceImportLocalResult {
+            generated_by: "deterministic-service",
+            import: record,
+            count: imports.len(),
+            app_local_only: true,
+            import_file: "trace-imports.json",
+            provider_request_sent: false,
+            raw_trace_persisted: false,
+        })
+    }
+
+    pub fn list_trace_imports(
+        &self,
+        params: TraceListImportsParams,
+    ) -> Result<TraceImportListResult, ServiceError> {
+        let mut imports = self.load_trace_imports()?;
+        if let Some(limit) = params.limit {
+            imports.truncate(limit);
+        }
+        Ok(TraceImportListResult {
+            count: imports.len(),
+            imports,
+            app_local_only: true,
+            provider_request_sent: false,
+            raw_trace_persisted: false,
+        })
+    }
+
+    pub fn delete_trace_import(
+        &self,
+        params: TraceDeleteImportParams,
+    ) -> Result<TraceDeleteImportResult, ServiceError> {
+        let id = sanitize_trace_import_id(params.id.trim());
+        if id.is_empty() {
+            return Err(ServiceError::InvalidRequest(
+                "trace.deleteImport requires an import id".to_string(),
+            ));
+        }
+        let mut imports = self.load_trace_imports()?;
+        let before = imports.len();
+        imports.retain(|record| record.id != id);
+        let deleted = imports.len() != before;
+        if deleted {
+            self.save_trace_imports(&imports)?;
+        }
+        Ok(TraceDeleteImportResult {
+            import_id: id,
+            deleted,
+            remaining_count: imports.len(),
+            app_local_only: true,
+            provider_request_sent: false,
+            raw_trace_persisted: false,
+        })
+    }
+
     pub fn script_execution_status(&self) -> ScriptExecutionStatus {
         ScriptExecutionStatus {
             enabled: false,
@@ -4268,6 +4578,10 @@ impl ServiceHost {
         self.app_data_dir.join("task-routing-baseline.json")
     }
 
+    fn trace_imports_path(&self) -> PathBuf {
+        self.app_data_dir.join("trace-imports.json")
+    }
+
     fn load_task_benchmarks(&self) -> Result<Vec<TaskBenchmarkRecord>, ServiceError> {
         let path = self.task_benchmarks_path();
         if !path.exists() {
@@ -4312,6 +4626,177 @@ impl ServiceHost {
         let content = serde_json::to_string_pretty(baseline)?;
         fs::write(path, content)?;
         Ok(())
+    }
+
+    fn load_trace_imports(&self) -> Result<Vec<TraceImportRecord>, ServiceError> {
+        let path = self.trace_imports_path();
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        let content = fs::read_to_string(path)?;
+        let mut imports: Vec<TraceImportRecord> = serde_json::from_str(&content)?;
+        imports.sort_by(|left, right| {
+            right
+                .imported_at
+                .cmp(&left.imported_at)
+                .then_with(|| left.title.cmp(&right.title))
+                .then_with(|| left.id.cmp(&right.id))
+        });
+        Ok(imports)
+    }
+
+    fn save_trace_imports(&self, imports: &[TraceImportRecord]) -> Result<(), ServiceError> {
+        fs::create_dir_all(&self.app_data_dir)?;
+        let path = self.trace_imports_path();
+        let mut sorted = imports.to_vec();
+        sorted.sort_by(|left, right| {
+            right
+                .imported_at
+                .cmp(&left.imported_at)
+                .then_with(|| left.title.cmp(&right.title))
+                .then_with(|| left.id.cmp(&right.id))
+        });
+        let content = serde_json::to_string_pretty(&sorted)?;
+        fs::write(path, content)?;
+        Ok(())
+    }
+
+    fn trace_redaction_roots(&self, adapter_ctx: &AdapterContext) -> Vec<(String, &'static str)> {
+        let mut roots = self.redaction_roots(adapter_ctx);
+        roots.push((env::temp_dir().to_string_lossy().to_string(), "<temp-dir>"));
+        roots.sort_by_key(|right| std::cmp::Reverse(right.0.len()));
+        roots.dedup_by(|left, right| left.0 == right.0);
+        roots
+    }
+
+    fn analyze_imported_trace(
+        &self,
+        content: &str,
+        expected_skill_refs: &[String],
+        expected_skill_names: &[String],
+        agent_filter: Option<&str>,
+    ) -> Result<TraceImportAnalysis, ServiceError> {
+        let Some(catalog) = self.open_existing_catalog_read_only()? else {
+            let mut reasons = vec![
+                "No local catalog is available; imported trace was stored as redacted app-local metadata only."
+                    .to_string(),
+            ];
+            if !expected_skill_refs.is_empty() || !expected_skill_names.is_empty() {
+                reasons.push(
+                    "Expected skill refs/names were provided but could not be checked without catalog evidence."
+                        .to_string(),
+                );
+            }
+            return Ok(TraceImportAnalysis {
+                generated_by: "deterministic-service".to_string(),
+                catalog_available: false,
+                outcome: "unknown".to_string(),
+                reasons,
+                detected_skills: Vec::new(),
+                evidence_refs: Vec::new(),
+            });
+        };
+
+        let content_lower = content.to_ascii_lowercase();
+        let expected_refs = expected_skill_refs
+            .iter()
+            .map(|value| value.to_ascii_lowercase())
+            .collect::<Vec<_>>();
+        let expected_names = expected_skill_names
+            .iter()
+            .map(|value| value.to_ascii_lowercase())
+            .collect::<Vec<_>>();
+        let mut detected = Vec::new();
+        for skill in self.list_visible_skill_records(&catalog)? {
+            if agent_filter.is_some_and(|agent| !agent.is_empty() && skill.agent != agent) {
+                continue;
+            }
+            let mut match_terms = Vec::new();
+            for term in [
+                skill.id.as_str(),
+                skill.definition_id.as_str(),
+                skill.name.as_str(),
+            ] {
+                let normalized = term.trim();
+                if normalized.len() < 3 {
+                    continue;
+                }
+                let normalized_lower = normalized.to_ascii_lowercase();
+                if content_lower.contains(&normalized_lower)
+                    && !match_terms.iter().any(|item| item == normalized)
+                {
+                    match_terms.push(normalized.to_string());
+                }
+            }
+            if !match_terms.is_empty() {
+                detected.push(TraceDetectedSkill {
+                    instance_id: skill.id.clone(),
+                    definition_id: skill.definition_id.clone(),
+                    skill_name: skill.name.clone(),
+                    agent: skill.agent.clone(),
+                    scope: skill.scope.clone(),
+                    evidence_refs: vec![format!("skill:{}", skill.id)],
+                    match_terms,
+                });
+            }
+        }
+        detected.sort_by(|left, right| {
+            left.agent
+                .cmp(&right.agent)
+                .then_with(|| left.skill_name.cmp(&right.skill_name))
+                .then_with(|| left.instance_id.cmp(&right.instance_id))
+        });
+
+        let expected_present = !expected_refs.is_empty() || !expected_names.is_empty();
+        let matching_expected = detected
+            .iter()
+            .filter(|skill| {
+                expected_refs.iter().any(|expected| {
+                    expected == &skill.instance_id.to_ascii_lowercase()
+                        || expected == &skill.definition_id.to_ascii_lowercase()
+                }) || expected_names
+                    .iter()
+                    .any(|expected| expected == &skill.skill_name.to_ascii_lowercase())
+            })
+            .count();
+        let unexpected_detected = detected.len().saturating_sub(matching_expected);
+        let outcome = if !expected_present {
+            if detected.len() > 1 {
+                "ambiguous"
+            } else {
+                "unknown"
+            }
+        } else if detected.is_empty() {
+            "miss"
+        } else if matching_expected == 0 {
+            "wrong_pick"
+        } else if unexpected_detected > 0 {
+            "ambiguous"
+        } else {
+            "hit"
+        };
+        let reasons = trace_outcome_reasons(
+            outcome,
+            detected.len(),
+            matching_expected,
+            unexpected_detected,
+            expected_present,
+            agent_filter,
+        );
+        let mut evidence_refs = detected
+            .iter()
+            .flat_map(|skill| skill.evidence_refs.clone())
+            .collect::<Vec<_>>();
+        evidence_refs.sort();
+        evidence_refs.dedup();
+        Ok(TraceImportAnalysis {
+            generated_by: "deterministic-service".to_string(),
+            catalog_available: true,
+            outcome: outcome.to_string(),
+            reasons,
+            detected_skills: detected,
+            evidence_refs,
+        })
     }
 
     fn tool_global_staging_root(&self) -> PathBuf {
@@ -4958,6 +5443,7 @@ impl<'a> PromptRedactor<'a> {
             self.redacted_fields.insert("local paths".to_string(), ());
         }
         let mut token_count = 0usize;
+        let mut redact_next_token = false;
         let redacted = path_redacted
             .split_whitespace()
             .map(|token| {
@@ -4965,12 +5451,19 @@ impl<'a> PromptRedactor<'a> {
                     matches!(ch, '"' | '\'' | ',' | ';' | ')' | '(' | '[' | ']')
                 });
                 let lower = trimmed.to_lowercase();
-                if lower.contains("key")
+                if redact_next_token {
+                    redact_next_token = lower == "bearer";
+                    token_count += 1;
+                    "<redacted>"
+                } else if lower.contains("key")
                     || lower.contains("token")
                     || lower.contains("secret")
                     || lower.contains("credential")
                     || lower.contains("password")
+                    || lower == "authorization:"
+                    || lower == "bearer"
                 {
+                    redact_next_token = !trimmed.contains('=');
                     token_count += 1;
                     "<redacted>"
                 } else if lower.starts_with("http://") || lower.starts_with("https://") {
@@ -5697,6 +6190,168 @@ fn task_benchmark_safety_flags() -> TaskBenchmarkSafetyFlags {
         raw_prompt_persisted: false,
         raw_response_persisted: false,
     }
+}
+
+fn trace_import_safety_flags() -> TraceImportSafetyFlags {
+    TraceImportSafetyFlags {
+        read_only: true,
+        app_local_only: true,
+        provider_request_sent: false,
+        write_back_allowed: false,
+        skill_files_mutated: false,
+        agent_config_mutated: false,
+        script_execution_allowed: false,
+        config_mutation_allowed: false,
+        snapshot_created: false,
+        triage_mutation_allowed: false,
+        credential_accessed: false,
+        raw_secret_returned: false,
+        raw_trace_persisted: false,
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+        cloud_sync_performed: false,
+        telemetry_emitted: false,
+    }
+}
+
+fn trace_import_redaction_summary_from(
+    summary: LlmPromptRedactionSummary,
+) -> TraceImportRedactionSummary {
+    TraceImportRedactionSummary {
+        status: "redacted-local-only".to_string(),
+        redacted_value_count: summary.redacted_value_count,
+        redacted_fields: summary.redacted_fields,
+        placeholders: summary
+            .placeholders
+            .into_iter()
+            .map(str::to_string)
+            .collect(),
+        raw_trace_persisted: false,
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+        raw_secret_returned: false,
+    }
+}
+
+fn trace_import_redaction_summary_default() -> TraceImportRedactionSummary {
+    TraceImportRedactionSummary {
+        status: "redacted-local-only".to_string(),
+        redacted_value_count: 0,
+        redacted_fields: Vec::new(),
+        placeholders: vec![
+            "$HOME".to_string(),
+            "<project-root>".to_string(),
+            "<project-cwd>".to_string(),
+            "<app-data-dir>".to_string(),
+            "<redacted>".to_string(),
+            "<redacted-url>".to_string(),
+        ],
+        raw_trace_persisted: false,
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+        raw_secret_returned: false,
+    }
+}
+
+fn trace_content_hash(content: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(content.as_bytes());
+    let digest = hasher.finalize();
+    hex_prefix(&digest, 16)
+}
+
+fn generated_trace_import_id(title: &str, content_hash: &str, imported_at: i64) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(title.as_bytes());
+    hasher.update(b"\0");
+    hasher.update(content_hash.as_bytes());
+    hasher.update(b"\0");
+    hasher.update(imported_at.to_string().as_bytes());
+    let digest = hasher.finalize();
+    format!("trace-import-{}", hex_prefix(&digest, 12))
+}
+
+fn sanitize_trace_import_id(id: &str) -> String {
+    id.chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
+        .take(96)
+        .collect()
+}
+
+fn redact_normalized_string_list(
+    values: Vec<String>,
+    roots: &[(String, &'static str)],
+) -> Vec<String> {
+    let mut redactor = PromptRedactor::new(roots);
+    normalize_string_list(
+        values
+            .into_iter()
+            .map(|value| redactor.redact(&value))
+            .collect(),
+    )
+}
+
+fn truncate_chars(value: &str, max_chars: usize) -> String {
+    let mut truncated = value.chars().take(max_chars).collect::<String>();
+    if value.chars().count() > max_chars {
+        truncated.push_str("...");
+    }
+    truncated
+}
+
+fn trace_outcome_reasons(
+    outcome: &str,
+    detected_count: usize,
+    matching_expected: usize,
+    unexpected_detected: usize,
+    expected_present: bool,
+    agent_filter: Option<&str>,
+) -> Vec<String> {
+    let mut reasons = Vec::new();
+    match outcome {
+        "hit" => reasons.push(format!(
+            "Detected {} skill reference(s) and all matched expected skill refs/names.",
+            detected_count
+        )),
+        "miss" => reasons.push(
+            "Expected skill refs/names were provided, but no matching local catalog skill was detected in the trace."
+                .to_string(),
+        ),
+        "wrong_pick" => reasons.push(format!(
+            "Detected {} local catalog skill reference(s), but none matched expected skill refs/names.",
+            detected_count
+        )),
+        "ambiguous" => {
+            if matching_expected > 0 {
+                reasons.push(format!(
+                    "Detected {} expected skill reference(s) plus {} other local catalog skill reference(s).",
+                    matching_expected, unexpected_detected
+                ));
+            } else {
+                reasons.push(format!(
+                    "Detected {} local catalog skill reference(s), so the trace is ambiguous without expected skill refs/names.",
+                    detected_count
+                ));
+            }
+        }
+        _ => {
+            if expected_present {
+                reasons.push(
+                    "Local catalog evidence was insufficient to classify the imported trace."
+                        .to_string(),
+                );
+            } else {
+                reasons.push(
+                    "No expected skill refs/names were provided; routing accuracy cannot be classified deterministically."
+                        .to_string(),
+                );
+            }
+        }
+    }
+    if let Some(agent) = agent_filter.filter(|agent| !agent.is_empty()) {
+        reasons.push(format!("Detection was filtered to agent `{}`.", agent));
+    }
+    reasons
 }
 
 fn task_benchmark_evaluation_item(
@@ -7578,6 +8233,9 @@ mod tests {
         assert!(methods.contains(&Value::String("task.evaluateBenchmarks".to_string())));
         assert!(methods.contains(&Value::String("task.saveRoutingBaseline".to_string())));
         assert!(methods.contains(&Value::String("task.detectRoutingRegression".to_string())));
+        assert!(methods.contains(&Value::String("trace.importLocal".to_string())));
+        assert!(methods.contains(&Value::String("trace.listImports".to_string())));
+        assert!(methods.contains(&Value::String("trace.deleteImport".to_string())));
         assert!(methods.contains(&Value::String("llm.status".to_string())));
         assert!(methods.contains(&Value::String("llm.listProviderProfiles".to_string())));
         assert!(methods.contains(&Value::String("llm.saveProviderProfile".to_string())));
@@ -10194,6 +10852,245 @@ mod tests {
     }
 
     #[test]
+    fn trace_import_rejects_empty_content_without_writing() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-trace-empty-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("trace-empty".to_string()),
+            method: "trace.importLocal".to_string(),
+            params: json!({ "content": "   " }),
+        });
+
+        assert!(!response.ok);
+        let error = response.error.expect("empty trace error");
+        assert_eq!(error.code, "invalid_request");
+        assert!(error.message.contains("non-empty trace content"));
+        assert!(!host.trace_imports_path().exists());
+        assert!(!host.catalog_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn trace_import_persists_redacted_only_app_local_record() {
+        let unique = unique_suffix();
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-trace-import-test-{}-{unique}",
+            std::process::id(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-trace-import-home-{}-{unique}",
+            std::process::id(),
+        ));
+        let project_root = app_data_dir.join("project-root");
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: Some(project_root.clone()),
+                project_cwd: Some(project_root.clone()),
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_llm_skill(&host, &project_root.join("fixture-skill").join("SKILL.md"));
+        let raw_secret = "trace-secret-value";
+        let key_label = ["API", "_", "KEY"].join("");
+        let auth_label = ["Author", "ization"].join("");
+        let raw_content = format!(
+            "Agent selected llm-skill-id for local task.\n{key_label}={raw_secret}\nPath: {}\n{auth_label}: Bearer {raw_secret}",
+            user_home.join(".local/share/app.log").display()
+        );
+
+        let response = host.handle(ServiceRequest {
+            id: Some("trace-import".to_string()),
+            method: "trace.importLocal".to_string(),
+            params: json!({
+                "content": raw_content,
+                "title": "Trace with local path",
+                "source_kind": "pasted-transcript",
+                "agent": "claude-code",
+                "task": "Analyze local skill posture",
+                "expected_skill_refs": ["llm-skill-id"],
+                "expected_skill_names": ["llm-fixture"],
+                "max_excerpt_chars": 1200
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("trace import result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("deterministic-service")
+        );
+        assert_eq!(
+            result
+                .pointer("/import/analysis/outcome")
+                .and_then(Value::as_str),
+            Some("hit")
+        );
+        assert_eq!(
+            result
+                .pointer("/import/analysis/detected_skills/0/instance_id")
+                .and_then(Value::as_str),
+            Some("llm-skill-id")
+        );
+        assert_eq!(
+            result
+                .pointer("/import/safety_flags/raw_trace_persisted")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("raw_trace_persisted").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert!(host.trace_imports_path().exists());
+        let persisted =
+            fs::read_to_string(host.trace_imports_path()).expect("read persisted trace import");
+        assert!(persisted.contains("<redacted>"));
+        assert!(persisted.contains("$HOME"));
+        assert!(!persisted.contains(raw_secret));
+        assert!(!persisted.contains(&key_label));
+        assert!(!persisted.contains(&user_home.to_string_lossy().to_string()));
+        assert!(!persisted.contains(&project_root.to_string_lossy().to_string()));
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn trace_import_list_delete_roundtrip_is_app_local() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-trace-roundtrip-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_llm_skill(&host, &app_data_dir.join("fixture-skill").join("SKILL.md"));
+
+        let import = host.handle(ServiceRequest {
+            id: Some("trace-import".to_string()),
+            method: "trace.importLocal".to_string(),
+            params: json!({
+                "trace_text": "Trace routed to llm-fixture using llm-skill-id.",
+                "title": "Trace roundtrip",
+                "expected_skill_names": ["llm-fixture"]
+            }),
+        });
+        assert!(import.ok, "{:?}", import.error);
+        let import_id = import
+            .result
+            .as_ref()
+            .and_then(|result| result.pointer("/import/id"))
+            .and_then(Value::as_str)
+            .expect("import id")
+            .to_string();
+
+        let list = host.handle(ServiceRequest {
+            id: Some("trace-list".to_string()),
+            method: "trace.listImports".to_string(),
+            params: json!({}),
+        });
+        assert!(list.ok, "{:?}", list.error);
+        let listed = list.result.expect("trace list result");
+        assert_eq!(listed.get("count").and_then(Value::as_u64), Some(1));
+        assert_eq!(
+            listed.pointer("/imports/0/id").and_then(Value::as_str),
+            Some(import_id.as_str())
+        );
+        assert_eq!(
+            listed.get("raw_trace_persisted").and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let delete = host.handle(ServiceRequest {
+            id: Some("trace-delete".to_string()),
+            method: "trace.deleteImport".to_string(),
+            params: json!({ "id": import_id }),
+        });
+        assert!(delete.ok, "{:?}", delete.error);
+        let deleted = delete.result.expect("trace delete result");
+        assert_eq!(deleted.get("deleted").and_then(Value::as_bool), Some(true));
+        assert_eq!(
+            deleted.get("remaining_count").and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            deleted
+                .get("provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn trace_import_missing_catalog_remains_read_only_unknown() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-trace-missing-catalog-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+        assert!(!host.catalog_path().exists());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("trace-missing-catalog".to_string()),
+            method: "trace.importLocal".to_string(),
+            params: json!({
+                "transcript": "Trace mentioned expected local routing but the catalog is absent.",
+                "title": "Missing catalog trace",
+                "expected_skill_refs": ["missing-local-skill"]
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response
+            .result
+            .expect("missing catalog trace import result");
+        assert_eq!(
+            result
+                .pointer("/import/analysis/catalog_available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/import/analysis/outcome")
+                .and_then(Value::as_str),
+            Some("unknown")
+        );
+        assert_eq!(
+            result
+                .pointer("/import/safety_flags/read_only")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/import/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert!(host.trace_imports_path().exists());
+        assert!(!host.catalog_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
     fn llm_preview_prompt_accepts_task_readiness_action_with_redaction() {
         let app_data_dir = env::temp_dir().join(format!(
             "skills-copilot-readiness-preview-test-{}-{}",
@@ -12277,6 +13174,39 @@ mod tests {
                     assert!(!item.safety_flags.raw_response_persisted);
                 }
             }
+            "trace.importLocal" => {
+                let imported: WireTraceImportLocalResult =
+                    decode_fixture_result(method, result, path);
+                assert_eq!(imported.generated_by, "deterministic-service");
+                assert!(imported.app_local_only);
+                assert_eq!(imported.import_file, "trace-imports.json");
+                assert!(!imported.provider_request_sent);
+                assert!(!imported.raw_trace_persisted);
+                assert_trace_import_safety(&imported.import.safety_flags);
+                assert!(!imported.import.excerpt.is_empty());
+                assert!(!imported.import.redaction_summary.raw_trace_persisted);
+                assert!(!imported.import.analysis.outcome.is_empty());
+            }
+            "trace.listImports" => {
+                let imports: WireTraceImportListResult =
+                    decode_fixture_result(method, result, path);
+                assert_eq!(imports.count, imports.imports.len());
+                assert!(imports.app_local_only);
+                assert!(!imports.provider_request_sent);
+                assert!(!imports.raw_trace_persisted);
+                for import in &imports.imports {
+                    assert_trace_import_safety(&import.safety_flags);
+                    assert!(!import.redaction_summary.raw_trace_persisted);
+                }
+            }
+            "trace.deleteImport" => {
+                let deleted: WireTraceDeleteImportResult =
+                    decode_fixture_result(method, result, path);
+                assert!(!deleted.import_id.is_empty());
+                assert!(deleted.app_local_only);
+                assert!(!deleted.provider_request_sent);
+                assert!(!deleted.raw_trace_persisted);
+            }
             "llm.status" => {
                 let status: WireLlmStatus = decode_fixture_result(method, result, path);
                 assert!(!status.enabled);
@@ -12579,6 +13509,26 @@ mod tests {
         assert_eq!(actual, expected, "{method} supported_methods drifted");
     }
 
+    fn assert_trace_import_safety(flags: &WireTraceImportSafetyFlags) {
+        assert!(flags.read_only);
+        assert!(flags.app_local_only);
+        assert!(!flags.provider_request_sent);
+        assert!(!flags.write_back_allowed);
+        assert!(!flags.skill_files_mutated);
+        assert!(!flags.agent_config_mutated);
+        assert!(!flags.script_execution_allowed);
+        assert!(!flags.config_mutation_allowed);
+        assert!(!flags.snapshot_created);
+        assert!(!flags.triage_mutation_allowed);
+        assert!(!flags.credential_accessed);
+        assert!(!flags.raw_secret_returned);
+        assert!(!flags.raw_trace_persisted);
+        assert!(!flags.raw_prompt_persisted);
+        assert!(!flags.raw_response_persisted);
+        assert!(!flags.cloud_sync_performed);
+        assert!(!flags.telemetry_emitted);
+    }
+
     fn assert_findings_cover_v28_contract(
         findings: &[WireRuleFindingRecord],
         expected_rule_ids: &[&str],
@@ -12781,6 +13731,13 @@ mod tests {
             "task.evaluateBenchmarks" => json!({}),
             "task.saveRoutingBaseline" => json!({}),
             "task.detectRoutingRegression" => json!({}),
+            "trace.importLocal" => json!({
+                "content": "Fixture trace selected fixture-skill-id for local routing.",
+                "title": "Fixture trace import",
+                "expected_skill_refs": ["fixture-skill-id"]
+            }),
+            "trace.listImports" => json!({}),
+            "trace.deleteImport" => json!({ "id": "fixture-trace-import-local" }),
             "evidence.piWritableHarness" => json!({ "run_label": "dispatch-fixture" }),
             "report.exportLocal" => json!({ "formats": ["json"] }),
             "script.previewExecution" => json!({
@@ -12838,6 +13795,7 @@ mod tests {
         refresh: WireRefreshStatus,
         project_context: WireProjectContextSummary,
         llm: WireLlmStatus,
+        trace_imports: WireTraceImportStatus,
         script_execution: WireScriptExecutionStatus,
         adapter_capabilities: Vec<WireAdapterCapabilityRecord>,
         #[serde(default)]
@@ -12855,6 +13813,17 @@ mod tests {
         analysis: WireCrossAgentAnalysisRecord,
         health: SkillHealthSummary,
         snapshots: Vec<WireConfigSnapshotRecord>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTraceImportStatus {
+        count: usize,
+        imports_path: String,
+        app_local_only: bool,
+        raw_trace_persistence_allowed: bool,
+        provider_request_allowed: bool,
     }
 
     #[allow(dead_code)]
@@ -13541,6 +14510,124 @@ mod tests {
         gap_notes: Vec<String>,
         blocker_notes: Vec<String>,
         evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTraceImportRecord {
+        id: String,
+        title: String,
+        source_kind: String,
+        agent: Option<String>,
+        task: Option<String>,
+        expected_skill_refs: Vec<String>,
+        expected_skill_names: Vec<String>,
+        excerpt: String,
+        excerpt_char_count: usize,
+        redaction_summary: WireTraceImportRedactionSummary,
+        content_hash: String,
+        imported_at: i64,
+        analysis: WireTraceImportAnalysis,
+        safety_flags: WireTraceImportSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTraceImportRedactionSummary {
+        status: String,
+        redacted_value_count: usize,
+        redacted_fields: Vec<String>,
+        placeholders: Vec<String>,
+        raw_trace_persisted: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+        raw_secret_returned: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTraceImportAnalysis {
+        generated_by: String,
+        catalog_available: bool,
+        outcome: String,
+        reasons: Vec<String>,
+        detected_skills: Vec<WireTraceDetectedSkill>,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTraceDetectedSkill {
+        instance_id: String,
+        definition_id: String,
+        skill_name: String,
+        agent: String,
+        scope: String,
+        evidence_refs: Vec<String>,
+        match_terms: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTraceImportSafetyFlags {
+        read_only: bool,
+        app_local_only: bool,
+        provider_request_sent: bool,
+        write_back_allowed: bool,
+        skill_files_mutated: bool,
+        agent_config_mutated: bool,
+        script_execution_allowed: bool,
+        config_mutation_allowed: bool,
+        snapshot_created: bool,
+        triage_mutation_allowed: bool,
+        credential_accessed: bool,
+        raw_secret_returned: bool,
+        raw_trace_persisted: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+        cloud_sync_performed: bool,
+        telemetry_emitted: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTraceImportLocalResult {
+        generated_by: String,
+        import: WireTraceImportRecord,
+        count: usize,
+        app_local_only: bool,
+        import_file: String,
+        provider_request_sent: bool,
+        raw_trace_persisted: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTraceImportListResult {
+        imports: Vec<WireTraceImportRecord>,
+        count: usize,
+        app_local_only: bool,
+        provider_request_sent: bool,
+        raw_trace_persisted: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTraceDeleteImportResult {
+        import_id: String,
+        deleted: bool,
+        remaining_count: usize,
+        app_local_only: bool,
+        provider_request_sent: bool,
+        raw_trace_persisted: bool,
     }
 
     #[allow(dead_code)]

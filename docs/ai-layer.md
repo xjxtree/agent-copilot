@@ -32,6 +32,14 @@
 > - 已实现 `task.saveRoutingBaseline`（保存基线）与 `task.detectRoutingRegression`（回归对比）；baseline 保存为 app-local `task-routing-baseline.json`，检测输出 score/confidence delta、match-status 变化、top-route 变化、gap/blocker 增量、missing benchmark 与 safety flags。
 > - 可选 provider 解释仍走 V2.42 `llm.previewPrompt` + `llm.confirmPromptAndSend`，仅 copy-only，不影响回归判定。
 
+> V2.48（已完成）：
+>
+> - `trace.importLocal`：用户粘贴 transcript/log raw text 后，服务端先做本地脱敏与 redaction summary，再持久化至 app-data `trace-imports.json` 的 trace import metadata、redacted excerpt 与 deterministic analysis（不落 raw trace）。
+> - 返回是 deterministic local 判读：`analysis.outcome`（hit/miss/wrong_pick/ambiguous/unknown）、detected skills、reasons 与 evidence refs。
+> - `trace.listImports`：查询历史导入的 app-local redacted metadata。
+> - `trace.deleteImport`：删除本地 trace import 元数据；仍为 read-only 工作流边界，不改 triage、不写配置、不改 snapshot、不执行脚本。
+> - 可选 provider 说明仍走 V2.42 preview/redaction/confirmation，纯 copy-only，不参与 deterministic 结果。
+
 ## 1. 双层分工
 
 | 能力 | 由谁负责 | 何时触发 |
@@ -43,7 +51,7 @@
 | skill 描述语义分析（"这个 skill 到底是干嘛的"） | LLM / AI provider | 用户主动点 Analyze |
 | 任务可用性判断（"这个任务哪个 agent/skill 能做"） | LLM + 本地证据 | 用户输入任务并确认分析 |
 | routing 置信度和错选/漏选解释 | LLM + 本地证据 | 用户主动运行 task readiness / benchmark |
-| trace/log 中实际选 skill 的准确性判断 | LLM + 本地证据 | 用户导入 trace 并确认分析 |
+| trace/log 中实际选 skill 的准确性判断 | LLM + 本地证据 | 用户导入 trace 并确认分析；LLM 说明仅作 optional provider 辅助，主判读为 deterministic local 结果 |
 | 修复建议 / review session / governance report | LLM + 本地证据 | 用户主动生成 |
 | 改写 frontmatter / 生成草稿 | LLM | 用户主动进入编辑模式；草稿仍不可直接 apply |
 
@@ -78,7 +86,8 @@ Provider 配置原则：
 | V2.45（实现） | Routing confidence（ranking + risk + ambiguity） | task text、readiness candidates、metadata、findings、conflicts、analysis、adapter diagnostics、quality score |
 | V2.46（实现） | Task benchmark set | app-local `task-benchmarks.json`、expected/acceptable route match、local evidence-first + optional AI 说明 |
 | V2.47（实现） | Routing regression detection | 基于 V2.46 benchmark 结果的 app-local baseline 对比（`task.saveRoutingBaseline` + `task.detectRoutingRegression`）；local evidence-first + optional AI 说明 |
-| V2.48-V2.50 | trace import、routing accuracy、cross-agent task readiness（规划） | benchmark results + catalog snapshots + imported trace evidence；local evidence-first + optional AI 说明 |
+| V2.48（实现） | Agent behavior trace import（`trace.importLocal`/`trace.listImports`/`trace.deleteImport`） | trace 文本先 redacted 后存元数据与可复查摘要；deterministic local 判读 hit/miss/wrong-pick/ambiguity；不落 raw trace；可选 provider 说明走 V2.42 |
+| V2.49-V2.50 | routing accuracy / cross-agent task readiness（规划） | benchmark results + catalog snapshots + imported trace evidence；local evidence-first + optional AI 说明 |
 | V2.51-V2.55 | stale/drift、knowledge index、similar grouping、taxonomy、workspace readiness | fingerprints、mtime、source/root provenance、local index |
 | V2.56-V2.60 | remediation planner、fix drafts、impact preview、batch review、history | findings、triage、policy, snapshots, writable capability matrix |
 | V2.61-V2.70 | review session、governance report、policy packs、skill map、full provider observability、safe write planning | local reports, policy profiles, V2.41-V2.42 call metadata, evidence gates |

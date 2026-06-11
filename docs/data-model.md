@@ -485,7 +485,27 @@ Model families:
 - `TaskReadinessAssessment`（V2.44-V2.45）：task text/normalized intent, candidate skills, agent/scope availability, confidence, match reasons, ambiguity, gaps, and risk notes. Raw user task text may be sensitive; persistence requires explicit design and redaction.
 - `TaskBenchmark`（V2.46）：user-defined local benchmark cases for repeatable readiness/routing checks。Benchmark definitions persist only in app data as `task-benchmarks.json` (not SQLite and not agent/project config) with `id`、`title`、task text、expected skill refs/names、acceptable agent/scope constraints、success criteria、created/updated metadata。`task.evaluateBenchmarks` uses V2.44/V2.45 local evidence（`metadata`/`findings`/`conflicts`/`analysis`/`adapter diagnostics`/`quality_score`/readiness/routing）for deterministic evaluation and returns expected/acceptable match status, top route, score/band, gap/blocker notes, evidence refs, and no-provider/no-write safety flags.
 - `RoutingRegression`（V2.47 completed）：对 V2.46 `TaskBenchmark` 结果与 app-local `task-routing-baseline.json` 的比较记录。Baseline snapshot 包含 `generated_at`、`catalog_available`、`evaluated_count`、benchmark result snapshot、evidence refs 与 safety flags；检测结果包含 `status`、`summary`、`items`、score/confidence delta、expected-match 状态变化、top-route 变化、gap/blocker 增量、missing benchmark / new benchmark 信号、`baseline`、`current_evaluation` 与 no-provider/no-write safety flags。结果默认 app-local，不触发 provider 请求。可选 provider explanation 仍走 V2.42 流程（preview / redaction / confirm / copy-only）。
-- `TraceImport` / `RoutingAccuracy`（V2.48-V2.49）：local imported transcript/log metadata, redaction result, expected vs actual skill selection, hit/miss/wrong-pick/ambiguity metrics. Raw trace content must not be stored by default.
+- `TraceImport`（V2.48 completed）
+
+  用于本地行为轨迹/日志导入与判读的持久化记录，保存在 app-data 的 `trace-imports.json`。
+
+  - `trace-imports.json`: `[{ id, title, source_kind, agent?, task?, expected_skill_refs, expected_skill_names, excerpt, excerpt_char_count, redaction_summary, content_hash, imported_at, analysis, safety_flags }]`
+    - `raw_trace_persisted` 默认 `false`（默认不落盘原始 transcript/log 文本）。
+    - `excerpt` 仅为可复查的脱敏片段，不包含 unredacted 路径、token、凭据、私有 URL、私有配置片段。
+    - `redaction_summary` 记录 redaction status、redacted value count、redacted fields、placeholders，以及 raw trace/prompt/response/secret 持久化关闭状态。
+  - `analysis`: `{ generated_by, catalog_available, outcome, reasons, detected_skills, evidence_refs }`
+    - `outcome` 是 deterministic read-only 判读（`hit` / `miss` / `wrong_pick` / `ambiguous` / `unknown`）。
+    - `detected_skills` 保存判读后的 skill id/name/agent/scope/evidence refs（与 catalog id 一致）。
+  - `safety_flags`: 每条导入和评估输出都带有 `provider_request_sent`, `agent_config_mutated`, `skill_files_mutated`, `raw_prompt_persisted`, `raw_response_persisted`, `raw_trace_persisted`, `cloud_sync_performed`, `telemetry_emitted`，默认全 false。
+  - 本模型不持久化 raw skill body、raw prompt/response、raw transcript/log，全量判读先基于 deterministic 本地证据。
+
+- `RoutingAccuracy`（V2.49，规划）
+
+  为后续 routing 准确性看板准备的汇总/时序模型（可由 `trace-imports` 派生）：
+
+  - `routing_accuracy`：按 agent/workspace/时间窗聚合 `hit/miss/wrong_pick/ambiguity` 与 `gap`，引用 `TraceImport` 的 `import_id`。
+  - `routing_accuracy_history`: `[{ date_bucket, agent, total_imports, hit_rate, miss_rate, wrong_pick_rate, ambiguity_rate, avg_confidence, benchmark_ref_ids }]`。
+  - 该模型默认不引入新 provider 调用，仍依赖 app-local trace import + benchmark/quality/routing 的本地 evidence。
 - `KnowledgeIndex` / `SimilarityGroup` / `CapabilityTaxonomy`（V2.51-V2.54）：local-only index and derived groupings; no default network dependency.
 - `ReviewSession` / `RemediationHistory`（V2.56-V2.61）：local review state, actions considered, decisions, reopened issues, and summary. AI suggestions remain untrusted and cannot directly mutate skill files or agent config.
 - `PolicyPack` / `PolicyProfile` / `ComplianceReport`（V2.63-V2.66）：local policy schema, import/export metadata, profile bindings, deterministic evidence, and optional AI explanation.

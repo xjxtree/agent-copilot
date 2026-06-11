@@ -236,6 +236,36 @@ private struct TaskBenchmarkDeleteParams: Encodable {
     }
 }
 
+private struct AgentTraceImportParams: Encodable {
+    let traceText: String
+    let title: String?
+    let task: String?
+    let expectedSkillNames: [String]
+    let candidateInstanceIDs: [String]?
+    let agent: String?
+
+    enum CodingKeys: String, CodingKey {
+        case traceText = "trace_text"
+        case title
+        case task
+        case expectedSkillNames = "expected_skill_names"
+        case candidateInstanceIDs = "candidate_instance_ids"
+        case agent
+    }
+}
+
+private struct AgentTraceListParams: Encodable {
+    let limit: Int?
+}
+
+private struct AgentTraceDeleteParams: Encodable {
+    let importID: String
+
+    enum CodingKeys: String, CodingKey {
+        case importID = "import_id"
+    }
+}
+
 private struct PrepareLLMActionParams: Encodable {
     let action: LLMAction
     let instanceId: String
@@ -718,6 +748,44 @@ final class ServiceClient {
     func deleteTaskBenchmark(benchmarkID: String) async throws -> TaskBenchmarkDeleteResult {
         do {
             return try await call(method: "task.deleteBenchmark", params: TaskBenchmarkDeleteParams(benchmarkId: benchmarkID))
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func importLocalTrace(
+        traceText: String,
+        title: String?,
+        taskText: String?,
+        expectedSkillNames: [String],
+        skill: SkillRecord?
+    ) async throws -> AgentTraceImportResult {
+        let params = AgentTraceImportParams(
+            traceText: traceText,
+            title: title,
+            task: taskText,
+            expectedSkillNames: expectedSkillNames,
+            candidateInstanceIDs: skill.map { [$0.id] },
+            agent: skill?.agent
+        )
+        do {
+            return try await call(method: "trace.importLocal", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func listTraceImports(limit: Int = 20) async throws -> AgentTraceImportListResult {
+        do {
+            return try await call(method: "trace.listImports", params: AgentTraceListParams(limit: limit))
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func deleteTraceImport(importID: String) async throws -> AgentTraceImportDeleteResult {
+        do {
+            return try await call(method: "trace.deleteImport", params: AgentTraceDeleteParams(importID: importID))
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .unavailable()
         }

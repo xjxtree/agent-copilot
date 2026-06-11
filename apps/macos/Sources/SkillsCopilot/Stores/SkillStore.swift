@@ -37,12 +37,18 @@ final class SkillStore: ObservableObject {
     @Published private(set) var taskBenchmarkDeleteResult: TaskBenchmarkDeleteResult?
     @Published private(set) var routingRegressionBaseline: RoutingRegressionBaselineResult?
     @Published private(set) var routingRegressionDetection: RoutingRegressionDetectionResult?
+    @Published private(set) var traceImportList = AgentTraceImportListResult(imports: [])
+    @Published private(set) var traceImportResult: AgentTraceImportResult?
+    @Published private(set) var traceImportDeleteResult: AgentTraceImportDeleteResult?
     @Published private(set) var isLoadingTaskBenchmarks = false
     @Published private(set) var isSavingTaskBenchmark = false
     @Published private(set) var isEvaluatingTaskBenchmarks = false
     @Published private(set) var isSavingRoutingBaseline = false
     @Published private(set) var isDetectingRoutingRegression = false
+    @Published private(set) var isLoadingTraceImports = false
+    @Published private(set) var isImportingTrace = false
     @Published private(set) var deletingTaskBenchmarkIDs: Set<String> = []
+    @Published private(set) var deletingTraceImportIDs: Set<String> = []
     @Published private(set) var llmPromptPreviews: [String: LLMPromptPreview] = [:]
     @Published private(set) var previewingLLMPromptKeys: Set<String> = []
     @Published private(set) var sendingLLMPromptKeys: Set<String> = []
@@ -114,6 +120,10 @@ final class SkillStore: ObservableObject {
         }
     }
     @Published var taskBenchmarkText = ""
+    @Published var traceImportText = ""
+    @Published var traceImportTitle = ""
+    @Published var traceImportTask = ""
+    @Published var traceImportExpectedSkills = ""
     @Published var errorMessage: String?
 
     private let service: ServiceClient
@@ -132,7 +142,7 @@ final class SkillStore: ObservableObject {
     }
 
     private var isTaskBenchmarkBusy: Bool {
-        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || !deletingTaskBenchmarkIDs.isEmpty
+        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingTraceImports || isImportingTrace || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty
     }
 
     private var isLLMPromptBusy: Bool {
@@ -525,6 +535,14 @@ final class SkillStore: ObservableObject {
 
     func isDeletingTaskBenchmark(_ benchmark: TaskBenchmarkRecord) -> Bool {
         deletingTaskBenchmarkIDs.contains(benchmark.id)
+    }
+
+    var latestTraceImportRecord: AgentTraceImportRecord? {
+        traceImportResult?.record ?? traceImportList.imports.first
+    }
+
+    func isDeletingTraceImport(_ record: AgentTraceImportRecord) -> Bool {
+        deletingTraceImportIDs.contains(record.id)
     }
 
     func scriptExecutionPreview(for skill: SkillRecord) -> ScriptExecutionPreview? {
@@ -1324,6 +1342,78 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func loadTraceImports() async {
+        guard !isLoadingTraceImports else { return }
+        isLoadingTraceImports = true
+        defer { isLoadingTraceImports = false }
+
+        do {
+            traceImportList = try await service.listTraceImports()
+        } catch {
+            traceImportList = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
+    func importLocalTrace() async {
+        let traceText = normalizedTraceImportText
+        guard !traceText.isEmpty else {
+            traceImportResult = .unavailable(reason: UIStrings.traceImportInputRequired)
+            return
+        }
+        guard !isRefreshBusy else {
+            traceImportResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        isImportingTrace = true
+        defer { isImportingTrace = false }
+
+        do {
+            let result = try await service.importLocalTrace(
+                traceText: traceText,
+                title: normalizedOptional(traceImportTitle),
+                taskText: normalizedOptional(traceImportTask),
+                expectedSkillNames: normalizedTraceExpectedSkillNames,
+                skill: selectedSkill
+            )
+            traceImportResult = result
+            if let record = result.record {
+                upsertTraceImport(record)
+                traceImportDeleteResult = nil
+                traceImportText = ""
+            } else if let reason = result.fallbackReason {
+                traceImportList = .unavailable(reason: reason)
+            }
+        } catch {
+            traceImportResult = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
+    func deleteTraceImport(_ record: AgentTraceImportRecord) async {
+        guard !isRefreshBusy else {
+            traceImportDeleteResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        deletingTraceImportIDs.insert(record.id)
+        defer { deletingTraceImportIDs.remove(record.id) }
+
+        do {
+            let result = try await service.deleteTraceImport(importID: record.id)
+            traceImportDeleteResult = result
+            guard result.deleted else { return }
+            traceImportList = AgentTraceImportListResult(
+                imports: traceImportList.imports.filter { $0.id != record.id },
+                fallbackReason: traceImportList.fallbackReason
+            )
+            if traceImportResult?.record?.id == record.id {
+                traceImportResult = nil
+            }
+        } catch {
+            traceImportDeleteResult = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
     func deleteTaskBenchmark(_ benchmark: TaskBenchmarkRecord) async {
         guard !isRefreshBusy else {
             taskBenchmarkDeleteResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
@@ -1765,10 +1855,32 @@ final class SkillStore: ObservableObject {
         taskBenchmarkText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private var normalizedTraceImportText: String {
+        traceImportText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var normalizedTraceExpectedSkillNames: [String] {
+        traceImportExpectedSkills
+            .split(whereSeparator: { $0 == "," || $0 == "\n" || $0 == ";" })
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private func normalizedOptional(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     private func upsertTaskBenchmark(_ benchmark: TaskBenchmarkRecord) {
         var benchmarks = taskBenchmarkList.benchmarks.filter { $0.id != benchmark.id }
         benchmarks.insert(benchmark, at: 0)
         taskBenchmarkList = TaskBenchmarkListResult(benchmarks: benchmarks, fallbackReason: nil)
+    }
+
+    private func upsertTraceImport(_ record: AgentTraceImportRecord) {
+        var imports = traceImportList.imports.filter { $0.id != record.id }
+        imports.insert(record, at: 0)
+        traceImportList = AgentTraceImportListResult(imports: imports, fallbackReason: nil)
     }
 
     private func canSendLLMPrompt(_ preview: LLMPromptPreview) -> Bool {

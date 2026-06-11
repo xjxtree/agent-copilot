@@ -240,6 +240,18 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
 - 本地流程不得读取 credentials、不得触达 config/snapshot/skill 文件写路径、不得改变 triage、不得执行脚本、不得发起 `raw` prompt/response 持久化；可选解释性 provider 输出仍受 `llm.previewPrompt` + `llm.confirmPromptAndSend` 的 V2.42 红线预览、确认、copy-only 限制。
 - 这一级别的输出仍属于 judgment output；只能用于 review/decision 辅助，不得作为任何自动写回、auto-run、auto-config 的触发信号。
 
+### 2.4.3.1.2 V2.48 Agent Behavior Trace Import（completed）
+
+- `trace.importLocal` 的目的是本地可复查的 routing judge 输入：从用户提供的 trace/log 文本提取 expected/actual skill selection 线索，并做命中/漏选/错选/歧义判读。
+- 输入进入 provider 前必须先本地 redaction；默认不持久化 raw trace/log，只持久化 app-local `trace-imports.json` 的脱敏元数据（如 redacted `excerpt`、`redaction_summary`、`content_hash`、deterministic `analysis`、evidence refs）。
+- `trace.importLocal`/`trace.listImports`/`trace.deleteImport` 不允许在此阶段触发 provider scoring 请求；本地判读结果需 deterministic、可复查、可追溯。
+- 这三类方法不允许：
+  - 触发 agent config 修改、skill 文件写、snapshot 创建/回滚
+  - 改变 triage
+  - 执行脚本
+  - 写入 raw prompt/response 或 raw trace
+- 可选 provider 说明为 V2.42 路径：`llm.previewPrompt` + `llm.confirmPromptAndSend`，必须先 preview/redaction/确认，且为 copy-only，不改变 `trace.importLocal` 的确定性输出。
+
 ### 2.4.3 Finding triage persistence 边界（V2.29）
 
 - Finding triage 持久化只发生在 app-local catalog/app data 层，目标是降低重复噪音并提示用户复核；不参与 agent 配置写入，也不改写 skill 内容。

@@ -46,6 +46,8 @@ struct SkillStoreTests {
         try await taskBenchmarkFallsBackWhenMethodUnavailable()
         try await routingRegressionUsesLocalBenchmarkServiceContract()
         try await routingRegressionFallsBackWhenMethodUnavailable()
+        try await agentTraceImportUsesLocalServiceContract()
+        try await agentTraceImportFallsBackWhenMethodUnavailable()
         try await routingConfidenceClearsStaleSelection()
         try await llmPreparePreviewIsScopedToSelectedSkillAndReadOnly()
         try await promptPreviewRequiresConfiguredProviderAndExplicitSend()
@@ -1131,6 +1133,79 @@ struct SkillStoreTests {
         try expectFalse(calls.contains("credential"), "Unavailable regression flow must not call credential paths.")
     }
 
+    private func agentTraceImportUsesLocalServiceContract() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        store.traceImportTitle = "Local trace"
+        store.traceImportTask = "Route a local audit release note task."
+        store.traceImportExpectedSkills = "Beta, Alpha"
+        store.traceImportText = "raw local transcript should be sent once"
+        await store.reload()
+        await store.loadTraceImports()
+        await store.importLocalTrace()
+
+        try expectEqual(store.traceImportList.imports.first?.id, "trace-2", "Imported trace should be inserted at the front of the trace list.")
+        try expectEqual(store.traceImportResult?.record?.outcome, "wrong_pick", "Trace import should expose imported outcome.")
+        try expectEqual(store.latestTraceImportRecord?.redactedExcerpt, "User asked for <project-root> release notes. Assistant selected Alpha.", "Trace result should expose redacted excerpt metadata.")
+        try expectEqual(store.traceImportText, "", "Successful import should clear raw pasted trace text from UI state.")
+        try expectFalse(store.traceImportResult?.record?.safety.providerRequestSent ?? true, "Local trace import must not send a provider request.")
+        try expectFalse(store.traceImportResult?.record?.safety.writeBackAllowed ?? true, "Trace import must not allow write-back.")
+        try expectFalse(store.traceImportResult?.record?.safety.scriptExecutionAllowed ?? true, "Trace import must not allow script execution.")
+        try expectFalse(store.traceImportResult?.record?.safety.configMutationAllowed ?? true, "Trace import must not mutate config.")
+        try expectFalse(store.traceImportResult?.record?.safety.credentialAccessed ?? true, "Trace import must not access credentials.")
+
+        guard let listedRecord = store.traceImportList.imports.last else {
+            throw NativeModelTestFailure(description: "Trace list should include the pre-existing trace.")
+        }
+        await store.deleteTraceImport(listedRecord)
+        try expectEqual(store.traceImportDeleteResult?.deleted, true, "Trace delete should expose deletion success.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "trace.listImports", "Trace UI should list imports through the V2.48 list method.")
+        try expectContains(calls, "trace.importLocal", "Trace UI should import local traces through the V2.48 import method.")
+        try expectContains(calls, "trace.deleteImport", "Trace UI should delete imports through the V2.48 delete method.")
+        try expectContains(calls, "\"trace_text\":\"raw local transcript should be sent once\"", "Trace import should send the pasted trace text to the local service.")
+        try expectContains(calls, "\"title\":\"Local trace\"", "Trace import should send optional title metadata.")
+        try expectContains(calls, "\"task\":\"Route a local audit release note task.\"", "Trace import should send optional task metadata.")
+        try expectContains(calls, "\"expected_skill_names\":[\"Beta\",\"Alpha\"]", "Trace import should send expected skill names.")
+        try expectContains(calls, "\"candidate_instance_ids\":[\"beta\"]", "Trace import should include selected skill context.")
+        try expectContains(calls, "\"agent\":\"claude-code\"", "Trace import should include selected agent context.")
+        try expectFalse(calls.contains("llm.previewPrompt"), "Local trace import must not prepare provider prompts.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Local trace import must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Trace import flow must not call config write paths.")
+        try expectFalse(calls.contains("script.execute"), "Trace import flow must not call execution paths.")
+    }
+
+    private func agentTraceImportFallsBackWhenMethodUnavailable() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "old-service")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        store.traceImportText = "raw local transcript"
+        await store.reload()
+        await store.loadTraceImports()
+        await store.importLocalTrace()
+
+        try expectEqual(store.traceImportList.isUnavailable, true, "Unknown trace list method should expose unavailable trace list.")
+        try expectEqual(store.traceImportResult?.isUnavailable, true, "Unknown trace import method should expose unavailable trace result.")
+        try expectContains(store.traceImportResult?.fallbackReason, "unavailable", "Unavailable trace import should expose quiet fallback reason.")
+        try expectEqual(store.traceImportText, "raw local transcript", "Failed import should keep raw pasted input for user correction.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "trace.listImports", "Fallback test should still attempt the V2.48 list method.")
+        try expectContains(calls, "trace.importLocal", "Fallback test should still attempt the V2.48 import method.")
+        try expectFalse(calls.contains("llm.previewPrompt"), "Unavailable trace flow must not fall back to provider prompt preview.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Unavailable trace flow must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Unavailable trace flow must not call config write paths.")
+        try expectFalse(calls.contains("script.execute"), "Unavailable trace flow must not call execution paths.")
+    }
+
     private func routingConfidenceClearsStaleSelection() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -1535,6 +1610,24 @@ private final class FakeServiceScript {
               respond '{"id":"test","ok":true,"result":{"deleted":true,"benchmark_id":"bench-1"}}'
             fi
             respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: task.deleteBenchmark"}}'
+            ;;
+          *\\"trace.listImports\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"records":[{"import_id":"trace-1","title":"Existing local trace","task":"Route a local audit task.","outcome":"hit","detected_skills":[{"instance_id":"beta","name":"Beta","agent":"claude-code"}],"expected_skill_names":["Beta"],"redacted_excerpt":"Assistant selected Beta from <project-root> evidence.","redaction_summary":{"status":"redacted","summary":"Local paths removed.","placeholders":["<project-root>"]},"reasons":["Detected skill matched expected skill."],"evidence_references":[{"title":"Trace","detail":"Beta appeared in route selection.","source":"trace.listImports"}],"safety_flags":["provider not sent"],"safety":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_secret_returned":false}}]}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: trace.listImports"}}'
+            ;;
+          *\\"trace.importLocal\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"record":{"import_id":"trace-2","title":"Local trace","task":"Route a local audit release note task.","outcome":"wrong_pick","detected_skill_names":["Alpha"],"expected_skills":[{"instance_id":"beta","name":"Beta","agent":"claude-code"}],"redacted_excerpt":"User asked for <project-root> release notes. Assistant selected Alpha.","redaction_summary":{"status":"redacted","summary":"Secrets and local paths removed.","redacted_fields":["path"],"placeholders":["<project-root>"]},"reasons":["Detected route differs from expected skill."],"evidence_references":[{"title":"Trace","detail":"Alpha appeared in route selection.","source":"trace.importLocal"}],"safety_flags":["provider not sent"],"safety":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_secret_returned":false}}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: trace.importLocal"}}'
+            ;;
+          *\\"trace.deleteImport\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"deleted":true,"import_id":"trace-1"}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: trace.deleteImport"}}'
             ;;
           *\\"llm.prepareAction\\"*)
             if [ "$scenario" = "old-service" ]; then

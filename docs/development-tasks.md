@@ -1,15 +1,15 @@
 # Development Tasks
 
-> Status: V2.47 Routing Regression Detection is completed and synchronized on `main`; V2.1 through V2.47 are synchronized baseline; V2.48+ remains the next roadmap line, not separate product branches.
+> Status: V2.48 Agent Behavior Trace Import is completed and synchronized on `main`; V2.1 through V2.48 are synchronized baseline; V2.49+ remains the next roadmap line, not separate product branches.
 
 ## Current Baseline
 
 - Current branch baseline: `main` after V2.16-V2.28 management/analysis/history/explainability/provenance/conflict-semantics line and 2026-06-10 real local Computer Use validation; V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout 均已收口。
 - Product boundary: native macOS SwiftUI/AppKit shell plus Rust service protocol.
-- Completed V2 milestones: first Codex slice, V2.1 through V2.47.
-- Current priority: keep V2.26 finding explainability, V2.27 identity/provenance, V2.28 conflict semantics, V2.29 finding triage persistence, V2.30 read-only AI analysis, V2.31 read-only cleanup queue, V2.32 app-local rule tuning, V2.33 preview-first + explicit-confirm batch actions, V2.34 read-only comparison, V2.35 local redacted export, V2.36 disposable evidence, V2.37 guarded Pi toggle, V2.38 Hermes external roots, V2.39 OpenClaw workspace scope, V2.40 adapter diagnostics, V2.41 provider foundation, V2.42 prompt preview/redaction, V2.43 quality scoring, V2.44 task readiness, V2.45 routing confidence, V2.46 task benchmark set, and V2.47 routing regression detection; V2.48 trace import is the next roadmap line.
-- Current code gap: the macOS app and Rust service now expose user-configured OpenAI-compatible / Claude-compatible provider profiles, Keychain-first API key storage, explicit Test Connection, V2.42 prompt preview/redaction, confirmation-gated provider-backed draft output, budget fields, minimal redacted call metadata, V2.43 deterministic skill quality scoring, V2.44 deterministic task readiness, V2.45 deterministic routing confidence with `task.rankSkillRoutes`, V2.46 app-local task benchmark CRUD/evaluation with `task.listBenchmarks` / `task.saveBenchmark` / `task.deleteBenchmark` / `task.evaluateBenchmarks`, V2.47 app-local routing baseline/regression detection with `task.saveRoutingBaseline` / `task.detectRoutingRegression`, and native English / Simplified Chinese UI localization with an app-local language setting. Trace analysis and full provider observability remain planned for later.
-- Real local Computer Use baseline: passed on 2026-06-11 for V2.45 against real local HOME/app data/Claude/Codex/opencode roots after explicitly targeting the current `dist/SkillsCopilot.app` bundle. Addressing Computer Use by app name can still attach to stale same-bundle-id worktree apps; future user-visible, UI, or service protocol changes must rerun Computer Use against the current bundle path and keep any blocker explicit. The later 2026-06-11 language-setting validation launched the current bundle and confirmed a visible CGWindow (`SkillsCopilot`, 920x652), but Computer Use returned `cgWindowNotFound` for the bundle path and timed out for the app name; keep that tool-layer blocker explicit until a new CU pass succeeds.
+- Completed V2 milestones: first Codex slice, V2.1 through V2.48.
+- Current priority: keep V2.26 finding explainability, V2.27 identity/provenance, V2.28 conflict semantics, V2.29 finding triage persistence, V2.30 read-only AI analysis, V2.31 read-only cleanup queue, V2.32 app-local rule tuning, V2.33 preview-first + explicit-confirm batch actions, V2.34 read-only comparison, V2.35 local redacted export, V2.36 disposable evidence, V2.37 guarded Pi toggle, V2.38 Hermes external roots, V2.39 OpenClaw workspace scope, V2.40 adapter diagnostics, V2.41 provider foundation, V2.42 prompt preview/redaction, V2.43 quality scoring, V2.44 task readiness, V2.45 routing confidence, V2.46 task benchmark set, V2.47 routing regression detection, and V2.48 trace import; V2.49 routing accuracy dashboard is the next roadmap line.
+- Current code gap: the macOS app and Rust service now expose user-configured OpenAI-compatible / Claude-compatible provider profiles, Keychain-first API key storage, explicit Test Connection, V2.42 prompt preview/redaction, confirmation-gated provider-backed draft output, budget fields, minimal redacted call metadata, V2.43 deterministic skill quality scoring, V2.44 deterministic task readiness, V2.45 deterministic routing confidence with `task.rankSkillRoutes`, V2.46 app-local task benchmark CRUD/evaluation with `task.listBenchmarks` / `task.saveBenchmark` / `task.deleteBenchmark` / `task.evaluateBenchmarks`, V2.47 app-local routing baseline/regression detection with `task.saveRoutingBaseline` / `task.detectRoutingRegression`, V2.48 app-local trace import/list/delete with `trace.importLocal` / `trace.listImports` / `trace.deleteImport`, and native English / Simplified Chinese UI localization with an app-local language setting. Routing accuracy dashboard and full provider observability remain planned for later.
+- Real local Computer Use baseline: latest V2.48 validation on 2026-06-11 launched the current `dist/SkillsCopilot.app` bundle against real local HOME/app data/Claude/Codex/opencode roots and direct CG window capture found the app window. Computer Use is currently blocked for the current bundle: absolute bundle path returns `cgWindowNotFound`, and app-name lookup returns `timeoutReached`; keep that tool-layer blocker explicit until a new CU pass succeeds. Future user-visible, UI, or service protocol changes must rerun Computer Use against the current bundle path and must not use smoke screenshots as a substitute.
 - Quality gate for code/UI/protocol work: `pnpm check:macos`; add focused Rust/Swift tests when touching shared behavior.
 
 ## Versioned Adapter Plan
@@ -54,7 +54,7 @@
 | V2.45 | AI Routing Confidence | Completed | Rank candidate skills for a task with confidence, match reasons, ambiguity/collision warnings, and likely wrong-pick / likely miss explanations |
 | V2.46 | Task Benchmark Set | Completed | Users define common tasks and expected/acceptable skills for repeatable local readiness evaluation |
 | V2.47 | Routing Regression Detection | Completed | Detect when skill changes, disablement, drift, or findings reduce task-to-skill readiness versus the benchmark baseline with `task.saveRoutingBaseline` + `task.detectRoutingRegression` |
-| V2.48 | Agent Behavior Trace Import | Planned | Import local transcript/log evidence, redact sensitive content, and analyze whether the agent selected, missed, or confused expected skills |
+| V2.48 | Agent Behavior Trace Import | Completed | Import local transcript/log evidence, redact sensitive content before persistence, and analyze deterministic expected-vs-actual routing（命中/漏选/错选/歧义）；默认不落 raw trace |
 | V2.49 | Routing Accuracy Dashboard | Planned | Summarize benchmark/trace hit rate, miss rate, wrong-pick rate, ambiguity, gaps, and per-agent readiness |
 | V2.50 | Cross-agent Task Readiness | Planned | Compare Claude/Codex/opencode/Pi/Hermes/OpenClaw readiness for the same task using skills, state, scope, quality, and routing confidence |
 | V2.51 | Stale / Drift Detection | Planned | Identify stale skills, fingerprint drift, finding drift, source drift, and changed readiness impact |
@@ -80,7 +80,7 @@
 
 ## Baseline and Next Priority: V2.26-V2.70
 
-**Goal**: keep the completed V2.26-V2.47 management/analysis/provider/prompt-safety/task-routing/benchmark/regression baseline stable, then move into AI-native task-centered governance. Users should understand why a finding exists, where a skill came from, whether a conflict is same-agent or cross-agent, which issues are already reviewed, and whether a real task can be routed to the right skill/agent with acceptable quality and risk over repeatable local benchmarks and saved baselines.
+**Goal**: keep the completed V2.26-V2.48 management/analysis/provider/prompt-safety/task-routing/benchmark/regression/trace baseline stable, then move into AI-native task-centered governance. Users should understand why a finding exists, where a skill came from, whether a conflict is same-agent or cross-agent, which issues are already reviewed, and whether a real task can be routed to the right skill/agent with acceptable quality and risk over repeatable local benchmarks, saved baselines, and redacted local trace evidence.
 
 **Priority order**
 
@@ -94,7 +94,7 @@
 8. V2.34 Cross-agent comparison view: completed; compare same-name/similar skills across agents by state, source, risk, writable capability, and differences without adding write paths.
 9. V2.35 Local report export: completed; generate redacted local Markdown/JSON audit reports from existing read models without distribution, provider calls, credentials, scripts, or automatic writes.
 10. V2.36-V2.40 Adapter trust and diagnostics: completed; V2.36 Pi writable evidence harness, V2.37 minimal guarded Pi native toggle, V2.38 Hermes external roots, V2.39 OpenClaw workspace scope, and V2.40 read-only adapter diagnostics are complete. Do not extend write semantics without fresh rollback-safe evidence.
-11. V2.41-V2.70 AI-native task-centered governance: V2.41 provider foundation, V2.42 prompt safety, V2.43 skill quality, V2.44 task readiness, V2.45 routing confidence, V2.46 task benchmark set, and V2.47 routing regression detection are completed. V2.48+ trace/knowledge and governance lines remain future.
+11. V2.41-V2.70 AI-native task-centered governance: V2.41 provider foundation, V2.42 prompt safety, V2.43 skill quality, V2.44 task readiness, V2.45 routing confidence, V2.46 task benchmark set, V2.47 routing regression detection, and V2.48 trace import are completed. V2.49+ routing accuracy/knowledge and governance lines remain future.
 
 ### V2.41 Verification Checklist（文档同步）
 
@@ -214,6 +214,22 @@
 7. 复核 V2.47 安全边界：不发 provider 请求用于回归评分；不读 credentials；不写 agent config；不创建/回滚 snapshot；不改 triage；不执行脚本；无 cloud sync 与 telemetry；可选 provider 说明仅走现有 V2.42 `llm.previewPrompt` + `llm.confirmPromptAndSend` 的 preview/redaction/确认/ copy-only 路径。
 
 **Closeout status**: completed with explicit Computer Use blocker. V2.47 integrates app-local routing baseline persistence and deterministic regression detection in the Rust service, native Analysis routing regression UI, tolerant Swift models, protocol fixtures, focused Rust/Swift tests, `pnpm check:macos`, and `pnpm check:privacy`. Real local app launch against the current `dist/SkillsCopilot.app` bundle succeeded and direct window capture found the app window, but Computer Use returned `cgWindowNotFound` for the absolute bundle path and `timeoutReached` for the app name after stale same-bundle-id processes were removed. No real-local screenshot was committed.
+
+### V2.48 Verification Checklist（完成）
+
+1. Focused Rust/Swift checks: `cargo test --workspace`、`cargo clippy --workspace --all-targets --all-features`、`swift test --package-path apps/macos`。
+2. `pnpm check:macos`。
+3. Real local launch (`./script/build_and_run.sh run` 或 `pnpm dev:macos`) 并执行 V2.48 目标流程的 `SkillsCopilot` 窗口 `Computer Use`/AX 观察；若窗口不可见，明确记录 blocker（例如 `cgWindowNotFound` / `timeoutReached`）。
+4. `pnpm check:privacy`。
+5. App-window-only 截图并手工复核路径/凭据占位符脱敏。
+6. 复核 V2.48 口径：
+   - `trace.importLocal` 接收 pasted/local trace text 与可选 task/agent/expected skill refs/names。
+   - redaction 先行，默认不落 raw trace（`raw_trace_persisted=false`）；仅持久化可复查 metadata、`redaction_summary`、redacted `excerpt` 与 deterministic `analysis` 到 `trace-imports.json`。
+   - 判读输出为 deterministic local 结果：`analysis.outcome`（`hit` / `miss` / `wrong_pick` / `ambiguous` / `unknown`）、detected skills、expected skill refs/names、reasons、evidence refs 与 safety flags。
+   - `trace.listImports` / `trace.deleteImport` 仅操作 app-local metadata，不改 triage、不改 agent config、不改 snapshot、不执行脚本。
+   - 可选 provider 说明仍走 V2.42 preview/redaction/confirmation，保持 copy-only，不改变 deterministic 结果。
+
+**Closeout status**: completed with explicit Computer Use blocker. V2.48 integrates app-local trace import/list/delete in the Rust service, redacted trace metadata persistence in `trace-imports.json`, deterministic trace outcome analysis, native Analysis trace import UI, tolerant Swift models, protocol fixtures, focused Rust/Swift tests, `pnpm check:macos`, and `pnpm check:privacy`. Real local app launch against the current `dist/SkillsCopilot.app` bundle succeeded and direct window capture found the app window, but Computer Use returned `cgWindowNotFound` for the absolute bundle path and `timeoutReached` for the app name after stale same-bundle-id processes were removed. No real-local screenshot was committed.
 
 ## Current Backlog
 

@@ -515,6 +515,32 @@ enum UIStrings {
     static var routingRegressionTopRouteChanged: String { text("routingRegression.topRouteChanged", "Top route changed") }
     static var routingRegressionMatchStatus: String { text("routingRegression.matchStatus", "Match status") }
     static var routingRegressionTopRouteChange: String { text("routingRegression.topRouteChange", "Top route") }
+    static var traceImportTitle: String { text("traceImport.title", "Agent Behavior Trace Import") }
+    static var traceImportBoundary: String { text("traceImport.boundary", "User-triggered local trace import for routing behavior review. Results show redacted excerpts and metadata only; local import cannot call a provider, write skill files, mutate agent config, create snapshots, change triage, execute scripts, or read credentials.") }
+    static var traceImportProviderBoundary: String { text("traceImport.providerBoundary", "Provider explanations remain copy-only and must use prompt preview, redaction, and confirmation; this import panel does not send provider requests.") }
+    static var traceImportTextPlaceholder: String { text("traceImport.placeholder.text", "Paste local transcript or log text to import") }
+    static var traceImportTitlePlaceholder: String { text("traceImport.placeholder.title", "Optional title") }
+    static var traceImportTaskPlaceholder: String { text("traceImport.placeholder.task", "Optional task text") }
+    static var traceImportExpectedPlaceholder: String { text("traceImport.placeholder.expected", "Optional expected skill names, separated by commas") }
+    static var traceImportImportAction: String { text("traceImport.action.import", "Import Trace") }
+    static var traceImportLoadAction: String { text("traceImport.action.load", "Load Imports") }
+    static var traceImportDeleteAction: String { text("traceImport.action.delete", "Delete import") }
+    static var traceImportInputRequired: String { text("traceImport.inputRequired", "Paste trace text before importing.") }
+    static var traceImportUnavailable: String { text("traceImport.unavailable", "Trace import is unavailable in this service build.") }
+    static var traceImportDeleteUnavailable: String { text("traceImport.deleteUnavailable", "Deleting trace imports is unavailable in this service build.") }
+    static var traceImportLatest: String { text("traceImport.latest", "Latest trace outcome") }
+    static var traceImportImports: String { text("traceImport.imports", "Trace imports") }
+    static var traceImportNoImports: String { text("traceImport.empty.imports", "No trace imports returned.") }
+    static var traceImportOutcome: String { text("traceImport.outcome", "Outcome") }
+    static var traceImportDetectedSkills: String { text("traceImport.detectedSkills", "Detected skills") }
+    static var traceImportExpectedSkills: String { text("traceImport.expectedSkills", "Expected skills") }
+    static var traceImportRedactedExcerpt: String { text("traceImport.redactedExcerpt", "Redacted excerpt") }
+    static var traceImportRedactionSummary: String { text("traceImport.redactionSummary", "Redaction summary") }
+    static var traceImportReasons: String { text("traceImport.reasons", "Reasons") }
+    static var traceImportEvidence: String { text("traceImport.evidence", "Evidence") }
+    static var traceImportNoSkills: String { text("traceImport.empty.skills", "No skills returned.") }
+    static var traceImportNoExcerpt: String { text("traceImport.empty.excerpt", "No redacted excerpt returned.") }
+    static var traceImportNoReasons: String { text("traceImport.empty.reasons", "No reasons returned.") }
     static var llmAssist: String { text("llm.assist", "LLM Assist") }
     static var llmEnabled: String { text("llm.enabled", "Enabled") }
     static var llmDisabled: String { text("llm.disabled", "Disabled") }

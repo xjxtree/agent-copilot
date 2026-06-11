@@ -13,6 +13,7 @@ struct LLMModelTests {
         try routingConfidenceDecodesFlexiblePayload()
         try taskBenchmarkDecodesFlexiblePayload()
         try routingRegressionDecodesFlexiblePayload()
+        try agentTraceImportDecodesFlexiblePayload()
         try promptPreviewDecodesV242Payload()
         try promptPreviewDecodesServiceArrayScopePayload()
         try promptSendResultDecodesCopyOnlyAuditPayload()
@@ -665,6 +666,88 @@ struct LLMModelTests {
         try expectFalse(detection.safety.configMutationAllowed, "Routing regression detection must not mutate config.")
         try expectFalse(detection.safety.snapshotCreated, "Routing regression detection must not create snapshots.")
         try expectFalse(detection.safety.credentialAccessed, "Routing regression detection must not access credentials.")
+    }
+
+    private func agentTraceImportDecodesFlexiblePayload() throws {
+        let importData = Data(
+            """
+            {
+              "record": {
+                "import_id": "trace-1",
+                "title": "Local routing trace",
+                "task": "Route a local audit release note task.",
+                "analysis": {
+                  "outcome": "wrong_pick",
+                  "detected_skills": [
+                    {
+                      "instance_id": "alpha",
+                      "definition_id": "alpha-definition",
+                      "skill_name": "Alpha",
+                      "agent": "claude-code",
+                      "scope": "agent-global",
+                      "evidence_refs": ["skill:alpha"]
+                    }
+                  ],
+                  "reasons": ["Detected route differs from expected skill."],
+                  "evidence_refs": ["Alpha appeared in tool selection."]
+                },
+                "expected_skills": [{"name":"Beta","agent":"claude-code","instance_id":"beta"}],
+                "excerpt": "User asked for <project-root> release notes. Assistant selected Alpha.",
+                "redaction_summary": {
+                  "status": "redacted-local-only",
+                  "redacted_fields": ["path"],
+                  "placeholders": ["<project-root>"]
+                },
+                "safety_flags": {
+                  "provider_request_sent": false,
+                  "write_back_allowed": false,
+                  "write_actions_available": false,
+                  "script_execution_allowed": false,
+                  "execution_actions_available": false,
+                  "config_mutation_allowed": false,
+                  "snapshot_created": false,
+                  "triage_mutation_allowed": false,
+                  "credential_accessed": false,
+                  "raw_secret_returned": false
+                }
+              }
+            }
+            """.utf8
+        )
+        let importResult = try JSONDecoder().decode(AgentTraceImportResult.self, from: importData)
+        try expectEqual(importResult.record?.id, "trace-1", "Trace import should decode nested import id.")
+        try expectEqual(importResult.record?.outcome, "wrong_pick", "Trace import should decode outcome.")
+        try expectEqual(importResult.record?.detectedSkills.map(\.name), ["Alpha"], "Trace import should decode detected skill names.")
+        try expectEqual(importResult.record?.expectedSkills.first?.agent, "claude-code", "Trace import should decode expected skill refs.")
+        try expectEqual(importResult.record?.redaction.placeholders, ["<project-root>"], "Trace import should decode redaction placeholders.")
+        try expectEqual(importResult.record?.reasons, ["Detected route differs from expected skill."], "Trace import should decode reasons.")
+        try expectEqual(importResult.record?.evidence.map(\.detail), ["Alpha appeared in tool selection."], "Trace import should decode nested analysis evidence references.")
+        try expectFalse(importResult.record?.safety.providerRequestSent ?? true, "Trace import must not send provider requests.")
+        try expectFalse(importResult.record?.safety.writeBackAllowed ?? true, "Trace import must not allow write-back.")
+        try expectFalse(importResult.record?.safety.scriptExecutionAllowed ?? true, "Trace import must not allow script execution.")
+        try expectFalse(importResult.record?.safety.configMutationAllowed ?? true, "Trace import must not mutate config.")
+        try expectFalse(importResult.record?.safety.credentialAccessed ?? true, "Trace import must not access credentials.")
+
+        let listData = Data(
+            """
+            {
+              "records": [
+                {
+                  "trace_id": "trace-2",
+                  "name": "Ambiguous route",
+                  "match_status": "ambiguous",
+                  "detected_skills": [{"name":"Alpha","agent":"claude-code"},{"name":"Beta","agent":"claude-code"}],
+                  "expected_skill_names": "Beta",
+                  "redaction": "redacted"
+                }
+              ]
+            }
+            """.utf8
+        )
+        let list = try JSONDecoder().decode(AgentTraceImportListResult.self, from: listData)
+        try expectEqual(list.imports.first?.id, "trace-2", "Trace list should decode records alias.")
+        try expectEqual(list.imports.first?.outcome, "ambiguous", "Trace list should decode match_status alias.")
+        try expectEqual(list.imports.first?.expectedSkills.map(\.name), ["Beta"], "Trace list should decode expected skill name string.")
     }
 
     private func promptSendResultDecodesCopyOnlyAuditPayload() throws {
