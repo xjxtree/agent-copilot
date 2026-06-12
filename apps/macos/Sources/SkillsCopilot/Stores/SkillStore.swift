@@ -42,6 +42,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var routingAccuracyDashboard: RoutingAccuracyDashboard?
     @Published private(set) var staleDriftDetection: StaleDriftDetectionResult?
     @Published private(set) var knowledgeSearchResult: KnowledgeSearchResult?
+    @Published private(set) var localSkillMapResult: LocalSkillMapResult?
     @Published private(set) var similarSkillGroupingResult: SimilarSkillGroupingResult?
     @Published private(set) var capabilityTaxonomyResult: CapabilityTaxonomyResult?
     @Published private(set) var workspaceReadinessResult: WorkspaceReadinessResult?
@@ -65,6 +66,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var isLoadingRoutingAccuracyDashboard = false
     @Published private(set) var isDetectingStaleDrift = false
     @Published private(set) var isSearchingKnowledge = false
+    @Published private(set) var isBuildingLocalSkillMap = false
     @Published private(set) var isGroupingSimilarSkills = false
     @Published private(set) var isBuildingCapabilityTaxonomy = false
     @Published private(set) var isCheckingWorkspaceReadiness = false
@@ -125,6 +127,7 @@ final class SkillStore: ObservableObject {
             routingAccuracyDashboard = nil
             staleDriftDetection = nil
             knowledgeSearchResult = nil
+            localSkillMapResult = nil
             similarSkillGroupingResult = nil
             capabilityTaxonomyResult = nil
             workspaceReadinessResult = nil
@@ -214,7 +217,7 @@ final class SkillStore: ObservableObject {
     }
 
     private var isTaskBenchmarkBusy: Bool {
-        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isGroupingSimilarSkills || isBuildingCapabilityTaxonomy || isCheckingWorkspaceReadiness || isPlanningRemediation || isPreviewingRemediationDrafts || isPreviewingRemediationImpact || isReviewingRemediationBatch || isLoadingRemediationHistory || isRecordingRemediationHistory || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || isLoadingAgentSessionSkillReviews || isReviewingAgentSessionSkillUse || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty || !deletingAgentSessionSkillReviewIDs.isEmpty
+        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isBuildingLocalSkillMap || isGroupingSimilarSkills || isBuildingCapabilityTaxonomy || isCheckingWorkspaceReadiness || isPlanningRemediation || isPreviewingRemediationDrafts || isPreviewingRemediationImpact || isReviewingRemediationBatch || isLoadingRemediationHistory || isRecordingRemediationHistory || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || isLoadingAgentSessionSkillReviews || isReviewingAgentSessionSkillUse || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty || !deletingAgentSessionSkillReviewIDs.isEmpty
     }
 
     private var isLLMPromptBusy: Bool {
@@ -1507,6 +1510,32 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func buildLocalSkillMap() async {
+        guard !isBuildingLocalSkillMap else { return }
+        guard !isRefreshBusy else {
+            localSkillMapResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        isBuildingLocalSkillMap = true
+        defer { isBuildingLocalSkillMap = false }
+
+        let agent = agentFilter == .all ? nil : agentFilter.rawValue
+        do {
+            localSkillMapResult = try await service.buildLocalSkillMap(
+                agent: agent,
+                project: activeProjectContext,
+                selectedSkill: selectedSkill,
+                limit: 30,
+                includeEdges: true,
+                includeClusters: true,
+                includeEvidence: true
+            )
+        } catch {
+            localSkillMapResult = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
     func groupSimilarSkills() async {
         guard !isGroupingSimilarSkills else { return }
         guard !isRefreshBusy else {
@@ -2256,6 +2285,9 @@ final class SkillStore: ObservableObject {
         if knowledgeSearchResult?.isUnavailable == true {
             knowledgeSearchResult = nil
         }
+        if localSkillMapResult?.isUnavailable == true {
+            localSkillMapResult = nil
+        }
         if capabilityTaxonomyResult?.isUnavailable == true {
             capabilityTaxonomyResult = nil
         }
@@ -2629,6 +2661,7 @@ final class SkillStore: ObservableObject {
         taskBenchmarkDeleteResult = nil
         routingRegressionBaseline = nil
         routingRegressionDetection = nil
+        localSkillMapResult = nil
         remediationHistoryResult = nil
         remediationHistoryRecordResult = nil
         agentSessionSkillReviewResult = nil

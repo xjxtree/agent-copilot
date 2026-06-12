@@ -284,6 +284,36 @@ private struct KnowledgeSearchParams: Encodable {
     }
 }
 
+private struct LocalSkillMapParams: Encodable {
+    let agent: String?
+    let projectRoot: String?
+    let currentCWD: String?
+    let workspace: String?
+    let selectedSkillID: String?
+    let selectedSkillName: String?
+    let selectedSkillAgent: String?
+    let selectedSkillPath: String?
+    let limit: Int?
+    let includeEdges: Bool
+    let includeClusters: Bool
+    let includeEvidence: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case agent
+        case projectRoot = "project_root"
+        case currentCWD = "current_cwd"
+        case workspace
+        case selectedSkillID = "selected_skill_id"
+        case selectedSkillName = "selected_skill_name"
+        case selectedSkillAgent = "selected_skill_agent"
+        case selectedSkillPath = "selected_skill_path"
+        case limit
+        case includeEdges = "include_edges"
+        case includeClusters = "include_clusters"
+        case includeEvidence = "include_evidence"
+    }
+}
+
 private struct SimilarSkillGroupingParams: Encodable {
     let agent: String?
     let limit: Int?
@@ -1180,6 +1210,36 @@ final class ServiceClient {
         let params = KnowledgeSearchParams(query: query, agent: agent, limit: limit)
         do {
             return try await call(method: "knowledge.search", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func buildLocalSkillMap(
+        agent: String? = nil,
+        project: ProjectContext? = nil,
+        selectedSkill: SkillRecord? = nil,
+        limit: Int? = 30,
+        includeEdges: Bool = true,
+        includeClusters: Bool = true,
+        includeEvidence: Bool = true
+    ) async throws -> LocalSkillMapResult {
+        let params = LocalSkillMapParams(
+            agent: agent,
+            projectRoot: project?.rootPath,
+            currentCWD: project?.currentCWD,
+            workspace: project?.name,
+            selectedSkillID: selectedSkill?.id,
+            selectedSkillName: selectedSkill?.name,
+            selectedSkillAgent: selectedSkill?.agent,
+            selectedSkillPath: selectedSkill?.displayPath.isEmpty == false ? selectedSkill?.displayPath : selectedSkill?.path,
+            limit: limit,
+            includeEdges: includeEdges,
+            includeClusters: includeClusters,
+            includeEvidence: includeEvidence
+        )
+        do {
+            return try await call(method: "knowledge.buildLocalSkillMap", params: params)
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .unavailable()
         }

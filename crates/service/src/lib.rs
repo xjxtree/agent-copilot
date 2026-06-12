@@ -66,6 +66,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "knowledge.search",
     "knowledge.groupSimilarSkills",
     "knowledge.buildCapabilityTaxonomy",
+    "knowledge.buildLocalSkillMap",
     "workspace.checkReadiness",
     "remediation.plan",
     "remediation.previewDrafts",
@@ -1156,6 +1157,140 @@ pub struct CapabilityRepresentativeSkill {
 
 pub type CapabilityTaxonomyPromptRequest = AgentReadinessPromptRequest;
 pub type CapabilityTaxonomySafetyFlags = AgentReadinessSafetyFlags;
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct LocalSkillMapParams {
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default, alias = "task_text", alias = "user_intent")]
+    pub task: Option<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+    #[serde(default)]
+    pub node_limit: Option<usize>,
+    #[serde(default)]
+    pub edge_limit: Option<usize>,
+    #[serde(default)]
+    pub cluster_limit: Option<usize>,
+    #[serde(default, alias = "instance_ids")]
+    pub candidate_instance_ids: Vec<String>,
+    #[serde(default)]
+    pub include_task_context: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LocalSkillMapResult {
+    pub generated_by: &'static str,
+    pub catalog_available: bool,
+    pub filters: LocalSkillMapFilters,
+    pub summary: LocalSkillMapSummary,
+    pub nodes: Vec<LocalSkillMapNode>,
+    pub edges: Vec<LocalSkillMapEdge>,
+    pub clusters: Vec<LocalSkillMapCluster>,
+    pub domains: Vec<LocalSkillMapDomain>,
+    pub risk_notes: Vec<String>,
+    pub gap_notes: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub evidence_references: Vec<TaskReadinessEvidenceReference>,
+    pub prompt_request: LocalSkillMapPromptRequest,
+    pub safety_flags: LocalSkillMapSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LocalSkillMapFilters {
+    pub agent: Option<String>,
+    pub task: Option<String>,
+    pub limit: usize,
+    pub node_limit: usize,
+    pub edge_limit: usize,
+    pub cluster_limit: usize,
+    pub candidate_instance_ids: Vec<String>,
+    pub include_task_context: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LocalSkillMapSummary {
+    pub indexed_skill_count: usize,
+    pub candidate_skill_count: usize,
+    pub returned_node_count: usize,
+    pub returned_edge_count: usize,
+    pub cluster_count: usize,
+    pub returned_cluster_count: usize,
+    pub domain_count: usize,
+    pub skill_node_count: usize,
+    pub capability_node_count: usize,
+    pub similar_group_node_count: usize,
+    pub conflict_node_count: usize,
+    pub risk_node_count: usize,
+    pub task_coverage_edge_count: usize,
+    pub cross_agent_edge_count: usize,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LocalSkillMapNode {
+    pub id: String,
+    pub node_type: String,
+    pub rank: usize,
+    pub label: String,
+    pub summary: String,
+    pub weight: u8,
+    pub agent: Option<String>,
+    pub scope: Option<String>,
+    pub enabled: Option<bool>,
+    pub state: Option<String>,
+    pub source: Option<KnowledgeSearchSource>,
+    pub risk_level: Option<String>,
+    pub tags: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub safety_flags: LocalSkillMapSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LocalSkillMapEdge {
+    pub id: String,
+    pub edge_type: String,
+    pub source: String,
+    pub target: String,
+    pub label: String,
+    pub weight: u8,
+    pub reasons: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub safety_flags: LocalSkillMapSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LocalSkillMapCluster {
+    pub id: String,
+    pub cluster_type: String,
+    pub label: String,
+    pub summary: String,
+    pub score: u8,
+    pub risk_level: String,
+    pub node_ids: Vec<String>,
+    pub edge_ids: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub safety_flags: LocalSkillMapSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LocalSkillMapDomain {
+    pub domain_id: String,
+    pub domain_key: String,
+    pub domain_name: String,
+    pub coverage_level: &'static str,
+    pub coverage_score: u8,
+    pub node_ids: Vec<String>,
+    pub skill_count: usize,
+    pub enabled_skill_count: usize,
+    pub agent_count: usize,
+    pub gap_notes: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+pub type LocalSkillMapPromptRequest = AgentReadinessPromptRequest;
+pub type LocalSkillMapSafetyFlags = AgentReadinessSafetyFlags;
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct WorkspaceReadinessParams {
@@ -2964,6 +3099,7 @@ pub enum LlmPromptActionKind {
     KnowledgeSearch,
     SimilarSkillGrouping,
     CapabilityTaxonomy,
+    LocalSkillMap,
     WorkspaceReadiness,
     RemediationPlan,
     RemediationPreviewDrafts,
@@ -2986,6 +3122,7 @@ impl LlmPromptActionKind {
             Self::KnowledgeSearch => "knowledge_search",
             Self::SimilarSkillGrouping => "similar_skill_grouping",
             Self::CapabilityTaxonomy => "capability_taxonomy",
+            Self::LocalSkillMap => "local_skill_map",
             Self::WorkspaceReadiness => "workspace_readiness",
             Self::RemediationPlan => "remediation_plan",
             Self::RemediationPreviewDrafts => "remediation_preview_drafts",
@@ -3641,6 +3778,14 @@ impl ServiceHost {
                     serde_json::from_value(request.params)?
                 };
                 serde_json::to_value(self.build_capability_taxonomy(params)?).map_err(Into::into)
+            }
+            "knowledge.buildLocalSkillMap" => {
+                let params: LocalSkillMapParams = if request.params.is_null() {
+                    LocalSkillMapParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.build_local_skill_map(params)?).map_err(Into::into)
             }
             "workspace.checkReadiness" => {
                 let params: WorkspaceReadinessParams = if request.params.is_null() {
@@ -5986,6 +6131,686 @@ impl ServiceHost {
                 },
             },
             safety_flags: capability_taxonomy_safety_flags(),
+        })
+    }
+
+    pub fn build_local_skill_map(
+        &self,
+        params: LocalSkillMapParams,
+    ) -> Result<LocalSkillMapResult, ServiceError> {
+        if matches!(params.limit, Some(0))
+            || matches!(params.node_limit, Some(0))
+            || matches!(params.edge_limit, Some(0))
+            || matches!(params.cluster_limit, Some(0))
+        {
+            return Err(ServiceError::InvalidRequest(
+                "knowledge.buildLocalSkillMap limits must be greater than zero".to_string(),
+            ));
+        }
+
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let roots = self.redaction_roots(&adapter_ctx);
+        let filters = local_skill_map_filters(&params, &roots);
+        let Some(catalog) = self.open_existing_catalog_read_only()? else {
+            return Ok(empty_local_skill_map_result(filters, false));
+        };
+
+        let skills = self.list_visible_skill_records(&catalog)?;
+        let conflicts = list_conflicts(&catalog)?;
+        let analysis = analyze_catalog(&catalog, &adapter_ctx)?;
+        let candidate_filter = filters
+            .candidate_instance_ids
+            .iter()
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        let search = self.search_knowledge(KnowledgeSearchParams {
+            query: filters.task.clone(),
+            agent: filters.agent.clone(),
+            limit: Some(filters.limit.max(filters.node_limit).min(100)),
+            risk: None,
+            scope: None,
+            enabled: None,
+            tool: None,
+            keyword: None,
+        })?;
+        let mut skill_rows = search.rows;
+        if !candidate_filter.is_empty() {
+            skill_rows.retain(|row| candidate_filter.contains(&row.instance_id));
+        }
+        skill_rows.truncate(filters.limit);
+        for (index, row) in skill_rows.iter_mut().enumerate() {
+            row.rank = index + 1;
+        }
+        let candidate_instance_ids = skill_rows
+            .iter()
+            .map(|row| row.instance_id.clone())
+            .collect::<Vec<_>>();
+        let candidate_id_set = candidate_instance_ids
+            .iter()
+            .cloned()
+            .collect::<BTreeSet<_>>();
+
+        let similar = self.group_similar_skills(SimilarSkillGroupingParams {
+            agent: filters.agent.clone(),
+            limit: Some(filters.cluster_limit),
+            min_score: Some(45.0),
+            include_singletons: false,
+            candidate_instance_ids: candidate_instance_ids.clone(),
+        })?;
+        let taxonomy = self.build_capability_taxonomy(CapabilityTaxonomyParams {
+            agent: filters.agent.clone(),
+            limit: Some(filters.cluster_limit),
+            include_single_skill_domains: true,
+            candidate_instance_ids: candidate_instance_ids.clone(),
+        })?;
+        let task_readiness = if filters.include_task_context {
+            filters
+                .task
+                .as_ref()
+                .map(|task| {
+                    self.check_task_readiness(TaskReadinessParams {
+                        task: task.clone(),
+                        agent: filters.agent.clone(),
+                        candidate_instance_ids: candidate_instance_ids.clone(),
+                        limit: Some(filters.limit.min(50)),
+                    })
+                })
+                .transpose()?
+        } else {
+            None
+        };
+        let routing = if filters.include_task_context {
+            filters
+                .task
+                .as_ref()
+                .map(|task| {
+                    self.rank_skill_routes(RankSkillRoutesParams {
+                        task: task.clone(),
+                        agent: filters.agent.clone(),
+                        candidate_instance_ids: candidate_instance_ids.clone(),
+                        limit: Some(filters.limit.min(50)),
+                    })
+                })
+                .transpose()?
+        } else {
+            None
+        };
+
+        let mut evidence = Vec::new();
+        extend_evidence_references(&mut evidence, search.evidence_references.clone());
+        extend_evidence_references(&mut evidence, similar.evidence_references.clone());
+        extend_evidence_references(&mut evidence, taxonomy.evidence_references.clone());
+        if let Some(readiness) = task_readiness.as_ref() {
+            extend_evidence_references(&mut evidence, readiness.evidence_references.clone());
+        }
+        if let Some(ranking) = routing.as_ref() {
+            extend_evidence_references(&mut evidence, ranking.evidence_references.clone());
+        }
+
+        let mut nodes = BTreeMap::<String, LocalSkillMapNode>::new();
+        let mut edges = BTreeMap::<String, LocalSkillMapEdge>::new();
+        let mut clusters = Vec::<LocalSkillMapCluster>::new();
+        let mut domains = Vec::<LocalSkillMapDomain>::new();
+
+        if let Some(task) = filters.task.as_ref() {
+            upsert_local_skill_map_node(
+                &mut nodes,
+                LocalSkillMapNode {
+                    id: "task:local-skill-map".to_string(),
+                    node_type: "task_coverage".to_string(),
+                    rank: 0,
+                    label: "Task coverage".to_string(),
+                    summary: format!(
+                        "Local skill map task context: {}",
+                        truncate_chars(task, 160)
+                    ),
+                    weight: 70,
+                    agent: None,
+                    scope: None,
+                    enabled: None,
+                    state: None,
+                    source: None,
+                    risk_level: None,
+                    tags: vec!["task-context".to_string(), "read-only".to_string()],
+                    evidence_refs: Vec::new(),
+                    safety_flags: local_skill_map_safety_flags(),
+                },
+            );
+        }
+
+        for row in &skill_rows {
+            let skill_node_id = local_skill_map_skill_node_id(&row.instance_id);
+            let agent_node_id = local_skill_map_agent_node_id(&row.agent);
+            let source_node_id = local_skill_map_source_node_id(&row.source);
+            let risk_level = local_skill_map_risk_level(&row.risk_tags);
+            let risk_node_id = local_skill_map_risk_node_id(&risk_level);
+            upsert_local_skill_map_node(&mut nodes, local_skill_map_skill_node(row, &risk_level));
+            upsert_local_skill_map_node(&mut nodes, local_skill_map_agent_node(&row.agent));
+            upsert_local_skill_map_node(&mut nodes, local_skill_map_source_node(&row.source));
+            upsert_local_skill_map_node(&mut nodes, local_skill_map_risk_node(&risk_level));
+            upsert_local_skill_map_edge(
+                &mut edges,
+                local_skill_map_edge(
+                    "skill_agent",
+                    &skill_node_id,
+                    &agent_node_id,
+                    "agent",
+                    65,
+                    vec![format!("Skill is visible to {}.", row.agent)],
+                    row.evidence_refs.clone(),
+                ),
+            );
+            upsert_local_skill_map_edge(
+                &mut edges,
+                local_skill_map_edge(
+                    "skill_source",
+                    &skill_node_id,
+                    &source_node_id,
+                    "source",
+                    55,
+                    vec![format!(
+                        "Source provenance: {}.",
+                        row.source.root_provenance
+                    )],
+                    row.evidence_refs.clone(),
+                ),
+            );
+            upsert_local_skill_map_edge(
+                &mut edges,
+                local_skill_map_edge(
+                    "skill_risk",
+                    &skill_node_id,
+                    &risk_node_id,
+                    "risk",
+                    local_skill_map_risk_weight(&risk_level),
+                    vec![format!("Risk level is `{risk_level}` from local evidence.")],
+                    row.evidence_refs.clone(),
+                ),
+            );
+        }
+
+        for domain in &taxonomy.domains {
+            let capability_node_id = local_skill_map_capability_node_id(&domain.domain_id);
+            upsert_local_skill_map_node(
+                &mut nodes,
+                LocalSkillMapNode {
+                    id: capability_node_id.clone(),
+                    node_type: "capability".to_string(),
+                    rank: domain.rank,
+                    label: domain.domain_name.clone(),
+                    summary: format!(
+                        "{} coverage ({}/100) across {} skill(s).",
+                        domain.coverage_level, domain.coverage_score, domain.skill_count
+                    ),
+                    weight: domain.coverage_score,
+                    agent: None,
+                    scope: None,
+                    enabled: None,
+                    state: None,
+                    source: None,
+                    risk_level: None,
+                    tags: domain
+                        .capability_tags
+                        .iter()
+                        .chain(domain.risk_tags.iter())
+                        .take(20)
+                        .cloned()
+                        .collect(),
+                    evidence_refs: domain.evidence_refs.clone(),
+                    safety_flags: local_skill_map_safety_flags(),
+                },
+            );
+            let mut node_ids = vec![capability_node_id.clone()];
+            let mut edge_ids = Vec::new();
+            for skill in &domain.representative_skills {
+                let skill_node_id = local_skill_map_skill_node_id(&skill.instance_id);
+                if candidate_id_set.contains(&skill.instance_id) {
+                    let edge = local_skill_map_edge(
+                        "skill_capability",
+                        &skill_node_id,
+                        &capability_node_id,
+                        "capability",
+                        domain.coverage_score,
+                        skill.match_reasons.clone(),
+                        skill.evidence_refs.clone(),
+                    );
+                    edge_ids.push(edge.id.clone());
+                    upsert_local_skill_map_edge(&mut edges, edge);
+                    node_ids.push(skill_node_id);
+                }
+            }
+            node_ids.sort();
+            node_ids.dedup();
+            edge_ids.sort();
+            edge_ids.dedup();
+            clusters.push(LocalSkillMapCluster {
+                id: format!("cluster:{}", domain.domain_id),
+                cluster_type: "capability_domain".to_string(),
+                label: domain.domain_name.clone(),
+                summary: format!(
+                    "{} local skill(s) mapped to {} with {} coverage.",
+                    domain.skill_count, domain.domain_name, domain.coverage_level
+                ),
+                score: domain.coverage_score,
+                risk_level: if domain.routing_ambiguity_count > 0 {
+                    "medium".to_string()
+                } else {
+                    "low".to_string()
+                },
+                node_ids: node_ids.clone(),
+                edge_ids,
+                evidence_refs: domain.evidence_refs.clone(),
+                safety_flags: local_skill_map_safety_flags(),
+            });
+            domains.push(LocalSkillMapDomain {
+                domain_id: domain.domain_id.clone(),
+                domain_key: domain.domain_key.clone(),
+                domain_name: domain.domain_name.clone(),
+                coverage_level: domain.coverage_level,
+                coverage_score: domain.coverage_score,
+                node_ids,
+                skill_count: domain.skill_count,
+                enabled_skill_count: domain.enabled_skill_count,
+                agent_count: domain.agent_count,
+                gap_notes: domain.gap_notes.clone(),
+                blocker_notes: domain.blocker_notes.clone(),
+                evidence_refs: domain.evidence_refs.clone(),
+            });
+        }
+
+        for group in &similar.groups {
+            let group_node_id = local_skill_map_similar_group_node_id(&group.group_id);
+            upsert_local_skill_map_node(
+                &mut nodes,
+                LocalSkillMapNode {
+                    id: group_node_id.clone(),
+                    node_type: "similar_group".to_string(),
+                    rank: group.rank,
+                    label: group.canonical_name.clone(),
+                    summary: group.summary.clone(),
+                    weight: group.similarity_score,
+                    agent: None,
+                    scope: None,
+                    enabled: None,
+                    state: None,
+                    source: None,
+                    risk_level: Some(group.ambiguity_risk.to_string()),
+                    tags: vec![
+                        format!("group-type-{}", group.group_type),
+                        format!("routing-ambiguity-{}", group.routing_ambiguity),
+                        format!("coverage-redundancy-{}", group.coverage_redundancy),
+                    ],
+                    evidence_refs: group.evidence_refs.clone(),
+                    safety_flags: local_skill_map_safety_flags(),
+                },
+            );
+            let mut node_ids = vec![group_node_id.clone()];
+            let mut edge_ids = Vec::new();
+            for member in &group.members {
+                if !candidate_id_set.contains(&member.instance_id) {
+                    continue;
+                }
+                let skill_node_id = local_skill_map_skill_node_id(&member.instance_id);
+                let edge = local_skill_map_edge(
+                    "similar_group_member",
+                    &group_node_id,
+                    &skill_node_id,
+                    "similar member",
+                    group.similarity_score,
+                    group.why_grouped.clone(),
+                    member.evidence_refs.clone(),
+                );
+                edge_ids.push(edge.id.clone());
+                upsert_local_skill_map_edge(&mut edges, edge);
+                node_ids.push(skill_node_id);
+            }
+            if node_ids.len() > 1 {
+                node_ids.sort();
+                node_ids.dedup();
+                edge_ids.sort();
+                edge_ids.dedup();
+                clusters.push(LocalSkillMapCluster {
+                    id: format!("cluster:{}", group.group_id),
+                    cluster_type: "similar_group".to_string(),
+                    label: group.canonical_name.clone(),
+                    summary: group.summary.clone(),
+                    score: group.similarity_score,
+                    risk_level: group.ambiguity_risk.to_string(),
+                    node_ids,
+                    edge_ids,
+                    evidence_refs: group.evidence_refs.clone(),
+                    safety_flags: local_skill_map_safety_flags(),
+                });
+            }
+        }
+
+        for conflict in &conflicts {
+            let member_ids = conflict
+                .instance_ids
+                .iter()
+                .filter(|id| candidate_id_set.contains(*id))
+                .cloned()
+                .collect::<Vec<_>>();
+            if member_ids.is_empty() {
+                continue;
+            }
+            let conflict_node_id = local_skill_map_conflict_node_id(&conflict.id);
+            let conflict_ref = push_task_readiness_evidence(
+                &mut evidence,
+                "conflict",
+                &conflict.id,
+                format!(
+                    "Same-agent conflict `{}` covers {} local map member(s).",
+                    redact_for_llm_preview(&conflict.reason),
+                    member_ids.len()
+                ),
+                Some("warning".to_string()),
+                member_ids.first().cloned(),
+            );
+            upsert_local_skill_map_node(
+                &mut nodes,
+                LocalSkillMapNode {
+                    id: conflict_node_id.clone(),
+                    node_type: "conflict".to_string(),
+                    rank: 0,
+                    label: conflict.reason.clone(),
+                    summary: format!(
+                        "Same-agent conflict for definition `{}` with {} mapped member(s).",
+                        redact_for_llm_preview(&conflict.definition_id),
+                        member_ids.len()
+                    ),
+                    weight: 80,
+                    agent: None,
+                    scope: None,
+                    enabled: None,
+                    state: None,
+                    source: None,
+                    risk_level: Some("medium".to_string()),
+                    tags: vec!["same-agent-conflict".to_string(), conflict.reason.clone()],
+                    evidence_refs: vec![conflict_ref.clone()],
+                    safety_flags: local_skill_map_safety_flags(),
+                },
+            );
+            let mut node_ids = vec![conflict_node_id.clone()];
+            let mut edge_ids = Vec::new();
+            for instance_id in member_ids {
+                let skill_node_id = local_skill_map_skill_node_id(&instance_id);
+                let edge = local_skill_map_edge(
+                    "same_agent_conflict",
+                    &conflict_node_id,
+                    &skill_node_id,
+                    "same-agent conflict",
+                    80,
+                    vec![format!(
+                        "Conflict reason `{}` is surfaced for review only.",
+                        redact_for_llm_preview(&conflict.reason)
+                    )],
+                    vec![conflict_ref.clone()],
+                );
+                edge_ids.push(edge.id.clone());
+                upsert_local_skill_map_edge(&mut edges, edge);
+                node_ids.push(skill_node_id);
+            }
+            clusters.push(LocalSkillMapCluster {
+                id: format!("cluster:{}", conflict.id),
+                cluster_type: "conflict".to_string(),
+                label: conflict.reason.clone(),
+                summary: "Conflict cluster is advisory; no winner is applied by the map."
+                    .to_string(),
+                score: 80,
+                risk_level: "medium".to_string(),
+                node_ids,
+                edge_ids,
+                evidence_refs: vec![conflict_ref],
+                safety_flags: local_skill_map_safety_flags(),
+            });
+        }
+
+        for group in &analysis.groups {
+            let member_ids = group
+                .instance_ids
+                .iter()
+                .filter(|id| candidate_id_set.contains(*id))
+                .cloned()
+                .collect::<Vec<_>>();
+            if member_ids.is_empty() {
+                continue;
+            }
+            let analysis_node_id = local_skill_map_analysis_node_id(&group.id);
+            let analysis_ref = push_task_readiness_evidence(
+                &mut evidence,
+                "analysis",
+                &group.id,
+                format!(
+                    "{} cross-agent analysis `{}`: {}",
+                    redact_for_llm_preview(&group.severity),
+                    redact_for_llm_preview(&group.kind),
+                    redact_for_llm_preview(&group.title)
+                ),
+                Some(group.severity.clone()),
+                member_ids.first().cloned(),
+            );
+            upsert_local_skill_map_node(
+                &mut nodes,
+                LocalSkillMapNode {
+                    id: analysis_node_id.clone(),
+                    node_type: "cross_agent_analysis".to_string(),
+                    rank: 0,
+                    label: group.title.clone(),
+                    summary: redact_for_llm_preview(&truncate_chars(&group.explanation, 220)),
+                    weight: local_skill_map_severity_weight(&group.severity),
+                    agent: None,
+                    scope: None,
+                    enabled: None,
+                    state: None,
+                    source: None,
+                    risk_level: Some(normalize_filter_value(&group.severity)),
+                    tags: vec![group.kind.clone(), group.severity.clone()],
+                    evidence_refs: vec![analysis_ref.clone()],
+                    safety_flags: local_skill_map_safety_flags(),
+                },
+            );
+            for instance_id in member_ids {
+                upsert_local_skill_map_edge(
+                    &mut edges,
+                    local_skill_map_edge(
+                        "cross_agent_analysis",
+                        &analysis_node_id,
+                        &local_skill_map_skill_node_id(&instance_id),
+                        "cross-agent analysis",
+                        local_skill_map_severity_weight(&group.severity),
+                        vec![
+                            "Cross-agent analysis is advisory and does not change routing."
+                                .to_string(),
+                        ],
+                        vec![analysis_ref.clone()],
+                    ),
+                );
+            }
+        }
+
+        if let Some(readiness) = task_readiness.as_ref() {
+            for candidate in &readiness.candidate_skills {
+                if !candidate_id_set.contains(&candidate.instance_id) {
+                    continue;
+                }
+                let task_node_id = "task:local-skill-map".to_string();
+                let skill_node_id = local_skill_map_skill_node_id(&candidate.instance_id);
+                upsert_local_skill_map_edge(
+                    &mut edges,
+                    local_skill_map_edge(
+                        "task_readiness",
+                        &task_node_id,
+                        &skill_node_id,
+                        "task readiness",
+                        candidate.score,
+                        candidate.match_reasons.clone(),
+                        candidate.evidence_refs.clone(),
+                    ),
+                );
+            }
+        }
+        if let Some(ranking) = routing.as_ref() {
+            for candidate in &ranking.route_candidates {
+                if !candidate_id_set.contains(&candidate.instance_id) {
+                    continue;
+                }
+                let task_node_id = "task:local-skill-map".to_string();
+                let skill_node_id = local_skill_map_skill_node_id(&candidate.instance_id);
+                upsert_local_skill_map_edge(
+                    &mut edges,
+                    local_skill_map_edge(
+                        "task_route_candidate",
+                        &task_node_id,
+                        &skill_node_id,
+                        "route candidate",
+                        candidate.confidence_score,
+                        candidate.confidence_rationale.clone(),
+                        candidate.evidence_refs.clone(),
+                    ),
+                );
+            }
+        }
+
+        let mut nodes = nodes.into_values().collect::<Vec<_>>();
+        nodes.sort_by(local_skill_map_node_sort);
+        nodes.truncate(filters.node_limit);
+        for (index, node) in nodes.iter_mut().enumerate() {
+            node.rank = index + 1;
+        }
+        let visible_node_ids = nodes
+            .iter()
+            .map(|node| node.id.clone())
+            .collect::<BTreeSet<_>>();
+        let mut edges = edges
+            .into_values()
+            .filter(|edge| {
+                visible_node_ids.contains(&edge.source) && visible_node_ids.contains(&edge.target)
+            })
+            .collect::<Vec<_>>();
+        edges.sort_by(local_skill_map_edge_sort);
+        edges.truncate(filters.edge_limit);
+        let visible_edge_ids = edges
+            .iter()
+            .map(|edge| edge.id.clone())
+            .collect::<BTreeSet<_>>();
+        clusters.retain(|cluster| {
+            cluster
+                .node_ids
+                .iter()
+                .any(|node_id| visible_node_ids.contains(node_id))
+        });
+        for cluster in &mut clusters {
+            cluster
+                .node_ids
+                .retain(|node_id| visible_node_ids.contains(node_id));
+            cluster
+                .edge_ids
+                .retain(|edge_id| visible_edge_ids.contains(edge_id));
+        }
+        clusters.sort_by(local_skill_map_cluster_sort);
+        let cluster_count = clusters.len();
+        clusters.truncate(filters.cluster_limit);
+        for domain in &mut domains {
+            domain
+                .node_ids
+                .retain(|node_id| visible_node_ids.contains(node_id));
+        }
+        domains.retain(|domain| !domain.node_ids.is_empty());
+        domains.truncate(filters.cluster_limit);
+
+        let risk_notes =
+            local_skill_map_risk_notes(&nodes, &edges, task_readiness.as_ref(), routing.as_ref());
+        let mut gap_notes = search.gap_notes;
+        gap_notes.extend(similar.gap_notes);
+        gap_notes.extend(taxonomy.gap_notes);
+        if let Some(readiness) = task_readiness.as_ref() {
+            gap_notes.extend(readiness.missing_gap_notes.clone());
+        }
+        if skill_rows.is_empty() {
+            gap_notes.push(
+                "No visible local skill evidence matched the local skill map filters.".to_string(),
+            );
+        }
+        normalize_note_list(&mut gap_notes);
+
+        let mut blocker_notes = search.blocker_notes;
+        blocker_notes.extend(similar.blocker_notes);
+        blocker_notes.extend(taxonomy.blocker_notes);
+        if let Some(readiness) = task_readiness.as_ref() {
+            blocker_notes.extend(readiness.blocker_risk_notes.clone());
+        }
+        if let Some(ranking) = routing.as_ref() {
+            blocker_notes.extend(ranking.ambiguity_warnings.clone());
+            blocker_notes.extend(ranking.likely_wrong_pick_risks.clone());
+            blocker_notes.extend(ranking.likely_miss_risks.clone());
+        }
+        if blocker_notes.is_empty() {
+            blocker_notes.push(
+                "Local skill map used deterministic catalog evidence only and found no returned-map blockers."
+                    .to_string(),
+            );
+        }
+        normalize_note_list(&mut blocker_notes);
+        dedupe_evidence_references(&mut evidence);
+
+        let prompt_instance_ids = skill_rows
+            .iter()
+            .take(12)
+            .map(|row| row.instance_id.clone())
+            .collect::<Vec<_>>();
+        let prompt_available = !prompt_instance_ids.is_empty();
+        let summary = local_skill_map_summary(
+            skills.len(),
+            skill_rows.len(),
+            cluster_count,
+            &nodes,
+            &edges,
+            &clusters,
+            &domains,
+        );
+
+        Ok(LocalSkillMapResult {
+            generated_by: "deterministic-service",
+            catalog_available: true,
+            filters: filters.clone(),
+            summary,
+            nodes,
+            edges,
+            clusters,
+            domains,
+            risk_notes,
+            gap_notes,
+            blocker_notes,
+            evidence_references: evidence,
+            prompt_request: LocalSkillMapPromptRequest {
+                available: prompt_available,
+                preview_method: "llm.previewPrompt",
+                confirm_method: "llm.confirmPromptAndSend",
+                action: "local_skill_map",
+                request: LlmPreviewPromptParams {
+                    action: LlmPromptActionKind::LocalSkillMap,
+                    profile_id: None,
+                    app_language: None,
+                    skill_instance_id: None,
+                    instance_ids: prompt_instance_ids,
+                    analysis_kind: None,
+                    user_intent: filters.task.clone().or_else(|| {
+                        Some(
+                            "Explain deterministic local skill map using only local catalog evidence."
+                                .to_string(),
+                        )
+                    }),
+                },
+                note: if prompt_available {
+                    "Optional provider-backed explanation must be requested through prompt preview and explicit confirmation; knowledge.buildLocalSkillMap never sends provider traffic."
+                        .to_string()
+                } else {
+                    "Prompt preview is unavailable until local catalog evidence produces map nodes."
+                        .to_string()
+                },
+            },
+            safety_flags: local_skill_map_safety_flags(),
         })
     }
 
@@ -9699,6 +10524,47 @@ impl ServiceHost {
                     &mut redactor,
                 ));
             }
+            LlmPromptActionKind::LocalSkillMap => {
+                let result = self.build_local_skill_map(LocalSkillMapParams {
+                    agent: None,
+                    task: params.user_intent.clone(),
+                    limit: Some(12),
+                    node_limit: Some(48),
+                    edge_limit: Some(96),
+                    cluster_limit: Some(12),
+                    candidate_instance_ids: params.instance_ids.clone(),
+                    include_task_context: params.user_intent.is_some(),
+                })?;
+                prompt_scope.extend([
+                    "deterministic local skill map graph".to_string(),
+                    "skill, capability, similar-group, conflict, agent, source, risk, and task coverage nodes".to_string(),
+                    "relationship edges and clusters".to_string(),
+                    "local risk, gap, and blocker notes".to_string(),
+                    "evidence reference summaries".to_string(),
+                    "safety flags".to_string(),
+                ]);
+                included_fields.extend([
+                    "candidate skill ids".to_string(),
+                    "node ids, types, labels, weights, and summaries".to_string(),
+                    "edge ids, types, labels, weights, and reasons".to_string(),
+                    "cluster ids, types, scores, risk levels, and member node ids".to_string(),
+                    "capability domain coverage summaries".to_string(),
+                    "risk, gap, blocker, and evidence reference summaries".to_string(),
+                    "read-only safety flags".to_string(),
+                ]);
+                excluded_fields.extend([
+                    "raw source paths".to_string(),
+                    "raw provider response".to_string(),
+                    "agent config contents".to_string(),
+                    "raw prompt or response persistence".to_string(),
+                    "raw skill body".to_string(),
+                    "raw frontmatter".to_string(),
+                ]);
+                sections.push(render_local_skill_map_prompt_section(
+                    &result,
+                    &mut redactor,
+                ));
+            }
             LlmPromptActionKind::WorkspaceReadiness => {
                 let result = self.check_workspace_readiness(WorkspaceReadinessParams {
                     agent: None,
@@ -10019,6 +10885,7 @@ impl ServiceHost {
             LlmPromptActionKind::KnowledgeSearch => 750,
             LlmPromptActionKind::SimilarSkillGrouping => 850,
             LlmPromptActionKind::CapabilityTaxonomy => 850,
+            LlmPromptActionKind::LocalSkillMap => 900,
             LlmPromptActionKind::WorkspaceReadiness => 900,
             LlmPromptActionKind::RemediationPlan => 900,
             LlmPromptActionKind::RemediationPreviewDrafts => 850,
@@ -14791,6 +15658,595 @@ fn stable_similar_group_id(member_ids: &[String]) -> String {
     }
     let digest = hasher.finalize();
     format!("similar-group-{:x}", digest)[..26].to_string()
+}
+
+fn local_skill_map_safety_flags() -> LocalSkillMapSafetyFlags {
+    agent_readiness_safety_flags()
+}
+
+fn local_skill_map_filters(
+    params: &LocalSkillMapParams,
+    redaction_roots: &[(String, &'static str)],
+) -> LocalSkillMapFilters {
+    let mut candidate_instance_ids = params
+        .candidate_instance_ids
+        .iter()
+        .map(|value| redact_for_llm_preview(value.trim()))
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    candidate_instance_ids.sort();
+    candidate_instance_ids.dedup();
+    let task = params
+        .task
+        .as_deref()
+        .map(str::trim)
+        .filter(|task| !task.is_empty())
+        .map(|task| redact_string(&redact_for_llm_preview(task), redaction_roots));
+    let limit = params.limit.unwrap_or(30).clamp(1, 100);
+    LocalSkillMapFilters {
+        agent: params
+            .agent
+            .as_deref()
+            .map(str::trim)
+            .filter(|agent| !agent.is_empty())
+            .map(ToOwned::to_owned),
+        task: task.clone(),
+        limit,
+        node_limit: params
+            .node_limit
+            .unwrap_or(limit.saturating_mul(4))
+            .clamp(1, 200),
+        edge_limit: params
+            .edge_limit
+            .unwrap_or(limit.saturating_mul(6))
+            .clamp(1, 400),
+        cluster_limit: params.cluster_limit.unwrap_or(20).clamp(1, 100),
+        candidate_instance_ids,
+        include_task_context: params.include_task_context || task.is_some(),
+    }
+}
+
+fn empty_local_skill_map_result(
+    filters: LocalSkillMapFilters,
+    catalog_available: bool,
+) -> LocalSkillMapResult {
+    LocalSkillMapResult {
+        generated_by: "deterministic-service",
+        catalog_available,
+        filters,
+        summary: LocalSkillMapSummary {
+            indexed_skill_count: 0,
+            candidate_skill_count: 0,
+            returned_node_count: 0,
+            returned_edge_count: 0,
+            cluster_count: 0,
+            returned_cluster_count: 0,
+            domain_count: 0,
+            skill_node_count: 0,
+            capability_node_count: 0,
+            similar_group_node_count: 0,
+            conflict_node_count: 0,
+            risk_node_count: 0,
+            task_coverage_edge_count: 0,
+            cross_agent_edge_count: 0,
+            summary: "No local catalog is available, so local skill map has no graph evidence."
+                .to_string(),
+        },
+        nodes: Vec::new(),
+        edges: Vec::new(),
+        clusters: Vec::new(),
+        domains: Vec::new(),
+        risk_notes: vec![
+            "No local risk relationships can be mapped until a catalog scan exists.".to_string(),
+        ],
+        gap_notes: vec![
+            "Run a local scan before relying on Local Skill Map for routing or cleanup review."
+                .to_string(),
+        ],
+        blocker_notes: vec![
+            "No provider request was sent and no fallback network lookup was attempted."
+                .to_string(),
+        ],
+        evidence_references: Vec::new(),
+        prompt_request: LocalSkillMapPromptRequest {
+            available: false,
+            preview_method: "llm.previewPrompt",
+            confirm_method: "llm.confirmPromptAndSend",
+            action: "local_skill_map",
+            request: LlmPreviewPromptParams {
+                action: LlmPromptActionKind::LocalSkillMap,
+                profile_id: None,
+                app_language: None,
+                skill_instance_id: None,
+                instance_ids: Vec::new(),
+                analysis_kind: None,
+                user_intent: Some(
+                    "Explain deterministic local skill map using only local catalog evidence."
+                        .to_string(),
+                ),
+            },
+            note: "Prompt preview is unavailable until local catalog evidence exists.".to_string(),
+        },
+        safety_flags: local_skill_map_safety_flags(),
+    }
+}
+
+fn local_skill_map_skill_node(row: &KnowledgeSearchRow, risk_level: &str) -> LocalSkillMapNode {
+    let mut tags = row
+        .capability_tags
+        .iter()
+        .chain(row.risk_tags.iter())
+        .take(24)
+        .cloned()
+        .collect::<Vec<_>>();
+    tags.extend(row.tools.iter().take(8).map(|tool| format!("tool-{tool}")));
+    tags.sort();
+    tags.dedup();
+    LocalSkillMapNode {
+        id: local_skill_map_skill_node_id(&row.instance_id),
+        node_type: "skill".to_string(),
+        rank: row.rank,
+        label: row.skill_name.clone(),
+        summary: row
+            .description_snippet
+            .clone()
+            .or_else(|| row.purpose_snippet.clone())
+            .unwrap_or_else(|| {
+                format!(
+                    "{} skill in {} ({}, enabled={}).",
+                    row.agent, row.scope, row.state, row.enabled
+                )
+            }),
+        weight: local_skill_map_skill_weight(row, risk_level),
+        agent: Some(row.agent.clone()),
+        scope: Some(row.scope.clone()),
+        enabled: Some(row.enabled),
+        state: Some(row.state.clone()),
+        source: Some(row.source.clone()),
+        risk_level: Some(risk_level.to_string()),
+        tags,
+        evidence_refs: row.evidence_refs.clone(),
+        safety_flags: local_skill_map_safety_flags(),
+    }
+}
+
+fn local_skill_map_agent_node(agent: &str) -> LocalSkillMapNode {
+    LocalSkillMapNode {
+        id: local_skill_map_agent_node_id(agent),
+        node_type: "agent".to_string(),
+        rank: 0,
+        label: agent.to_string(),
+        summary: format!("{agent} local skill surface from catalog evidence."),
+        weight: 50,
+        agent: Some(agent.to_string()),
+        scope: None,
+        enabled: None,
+        state: None,
+        source: None,
+        risk_level: None,
+        tags: vec!["agent".to_string(), "local-catalog".to_string()],
+        evidence_refs: Vec::new(),
+        safety_flags: local_skill_map_safety_flags(),
+    }
+}
+
+fn local_skill_map_source_node(source: &KnowledgeSearchSource) -> LocalSkillMapNode {
+    LocalSkillMapNode {
+        id: local_skill_map_source_node_id(source),
+        node_type: "source".to_string(),
+        rank: 0,
+        label: source.root_provenance.clone(),
+        summary: format!("Source evidence at {}", source.display_path),
+        weight: 45,
+        agent: None,
+        scope: None,
+        enabled: None,
+        state: None,
+        source: Some(source.clone()),
+        risk_level: None,
+        tags: vec![
+            "source".to_string(),
+            source.root_provenance.clone(),
+            format!("fingerprint-{}", source.fingerprint),
+        ],
+        evidence_refs: Vec::new(),
+        safety_flags: local_skill_map_safety_flags(),
+    }
+}
+
+fn local_skill_map_risk_node(risk_level: &str) -> LocalSkillMapNode {
+    LocalSkillMapNode {
+        id: local_skill_map_risk_node_id(risk_level),
+        node_type: "risk".to_string(),
+        rank: 0,
+        label: risk_level.to_string(),
+        summary: format!("Risk bucket `{risk_level}` derived from local findings, conflicts, analysis, and stale/drift signals."),
+        weight: local_skill_map_risk_weight(risk_level),
+        agent: None,
+        scope: None,
+        enabled: None,
+        state: None,
+        source: None,
+        risk_level: Some(risk_level.to_string()),
+        tags: vec![format!("risk-{risk_level}")],
+        evidence_refs: Vec::new(),
+        safety_flags: local_skill_map_safety_flags(),
+    }
+}
+
+fn local_skill_map_edge(
+    edge_type: &str,
+    source: &str,
+    target: &str,
+    label: &str,
+    weight: u8,
+    reasons: Vec<String>,
+    evidence_refs: Vec<String>,
+) -> LocalSkillMapEdge {
+    LocalSkillMapEdge {
+        id: stable_local_skill_map_edge_id(edge_type, source, target),
+        edge_type: edge_type.to_string(),
+        source: source.to_string(),
+        target: target.to_string(),
+        label: label.to_string(),
+        weight,
+        reasons: reasons.into_iter().take(8).collect(),
+        evidence_refs,
+        safety_flags: local_skill_map_safety_flags(),
+    }
+}
+
+fn upsert_local_skill_map_node(
+    nodes: &mut BTreeMap<String, LocalSkillMapNode>,
+    mut node: LocalSkillMapNode,
+) {
+    node.tags.sort();
+    node.tags.dedup();
+    node.evidence_refs.sort();
+    node.evidence_refs.dedup();
+    nodes
+        .entry(node.id.clone())
+        .and_modify(|existing| {
+            existing.weight = existing.weight.max(node.weight);
+            existing.tags.extend(node.tags.clone());
+            existing.tags.sort();
+            existing.tags.dedup();
+            existing.evidence_refs.extend(node.evidence_refs.clone());
+            existing.evidence_refs.sort();
+            existing.evidence_refs.dedup();
+        })
+        .or_insert(node);
+}
+
+fn upsert_local_skill_map_edge(
+    edges: &mut BTreeMap<String, LocalSkillMapEdge>,
+    mut edge: LocalSkillMapEdge,
+) {
+    edge.reasons.sort();
+    edge.reasons.dedup();
+    edge.evidence_refs.sort();
+    edge.evidence_refs.dedup();
+    edges
+        .entry(edge.id.clone())
+        .and_modify(|existing| {
+            existing.weight = existing.weight.max(edge.weight);
+            existing.reasons.extend(edge.reasons.clone());
+            existing.reasons.sort();
+            existing.reasons.dedup();
+            existing.evidence_refs.extend(edge.evidence_refs.clone());
+            existing.evidence_refs.sort();
+            existing.evidence_refs.dedup();
+        })
+        .or_insert(edge);
+}
+
+fn extend_evidence_references(
+    evidence: &mut Vec<TaskReadinessEvidenceReference>,
+    references: Vec<TaskReadinessEvidenceReference>,
+) {
+    evidence.extend(references);
+    dedupe_evidence_references(evidence);
+}
+
+fn dedupe_evidence_references(evidence: &mut Vec<TaskReadinessEvidenceReference>) {
+    let mut by_id = BTreeMap::<String, TaskReadinessEvidenceReference>::new();
+    for item in evidence.drain(..) {
+        by_id.entry(item.id.clone()).or_insert(item);
+    }
+    evidence.extend(by_id.into_values());
+}
+
+fn normalize_note_list(notes: &mut Vec<String>) {
+    notes.retain(|note| !note.trim().is_empty());
+    notes.sort();
+    notes.dedup();
+}
+
+fn local_skill_map_skill_weight(row: &KnowledgeSearchRow, risk_level: &str) -> u8 {
+    let mut weight = 35i16;
+    if row.enabled {
+        weight += 15;
+    }
+    if row.state == "loaded" {
+        weight += 12;
+    }
+    weight += row.tools.len().min(6) as i16 * 4;
+    weight += row.match_reasons.len().min(4) as i16 * 3;
+    weight += match risk_level {
+        "blocked" => 25,
+        "high" => 18,
+        "medium" => 8,
+        _ => 0,
+    };
+    weight.clamp(1, 100) as u8
+}
+
+fn local_skill_map_risk_level(risk_tags: &[String]) -> String {
+    if risk_tags.iter().any(|tag| tag == "risk-blocked") {
+        "blocked".to_string()
+    } else if risk_tags.iter().any(|tag| tag == "risk-high") {
+        "high".to_string()
+    } else if risk_tags.iter().any(|tag| tag == "risk-medium") {
+        "medium".to_string()
+    } else {
+        "low".to_string()
+    }
+}
+
+fn local_skill_map_risk_weight(risk_level: &str) -> u8 {
+    match risk_level {
+        "blocked" => 100,
+        "high" => 90,
+        "medium" => 65,
+        _ => 35,
+    }
+}
+
+fn local_skill_map_severity_weight(severity: &str) -> u8 {
+    match normalize_filter_value(severity).as_str() {
+        "error" | "critical" | "high" => 90,
+        "warning" | "warn" | "medium" => 70,
+        "info" | "low" => 45,
+        _ => 55,
+    }
+}
+
+fn local_skill_map_node_sort(
+    left: &LocalSkillMapNode,
+    right: &LocalSkillMapNode,
+) -> std::cmp::Ordering {
+    local_skill_map_node_type_order(&left.node_type)
+        .cmp(&local_skill_map_node_type_order(&right.node_type))
+        .then_with(|| right.weight.cmp(&left.weight))
+        .then_with(|| left.label.cmp(&right.label))
+        .then_with(|| left.id.cmp(&right.id))
+}
+
+fn local_skill_map_edge_sort(
+    left: &LocalSkillMapEdge,
+    right: &LocalSkillMapEdge,
+) -> std::cmp::Ordering {
+    local_skill_map_edge_type_order(&left.edge_type)
+        .cmp(&local_skill_map_edge_type_order(&right.edge_type))
+        .then_with(|| right.weight.cmp(&left.weight))
+        .then_with(|| left.source.cmp(&right.source))
+        .then_with(|| left.target.cmp(&right.target))
+        .then_with(|| left.id.cmp(&right.id))
+}
+
+fn local_skill_map_cluster_sort(
+    left: &LocalSkillMapCluster,
+    right: &LocalSkillMapCluster,
+) -> std::cmp::Ordering {
+    local_skill_map_cluster_type_order(&left.cluster_type)
+        .cmp(&local_skill_map_cluster_type_order(&right.cluster_type))
+        .then_with(|| right.score.cmp(&left.score))
+        .then_with(|| left.label.cmp(&right.label))
+        .then_with(|| left.id.cmp(&right.id))
+}
+
+fn local_skill_map_node_type_order(node_type: &str) -> u8 {
+    match node_type {
+        "task_coverage" => 0,
+        "skill" => 1,
+        "capability" => 2,
+        "similar_group" => 3,
+        "conflict" => 4,
+        "cross_agent_analysis" => 5,
+        "agent" => 6,
+        "source" => 7,
+        "risk" => 8,
+        _ => 9,
+    }
+}
+
+fn local_skill_map_edge_type_order(edge_type: &str) -> u8 {
+    match edge_type {
+        "task_route_candidate" => 0,
+        "task_readiness" => 1,
+        "skill_capability" => 2,
+        "similar_group_member" => 3,
+        "same_agent_conflict" => 4,
+        "cross_agent_analysis" => 5,
+        "skill_agent" => 6,
+        "skill_source" => 7,
+        "skill_risk" => 8,
+        _ => 9,
+    }
+}
+
+fn local_skill_map_cluster_type_order(cluster_type: &str) -> u8 {
+    match cluster_type {
+        "capability_domain" => 0,
+        "similar_group" => 1,
+        "conflict" => 2,
+        _ => 3,
+    }
+}
+
+fn local_skill_map_risk_notes(
+    nodes: &[LocalSkillMapNode],
+    edges: &[LocalSkillMapEdge],
+    readiness: Option<&TaskReadinessResult>,
+    routing: Option<&SkillRouteRankingResult>,
+) -> Vec<String> {
+    let mut notes = Vec::new();
+    let high_or_blocked = nodes
+        .iter()
+        .filter(|node| {
+            node.node_type == "skill"
+                && matches!(node.risk_level.as_deref(), Some("high" | "blocked"))
+        })
+        .count();
+    if high_or_blocked > 0 {
+        notes.push(format!(
+            "{high_or_blocked} mapped skill node(s) carry high or blocked risk signals from local evidence."
+        ));
+    }
+    let conflict_edges = edges
+        .iter()
+        .filter(|edge| edge.edge_type == "same_agent_conflict")
+        .count();
+    if conflict_edges > 0 {
+        notes.push(
+            "Same-agent conflict edges are advisory and never select winners or mutate config."
+                .to_string(),
+        );
+    }
+    if let Some(readiness) = readiness {
+        notes.extend(readiness.blocker_risk_notes.iter().take(6).cloned());
+    }
+    if let Some(routing) = routing {
+        notes.extend(routing.ambiguity_warnings.iter().take(6).cloned());
+    }
+    if notes.is_empty() {
+        notes.push(
+            "Local Skill Map did not find high-risk returned nodes; risk buckets remain review-only."
+                .to_string(),
+        );
+    }
+    normalize_note_list(&mut notes);
+    notes
+}
+
+fn local_skill_map_summary(
+    indexed_skill_count: usize,
+    candidate_skill_count: usize,
+    cluster_count: usize,
+    nodes: &[LocalSkillMapNode],
+    edges: &[LocalSkillMapEdge],
+    clusters: &[LocalSkillMapCluster],
+    domains: &[LocalSkillMapDomain],
+) -> LocalSkillMapSummary {
+    let skill_node_count = nodes
+        .iter()
+        .filter(|node| node.node_type == "skill")
+        .count();
+    let capability_node_count = nodes
+        .iter()
+        .filter(|node| node.node_type == "capability")
+        .count();
+    let similar_group_node_count = nodes
+        .iter()
+        .filter(|node| node.node_type == "similar_group")
+        .count();
+    let conflict_node_count = nodes
+        .iter()
+        .filter(|node| node.node_type == "conflict")
+        .count();
+    let risk_node_count = nodes.iter().filter(|node| node.node_type == "risk").count();
+    let task_coverage_edge_count = edges
+        .iter()
+        .filter(|edge| {
+            edge.edge_type == "task_readiness" || edge.edge_type == "task_route_candidate"
+        })
+        .count();
+    let cross_agent_edge_count = edges
+        .iter()
+        .filter(|edge| edge.edge_type == "cross_agent_analysis")
+        .count();
+    let summary = if nodes.is_empty() {
+        "No deterministic local skill map nodes matched the selected filters.".to_string()
+    } else {
+        format!(
+            "Returned {} node(s), {} edge(s), and {} cluster(s) from {} candidate skill(s) across {} indexed visible skill(s).",
+            nodes.len(),
+            edges.len(),
+            clusters.len(),
+            candidate_skill_count,
+            indexed_skill_count
+        )
+    };
+    LocalSkillMapSummary {
+        indexed_skill_count,
+        candidate_skill_count,
+        returned_node_count: nodes.len(),
+        returned_edge_count: edges.len(),
+        cluster_count,
+        returned_cluster_count: clusters.len(),
+        domain_count: domains.len(),
+        skill_node_count,
+        capability_node_count,
+        similar_group_node_count,
+        conflict_node_count,
+        risk_node_count,
+        task_coverage_edge_count,
+        cross_agent_edge_count,
+        summary,
+    }
+}
+
+fn local_skill_map_skill_node_id(instance_id: &str) -> String {
+    format!("skill:{}", redact_for_llm_preview(instance_id))
+}
+
+fn local_skill_map_agent_node_id(agent: &str) -> String {
+    format!("agent:{}", redact_for_llm_preview(agent))
+}
+
+fn local_skill_map_source_node_id(source: &KnowledgeSearchSource) -> String {
+    stable_local_skill_map_node_id(
+        "source",
+        &[
+            source.root_provenance.as_str(),
+            source.display_path.as_str(),
+            source.fingerprint.as_str(),
+        ],
+    )
+}
+
+fn local_skill_map_risk_node_id(risk_level: &str) -> String {
+    format!("risk:{risk_level}")
+}
+
+fn local_skill_map_capability_node_id(domain_id: &str) -> String {
+    format!("capability:{}", redact_for_llm_preview(domain_id))
+}
+
+fn local_skill_map_similar_group_node_id(group_id: &str) -> String {
+    format!("similar_group:{}", redact_for_llm_preview(group_id))
+}
+
+fn local_skill_map_conflict_node_id(conflict_id: &str) -> String {
+    format!("conflict:{}", redact_for_llm_preview(conflict_id))
+}
+
+fn local_skill_map_analysis_node_id(analysis_id: &str) -> String {
+    format!("analysis:{}", redact_for_llm_preview(analysis_id))
+}
+
+fn stable_local_skill_map_node_id(prefix: &str, parts: &[&str]) -> String {
+    let mut hasher = Sha256::new();
+    for part in parts {
+        hasher.update(part.as_bytes());
+        hasher.update(b"\0");
+    }
+    let digest = hasher.finalize();
+    format!("{prefix}:{}", hex_prefix(&digest, 16))
+}
+
+fn stable_local_skill_map_edge_id(edge_type: &str, source: &str, target: &str) -> String {
+    stable_local_skill_map_node_id("edge", &[edge_type, source, target])
 }
 
 fn workspace_readiness_safety_flags() -> WorkspaceReadinessSafetyFlags {
@@ -21551,6 +23007,182 @@ fn render_capability_taxonomy_prompt_section(
     )
 }
 
+fn render_local_skill_map_prompt_section(
+    result: &LocalSkillMapResult,
+    redactor: &mut PromptRedactor<'_>,
+) -> String {
+    let nodes = result
+        .nodes
+        .iter()
+        .take(12)
+        .map(|node| {
+            format!(
+                "- #{} {} {} weight={} risk={} agent={} summary={}",
+                node.rank,
+                node.node_type,
+                redactor.redact(&node.label),
+                node.weight,
+                node.risk_level.as_deref().unwrap_or("n/a"),
+                node.agent
+                    .as_deref()
+                    .map(|agent| redactor.redact(agent))
+                    .unwrap_or_else(|| "n/a".to_string()),
+                redactor.redact(&node.summary)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let edges = result
+        .edges
+        .iter()
+        .take(16)
+        .map(|edge| {
+            format!(
+                "- {} {} -> {} weight={} label={} reasons={}",
+                edge.edge_type,
+                redactor.redact(&edge.source),
+                redactor.redact(&edge.target),
+                edge.weight,
+                redactor.redact(&edge.label),
+                edge.reasons
+                    .iter()
+                    .take(3)
+                    .map(|reason| redactor.redact(reason))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let clusters = result
+        .clusters
+        .iter()
+        .take(8)
+        .map(|cluster| {
+            format!(
+                "- {} {} score={} risk={} nodes={} edges={} summary={}",
+                cluster.cluster_type,
+                redactor.redact(&cluster.label),
+                cluster.score,
+                redactor.redact(&cluster.risk_level),
+                cluster.node_ids.len(),
+                cluster.edge_ids.len(),
+                redactor.redact(&cluster.summary)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let domains = result
+        .domains
+        .iter()
+        .take(8)
+        .map(|domain| {
+            format!(
+                "- {} key={} coverage={} score={} skills={} enabled={} agents={} gaps={} blockers={}",
+                redactor.redact(&domain.domain_name),
+                redactor.redact(&domain.domain_key),
+                domain.coverage_level,
+                domain.coverage_score,
+                domain.skill_count,
+                domain.enabled_skill_count,
+                domain.agent_count,
+                domain
+                    .gap_notes
+                    .iter()
+                    .take(3)
+                    .map(|note| redactor.redact(note))
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                domain
+                    .blocker_notes
+                    .iter()
+                    .take(3)
+                    .map(|note| redactor.redact(note))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let evidence = result
+        .evidence_references
+        .iter()
+        .take(16)
+        .map(|reference| {
+            format!(
+                "- {} {} {}",
+                reference.source_type,
+                redactor.redact(&reference.source_id),
+                redactor.redact(&reference.label)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "Local Skill Map evidence:\n- catalog_available: {}\n- agent: {}\n- task: {}\n- indexed_skill_count: {}\n- candidate_skill_count: {}\n- returned_node_count: {}\n- returned_edge_count: {}\n- returned_cluster_count: {}\n- domain_count: {}\n- skill_node_count: {}\n- conflict_node_count: {}\n- risk_node_count: {}\n- task_coverage_edge_count: {}\n- cross_agent_edge_count: {}\n- summary: {}\n\nNodes:\n{}\n\nEdges:\n{}\n\nClusters:\n{}\n\nDomains:\n{}\n\nRisk notes:\n{}\n\nGap notes:\n{}\n\nBlocker notes:\n{}\n\nEvidence references:\n{}\n\nSafety flags: read_only=true, app_local_only=true, provider_request_sent=false, write_back_allowed=false, write_actions_available=false, skill_files_mutated=false, agent_config_mutated=false, script_execution_allowed=false, execution_actions_available=false, config_mutation_allowed=false, snapshot_created=false, triage_mutation_allowed=false, credential_accessed=false, raw_prompt_persisted=false, raw_response_persisted=false, raw_trace_persisted=false, cloud_sync_performed=false, telemetry_emitted=false.",
+        result.catalog_available,
+        result
+            .filters
+            .agent
+            .as_deref()
+            .map(|agent| redactor.redact(agent))
+            .unwrap_or_else(|| "all".to_string()),
+        result
+            .filters
+            .task
+            .as_deref()
+            .map(|task| redactor.redact(task))
+            .unwrap_or_else(|| "none".to_string()),
+        result.summary.indexed_skill_count,
+        result.summary.candidate_skill_count,
+        result.summary.returned_node_count,
+        result.summary.returned_edge_count,
+        result.summary.returned_cluster_count,
+        result.summary.domain_count,
+        result.summary.skill_node_count,
+        result.summary.conflict_node_count,
+        result.summary.risk_node_count,
+        result.summary.task_coverage_edge_count,
+        result.summary.cross_agent_edge_count,
+        redactor.redact(&result.summary.summary),
+        if nodes.is_empty() { "none" } else { &nodes },
+        if edges.is_empty() { "none" } else { &edges },
+        if clusters.is_empty() { "none" } else { &clusters },
+        if domains.is_empty() { "none" } else { &domains },
+        if result.risk_notes.is_empty() {
+            "none".to_string()
+        } else {
+            result
+                .risk_notes
+                .iter()
+                .map(|note| redactor.redact(note))
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+        if result.gap_notes.is_empty() {
+            "none".to_string()
+        } else {
+            result
+                .gap_notes
+                .iter()
+                .map(|note| redactor.redact(note))
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+        if result.blocker_notes.is_empty() {
+            "none".to_string()
+        } else {
+            result
+                .blocker_notes
+                .iter()
+                .map(|note| redactor.redact(note))
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+        if evidence.is_empty() { "none" } else { &evidence },
+    )
+}
+
 fn render_task_readiness_prompt_section(
     readiness: &TaskReadinessResult,
     redactor: &mut PromptRedactor<'_>,
@@ -25255,6 +26887,334 @@ mod tests {
 
         let _ = fs::remove_dir_all(app_data_dir);
         let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn knowledge_build_local_skill_map_missing_catalog_returns_safe_empty_result() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-local-map-missing-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("local-map-missing".to_string()),
+            method: "knowledge.buildLocalSkillMap".to_string(),
+            params: json!({ "task": "release readiness map" }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("missing catalog local map result");
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/returned_node_count")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert!(result
+            .get("nodes")
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty));
+        assert!(result
+            .get("edges")
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_agent_readiness_safety(&result);
+        assert!(
+            !host.catalog_path().exists(),
+            "missing-catalog local map must not initialize catalog.sqlite"
+        );
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    }
+
+    #[test]
+    fn knowledge_build_local_skill_map_returns_deterministic_graph() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-local-map-graph-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-local-map-graph-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_similar_grouping_fixture(&host);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("local-map-graph".to_string()),
+            method: "knowledge.buildLocalSkillMap".to_string(),
+            params: json!({
+                "task": "release readiness privacy evidence",
+                "limit": 10,
+                "node_limit": 80,
+                "edge_limit": 160,
+                "cluster_limit": 20,
+                "include_task_context": true
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("local map result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("deterministic-service")
+        );
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/candidate_skill_count")
+                .and_then(Value::as_u64),
+            Some(3)
+        );
+        assert_eq!(
+            result
+                .pointer("/prompt_request/action")
+                .and_then(Value::as_str),
+            Some("local_skill_map")
+        );
+        assert_eq!(
+            result
+                .pointer("/prompt_request/request/action")
+                .and_then(Value::as_str),
+            Some("local_skill_map")
+        );
+        let nodes = result
+            .get("nodes")
+            .and_then(Value::as_array)
+            .expect("nodes");
+        let edges = result
+            .get("edges")
+            .and_then(Value::as_array)
+            .expect("edges");
+        assert!(nodes.iter().any(|node| {
+            node.get("node_type").and_then(Value::as_str) == Some("skill")
+                && node.get("id").and_then(Value::as_str) == Some("skill:similar-claude-a")
+        }));
+        assert!(nodes
+            .iter()
+            .any(|node| node.get("node_type").and_then(Value::as_str) == Some("capability")));
+        assert!(nodes
+            .iter()
+            .any(|node| node.get("node_type").and_then(Value::as_str) == Some("similar_group")));
+        assert!(nodes
+            .iter()
+            .any(|node| node.get("node_type").and_then(Value::as_str) == Some("risk")));
+        assert!(nodes
+            .iter()
+            .any(|node| node.get("node_type").and_then(Value::as_str) == Some("task_coverage")));
+        assert!(edges
+            .iter()
+            .any(|edge| edge.get("edge_type").and_then(Value::as_str) == Some("skill_capability")));
+        assert!(edges.iter().any(|edge| {
+            edge.get("edge_type").and_then(Value::as_str) == Some("similar_group_member")
+        }));
+        assert!(edges.iter().any(|edge| {
+            edge.get("edge_type").and_then(Value::as_str) == Some("task_readiness")
+        }));
+        assert!(result
+            .get("clusters")
+            .and_then(Value::as_array)
+            .is_some_and(|clusters| !clusters.is_empty()));
+        assert!(result
+            .get("domains")
+            .and_then(Value::as_array)
+            .is_some_and(|domains| !domains.is_empty()));
+        assert_agent_readiness_safety(&result);
+
+        let second = host.handle(ServiceRequest {
+            id: Some("local-map-graph-second".to_string()),
+            method: "knowledge.buildLocalSkillMap".to_string(),
+            params: json!({
+                "task": "release readiness privacy evidence",
+                "limit": 10,
+                "node_limit": 80,
+                "edge_limit": 160,
+                "cluster_limit": 20,
+                "include_task_context": true
+            }),
+        });
+        assert!(second.ok, "{:?}", second.error);
+        assert_eq!(
+            serde_json::to_string(&result).expect("serialize first local map"),
+            serde_json::to_string(&second.result.expect("second local map"))
+                .expect("serialize second local map")
+        );
+
+        let serialized = serde_json::to_string(&result).expect("serialize local map result");
+        assert!(!serialized.contains(&app_data_dir.to_string_lossy().to_string()));
+        assert!(!serialized.contains(&user_home.to_string_lossy().to_string()));
+        assert!(!serialized.contains("fixture-redacted-value"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn knowledge_build_local_skill_map_preserves_provider_and_write_boundaries() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-local-map-safety-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-local-map-safety-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_similar_grouping_fixture(&host);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("local-map-safety".to_string()),
+            method: "knowledge.buildLocalSkillMap".to_string(),
+            params: json!({
+                "task": "release readiness token=fixture-redacted-value",
+                "limit": 10,
+                "node_limit": 64,
+                "edge_limit": 128,
+                "cluster_limit": 16,
+                "include_task_context": true
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("local map safety result");
+        assert_agent_readiness_safety(&result);
+        assert_eq!(
+            result
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/write_actions_available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert!(result
+            .get("nodes")
+            .and_then(Value::as_array)
+            .expect("nodes")
+            .iter()
+            .all(|node| node
+                .pointer("/safety_flags/read_only")
+                .and_then(Value::as_bool)
+                == Some(true)));
+        assert!(result
+            .get("edges")
+            .and_then(Value::as_array)
+            .expect("edges")
+            .iter()
+            .all(|edge| edge
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool)
+                == Some(false)));
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let serialized = serde_json::to_string(&result).expect("serialize local map result");
+        assert!(!serialized.contains(&app_data_dir.to_string_lossy().to_string()));
+        assert!(!serialized.contains(&user_home.to_string_lossy().to_string()));
+        assert!(!serialized.contains("fixture-redacted-value"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn local_skill_map_prompt_preview_is_redacted_and_preview_only() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-local-map-prompt-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_similar_grouping_fixture(&host);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("local-map-preview".to_string()),
+            method: "llm.previewPrompt".to_string(),
+            params: json!({
+                "action": "local_skill_map",
+                "user_intent": "Explain map for release readiness with secret-token=fixture-redacted-value",
+                "instance_ids": ["similar-claude-a", "similar-codex-a"]
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let preview: WireLlmPreviewPromptResult =
+            serde_json::from_value(response.result.expect("preview result"))
+                .expect("decode local map prompt preview");
+        assert_eq!(preview.action, "local_skill_map");
+        assert!(preview.prompt_preview.contains("Local Skill Map evidence"));
+        assert!(!preview.prompt_preview.contains("fixture-redacted-value"));
+        assert!(!preview.provider_request_sent);
+        assert!(!preview.write_back_allowed);
+        assert!(preview.draft_requires_user_copy);
+        assert!(!preview.raw_prompt_persisted);
+        assert!(!preview.raw_response_persisted);
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
     }
 
     #[test]
@@ -31410,6 +33370,45 @@ mod tests {
                     assert_agent_readiness_safety_flags(&domain.safety_flags);
                 }
             }
+            "knowledge.buildLocalSkillMap" => {
+                let skill_map: WireLocalSkillMapResult =
+                    decode_fixture_result(method, result, path);
+                assert_eq!(skill_map.generated_by, "deterministic-service");
+                assert!(skill_map.catalog_available);
+                assert_eq!(skill_map.summary.returned_node_count, skill_map.nodes.len());
+                assert_eq!(skill_map.summary.returned_edge_count, skill_map.edges.len());
+                assert_eq!(
+                    skill_map.summary.returned_cluster_count,
+                    skill_map.clusters.len()
+                );
+                assert!(!skill_map.nodes.is_empty());
+                assert!(!skill_map.edges.is_empty());
+                assert!(skill_map.nodes.iter().any(|node| node.node_type == "skill"));
+                assert!(skill_map
+                    .nodes
+                    .iter()
+                    .any(|node| node.node_type == "capability"));
+                assert!(skill_map
+                    .edges
+                    .iter()
+                    .any(|edge| edge.edge_type == "skill_capability"));
+                assert_eq!(skill_map.prompt_request.action, "local_skill_map");
+                assert_eq!(skill_map.prompt_request.preview_method, "llm.previewPrompt");
+                assert_eq!(
+                    skill_map.prompt_request.request.action,
+                    LlmPromptActionKind::LocalSkillMap
+                );
+                assert_agent_readiness_safety_flags(&skill_map.safety_flags);
+                for node in &skill_map.nodes {
+                    assert_agent_readiness_safety_flags(&node.safety_flags);
+                }
+                for edge in &skill_map.edges {
+                    assert_agent_readiness_safety_flags(&edge.safety_flags);
+                }
+                for cluster in &skill_map.clusters {
+                    assert_agent_readiness_safety_flags(&cluster.safety_flags);
+                }
+            }
             "workspace.checkReadiness" => {
                 let readiness: WireWorkspaceReadinessResult =
                     decode_fixture_result(method, result, path);
@@ -32616,6 +34615,14 @@ mod tests {
             "knowledge.buildCapabilityTaxonomy" => {
                 json!({ "include_single_skill_domains": true, "limit": 4 })
             }
+            "knowledge.buildLocalSkillMap" => json!({
+                "task": "fixture local skill map",
+                "limit": 4,
+                "node_limit": 24,
+                "edge_limit": 48,
+                "cluster_limit": 8,
+                "include_task_context": true
+            }),
             "workspace.checkReadiness" => json!({
                 "task": "fixture workspace readiness check",
                 "expected_capabilities": ["Release & Validation", "Security & Privacy"],
@@ -33492,6 +35499,131 @@ mod tests {
         stale_drift_context: Option<WireKnowledgeStaleDriftContext>,
         similarity_group_ids: Vec<String>,
         match_reasons: Vec<String>,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireLocalSkillMapResult {
+        generated_by: String,
+        catalog_available: bool,
+        filters: WireLocalSkillMapFilters,
+        summary: WireLocalSkillMapSummary,
+        nodes: Vec<WireLocalSkillMapNode>,
+        edges: Vec<WireLocalSkillMapEdge>,
+        clusters: Vec<WireLocalSkillMapCluster>,
+        domains: Vec<WireLocalSkillMapDomain>,
+        risk_notes: Vec<String>,
+        gap_notes: Vec<String>,
+        blocker_notes: Vec<String>,
+        evidence_references: Vec<WireTaskReadinessEvidenceReference>,
+        prompt_request: WireAgentReadinessPromptRequest,
+        safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireLocalSkillMapFilters {
+        agent: Option<String>,
+        task: Option<String>,
+        limit: usize,
+        node_limit: usize,
+        edge_limit: usize,
+        cluster_limit: usize,
+        candidate_instance_ids: Vec<String>,
+        include_task_context: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireLocalSkillMapSummary {
+        indexed_skill_count: usize,
+        candidate_skill_count: usize,
+        returned_node_count: usize,
+        returned_edge_count: usize,
+        cluster_count: usize,
+        returned_cluster_count: usize,
+        domain_count: usize,
+        skill_node_count: usize,
+        capability_node_count: usize,
+        similar_group_node_count: usize,
+        conflict_node_count: usize,
+        risk_node_count: usize,
+        task_coverage_edge_count: usize,
+        cross_agent_edge_count: usize,
+        summary: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireLocalSkillMapNode {
+        id: String,
+        node_type: String,
+        rank: usize,
+        label: String,
+        summary: String,
+        weight: u8,
+        agent: Option<String>,
+        scope: Option<String>,
+        enabled: Option<bool>,
+        state: Option<String>,
+        source: Option<WireKnowledgeSearchSource>,
+        risk_level: Option<String>,
+        tags: Vec<String>,
+        evidence_refs: Vec<String>,
+        safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireLocalSkillMapEdge {
+        id: String,
+        edge_type: String,
+        source: String,
+        target: String,
+        label: String,
+        weight: u8,
+        reasons: Vec<String>,
+        evidence_refs: Vec<String>,
+        safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireLocalSkillMapCluster {
+        id: String,
+        cluster_type: String,
+        label: String,
+        summary: String,
+        score: u8,
+        risk_level: String,
+        node_ids: Vec<String>,
+        edge_ids: Vec<String>,
+        evidence_refs: Vec<String>,
+        safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireLocalSkillMapDomain {
+        domain_id: String,
+        domain_key: String,
+        domain_name: String,
+        coverage_level: String,
+        coverage_score: u8,
+        node_ids: Vec<String>,
+        skill_count: usize,
+        enabled_skill_count: usize,
+        agent_count: usize,
+        gap_notes: Vec<String>,
+        blocker_notes: Vec<String>,
         evidence_refs: Vec<String>,
     }
 

@@ -51,6 +51,8 @@ struct SkillStoreTests {
         try await routingAccuracyDashboardUsesReadOnlyServiceContract()
         try await staleDriftDetectionUsesReadOnlyServiceContract()
         try await knowledgeSearchUsesReadOnlyServiceContract()
+        try await localSkillMapUsesReadOnlyServiceContract()
+        try await localSkillMapFallsBackWhenMethodUnavailable()
         try await similarSkillGroupingUsesReadOnlyServiceContract()
         try await similarSkillGroupingFallsBackWhenMethodUnavailable()
         try await capabilityTaxonomyUsesReadOnlyServiceContract()
@@ -1370,6 +1372,81 @@ struct SkillStoreTests {
         try expectFalse(calls.contains("credential"), "Knowledge search must not call credential paths.")
     }
 
+    private func localSkillMapUsesReadOnlyServiceContract() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+        let snapshotCallsBeforeMap = countOccurrences("snapshot.", in: fake.calls())
+        await store.buildLocalSkillMap()
+
+        let result = store.localSkillMapResult
+        try expectEqual(result?.generatedBy, "local-v2.63", "Local skill map should expose generator metadata.")
+        try expectEqual(result?.summary.nodeCount, 2, "Local skill map should expose node count.")
+        try expectEqual(result?.summary.edgeCount, 1, "Local skill map should expose edge count.")
+        try expectEqual(result?.summary.clusterCount, 1, "Local skill map should expose cluster count.")
+        try expectEqual(result?.selectedSkill?.skillName, "Beta", "Local skill map should expose selected skill context.")
+        try expectEqual(result?.nodes.first?.label, "Beta", "Local skill map should expose key nodes.")
+        try expectEqual(result?.edges.first?.relation, "similar-purpose", "Local skill map should expose edge relations.")
+        try expectEqual(result?.clusters.first?.title, "Release audit", "Local skill map should expose clusters.")
+        try expectEqual(result?.gapRows.first?.detail, "No Codex project route.", "Local skill map should expose gap rows.")
+        try expectEqual(result?.evidenceReferences.first?.title, "Local skill map", "Local skill map should expose evidence references.")
+        try expectFalse(result?.safetyFlags.providerRequestSent ?? true, "Local skill map must not send provider requests.")
+        try expectFalse(result?.safetyFlags.writeBackAllowed ?? true, "Local skill map must not allow write-back.")
+        try expectFalse(result?.safetyFlags.writeActionsAvailable ?? true, "Local skill map must not expose write actions.")
+        try expectFalse(result?.safetyFlags.scriptExecutionAllowed ?? true, "Local skill map must not allow script execution.")
+        try expectFalse(result?.safetyFlags.executionActionsAvailable ?? true, "Local skill map must not expose execution actions.")
+        try expectFalse(result?.safetyFlags.configMutationAllowed ?? true, "Local skill map must not mutate config.")
+        try expectFalse(result?.safetyFlags.snapshotCreated ?? true, "Local skill map must not create snapshots.")
+        try expectFalse(result?.safetyFlags.triageMutationAllowed ?? true, "Local skill map must not mutate triage.")
+        try expectFalse(result?.safetyFlags.credentialAccessed ?? true, "Local skill map must not access credentials.")
+        try expectFalse(result?.safetyFlags.rawPromptPersisted ?? true, "Local skill map must not persist raw prompts.")
+        try expectFalse(result?.safetyFlags.rawResponsePersisted ?? true, "Local skill map must not persist raw responses.")
+        try expectFalse(result?.safetyFlags.rawTracePersisted ?? true, "Local skill map must not persist raw traces.")
+        try expectFalse(result?.safetyFlags.cloudSyncEnabled ?? true, "Local skill map must not sync cloud data.")
+        try expectFalse(result?.safetyFlags.telemetryEnabled ?? true, "Local skill map must not emit telemetry.")
+        try expectFalse(store.isBuildingLocalSkillMap, "Local skill map should reset loading state.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "knowledge.buildLocalSkillMap", "Local skill map should call the V2.63 map method.")
+        try expectContains(calls, "\"agent\":\"claude-code\"", "Local skill map should pass the current agent filter.")
+        try expectContains(calls, "\"selected_skill_id\":\"beta\"", "Local skill map should pass selected skill id.")
+        try expectContains(calls, "\"selected_skill_name\":\"Beta\"", "Local skill map should pass selected skill name.")
+        try expectContains(calls, "\"selected_skill_agent\":\"claude-code\"", "Local skill map should pass selected skill agent.")
+        try expectContains(calls, "\"project_root\":\"\\/tmp\\/project\"", "Local skill map should pass active project root.")
+        try expectContains(calls, "\"current_cwd\":\"\\/tmp\\/project\"", "Local skill map should pass active project cwd.")
+        try expectContains(calls, "\"workspace\":\"Fixture Project\"", "Local skill map should pass active workspace name.")
+        try expectContains(calls, "\"limit\":30", "Local skill map should pass map limit.")
+        try expectContains(calls, "\"include_edges\":true", "Local skill map should request edges.")
+        try expectContains(calls, "\"include_clusters\":true", "Local skill map should request clusters.")
+        try expectContains(calls, "\"include_evidence\":true", "Local skill map should request evidence rows.")
+        try expectFalse(calls.contains("llm.previewPrompt"), "Local skill map must not prepare provider prompts.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Local skill map must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Local skill map must not call config write paths.")
+        try expectFalse(calls.contains("script.execute"), "Local skill map must not call execution paths.")
+        try expectEqual(countOccurrences("snapshot.", in: calls), snapshotCallsBeforeMap, "Local skill map must not call snapshot paths.")
+        try expectFalse(calls.contains("credential"), "Local skill map must not call credential paths.")
+    }
+
+    private func localSkillMapFallsBackWhenMethodUnavailable() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "normal")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+        await store.buildLocalSkillMap()
+
+        try expectEqual(store.localSkillMapResult?.isUnavailable, true, "Local skill map should expose unavailable fallback for older services.")
+        try expectEqual(store.localSkillMapResult?.fallbackReason, UIStrings.localSkillMapUnavailable, "Unknown method fallback should use the localized unavailable copy.")
+        try expectFalse(store.isBuildingLocalSkillMap, "Unavailable local skill map should reset loading state.")
+        try expectContains(fake.calls(), "knowledge.buildLocalSkillMap", "Fallback should still prove the intended V2.63 method was attempted.")
+    }
+
     private func similarSkillGroupingUsesReadOnlyServiceContract() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -2412,6 +2489,12 @@ private final class FakeServiceScript {
               respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.52","catalog_available":true,"filters":{"query":"release audit","agent":"claude-code","limit":20},"summary":{"result_count":1,"agent_count":1,"gap_count":1,"blocker_count":0,"summary":"Beta matches local knowledge for release audit work."},"knowledge_rows":[{"rank":1,"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","purpose":"Handles local audit release notes.","matched_fields":["purpose","tools"],"match_reasons":["Purpose mentions audit."],"keywords":["audit","release"],"tools":["rg"],"rules":["permissions.network-declared"],"capability_tags":["analysis"],"risk_tags":["local-only"],"evidence_refs":["catalog:beta"],"safety_flags":["provider not sent"]}],"facet_rows":[{"facet":"agent","value":"claude-code","count":1}],"gap_notes":["No fresh trace confirms the release audit route."],"blocker_notes":[],"evidence_references":[{"title":"Knowledge index","detail":"Beta indexed from local catalog metadata.","source":"knowledge.search","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"knowledge_search","summary":"Provider explanation is copy-only and preview-gated.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent"]}}}'
             fi
             respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: knowledge.search"}}'
+            ;;
+          *\\"knowledge.buildLocalSkillMap\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.63","catalog_available":true,"filters":{"agent":"claude-code","selected_skill_id":"beta","selected_skill_name":"Beta","selected_skill_agent":"claude-code","project_root":"/tmp/project","current_cwd":"/tmp/project","workspace":"Fixture Project","limit":30,"include_edges":true,"include_clusters":true},"summary":{"node_count":2,"edge_count":1,"cluster_count":1,"domain_count":1,"skill_count":2,"agent_count":1,"gap_count":1,"blocker_count":0,"evidence_count":1,"selected_skill_context":"Beta in Claude Code project scope","summary":"Beta anchors the release audit local skill map."},"selected_skill":{"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","quality_score":82,"readiness_score":78,"reasons":["Selected skill anchors this map."],"evidence_refs":["catalog:beta"],"safety_flags":["provider not sent"]},"nodes":[{"node_id":"skill:beta","label":"Beta","kind":"skill","instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","domain":"Release audit","cluster_id":"cluster:audit","weight":0.91,"reasons":["Selected skill anchors this map."],"evidence_refs":["catalog:beta"],"safety_flags":["provider not sent"]},{"node_id":"skill:alpha","label":"Alpha","kind":"skill","instance_id":"alpha","definition_id":"def.alpha","skill_name":"Alpha","agent":"claude-code","scope":"agent-global","enabled":true,"state":"loaded","domain":"Release audit","cluster_id":"cluster:audit","weight":0.64,"reasons":["Similar purpose wording."],"evidence_refs":["catalog:alpha"],"safety_flags":["provider not sent"]}],"edges":[{"source_id":"skill:beta","target_id":"skill:alpha","relation_kind":"similar-purpose","label":"Shared audit purpose","strength":0.74,"direction":"undirected","reasons":["Shared audit keywords and rg tool use."],"evidence_refs":["similar:audit"],"safety_flags":["provider not sent"]}],"clusters":[{"cluster_id":"cluster:audit","name":"Release audit","kind":"domain","summary":"Skills that support release audit workflows.","node_ids":["skill:beta","skill:alpha"],"agents":["claude-code"],"capabilities":["release-audit"],"gap_notes":["No Codex project route."],"blocker_notes":[],"evidence_refs":["domain:audit"],"safety_flags":["provider not sent"]}],"gap_rows":[{"title":"Missing Codex route","detail":"No Codex project route.","severity":"warning","agent":"codex","evidence_refs":["workspace:codex-gap"]}],"blocker_rows":[],"evidence_references":[{"title":"Local skill map","detail":"Map derived from local catalog and analysis evidence.","source":"knowledge.buildLocalSkillMap","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"local_skill_map","summary":"Provider explanation is copy-only and preview-gated.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent"]}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: knowledge.buildLocalSkillMap"}}'
             ;;
           *\\"knowledge.groupSimilarSkills\\"*)
             if [ "$scenario" = "prompt-ready" ]; then

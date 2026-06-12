@@ -19,6 +19,7 @@
       "knowledge.search",
       "knowledge.groupSimilarSkills",
       "knowledge.buildCapabilityTaxonomy",
+      "knowledge.buildLocalSkillMap",
       "workspace.checkReadiness",
       "remediation.plan",
       "remediation.previewDrafts",

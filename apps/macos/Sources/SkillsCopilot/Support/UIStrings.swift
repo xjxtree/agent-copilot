@@ -572,6 +572,21 @@ enum UIStrings {
     static var knowledgeGapNotes: String { text("knowledge.gapNotes", "Gap notes") }
     static var knowledgeBlockerNotes: String { text("knowledge.blockerNotes", "Blocker notes") }
     static var knowledgeSafetyFlags: String { text("knowledge.safetyFlags", "Safety flags") }
+    static var localSkillMapTitle: String { text("localSkillMap.title", "Local Skill Map") }
+    static var localSkillMapBoundary: String { text("localSkillMap.boundary", "User-triggered, read-only local map of skill relationships, domains, gaps, blockers, and evidence. It cannot call a provider, write skill files, mutate agent config, create snapshots, change triage, execute scripts, read credentials, sync cloud data, or emit telemetry.") }
+    static var localSkillMapAction: String { text("localSkillMap.action.build", "Build Map") }
+    static var localSkillMapUnavailable: String { text("localSkillMap.unavailable", "Local skill map is unavailable in this service build.") }
+    static var localSkillMapNoResult: String { text("localSkillMap.empty.result", "No local skill map loaded.") }
+    static var localSkillMapNodes: String { text("localSkillMap.nodes", "Map nodes") }
+    static var localSkillMapEdges: String { text("localSkillMap.edges", "Map edges") }
+    static var localSkillMapClusters: String { text("localSkillMap.clusters", "Clusters / domains") }
+    static var localSkillMapNoNodes: String { text("localSkillMap.empty.nodes", "No map nodes returned.") }
+    static var localSkillMapNoEdges: String { text("localSkillMap.empty.edges", "No map edges returned.") }
+    static var localSkillMapNoClusters: String { text("localSkillMap.empty.clusters", "No clusters or domains returned.") }
+    static var localSkillMapSelectedContext: String { text("localSkillMap.selectedContext", "Selected skill context") }
+    static var localSkillMapRelation: String { text("localSkillMap.relation", "Relation") }
+    static var localSkillMapStrength: String { text("localSkillMap.strength", "Strength") }
+    static var localSkillMapNodeIDs: String { text("localSkillMap.nodeIDs", "Node IDs") }
     static var similarGroupingTitle: String { text("similarGrouping.title", "Similar Skill Grouping") }
     static var similarGroupingBoundary: String { text("similarGrouping.boundary", "User-triggered, read-only local grouping for duplicate, similar, and confusable skills across catalog evidence. It cannot call a provider, write skill files, mutate agent config, create snapshots, change triage, execute scripts, read credentials, persist raw prompts/responses/traces, sync cloud data, or emit telemetry.") }
     static var similarGroupingAction: String { text("similarGrouping.action.group", "Group Similar Skills") }

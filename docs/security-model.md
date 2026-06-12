@@ -222,6 +222,7 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
 - V2.64 provider observability 只能在上述最小 metadata 上做完整 UI、趋势、失败/限流分析、清理/保留策略和可选脱敏导出；不得把 observability 扩展成 secrets/raw prompt/raw response 存储。
 - Imported trace/log 必须本地脱敏后再允许进入 provider prompt；默认不得发送 credentials、tokens、real home paths、temp paths、private URLs 或 raw config secrets。
 - V2.62 Agent Session Skill Review 必须由用户显式导入/粘贴 trace 或未来显式选择本地 agent 会话后触发；不得后台索引全量 agent 历史，不得保存 raw transcript。仅允许保存 redacted metadata/excerpt、skill usage evidence refs、review outcome 与 safety flags。
+- V2.63 Local Skill Map 必须由用户显式触发，且只派生 existing catalog evidence、knowledge tags、similar groups、capability taxonomy、conflict/cross-agent analysis、task readiness/routing/session-review context、stale/drift 与 risk evidence。它不得创建新的 source of truth，不得默认持久化 map artifact，不得写 skill/config、snapshot、triage，不得执行脚本，不得默认发送 provider request，也不得保存 raw prompt/raw response/raw trace/secrets/unredacted local paths。
 - V2.65 Task-first Cockpit 只能聚合现有 local evidence 与 redacted provider/run metadata；不得创建新的 hidden task state source，不得自动触发 provider 请求或写入。
 - V2.66 Skill Lifecycle Timeline 只能保存/展示 redacted lifecycle metadata；不得保存 raw skill content、raw prompt/response、raw transcript、credentials 或 unredacted local paths。
 - V2.67 Guided Cleanup Flow 只能组织现有 evidence 与 metadata-only step state；实际 enable/disable/edit 必须跳转或调用既有 preview-first、explicit-confirm safe write path，不能在 guided flow 内隐藏 apply。
@@ -312,6 +313,14 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
 - The method must not default to provider or network usage. Optional provider explanation remains V2.42 preview/redaction/confirmation-gated and copy-only, and must not affect deterministic taxonomy results.
 - Output safety flags must default false: `provider_request_sent`, `write_back_allowed`, `write_actions_available`, `skill_files_mutated`, `agent_config_mutated`, `script_execution_allowed`, `execution_actions_available`, `config_mutation_allowed`, `snapshot_created`, `triage_mutation_allowed`, `credential_accessed`, `raw_prompt_persisted`, `raw_response_persisted`, `raw_trace_persisted`, `cloud_sync_performed`, and `telemetry_emitted`.
 - Output shape must remain explanatory: summary, domain rows, coverage rows, representative skills, gap notes, blocker notes, evidence references, prompt request metadata, and safety flags. The taxonomy explanation may surface coverage redundancy and routing ambiguity but must not imply workspace readiness or remediation planning is implemented.
+
+### 2.4.3.1.8a V2.63 Local Skill Map（completed）
+
+- `knowledge.buildLocalSkillMap` is user-triggered, local-only, deterministic, read-only, and evidence-first. It derives a navigable skill map from existing catalog evidence, V2.52 knowledge tags, V2.53 similar groups, V2.54 capability taxonomy, same-agent conflicts, cross-agent analysis, task readiness/routing/session-review context, stale/drift signals, source provenance, and risk evidence.
+- The map is a view over existing ids and evidence refs, not a new source of truth. It must not persist a map artifact by default, write skill files, mutate agent config, create or roll back snapshots, mutate triage, execute scripts, read or write credentials, sync cloud data, or emit telemetry.
+- The method must not default to provider or network usage. Optional provider wording, if added later, must still go through V2.42 preview/redaction/confirmation and remain copy-only; it must not affect deterministic map nodes, edges, clusters, domains, or risk/gap conclusions.
+- Output safety flags must default false: `provider_request_sent`, `write_back_allowed`, `config_mutation_allowed`, `map_artifact_written`, `snapshot_created`, `triage_mutation_allowed`, `script_execution_allowed`, `credential_accessed`, `raw_prompt_persisted`, `raw_response_persisted`, `raw_trace_persisted`, `cloud_sync_performed`, and `telemetry_emitted`.
+- Output shape must remain explanatory: summary, map nodes, map edges, clusters, domains, risk notes, gap notes, blocker notes, evidence references, prompt request metadata, and safety flags. Nodes and edges should cite existing skill/source/capability/similarity/conflict/task/risk evidence refs instead of embedding raw skill bodies, raw prompts, raw responses, raw transcripts, secrets, or unredacted local paths.
 
 ### 2.4.3.1.9 V2.56 Remediation Planner（completed）
 
