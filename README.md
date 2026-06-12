@@ -6,7 +6,7 @@
 
 **当前阶段**：V2.67 Guided Cleanup Flow 已完成。V2.67 defines `cleanup.planGuidedFlow` as user-triggered deterministic/read-only guidance over existing local evidence, and `cleanup.recordGuidedStep` as app-local redacted guided cleanup step metadata only. `cleanup.planGuidedFlow` 只能基于 findings、cleanup queue、similar groups、stale/drift、readiness/routing/task cockpit、lifecycle timeline、remediation plan/drafts/impact/batch review、adapter diagnostics 与 source provenance 派生；`cleanup.recordGuidedStep` 最多写入 app-local `guided-cleanup-steps.json` 这类 redacted metadata。实际 enable/disable/edit/remediation 仍必须走既有 preview-first / explicit-confirm safe methods。
 
-**近期主线**：后续统一为 **AI-native Skill Review and Observability**。本地 scanner/rules/catalog 继续负责事实层；围绕真实 agent 会话的 skill 发现/选择/漏用/错用审查、本地 skill map、provider 调用可观测性、task-first cockpit、skill lifecycle timeline 和 guided cleanup 作为连续短期规划。短期不做全平台 UI 适配、正式签名 release、notarization、DMG/ZIP 或 public distribution。OpenClaw/Hermes writable/install 与 Pi install 仍保持 blocked；Pi production toggle 仅限 V2.37 evidence-backed guarded native scope，不自动开放兼容根写入。
+**近期主线**：V2.68-V2.72 进入 **post-V2.67 consolidation** 规划。事实层仍由本地 scanner/rules/catalog 提供；重点从继续叠加分析端点，转向 task-first cockpit 主入口、Analysis 信息架构收束、隐私/截图模式、本地化和路径展示治理、Swift/Rust feature module 拆分、Guided Cleanup 到既有安全动作的 deep links，以及锁屏/黑屏截图验证加固。短期不做全平台 UI 适配、正式签名 release、notarization、DMG/ZIP 或 public distribution。OpenClaw/Hermes writable/install 与 Pi install 仍保持 blocked；Pi production toggle 仅限 V2.37 evidence-backed guarded native scope，不自动开放兼容根写入。
 
 **已集成能力**：
 
@@ -68,6 +68,11 @@
 | V2.63 | Local Skill Map | 已完成：`knowledge.buildLocalSkillMap` 基于 existing catalog/knowledge/similar/taxonomy/conflict/task/risk evidence 构建本地 skill map；用户触发、deterministic/read-only、no new source of truth、no map artifact persistence by default、无 skill/config writes、snapshot、triage、script、default provider、raw prompt/response/trace/secret、cloud/telemetry 路径 |
 | V2.64 | AI Provider Observability | 已完成：`llm.providerObservability` 从 V2.61 prompt run metadata 与最小 provider call metadata 派生 read-only/app-local observability；输出调用历史、provider/model/destination grouping、status rows、budget usage hints、retention recommendations、evidence refs、prompt metadata 与 safety flags；无 provider/default network/write/execute/telemetry 路径 |
 | V2.65-V2.67 | Cockpit / lifecycle / guided cleanup | 已完成：V2.65 Task-first Cockpit、V2.66 Skill Lifecycle Timeline、V2.67 Guided Cleanup Flow |
+| V2.68 | Task Cockpit 主入口 / Analysis IA 重组 | 规划：把用户任务作为默认入口，将 Analysis 拆成 Task Cockpit、Skill Map、Cleanup Flow、Observability 等明确区域；默认复用 existing service methods，不新增写入/provider 默认调用 |
+| V2.69 | Privacy / Screenshot Mode + 本地化收束 | 规划：增加截图/演示友好的路径脱敏与长路径折叠策略，统一中英文混排文案，保证真实本机验证可产出不泄露本地路径的证据 |
+| V2.70 | Swift / Rust feature modularization | 规划：拆分 `DetailView.swift`、`SkillStore.swift` 与 `crates/service/src/lib.rs` 等高负载文件，按功能模块整理模型、协议和视图；默认不改变 service 语义 |
+| V2.71 | Guided Cleanup safe-action deep links | 规划：让 guided cleanup 步骤跳转到既有 `remediation.previewImpact`、`remediation.batchReview`、safe batch preview、详情筛选等安全入口；实际写入仍 preview-first / explicit-confirm |
+| V2.72 | Validation harness hardening | 规划：加固锁屏检测、黑屏截图检测、fixture/real 截图矩阵与 Computer Use blocker 分类；文档/脚本必须拒绝把锁屏或全黑截图当作 UI 完成证据 |
 
 ## 它做什么
 
@@ -88,6 +93,7 @@
 - 不触发后台自动分析；LLM 不会在未显式用户操作时发起 provider 请求。
 - 不让 LLM 触发执行、写入或确认用户动作。
 - 不在 Cleanup Queue 或 Guided Cleanup Flow 阶段新增自动清理、隐藏 apply、自动写入或自动执行链路。
+- 不把 V2.68-V2.72 规划文档视为已实现能力；对应版本必须完成代码、验证和文档 closeout 后才能标记 completed。
 
 ## 文档导航
 

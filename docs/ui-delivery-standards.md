@@ -49,6 +49,16 @@ After development and test verification:
 - Do not mark a UI feature complete if the latest completed screenshot is stale.
 - Health 区块必须以行动摘要（可执行动作）展示；若只剩全量数字复用表格，不算该特性完成。
 
+### 3.1 Lockscreen / Black Screenshot Guard
+
+Before taking or accepting app screenshots for completed UI evidence:
+
+- Confirm the macOS session is unlocked and interactive. Capture helpers should check `CGSessionCopyCurrentDictionary` / `CGSSessionScreenIsLocked`; if the session is locked, fail fast or record a locked-session blocker.
+- Reject all-black, near-all-black, or zero-useful-pixel captures. A black screenshot is evidence of a capture/session problem, not evidence that the UI rendered correctly.
+- A valid capture must show the target app window content, not only a window id, process id, or successful smoke command.
+- If Computer Use, AX, or direct capture disagree, record the exact blocker classification: locked session, no AX window, `cgWindowNotFound`, `remoteConnection`, black capture, stale bundle, or unknown tool-layer issue.
+- Fixture smoke screenshots can support build health, but cannot replace a blocked real-local UI check for user-visible, UI, or service-protocol changes.
+
 ## 4. Required macOS App Verification
 
 Every task that changes code must be verified by launching the macOS app and operating the affected behavior with macOS Computer Use before the task is considered complete, but only when the macOS session is confirmed unlocked and interactive.
