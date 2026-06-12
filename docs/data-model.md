@@ -473,7 +473,7 @@ CREATE TABLE config_snapshot (
 
 ## V2.41-V2.67 AI-native skill review models
 
-The AI-native line introduces analysis models incrementally and evidence-first. V2.41 adds app-data provider profile metadata and Keychain credential references, V2.61 adds redacted prompt run history, V2.62 adds app-local redacted Agent Session Skill Review metadata, V2.63 adds a derived Local Skill Map response, and V2.64 adds a completed Provider Observability view. The remaining planned models cover Task-first Cockpit, Skill Lifecycle Timeline, and Guided Cleanup Flow.
+The AI-native line introduces analysis models incrementally and evidence-first. V2.41 adds app-data provider profile metadata and Keychain credential references, V2.61 adds redacted prompt run history, V2.62 adds app-local redacted Agent Session Skill Review metadata, V2.63 adds a derived Local Skill Map response, V2.64 adds a completed Provider Observability view, and V2.65 adds a completed Task-first Cockpit response. V2.66 Skill Lifecycle Timeline and V2.67 Guided Cleanup Flow remain planned.
 
 Model families:
 
@@ -572,7 +572,7 @@ Model families:
   - `grouping_rows` aggregate provider/model/destination tuple counts, status mix, and token/cost hints without embedding raw prompts, raw response JSON, raw trace excerpts, API keys, credentials, secrets, or unredacted paths.
   - `retention_recommendations` are recommendations; the observability view does not imply hidden deletion/export writes.
   - Safety boundary: user-triggered, deterministic/read-only, app-local evidence only; no skill/config writes, no triage/snapshot mutation, no script execution, no default provider/network request, no cloud sync, and no telemetry.
-- `TaskCockpitView`（V2.65 future）：derived task-first workspace view over readiness, routing, benchmark/regression, trace/session review, provider-run metadata, remediation next steps, and evidence refs. It stores no new source of truth by default and must not mutate skills, agent config, triage, snapshots, or cleanup records.
+- `TaskCockpitView`（V2.65 completed）：derived task-first workspace view over readiness, routing, benchmark/regression, trace/session review, provider-run metadata, remediation next steps, and evidence refs. It stores no new source of truth by default and must not mutate skills, agent config, triage, snapshots, or cleanup records.
 - `SkillLifecycleEvent` / `SkillLifecycleTimeline`（V2.66 future）：redacted metadata timeline for a skill, agent, or workspace. Events may reference scan/provenance changes, stale/drift rows, triage transitions, remediation history, prompt analysis runs, and session review outcomes. It must not persist raw skill content, raw prompt/response, raw transcript, credentials, or unredacted local paths.
 - `GuidedCleanupFlow` / `GuidedCleanupStep`（V2.67 future）：app-local guided flow metadata derived from findings, similar groups, drift, readiness gaps, remediation plan/drafts/impact/batch review, and safe next-step labels. Recording a guided step is metadata-only; actual enable/disable/edit actions must call existing preview-first, explicit-confirm safe write methods and cannot be hidden inside the guided flow.
 

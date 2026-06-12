@@ -613,6 +613,25 @@ enum UIStrings {
     static var providerObservabilityAverageDuration: String { text("providerObservability.averageDuration", "Average duration") }
     static var providerObservabilityEstimatedTokens: String { text("providerObservability.estimatedTokens", "Estimated tokens") }
     static var providerObservabilityEstimatedCost: String { text("providerObservability.estimatedCost", "Estimated cost") }
+    static var taskCockpitTitle: String { text("taskCockpit.title", "Task-first Cockpit") }
+    static var taskCockpitBoundary: String { text("taskCockpit.boundary", "User-triggered, deterministic, read-only task cockpit from local readiness, routing, session-review, provider-observability, remediation, gap, blocker, and evidence metadata. It cannot send provider requests, write skill files, mutate agent config, create snapshots, change triage, execute scripts, read credentials, persist raw prompts/responses/traces, sync cloud data, or emit telemetry.") }
+    static var taskCockpitAction: String { text("taskCockpit.action.build", "Build Cockpit") }
+    static var taskCockpitUnavailable: String { text("taskCockpit.unavailable", "Task-first cockpit is unavailable in this service build.") }
+    static var taskCockpitTaskRequired: String { text("taskCockpit.taskRequired", "Enter a task before building the cockpit.") }
+    static var taskCockpitTaskPlaceholder: String { text("taskCockpit.task.placeholder", "Describe the task, or leave blank to reuse the current readiness/routing task") }
+    static var taskCockpitNoResult: String { text("taskCockpit.empty.result", "No task cockpit loaded.") }
+    static var taskCockpitSections: String { text("taskCockpit.sections", "Cockpit sections") }
+    static var taskCockpitTasks: String { text("taskCockpit.tasks", "Task rows") }
+    static var taskCockpitRoutes: String { text("taskCockpit.routes", "Route candidates") }
+    static var taskCockpitAgents: String { text("taskCockpit.agents", "Agent candidates") }
+    static var taskCockpitSkills: String { text("taskCockpit.skills", "Skill candidates") }
+    static var taskCockpitReadinessSignals: String { text("taskCockpit.readinessSignals", "Readiness signals") }
+    static var taskCockpitSessionContext: String { text("taskCockpit.sessionContext", "Session-review context") }
+    static var taskCockpitProviderContext: String { text("taskCockpit.providerContext", "Provider-observability context") }
+    static var taskCockpitRemediationContext: String { text("taskCockpit.remediationContext", "Remediation context") }
+    static var taskCockpitNoRows: String { text("taskCockpit.empty.rows", "No rows returned.") }
+    static var taskCockpitRecommendedAgent: String { text("taskCockpit.recommendedAgent", "Recommended agent") }
+    static var taskCockpitRecommendedSkill: String { text("taskCockpit.recommendedSkill", "Recommended skill") }
     static var similarGroupingTitle: String { text("similarGrouping.title", "Similar Skill Grouping") }
     static var similarGroupingBoundary: String { text("similarGrouping.boundary", "User-triggered, read-only local grouping for duplicate, similar, and confusable skills across catalog evidence. It cannot call a provider, write skill files, mutate agent config, create snapshots, change triage, execute scripts, read credentials, persist raw prompts/responses/traces, sync cloud data, or emit telemetry.") }
     static var similarGroupingAction: String { text("similarGrouping.action.group", "Group Similar Skills") }

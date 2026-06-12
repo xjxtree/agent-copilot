@@ -196,6 +196,42 @@ private struct CrossAgentReadinessParams: Encodable {
     }
 }
 
+private struct TaskCockpitParams: Encodable {
+    let task: String
+    let agent: String?
+    let projectRoot: String?
+    let currentCWD: String?
+    let workspace: String?
+    let selectedSkillID: String?
+    let selectedSkillName: String?
+    let selectedSkillAgent: String?
+    let selectedSkillPath: String?
+    let candidateInstanceIDs: [String]?
+    let limit: Int?
+    let includeSessionReview: Bool
+    let includeProviderObservability: Bool
+    let includeRemediationContext: Bool
+    let includeEvidence: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case task
+        case agent
+        case projectRoot = "project_root"
+        case currentCWD = "current_cwd"
+        case workspace
+        case selectedSkillID = "selected_skill_id"
+        case selectedSkillName = "selected_skill_name"
+        case selectedSkillAgent = "selected_skill_agent"
+        case selectedSkillPath = "selected_skill_path"
+        case candidateInstanceIDs = "candidate_instance_ids"
+        case limit
+        case includeSessionReview = "include_session_review"
+        case includeProviderObservability = "include_provider_observability"
+        case includeRemediationContext = "include_remediation_context"
+        case includeEvidence = "include_evidence"
+    }
+}
+
 private struct TaskBenchmarkListParams: Encodable {
     let limit: Int?
 
@@ -1121,6 +1157,41 @@ final class ServiceClient {
         )
         do {
             return try await call(method: "task.compareAgentReadiness", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable(taskText: taskText)
+        }
+    }
+
+    func buildTaskCockpit(
+        taskText: String,
+        agent: String? = nil,
+        project: ProjectContext? = nil,
+        selectedSkill: SkillRecord? = nil,
+        limit: Int? = 8,
+        includeSessionReview: Bool = true,
+        includeProviderObservability: Bool = true,
+        includeRemediationContext: Bool = true,
+        includeEvidence: Bool = true
+    ) async throws -> TaskCockpitResult {
+        let params = TaskCockpitParams(
+            task: taskText,
+            agent: agent,
+            projectRoot: project?.rootPath,
+            currentCWD: project?.currentCWD,
+            workspace: project?.name,
+            selectedSkillID: selectedSkill?.id,
+            selectedSkillName: selectedSkill?.name,
+            selectedSkillAgent: selectedSkill?.agent,
+            selectedSkillPath: selectedSkill?.displayPath.isEmpty == false ? selectedSkill?.displayPath : selectedSkill?.path,
+            candidateInstanceIDs: selectedSkill.map { [$0.id] },
+            limit: limit,
+            includeSessionReview: includeSessionReview,
+            includeProviderObservability: includeProviderObservability,
+            includeRemediationContext: includeRemediationContext,
+            includeEvidence: includeEvidence
+        )
+        do {
+            return try await call(method: "task.buildCockpit", params: params)
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .unavailable(taskText: taskText)
         }

@@ -91,6 +91,8 @@ final class SkillStore: ObservableObject {
     @Published private(set) var isLoadingLLMPromptRuns = false
     @Published private(set) var providerObservabilityResult: ProviderObservabilityResult?
     @Published private(set) var isLoadingProviderObservability = false
+    @Published private(set) var taskCockpitResult: TaskCockpitResult?
+    @Published private(set) var isBuildingTaskCockpit = false
     @Published private(set) var scriptExecutionPreviews: [SkillRecord.ID: ScriptExecutionPreview] = [:]
     @Published private(set) var previewingScriptExecutionSkillIDs: Set<SkillRecord.ID> = []
     @Published private(set) var batchTogglePreview: BatchTogglePreview?
@@ -130,6 +132,7 @@ final class SkillStore: ObservableObject {
             staleDriftDetection = nil
             knowledgeSearchResult = nil
             localSkillMapResult = nil
+            taskCockpitResult = nil
             similarSkillGroupingResult = nil
             capabilityTaxonomyResult = nil
             workspaceReadinessResult = nil
@@ -166,6 +169,9 @@ final class SkillStore: ObservableObject {
                 if normalizedCrossAgentReadinessText.isEmpty {
                     crossAgentReadinessResult = nil
                 }
+                if normalizedTaskCockpitText.isEmpty {
+                    taskCockpitResult = nil
+                }
             }
         }
     }
@@ -176,6 +182,9 @@ final class SkillStore: ObservableObject {
                 if normalizedCrossAgentReadinessText.isEmpty {
                     crossAgentReadinessResult = nil
                 }
+                if normalizedTaskCockpitText.isEmpty {
+                    taskCockpitResult = nil
+                }
             }
         }
     }
@@ -183,6 +192,16 @@ final class SkillStore: ObservableObject {
         didSet {
             if oldValue != crossAgentReadinessText {
                 crossAgentReadinessResult = nil
+                if normalizedTaskCockpitText.isEmpty {
+                    taskCockpitResult = nil
+                }
+            }
+        }
+    }
+    @Published var taskCockpitText = "" {
+        didSet {
+            if oldValue != taskCockpitText {
+                taskCockpitResult = nil
             }
         }
     }
@@ -219,7 +238,7 @@ final class SkillStore: ObservableObject {
     }
 
     private var isTaskBenchmarkBusy: Bool {
-        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isBuildingLocalSkillMap || isLoadingProviderObservability || isGroupingSimilarSkills || isBuildingCapabilityTaxonomy || isCheckingWorkspaceReadiness || isPlanningRemediation || isPreviewingRemediationDrafts || isPreviewingRemediationImpact || isReviewingRemediationBatch || isLoadingRemediationHistory || isRecordingRemediationHistory || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || isLoadingAgentSessionSkillReviews || isReviewingAgentSessionSkillUse || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty || !deletingAgentSessionSkillReviewIDs.isEmpty
+        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isBuildingLocalSkillMap || isLoadingProviderObservability || isBuildingTaskCockpit || isGroupingSimilarSkills || isBuildingCapabilityTaxonomy || isCheckingWorkspaceReadiness || isPlanningRemediation || isPreviewingRemediationDrafts || isPreviewingRemediationImpact || isReviewingRemediationBatch || isLoadingRemediationHistory || isRecordingRemediationHistory || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || isLoadingAgentSessionSkillReviews || isReviewingAgentSessionSkillUse || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty || !deletingAgentSessionSkillReviewIDs.isEmpty
     }
 
     private var isLLMPromptBusy: Bool {
@@ -620,6 +639,14 @@ final class SkillStore: ObservableObject {
             return trimmedCrossAgent
         }
         return selectedTaskBenchmarkInput
+    }
+
+    var selectedTaskCockpitInput: String {
+        let trimmedCockpit = normalizedTaskCockpitText
+        if !trimmedCockpit.isEmpty {
+            return trimmedCockpit
+        }
+        return selectedCrossAgentReadinessInput
     }
 
     func isDeletingTaskBenchmark(_ benchmark: TaskBenchmarkRecord) -> Bool {
@@ -1535,6 +1562,39 @@ final class SkillStore: ObservableObject {
             )
         } catch {
             localSkillMapResult = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
+    func buildTaskCockpit() async {
+        let taskText = selectedTaskCockpitInput
+        guard !taskText.isEmpty else {
+            taskCockpitResult = .unavailable(taskText: "", reason: UIStrings.taskCockpitTaskRequired)
+            return
+        }
+        guard !isBuildingTaskCockpit else { return }
+        guard !isRefreshBusy else {
+            taskCockpitResult = .unavailable(taskText: taskText, reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        isBuildingTaskCockpit = true
+        defer { isBuildingTaskCockpit = false }
+
+        let agent = agentFilter == .all ? nil : agentFilter.rawValue
+        do {
+            taskCockpitResult = try await service.buildTaskCockpit(
+                taskText: taskText,
+                agent: agent,
+                project: activeProjectContext,
+                selectedSkill: selectedSkill,
+                limit: 8,
+                includeSessionReview: true,
+                includeProviderObservability: true,
+                includeRemediationContext: true,
+                includeEvidence: true
+            )
+        } catch {
+            taskCockpitResult = .unavailable(taskText: taskText, reason: error.localizedDescription)
         }
     }
 
@@ -2465,6 +2525,10 @@ final class SkillStore: ObservableObject {
 
     private var normalizedCrossAgentReadinessText: String {
         crossAgentReadinessText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var normalizedTaskCockpitText: String {
+        taskCockpitText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var normalizedKnowledgeSearchText: String {

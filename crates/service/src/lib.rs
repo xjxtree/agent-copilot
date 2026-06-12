@@ -78,6 +78,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "task.checkReadiness",
     "task.rankSkillRoutes",
     "task.compareAgentReadiness",
+    "task.buildCockpit",
     "task.listBenchmarks",
     "task.saveBenchmark",
     "task.deleteBenchmark",
@@ -808,6 +809,183 @@ pub struct AgentReadinessSafetyFlags {
     pub cloud_sync_performed: bool,
     pub telemetry_emitted: bool,
 }
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TaskCockpitParams {
+    #[serde(alias = "user_intent", alias = "task_text")]
+    pub task: String,
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default, alias = "instance_ids")]
+    pub candidate_instance_ids: Vec<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskCockpitResult {
+    pub generated_by: &'static str,
+    pub catalog_available: bool,
+    pub filters: TaskCockpitFilters,
+    pub summary: TaskCockpitSummary,
+    pub cockpit_sections: Vec<TaskCockpitSection>,
+    pub task_rows: Vec<TaskCockpitTaskRow>,
+    pub agent_route_rows: Vec<TaskCockpitAgentRouteRow>,
+    pub skill_candidate_rows: Vec<TaskCockpitSkillCandidateRow>,
+    pub readiness_rows: Vec<TaskCockpitReadinessRow>,
+    pub session_review_rows: Vec<TaskCockpitSessionReviewRow>,
+    pub provider_observability_rows: Vec<TaskCockpitProviderObservabilityRow>,
+    pub remediation_next_steps: Vec<TaskCockpitRemediationNextStep>,
+    pub gap_notes: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub evidence_references: Vec<TaskReadinessEvidenceReference>,
+    pub prompt_request: AgentReadinessPromptRequest,
+    pub safety_flags: TaskCockpitSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskCockpitFilters {
+    pub task: String,
+    pub agent: Option<String>,
+    pub candidate_instance_ids: Vec<String>,
+    pub limit: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskCockpitSummary {
+    pub readiness_score: u8,
+    pub readiness_band: &'static str,
+    pub routing_confidence_score: u8,
+    pub routing_confidence_band: &'static str,
+    pub candidate_count: usize,
+    pub agent_count: usize,
+    pub session_review_count: usize,
+    pub provider_observability_row_count: usize,
+    pub remediation_next_step_count: usize,
+    pub gap_count: usize,
+    pub blocker_count: usize,
+    pub recommended_agent: Option<String>,
+    pub top_skill_name: Option<String>,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskCockpitSection {
+    pub id: &'static str,
+    pub title: &'static str,
+    pub status: &'static str,
+    pub score: Option<u8>,
+    pub row_count: usize,
+    pub summary: String,
+    pub evidence_refs: Vec<String>,
+    pub safety_flags: TaskCockpitSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskCockpitTaskRow {
+    pub id: &'static str,
+    pub task: String,
+    pub readiness_score: u8,
+    pub readiness_band: &'static str,
+    pub routing_confidence_score: u8,
+    pub routing_confidence_band: &'static str,
+    pub recommended_agent: Option<String>,
+    pub top_skill_name: Option<String>,
+    pub candidate_count: usize,
+    pub gap_count: usize,
+    pub blocker_count: usize,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskCockpitAgentRouteRow {
+    pub rank: usize,
+    pub agent: String,
+    pub display_name: String,
+    pub comparison_score: u8,
+    pub readiness_score: u8,
+    pub readiness_band: &'static str,
+    pub routing_confidence_score: u8,
+    pub routing_confidence_band: &'static str,
+    pub best_skill_name: Option<String>,
+    pub blocker_count: usize,
+    pub gap_count: usize,
+    pub reasons: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskCockpitSkillCandidateRow {
+    pub rank: usize,
+    pub instance_id: String,
+    pub definition_id: String,
+    pub skill_name: String,
+    pub agent: String,
+    pub scope: String,
+    pub enabled: bool,
+    pub state: String,
+    pub readiness_score: u8,
+    pub readiness_band: &'static str,
+    pub routing_confidence_score: u8,
+    pub routing_confidence_band: &'static str,
+    pub quality_score: Option<u8>,
+    pub match_reasons: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub gap_notes: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskCockpitReadinessRow {
+    pub id: String,
+    pub row_type: &'static str,
+    pub label: String,
+    pub status: &'static str,
+    pub score: Option<u8>,
+    pub summary: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskCockpitSessionReviewRow {
+    pub id: String,
+    pub title: String,
+    pub agent: Option<String>,
+    pub task: Option<String>,
+    pub outcome: String,
+    pub summary: String,
+    pub detected_skill_count: usize,
+    pub expected_skill_signal_count: usize,
+    pub reviewed_at: i64,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskCockpitProviderObservabilityRow {
+    pub id: String,
+    pub source: &'static str,
+    pub status: String,
+    pub provider: Option<String>,
+    pub model: Option<String>,
+    pub action: Option<String>,
+    pub count: usize,
+    pub message: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskCockpitRemediationNextStep {
+    pub id: String,
+    pub source: &'static str,
+    pub priority: &'static str,
+    pub title: String,
+    pub suggested_safe_next_action: String,
+    pub blocker_notes: Vec<String>,
+    pub gap_notes: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+pub type TaskCockpitSafetyFlags = AgentReadinessSafetyFlags;
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct KnowledgeSearchParams {
@@ -3108,6 +3286,7 @@ pub enum LlmPromptActionKind {
     RemediationBatchReview,
     TaskReadiness,
     RoutingConfidence,
+    TaskCockpit,
 }
 
 impl LlmPromptActionKind {
@@ -3131,6 +3310,7 @@ impl LlmPromptActionKind {
             Self::RemediationBatchReview => "remediation_batch_review",
             Self::TaskReadiness => "task_readiness",
             Self::RoutingConfidence => "routing_confidence",
+            Self::TaskCockpit => "task_cockpit",
         }
     }
 }
@@ -4079,6 +4259,10 @@ impl ServiceHost {
             "task.compareAgentReadiness" => {
                 let params: CompareAgentReadinessParams = serde_json::from_value(request.params)?;
                 serde_json::to_value(self.compare_agent_readiness(params)?).map_err(Into::into)
+            }
+            "task.buildCockpit" => {
+                let params: TaskCockpitParams = serde_json::from_value(request.params)?;
+                serde_json::to_value(self.build_task_cockpit(params)?).map_err(Into::into)
             }
             "task.listBenchmarks" => {
                 let params: ListTaskBenchmarksParams = if request.params.is_null() {
@@ -9595,6 +9779,263 @@ impl ServiceHost {
         })
     }
 
+    pub fn build_task_cockpit(
+        &self,
+        params: TaskCockpitParams,
+    ) -> Result<TaskCockpitResult, ServiceError> {
+        let task = params.task.trim();
+        if task.is_empty() {
+            return Err(ServiceError::InvalidRequest(
+                "task.buildCockpit requires a non-empty task".to_string(),
+            ));
+        }
+
+        let limit = params.limit.unwrap_or(8).clamp(1, 25);
+        let agent = params
+            .agent
+            .as_deref()
+            .map(str::trim)
+            .filter(|agent| !agent.is_empty())
+            .map(ToOwned::to_owned);
+        let candidate_instance_ids = normalize_string_list(params.candidate_instance_ids);
+
+        let readiness = self.check_task_readiness(TaskReadinessParams {
+            task: task.to_string(),
+            agent: agent.clone(),
+            candidate_instance_ids: candidate_instance_ids.clone(),
+            limit: Some(limit),
+        })?;
+        let ranking = self.rank_skill_routes(RankSkillRoutesParams {
+            task: readiness.task.clone(),
+            agent: agent.clone(),
+            candidate_instance_ids: candidate_instance_ids.clone(),
+            limit: Some(limit),
+        })?;
+        let comparison = self.compare_agent_readiness(CompareAgentReadinessParams {
+            task: readiness.task.clone(),
+            agents: agent.clone().into_iter().collect(),
+            limit_per_agent: Some(limit.min(5)),
+            include_routing_accuracy: true,
+            include_benchmarks: true,
+        })?;
+        let session_reviews =
+            self.list_agent_skill_reviews(AgentSessionListSkillReviewsParams {
+                agent: agent.clone(),
+                outcome: None,
+                trace_import_id: None,
+                limit: Some(limit),
+            })?;
+        let provider_observability =
+            self.llm_provider_observability(LlmProviderObservabilityParams {
+                profile_id: None,
+                provider: None,
+                model: None,
+                status: None,
+                action: None,
+                limit: Some(limit),
+            })?;
+        let remediation_plan = self.plan_remediation(RemediationPlanParams {
+            agent: agent.clone(),
+            task: Some(readiness.task.clone()),
+            project_root: None,
+            focus: None,
+            focus_areas: vec![
+                "finding".to_string(),
+                "gap".to_string(),
+                "ambiguity".to_string(),
+                "drift".to_string(),
+                "readiness".to_string(),
+            ],
+            limit: Some(limit),
+            candidate_instance_ids: candidate_instance_ids.clone(),
+            include_deferred: false,
+        })?;
+        let batch_review = self.batch_review_remediation(RemediationBatchReviewParams {
+            task: Some(readiness.task.clone()),
+            agent: agent.clone(),
+            project_root: None,
+            workspace_label: None,
+            rule_id: None,
+            severity: None,
+            status: None,
+            triage_status: None,
+            candidate_instance_ids: candidate_instance_ids.clone(),
+            group_by: vec![
+                "risk".to_string(),
+                "rule".to_string(),
+                "agent".to_string(),
+                "task".to_string(),
+            ],
+            limit: Some(limit),
+        })?;
+
+        let mut evidence_references = Vec::new();
+        evidence_references.extend(readiness.evidence_references.clone());
+        evidence_references.extend(ranking.evidence_references.clone());
+        evidence_references.extend(comparison.evidence_references.clone());
+        evidence_references.extend(remediation_plan.evidence_references.clone());
+        evidence_references.extend(batch_review.evidence_references.clone());
+        evidence_references.extend(provider_observability_evidence_as_task_refs(
+            &provider_observability.evidence_references,
+        ));
+        dedupe_evidence_references(&mut evidence_references);
+
+        let mut gap_notes = Vec::new();
+        gap_notes.extend(readiness.missing_gap_notes.clone());
+        gap_notes.extend(ranking.likely_miss_risks.clone());
+        gap_notes.extend(
+            comparison
+                .gap_issue_rows
+                .iter()
+                .filter(|row| row.severity != "blocker")
+                .map(|row| row.detail.clone()),
+        );
+        gap_notes.extend(provider_observability.gap_notes.clone());
+        gap_notes.extend(remediation_plan.gap_notes.clone());
+        gap_notes.extend(batch_review.gap_notes.clone());
+        normalize_note_list(&mut gap_notes);
+
+        let mut blocker_notes = Vec::new();
+        blocker_notes.extend(readiness.blocker_risk_notes.clone());
+        blocker_notes.extend(ranking.likely_wrong_pick_risks.clone());
+        blocker_notes.extend(
+            comparison
+                .gap_issue_rows
+                .iter()
+                .filter(|row| row.severity == "blocker")
+                .map(|row| row.detail.clone()),
+        );
+        blocker_notes.extend(provider_observability.blocker_notes.clone());
+        blocker_notes.extend(remediation_plan.blocker_notes.clone());
+        blocker_notes.extend(batch_review.blocker_notes.clone());
+        normalize_note_list(&mut blocker_notes);
+
+        let task_rows = vec![TaskCockpitTaskRow {
+            id: "task",
+            task: readiness.task.clone(),
+            readiness_score: readiness.score,
+            readiness_band: readiness.band,
+            routing_confidence_score: ranking.overall_confidence_score,
+            routing_confidence_band: ranking.overall_confidence_band,
+            recommended_agent: comparison
+                .recommended_agent
+                .as_ref()
+                .map(|recommendation| recommendation.agent.clone()),
+            top_skill_name: ranking
+                .route_candidates
+                .first()
+                .map(|candidate| candidate.skill_name.clone()),
+            candidate_count: readiness.candidate_skills.len(),
+            gap_count: gap_notes.len(),
+            blocker_count: blocker_notes.len(),
+            evidence_refs: evidence_references
+                .iter()
+                .take(limit)
+                .map(|evidence| evidence.id.clone())
+                .collect(),
+        }];
+        let agent_route_rows = comparison
+            .agent_rows
+            .iter()
+            .take(limit)
+            .map(task_cockpit_agent_route_row)
+            .collect::<Vec<_>>();
+        let skill_candidate_rows = ranking
+            .route_candidates
+            .iter()
+            .take(limit)
+            .map(|candidate| {
+                task_cockpit_skill_candidate_row(
+                    candidate,
+                    readiness
+                        .candidate_skills
+                        .iter()
+                        .find(|ready| ready.instance_id == candidate.instance_id),
+                )
+            })
+            .collect::<Vec<_>>();
+        let readiness_rows = task_cockpit_readiness_rows(&readiness, &ranking, &comparison, limit);
+        let session_review_rows = session_reviews
+            .reviews
+            .iter()
+            .take(limit)
+            .map(task_cockpit_session_review_row)
+            .collect::<Vec<_>>();
+        let provider_observability_rows =
+            task_cockpit_provider_observability_rows(&provider_observability, limit);
+        let remediation_next_steps =
+            task_cockpit_remediation_next_steps(&remediation_plan, &batch_review, limit);
+
+        let safety_flags = task_cockpit_safety_flags();
+        let cockpit_sections = task_cockpit_sections(
+            &readiness,
+            &ranking,
+            &comparison,
+            &session_review_rows,
+            &provider_observability_rows,
+            &remediation_next_steps,
+            safety_flags,
+        );
+        let summary = task_cockpit_summary(
+            &readiness,
+            &ranking,
+            &comparison,
+            TaskCockpitSummaryCounts {
+                session_review_count: session_review_rows.len(),
+                provider_observability_row_count: provider_observability_rows.len(),
+                remediation_next_step_count: remediation_next_steps.len(),
+                gap_count: gap_notes.len(),
+                blocker_count: blocker_notes.len(),
+            },
+        );
+        let prompt_instance_ids = skill_candidate_rows
+            .iter()
+            .take(8)
+            .map(|candidate| candidate.instance_id.clone())
+            .collect::<Vec<_>>();
+
+        Ok(TaskCockpitResult {
+            generated_by: "local-v2.65",
+            catalog_available: readiness.catalog_available || comparison.catalog_available,
+            filters: TaskCockpitFilters {
+                task: readiness.task.clone(),
+                agent,
+                candidate_instance_ids,
+                limit,
+            },
+            summary,
+            cockpit_sections,
+            task_rows,
+            agent_route_rows,
+            skill_candidate_rows,
+            readiness_rows,
+            session_review_rows,
+            provider_observability_rows,
+            remediation_next_steps,
+            gap_notes,
+            blocker_notes,
+            evidence_references,
+            prompt_request: AgentReadinessPromptRequest {
+                available: !prompt_instance_ids.is_empty(),
+                preview_method: "llm.previewPrompt",
+                confirm_method: "llm.confirmPromptAndSend",
+                action: "task_cockpit",
+                request: LlmPreviewPromptParams {
+                    action: LlmPromptActionKind::TaskCockpit,
+                    profile_id: None,
+                    app_language: None,
+                    skill_instance_id: None,
+                    instance_ids: prompt_instance_ids,
+                    analysis_kind: None,
+                    user_intent: Some(readiness.task),
+                },
+                note: "Optional provider-backed cockpit explanation must be requested through prompt preview and explicit confirmation; task.buildCockpit never sends provider traffic."
+                    .to_string(),
+            },
+            safety_flags,
+        })
+    }
+
     pub fn list_task_benchmarks(
         &self,
         params: ListTaskBenchmarksParams,
@@ -11215,6 +11656,51 @@ impl ServiceHost {
                     &mut redactor,
                 ));
             }
+            LlmPromptActionKind::TaskCockpit => {
+                let task = params.user_intent.as_deref().ok_or_else(|| {
+                    ServiceError::InvalidRequest(
+                        "llm.previewPrompt task_cockpit requires user_intent/task".to_string(),
+                    )
+                })?;
+                let cockpit = self.build_task_cockpit(TaskCockpitParams {
+                    task: task.to_string(),
+                    agent: None,
+                    candidate_instance_ids: params.instance_ids.clone(),
+                    limit: Some(8),
+                })?;
+                prompt_scope.extend([
+                    "deterministic task-first cockpit summary".to_string(),
+                    "task readiness and routing rows".to_string(),
+                    "cross-agent route rows".to_string(),
+                    "app-local session review rows".to_string(),
+                    "app-local provider observability metadata".to_string(),
+                    "read-only remediation next steps".to_string(),
+                    "gap, blocker, evidence, and safety summaries".to_string(),
+                ]);
+                included_fields.extend([
+                    "redacted task intent".to_string(),
+                    "readiness and routing scores".to_string(),
+                    "candidate skill ids, names, agents, scopes, enabled states, and states"
+                        .to_string(),
+                    "session review outcomes and detected/expected counts".to_string(),
+                    "provider/model/status/count metadata without raw prompts or responses"
+                        .to_string(),
+                    "read-only remediation next-step labels".to_string(),
+                    "evidence ids and safety flags".to_string(),
+                ]);
+                excluded_fields.extend([
+                    "raw source paths".to_string(),
+                    "raw provider prompt".to_string(),
+                    "raw provider response".to_string(),
+                    "provider API keys or credentials".to_string(),
+                    "raw trace content".to_string(),
+                    "agent config contents".to_string(),
+                    "raw skill body".to_string(),
+                    "write/apply instructions".to_string(),
+                    "snapshot creation or rollback commands".to_string(),
+                ]);
+                sections.push(render_task_cockpit_prompt_section(&cockpit, &mut redactor));
+            }
         }
 
         sections.push("Required output: concise Markdown draft guidance in the requested output language, with evidence notes, uncertainty, and safe next steps. Mark all suggestions copy-only.".to_string());
@@ -11240,6 +11726,7 @@ impl ServiceHost {
             LlmPromptActionKind::RemediationBatchReview => 900,
             LlmPromptActionKind::TaskReadiness => 750,
             LlmPromptActionKind::RoutingConfidence => 850,
+            LlmPromptActionKind::TaskCockpit => 950,
         };
         let prompt_preview = sections.join("\n\n");
         let redaction = redactor.summary();
@@ -16526,6 +17013,23 @@ fn normalize_note_list(notes: &mut Vec<String>) {
     notes.dedup();
 }
 
+fn stable_slug(value: &str) -> String {
+    let mut slug = value
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() {
+                ch.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+    while slug.contains("--") {
+        slug = slug.replace("--", "-");
+    }
+    slug.trim_matches('-').chars().take(64).collect()
+}
+
 fn local_skill_map_skill_weight(row: &KnowledgeSearchRow, risk_level: &str) -> u8 {
     let mut weight = 35i16;
     if row.enabled {
@@ -19685,6 +20189,465 @@ fn task_readiness_safety_flags() -> TaskReadinessSafetyFlags {
         raw_prompt_persisted: false,
         raw_response_persisted: false,
     }
+}
+
+fn task_cockpit_safety_flags() -> TaskCockpitSafetyFlags {
+    AgentReadinessSafetyFlags {
+        read_only: true,
+        app_local_only: true,
+        provider_request_sent: false,
+        write_back_allowed: false,
+        write_actions_available: false,
+        skill_files_mutated: false,
+        agent_config_mutated: false,
+        script_execution_allowed: false,
+        execution_actions_available: false,
+        config_mutation_allowed: false,
+        snapshot_created: false,
+        triage_mutation_allowed: false,
+        credential_accessed: false,
+        raw_secret_returned: false,
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+        raw_trace_persisted: false,
+        cloud_sync_performed: false,
+        telemetry_emitted: false,
+    }
+}
+
+struct TaskCockpitSummaryCounts {
+    session_review_count: usize,
+    provider_observability_row_count: usize,
+    remediation_next_step_count: usize,
+    gap_count: usize,
+    blocker_count: usize,
+}
+
+fn task_cockpit_summary(
+    readiness: &TaskReadinessResult,
+    ranking: &SkillRouteRankingResult,
+    comparison: &AgentReadinessComparisonResult,
+    counts: TaskCockpitSummaryCounts,
+) -> TaskCockpitSummary {
+    let recommended_agent = comparison
+        .recommended_agent
+        .as_ref()
+        .map(|recommendation| recommendation.agent.clone());
+    let top_skill_name = ranking
+        .route_candidates
+        .first()
+        .map(|candidate| candidate.skill_name.clone());
+    let summary = if !readiness.catalog_available {
+        "Task cockpit has no local catalog evidence yet; scan before using it for routing decisions."
+            .to_string()
+    } else {
+        format!(
+            "Task cockpit combined readiness {}, routing {}, {} candidate(s), {} agent row(s), {} session review row(s), {} provider observability row(s), and {} remediation next step(s).",
+            readiness.band,
+            ranking.overall_confidence_band,
+            readiness.candidate_skills.len(),
+            comparison.agent_rows.len(),
+            counts.session_review_count,
+            counts.provider_observability_row_count,
+            counts.remediation_next_step_count
+        )
+    };
+    TaskCockpitSummary {
+        readiness_score: readiness.score,
+        readiness_band: readiness.band,
+        routing_confidence_score: ranking.overall_confidence_score,
+        routing_confidence_band: ranking.overall_confidence_band,
+        candidate_count: readiness.candidate_skills.len(),
+        agent_count: comparison.agent_rows.len(),
+        session_review_count: counts.session_review_count,
+        provider_observability_row_count: counts.provider_observability_row_count,
+        remediation_next_step_count: counts.remediation_next_step_count,
+        gap_count: counts.gap_count,
+        blocker_count: counts.blocker_count,
+        recommended_agent,
+        top_skill_name,
+        summary,
+    }
+}
+
+fn task_cockpit_sections(
+    readiness: &TaskReadinessResult,
+    ranking: &SkillRouteRankingResult,
+    comparison: &AgentReadinessComparisonResult,
+    session_review_rows: &[TaskCockpitSessionReviewRow],
+    provider_rows: &[TaskCockpitProviderObservabilityRow],
+    remediation_steps: &[TaskCockpitRemediationNextStep],
+    safety_flags: TaskCockpitSafetyFlags,
+) -> Vec<TaskCockpitSection> {
+    vec![
+        TaskCockpitSection {
+            id: "task",
+            title: "Task",
+            status: readiness.band,
+            score: Some(readiness.score),
+            row_count: 1,
+            summary: readiness.summary.clone(),
+            evidence_refs: readiness
+                .evidence_references
+                .iter()
+                .take(6)
+                .map(|evidence| evidence.id.clone())
+                .collect(),
+            safety_flags,
+        },
+        TaskCockpitSection {
+            id: "routing",
+            title: "Routing",
+            status: ranking.overall_confidence_band,
+            score: Some(ranking.overall_confidence_score),
+            row_count: ranking.route_candidates.len(),
+            summary: ranking.summary.clone(),
+            evidence_refs: ranking
+                .evidence_references
+                .iter()
+                .take(6)
+                .map(|evidence| evidence.id.clone())
+                .collect(),
+            safety_flags,
+        },
+        TaskCockpitSection {
+            id: "agents",
+            title: "Agents",
+            status: if comparison.summary.blocked_agent_count > 0 {
+                "partial"
+            } else {
+                "ready"
+            },
+            score: comparison
+                .agent_rows
+                .first()
+                .map(|row| row.comparison_score),
+            row_count: comparison.agent_rows.len(),
+            summary: comparison.summary.summary.clone(),
+            evidence_refs: comparison
+                .evidence_references
+                .iter()
+                .take(6)
+                .map(|evidence| evidence.id.clone())
+                .collect(),
+            safety_flags,
+        },
+        TaskCockpitSection {
+            id: "sessions",
+            title: "Sessions",
+            status: if session_review_rows.is_empty() {
+                "empty"
+            } else {
+                "ready"
+            },
+            score: None,
+            row_count: session_review_rows.len(),
+            summary: if session_review_rows.is_empty() {
+                "No app-local session skill review rows matched the current filters.".to_string()
+            } else {
+                format!(
+                    "Showing {} app-local session skill review row(s).",
+                    session_review_rows.len()
+                )
+            },
+            evidence_refs: session_review_rows
+                .iter()
+                .flat_map(|row| row.evidence_refs.iter().cloned())
+                .take(6)
+                .collect(),
+            safety_flags,
+        },
+        TaskCockpitSection {
+            id: "provider_observability",
+            title: "Provider Observability",
+            status: if provider_rows.is_empty() {
+                "empty"
+            } else {
+                "ready"
+            },
+            score: None,
+            row_count: provider_rows.len(),
+            summary: if provider_rows.is_empty() {
+                "No app-local provider observability rows matched the current filters.".to_string()
+            } else {
+                format!(
+                    "Showing {} provider observability summary row(s) without reading credentials.",
+                    provider_rows.len()
+                )
+            },
+            evidence_refs: provider_rows
+                .iter()
+                .flat_map(|row| row.evidence_refs.iter().cloned())
+                .take(6)
+                .collect(),
+            safety_flags,
+        },
+        TaskCockpitSection {
+            id: "remediation",
+            title: "Remediation",
+            status: if remediation_steps.is_empty() {
+                "empty"
+            } else {
+                "ready"
+            },
+            score: None,
+            row_count: remediation_steps.len(),
+            summary: if remediation_steps.is_empty() {
+                "No read-only remediation next steps matched the current filters.".to_string()
+            } else {
+                format!(
+                    "Showing {} read-only remediation next step(s).",
+                    remediation_steps.len()
+                )
+            },
+            evidence_refs: remediation_steps
+                .iter()
+                .flat_map(|row| row.evidence_refs.iter().cloned())
+                .take(6)
+                .collect(),
+            safety_flags,
+        },
+    ]
+}
+
+fn task_cockpit_agent_route_row(row: &AgentReadinessComparisonRow) -> TaskCockpitAgentRouteRow {
+    TaskCockpitAgentRouteRow {
+        rank: row.rank,
+        agent: row.agent.clone(),
+        display_name: row.display_name.clone(),
+        comparison_score: row.comparison_score,
+        readiness_score: row.readiness_score,
+        readiness_band: row.readiness_band,
+        routing_confidence_score: row.routing_confidence_score,
+        routing_confidence_band: row.routing_confidence_band,
+        best_skill_name: row
+            .best_candidate
+            .as_ref()
+            .map(|candidate| candidate.skill_name.clone()),
+        blocker_count: row.blocker_count,
+        gap_count: row.gap_count,
+        reasons: row.reasons.clone(),
+        evidence_refs: row.evidence_refs.clone(),
+    }
+}
+
+fn task_cockpit_skill_candidate_row(
+    candidate: &SkillRouteCandidate,
+    readiness: Option<&TaskReadinessCandidate>,
+) -> TaskCockpitSkillCandidateRow {
+    TaskCockpitSkillCandidateRow {
+        rank: candidate.rank,
+        instance_id: candidate.instance_id.clone(),
+        definition_id: candidate.definition_id.clone(),
+        skill_name: candidate.skill_name.clone(),
+        agent: candidate.agent.clone(),
+        scope: candidate.scope.clone(),
+        enabled: candidate.enabled,
+        state: candidate.state.clone(),
+        readiness_score: candidate.readiness_score,
+        readiness_band: candidate.readiness_band,
+        routing_confidence_score: candidate.confidence_score,
+        routing_confidence_band: candidate.confidence_band,
+        quality_score: candidate.quality_score,
+        match_reasons: candidate.match_reasons.clone(),
+        blocker_notes: readiness
+            .map(|row| row.blocker_risk_notes.clone())
+            .unwrap_or_default(),
+        gap_notes: readiness
+            .map(|row| row.missing_gap_notes.clone())
+            .unwrap_or_default(),
+        evidence_refs: candidate.evidence_refs.clone(),
+    }
+}
+
+fn task_cockpit_readiness_rows(
+    readiness: &TaskReadinessResult,
+    ranking: &SkillRouteRankingResult,
+    comparison: &AgentReadinessComparisonResult,
+    limit: usize,
+) -> Vec<TaskCockpitReadinessRow> {
+    let mut rows = vec![
+        TaskCockpitReadinessRow {
+            id: "task-readiness".to_string(),
+            row_type: "task",
+            label: "Task readiness".to_string(),
+            status: readiness.band,
+            score: Some(readiness.score),
+            summary: readiness.summary.clone(),
+            evidence_refs: readiness
+                .evidence_references
+                .iter()
+                .take(6)
+                .map(|evidence| evidence.id.clone())
+                .collect(),
+        },
+        TaskCockpitReadinessRow {
+            id: "routing-confidence".to_string(),
+            row_type: "routing",
+            label: "Routing confidence".to_string(),
+            status: ranking.overall_confidence_band,
+            score: Some(ranking.overall_confidence_score),
+            summary: ranking.summary.clone(),
+            evidence_refs: ranking
+                .evidence_references
+                .iter()
+                .take(6)
+                .map(|evidence| evidence.id.clone())
+                .collect(),
+        },
+    ];
+    rows.extend(comparison.gap_issue_rows.iter().take(limit).map(|issue| {
+        TaskCockpitReadinessRow {
+            id: format!("agent-issue:{}:{}", issue.agent, stable_slug(&issue.title)),
+            row_type: issue.source,
+            label: issue.title.clone(),
+            status: issue.severity,
+            score: None,
+            summary: issue.detail.clone(),
+            evidence_refs: issue.evidence_refs.clone(),
+        }
+    }));
+    rows
+}
+
+fn task_cockpit_session_review_row(
+    review: &AgentSessionSkillReviewRecord,
+) -> TaskCockpitSessionReviewRow {
+    TaskCockpitSessionReviewRow {
+        id: review.id.clone(),
+        title: review.title.clone(),
+        agent: review.agent.clone(),
+        task: review.task.clone(),
+        outcome: review.analysis.outcome.clone(),
+        summary: review.analysis.summary.clone(),
+        detected_skill_count: review.analysis.detected_skills.len(),
+        expected_skill_signal_count: review.analysis.expected_skill_signals.len(),
+        reviewed_at: review.reviewed_at,
+        evidence_refs: review.analysis.evidence_refs.clone(),
+    }
+}
+
+fn task_cockpit_provider_observability_rows(
+    observability: &LlmProviderObservabilityResult,
+    limit: usize,
+) -> Vec<TaskCockpitProviderObservabilityRow> {
+    let mut rows = observability
+        .grouping_rows
+        .iter()
+        .map(|row| TaskCockpitProviderObservabilityRow {
+            id: row.id.clone(),
+            source: "provider_group",
+            status: if row.failed_count > 0 {
+                "partial".to_string()
+            } else {
+                "ready".to_string()
+            },
+            provider: Some(row.provider.clone()),
+            model: Some(row.model.clone()),
+            action: None,
+            count: row.prompt_run_count + row.call_metadata_count,
+            message: format!(
+                "{} prompt run(s), {} call metadata row(s), {} failed row(s).",
+                row.prompt_run_count, row.call_metadata_count, row.failed_count
+            ),
+            evidence_refs: row.evidence_refs.clone(),
+        })
+        .collect::<Vec<_>>();
+    rows.extend(
+        observability
+            .status_rows
+            .iter()
+            .map(|row| TaskCockpitProviderObservabilityRow {
+                id: row.id.clone(),
+                source: "provider_status",
+                status: row.status.clone(),
+                provider: None,
+                model: None,
+                action: None,
+                count: row.count,
+                message: row.message.clone(),
+                evidence_refs: row.evidence_refs.clone(),
+            }),
+    );
+    rows.extend(
+        observability
+            .history_rows
+            .iter()
+            .map(|row| TaskCockpitProviderObservabilityRow {
+                id: row.id.clone(),
+                source: "prompt_run",
+                status: row.status.clone(),
+                provider: Some(row.provider.clone()),
+                model: Some(row.model.clone()),
+                action: Some(row.action.clone()),
+                count: 1,
+                message: format!(
+                    "{} / {} completed with status {}.",
+                    row.action, row.request_kind, row.status
+                ),
+                evidence_refs: row.evidence_refs.clone(),
+            }),
+    );
+    rows.truncate(limit);
+    rows
+}
+
+fn task_cockpit_remediation_next_steps(
+    plan: &RemediationPlanResult,
+    batch: &RemediationBatchReviewResult,
+    limit: usize,
+) -> Vec<TaskCockpitRemediationNextStep> {
+    let mut steps = plan
+        .plan_items
+        .iter()
+        .map(|item| TaskCockpitRemediationNextStep {
+            id: item.id.clone(),
+            source: "remediation_plan",
+            priority: item.priority,
+            title: item.title.clone(),
+            suggested_safe_next_action: item.suggested_safe_next_action.clone(),
+            blocker_notes: item.blockers.clone(),
+            gap_notes: Vec::new(),
+            evidence_refs: item.evidence_refs.clone(),
+        })
+        .collect::<Vec<_>>();
+    steps.extend(
+        batch
+            .review_items
+            .iter()
+            .map(|item| TaskCockpitRemediationNextStep {
+                id: item.id.clone(),
+                source: "batch_review",
+                priority: match item.risk {
+                    "high" => "high",
+                    "medium" => "medium",
+                    _ => "low",
+                },
+                title: item.title.clone(),
+                suggested_safe_next_action: item.recommended_next_step_label.clone(),
+                blocker_notes: item.blocker_notes.clone(),
+                gap_notes: item.gap_notes.clone(),
+                evidence_refs: item.evidence_refs.clone(),
+            }),
+    );
+    steps.truncate(limit);
+    steps
+}
+
+fn provider_observability_evidence_as_task_refs(
+    evidence: &[LlmProviderObservabilityEvidenceReference],
+) -> Vec<TaskReadinessEvidenceReference> {
+    evidence
+        .iter()
+        .map(|item| TaskReadinessEvidenceReference {
+            id: format!("provider-observability:{}", item.id),
+            source_type: "provider_observability",
+            source_id: item.id.clone(),
+            label: item.label.clone(),
+            severity: None,
+            related_instance_id: None,
+        })
+        .collect()
 }
 
 fn empty_task_readiness_result(
@@ -25400,6 +26363,176 @@ fn render_routing_confidence_prompt_section(
     )
 }
 
+fn render_task_cockpit_prompt_section(
+    cockpit: &TaskCockpitResult,
+    redactor: &mut PromptRedactor<'_>,
+) -> String {
+    let sections = cockpit
+        .cockpit_sections
+        .iter()
+        .take(8)
+        .map(|section| {
+            format!(
+                "- {} status={} score={} rows={} summary={}",
+                section.id,
+                section.status,
+                section
+                    .score
+                    .map(|score| score.to_string())
+                    .unwrap_or_else(|| "n/a".to_string()),
+                section.row_count,
+                redactor.redact(&section.summary)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let candidates = cockpit
+        .skill_candidate_rows
+        .iter()
+        .take(8)
+        .map(|candidate| {
+            format!(
+                "- #{} {} ({}, {}, enabled={}, state={}): readiness={} {}, routing={} {}, quality={}",
+                candidate.rank,
+                redactor.redact(&candidate.skill_name),
+                redactor.redact(&candidate.agent),
+                redactor.redact(&candidate.scope),
+                candidate.enabled,
+                redactor.redact(&candidate.state),
+                candidate.readiness_score,
+                candidate.readiness_band,
+                candidate.routing_confidence_score,
+                candidate.routing_confidence_band,
+                candidate
+                    .quality_score
+                    .map(|score| score.to_string())
+                    .unwrap_or_else(|| "n/a".to_string())
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let agents = cockpit
+        .agent_route_rows
+        .iter()
+        .take(8)
+        .map(|row| {
+            format!(
+                "- #{} {} readiness={} {} routing={} {} best_skill={}",
+                row.rank,
+                redactor.redact(&row.agent),
+                row.readiness_score,
+                row.readiness_band,
+                row.routing_confidence_score,
+                row.routing_confidence_band,
+                row.best_skill_name
+                    .as_deref()
+                    .map(|skill| redactor.redact(skill))
+                    .unwrap_or_else(|| "none".to_string())
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let sessions = cockpit
+        .session_review_rows
+        .iter()
+        .take(5)
+        .map(|row| {
+            format!(
+                "- {} outcome={} detected={} expected={} summary={}",
+                redactor.redact(&row.title),
+                redactor.redact(&row.outcome),
+                row.detected_skill_count,
+                row.expected_skill_signal_count,
+                redactor.redact(&row.summary)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let providers = cockpit
+        .provider_observability_rows
+        .iter()
+        .take(5)
+        .map(|row| {
+            format!(
+                "- {} status={} provider={} model={} count={} message={}",
+                row.source,
+                redactor.redact(&row.status),
+                row.provider
+                    .as_deref()
+                    .map(|provider| redactor.redact(provider))
+                    .unwrap_or_else(|| "none".to_string()),
+                row.model
+                    .as_deref()
+                    .map(|model| redactor.redact(model))
+                    .unwrap_or_else(|| "none".to_string()),
+                row.count,
+                redactor.redact(&row.message)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let remediation = cockpit
+        .remediation_next_steps
+        .iter()
+        .take(8)
+        .map(|step| {
+            format!(
+                "- {} priority={} action={}",
+                redactor.redact(&step.title),
+                step.priority,
+                redactor.redact(&step.suggested_safe_next_action)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let gaps = cockpit
+        .gap_notes
+        .iter()
+        .take(8)
+        .map(|note| format!("- {}", redactor.redact(note)))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let blockers = cockpit
+        .blocker_notes
+        .iter()
+        .take(8)
+        .map(|note| format!("- {}", redactor.redact(note)))
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "Task-first cockpit evidence:\n- task: {}\n- readiness_score: {} / 100 ({})\n- routing_confidence_score: {} / 100 ({})\n- recommended_agent: {}\n- top_skill_name: {}\n- candidate_count: {}\n- gap_count: {}\n- blocker_count: {}\n- summary: {}\n\nCockpit sections:\n{}\n\nSkill candidates:\n{}\n\nAgent routes:\n{}\n\nSession review rows:\n{}\n\nProvider observability rows:\n{}\n\nRemediation next steps:\n{}\n\nGap notes:\n{}\n\nBlocker notes:\n{}\n\nSafety flags: read_only=true, app_local_only=true, provider_request_sent=false, credential_accessed=false, write_back_allowed=false, write_actions_available=false, skill_files_mutated=false, agent_config_mutated=false, script_execution_allowed=false, execution_actions_available=false, config_mutation_allowed=false, snapshot_created=false, triage_mutation_allowed=false, raw_secret_returned=false, raw_prompt_persisted=false, raw_response_persisted=false, raw_trace_persisted=false, cloud_sync_performed=false, telemetry_emitted=false.",
+        redactor.redact(&cockpit.filters.task),
+        cockpit.summary.readiness_score,
+        cockpit.summary.readiness_band,
+        cockpit.summary.routing_confidence_score,
+        cockpit.summary.routing_confidence_band,
+        cockpit
+            .summary
+            .recommended_agent
+            .as_deref()
+            .map(|agent| redactor.redact(agent))
+            .unwrap_or_else(|| "none".to_string()),
+        cockpit
+            .summary
+            .top_skill_name
+            .as_deref()
+            .map(|skill| redactor.redact(skill))
+            .unwrap_or_else(|| "none".to_string()),
+        cockpit.summary.candidate_count,
+        cockpit.summary.gap_count,
+        cockpit.summary.blocker_count,
+        redactor.redact(&cockpit.summary.summary),
+        if sections.is_empty() { "none" } else { &sections },
+        if candidates.is_empty() { "none" } else { &candidates },
+        if agents.is_empty() { "none" } else { &agents },
+        if sessions.is_empty() { "none" } else { &sessions },
+        if providers.is_empty() { "none" } else { &providers },
+        if remediation.is_empty() { "none" } else { &remediation },
+        if gaps.is_empty() { "none" } else { &gaps },
+        if blockers.is_empty() { "none" } else { &blockers },
+    )
+}
+
 fn llm_skill_analysis_safety_flags() -> LlmSkillAnalysisSafetyFlags {
     LlmSkillAnalysisSafetyFlags {
         write_back_enabled: false,
@@ -25688,6 +26821,7 @@ mod tests {
         assert!(methods.contains(&Value::String("task.checkReadiness".to_string())));
         assert!(methods.contains(&Value::String("task.rankSkillRoutes".to_string())));
         assert!(methods.contains(&Value::String("task.compareAgentReadiness".to_string())));
+        assert!(methods.contains(&Value::String("task.buildCockpit".to_string())));
         assert!(methods.contains(&Value::String("task.listBenchmarks".to_string())));
         assert!(methods.contains(&Value::String("task.saveBenchmark".to_string())));
         assert!(methods.contains(&Value::String("task.deleteBenchmark".to_string())));
@@ -29435,6 +30569,240 @@ mod tests {
 
         let _ = fs::remove_dir_all(app_data_dir);
         let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn task_cockpit_aggregates_local_evidence_read_only() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-task-cockpit-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-task-cockpit-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_cleanup_queue_fixture(&host);
+        let trace = host.handle(ServiceRequest {
+            id: Some("task-cockpit-trace".to_string()),
+            method: "trace.importLocal".to_string(),
+            params: json!({
+                "title": "Task cockpit trace fixture",
+                "content": "The agent selected shared-fixture-skill for local cleanup posture.",
+                "task": "Review the shared fixture skill and local cleanup posture",
+                "agent": "codex",
+                "expected_skill_refs": ["shared-fixture-skill"]
+            }),
+        });
+        assert!(trace.ok, "{:?}", trace.error);
+        let review = host.handle(ServiceRequest {
+            id: Some("task-cockpit-review".to_string()),
+            method: "session.reviewAgentSkillUse".to_string(),
+            params: json!({
+                "content": "The agent selected shared-fixture-skill for local cleanup posture.",
+                "title": "Task cockpit session review fixture",
+                "task": "Review the shared fixture skill and local cleanup posture",
+                "agent": "codex",
+                "expected_skill_refs": ["shared-fixture-skill"]
+            }),
+        });
+        assert!(review.ok, "{:?}", review.error);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+        let before_reviews =
+            fs::read_to_string(host.agent_session_reviews_path()).expect("reviews before");
+        let before_traces = fs::read_to_string(host.trace_imports_path()).expect("traces before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("task-cockpit".to_string()),
+            method: "task.buildCockpit".to_string(),
+            params: json!({
+                "task_text": "Review the shared fixture skill and local cleanup posture",
+                "agent": "codex",
+                "limit": 4
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("task cockpit result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("local-v2.65")
+        );
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result.pointer("/filters/agent").and_then(Value::as_str),
+            Some("codex")
+        );
+        assert!(result
+            .get("cockpit_sections")
+            .and_then(Value::as_array)
+            .is_some_and(|rows| rows.len() >= 5));
+        assert!(result
+            .get("task_rows")
+            .and_then(Value::as_array)
+            .is_some_and(|rows| rows.len() == 1));
+        assert!(result
+            .get("skill_candidate_rows")
+            .and_then(Value::as_array)
+            .is_some_and(|rows| !rows.is_empty()));
+        assert!(result
+            .get("agent_route_rows")
+            .and_then(Value::as_array)
+            .is_some_and(|rows| !rows.is_empty()));
+        assert!(result
+            .get("session_review_rows")
+            .and_then(Value::as_array)
+            .is_some_and(|rows| !rows.is_empty()));
+        assert!(result
+            .get("provider_observability_rows")
+            .and_then(Value::as_array)
+            .is_some());
+        assert!(result
+            .get("remediation_next_steps")
+            .and_then(Value::as_array)
+            .is_some());
+        assert_eq!(
+            result
+                .pointer("/prompt_request/action")
+                .and_then(Value::as_str),
+            Some("task_cockpit")
+        );
+        assert_eq!(
+            result
+                .pointer("/prompt_request/request/action")
+                .and_then(Value::as_str),
+            Some("task_cockpit")
+        );
+        assert_agent_readiness_safety(&result);
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert_eq!(
+            fs::read_to_string(host.agent_session_reviews_path()).expect("reviews after"),
+            before_reviews
+        );
+        assert_eq!(
+            fs::read_to_string(host.trace_imports_path()).expect("traces after"),
+            before_traces
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let serialized = serde_json::to_string(&result).expect("serialize cockpit result");
+        assert!(!serialized.contains(&app_data_dir.to_string_lossy().to_string()));
+        assert!(!serialized.contains(&user_home.to_string_lossy().to_string()));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn task_cockpit_rejects_empty_task_without_creating_catalog() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-task-cockpit-empty-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("task-cockpit-empty".to_string()),
+            method: "task.buildCockpit".to_string(),
+            params: json!({ "task": "   " }),
+        });
+
+        assert!(!response.ok);
+        let error = response.error.expect("empty cockpit error");
+        assert_eq!(error.code, "invalid_request");
+        assert!(error.message.contains("non-empty task"));
+        assert!(
+            !app_data_dir.exists(),
+            "empty task cockpit request must not initialize app data"
+        );
+    }
+
+    #[test]
+    fn task_cockpit_missing_catalog_returns_safe_empty_result() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-task-cockpit-missing-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("task-cockpit-missing".to_string()),
+            method: "task.buildCockpit".to_string(),
+            params: json!({ "task": "Prepare a release readiness report", "limit": 4 }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("missing catalog cockpit");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("local-v2.65")
+        );
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/readiness_score")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert!(result
+            .get("skill_candidate_rows")
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_agent_readiness_safety(&result);
+        assert!(
+            !host.catalog_path().exists(),
+            "missing-catalog task cockpit must not initialize catalog.sqlite"
+        );
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
     }
 
     #[test]
@@ -35464,6 +36832,36 @@ mod tests {
                 assert!(!comparison.safety_flags.cloud_sync_performed);
                 assert!(!comparison.safety_flags.telemetry_emitted);
             }
+            "task.buildCockpit" => {
+                let cockpit: WireTaskCockpitResult = decode_fixture_result(method, result, path);
+                assert_eq!(cockpit.generated_by, "local-v2.65");
+                assert_eq!(
+                    cockpit.summary.candidate_count,
+                    cockpit.skill_candidate_rows.len()
+                );
+                assert_eq!(cockpit.summary.agent_count, cockpit.agent_route_rows.len());
+                assert_eq!(
+                    cockpit.summary.session_review_count,
+                    cockpit.session_review_rows.len()
+                );
+                assert_eq!(
+                    cockpit.summary.provider_observability_row_count,
+                    cockpit.provider_observability_rows.len()
+                );
+                assert_eq!(
+                    cockpit.summary.remediation_next_step_count,
+                    cockpit.remediation_next_steps.len()
+                );
+                assert_eq!(cockpit.prompt_request.action, "task_cockpit");
+                assert_eq!(
+                    cockpit.prompt_request.request.action,
+                    LlmPromptActionKind::TaskCockpit
+                );
+                assert_agent_readiness_safety_flags(&cockpit.safety_flags);
+                for section in &cockpit.cockpit_sections {
+                    assert_agent_readiness_safety_flags(&section.safety_flags);
+                }
+            }
             "task.listBenchmarks" => {
                 let benchmarks: WireTaskBenchmarkListResult =
                     decode_fixture_result(method, result, path);
@@ -36505,6 +37903,10 @@ mod tests {
                 "task": "fixture cross-agent readiness check",
                 "agents": ["claude-code", "codex"],
                 "limit_per_agent": 2
+            }),
+            "task.buildCockpit" => json!({
+                "task": "fixture task-first cockpit check",
+                "limit": 4
             }),
             "task.listBenchmarks" => json!({}),
             "task.saveBenchmark" => json!({
@@ -38336,6 +39738,191 @@ mod tests {
         raw_trace_persisted: bool,
         cloud_sync_performed: bool,
         telemetry_emitted: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTaskCockpitResult {
+        generated_by: String,
+        catalog_available: bool,
+        filters: WireTaskCockpitFilters,
+        summary: WireTaskCockpitSummary,
+        cockpit_sections: Vec<WireTaskCockpitSection>,
+        task_rows: Vec<WireTaskCockpitTaskRow>,
+        agent_route_rows: Vec<WireTaskCockpitAgentRouteRow>,
+        skill_candidate_rows: Vec<WireTaskCockpitSkillCandidateRow>,
+        readiness_rows: Vec<WireTaskCockpitReadinessRow>,
+        session_review_rows: Vec<WireTaskCockpitSessionReviewRow>,
+        provider_observability_rows: Vec<WireTaskCockpitProviderObservabilityRow>,
+        remediation_next_steps: Vec<WireTaskCockpitRemediationNextStep>,
+        gap_notes: Vec<String>,
+        blocker_notes: Vec<String>,
+        evidence_references: Vec<WireTaskReadinessEvidenceReference>,
+        prompt_request: WireAgentReadinessPromptRequest,
+        safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTaskCockpitFilters {
+        task: String,
+        agent: Option<String>,
+        candidate_instance_ids: Vec<String>,
+        limit: usize,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTaskCockpitSummary {
+        readiness_score: u8,
+        readiness_band: String,
+        routing_confidence_score: u8,
+        routing_confidence_band: String,
+        candidate_count: usize,
+        agent_count: usize,
+        session_review_count: usize,
+        provider_observability_row_count: usize,
+        remediation_next_step_count: usize,
+        gap_count: usize,
+        blocker_count: usize,
+        recommended_agent: Option<String>,
+        top_skill_name: Option<String>,
+        summary: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTaskCockpitSection {
+        id: String,
+        title: String,
+        status: String,
+        score: Option<u8>,
+        row_count: usize,
+        summary: String,
+        evidence_refs: Vec<String>,
+        safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTaskCockpitTaskRow {
+        id: String,
+        task: String,
+        readiness_score: u8,
+        readiness_band: String,
+        routing_confidence_score: u8,
+        routing_confidence_band: String,
+        recommended_agent: Option<String>,
+        top_skill_name: Option<String>,
+        candidate_count: usize,
+        gap_count: usize,
+        blocker_count: usize,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTaskCockpitAgentRouteRow {
+        rank: usize,
+        agent: String,
+        display_name: String,
+        comparison_score: u8,
+        readiness_score: u8,
+        readiness_band: String,
+        routing_confidence_score: u8,
+        routing_confidence_band: String,
+        best_skill_name: Option<String>,
+        blocker_count: usize,
+        gap_count: usize,
+        reasons: Vec<String>,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTaskCockpitSkillCandidateRow {
+        rank: usize,
+        instance_id: String,
+        definition_id: String,
+        skill_name: String,
+        agent: String,
+        scope: String,
+        enabled: bool,
+        state: String,
+        readiness_score: u8,
+        readiness_band: String,
+        routing_confidence_score: u8,
+        routing_confidence_band: String,
+        quality_score: Option<u8>,
+        match_reasons: Vec<String>,
+        blocker_notes: Vec<String>,
+        gap_notes: Vec<String>,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTaskCockpitReadinessRow {
+        id: String,
+        row_type: String,
+        label: String,
+        status: String,
+        score: Option<u8>,
+        summary: String,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTaskCockpitSessionReviewRow {
+        id: String,
+        title: String,
+        agent: Option<String>,
+        task: Option<String>,
+        outcome: String,
+        summary: String,
+        detected_skill_count: usize,
+        expected_skill_signal_count: usize,
+        reviewed_at: i64,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTaskCockpitProviderObservabilityRow {
+        id: String,
+        source: String,
+        status: String,
+        provider: Option<String>,
+        model: Option<String>,
+        action: Option<String>,
+        count: usize,
+        message: String,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireTaskCockpitRemediationNextStep {
+        id: String,
+        source: String,
+        priority: String,
+        title: String,
+        suggested_safe_next_action: String,
+        blocker_notes: Vec<String>,
+        gap_notes: Vec<String>,
+        evidence_refs: Vec<String>,
     }
 
     #[allow(dead_code)]

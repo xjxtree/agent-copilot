@@ -31,6 +31,7 @@
       "task.checkReadiness",
       "task.rankSkillRoutes",
       "task.compareAgentReadiness",
+      "task.buildCockpit",
       "task.listBenchmarks",
       "task.saveBenchmark",
       "task.deleteBenchmark",

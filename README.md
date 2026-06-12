@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-**当前阶段**：V2.64 AI Provider Observability complete；next V2.65 Task-first Cockpit。V2.64 新增 `llm.providerObservability`，基于 V2.61 prompt run metadata 与既有最小 provider call metadata 派生 provider 调用可观测性：summary、call/history rows、provider/model/destination grouping rows、status rows、budget usage hints、retention recommendations、evidence refs、prompt metadata 与 safety flags。该路径是用户触发、deterministic/read-only、app-local evidence only，不保存 raw prompt/raw response JSON、API keys、credentials、raw traces 或 unredacted paths，不写 skill/config、不改 triage、不创建或回滚 snapshot、不执行脚本、不默认发 provider/network request、不云同步、不发 telemetry。Export/cleanup 在本切片中仅作为 observability recommendations。
+**当前阶段**：V2.65 Task-first Cockpit complete。V2.65 新增 `task.buildCockpit`，基于 task readiness、routing confidence、benchmark/regression、session review、provider observability、remediation next steps、gap/blocker notes 与 evidence refs 派生任务优先 cockpit：summary、cockpit sections、task rows、agent route rows、skill candidates、readiness rows、context rows、prompt metadata 与 safety flags。该路径是用户触发、deterministic/read-only、app-local evidence only，不创建 hidden task-state source，不保存 raw prompt/raw response JSON、API keys、credentials、raw traces 或 unredacted paths，不写 skill/config、不改 triage、不创建或回滚 snapshot、不执行脚本、不默认发 provider/network request、不云同步、不发 telemetry。
 
 **近期主线**：后续统一为 **AI-native Skill Review and Observability**。本地 scanner/rules/catalog 继续负责事实层；围绕真实 agent 会话的 skill 发现/选择/漏用/错用审查、本地 skill map、provider 调用可观测性、task-first cockpit、skill lifecycle timeline 和 guided cleanup 作为连续短期规划。短期不做全平台 UI 适配、正式签名 release、notarization、DMG/ZIP 或 public distribution。OpenClaw/Hermes writable/install 与 Pi install 仍保持 blocked；Pi production toggle 仅限 V2.37 evidence-backed guarded native scope，不自动开放兼容根写入。
 
@@ -23,9 +23,10 @@
 - V2.14 Hermes evidence-gate closeout 与 V2.17 Hermes read-only scanner：active/profile Hermes home `skills/**/SKILL.md` 只读进入 catalog。
 - V2.15 OpenClaw evidence-gate closeout 与 V2.16 OpenClaw read-only scanner：workspace/global documented filesystem roots 只读进入 catalog。
 - V2.18-V2.40：cross-agent analysis、skill health dashboard、read-only AI skill analysis、scan accuracy/dedupe、finding/conflict 语义、Health/Adapter Capability UX、Detail 诊断口径、Agent-config timeline、Finding explainability、skill identity/provenance dedupe、conflict semantic closeout、finding triage persistence、AI skill analysis workflow、Cleanup Queue、Rule tuning / suppression、Safe batch actions、Cross-agent comparison view、Local report export、Pi writable evidence harness、Pi guarded writable toggle、Hermes external roots、OpenClaw workspace deepening、Adapter diagnostics 已收口。
-- V2.41-V2.64：AI Provider Foundation、Prompt Preview/Redaction、AI Skill Quality、AI Task Readiness、AI Routing Confidence、Task Benchmark/Regression、Trace Analysis、Routing Accuracy Dashboard、Local Knowledge Index、Remediation Workflow、Remediation History、Prompt Run History、Agent Session Skill Review、Local Skill Map 与 AI Provider Observability 已完成。
+- V2.41-V2.65：AI Provider Foundation、Prompt Preview/Redaction、AI Skill Quality、AI Task Readiness、AI Routing Confidence、Task Benchmark/Regression、Trace Analysis、Routing Accuracy Dashboard、Local Knowledge Index、Remediation Workflow、Remediation History、Prompt Run History、Agent Session Skill Review、Local Skill Map、AI Provider Observability 与 Task-first Cockpit 已完成。
 - 2026-06-12 V2.63 真实本机 app validation 通过：当前 `dist/SkillsCopilot.app` 的 single-skill Analysis 页显示 Local Skill Map，点击 `Build Map` 后渲染真实 local map 输出（nodes、edges、clusters、evidence、safety sections）。真实本机截图未提交，因为 live UI 会暴露本地路径；fixture smoke 截图仍只作为自动化证据。V2.63 focused Rust/protocol、Swift/model/store、`pnpm check:macos`、`pnpm check:privacy` 与 `git diff --check` 均已通过；后续 coordinator 复测 exact-path Computer Use 时因重复同 bundle app 进程出现 `cgWindowNotFound` / `remoteConnection`，记录为工具/窗口层 blocker。
 - 2026-06-12 V2.64 validation：focused Rust/protocol checks、full service tests、focused/full Swift decode/store checks、service protocol fixture decode、`pnpm check:macos`、`pnpm check:privacy` 与 `git diff --check` 已通过；fixture macOS smoke 成功启动并捕获 `dist/SkillsCopilot.app` 窗口。真实本机验证中当前 bundle 进程可启动，但 System Events 在 activation 与 clean relaunch 后仍看到 0 个窗口，Computer Use 返回 `cgWindowNotFound`；该项记录为 V2.64 window/tool-layer blocker。真实本机截图未提交，因为 live UI 会暴露本地路径。
+- 2026-06-12 V2.65 validation：focused Rust/protocol checks、full service tests、focused/full Swift model/store checks、service protocol fixture decode、`pnpm check:macos`、`pnpm check:privacy` 与 `git diff --check` 已通过；fixture macOS smoke 成功启动并捕获 `dist/SkillsCopilot.app` 窗口。真实本机验证中当前 bundle 进程可启动且 System Events 能看到 `SkillsCopilot` 进程，但 activation 后仍报告 0 windows，Computer Use 返回 `cgWindowNotFound`；该项记录为 V2.65 window/tool-layer blocker。真实本机截图未提交，因为 live UI 会暴露本地路径。
 
 **当前产品 UI**：SwiftUI/AppKit macOS 原生壳 + Rust service protocol。
 
@@ -64,7 +65,7 @@
 | V2.62 | Agent Session Skill Review | 已完成：`session.reviewAgentSkillUse` / `session.listSkillReviews` / `session.deleteSkillReview`，用户触发、deterministic/read-only、app-local redacted metadata only；审查 pasted/imported agent sessions/traces 的 skill hit/miss/wrong-pick/ambiguity/unknown、expected vs detected skills、similar/duplicate interference、safe next steps 与 evidence refs |
 | V2.63 | Local Skill Map | 已完成：`knowledge.buildLocalSkillMap` 基于 existing catalog/knowledge/similar/taxonomy/conflict/task/risk evidence 构建本地 skill map；用户触发、deterministic/read-only、no new source of truth、no map artifact persistence by default、无 skill/config writes、snapshot、triage、script、default provider、raw prompt/response/trace/secret、cloud/telemetry 路径 |
 | V2.64 | AI Provider Observability | 已完成：`llm.providerObservability` 从 V2.61 prompt run metadata 与最小 provider call metadata 派生 read-only/app-local observability；输出调用历史、provider/model/destination grouping、status rows、budget usage hints、retention recommendations、evidence refs、prompt metadata 与 safety flags；无 provider/default network/write/execute/telemetry 路径 |
-| V2.65-V2.67 | Cockpit / lifecycle / guided cleanup | Planned：V2.65 汇总 task-first cockpit；V2.66 展示 skill lifecycle timeline；V2.67 做 guided cleanup flow |
+| V2.65-V2.67 | Cockpit / lifecycle / guided cleanup | V2.65 已完成 Task-first Cockpit；V2.66 展示 skill lifecycle timeline；V2.67 做 guided cleanup flow |
 
 ## 它做什么
 
@@ -75,7 +76,7 @@
 - **Tool-global skill 池**：本地目录导入到 app-controlled staging，审计后 read-only preview，并可经确认安装到 Claude/Codex verified skill root。
 - **Cleanup Queue**：把 open findings、完整性问题和 analysis insights 聚合成可处理队列，主要支持查看详情、跳转到现有安全动作入口、或获取建议草稿进行人工处理。
 - **Skill 执行安全边界**：默认不真实执行脚本；任何未来执行请求都必须展示 cwd/env/network/files 预览并逐次确认。
-- **AI-native 分析 gate**：规则引擎和 scanner 默认离线提供事实层；provider-backed explanation 只在用户完成 prompt preview/redaction/confirmation 后发送，输出保持 copy-only。V2.61 起，已确认发送的 AI 分析会保存 redacted prompt run metadata 与 copy-only draft output，用于重启后恢复展示；V2.62 起，Agent Session Skill Review 只保存 app-local redacted review metadata 且不发送 provider requests；V2.63 起，Local Skill Map 只派生本地 read-only map，不创建新的 source of truth 或默认持久化 artifact；V2.64 起，Provider Observability 只汇总 app-local redacted prompt/call metadata 并返回 cleanup/retention recommendations。它们都不保存 raw transcript、raw prompt、raw response JSON、API key、credential、raw trace 或未脱敏本地路径，也不写 skill/config、不改 triage、不执行脚本、不发 telemetry。
+- **AI-native 分析 gate**：规则引擎和 scanner 默认离线提供事实层；provider-backed explanation 只在用户完成 prompt preview/redaction/confirmation 后发送，输出保持 copy-only。V2.61 起，已确认发送的 AI 分析会保存 redacted prompt run metadata 与 copy-only draft output，用于重启后恢复展示；V2.62 起，Agent Session Skill Review 只保存 app-local redacted review metadata 且不发送 provider requests；V2.63 起，Local Skill Map 只派生本地 read-only map，不创建新的 source of truth 或默认持久化 artifact；V2.64 起，Provider Observability 只汇总 app-local redacted prompt/call metadata 并返回 cleanup/retention recommendations；V2.65 起，Task-first Cockpit 只聚合现有 local task/readiness/routing/session/provider/remediation evidence，不创建 hidden task state。它们都不保存 raw transcript、raw prompt、raw response JSON、API key、credential、raw trace 或未脱敏本地路径，也不写 skill/config、不改 triage、不执行脚本、不发 telemetry。
 
 ## 它不做什么
 
@@ -104,6 +105,7 @@
 | AI 层（规则 + LLM） | [`docs/ai-layer.md`](./docs/ai-layer.md) |
 | 安全模型 | [`docs/security-model.md`](./docs/security-model.md) |
 | 当前开发任务清单 | [`docs/development-tasks.md`](./docs/development-tasks.md) |
+| V2.65 验证清单 | [`docs/v2.65-verification-checklist.md`](./docs/v2.65-verification-checklist.md) |
 | MVP 施工图 | [`docs/mvp-implementation-plan.md`](./docs/mvp-implementation-plan.md) |
 | 路线图 | [`docs/roadmap.md`](./docs/roadmap.md) |
 

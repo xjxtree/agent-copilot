@@ -724,7 +724,18 @@ struct ProviderObservabilityEvidenceReference: Decodable, Identifiable, Hashable
         case summary
         case ref
         case source
+        case sourceType = "source_type"
+        case sourceID = "source_id"
+        case relatedInstanceID = "related_instance_id"
         case agent
+    }
+
+    init(id: String? = nil, title: String, detail: String, source: String? = nil, agent: String? = nil) {
+        self.id = id ?? "\(title):\(detail):\(source ?? "")"
+        self.title = title
+        self.detail = detail
+        self.source = source
+        self.agent = agent
     }
 
     init(from decoder: Decoder) throws {
@@ -741,12 +752,16 @@ struct ProviderObservabilityEvidenceReference: Decodable, Identifiable, Hashable
         title = try container.decodeIfPresent(String.self, forKey: .title)
             ?? container.decodeIfPresent(String.self, forKey: .label)
             ?? container.decodeIfPresent(String.self, forKey: .ref)
+            ?? container.decodeIfPresent(String.self, forKey: .sourceID)
             ?? UIStrings.unknown
         detail = try container.decodeIfPresent(String.self, forKey: .detail)
             ?? container.decodeIfPresent(String.self, forKey: .summary)
             ?? container.decodeIfPresent(String.self, forKey: .ref)
+            ?? container.decodeIfPresent(String.self, forKey: .sourceID)
+            ?? container.decodeIfPresent(String.self, forKey: .relatedInstanceID)
             ?? title
         source = try container.decodeIfPresent(String.self, forKey: .source)
+            ?? container.decodeIfPresent(String.self, forKey: .sourceType)
         agent = try container.decodeIfPresent(String.self, forKey: .agent)
         id = try container.decodeIfPresent(String.self, forKey: .id) ?? "\(title):\(detail):\(source ?? "")"
     }
@@ -765,6 +780,8 @@ struct ProviderObservabilityPromptRequest: Decodable, Hashable {
         case requestKind = "request_kind"
         case requestKindAlt = "requestKind"
         case kind
+        case action
+        case method
         case summary
         case detail
         case note
@@ -782,6 +799,8 @@ struct ProviderObservabilityPromptRequest: Decodable, Hashable {
         requestKind = try container.decodeIfPresent(String.self, forKey: .requestKind)
             ?? container.decodeIfPresent(String.self, forKey: .requestKindAlt)
             ?? container.decodeIfPresent(String.self, forKey: .kind)
+            ?? container.decodeIfPresent(String.self, forKey: .action)
+            ?? container.decodeIfPresent(String.self, forKey: .method)
             ?? "provider_observability"
         summary = try container.decodeIfPresent(String.self, forKey: .summary)
             ?? container.decodeIfPresent(String.self, forKey: .detail)
@@ -855,8 +874,12 @@ struct ProviderObservabilitySafety: Decodable, Hashable {
         case rawTracePersistedAlt = "rawTracePersisted"
         case cloudSyncEnabled = "cloud_sync_enabled"
         case cloudSyncEnabledAlt = "cloudSyncEnabled"
+        case cloudSyncPerformed = "cloud_sync_performed"
+        case cloudSyncPerformedAlt = "cloudSyncPerformed"
         case telemetryEnabled = "telemetry_enabled"
         case telemetryEnabledAlt = "telemetryEnabled"
+        case telemetryEmitted = "telemetry_emitted"
+        case telemetryEmittedAlt = "telemetryEmitted"
         case rawSecretReturned = "raw_secret_returned"
         case rawSecretReturnedAlt = "rawSecretReturned"
         case notes
@@ -919,8 +942,8 @@ struct ProviderObservabilitySafety: Decodable, Hashable {
             rawPromptPersisted: try container.decodeFlexibleProviderObservabilityBool(keys: [.rawPromptPersisted, .rawPromptPersistedAlt]) ?? false,
             rawResponsePersisted: try container.decodeFlexibleProviderObservabilityBool(keys: [.rawResponsePersisted, .rawResponsePersistedAlt]) ?? false,
             rawTracePersisted: try container.decodeFlexibleProviderObservabilityBool(keys: [.rawTracePersisted, .rawTracePersistedAlt]) ?? false,
-            cloudSyncEnabled: try container.decodeFlexibleProviderObservabilityBool(keys: [.cloudSyncEnabled, .cloudSyncEnabledAlt]) ?? false,
-            telemetryEnabled: try container.decodeFlexibleProviderObservabilityBool(keys: [.telemetryEnabled, .telemetryEnabledAlt]) ?? false,
+            cloudSyncEnabled: try container.decodeFlexibleProviderObservabilityBool(keys: [.cloudSyncEnabled, .cloudSyncEnabledAlt, .cloudSyncPerformed, .cloudSyncPerformedAlt]) ?? false,
+            telemetryEnabled: try container.decodeFlexibleProviderObservabilityBool(keys: [.telemetryEnabled, .telemetryEnabledAlt, .telemetryEmitted, .telemetryEmittedAlt]) ?? false,
             rawSecretReturned: try container.decodeFlexibleProviderObservabilityBool(keys: [.rawSecretReturned, .rawSecretReturnedAlt]) ?? false,
             notes: try container.decodeFlexibleProviderObservabilityStringArray(keys: [.notes, .safetyFlags])
         )

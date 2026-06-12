@@ -55,6 +55,8 @@ struct SkillStoreTests {
         try await localSkillMapFallsBackWhenMethodUnavailable()
         try await providerObservabilityUsesReadOnlyServiceContract()
         try await providerObservabilityFallsBackWhenMethodUnavailable()
+        try await taskCockpitUsesReadOnlyServiceContract()
+        try await taskCockpitFallsBackWhenMethodUnavailable()
         try await similarSkillGroupingUsesReadOnlyServiceContract()
         try await similarSkillGroupingFallsBackWhenMethodUnavailable()
         try await capabilityTaxonomyUsesReadOnlyServiceContract()
@@ -1526,6 +1528,95 @@ struct SkillStoreTests {
         try expectContains(fake.calls(), "llm.providerObservability", "Fallback should still prove the intended V2.64 method was attempted.")
     }
 
+    private func taskCockpitUsesReadOnlyServiceContract() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        store.taskCockpitText = "Prepare local release audit work."
+        await store.reload()
+        let snapshotCallsBeforeCockpit = countOccurrences("snapshot.", in: fake.calls())
+        await store.buildTaskCockpit()
+
+        let result = store.taskCockpitResult
+        try expectEqual(result?.generatedBy, "local-v2.65", "Task cockpit should expose generator metadata.")
+        try expectEqual(result?.summary.recommendedAgent, "claude-code", "Task cockpit should expose recommended agent.")
+        try expectEqual(result?.summary.recommendedSkillName, "Beta", "Task cockpit should expose recommended skill.")
+        try expectEqual(result?.routeCandidates.first?.title, "Beta", "Task cockpit should expose route candidates.")
+        try expectEqual(result?.agentCandidates.first?.agent, "claude-code", "Task cockpit should expose agent candidates.")
+        try expectEqual(result?.skillCandidates.first?.skill?.name, "Beta", "Task cockpit should expose skill candidates.")
+        try expectEqual(result?.readinessSignals.first?.title, "Readiness partial", "Task cockpit should expose readiness signals.")
+        try expectEqual(result?.sessionReviewContext.first?.source, "session.reviewAgentSkillUse", "Task cockpit should expose session context.")
+        try expectEqual(result?.providerObservabilityContext.first?.source, "llm.providerObservability", "Task cockpit should expose provider observability context.")
+        try expectEqual(result?.remediationContext.first?.source, "remediation.plan", "Task cockpit should expose remediation context.")
+        try expectEqual(result?.gapRows.first?.title, "Codex coverage gap", "Task cockpit should expose gaps.")
+        try expectEqual(result?.blockerRows.first?.title, "No apply path", "Task cockpit should expose blockers.")
+        try expectEqual(result?.evidenceReferences.first?.source, "task.buildCockpit", "Task cockpit should expose evidence references.")
+        try expectEqual(result?.promptRequest?.requestKind, "task_cockpit", "Task cockpit should expose prompt metadata.")
+        try expectFalse(result?.safetyFlags.providerRequestSent ?? true, "Task cockpit must not send provider requests.")
+        try expectFalse(result?.safetyFlags.writeBackAllowed ?? true, "Task cockpit must not allow write-back.")
+        try expectFalse(result?.safetyFlags.writeActionsAvailable ?? true, "Task cockpit must not expose write actions.")
+        try expectFalse(result?.safetyFlags.scriptExecutionAllowed ?? true, "Task cockpit must not allow script execution.")
+        try expectFalse(result?.safetyFlags.executionActionsAvailable ?? true, "Task cockpit must not expose execution actions.")
+        try expectFalse(result?.safetyFlags.configMutationAllowed ?? true, "Task cockpit must not mutate config.")
+        try expectFalse(result?.safetyFlags.snapshotCreated ?? true, "Task cockpit must not create snapshots.")
+        try expectFalse(result?.safetyFlags.triageMutationAllowed ?? true, "Task cockpit must not mutate triage.")
+        try expectFalse(result?.safetyFlags.credentialAccessed ?? true, "Task cockpit must not access credentials.")
+        try expectFalse(result?.safetyFlags.rawPromptPersisted ?? true, "Task cockpit must not persist raw prompts.")
+        try expectFalse(result?.safetyFlags.rawResponsePersisted ?? true, "Task cockpit must not persist raw responses.")
+        try expectFalse(result?.safetyFlags.rawTracePersisted ?? true, "Task cockpit must not persist raw traces.")
+        try expectFalse(result?.safetyFlags.cloudSyncEnabled ?? true, "Task cockpit must not sync cloud data.")
+        try expectFalse(result?.safetyFlags.telemetryEnabled ?? true, "Task cockpit must not emit telemetry.")
+        try expectFalse(store.isBuildingTaskCockpit, "Task cockpit should reset loading state.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "task.buildCockpit", "Task cockpit should call the V2.65 task.buildCockpit method.")
+        try expectContains(calls, "\"task\":\"Prepare local release audit work.\"", "Task cockpit should send task text.")
+        try expectContains(calls, "\"agent\":\"claude-code\"", "Task cockpit should pass the current agent filter.")
+        try expectContains(calls, "\"selected_skill_id\":\"beta\"", "Task cockpit should pass selected skill id.")
+        try expectContains(calls, "\"selected_skill_name\":\"Beta\"", "Task cockpit should pass selected skill name.")
+        try expectContains(calls, "\"selected_skill_agent\":\"claude-code\"", "Task cockpit should pass selected skill agent.")
+        try expectContains(calls, "\"candidate_instance_ids\":[\"beta\"]", "Task cockpit should include selected skill candidate context.")
+        try expectContains(calls, "\"project_root\":\"\\/tmp\\/project\"", "Task cockpit should pass active project root.")
+        try expectContains(calls, "\"current_cwd\":\"\\/tmp\\/project\"", "Task cockpit should pass active project cwd.")
+        try expectContains(calls, "\"workspace\":\"Fixture Project\"", "Task cockpit should pass active workspace name.")
+        try expectContains(calls, "\"limit\":8", "Task cockpit should pass cockpit limit.")
+        try expectContains(calls, "\"include_session_review\":true", "Task cockpit should request session-review context.")
+        try expectContains(calls, "\"include_provider_observability\":true", "Task cockpit should request provider-observability context.")
+        try expectContains(calls, "\"include_remediation_context\":true", "Task cockpit should request remediation context.")
+        try expectContains(calls, "\"include_evidence\":true", "Task cockpit should request evidence rows.")
+        try expectFalse(calls.contains("llm.previewPrompt"), "Task cockpit must not prepare provider prompts.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Task cockpit must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Task cockpit must not call config write paths.")
+        try expectFalse(calls.contains("script.execute"), "Task cockpit must not call execution paths.")
+        try expectEqual(countOccurrences("snapshot.", in: calls), snapshotCallsBeforeCockpit, "Task cockpit must not call snapshot paths.")
+        try expectFalse(calls.contains("credential"), "Task cockpit must not call credential paths.")
+    }
+
+    private func taskCockpitFallsBackWhenMethodUnavailable() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "normal")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        store.routingConfidenceText = "Route a local audit release note task."
+        await store.reload()
+        await store.buildTaskCockpit()
+
+        try expectEqual(store.taskCockpitResult?.isUnavailable, true, "Task cockpit should expose unavailable fallback for older services.")
+        try expectEqual(store.taskCockpitResult?.fallbackReason, UIStrings.taskCockpitUnavailable, "Unknown method fallback should use the localized unavailable copy.")
+        try expectFalse(store.isBuildingTaskCockpit, "Unavailable task cockpit should reset loading state.")
+        try expectContains(fake.calls(), "task.buildCockpit", "Fallback should still prove the intended V2.65 method was attempted.")
+        try expectContains(fake.calls(), "\"task\":\"Route a local audit release note task.\"", "Fallback should reuse existing routing task text when cockpit input is blank.")
+        try expectFalse(fake.calls().contains("llm.previewPrompt"), "Unavailable cockpit flow must not fall back to provider prompt preview.")
+        try expectFalse(fake.calls().contains("llm.confirmPromptAndSend"), "Unavailable cockpit flow must not send to provider.")
+        try expectFalse(fake.calls().contains("config.toggleSkill"), "Unavailable cockpit flow must not call config write paths.")
+        try expectFalse(fake.calls().contains("script.execute"), "Unavailable cockpit flow must not call execution paths.")
+    }
+
     private func similarSkillGroupingUsesReadOnlyServiceContract() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -2580,6 +2671,12 @@ private final class FakeServiceScript {
               respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.64","app_local_only":true,"metadata_redacted":true,"filters":{"window_days":30,"limit":30,"include_history":true,"include_budget_hints":true,"include_retention_recommendations":true,"include_evidence":true},"summary":{"call_count":3,"success_count":1,"failure_count":1,"blocked_count":1,"provider_count":1,"model_count":2,"destination_count":1,"error_count":1,"estimated_input_tokens":980,"estimated_output_tokens":320,"estimated_total_tokens":1300,"estimated_cost_usd":0.041,"total_duration_ms":1800,"average_duration_ms":600,"budget_hint_count":1,"retention_recommendation_count":2,"summary":"Three redacted provider-call metadata rows were reviewed locally."},"call_rows":[{"id":"call-1","preview_id":"preview-1","confirmation_id":"confirm-1","request_kind":"task_readiness","action":"task_readiness","provider":"openai-compatible","model":"gpt-5","destination_host":"llm.example.com","status":"succeeded","duration_ms":720,"input_tokens":420,"output_tokens":120,"total_tokens":540,"estimated_cost_usd":0.014,"completed_at":1781260000000,"draft_copy_only":true,"provider_request_sent":true,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_secret_returned":false,"evidence_refs":["prompt-run:preview-1"],"safety_flags":["copy-only","raw prompt not stored"],"detail":"Provider response metadata was stored without raw prompt or response."},{"id":"call-2","request_kind":"quality_score","provider":"openai-compatible","model":"gpt-5-mini","destination_host":"llm.example.com","status":"failed","error_code":"timeout","error_message":"Provider request timed out.","duration_ms":1080,"input_tokens":560,"output_tokens":0,"total_tokens":560,"estimated_cost_usd":0.027,"draft_copy_only":true,"provider_request_sent":true,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_secret_returned":false,"evidence_refs":["prompt-run:timeout"],"safety_flags":["raw response not stored"]}],"provider_rows":[{"kind":"provider","label":"OpenAI-compatible","provider":"openai-compatible","call_count":3,"success_count":1,"failure_count":1,"blocked_count":1,"estimated_tokens":1300,"estimated_cost_usd":0.041,"average_duration_ms":600,"status":"partial","notes":["One timeout and one blocked local preview."],"evidence_refs":["provider:openai-compatible"]}],"model_rows":[{"kind":"model","label":"gpt-5","model":"gpt-5","call_count":1,"success_count":1,"estimated_tokens":540,"status":"ok"},{"kind":"model","label":"gpt-5-mini","model":"gpt-5-mini","call_count":1,"failure_count":1,"estimated_tokens":560,"status":"warning"}],"destination_rows":[{"kind":"destination","label":"llm.example.com","destination_host":"llm.example.com","call_count":2,"status":"partial"}],"status_rows":[{"severity":"info","status":"succeeded","title":"Succeeded","detail":"One call completed.","count":1},{"severity":"warning","status":"blocked","title":"Blocked locally","detail":"One preview never sent a provider request.","count":1}],"error_rows":[{"severity":"warning","status":"failed","title":"Timeout","detail":"Provider request timed out.","count":1,"provider":"openai-compatible","model":"gpt-5-mini","evidence_refs":["prompt-run:timeout"]}],"budget_hints":[{"severity":"info","title":"Monthly budget healthy","detail":"Estimated spend is below the configured budget.","value":"0.041","threshold":"25.00","recommendation":"Keep monitoring prompt-run history."}],"usage_hints":[{"severity":"info","title":"Token usage available","detail":"Estimated token totals are derived from redacted metadata.","value":"1300"}],"retention_rows":[{"severity":"info","title":"Retain metadata only","detail":"Keep redacted prompt-run metadata; do not retain raw prompts.","recommendation":"Review old metadata periodically."}],"cleanup_recommendations":[{"severity":"info","title":"No cleanup required","detail":"No unsafe raw prompt or response payloads were observed."}],"gap_notes":["No raw response bodies are available for observability by design."],"blocker_notes":[],"evidence_references":[{"title":"Prompt run history","detail":"Read from app-local prompt-runs metadata.","source":"llm.providerObservability"}],"prompt_request":{"enabled":false,"request_kind":"provider_observability","summary":"No provider request is prepared or sent by observability.","draft_copy_only":true,"redacted":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["observability did not send a provider request"]}}}'
             fi
             respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: llm.providerObservability"}}'
+            ;;
+          *\\"task.buildCockpit\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.65","catalog_available":true,"filters":{"task":"Prepare local release audit work.","agent":"claude-code","selected_skill_id":"beta","selected_skill_name":"Beta","selected_skill_agent":"claude-code","project_root":"/tmp/project","current_cwd":"/tmp/project","workspace":"Fixture Project","limit":8,"include_session_review":true,"include_provider_observability":true,"include_remediation_context":true},"summary":{"task_text":"Prepare local release audit work.","summary":"Beta is the strongest route; Codex coverage remains a gap.","route_candidate_count":2,"agent_candidate_count":1,"skill_candidate_count":1,"readiness_signal_count":1,"session_review_count":1,"provider_call_count":3,"remediation_item_count":1,"gap_count":1,"blocker_count":1,"evidence_count":1,"safety_flag_count":1,"recommended_agent":"claude-code","recommended_skill_name":"Beta","readiness_score":78,"routing_score":88},"route_candidates":[{"route_id":"route-beta","rank":1,"title":"Beta","agent":"claude-code","skill":{"instance_id":"beta","skill_name":"Beta","agent":"claude-code","definition_id":"def.beta"},"readiness_score":78,"routing_score":88,"band":"High","status":"ready","summary":"Best local match for release audit.","match_reasons":["Description matches audit work."],"evidence_refs":["route:beta"],"safety_flags":["provider not sent"]},{"route_id":"route-alpha","rank":2,"title":"Alpha","agent":"claude-code","routing_score":64,"band":"Medium","summary":"Similar audit wording."}],"agent_candidates":[{"agent_id":"agent-claude","title":"Claude Code","agent":"claude-code","score":82,"reasons":["Selected skill is enabled."]}],"skill_candidates":[{"skill_id":"beta","title":"Beta","agent":"claude-code","skill":{"instance_id":"beta","skill_name":"Beta","agent":"claude-code","definition_id":"def.beta"},"readiness_score":78,"routing_score":88}],"readiness_signals":[{"id":"readiness-beta","title":"Readiness partial","detail":"Ready for local audit, missing release-note examples.","status":"partial","count":1}],"session_review_context":[{"id":"review-1","title":"Recent session matched Beta","detail":"Latest review outcome was hit.","status":"hit","source":"session.reviewAgentSkillUse"}],"provider_observability_context":[{"id":"provider-1","title":"Provider calls observed","detail":"Three redacted call metadata rows.","count":3,"source":"llm.providerObservability"}],"remediation_context":[{"id":"plan-1","title":"Add Codex release audit coverage","detail":"Guidance only; no apply path.","severity":"medium","source":"remediation.plan"}],"gap_rows":[{"title":"Codex coverage gap","detail":"No Codex project route.","severity":"warning","agent":"codex","evidence_refs":["workspace:codex-gap"]}],"blocker_rows":[{"title":"No apply path","detail":"Cockpit only recommends review surfaces.","severity":"info"}],"evidence_references":[{"title":"Task cockpit","detail":"Derived from local readiness, routing, session, provider, and remediation metadata.","source":"task.buildCockpit","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"task_cockpit","summary":"No provider request is prepared or sent.","draft_copy_only":true,"redacted":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent"]}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: task.buildCockpit"}}'
             ;;
           *\\"knowledge.groupSimilarSkills\\"*)
             if [ "$scenario" = "prompt-ready" ]; then
