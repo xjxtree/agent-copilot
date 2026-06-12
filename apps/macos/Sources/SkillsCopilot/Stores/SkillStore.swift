@@ -53,6 +53,8 @@ final class SkillStore: ObservableObject {
     @Published private(set) var remediationBatchReviewResult: RemediationBatchReviewResult?
     @Published private(set) var remediationHistoryResult: RemediationHistoryResult?
     @Published private(set) var remediationHistoryRecordResult: RemediationHistoryRecordResult?
+    @Published private(set) var guidedCleanupFlowResult: GuidedCleanupFlowResult?
+    @Published private(set) var guidedCleanupRecordResult: GuidedCleanupRecordStepResult?
     @Published private(set) var traceImportList = AgentTraceImportListResult(imports: [])
     @Published private(set) var traceImportResult: AgentTraceImportResult?
     @Published private(set) var traceImportDeleteResult: AgentTraceImportDeleteResult?
@@ -78,6 +80,8 @@ final class SkillStore: ObservableObject {
     @Published private(set) var isReviewingRemediationBatch = false
     @Published private(set) var isLoadingRemediationHistory = false
     @Published private(set) var isRecordingRemediationHistory = false
+    @Published private(set) var isPlanningGuidedCleanupFlow = false
+    @Published private(set) var isRecordingGuidedCleanupStep = false
     @Published private(set) var isLoadingTraceImports = false
     @Published private(set) var isImportingTrace = false
     @Published private(set) var isLoadingAgentSessionSkillReviews = false
@@ -145,6 +149,8 @@ final class SkillStore: ObservableObject {
             remediationBatchReviewResult = nil
             remediationHistoryResult = nil
             remediationHistoryRecordResult = nil
+            guidedCleanupFlowResult = nil
+            guidedCleanupRecordResult = nil
             agentSessionSkillReviewResult = nil
             agentSessionSkillReviewDeleteResult = nil
             agentSessionSkillReviewList = AgentSessionSkillReviewListResult(reviews: [])
@@ -241,7 +247,7 @@ final class SkillStore: ObservableObject {
     }
 
     private var isTaskBenchmarkBusy: Bool {
-        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isBuildingLocalSkillMap || isLoadingSkillLifecycleTimeline || isLoadingProviderObservability || isBuildingTaskCockpit || isGroupingSimilarSkills || isBuildingCapabilityTaxonomy || isCheckingWorkspaceReadiness || isPlanningRemediation || isPreviewingRemediationDrafts || isPreviewingRemediationImpact || isReviewingRemediationBatch || isLoadingRemediationHistory || isRecordingRemediationHistory || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || isLoadingAgentSessionSkillReviews || isReviewingAgentSessionSkillUse || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty || !deletingAgentSessionSkillReviewIDs.isEmpty
+        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isBuildingLocalSkillMap || isLoadingSkillLifecycleTimeline || isLoadingProviderObservability || isBuildingTaskCockpit || isGroupingSimilarSkills || isBuildingCapabilityTaxonomy || isCheckingWorkspaceReadiness || isPlanningRemediation || isPreviewingRemediationDrafts || isPreviewingRemediationImpact || isReviewingRemediationBatch || isLoadingRemediationHistory || isRecordingRemediationHistory || isPlanningGuidedCleanupFlow || isRecordingGuidedCleanupStep || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || isLoadingAgentSessionSkillReviews || isReviewingAgentSessionSkillUse || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty || !deletingAgentSessionSkillReviewIDs.isEmpty
     }
 
     private var isLLMPromptBusy: Bool {
@@ -1856,6 +1862,66 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func planGuidedCleanupFlow() async {
+        guard !isPlanningGuidedCleanupFlow else { return }
+        guard !isRefreshBusy else {
+            guidedCleanupFlowResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        isPlanningGuidedCleanupFlow = true
+        defer { isPlanningGuidedCleanupFlow = false }
+
+        let agent = agentFilter == .all ? nil : agentFilter.rawValue
+        let taskText = selectedCrossAgentReadinessInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            guidedCleanupFlowResult = try await service.planGuidedCleanupFlow(
+                taskText: taskText.isEmpty ? nil : taskText,
+                agent: agent,
+                project: activeProjectContext,
+                selectedSkill: selectedSkill,
+                limit: 12,
+                includeIssueGroups: true,
+                includeSafeNextActions: true,
+                includeRecordedSteps: true,
+                includeEvidence: true,
+                includeSafetyFlags: true
+            )
+        } catch {
+            guidedCleanupFlowResult = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
+    func recordGuidedCleanupStep(_ step: GuidedCleanupFlowStep? = nil) async {
+        guard !isRecordingGuidedCleanupStep else { return }
+        guard !isRefreshBusy else {
+            guidedCleanupRecordResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+        guard let step = step ?? guidedCleanupFlowResult?.recommendedStep else {
+            guidedCleanupRecordResult = .unavailable(reason: UIStrings.guidedCleanupFlowNoSteps)
+            return
+        }
+
+        isRecordingGuidedCleanupStep = true
+        defer { isRecordingGuidedCleanupStep = false }
+
+        let agent = agentFilter == .all ? nil : agentFilter.rawValue
+        let taskText = selectedCrossAgentReadinessInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            guidedCleanupRecordResult = try await service.recordGuidedCleanupStep(
+                taskText: taskText.isEmpty ? nil : taskText,
+                agent: agent,
+                project: activeProjectContext,
+                selectedSkill: selectedSkill,
+                step: step,
+                evidenceRefs: guidedCleanupEvidenceRefs(for: step)
+            )
+        } catch {
+            guidedCleanupRecordResult = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
     func compareCrossAgentReadiness() async {
         let taskText = selectedCrossAgentReadinessInput
         guard !taskText.isEmpty else {
@@ -2413,6 +2479,12 @@ final class SkillStore: ObservableObject {
         if workspaceReadinessResult?.isUnavailable == true {
             workspaceReadinessResult = nil
         }
+        if guidedCleanupFlowResult?.isUnavailable == true {
+            guidedCleanupFlowResult = nil
+        }
+        if guidedCleanupRecordResult?.isUnavailable == true {
+            guidedCleanupRecordResult = nil
+        }
         deletingTaskBenchmarkIDs.removeAll()
         if taskBenchmarkList.isUnavailable {
             taskBenchmarkEvaluation = nil
@@ -2788,6 +2860,8 @@ final class SkillStore: ObservableObject {
         skillLifecycleTimelineResult = nil
         remediationHistoryResult = nil
         remediationHistoryRecordResult = nil
+        guidedCleanupFlowResult = nil
+        guidedCleanupRecordResult = nil
         agentSessionSkillReviewResult = nil
         agentSessionSkillReviewDeleteResult = nil
         agentSessionSkillReviewList = AgentSessionSkillReviewListResult(reviews: [])
@@ -2804,6 +2878,24 @@ final class SkillStore: ObservableObject {
         refs.append(contentsOf: remediationPreviewDraftsResult?.evidenceReferences.map(\.detail) ?? [])
         refs.append(contentsOf: remediationPlanResult?.evidenceReferences.map(\.detail) ?? [])
         refs.append(contentsOf: remediationBatchReviewResult?.safeNextStepLabels.map { "safe_next_step:\($0)" } ?? [])
+        if let selectedSkill {
+            refs.append("selected_skill:\(selectedSkill.id)")
+        }
+        var seen = Set<String>()
+        return refs.compactMap { value in
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, !seen.contains(trimmed) else { return nil }
+            seen.insert(trimmed)
+            return trimmed
+        }
+    }
+
+    private func guidedCleanupEvidenceRefs(for step: GuidedCleanupFlowStep) -> [String] {
+        var refs: [String] = []
+        refs.append("guided_step:\(step.id)")
+        refs.append(contentsOf: step.evidenceRefs)
+        refs.append(contentsOf: guidedCleanupFlowResult?.evidenceReferences.map(\.detail) ?? [])
+        refs.append(contentsOf: guidedCleanupFlowResult?.safeNextActions.map { "safe_action:\($0.id)" } ?? [])
         if let selectedSkill {
             refs.append("selected_skill:\(selectedSkill.id)")
         }

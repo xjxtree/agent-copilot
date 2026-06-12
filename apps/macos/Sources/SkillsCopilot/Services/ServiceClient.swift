@@ -618,6 +618,82 @@ private struct RemediationHistoryRecordParams: Encodable {
     }
 }
 
+private struct GuidedCleanupFlowParams: Encodable {
+    let task: String?
+    let agent: String?
+    let projectRoot: String?
+    let currentCWD: String?
+    let workspace: String?
+    let selectedSkillID: String?
+    let selectedSkillName: String?
+    let selectedSkillAgent: String?
+    let selectedSkillPath: String?
+    let limit: Int?
+    let includeIssueGroups: Bool
+    let includeSafeNextActions: Bool
+    let includeRecordedSteps: Bool
+    let includeEvidence: Bool
+    let includeSafetyFlags: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case task
+        case agent
+        case projectRoot = "project_root"
+        case currentCWD = "current_cwd"
+        case workspace
+        case selectedSkillID = "selected_skill_id"
+        case selectedSkillName = "selected_skill_name"
+        case selectedSkillAgent = "selected_skill_agent"
+        case selectedSkillPath = "selected_skill_path"
+        case limit
+        case includeIssueGroups = "include_issue_groups"
+        case includeSafeNextActions = "include_safe_next_actions"
+        case includeRecordedSteps = "include_recorded_steps"
+        case includeEvidence = "include_evidence"
+        case includeSafetyFlags = "include_safety_flags"
+    }
+}
+
+private struct GuidedCleanupRecordStepParams: Encodable {
+    let task: String?
+    let agent: String?
+    let projectRoot: String?
+    let currentCWD: String?
+    let workspace: String?
+    let selectedSkillID: String?
+    let selectedSkillName: String?
+    let selectedSkillAgent: String?
+    let selectedSkillPath: String?
+    let stepID: String
+    let stepTitle: String
+    let stepKind: String
+    let actionLabel: String
+    let sourceMethod: String
+    let note: String
+    let evidenceRefs: [String]
+    let safetyFlags: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case task
+        case agent
+        case projectRoot = "project_root"
+        case currentCWD = "current_cwd"
+        case workspace
+        case selectedSkillID = "selected_skill_id"
+        case selectedSkillName = "selected_skill_name"
+        case selectedSkillAgent = "selected_skill_agent"
+        case selectedSkillPath = "selected_skill_path"
+        case stepID = "step_id"
+        case stepTitle = "step_title"
+        case stepKind = "step_kind"
+        case actionLabel = "action_label"
+        case sourceMethod = "source_method"
+        case note
+        case evidenceRefs = "evidence_refs"
+        case safetyFlags = "safety_flags"
+    }
+}
+
 private struct TaskBenchmarkDeleteParams: Encodable {
     let benchmarkId: String
 
@@ -1653,6 +1729,81 @@ final class ServiceClient {
         )
         do {
             return try await call(method: "remediation.recordHistory", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func planGuidedCleanupFlow(
+        taskText: String? = nil,
+        agent: String? = nil,
+        project: ProjectContext? = nil,
+        selectedSkill: SkillRecord? = nil,
+        limit: Int? = 12,
+        includeIssueGroups: Bool = true,
+        includeSafeNextActions: Bool = true,
+        includeRecordedSteps: Bool = true,
+        includeEvidence: Bool = true,
+        includeSafetyFlags: Bool = true
+    ) async throws -> GuidedCleanupFlowResult {
+        let normalizedTask = taskText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let params = GuidedCleanupFlowParams(
+            task: normalizedTask?.isEmpty == true ? nil : normalizedTask,
+            agent: agent,
+            projectRoot: project?.rootPath,
+            currentCWD: project?.currentCWD,
+            workspace: project?.name,
+            selectedSkillID: selectedSkill?.id,
+            selectedSkillName: selectedSkill?.name,
+            selectedSkillAgent: selectedSkill?.agent,
+            selectedSkillPath: selectedSkill?.displayPath.isEmpty == false ? selectedSkill?.displayPath : selectedSkill?.path,
+            limit: limit,
+            includeIssueGroups: includeIssueGroups,
+            includeSafeNextActions: includeSafeNextActions,
+            includeRecordedSteps: includeRecordedSteps,
+            includeEvidence: includeEvidence,
+            includeSafetyFlags: includeSafetyFlags
+        )
+        do {
+            return try await call(method: "cleanup.planGuidedFlow", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func recordGuidedCleanupStep(
+        taskText: String? = nil,
+        agent: String? = nil,
+        project: ProjectContext? = nil,
+        selectedSkill: SkillRecord? = nil,
+        step: GuidedCleanupFlowStep,
+        sourceMethod: String = "analysis.guidedCleanupFlow.ui",
+        note: String = UIStrings.guidedCleanupFlowRecordDefaultNote,
+        evidenceRefs: [String] = [],
+        safetyFlags: [String] = ["app-local metadata only", "no write", "provider not sent"]
+    ) async throws -> GuidedCleanupRecordStepResult {
+        let normalizedTask = taskText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let params = GuidedCleanupRecordStepParams(
+            task: normalizedTask?.isEmpty == true ? nil : normalizedTask,
+            agent: agent,
+            projectRoot: project?.rootPath,
+            currentCWD: project?.currentCWD,
+            workspace: project?.name,
+            selectedSkillID: selectedSkill?.id,
+            selectedSkillName: selectedSkill?.name,
+            selectedSkillAgent: selectedSkill?.agent,
+            selectedSkillPath: selectedSkill?.displayPath.isEmpty == false ? selectedSkill?.displayPath : selectedSkill?.path,
+            stepID: step.id,
+            stepTitle: step.title,
+            stepKind: step.kind,
+            actionLabel: step.actionLabel,
+            sourceMethod: sourceMethod,
+            note: note,
+            evidenceRefs: evidenceRefs,
+            safetyFlags: safetyFlags
+        )
+        do {
+            return try await call(method: "cleanup.recordGuidedStep", params: params)
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .unavailable()
         }

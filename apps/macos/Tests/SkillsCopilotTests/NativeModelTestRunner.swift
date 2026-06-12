@@ -69,6 +69,7 @@ public func runNativeModelTests() {
         try ProviderObservabilityModelTests().run()
         try TaskCockpitModelTests().run()
         try SkillLifecycleTimelineModelTests().run()
+        try GuidedCleanupFlowModelTests().run()
         try AIProviderModelTests().run()
         try LLMModelTests().run()
         try ScriptExecutionModelTests().run()

@@ -105,6 +105,8 @@ const SUPPORTED_METHODS: &[&str] = &[
     "llm.prepareAction",
     "llm.prepareSkillAnalysis",
     "cleanup.listQueue",
+    "cleanup.planGuidedFlow",
+    "cleanup.recordGuidedStep",
     "comparison.listCrossAgent",
     "report.exportLocal",
     "rules.listTuning",
@@ -351,6 +353,212 @@ pub struct CleanupQueueItem {
     pub read_only: bool,
     pub writes_allowed: bool,
     pub provider_request_sent: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct GuidedCleanupPlanParams {
+    #[serde(default, alias = "task_text", alias = "user_intent")]
+    pub task: Option<String>,
+    #[serde(default, alias = "target_agent")]
+    pub agent: Option<String>,
+    #[serde(default, alias = "instance_id", alias = "skill_id")]
+    pub selected_skill_id: Option<String>,
+    #[serde(default)]
+    pub selected_skill_name: Option<String>,
+    #[serde(default, alias = "target_skill_agent")]
+    pub selected_skill_agent: Option<String>,
+    #[serde(default, alias = "workspace_path")]
+    pub project_root: Option<String>,
+    #[serde(default)]
+    pub current_cwd: Option<String>,
+    #[serde(default, alias = "workspace_label")]
+    pub workspace: Option<String>,
+    #[serde(default, alias = "instance_ids")]
+    pub candidate_instance_ids: Vec<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+    #[serde(default)]
+    pub include_recorded_steps: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GuidedCleanupFlowResult {
+    pub generated_by: &'static str,
+    pub catalog_available: bool,
+    pub filters: GuidedCleanupFlowFilters,
+    pub summary: GuidedCleanupFlowSummary,
+    pub flow_steps: Vec<GuidedCleanupFlowStep>,
+    pub issue_groups: Vec<GuidedCleanupIssueGroup>,
+    pub safe_next_actions: Vec<GuidedCleanupSafeNextAction>,
+    pub recorded_steps: Vec<GuidedCleanupStepRecord>,
+    pub gap_notes: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub evidence_references: Vec<TaskReadinessEvidenceReference>,
+    pub prompt_request: GuidedCleanupPromptRequest,
+    pub safety_flags: GuidedCleanupSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GuidedCleanupFlowFilters {
+    pub task: Option<String>,
+    pub agent: Option<String>,
+    pub selected_skill_id: Option<String>,
+    pub selected_skill_name: Option<String>,
+    pub selected_skill_agent: Option<String>,
+    pub project_root: Option<String>,
+    pub current_cwd: Option<String>,
+    pub workspace: Option<String>,
+    pub candidate_instance_ids: Vec<String>,
+    pub limit: usize,
+    pub include_recorded_steps: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct GuidedCleanupFlowSummary {
+    pub total_step_count: usize,
+    pub returned_step_count: usize,
+    pub issue_group_count: usize,
+    pub safe_next_action_count: usize,
+    pub recorded_step_count: usize,
+    pub high_risk_count: usize,
+    pub medium_risk_count: usize,
+    pub low_risk_count: usize,
+    pub blocker_count: usize,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GuidedCleanupFlowStep {
+    pub id: String,
+    pub rank: usize,
+    pub step_type: &'static str,
+    pub phase: &'static str,
+    pub title: String,
+    pub summary: String,
+    pub status: String,
+    pub risk: &'static str,
+    pub source_method: &'static str,
+    pub source_id: String,
+    pub agent: Option<String>,
+    pub skill_name: Option<String>,
+    pub instance_id: Option<String>,
+    pub definition_id: Option<String>,
+    pub recommended_action_label: String,
+    pub safe_entry_method: &'static str,
+    pub existing_safe_method: Option<&'static str>,
+    pub requires_explicit_confirmation: bool,
+    pub evidence_refs: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub gap_notes: Vec<String>,
+    pub side_effect_flags: Vec<&'static str>,
+    pub safety_flags: GuidedCleanupSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GuidedCleanupIssueGroup {
+    pub id: String,
+    pub group_type: &'static str,
+    pub label: String,
+    pub step_count: usize,
+    pub high_risk_count: usize,
+    pub medium_risk_count: usize,
+    pub low_risk_count: usize,
+    pub step_ids: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub safety_flags: GuidedCleanupSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GuidedCleanupSafeNextAction {
+    pub id: String,
+    pub label: String,
+    pub entry_method: &'static str,
+    pub description: String,
+    pub requires_preview: bool,
+    pub requires_confirmation: bool,
+    pub copy_only: bool,
+    pub related_step_ids: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub safety_flags: GuidedCleanupSafetyFlags,
+}
+
+pub type GuidedCleanupPromptRequest = AgentReadinessPromptRequest;
+pub type GuidedCleanupSafetyFlags = RemediationHistorySafetyFlags;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GuidedCleanupStepRecord {
+    pub id: String,
+    pub flow_step_id: String,
+    pub title: String,
+    pub decision: String,
+    pub status: String,
+    pub note: Option<String>,
+    pub task: Option<String>,
+    pub agent: Option<String>,
+    pub instance_id: Option<String>,
+    pub definition_id: Option<String>,
+    pub skill_name: Option<String>,
+    pub source_refs: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    #[serde(default = "remediation_history_redaction_summary_default")]
+    pub redaction_summary: RemediationHistoryRedactionSummary,
+    pub created_at: i64,
+    pub updated_at: i64,
+    #[serde(default = "guided_cleanup_safety_flags")]
+    pub safety_flags: GuidedCleanupSafetyFlags,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct GuidedCleanupRecordStepParams {
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(default)]
+    pub flow_step_id: Option<String>,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub decision: Option<String>,
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub note: Option<String>,
+    #[serde(default, alias = "task_text", alias = "user_intent")]
+    pub task: Option<String>,
+    #[serde(default, alias = "target_agent")]
+    pub agent: Option<String>,
+    #[serde(default, alias = "skill_id", alias = "selected_skill_id")]
+    pub instance_id: Option<String>,
+    #[serde(default)]
+    pub definition_id: Option<String>,
+    #[serde(default, alias = "selected_skill_name")]
+    pub skill_name: Option<String>,
+    #[serde(default, alias = "source_item_refs")]
+    pub source_refs: Vec<String>,
+    #[serde(default)]
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GuidedCleanupRecordStepResult {
+    pub generated_by: &'static str,
+    pub record: GuidedCleanupStepRecord,
+    pub created: bool,
+    pub count: usize,
+    pub app_local_only: bool,
+    pub record_file: &'static str,
+    pub provider_request_sent: bool,
+    pub skill_files_mutated: bool,
+    pub agent_config_mutated: bool,
+    pub snapshot_created: bool,
+    pub rollback_performed: bool,
+    pub triage_mutated: bool,
+    pub script_executed: bool,
+    pub credential_accessed: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_trace_persisted: bool,
+    pub safety_flags: GuidedCleanupSafetyFlags,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -3426,6 +3634,7 @@ pub enum LlmPromptActionKind {
     RemediationPreviewDrafts,
     RemediationPreviewImpact,
     RemediationBatchReview,
+    GuidedCleanupFlow,
     TaskReadiness,
     RoutingConfidence,
     TaskCockpit,
@@ -3451,6 +3660,7 @@ impl LlmPromptActionKind {
             Self::RemediationPreviewDrafts => "remediation_preview_drafts",
             Self::RemediationPreviewImpact => "remediation_preview_impact",
             Self::RemediationBatchReview => "remediation_batch_review",
+            Self::GuidedCleanupFlow => "guided_cleanup_flow",
             Self::TaskReadiness => "task_readiness",
             Self::RoutingConfidence => "routing_confidence",
             Self::TaskCockpit => "task_cockpit",
@@ -4561,6 +4771,18 @@ impl ServiceHost {
                 };
                 serde_json::to_value(self.cleanup_list_queue(params)?).map_err(Into::into)
             }
+            "cleanup.planGuidedFlow" => {
+                let params: GuidedCleanupPlanParams = if request.params.is_null() {
+                    GuidedCleanupPlanParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.plan_guided_cleanup_flow(params)?).map_err(Into::into)
+            }
+            "cleanup.recordGuidedStep" => {
+                let params: GuidedCleanupRecordStepParams = serde_json::from_value(request.params)?;
+                serde_json::to_value(self.record_guided_cleanup_step(params)?).map_err(Into::into)
+            }
             "comparison.listCrossAgent" => {
                 let params: ListCrossAgentComparisonParams = if request.params.is_null() {
                     ListCrossAgentComparisonParams::default()
@@ -5164,6 +5386,372 @@ impl ServiceHost {
         }
 
         Ok(cleanup_queue_response(items, params.limit))
+    }
+
+    pub fn plan_guided_cleanup_flow(
+        &self,
+        params: GuidedCleanupPlanParams,
+    ) -> Result<GuidedCleanupFlowResult, ServiceError> {
+        if matches!(params.limit, Some(0)) {
+            return Err(ServiceError::InvalidRequest(
+                "cleanup.planGuidedFlow limit must be greater than zero".to_string(),
+            ));
+        }
+
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let roots = self.trace_redaction_roots(&adapter_ctx);
+        let filters = guided_cleanup_filters(&params, &adapter_ctx, &roots);
+        let recorded_steps = if filters.include_recorded_steps {
+            self.load_guided_cleanup_steps()?
+                .into_iter()
+                .filter(|record| guided_cleanup_record_matches(&filters, record))
+                .take(filters.limit)
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
+
+        let Some(catalog) = self.open_existing_catalog_read_only()? else {
+            return Ok(empty_guided_cleanup_flow_result(
+                filters,
+                false,
+                recorded_steps,
+            ));
+        };
+
+        let skills = self.list_visible_skill_records(&catalog)?;
+        let visible_by_id = skills
+            .iter()
+            .map(|skill| (skill.id.as_str(), skill))
+            .collect::<BTreeMap<_, _>>();
+        let candidate_instance_ids =
+            guided_cleanup_candidate_ids(&params, &filters, &visible_by_id);
+        let agent = filters
+            .selected_skill_agent
+            .clone()
+            .or_else(|| filters.agent.clone());
+        let task = filters.task.clone();
+        let evidence_limit = filters.limit.saturating_mul(2).max(filters.limit);
+
+        let batch_review = self.batch_review_remediation(RemediationBatchReviewParams {
+            task: task.clone(),
+            agent: agent.clone(),
+            project_root: params.project_root.clone(),
+            workspace_label: filters.workspace.clone(),
+            rule_id: None,
+            severity: None,
+            status: None,
+            triage_status: None,
+            candidate_instance_ids: candidate_instance_ids.clone(),
+            group_by: Vec::new(),
+            limit: Some(evidence_limit),
+        })?;
+        let lifecycle = self.build_skill_lifecycle_timeline(SkillLifecycleTimelineParams {
+            task: task.clone(),
+            agent: agent.clone(),
+            selected_skill_id: filters.selected_skill_id.clone(),
+            selected_skill_name: filters.selected_skill_name.clone(),
+            selected_skill_agent: filters.selected_skill_agent.clone(),
+            definition_id: None,
+            project_root: params.project_root.clone(),
+            current_cwd: params.current_cwd.clone(),
+            workspace: params.workspace.clone(),
+            limit: Some(evidence_limit.clamp(12, 100)),
+            include_prompt_runs: true,
+            include_session_reviews: true,
+            include_remediation_history: true,
+            include_stale_drift: true,
+        })?;
+        let cockpit = if let Some(task) = task.as_ref() {
+            Some(self.build_task_cockpit(TaskCockpitParams {
+                task: task.clone(),
+                agent: agent.clone(),
+                candidate_instance_ids: candidate_instance_ids.clone(),
+                limit: Some(filters.limit.min(12)),
+            })?)
+        } else {
+            None
+        };
+
+        let mut evidence_references = Vec::new();
+        extend_evidence_references(
+            &mut evidence_references,
+            batch_review.evidence_references.clone(),
+        );
+        extend_evidence_references(
+            &mut evidence_references,
+            lifecycle.evidence_references.clone(),
+        );
+        if let Some(cockpit) = cockpit.as_ref() {
+            extend_evidence_references(
+                &mut evidence_references,
+                cockpit.evidence_references.clone(),
+            );
+        }
+
+        let mut flow_steps = Vec::new();
+        for item in &batch_review.review_items {
+            flow_steps.push(guided_cleanup_step_from_batch_item(item));
+        }
+        for next in &batch_review.recommended_next_step_labels {
+            if flow_steps.len() >= evidence_limit {
+                break;
+            }
+            flow_steps.push(guided_cleanup_step_from_next_label(next, &task));
+        }
+        for row in lifecycle.timeline_rows.iter().take(filters.limit.min(8)) {
+            flow_steps.push(guided_cleanup_step_from_lifecycle(row));
+        }
+        if let Some(cockpit) = cockpit.as_ref() {
+            for next in cockpit
+                .remediation_next_steps
+                .iter()
+                .take(filters.limit.min(8))
+            {
+                flow_steps.push(guided_cleanup_step_from_cockpit(next));
+            }
+        }
+
+        guided_cleanup_sort_steps(&mut flow_steps, filters.limit);
+        let issue_groups = guided_cleanup_issue_groups(&flow_steps, filters.limit);
+        let safe_next_actions = guided_cleanup_safe_next_actions(&flow_steps);
+
+        let mut gap_notes = batch_review.gap_notes.clone();
+        gap_notes.extend(lifecycle.gap_notes.clone());
+        if let Some(cockpit) = cockpit.as_ref() {
+            gap_notes.extend(cockpit.gap_notes.clone());
+        }
+        if flow_steps.is_empty() {
+            gap_notes.push(
+                "No deterministic local guided cleanup steps matched the selected filters."
+                    .to_string(),
+            );
+        }
+        normalize_note_list(&mut gap_notes);
+        gap_notes.truncate(18);
+
+        let mut blocker_notes = batch_review.blocker_notes.clone();
+        blocker_notes.extend(lifecycle.blocker_notes.clone());
+        if let Some(cockpit) = cockpit.as_ref() {
+            blocker_notes.extend(cockpit.blocker_notes.clone());
+        }
+        blocker_notes.push(
+            "Guided cleanup flow is read-only planning; it does not write skill files, mutate agent config, change triage, create snapshots, execute scripts, or send provider requests."
+                .to_string(),
+        );
+        blocker_notes.push(
+            "Enable/disable/edit/remediation actions remain outside this flow and must use existing preview-first, explicit-confirm safe methods."
+                .to_string(),
+        );
+        normalize_note_list(&mut blocker_notes);
+        blocker_notes.truncate(18);
+
+        dedupe_evidence_references(&mut evidence_references);
+        let prompt_instance_ids = flow_steps
+            .iter()
+            .filter_map(|step| step.instance_id.clone())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .take(12)
+            .collect::<Vec<_>>();
+        let summary = guided_cleanup_summary(
+            flow_steps.len(),
+            &flow_steps,
+            issue_groups.len(),
+            safe_next_actions.len(),
+            recorded_steps.len(),
+        );
+
+        Ok(GuidedCleanupFlowResult {
+            generated_by: "local-v2.67",
+            catalog_available: true,
+            filters: filters.clone(),
+            summary,
+            flow_steps,
+            issue_groups,
+            safe_next_actions,
+            recorded_steps,
+            gap_notes,
+            blocker_notes,
+            evidence_references,
+            prompt_request: GuidedCleanupPromptRequest {
+                available: !prompt_instance_ids.is_empty(),
+                preview_method: "llm.previewPrompt",
+                confirm_method: "llm.confirmPromptAndSend",
+                action: "guided_cleanup_flow",
+                request: LlmPreviewPromptParams {
+                    action: LlmPromptActionKind::GuidedCleanupFlow,
+                    profile_id: None,
+                    app_language: None,
+                    skill_instance_id: filters.selected_skill_id.clone(),
+                    instance_ids: prompt_instance_ids,
+                    analysis_kind: None,
+                    user_intent: filters.task.clone().or_else(|| {
+                        Some(
+                            "Explain deterministic guided cleanup flow steps using only local redacted evidence."
+                                .to_string(),
+                        )
+                    }),
+                },
+                note: "Optional provider-backed guided cleanup wording must be requested through prompt preview and explicit confirmation; cleanup.planGuidedFlow never sends provider traffic and remains copy-only."
+                    .to_string(),
+            },
+            safety_flags: guided_cleanup_safety_flags(),
+        })
+    }
+
+    pub fn record_guided_cleanup_step(
+        &self,
+        params: GuidedCleanupRecordStepParams,
+    ) -> Result<GuidedCleanupRecordStepResult, ServiceError> {
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let roots = self.trace_redaction_roots(&adapter_ctx);
+        let mut redactor = PromptRedactor::new(&roots);
+        let flow_step_id = params
+            .flow_step_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| truncate_chars(&redactor.redact(value), 180))
+            .ok_or_else(|| {
+                ServiceError::InvalidRequest(
+                    "cleanup.recordGuidedStep requires a non-empty flow_step_id".to_string(),
+                )
+            })?;
+        let decision = params
+            .decision
+            .as_deref()
+            .or(params.status.as_deref())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(normalize_history_token)
+            .unwrap_or_else(|| "recorded".to_string());
+        if decision.is_empty() {
+            return Err(ServiceError::InvalidRequest(
+                "cleanup.recordGuidedStep requires a valid decision or status".to_string(),
+            ));
+        }
+        let status = params
+            .status
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(normalize_history_token)
+            .unwrap_or_else(|| "recorded".to_string());
+        if status.is_empty() {
+            return Err(ServiceError::InvalidRequest(
+                "cleanup.recordGuidedStep requires a valid status".to_string(),
+            ));
+        }
+
+        let now = unix_timestamp_millis();
+        let title = params
+            .title
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| truncate_chars(&redactor.redact(value), 180))
+            .unwrap_or_else(|| format!("Guided cleanup step: {flow_step_id}"));
+        let note = params
+            .note
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| truncate_chars(&redactor.redact(value), 500));
+        let task = params
+            .task
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| truncate_chars(&redactor.redact(value), 320));
+        let agent = params
+            .agent
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| truncate_chars(&redactor.redact(value), 80));
+        let instance_id = params
+            .instance_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| truncate_chars(&redactor.redact(value), 160));
+        let definition_id = params
+            .definition_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| truncate_chars(&redactor.redact(value), 160));
+        let skill_name = params
+            .skill_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| truncate_chars(&redactor.redact(value), 180));
+        let source_refs = redact_history_string_list(params.source_refs, &mut redactor, 180, 80);
+        let evidence_refs =
+            redact_history_string_list(params.evidence_refs, &mut redactor, 180, 80);
+        let redaction_summary = remediation_history_redaction_summary_from(redactor.summary());
+        let id = params
+            .id
+            .as_deref()
+            .map(sanitize_guided_cleanup_record_id)
+            .filter(|id| !id.is_empty())
+            .unwrap_or_else(|| generated_guided_cleanup_record_id(&flow_step_id, &decision, now));
+
+        let mut records = self.load_guided_cleanup_steps()?;
+        let created = !records.iter().any(|record| record.id == id);
+        let record = GuidedCleanupStepRecord {
+            id: id.clone(),
+            flow_step_id,
+            title,
+            decision,
+            status,
+            note,
+            task,
+            agent,
+            instance_id,
+            definition_id,
+            skill_name,
+            source_refs,
+            evidence_refs,
+            redaction_summary,
+            created_at: if created {
+                now
+            } else {
+                records
+                    .iter()
+                    .find(|record| record.id == id)
+                    .map(|record| record.created_at)
+                    .unwrap_or(now)
+            },
+            updated_at: now,
+            safety_flags: guided_cleanup_safety_flags(),
+        };
+        records.retain(|existing| existing.id != id);
+        records.push(record.clone());
+        self.save_guided_cleanup_steps(&records)?;
+
+        Ok(GuidedCleanupRecordStepResult {
+            generated_by: "local-v2.67",
+            record,
+            created,
+            count: records.len(),
+            app_local_only: true,
+            record_file: "guided-cleanup-steps.json",
+            provider_request_sent: false,
+            skill_files_mutated: false,
+            agent_config_mutated: false,
+            snapshot_created: false,
+            rollback_performed: false,
+            triage_mutated: false,
+            script_executed: false,
+            credential_accessed: false,
+            raw_prompt_persisted: false,
+            raw_response_persisted: false,
+            raw_trace_persisted: false,
+            safety_flags: guided_cleanup_safety_flags(),
+        })
     }
 
     pub fn export_local_report(
@@ -12074,6 +12662,54 @@ impl ServiceHost {
                     &mut redactor,
                 ));
             }
+            LlmPromptActionKind::GuidedCleanupFlow => {
+                let result = self.plan_guided_cleanup_flow(GuidedCleanupPlanParams {
+                    task: params.user_intent.clone(),
+                    agent: None,
+                    selected_skill_id: params
+                        .skill_instance_id
+                        .clone()
+                        .or_else(|| params.instance_ids.first().cloned()),
+                    selected_skill_name: None,
+                    selected_skill_agent: None,
+                    project_root: None,
+                    current_cwd: None,
+                    workspace: None,
+                    candidate_instance_ids: params.instance_ids.clone(),
+                    limit: Some(12),
+                    include_recorded_steps: true,
+                })?;
+                prompt_scope.extend([
+                    "deterministic guided cleanup flow steps".to_string(),
+                    "issue groups and safe next action labels".to_string(),
+                    "app-local recorded guided step metadata when available".to_string(),
+                    "gap, blocker, evidence, and safety summaries".to_string(),
+                ]);
+                included_fields.extend([
+                    "redacted task or cleanup intent".to_string(),
+                    "flow step ids, phases, risk bands, statuses, and source methods".to_string(),
+                    "candidate skill ids, names, agents, and definition ids".to_string(),
+                    "safe next action entry methods and confirmation requirements".to_string(),
+                    "recorded guided step metadata without raw prompt, response, trace, secrets, or unredacted paths"
+                        .to_string(),
+                    "evidence ids and read-only safety flags".to_string(),
+                ]);
+                excluded_fields.extend([
+                    "raw source paths".to_string(),
+                    "raw provider prompt".to_string(),
+                    "raw provider response".to_string(),
+                    "provider API keys or credentials".to_string(),
+                    "raw trace content".to_string(),
+                    "agent config contents".to_string(),
+                    "raw skill body".to_string(),
+                    "write/apply instructions".to_string(),
+                    "snapshot creation or rollback commands".to_string(),
+                ]);
+                sections.push(render_guided_cleanup_flow_prompt_section(
+                    &result,
+                    &mut redactor,
+                ));
+            }
             LlmPromptActionKind::TaskReadiness => {
                 let task = params.user_intent.as_deref().ok_or_else(|| {
                     ServiceError::InvalidRequest(
@@ -12282,6 +12918,7 @@ impl ServiceHost {
             LlmPromptActionKind::RemediationPreviewDrafts => 850,
             LlmPromptActionKind::RemediationPreviewImpact => 850,
             LlmPromptActionKind::RemediationBatchReview => 900,
+            LlmPromptActionKind::GuidedCleanupFlow => 900,
             LlmPromptActionKind::TaskReadiness => 750,
             LlmPromptActionKind::RoutingConfidence => 850,
             LlmPromptActionKind::TaskCockpit => 950,
@@ -12869,6 +13506,10 @@ impl ServiceHost {
         self.app_data_dir.join("remediation-history.json")
     }
 
+    fn guided_cleanup_steps_path(&self) -> PathBuf {
+        self.app_data_dir.join("guided-cleanup-steps.json")
+    }
+
     fn load_task_benchmarks(&self) -> Result<Vec<TaskBenchmarkRecord>, ServiceError> {
         let path = self.task_benchmarks_path();
         if !path.exists() {
@@ -13330,6 +13971,30 @@ impl ServiceHost {
         let path = self.remediation_history_path();
         let mut sorted = records.to_vec();
         sorted.sort_by(remediation_history_record_sort);
+        let content = serde_json::to_string_pretty(&sorted)?;
+        fs::write(path, content)?;
+        Ok(())
+    }
+
+    fn load_guided_cleanup_steps(&self) -> Result<Vec<GuidedCleanupStepRecord>, ServiceError> {
+        let path = self.guided_cleanup_steps_path();
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        let content = fs::read_to_string(path)?;
+        let mut records: Vec<GuidedCleanupStepRecord> = serde_json::from_str(&content)?;
+        records.sort_by(guided_cleanup_record_sort);
+        Ok(records)
+    }
+
+    fn save_guided_cleanup_steps(
+        &self,
+        records: &[GuidedCleanupStepRecord],
+    ) -> Result<(), ServiceError> {
+        fs::create_dir_all(&self.app_data_dir)?;
+        let path = self.guided_cleanup_steps_path();
+        let mut sorted = records.to_vec();
+        sorted.sort_by(guided_cleanup_record_sort);
         let content = serde_json::to_string_pretty(&sorted)?;
         fs::write(path, content)?;
         Ok(())
@@ -28052,6 +28717,149 @@ fn render_remediation_batch_review_prompt_section(
     )
 }
 
+fn render_guided_cleanup_flow_prompt_section(
+    result: &GuidedCleanupFlowResult,
+    redactor: &mut PromptRedactor<'_>,
+) -> String {
+    let steps = result
+        .flow_steps
+        .iter()
+        .take(10)
+        .map(|step| {
+            format!(
+                "- #{} type={} phase={} risk={} status={} method={} skill={} title={} next={} blockers={}",
+                step.rank,
+                step.step_type,
+                step.phase,
+                step.risk,
+                redactor.redact(&step.status),
+                step.source_method,
+                step.skill_name
+                    .as_deref()
+                    .map(|value| redactor.redact(value))
+                    .unwrap_or_else(|| "none".to_string()),
+                redactor.redact(&step.title),
+                redactor.redact(&step.recommended_action_label),
+                step.blocker_notes
+                    .iter()
+                    .take(3)
+                    .map(|blocker| redactor.redact(blocker))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let groups = result
+        .issue_groups
+        .iter()
+        .take(8)
+        .map(|group| {
+            format!(
+                "- {} label={} steps={} high={} medium={} low={}",
+                group.group_type,
+                redactor.redact(&group.label),
+                group.step_count,
+                group.high_risk_count,
+                group.medium_risk_count,
+                group.low_risk_count
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let safe_actions = result
+        .safe_next_actions
+        .iter()
+        .take(8)
+        .map(|action| {
+            format!(
+                "- {} via {} preview={} confirmation={} copy_only={} description={}",
+                redactor.redact(&action.label),
+                action.entry_method,
+                action.requires_preview,
+                action.requires_confirmation,
+                action.copy_only,
+                redactor.redact(&action.description)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let recorded = result
+        .recorded_steps
+        .iter()
+        .take(6)
+        .map(|record| {
+            format!(
+                "- {} decision={} status={} flow_step={}",
+                redactor.redact(&record.title),
+                redactor.redact(&record.decision),
+                redactor.redact(&record.status),
+                redactor.redact(&record.flow_step_id)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let evidence = result
+        .evidence_references
+        .iter()
+        .take(16)
+        .map(|reference| {
+            format!(
+                "- {} {} {}",
+                reference.source_type,
+                redactor.redact(&reference.source_id),
+                redactor.redact(&reference.label)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "Guided cleanup flow evidence:\n- catalog_available: {}\n- total_step_count: {}\n- returned_step_count: {}\n- issue_group_count: {}\n- safe_next_action_count: {}\n- recorded_step_count: {}\n- high_risk_count: {}\n- medium_risk_count: {}\n- low_risk_count: {}\n- blocker_count: {}\n- summary: {}\n\nFlow steps:\n{}\n\nIssue groups:\n{}\n\nSafe next actions:\n{}\n\nRecorded step metadata:\n{}\n\nGap notes:\n{}\n\nBlocker notes:\n{}\n\nEvidence references:\n{}\n\nSafety flags: read_only=true, app_local_only=true, provider_request_sent=false, write_back_allowed=false, write_actions_available=false, skill_files_mutated=false, agent_config_mutated=false, script_execution_allowed=false, execution_actions_available=false, config_mutation_allowed=false, snapshot_created=false, rollback_performed=false, triage_mutation_allowed=false, credential_accessed=false, raw_prompt_persisted=false, raw_response_persisted=false, raw_trace_persisted=false, cloud_sync_performed=false, telemetry_emitted=false.",
+        result.catalog_available,
+        result.summary.total_step_count,
+        result.summary.returned_step_count,
+        result.summary.issue_group_count,
+        result.summary.safe_next_action_count,
+        result.summary.recorded_step_count,
+        result.summary.high_risk_count,
+        result.summary.medium_risk_count,
+        result.summary.low_risk_count,
+        result.summary.blocker_count,
+        redactor.redact(&result.summary.summary),
+        if steps.is_empty() { "none" } else { &steps },
+        if groups.is_empty() { "none" } else { &groups },
+        if safe_actions.is_empty() {
+            "none"
+        } else {
+            &safe_actions
+        },
+        if recorded.is_empty() { "none" } else { &recorded },
+        if result.gap_notes.is_empty() {
+            "none".to_string()
+        } else {
+            result
+                .gap_notes
+                .iter()
+                .take(10)
+                .map(|note| redactor.redact(note))
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+        if result.blocker_notes.is_empty() {
+            "none".to_string()
+        } else {
+            result
+                .blocker_notes
+                .iter()
+                .take(10)
+                .map(|note| redactor.redact(note))
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+        if evidence.is_empty() { "none" } else { &evidence },
+    )
+}
+
 fn render_routing_confidence_prompt_section(
     ranking: &SkillRouteRankingResult,
     redactor: &mut PromptRedactor<'_>,
@@ -28644,6 +29452,737 @@ fn priority_for(severity: &str) -> &'static str {
     }
 }
 
+fn guided_cleanup_safety_flags() -> GuidedCleanupSafetyFlags {
+    remediation_history_safety_flags()
+}
+
+fn guided_cleanup_filters(
+    params: &GuidedCleanupPlanParams,
+    adapter_ctx: &AdapterContext,
+    roots: &[(String, &'static str)],
+) -> GuidedCleanupFlowFilters {
+    let mut candidate_instance_ids = normalized_redacted_ids(&params.candidate_instance_ids);
+    if let Some(selected) = params
+        .selected_skill_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| truncate_chars(&redact_string(&redact_for_llm_preview(value), roots), 160))
+    {
+        if !candidate_instance_ids.iter().any(|id| id == &selected) {
+            candidate_instance_ids.push(selected);
+        }
+    }
+    candidate_instance_ids.sort();
+    candidate_instance_ids.dedup();
+
+    GuidedCleanupFlowFilters {
+        task: skill_lifecycle_filter_text(params.task.as_deref(), roots, 320),
+        agent: params.agent.as_deref().and_then(normalize_agent_label),
+        selected_skill_id: skill_lifecycle_filter_token(
+            params.selected_skill_id.as_deref(),
+            roots,
+            160,
+        ),
+        selected_skill_name: skill_lifecycle_filter_text(
+            params.selected_skill_name.as_deref(),
+            roots,
+            180,
+        ),
+        selected_skill_agent: params
+            .selected_skill_agent
+            .as_deref()
+            .and_then(normalize_agent_label),
+        project_root: params
+            .project_root
+            .as_deref()
+            .map(|value| skill_lifecycle_filter_path_text(value, roots, 240))
+            .or_else(|| {
+                adapter_ctx.project_root.as_ref().map(|path| {
+                    skill_lifecycle_filter_path_text(&path.to_string_lossy(), roots, 240)
+                })
+            }),
+        current_cwd: params
+            .current_cwd
+            .as_deref()
+            .map(|value| skill_lifecycle_filter_path_text(value, roots, 240))
+            .or_else(|| {
+                adapter_ctx.project_cwd.as_ref().map(|path| {
+                    skill_lifecycle_filter_path_text(&path.to_string_lossy(), roots, 240)
+                })
+            }),
+        workspace: skill_lifecycle_filter_text(params.workspace.as_deref(), roots, 240),
+        candidate_instance_ids,
+        limit: params.limit.unwrap_or(18).clamp(1, 100),
+        include_recorded_steps: params.include_recorded_steps,
+    }
+}
+
+fn guided_cleanup_candidate_ids(
+    params: &GuidedCleanupPlanParams,
+    filters: &GuidedCleanupFlowFilters,
+    visible_by_id: &BTreeMap<&str, &SkillRecord>,
+) -> Vec<String> {
+    let mut ids = filters.candidate_instance_ids.clone();
+    if let Some(name) = filters.selected_skill_name.as_deref() {
+        ids.extend(
+            visible_by_id
+                .values()
+                .filter(|skill| skill.name.eq_ignore_ascii_case(name))
+                .map(|skill| skill.id.clone()),
+        );
+    }
+    if let Some(agent) = filters
+        .selected_skill_agent
+        .as_deref()
+        .or(filters.agent.as_deref())
+    {
+        ids.retain(|id| {
+            visible_by_id
+                .get(id.as_str())
+                .is_none_or(|skill| skill.agent.eq_ignore_ascii_case(agent))
+        });
+    }
+    if ids.is_empty() && params.selected_skill_id.is_none() && params.selected_skill_name.is_none()
+    {
+        return Vec::new();
+    }
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
+fn empty_guided_cleanup_flow_result(
+    filters: GuidedCleanupFlowFilters,
+    catalog_available: bool,
+    recorded_steps: Vec<GuidedCleanupStepRecord>,
+) -> GuidedCleanupFlowResult {
+    GuidedCleanupFlowResult {
+        generated_by: "local-v2.67",
+        catalog_available,
+        summary: GuidedCleanupFlowSummary {
+            recorded_step_count: recorded_steps.len(),
+            blocker_count: 1,
+            summary:
+                "No local catalog is available, so guided cleanup flow has no catalog evidence."
+                    .to_string(),
+            ..GuidedCleanupFlowSummary::default()
+        },
+        filters,
+        flow_steps: Vec::new(),
+        issue_groups: Vec::new(),
+        safe_next_actions: Vec::new(),
+        recorded_steps,
+        gap_notes: vec![
+            "Run a local scan before relying on guided cleanup flow evidence.".to_string(),
+        ],
+        blocker_notes: vec![
+            "No provider request was sent and no fallback network lookup was attempted.".to_string(),
+        ],
+        evidence_references: Vec::new(),
+        prompt_request: GuidedCleanupPromptRequest {
+            available: false,
+            preview_method: "llm.previewPrompt",
+            confirm_method: "llm.confirmPromptAndSend",
+            action: "guided_cleanup_flow",
+            request: LlmPreviewPromptParams {
+                action: LlmPromptActionKind::GuidedCleanupFlow,
+                profile_id: None,
+                app_language: None,
+                skill_instance_id: None,
+                instance_ids: Vec::new(),
+                analysis_kind: None,
+                user_intent: Some(
+                    "Explain deterministic guided cleanup flow steps using only local redacted evidence."
+                        .to_string(),
+                ),
+            },
+            note: "Prompt preview is unavailable until local catalog evidence produces guided cleanup flow steps."
+                .to_string(),
+        },
+        safety_flags: guided_cleanup_safety_flags(),
+    }
+}
+
+fn guided_cleanup_step_from_batch_item(item: &RemediationBatchReviewItem) -> GuidedCleanupFlowStep {
+    let source_method = guided_cleanup_source_method(item.source);
+    let (instance_id, definition_id, skill_name) = item
+        .affected_skill
+        .as_ref()
+        .map(|skill| {
+            (
+                Some(skill.instance_id.clone()),
+                Some(skill.definition_id.clone()),
+                Some(skill.skill_name.clone()),
+            )
+        })
+        .unwrap_or_else(|| {
+            (
+                item.affected_instance_ids.first().cloned(),
+                None,
+                item.title
+                    .split(':')
+                    .next_back()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(redact_for_llm_preview),
+            )
+        });
+    GuidedCleanupFlowStep {
+        id: format!("guided:batch:{}", item.id),
+        rank: 0,
+        step_type: guided_cleanup_step_type(item.source),
+        phase: guided_cleanup_step_phase(item.source),
+        title: item.title.clone(),
+        summary: item.summary.clone(),
+        status: item.status.clone(),
+        risk: item.risk,
+        source_method,
+        source_id: item.source_id.clone(),
+        agent: item.agent.clone(),
+        skill_name,
+        instance_id,
+        definition_id,
+        recommended_action_label: item.recommended_next_step_label.clone(),
+        safe_entry_method: source_method,
+        existing_safe_method: Some(source_method),
+        requires_explicit_confirmation: false,
+        evidence_refs: item.evidence_refs.clone(),
+        blocker_notes: guided_cleanup_step_blockers(&item.blocker_notes),
+        gap_notes: item.gap_notes.clone(),
+        side_effect_flags: guided_cleanup_side_effect_flags(),
+        safety_flags: guided_cleanup_safety_flags(),
+    }
+}
+
+fn guided_cleanup_step_from_next_label(
+    label: &str,
+    task: &Option<String>,
+) -> GuidedCleanupFlowStep {
+    GuidedCleanupFlowStep {
+        id: stable_guided_cleanup_step_id("next-action", label, &[]),
+        rank: 0,
+        step_type: "safe_next_action",
+        phase: "review",
+        title: redact_for_llm_preview(label),
+        summary: task
+            .as_ref()
+            .map(|task| format!("Review this safe next step for task `{}`.", task))
+            .unwrap_or_else(|| {
+                "Review this safe next step against current local evidence.".to_string()
+            }),
+        status: "open".to_string(),
+        risk: "low",
+        source_method: "remediation.batchReview",
+        source_id: redact_for_llm_preview(label),
+        agent: None,
+        skill_name: None,
+        instance_id: None,
+        definition_id: None,
+        recommended_action_label: redact_for_llm_preview(label),
+        safe_entry_method: "remediation.batchReview",
+        existing_safe_method: Some("remediation.batchReview"),
+        requires_explicit_confirmation: false,
+        evidence_refs: Vec::new(),
+        blocker_notes: vec![
+            "Guided cleanup next steps are advisory and do not execute cleanup.".to_string(),
+        ],
+        gap_notes: Vec::new(),
+        side_effect_flags: guided_cleanup_side_effect_flags(),
+        safety_flags: guided_cleanup_safety_flags(),
+    }
+}
+
+fn guided_cleanup_step_from_lifecycle(row: &SkillLifecycleTimelineRow) -> GuidedCleanupFlowStep {
+    GuidedCleanupFlowStep {
+        id: format!("guided:lifecycle:{}", row.id),
+        rank: 0,
+        step_type: "lifecycle_context",
+        phase: "context",
+        title: row.title.clone(),
+        summary: row.summary.clone(),
+        status: row
+            .status
+            .clone()
+            .unwrap_or_else(|| row.lifecycle_stage.to_string()),
+        risk: guided_cleanup_risk_for_severity(row.severity.as_deref()),
+        source_method: "skill.lifecycleTimeline",
+        source_id: row.id.clone(),
+        agent: row.agent.clone(),
+        skill_name: row.skill_name.clone(),
+        instance_id: row.instance_id.clone(),
+        definition_id: row.definition_id.clone(),
+        recommended_action_label: "Review lifecycle timeline context".to_string(),
+        safe_entry_method: "skill.lifecycleTimeline",
+        existing_safe_method: Some("skill.lifecycleTimeline"),
+        requires_explicit_confirmation: false,
+        evidence_refs: row.evidence_refs.clone(),
+        blocker_notes: vec![
+            "Lifecycle context is read-only and cannot apply cleanup actions.".to_string(),
+        ],
+        gap_notes: Vec::new(),
+        side_effect_flags: guided_cleanup_side_effect_flags(),
+        safety_flags: guided_cleanup_safety_flags(),
+    }
+}
+
+fn guided_cleanup_step_from_cockpit(
+    next: &TaskCockpitRemediationNextStep,
+) -> GuidedCleanupFlowStep {
+    GuidedCleanupFlowStep {
+        id: format!("guided:cockpit:{}", next.id),
+        rank: 0,
+        step_type: "task_context",
+        phase: "task_context",
+        title: next.title.clone(),
+        summary: next.suggested_safe_next_action.clone(),
+        status: "open".to_string(),
+        risk: next.priority,
+        source_method: "task.buildCockpit",
+        source_id: next.id.clone(),
+        agent: None,
+        skill_name: None,
+        instance_id: None,
+        definition_id: None,
+        recommended_action_label: next.suggested_safe_next_action.clone(),
+        safe_entry_method: "task.buildCockpit",
+        existing_safe_method: Some("task.buildCockpit"),
+        requires_explicit_confirmation: false,
+        evidence_refs: next.evidence_refs.clone(),
+        blocker_notes: guided_cleanup_step_blockers(&next.blocker_notes),
+        gap_notes: next.gap_notes.clone(),
+        side_effect_flags: guided_cleanup_side_effect_flags(),
+        safety_flags: guided_cleanup_safety_flags(),
+    }
+}
+
+fn guided_cleanup_step_blockers(blockers: &[String]) -> Vec<String> {
+    let mut notes = blockers.to_vec();
+    notes.push(
+        "This guided cleanup step does not write files, mutate config, change triage, create snapshots, execute scripts, or send provider requests."
+            .to_string(),
+    );
+    normalize_note_list(&mut notes);
+    notes
+}
+
+fn guided_cleanup_source_method(source: &str) -> &'static str {
+    match source {
+        "cleanup_queue" => "cleanup.listQueue",
+        "remediation_plan" => "remediation.plan",
+        "fix_preview_draft" => "remediation.previewDrafts",
+        "impact_preview" => "remediation.previewImpact",
+        _ => "remediation.batchReview",
+    }
+}
+
+fn guided_cleanup_step_type(source: &str) -> &'static str {
+    match source {
+        "cleanup_queue" => "queue_review",
+        "remediation_plan" => "plan_review",
+        "fix_preview_draft" => "copy_only_draft_review",
+        "impact_preview" => "impact_review",
+        _ => "review",
+    }
+}
+
+fn guided_cleanup_step_phase(source: &str) -> &'static str {
+    match source {
+        "fix_preview_draft" => "draft_preview",
+        "impact_preview" => "impact_preview",
+        "remediation_plan" => "plan",
+        _ => "inspect",
+    }
+}
+
+fn guided_cleanup_risk_for_severity(severity: Option<&str>) -> &'static str {
+    match severity.unwrap_or("info") {
+        "critical" | "error" | "high" | "failed" | "miss" | "wrong_pick" => "high",
+        "warning" | "warn" | "medium" | "ambiguous" => "medium",
+        _ => "low",
+    }
+}
+
+fn guided_cleanup_side_effect_flags() -> Vec<&'static str> {
+    vec![
+        "provider_request_sent=false",
+        "write_back_allowed=false",
+        "write_actions_available=false",
+        "skill_files_mutated=false",
+        "agent_config_mutated=false",
+        "script_execution_allowed=false",
+        "snapshot_created=false",
+        "rollback_performed=false",
+        "triage_mutation_allowed=false",
+        "credential_accessed=false",
+        "cloud_sync_performed=false",
+        "telemetry_emitted=false",
+    ]
+}
+
+fn stable_guided_cleanup_step_id(kind: &str, label: &str, evidence_refs: &[String]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(kind.as_bytes());
+    hasher.update(b"\0");
+    hasher.update(label.as_bytes());
+    hasher.update(b"\0");
+    for reference in evidence_refs {
+        hasher.update(reference.as_bytes());
+        hasher.update(b"\0");
+    }
+    let digest = hasher.finalize();
+    format!("guided-step-{}", hex_prefix(&digest, 12))
+}
+
+fn guided_cleanup_sort_steps(steps: &mut Vec<GuidedCleanupFlowStep>, limit: usize) {
+    let mut by_id = BTreeMap::<String, GuidedCleanupFlowStep>::new();
+    for step in steps.drain(..) {
+        by_id.entry(step.id.clone()).or_insert(step);
+    }
+    steps.extend(by_id.into_values());
+    steps.sort_by(|left, right| {
+        remediation_batch_risk_rank(left.risk)
+            .cmp(&remediation_batch_risk_rank(right.risk))
+            .then_with(|| {
+                guided_cleanup_phase_rank(left.phase).cmp(&guided_cleanup_phase_rank(right.phase))
+            })
+            .then_with(|| left.source_method.cmp(right.source_method))
+            .then_with(|| left.title.cmp(&right.title))
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    steps.truncate(limit);
+    for (index, step) in steps.iter_mut().enumerate() {
+        step.rank = index + 1;
+    }
+}
+
+fn guided_cleanup_phase_rank(phase: &str) -> u8 {
+    match phase {
+        "inspect" => 0,
+        "plan" => 1,
+        "draft_preview" => 2,
+        "impact_preview" => 3,
+        "task_context" => 4,
+        "context" => 5,
+        _ => 6,
+    }
+}
+
+fn guided_cleanup_issue_groups(
+    steps: &[GuidedCleanupFlowStep],
+    limit: usize,
+) -> Vec<GuidedCleanupIssueGroup> {
+    let mut grouped = BTreeMap::<(&'static str, String), Vec<&GuidedCleanupFlowStep>>::new();
+    for step in steps {
+        grouped
+            .entry(("phase", step.phase.to_string()))
+            .or_default()
+            .push(step);
+        grouped
+            .entry(("risk", step.risk.to_string()))
+            .or_default()
+            .push(step);
+        if let Some(agent) = step.agent.as_ref() {
+            grouped
+                .entry(("agent", agent.clone()))
+                .or_default()
+                .push(step);
+        }
+    }
+    let mut groups = grouped
+        .into_iter()
+        .map(|((group_type, label), rows)| {
+            let step_ids = rows
+                .iter()
+                .take(8)
+                .map(|step| step.id.clone())
+                .collect::<Vec<_>>();
+            let evidence_refs = rows
+                .iter()
+                .flat_map(|step| step.evidence_refs.iter().cloned())
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .take(8)
+                .collect::<Vec<_>>();
+            let blocker_notes = rows
+                .iter()
+                .flat_map(|step| step.blocker_notes.iter().cloned())
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .take(6)
+                .collect::<Vec<_>>();
+            GuidedCleanupIssueGroup {
+                id: stable_guided_cleanup_step_id(group_type, &label, &evidence_refs),
+                group_type,
+                label,
+                step_count: rows.len(),
+                high_risk_count: rows.iter().filter(|step| step.risk == "high").count(),
+                medium_risk_count: rows.iter().filter(|step| step.risk == "medium").count(),
+                low_risk_count: rows.iter().filter(|step| step.risk == "low").count(),
+                step_ids,
+                evidence_refs,
+                blocker_notes,
+                safety_flags: guided_cleanup_safety_flags(),
+            }
+        })
+        .collect::<Vec<_>>();
+    groups.sort_by(|left, right| {
+        guided_cleanup_group_rank(left.group_type)
+            .cmp(&guided_cleanup_group_rank(right.group_type))
+            .then_with(|| right.step_count.cmp(&left.step_count))
+            .then_with(|| left.label.cmp(&right.label))
+    });
+    groups.truncate(limit);
+    groups
+}
+
+fn guided_cleanup_group_rank(group_type: &str) -> u8 {
+    match group_type {
+        "risk" => 0,
+        "phase" => 1,
+        "agent" => 2,
+        _ => 3,
+    }
+}
+
+fn guided_cleanup_safe_next_actions(
+    steps: &[GuidedCleanupFlowStep],
+) -> Vec<GuidedCleanupSafeNextAction> {
+    let mut by_method = BTreeMap::<&'static str, Vec<&GuidedCleanupFlowStep>>::new();
+    for step in steps {
+        by_method
+            .entry(step.safe_entry_method)
+            .or_default()
+            .push(step);
+    }
+    let mut actions = by_method
+        .into_iter()
+        .map(|(method, rows)| guided_cleanup_safe_next_action_for_method(method, &rows))
+        .collect::<Vec<_>>();
+    if !steps.is_empty() {
+        actions.push(GuidedCleanupSafeNextAction {
+            id: "guided-action-record-step".to_string(),
+            label: "Record guided cleanup step metadata".to_string(),
+            entry_method: "cleanup.recordGuidedStep",
+            description:
+                "Store only redacted app-local review metadata for the selected guided step."
+                    .to_string(),
+            requires_preview: false,
+            requires_confirmation: true,
+            copy_only: false,
+            related_step_ids: steps.iter().take(8).map(|step| step.id.clone()).collect(),
+            evidence_refs: Vec::new(),
+            safety_flags: guided_cleanup_safety_flags(),
+        });
+        if steps.iter().any(|step| step.instance_id.is_some()) {
+            actions.push(GuidedCleanupSafeNextAction {
+                id: "guided-action-preview-toggle".to_string(),
+                label: "Preview enable/disable with existing safe batch toggle flow".to_string(),
+                entry_method: "batch.previewSkillToggles",
+                description:
+                    "If runtime enable/disable is still desired, open the existing preview-first toggle method; apply remains separate and explicit-confirm."
+                        .to_string(),
+                requires_preview: true,
+                requires_confirmation: true,
+                copy_only: false,
+                related_step_ids: steps
+                    .iter()
+                    .filter(|step| step.instance_id.is_some())
+                    .take(8)
+                    .map(|step| step.id.clone())
+                    .collect(),
+                evidence_refs: steps
+                    .iter()
+                    .flat_map(|step| step.evidence_refs.iter().cloned())
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .take(8)
+                    .collect(),
+                safety_flags: guided_cleanup_safety_flags(),
+            });
+        }
+    }
+    actions.sort_by(|left, right| left.entry_method.cmp(right.entry_method));
+    actions
+}
+
+fn guided_cleanup_safe_next_action_for_method(
+    method: &'static str,
+    rows: &[&GuidedCleanupFlowStep],
+) -> GuidedCleanupSafeNextAction {
+    let (label, description, copy_only) = match method {
+        "cleanup.listQueue" => (
+            "Review cleanup queue evidence",
+            "Open the existing read-only cleanup queue/detail evidence.",
+            false,
+        ),
+        "remediation.plan" => (
+            "Review remediation plan item",
+            "Open the existing read-only remediation planner for prioritization context.",
+            false,
+        ),
+        "remediation.previewDrafts" => (
+            "Open copy-only fix preview draft",
+            "Open existing draft suggestions; any wording remains copy-only unless separately applied outside this flow.",
+            true,
+        ),
+        "remediation.previewImpact" => (
+            "Open read-only impact preview",
+            "Open existing impact preview rows before considering any separate write flow.",
+            false,
+        ),
+        "skill.lifecycleTimeline" => (
+            "Review lifecycle timeline",
+            "Open existing lifecycle context to understand recent local evidence.",
+            false,
+        ),
+        "task.buildCockpit" => (
+            "Review task cockpit",
+            "Open existing task-first cockpit context before routing or cleanup decisions.",
+            false,
+        ),
+        _ => (
+            "Open batch review workflow",
+            "Open the existing read-only batch review workflow.",
+            false,
+        ),
+    };
+    GuidedCleanupSafeNextAction {
+        id: format!("guided-action-{}", stable_slug(method)),
+        label: label.to_string(),
+        entry_method: method,
+        description: description.to_string(),
+        requires_preview: matches!(method, "batch.previewSkillToggles"),
+        requires_confirmation: false,
+        copy_only,
+        related_step_ids: rows.iter().take(8).map(|step| step.id.clone()).collect(),
+        evidence_refs: rows
+            .iter()
+            .flat_map(|step| step.evidence_refs.iter().cloned())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .take(8)
+            .collect(),
+        safety_flags: guided_cleanup_safety_flags(),
+    }
+}
+
+fn guided_cleanup_summary(
+    total_step_count: usize,
+    steps: &[GuidedCleanupFlowStep],
+    issue_group_count: usize,
+    safe_next_action_count: usize,
+    recorded_step_count: usize,
+) -> GuidedCleanupFlowSummary {
+    let high_risk_count = steps.iter().filter(|step| step.risk == "high").count();
+    let medium_risk_count = steps.iter().filter(|step| step.risk == "medium").count();
+    let low_risk_count = steps.iter().filter(|step| step.risk == "low").count();
+    let blocker_count = steps.iter().map(|step| step.blocker_notes.len()).sum();
+    let summary = if steps.is_empty() {
+        "No guided cleanup steps matched the selected local filters.".to_string()
+    } else {
+        format!(
+            "Guided cleanup flow returned {} local read-only step(s): {high_risk_count} high, {medium_risk_count} medium, {low_risk_count} low, with {safe_next_action_count} safe next action row(s).",
+            steps.len()
+        )
+    };
+    GuidedCleanupFlowSummary {
+        total_step_count,
+        returned_step_count: steps.len(),
+        issue_group_count,
+        safe_next_action_count,
+        recorded_step_count,
+        high_risk_count,
+        medium_risk_count,
+        low_risk_count,
+        blocker_count,
+        summary,
+    }
+}
+
+fn guided_cleanup_record_matches(
+    filters: &GuidedCleanupFlowFilters,
+    record: &GuidedCleanupStepRecord,
+) -> bool {
+    if let Some(agent) = filters
+        .selected_skill_agent
+        .as_deref()
+        .or(filters.agent.as_deref())
+    {
+        if record
+            .agent
+            .as_deref()
+            .is_some_and(|value| !value.eq_ignore_ascii_case(agent))
+        {
+            return false;
+        }
+    }
+    if let Some(task) = filters.task.as_deref() {
+        if !record.task.as_deref().is_some_and(|value| {
+            value
+                .to_ascii_lowercase()
+                .contains(&task.to_ascii_lowercase())
+        }) {
+            return false;
+        }
+    }
+    let mut ids = filters.candidate_instance_ids.clone();
+    if let Some(selected) = filters.selected_skill_id.clone() {
+        ids.push(selected);
+    }
+    ids.sort();
+    ids.dedup();
+    if !ids.is_empty()
+        && !record
+            .instance_id
+            .as_deref()
+            .is_some_and(|instance_id| ids.iter().any(|id| id == instance_id))
+    {
+        return false;
+    }
+    if let Some(name) = filters.selected_skill_name.as_deref() {
+        if !record
+            .skill_name
+            .as_deref()
+            .is_some_and(|value| value.eq_ignore_ascii_case(name))
+        {
+            return false;
+        }
+    }
+    true
+}
+
+fn guided_cleanup_record_sort(
+    left: &GuidedCleanupStepRecord,
+    right: &GuidedCleanupStepRecord,
+) -> std::cmp::Ordering {
+    right
+        .updated_at
+        .cmp(&left.updated_at)
+        .then_with(|| right.created_at.cmp(&left.created_at))
+        .then_with(|| left.title.cmp(&right.title))
+        .then_with(|| left.id.cmp(&right.id))
+}
+
+fn generated_guided_cleanup_record_id(
+    flow_step_id: &str,
+    decision: &str,
+    recorded_at: i64,
+) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(flow_step_id.as_bytes());
+    hasher.update(b"\0");
+    hasher.update(decision.as_bytes());
+    hasher.update(b"\0");
+    hasher.update(recorded_at.to_string().as_bytes());
+    let digest = hasher.finalize();
+    format!("guided-cleanup-{}", hex_prefix(&digest, 12))
+}
+
+fn sanitize_guided_cleanup_record_id(id: &str) -> String {
+    sanitize_remediation_history_id(id)
+}
+
 fn parse_agent_param(agent: &str) -> Result<AgentId, ServiceError> {
     match agent {
         "claude-code" => Ok(AgentId::ClaudeCode),
@@ -28749,6 +30288,8 @@ mod tests {
         assert!(methods.contains(&Value::String("llm.prepareAction".to_string())));
         assert!(methods.contains(&Value::String("llm.prepareSkillAnalysis".to_string())));
         assert!(methods.contains(&Value::String("cleanup.listQueue".to_string())));
+        assert!(methods.contains(&Value::String("cleanup.planGuidedFlow".to_string())));
+        assert!(methods.contains(&Value::String("cleanup.recordGuidedStep".to_string())));
         assert!(methods.contains(&Value::String("comparison.listCrossAgent".to_string())));
         assert!(methods.contains(&Value::String("rules.listTuning".to_string())));
         assert!(methods.contains(&Value::String("rules.setSeverityOverride".to_string())));
@@ -29203,6 +30744,355 @@ mod tests {
             !app_data_dir.exists(),
             "cleanup.listQueue must not initialize app data when there is no catalog"
         );
+    }
+
+    #[test]
+    fn guided_cleanup_plan_guided_flow_combines_local_evidence_read_only() {
+        let unique = unique_suffix();
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-guided-cleanup-plan-test-{}-{unique}",
+            std::process::id()
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-guided-cleanup-plan-home-{}-{unique}",
+            std::process::id()
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_cleanup_queue_fixture(&host);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("guided-cleanup-plan".to_string()),
+            method: "cleanup.planGuidedFlow".to_string(),
+            params: json!({
+                "task_text": "Review the shared fixture skill and local cleanup posture",
+                "agent": "codex",
+                "selected_skill_id": "codex-alpha",
+                "workspace": "Fixture Workspace",
+                "limit": 8,
+                "include_recorded_steps": false
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("guided cleanup plan");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("local-v2.67")
+        );
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result.pointer("/filters/agent").and_then(Value::as_str),
+            Some("codex")
+        );
+        assert!(result
+            .get("flow_steps")
+            .and_then(Value::as_array)
+            .is_some_and(|steps| !steps.is_empty()));
+        assert!(result
+            .get("issue_groups")
+            .and_then(Value::as_array)
+            .is_some_and(|groups| !groups.is_empty()));
+        assert!(result
+            .get("safe_next_actions")
+            .and_then(Value::as_array)
+            .is_some_and(|actions| actions
+                .iter()
+                .any(|action| action.get("entry_method").and_then(Value::as_str)
+                    == Some("cleanup.recordGuidedStep"))));
+        assert!(result
+            .get("safe_next_actions")
+            .and_then(Value::as_array)
+            .is_some_and(|actions| actions
+                .iter()
+                .any(|action| action.get("entry_method").and_then(Value::as_str)
+                    == Some("batch.previewSkillToggles"))));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/action")
+                .and_then(Value::as_str),
+            Some("guided_cleanup_flow")
+        );
+        assert_eq!(
+            result
+                .pointer("/prompt_request/request/action")
+                .and_then(Value::as_str),
+            Some("guided_cleanup_flow")
+        );
+        assert_guided_cleanup_safety(&result);
+        assert!(result
+            .get("flow_steps")
+            .and_then(Value::as_array)
+            .expect("flow steps")
+            .iter()
+            .all(|step| step
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool)
+                == Some(false)));
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.guided_cleanup_steps_path().exists());
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn guided_cleanup_plan_guided_flow_missing_catalog_is_safe_empty() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-guided-cleanup-empty-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("guided-cleanup-empty".to_string()),
+            method: "cleanup.planGuidedFlow".to_string(),
+            params: json!({
+                "task": "Review cleanup posture",
+                "selected_skill_id": "missing-skill",
+                "limit": 4
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("guided cleanup empty");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("local-v2.67")
+        );
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/returned_step_count")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert!(result
+            .get("flow_steps")
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_guided_cleanup_safety(&result);
+        assert!(
+            !app_data_dir.exists(),
+            "missing-catalog guided cleanup plan must not initialize app data"
+        );
+    }
+
+    #[test]
+    fn guided_cleanup_record_guided_step_persists_redacted_app_local_metadata_only() {
+        let unique = unique_suffix();
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-guided-cleanup-record-test-{}-{unique}",
+            std::process::id()
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-guided-cleanup-record-home-{}-{unique}",
+            std::process::id()
+        ));
+        let project_root = app_data_dir.join("project-root");
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: Some(project_root.clone()),
+                project_cwd: Some(project_root.clone()),
+                extra_roots: Vec::new(),
+            },
+        };
+        let raw_secret = "guided-cleanup-secret-value";
+        let key_label = ["API", "_", "KEY"].join("");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("guided-cleanup-record".to_string()),
+            method: "cleanup.recordGuidedStep".to_string(),
+            params: json!({
+                "id": "guided-cleanup-redaction",
+                "flow_step_id": format!("guided-step:{}", project_root.join("SKILL.md").display()),
+                "title": format!("Record guided review at {}", user_home.join(".codex/config.toml").display()),
+                "decision": "Needs follow-up",
+                "status": "Recorded",
+                "note": format!("Do not store {key_label}={raw_secret}"),
+                "task": format!("Review local cleanup path {}", project_root.display()),
+                "agent": "codex",
+                "instance_id": "codex-alpha",
+                "definition_id": "shared-fixture",
+                "skill_name": "shared-fixture-skill",
+                "source_refs": [format!("cleanup:{}", project_root.join("SKILL.md").display())],
+                "evidence_refs": [format!("path:{}", user_home.join(".codex/config.toml").display())]
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("guided cleanup record result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("local-v2.67")
+        );
+        assert_eq!(
+            result.pointer("/record/id").and_then(Value::as_str),
+            Some("guided-cleanup-redaction")
+        );
+        assert_eq!(
+            result.pointer("/record/decision").and_then(Value::as_str),
+            Some("needs-follow-up")
+        );
+        assert_eq!(
+            result.pointer("/record/status").and_then(Value::as_str),
+            Some("recorded")
+        );
+        assert_eq!(
+            result.get("app_local_only").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result.get("provider_request_sent").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("skill_files_mutated").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("agent_config_mutated").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("snapshot_created").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("rollback_performed").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("triage_mutated").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("script_executed").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("credential_accessed").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_guided_cleanup_safety(&result);
+
+        assert!(host.guided_cleanup_steps_path().exists());
+        let persisted =
+            fs::read_to_string(host.guided_cleanup_steps_path()).expect("read guided cleanup file");
+        assert!(persisted.contains("$HOME"));
+        assert!(persisted.contains("<project-root>"));
+        assert!(persisted.contains("<redacted>"));
+        assert!(!persisted.contains(raw_secret));
+        assert!(!persisted.contains(&key_label));
+        assert!(!persisted.contains(&user_home.to_string_lossy().to_string()));
+        assert!(!persisted.contains(&project_root.to_string_lossy().to_string()));
+        assert!(!host.catalog_path().exists());
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn guided_cleanup_record_guided_step_rejects_empty_step_without_writing() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-guided-cleanup-record-empty-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("guided-cleanup-record-empty".to_string()),
+            method: "cleanup.recordGuidedStep".to_string(),
+            params: json!({
+                "flow_step_id": "   ",
+                "decision": "recorded"
+            }),
+        });
+
+        assert!(!response.ok);
+        let error = response.error.expect("empty guided cleanup record error");
+        assert_eq!(error.code, "invalid_request");
+        assert!(error.message.contains("flow_step_id"));
+        assert!(!host.guided_cleanup_steps_path().exists());
+        assert!(!host.catalog_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    }
+
+    #[test]
+    fn guided_cleanup_service_protocol_fixtures_decode_new_methods() {
+        let fixtures_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join("fixtures/service-protocol");
+        for method in ["cleanup.planGuidedFlow", "cleanup.recordGuidedStep"] {
+            let request_path = fixtures_dir.join(format!("{method}.request.json"));
+            let response_path = fixtures_dir.join(format!("{method}.response.json"));
+            let request_content =
+                fs::read_to_string(&request_path).expect("read guided cleanup request fixture");
+            let request: ServiceRequest =
+                serde_json::from_str(&request_content).expect("decode guided cleanup request");
+            assert_eq!(request.method, method);
+            let response_content =
+                fs::read_to_string(&response_path).expect("read guided cleanup response fixture");
+            let response: ServiceResponse =
+                serde_json::from_str(&response_content).expect("decode guided cleanup response");
+            assert!(response.ok, "{method} response fixture should be ok");
+            let result = response.result.expect("guided cleanup fixture result");
+            decode_response_fixture(method, &result, &response_path);
+        }
     }
 
     #[test]
@@ -39484,6 +41374,66 @@ mod tests {
                 assert!(queue.items.iter().all(|item| !item.writes_allowed));
                 assert!(queue.items.iter().all(|item| !item.provider_request_sent));
             }
+            "cleanup.planGuidedFlow" => {
+                let flow: WireGuidedCleanupFlowResult = decode_fixture_result(method, result, path);
+                assert_eq!(flow.generated_by, "local-v2.67");
+                assert!(flow.catalog_available);
+                assert_eq!(flow.summary.returned_step_count, flow.flow_steps.len());
+                assert_eq!(flow.summary.issue_group_count, flow.issue_groups.len());
+                assert_eq!(
+                    flow.summary.safe_next_action_count,
+                    flow.safe_next_actions.len()
+                );
+                assert!(!flow.flow_steps.is_empty());
+                assert!(!flow.issue_groups.is_empty());
+                assert!(!flow.safe_next_actions.is_empty());
+                assert_eq!(flow.prompt_request.action, "guided_cleanup_flow");
+                assert_eq!(
+                    flow.prompt_request.request.action,
+                    LlmPromptActionKind::GuidedCleanupFlow
+                );
+                assert_remediation_history_safety(&flow.safety_flags);
+                for step in &flow.flow_steps {
+                    assert!(step.rank > 0);
+                    assert_remediation_history_safety(&step.safety_flags);
+                    assert!(step
+                        .side_effect_flags
+                        .iter()
+                        .any(|flag| flag == "provider_request_sent=false"));
+                    assert!(step
+                        .side_effect_flags
+                        .iter()
+                        .any(|flag| flag == "skill_files_mutated=false"));
+                }
+                for group in &flow.issue_groups {
+                    assert_remediation_history_safety(&group.safety_flags);
+                }
+                for action in &flow.safe_next_actions {
+                    assert_remediation_history_safety(&action.safety_flags);
+                }
+                for record in &flow.recorded_steps {
+                    assert_remediation_history_safety(&record.safety_flags);
+                }
+            }
+            "cleanup.recordGuidedStep" => {
+                let result: WireGuidedCleanupRecordStepResult =
+                    decode_fixture_result(method, result, path);
+                assert_eq!(result.generated_by, "local-v2.67");
+                assert!(result.app_local_only);
+                assert!(!result.provider_request_sent);
+                assert!(!result.skill_files_mutated);
+                assert!(!result.agent_config_mutated);
+                assert!(!result.snapshot_created);
+                assert!(!result.rollback_performed);
+                assert!(!result.triage_mutated);
+                assert!(!result.script_executed);
+                assert!(!result.credential_accessed);
+                assert!(!result.raw_prompt_persisted);
+                assert!(!result.raw_response_persisted);
+                assert!(!result.raw_trace_persisted);
+                assert_remediation_history_safety(&result.safety_flags);
+                assert_remediation_history_safety(&result.record.safety_flags);
+            }
             "rules.listTuning" => {
                 let _: Vec<WireRuleTuningRecord> = decode_fixture_result(method, result, path);
             }
@@ -39845,6 +41795,43 @@ mod tests {
         }
     }
 
+    fn assert_guided_cleanup_safety(result: &Value) {
+        assert_eq!(
+            result
+                .pointer("/safety_flags/read_only")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/app_local_only")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        for path in [
+            "/safety_flags/provider_request_sent",
+            "/safety_flags/write_back_allowed",
+            "/safety_flags/write_actions_available",
+            "/safety_flags/skill_files_mutated",
+            "/safety_flags/agent_config_mutated",
+            "/safety_flags/script_execution_allowed",
+            "/safety_flags/execution_actions_available",
+            "/safety_flags/config_mutation_allowed",
+            "/safety_flags/snapshot_created",
+            "/safety_flags/rollback_performed",
+            "/safety_flags/triage_mutation_allowed",
+            "/safety_flags/credential_accessed",
+            "/safety_flags/raw_secret_returned",
+            "/safety_flags/raw_prompt_persisted",
+            "/safety_flags/raw_response_persisted",
+            "/safety_flags/raw_trace_persisted",
+            "/safety_flags/cloud_sync_performed",
+            "/safety_flags/telemetry_emitted",
+        ] {
+            assert_eq!(result.pointer(path).and_then(Value::as_bool), Some(false));
+        }
+    }
+
     fn assert_agent_readiness_safety(result: &Value) {
         assert_eq!(
             result
@@ -40155,6 +42142,21 @@ mod tests {
                 "evidence_refs": ["finding:dispatch"]
             }),
             "remediation.deleteHistory" => json!({ "id": "dispatch-remediation-history" }),
+            "cleanup.planGuidedFlow" => json!({
+                "task": "fixture guided cleanup flow",
+                "selected_skill_id": "missing-skill",
+                "limit": 4,
+                "include_recorded_steps": true
+            }),
+            "cleanup.recordGuidedStep" => json!({
+                "id": "dispatch-guided-cleanup-step",
+                "flow_step_id": "dispatch-guided-step",
+                "title": "Dispatch guided cleanup step",
+                "decision": "reviewed",
+                "status": "recorded",
+                "source_refs": ["dispatch-source"],
+                "evidence_refs": ["dispatch-evidence"]
+            }),
             "task.checkReadiness" => json!({ "task": "fixture task readiness check" }),
             "task.rankSkillRoutes" => json!({ "task": "fixture routing confidence check" }),
             "task.compareAgentReadiness" => json!({
@@ -43838,6 +45840,167 @@ mod tests {
         read_only: bool,
         writes_allowed: bool,
         provider_request_sent: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireGuidedCleanupFlowResult {
+        generated_by: String,
+        catalog_available: bool,
+        filters: WireGuidedCleanupFlowFilters,
+        summary: WireGuidedCleanupFlowSummary,
+        flow_steps: Vec<WireGuidedCleanupFlowStep>,
+        issue_groups: Vec<WireGuidedCleanupIssueGroup>,
+        safe_next_actions: Vec<WireGuidedCleanupSafeNextAction>,
+        recorded_steps: Vec<WireGuidedCleanupStepRecord>,
+        gap_notes: Vec<String>,
+        blocker_notes: Vec<String>,
+        evidence_references: Vec<WireTaskReadinessEvidenceReference>,
+        prompt_request: WireAgentReadinessPromptRequest,
+        safety_flags: WireRemediationHistorySafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireGuidedCleanupFlowFilters {
+        task: Option<String>,
+        agent: Option<String>,
+        selected_skill_id: Option<String>,
+        selected_skill_name: Option<String>,
+        selected_skill_agent: Option<String>,
+        project_root: Option<String>,
+        current_cwd: Option<String>,
+        workspace: Option<String>,
+        candidate_instance_ids: Vec<String>,
+        limit: usize,
+        include_recorded_steps: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireGuidedCleanupFlowSummary {
+        total_step_count: usize,
+        returned_step_count: usize,
+        issue_group_count: usize,
+        safe_next_action_count: usize,
+        recorded_step_count: usize,
+        high_risk_count: usize,
+        medium_risk_count: usize,
+        low_risk_count: usize,
+        blocker_count: usize,
+        summary: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireGuidedCleanupFlowStep {
+        id: String,
+        rank: usize,
+        step_type: String,
+        phase: String,
+        title: String,
+        summary: String,
+        status: String,
+        risk: String,
+        source_method: String,
+        source_id: String,
+        agent: Option<String>,
+        skill_name: Option<String>,
+        instance_id: Option<String>,
+        definition_id: Option<String>,
+        recommended_action_label: String,
+        safe_entry_method: String,
+        existing_safe_method: Option<String>,
+        requires_explicit_confirmation: bool,
+        evidence_refs: Vec<String>,
+        blocker_notes: Vec<String>,
+        gap_notes: Vec<String>,
+        side_effect_flags: Vec<String>,
+        safety_flags: WireRemediationHistorySafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireGuidedCleanupIssueGroup {
+        id: String,
+        group_type: String,
+        label: String,
+        step_count: usize,
+        high_risk_count: usize,
+        medium_risk_count: usize,
+        low_risk_count: usize,
+        step_ids: Vec<String>,
+        evidence_refs: Vec<String>,
+        blocker_notes: Vec<String>,
+        safety_flags: WireRemediationHistorySafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireGuidedCleanupSafeNextAction {
+        id: String,
+        label: String,
+        entry_method: String,
+        description: String,
+        requires_preview: bool,
+        requires_confirmation: bool,
+        copy_only: bool,
+        related_step_ids: Vec<String>,
+        evidence_refs: Vec<String>,
+        safety_flags: WireRemediationHistorySafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireGuidedCleanupStepRecord {
+        id: String,
+        flow_step_id: String,
+        title: String,
+        decision: String,
+        status: String,
+        note: Option<String>,
+        task: Option<String>,
+        agent: Option<String>,
+        instance_id: Option<String>,
+        definition_id: Option<String>,
+        skill_name: Option<String>,
+        source_refs: Vec<String>,
+        evidence_refs: Vec<String>,
+        redaction_summary: WireRemediationHistoryRedactionSummary,
+        created_at: i64,
+        updated_at: i64,
+        safety_flags: WireRemediationHistorySafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireGuidedCleanupRecordStepResult {
+        generated_by: String,
+        record: WireGuidedCleanupStepRecord,
+        created: bool,
+        count: usize,
+        app_local_only: bool,
+        record_file: String,
+        provider_request_sent: bool,
+        skill_files_mutated: bool,
+        agent_config_mutated: bool,
+        snapshot_created: bool,
+        rollback_performed: bool,
+        triage_mutated: bool,
+        script_executed: bool,
+        credential_accessed: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+        raw_trace_persisted: bool,
+        safety_flags: WireRemediationHistorySafetyFlags,
     }
 
     #[allow(dead_code)]

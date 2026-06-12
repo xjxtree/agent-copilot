@@ -473,7 +473,7 @@ CREATE TABLE config_snapshot (
 
 ## V2.41-V2.67 AI-native skill review models
 
-The AI-native line introduces analysis models incrementally and evidence-first. V2.41 adds app-data provider profile metadata and Keychain credential references, V2.61 adds redacted prompt run history, V2.62 adds app-local redacted Agent Session Skill Review metadata, V2.63 adds a derived Local Skill Map response, V2.64 adds a completed Provider Observability view, V2.65 adds a completed Task-first Cockpit response, and V2.66 adds a completed Skill Lifecycle Timeline response. V2.67 Guided Cleanup Flow remains planned.
+The AI-native line introduces analysis models incrementally and evidence-first. V2.41 adds app-data provider profile metadata and Keychain credential references, V2.61 adds redacted prompt run history, V2.62 adds app-local redacted Agent Session Skill Review metadata, V2.63 adds a derived Local Skill Map response, V2.64 adds a completed Provider Observability view, V2.65 adds a completed Task-first Cockpit response, V2.66 adds a completed Skill Lifecycle Timeline response, and V2.67 adds completed Guided Cleanup Flow response plus app-local redacted step metadata.
 
 Model families:
 
@@ -577,7 +577,13 @@ Model families:
   - Response shape: `{ generated_by, catalog_available, filters, summary, timeline_rows, skill_rows, agent_rows, gap_notes, blocker_notes, evidence_references, prompt_request, safety_flags }`.
   - Timeline rows should include stable row ids, timestamp or coarse ordering evidence, subject type (`skill` / `agent` / `workspace`), event type (`discovered` / `changed` / `stale` / `drift` / `finding` / `triage` / `remediation` / `prompt_run` / `provider_observability` / `session_review`), skill/agent/workspace refs where available, redacted labels, reason text, evidence refs, and safety flags.
   - Safety boundary: no new raw lifecycle artifact persistence by default, no skill/config writes, no triage mutation, no snapshot creation/rollback, no script execution, no default provider/network request, no credential reads, no raw prompt/raw response/raw trace/secret/unredacted-path persistence, no cloud sync, and no telemetry.
-- `GuidedCleanupFlow` / `GuidedCleanupStep`（V2.67 future）：app-local guided flow metadata derived from findings, similar groups, drift, readiness gaps, remediation plan/drafts/impact/batch review, and safe next-step labels. Recording a guided step is metadata-only; actual enable/disable/edit actions must call existing preview-first, explicit-confirm safe write methods and cannot be hidden inside the guided flow.
+- `GuidedCleanupFlow` / `GuidedCleanupStep`（V2.67 completed）：guided cleanup response and app-local step metadata derived from existing local evidence only: findings, cleanup queue, similar groups, stale/drift, readiness/routing/task cockpit, lifecycle timeline, remediation plan/drafts/impact/batch review, adapter diagnostics, and source provenance.
+  - `cleanup.planGuidedFlow` response: `{ generated_by, catalog_available, filters, summary, flow_steps, issue_groups, safe_next_actions, recorded_steps, gap_notes, blocker_notes, evidence_references, prompt_request, safety_flags }`.
+  - `flow_steps`: stable ids, rank, step type, phase, status, issue/risk/task labels, affected skill/agent/workspace refs, recommended safe next-step labels, safe entry method, existing safe method when one exists, explicit-confirmation flag, blocker/gap notes, evidence refs, side-effect flags, and no-write/no-provider safety flags. Rows reference existing evidence ids and must not embed raw skill bodies, raw prompt/response content, raw trace excerpts, secrets, credentials, or unredacted local paths.
+  - `issue_groups` and `safe_next_actions` summarize grouped issues and safe review entry points without applying fixes.
+  - `cleanup.recordGuidedStep` may write only app-local redacted guided cleanup step metadata, for example `guided-cleanup-steps.json`: `[{ id, flow_step_id, title, decision, status, note, task, agent, instance_id, definition_id, skill_name, source_refs, evidence_refs, redaction_summary, created_at, updated_at, safety_flags }]`.
+  - Recording a guided step is metadata-only. Actual enable/disable/edit/remediation actions must call existing preview-first, explicit-confirm safe write methods and cannot be hidden inside the guided flow.
+  - Safety boundary: no skill file writes, no agent config writes, no triage mutation, no snapshot creation/rollback, no script execution, no credential reads, no default provider/network request, no raw prompt/raw response/raw trace/secret/unredacted-path persistence, no cloud sync, and no telemetry.
 
 Cross-cutting constraints:
 

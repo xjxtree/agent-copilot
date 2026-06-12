@@ -75,6 +75,8 @@ struct SkillStoreTests {
         try await remediationBatchReviewFallsBackWhenMethodUnavailable()
         try await remediationHistoryUsesLocalServiceContract()
         try await remediationHistoryFallsBackWhenMethodUnavailable()
+        try await guidedCleanupFlowUsesLocalServiceContract()
+        try await guidedCleanupFlowFallsBackWhenMethodUnavailable()
         try await crossAgentReadinessUsesReadOnlyServiceContract()
         try await routingConfidenceClearsStaleSelection()
         try await llmPreparePreviewIsScopedToSelectedSkillAndReadOnly()
@@ -2304,6 +2306,105 @@ struct SkillStoreTests {
         try expectContains(fake.calls(), "remediation.recordHistory", "Fallback should still prove the intended V2.60 record method was attempted.")
     }
 
+    private func guidedCleanupFlowUsesLocalServiceContract() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        store.routingConfidenceText = "Prepare local release audit work."
+        await store.reload()
+        let snapshotCallsBeforeGuided = countOccurrences("snapshot.", in: fake.calls())
+        await store.planGuidedCleanupFlow()
+        await store.recordGuidedCleanupStep()
+
+        let result = store.guidedCleanupFlowResult
+        try expectEqual(result?.generatedBy, "local-v2.67", "Guided cleanup should expose generator metadata.")
+        try expectEqual(result?.summary.stepCount, 2, "Guided cleanup should expose step count.")
+        try expectEqual(result?.summary.issueGroupCount, 1, "Guided cleanup should expose issue group count.")
+        try expectEqual(result?.summary.safeActionCount, 2, "Guided cleanup should expose safe action count.")
+        try expectEqual(result?.flowSteps.first?.id, "step-review-permission", "Guided cleanup should expose flow steps.")
+        try expectEqual(result?.flowSteps.first?.recommended, true, "Guided cleanup should expose recommended steps.")
+        try expectEqual(result?.flowSteps.first?.skill?.skillName, "Beta", "Guided cleanup should expose affected skill evidence.")
+        try expectEqual(result?.issueGroups.first?.title, "Permission clarity", "Guided cleanup should expose issue groups.")
+        try expectEqual(result?.safeNextActions.first?.canApplyFix, false, "Guided cleanup safe actions should stay non-applying.")
+        try expectEqual(result?.recordedSteps.first?.sourceMethod, "cleanup.recordGuidedStep", "Guided cleanup should expose existing recorded metadata.")
+        try expectEqual(result?.evidenceReferences.first?.source, "cleanup.planGuidedFlow", "Guided cleanup should expose evidence references.")
+        try expectEqual(result?.promptRequest?.requestKind, "guided_cleanup_flow", "Guided cleanup should expose prompt metadata.")
+        try expectFalse(result?.safetyFlags.providerRequestSent ?? true, "Guided cleanup planning must not send provider requests.")
+        try expectFalse(result?.safetyFlags.writeBackAllowed ?? true, "Guided cleanup planning must not allow write-back.")
+        try expectFalse(result?.safetyFlags.writeActionsAvailable ?? true, "Guided cleanup planning must not expose write actions.")
+        try expectFalse(result?.safetyFlags.scriptExecutionAllowed ?? true, "Guided cleanup planning must not allow script execution.")
+        try expectFalse(result?.safetyFlags.executionActionsAvailable ?? true, "Guided cleanup planning must not expose execution actions.")
+        try expectFalse(result?.safetyFlags.configMutationAllowed ?? true, "Guided cleanup planning must not mutate config.")
+        try expectFalse(result?.safetyFlags.snapshotCreated ?? true, "Guided cleanup planning must not create snapshots.")
+        try expectFalse(result?.safetyFlags.triageMutationAllowed ?? true, "Guided cleanup planning must not mutate triage.")
+        try expectFalse(result?.safetyFlags.credentialAccessed ?? true, "Guided cleanup planning must not access credentials.")
+        try expectFalse(result?.safetyFlags.rawPromptPersisted ?? true, "Guided cleanup planning must not persist raw prompts.")
+        try expectFalse(result?.safetyFlags.rawResponsePersisted ?? true, "Guided cleanup planning must not persist raw responses.")
+        try expectFalse(result?.safetyFlags.rawTracePersisted ?? true, "Guided cleanup planning must not persist raw traces.")
+        try expectFalse(result?.safetyFlags.cloudSyncEnabled ?? true, "Guided cleanup planning must not sync cloud data.")
+        try expectFalse(result?.safetyFlags.telemetryEnabled ?? true, "Guided cleanup planning must not emit telemetry.")
+
+        let record = store.guidedCleanupRecordResult
+        try expectEqual(record?.recorded, true, "Guided cleanup record should report local metadata persistence.")
+        try expectEqual(record?.record?.sourceMethod, "analysis.guidedCleanupFlow.ui", "Guided cleanup record should identify the native UI source.")
+        try expectEqual(record?.record?.appLocalOnly, true, "Guided cleanup record should remain app-local.")
+        try expectEqual(record?.metadataRedacted, true, "Guided cleanup record should be marked redacted.")
+        try expectFalse(record?.safetyFlags.providerRequestSent ?? true, "Guided cleanup record must not send provider requests.")
+        try expectFalse(record?.safetyFlags.writeActionsAvailable ?? true, "Guided cleanup record must not expose write actions.")
+        try expectFalse(record?.safetyFlags.snapshotCreated ?? true, "Guided cleanup record must not create snapshots.")
+        try expectFalse(record?.safetyFlags.triageMutationAllowed ?? true, "Guided cleanup record must not mutate triage.")
+        try expectFalse(store.isPlanningGuidedCleanupFlow, "Guided cleanup planning should reset loading state.")
+        try expectFalse(store.isRecordingGuidedCleanupStep, "Guided cleanup recording should reset loading state.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "cleanup.planGuidedFlow", "Guided cleanup UI should call the V2.67 plan method.")
+        try expectContains(calls, "cleanup.recordGuidedStep", "Guided cleanup UI should call the V2.67 record method.")
+        try expectContains(calls, "\"task\":\"Prepare local release audit work.\"", "Guided cleanup should pass current task context when present.")
+        try expectContains(calls, "\"agent\":\"claude-code\"", "Guided cleanup should pass the current agent filter.")
+        try expectContains(calls, "\"selected_skill_id\":\"beta\"", "Guided cleanup should pass selected skill context.")
+        try expectContains(calls, "\"selected_skill_name\":\"Beta\"", "Guided cleanup should pass selected skill name.")
+        try expectContains(calls, "\"limit\":12", "Guided cleanup should pass the guided flow limit.")
+        try expectContains(calls, "\"include_issue_groups\":true", "Guided cleanup should request issue groups.")
+        try expectContains(calls, "\"include_safe_next_actions\":true", "Guided cleanup should request safe next actions.")
+        try expectContains(calls, "\"include_recorded_steps\":true", "Guided cleanup should request app-local recorded steps.")
+        try expectContains(calls, "\"step_id\":\"step-review-permission\"", "Guided cleanup record should pass selected/recommended step id.")
+        try expectContains(calls, "\"source_method\":\"analysis.guidedCleanupFlow.ui\"", "Guided cleanup record should identify the native source.")
+        try expectFalse(calls.contains("llm.previewPrompt"), "Guided cleanup must not prepare provider prompts.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Guided cleanup must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Guided cleanup must not call config write paths.")
+        try expectFalse(calls.contains("batch.applySkillToggles"), "Guided cleanup must not call batch apply.")
+        try expectFalse(calls.contains("script.execute"), "Guided cleanup must not call execution paths.")
+        try expectEqual(countOccurrences("snapshot.", in: calls), snapshotCallsBeforeGuided, "Guided cleanup must not call snapshot paths.")
+        try expectFalse(calls.contains("credential"), "Guided cleanup must not call credential paths.")
+    }
+
+    private func guidedCleanupFlowFallsBackWhenMethodUnavailable() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "normal")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+        await store.planGuidedCleanupFlow()
+        await store.recordGuidedCleanupStep()
+
+        try expectEqual(store.guidedCleanupFlowResult?.isUnavailable, true, "Guided cleanup should expose unavailable fallback for older services.")
+        try expectEqual(store.guidedCleanupFlowResult?.fallbackReason, UIStrings.guidedCleanupFlowUnavailable, "Unknown plan method fallback should use localized unavailable copy.")
+        try expectEqual(store.guidedCleanupRecordResult?.isUnavailable, true, "Guided cleanup record should expose unavailable fallback when no step exists.")
+        try expectEqual(store.guidedCleanupRecordResult?.fallbackReason, UIStrings.guidedCleanupFlowNoSteps, "Missing step fallback should use no-steps copy before attempting record.")
+        try expectFalse(store.isPlanningGuidedCleanupFlow, "Unavailable guided cleanup planning should reset loading state.")
+        try expectFalse(store.isRecordingGuidedCleanupStep, "Unavailable guided cleanup recording should reset loading state.")
+        try expectContains(fake.calls(), "cleanup.planGuidedFlow", "Fallback should still prove the intended V2.67 plan method was attempted.")
+        try expectFalse(fake.calls().contains("cleanup.recordGuidedStep"), "Record fallback without a loaded step must not call service record.")
+        try expectFalse(fake.calls().contains("llm.confirmPromptAndSend"), "Unavailable guided cleanup must not send to provider.")
+        try expectFalse(fake.calls().contains("config.toggleSkill"), "Unavailable guided cleanup must not call config write paths.")
+        try expectFalse(fake.calls().contains("script.execute"), "Unavailable guided cleanup must not call execution paths.")
+    }
+
     private func crossAgentReadinessUsesReadOnlyServiceContract() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -2806,6 +2907,18 @@ private final class FakeServiceScript {
               respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.58","catalog_available":true,"filters":{"task":"Prepare local release audit work.","agent":"claude-code","limit":20},"summary":{"total_count":6,"task_impact_count":1,"agent_impact_count":1,"skill_impact_count":1,"risk_delta_count":1,"snapshot_rollback_count":1,"blocker_count":1,"gap_count":1,"no_write_count":1,"summary":"Impact preview is read-only and shows where remediation would improve routing confidence."},"impact_rows":[{"row_id":"impact-overall","title":"Overall readiness improves","category":"overall","impact":"Improves release audit readiness without writing files.","rationale":"Derived from remediation plan and workspace readiness.","severity":"info","evidence_refs":["remediation:plan"],"safety_flags":["provider not sent","no write"]}],"task_impact_rows":[{"row_id":"task-release-audit","title":"Release audit route gets clearer","category":"task","before":"Partial","after":"Ready","delta":"+12 readiness","impact":"The selected task has a stronger local route.","rationale":"Routing confidence and workspace readiness both point to Beta.","severity":"medium","evidence_refs":["task:release-audit"]}],"agent_impact_rows":[{"row_id":"agent-claude","title":"Claude Code remains the recommended agent","category":"agent","agent":"claude-code","delta":"+8 comparison","impact":"No cross-agent write path is needed.","severity":"low"}],"skill_impact_rows":[{"row_id":"skill-beta","title":"Beta benefits from clearer permissions","category":"skill","agent":"claude-code","skill":{"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","readiness_score":78},"impact":"The permission finding would become easier to review.","severity":"medium"}],"risk_delta_rows":[{"row_id":"risk-network","title":"Network declaration risk drops","category":"risk_delta","before":"Medium","after":"Low","delta":"-1 risk band","impact":"Manual review remains required.","severity":"warning"}],"snapshot_rollback_rows":[{"row_id":"rollback-none","title":"No snapshot is created","category":"snapshot_rollback","impact":"Rollback remains a plan note only because no write happens.","severity":"info","safety_flags":["snapshot not created"]}],"gap_notes":["Codex still lacks project-scoped coverage."],"blocker_notes":["No apply/write path is exposed."],"evidence_references":[{"title":"Impact preview","detail":"Derived from local remediation evidence.","source":"remediation.previewImpact","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"remediation_preview_impact","summary":"Provider explanation is not sent.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent","preview only","no write"]}}}'
             fi
             respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: remediation.previewImpact"}}'
+            ;;
+          *\\"cleanup.planGuidedFlow\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.67","catalog_available":true,"filters":{"task":"Prepare local release audit work.","agent":"claude-code","selected_skill_id":"beta","selected_skill_name":"Beta","selected_skill_agent":"claude-code","project_root":"/tmp/project","current_cwd":"/tmp/project","workspace":"Fixture Project","limit":12,"include_issue_groups":true,"include_safe_next_actions":true,"include_recorded_steps":true,"include_evidence":true,"include_safety_flags":true},"summary":{"step_count":2,"issue_group_count":1,"safe_action_count":2,"recorded_step_count":1,"recommended_step_count":1,"gap_count":1,"blocker_count":1,"summary":"Review the permission finding, inspect impact, then record local metadata."},"flow_steps":[{"step_id":"step-review-permission","title":"Review network permission finding","kind":"finding_review","status":"preview_only","priority":"high","order":1,"action_label":"Open Findings and Fix Preview Drafts","review_area":"Fix Preview Drafts","agent":"claude-code","skill":{"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","readiness_score":78},"rationale":"Finding and draft preview both point to manual permission review.","detail":"No file write happens from Guided Cleanup.","recommended":true,"app_local_record_only":true,"evidence_refs":["finding:permissions.network-declared"],"gap_notes":["Codex route still lacks equivalent coverage."],"blocker_notes":["No apply/write path is exposed."],"safety_flags":["provider not sent","metadata only","no write"]},{"step_id":"step-impact","title":"Inspect impact preview","kind":"impact_preview","status":"preview_only","priority":"medium","action_label":"Open Impact Preview","recommended":false,"app_local_record_only":true}],"issue_groups":[{"group_id":"group-permissions","title":"Permission clarity","category":"finding","severity":"high","status":"open","count":1,"summary":"One permission finding needs human review.","issue_refs":["finding:permissions.network-declared"],"safe_next_action_ids":["open-fix-preview"],"evidence_refs":["finding:permissions.network-declared"],"safety_flags":["no write"]}],"safe_next_actions":[{"action_id":"open-fix-preview","title":"Open Fix Preview Drafts","kind":"existing_safe_entry","review_area":"Fix Preview Drafts","detail":"Use the existing copy-only draft surface.","requires_existing_safe_entry":true,"app_local_only":true,"can_apply_fix":false,"evidence_refs":["draft:permissions"]},{"action_id":"open-history","title":"Open Remediation History","kind":"app_local_metadata","review_area":"Remediation History","detail":"Record local audit metadata only.","requires_existing_safe_entry":true,"app_local_only":true,"can_apply_fix":false}],"recorded_steps":[{"record_id":"guided-record-1","step_id":"step-review-permission","title":"Permission review recorded","status":"recorded","decision":"reviewed","source_method":"cleanup.recordGuidedStep","recorded_at":"2026-06-12T08:00:00Z","note":"Metadata only.","metadata_redacted":true,"app_local_only":true,"evidence_refs":["guided_step:step-review-permission"],"safety_flags":["app-local metadata only","no write"]}],"gap_notes":["Codex lacks project-scoped release audit coverage."],"blocker_notes":["Actual edits remain in existing preview-first flows."],"evidence_references":[{"title":"Guided cleanup","detail":"Derived from local cleanup/remediation evidence.","source":"cleanup.planGuidedFlow","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"guided_cleanup_flow","summary":"No provider request is prepared or sent.","draft_copy_only":true,"redacted":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent","planning read-only"]}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: cleanup.planGuidedFlow"}}'
+            ;;
+          *\\"cleanup.recordGuidedStep\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"recorded":true,"generated_by":"local-v2.67","app_local_only":true,"metadata_redacted":true,"record":{"record_id":"guided-record-native","step_id":"step-review-permission","title":"Native guided cleanup metadata","status":"recorded","decision":"reviewed","source_method":"analysis.guidedCleanupFlow.ui","recorded_at":"2026-06-12T08:05:00Z","note":"Recorded app-local metadata only; no cleanup was applied.","metadata_redacted":true,"app_local_only":true,"evidence_refs":["guided_step:step-review-permission"],"safety_flags":["app-local metadata only","no write","provider not sent"]},"summary":{"recorded_step_count":1,"summary":"Recorded one guided cleanup step."},"message":"Guided cleanup metadata recorded.","evidence_references":[{"title":"Guided record","detail":"Stored app-local metadata only.","source":"cleanup.recordGuidedStep"}],"prompt_request":{"enabled":false,"request_kind":"guided_cleanup_record","summary":"No provider request is sent.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["app-local metadata only","no write"]}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: cleanup.recordGuidedStep"}}'
             ;;
           *\\"remediation.batchReview\\"*)
             if [ "$scenario" = "prompt-ready" ]; then

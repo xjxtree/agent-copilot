@@ -56,6 +56,8 @@
         "llm.prepareAction",
         "llm.prepareSkillAnalysis",
         "cleanup.listQueue",
+        "cleanup.planGuidedFlow",
+        "cleanup.recordGuidedStep",
         "comparison.listCrossAgent",
         "report.exportLocal",
         "rules.listTuning",

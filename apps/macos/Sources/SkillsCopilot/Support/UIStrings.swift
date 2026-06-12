@@ -601,6 +601,35 @@ enum UIStrings {
     static var skillLifecycleTimelineOccurredAt: String { text("skillLifecycleTimeline.occurredAt", "Occurred") }
     static var skillLifecycleTimelineEventType: String { text("skillLifecycleTimeline.eventType", "Event type") }
     static var skillLifecycleTimelineLifecycleStage: String { text("skillLifecycleTimeline.lifecycleStage", "Lifecycle stage") }
+    static var guidedCleanupFlowTitle: String { text("guidedCleanup.title", "Guided Cleanup Flow") }
+    static var guidedCleanupFlowBoundary: String { text("guidedCleanup.boundary", "User-triggered, deterministic guided cleanup from local catalog, findings, remediation, readiness, routing, lifecycle, and history evidence. Planning is read-only. Recording a guided step stores only app-local redacted cleanup metadata through cleanup.recordGuidedStep; this panel cannot apply fixes, write skill files, mutate agent config, create or roll back snapshots, change triage, execute scripts, send provider requests, read credentials, persist raw prompts/responses/traces, sync cloud data, or emit telemetry.") }
+    static var guidedCleanupFlowNoWriteBoundary: String { text("guidedCleanup.noWriteBoundary", "Guidance and app-local metadata only. No Apply, Fix, Enable, Disable, Write, Snapshot, Rollback, Script, Provider Send, or Triage action is exposed here.") }
+    static var guidedCleanupFlowAction: String { text("guidedCleanup.action.load", "Load Flow") }
+    static var guidedCleanupFlowRecordAction: String { text("guidedCleanup.action.record", "Record Step Metadata") }
+    static var guidedCleanupFlowUnavailable: String { text("guidedCleanup.unavailable", "Guided cleanup flow is unavailable in this service build.") }
+    static var guidedCleanupRecordUnavailable: String { text("guidedCleanup.record.unavailable", "Recording guided cleanup metadata is unavailable in this service build.") }
+    static var guidedCleanupFlowNoResult: String { text("guidedCleanup.empty.result", "No guided cleanup flow loaded.") }
+    static var guidedCleanupFlowSteps: String { text("guidedCleanup.steps", "Flow steps") }
+    static var guidedCleanupFlowStep: String { text("guidedCleanup.step", "Guided step") }
+    static var guidedCleanupFlowNoSteps: String { text("guidedCleanup.empty.steps", "No guided steps returned.") }
+    static var guidedCleanupFlowIssueGroups: String { text("guidedCleanup.issueGroups", "Issue groups") }
+    static var guidedCleanupFlowIssueGroup: String { text("guidedCleanup.issueGroup", "Issue group") }
+    static var guidedCleanupFlowNoIssueGroups: String { text("guidedCleanup.empty.issueGroups", "No issue groups returned.") }
+    static var guidedCleanupFlowSafeActions: String { text("guidedCleanup.safeActions", "Safe actions") }
+    static var guidedCleanupFlowSafeAction: String { text("guidedCleanup.safeAction", "Safe action") }
+    static var guidedCleanupFlowNoSafeActions: String { text("guidedCleanup.empty.safeActions", "No safe next actions returned.") }
+    static var guidedCleanupFlowRecordedSteps: String { text("guidedCleanup.recordedSteps", "Recorded steps") }
+    static var guidedCleanupFlowRecordedStep: String { text("guidedCleanup.recordedStep", "Recorded step") }
+    static var guidedCleanupFlowNoRecordedSteps: String { text("guidedCleanup.empty.recordedSteps", "No recorded guided cleanup steps returned.") }
+    static var guidedCleanupFlowRecommended: String { text("guidedCleanup.recommended", "Recommended") }
+    static var guidedCleanupFlowRecordGuidance: String { text("guidedCleanup.recordGuidance", "Record that this step was reviewed as app-local metadata only.") }
+    static var guidedCleanupFlowRecordResult: String { text("guidedCleanup.record.result", "Guided cleanup record") }
+    static var guidedCleanupFlowRecordDefaultNote: String { text("guidedCleanup.record.defaultNote", "Recorded from native Guided Cleanup Flow as app-local redacted metadata only; no cleanup was applied.") }
+    static var guidedCleanupFlowAppLocalOnly: String { text("guidedCleanup.appLocalOnly", "App-local only") }
+    static var guidedCleanupFlowMetadataRedacted: String { text("guidedCleanup.metadataRedacted", "Metadata redacted") }
+    static var guidedCleanupFlowPreviewOnly: String { text("guidedCleanup.previewOnly", "Preview only") }
+    static var guidedCleanupFlowExistingSafeEntry: String { text("guidedCleanup.existingSafeEntry", "Existing safe entry") }
+    static var guidedCleanupFlowCanApplyFix: String { text("guidedCleanup.canApplyFix", "Can apply fix") }
     static var providerObservabilityTitle: String { text("providerObservability.title", "Provider Observability") }
     static var providerObservabilityBoundary: String { text("providerObservability.boundary", "User-triggered, deterministic, read-only dashboard from redacted app-local prompt-run and provider-call metadata. It does not send provider requests, read credentials, expose raw prompts or responses, write files, mutate agent config, create snapshots, execute scripts, sync cloud data, or emit telemetry.") }
     static var providerObservabilityAction: String { text("providerObservability.action.build", "Build Observability") }
