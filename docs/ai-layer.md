@@ -2,23 +2,24 @@
 
 > 原则：**本地 deterministic 逻辑负责事实，用户显式配置的大模型负责复杂判断**。
 >
-> Scanner / rules / catalog 始终是事实来源；LLM/AI provider 是 AI agent skills 的核心分析增强，用于质量、任务可用性、routing 置信度、trace 分析、remediation 和治理总结。
+> Scanner / rules / catalog 始终是事实来源；LLM/AI provider 是 AI agent skills 的核心分析增强，用于质量、任务可用性、routing 置信度、trace 分析、remediation、真实 agent session skill review 和 provider observability。
 >
-> 当前实现边界（V2.55 baseline；V2.56 Remediation Planner 已实现）：
+> 当前实现边界（V2.61 complete；V2.62-V2.67 planned）：
 >
 > - 已落地 disabled-by-default 的 service/UI gate 和 request prepare/estimate 能力。
 > - 已落地用户显式配置的 OpenAI-compatible / Claude-compatible provider profile 基础：`llm.listProviderProfiles`、`llm.saveProviderProfile`、`llm.deleteProviderProfile`、`llm.testProviderConnection`、macOS Keychain-first API key storage、预算字段、disabled/unconfigured state，以及 test connection 的最小 redacted call metadata。
 > - 用户主动触发 Analyze / Recommend / conflict explanation / draft frontmatter 前，可以展示 provider、model、token/cost 估算和不可用原因。
 > - Analyze / Recommend / conflict explanation / draft frontmatter / skill analysis 可先生成 redacted prompt preview；只有用户显式确认后才可通过 `llm.confirmPromptAndSend` 发起 provider 请求并返回 copy-only draft output。
 > - V2.43 已落地 `analysis.scoreSkillQuality`：基于 metadata、findings、conflicts、analysis、adapter diagnostics 生成 user-triggered/read-only deterministic local quality score；optional provider explanation 只走 V2.42 preview/redaction/confirmation。
-> - V2.44 已落地 `task.checkReadiness`：用户输入真实任务后，基于 metadata、findings、conflicts、analysis、adapter diagnostics 与 V2.43 quality score 生成 read-only readiness score、候选 skill、gap/blocker、evidence references 与 safety flags；本地 readiness 不发起 provider 请求。
+> - V2.44-V2.61 已落地 task readiness、routing confidence、benchmark/regression、trace import、routing accuracy、cross-agent readiness、stale/drift、knowledge index、similar grouping、capability taxonomy、workspace readiness、remediation planning/drafts/impact/batch/history，以及 app-local prompt run history；这些能力默认仍是 user-triggered、read-only、local evidence-first。
+> - V2.62-V2.67 计划继续围绕 agent session skill review、local skill map、provider observability、task-first cockpit、skill lifecycle timeline 和 guided cleanup flow 收口。
 >
 > V2.45（已完成）：
 >
 > - V2.45 在 V2.42-V2.44 基础上把 `task.checkReadiness` 输出升级为 `task.rankSkillRoutes` routing ranking：主候选 + 备选顺序、`confidence`、`match_reasons`、`ambiguity/collision warnings`、`likely wrong-pick`、`likely_miss`。
 > - 当前已完成本地 deterministic ranking 与 native Analysis UI 集成；默认仅 read-only，不写 skill、不改 agent config、不执行脚本、不改 triage、不直接发送 provider 请求。
 > - 每次真实 provider 调用前必须展示 prompt preview、redaction summary、token/cost estimate 和 network destination。
-> - AI 输出默认 read-only，不直接写 skill、不改 agent config、不执行脚本、不改变 triage 或 policy 状态。
+> - AI 输出默认 read-only，不直接写 skill、不改 agent config、不执行脚本、不改变 triage 或 hidden state。
 >
 > V2.46（已完成）：
 >
@@ -100,7 +101,7 @@
 | 任务可用性判断（"这个任务哪个 agent/skill 能做"） | LLM + 本地证据 | 用户输入任务并确认分析 |
 | routing 置信度和错选/漏选解释 | LLM + 本地证据 | 用户主动运行 task readiness / benchmark |
 | trace/log 中实际选 skill 的准确性判断 | LLM + 本地证据 | 用户导入 trace 并确认分析；LLM 说明仅作 optional provider 辅助，主判读为 deterministic local 结果 |
-| 修复建议 / review session / governance report | LLM + 本地证据 | 用户主动生成 |
+| 真实 agent 会话中的 skill 使用审查 | LLM + 本地证据 | 用户导入 trace、粘贴 transcript，或未来显式选择本地 agent 会话后主动生成 |
 | 改写 frontmatter / 生成草稿 | LLM | 用户主动进入编辑模式；草稿仍不可直接 apply |
 
 > **关键约束**：LLM **永远不直接执行** toggle、edit、delete 等写操作。所有"看起来 LLM 在做"的动作，最终都是"LLM 给提案 → 用户在 UI shell 确认 → Rust service / 规则引擎执行"。
@@ -121,10 +122,10 @@ Provider 配置原则：
 - endpoint/API key/model 由用户自己配置。
 - key 不写 SQLite、project directory、logs、prompt artifacts、response artifacts、report exports 或 screenshots。
 - provider call 只在用户发起具体动作后发生；V2.41 支持显式 Test Connection，V2.42 起分析请求必须经过 prompt preview/redaction confirmation。
-- provider request/response 默认不持久化；V2.42 confirmed send 只保存最小 redacted call metadata（status、duration、error、token/cost、redaction status、confirmation id、destination host），用于审计每次真实请求；V2.69 再在此基础上做完整 observability UI、统计、清理和导出策略。
+- provider request/response 默认不持久化；V2.42 confirmed send 只保存最小 redacted call metadata（status、duration、error、token/cost、redaction status、confirmation id、destination host），用于审计每次真实请求；V2.64 再在此基础上做完整 observability UI、统计、清理和导出策略。
 - provider 不得成为写入者、执行者或确认者。
 
-## 1.2 V2.41-V2.70 AI-native 能力线
+## 1.2 V2.41-V2.67 AI-native 能力线
 
 | Version | AI role | 本地事实来源 |
 | --- | --- | --- |
@@ -148,7 +149,12 @@ Provider 配置原则：
 | V2.59（实现） | batch review / `remediation.batchReview` | User-triggered, local-only deterministic batch review over task, risk, rule, agent, and workspace groups; review groups/items, safe next-step labels, evidence refs, gap/blocker notes, prompt metadata, and safety flags; no apply/write/snapshot/triage/script/credential/provider side effects |
 | V2.60（实现） | remediation history / `remediation.listHistory`、`remediation.recordHistory`、`remediation.deleteHistory` | local app-data remediation history with redacted metadata only; user-triggered record/list/delete behavior for decisions、recurrence、reopened issues、readiness/routing improvement notes、evidence refs and safety flags; no provider/write/script/config/credential/raw prompt/raw response/raw trace/cloud/telemetry side effects |
 | V2.61（实现） | AI analysis UX / prompt run history / `llm.listPromptRuns` | provider-backed AI analysis remains preview/redaction/confirmation-gated and copy-only; request timeout is 10 minutes; confirmed runs persist app-local redacted task/result metadata and extracted draft output for restart hydration and reruns, without raw prompt/raw response/secrets/write/script/config/snapshot/triage/cloud/telemetry side effects |
-| V2.62-V2.70 | review session、governance report、policy packs、skill map、full provider observability、safe write planning | local reports, policy profiles, V2.41-V2.42 call metadata, evidence gates |
+| V2.62（计划） | Agent Session Skill Review | V2.48 imported trace、用户粘贴/导入的 agent transcript、未来显式选择的本地 agent session；审查 skill 发现/选择/使用、miss、wrong-pick、ambiguity、重复/相似 skill 干扰；app AI prompt runs 仅作辅助证据 |
+| V2.63（计划） | Local Skill Map | catalog evidence、knowledge tags、similar groups、capability taxonomy、conflicts、task coverage、risk context |
+| V2.64（计划） | Full provider observability | V2.41-V2.42 minimal call metadata、V2.61 prompt run metadata；默认不持久化 raw prompt/raw response/secrets |
+| V2.65（计划） | Task-first Cockpit | task readiness、routing confidence、benchmark/regression、trace/session review、provider run context、remediation next steps；按用户任务聚合 local evidence |
+| V2.66（计划） | Skill Lifecycle Timeline | scan/provenance、stale/drift、triage、remediation history、prompt analysis、session review outcome 的 redacted metadata timeline |
+| V2.67（计划） | Guided Cleanup Flow | findings、similar groups、drift、readiness gaps、remediation plan/drafts/impact/batch review；所有写入继续走 existing preview-first / explicit-confirm safe paths |
 
 V2.57 的 preview drafts 只生成可复制/可编辑的草稿建议，不提供直接 apply/write；任何 provider wording 都必须经过 V2.42 的 prompt preview / redaction / confirmation，并继续作为 copy-only 输出。
 

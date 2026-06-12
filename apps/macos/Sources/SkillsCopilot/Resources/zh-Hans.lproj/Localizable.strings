@@ -674,6 +674,10 @@
 "llm.promptPreview.copyOnly" = "仅复制输出";
 "llm.promptPreview.output" = "提供方输出";
 "llm.promptPreview.copyOutput" = "复制输出";
+"llm.promptPreview.viewDetails" = "查看详情";
+"llm.promptPreview.copyFullText" = "复制全文";
+"llm.promptPreview.closeDetails" = "关闭";
+"llm.promptPreview.historyNote" = "最新提供方输出显示在这里，并已保存到本地提示词运行历史。";
 "scriptExecution.safety" = "脚本执行安全";
 "scriptExecution.previewOnly" = "仅预览";
 "scriptExecution.unavailable" = "此服务构建不支持脚本执行预检。脚本在原生 UI 中仍不可执行。";

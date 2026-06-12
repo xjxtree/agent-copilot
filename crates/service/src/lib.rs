@@ -2716,6 +2716,8 @@ pub struct LlmPreviewPromptParams {
     pub action: LlmPromptActionKind,
     #[serde(default)]
     pub profile_id: Option<String>,
+    #[serde(default)]
+    pub app_language: Option<String>,
     #[serde(default, alias = "instance_id")]
     pub skill_instance_id: Option<String>,
     #[serde(default)]
@@ -2799,6 +2801,22 @@ impl LlmPromptActionKind {
             Self::RoutingConfidence => "routing_confidence",
         }
     }
+}
+
+fn llm_output_language_instruction(app_language: Option<&str>) -> String {
+    let raw_language = app_language
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("en");
+    let normalized = raw_language.to_ascii_lowercase();
+    let (language_name, language_code) = match normalized.as_str() {
+        "zh" | "zh-hans" | "zh-cn" | "cn" => ("Simplified Chinese", "zh-Hans"),
+        "en" | "en-us" | "en-gb" => ("English", "en"),
+        _ => ("English", "en"),
+    };
+    format!(
+        "Output language: {language_name} ({language_code}). Write all prose, Markdown headings, evidence notes, uncertainty, and safe next steps in {language_name}. Keep skill names, agent names, rule IDs, paths, code, commands, quoted evidence, and placeholders unchanged."
+    )
 }
 
 impl LlmSkillAnalysisKind {
@@ -4979,6 +4997,7 @@ impl ServiceHost {
                 request: LlmPreviewPromptParams {
                     action: LlmPromptActionKind::QualityScore,
                     profile_id: None,
+                    app_language: None,
                     skill_instance_id: Some(params.instance_id),
                     instance_ids: Vec::new(),
                     analysis_kind: None,
@@ -5181,6 +5200,7 @@ impl ServiceHost {
                 request: LlmPreviewPromptParams {
                     action: LlmPromptActionKind::StaleDriftDetection,
                     profile_id: None,
+                    app_language: None,
                     skill_instance_id: None,
                     instance_ids: prompt_instance_ids,
                     analysis_kind: None,
@@ -5350,6 +5370,7 @@ impl ServiceHost {
                 request: LlmPreviewPromptParams {
                     action: LlmPromptActionKind::KnowledgeSearch,
                     profile_id: None,
+                    app_language: None,
                     skill_instance_id: None,
                     instance_ids: prompt_instance_ids,
                     analysis_kind: None,
@@ -5524,6 +5545,7 @@ impl ServiceHost {
                 request: LlmPreviewPromptParams {
                     action: LlmPromptActionKind::SimilarSkillGrouping,
                     profile_id: None,
+                    app_language: None,
                     skill_instance_id: None,
                     instance_ids: prompt_instance_ids,
                     analysis_kind: None,
@@ -5717,6 +5739,7 @@ impl ServiceHost {
                 request: LlmPreviewPromptParams {
                     action: LlmPromptActionKind::CapabilityTaxonomy,
                     profile_id: None,
+                    app_language: None,
                     skill_instance_id: None,
                     instance_ids: prompt_instance_ids,
                     analysis_kind: None,
@@ -5992,6 +6015,7 @@ impl ServiceHost {
                 request: LlmPreviewPromptParams {
                     action: LlmPromptActionKind::WorkspaceReadiness,
                     profile_id: None,
+                    app_language: None,
                     skill_instance_id: None,
                     instance_ids: prompt_instance_ids,
                     analysis_kind: None,
@@ -6643,6 +6667,7 @@ impl ServiceHost {
                 request: LlmPreviewPromptParams {
                     action: LlmPromptActionKind::RemediationPlan,
                     profile_id: None,
+                    app_language: None,
                     skill_instance_id: None,
                     instance_ids: prompt_instance_ids,
                     analysis_kind: None,
@@ -6931,6 +6956,7 @@ impl ServiceHost {
                 request: LlmPreviewPromptParams {
                     action: LlmPromptActionKind::RemediationPreviewDrafts,
                     profile_id: None,
+                    app_language: None,
                     skill_instance_id: None,
                     instance_ids: prompt_instance_ids,
                     analysis_kind: None,
@@ -7264,6 +7290,7 @@ impl ServiceHost {
                 request: LlmPreviewPromptParams {
                     action: LlmPromptActionKind::RemediationPreviewImpact,
                     profile_id: None,
+                    app_language: None,
                     skill_instance_id: None,
                     instance_ids: prompt_instance_ids,
                     analysis_kind: None,
@@ -7473,6 +7500,7 @@ impl ServiceHost {
                 request: LlmPreviewPromptParams {
                     action: LlmPromptActionKind::RemediationBatchReview,
                     profile_id: None,
+                    app_language: None,
                     skill_instance_id: None,
                     instance_ids: prompt_instance_ids,
                     analysis_kind: None,
@@ -7967,6 +7995,7 @@ impl ServiceHost {
                 request: LlmPreviewPromptParams {
                     action: LlmPromptActionKind::TaskReadiness,
                     profile_id: None,
+                    app_language: None,
                     skill_instance_id: None,
                     instance_ids: prompt_instance_ids,
                     analysis_kind: None,
@@ -8147,6 +8176,7 @@ impl ServiceHost {
                 request: LlmPreviewPromptParams {
                     action: LlmPromptActionKind::TaskReadiness,
                     profile_id: None,
+                    app_language: None,
                     skill_instance_id: None,
                     instance_ids: prompt_instance_ids,
                     analysis_kind: None,
@@ -8870,10 +8900,12 @@ impl ServiceHost {
         let mut redactor = PromptRedactor::new(&roots);
         let mut prompt_scope = vec![
             "operation metadata".to_string(),
+            "app output language preference".to_string(),
             "safety boundaries".to_string(),
         ];
         let mut included_fields = vec![
             "action kind".to_string(),
+            "app language code".to_string(),
             "draft-only safety instructions".to_string(),
         ];
         let mut excluded_fields = vec![
@@ -8886,6 +8918,7 @@ impl ServiceHost {
         let mut sections = vec![
             "You are assisting with AI agent skill governance.".to_string(),
             format!("Action: {}", params.action.as_str()),
+            llm_output_language_instruction(params.app_language.as_deref()),
             "Return draft-only analysis. Do not write files, mutate agent config, execute scripts, change triage, create snapshots, call tools, or request secrets.".to_string(),
         ];
         if let Some(intent) = params
@@ -9482,7 +9515,7 @@ impl ServiceHost {
             }
         }
 
-        sections.push("Required output: concise draft guidance with evidence notes, uncertainty, and safe next steps. Mark all suggestions copy-only.".to_string());
+        sections.push("Required output: concise Markdown draft guidance in the requested output language, with evidence notes, uncertainty, and safe next steps. Mark all suggestions copy-only.".to_string());
         let estimated_output_tokens = match params.action {
             LlmPromptActionKind::Analyze => 700,
             LlmPromptActionKind::Recommend => 500,
@@ -11388,6 +11421,7 @@ fn empty_stale_drift_result(
             request: LlmPreviewPromptParams {
                 action: LlmPromptActionKind::StaleDriftDetection,
                 profile_id: None,
+                app_language: None,
                 skill_instance_id: None,
                 instance_ids: Vec::new(),
                 analysis_kind: None,
@@ -11899,6 +11933,7 @@ fn empty_knowledge_search_result(
             request: LlmPreviewPromptParams {
                 action: LlmPromptActionKind::KnowledgeSearch,
                 profile_id: None,
+                app_language: None,
                 skill_instance_id: None,
                 instance_ids: Vec::new(),
                 analysis_kind: None,
@@ -12608,6 +12643,7 @@ fn empty_similar_skill_grouping_result(
             request: LlmPreviewPromptParams {
                 action: LlmPromptActionKind::SimilarSkillGrouping,
                 profile_id: None,
+                app_language: None,
                 skill_instance_id: None,
                 instance_ids: Vec::new(),
                 analysis_kind: None,
@@ -13386,6 +13422,7 @@ fn empty_capability_taxonomy_result(
             request: LlmPreviewPromptParams {
                 action: LlmPromptActionKind::CapabilityTaxonomy,
                 profile_id: None,
+                app_language: None,
                 skill_instance_id: None,
                 instance_ids: Vec::new(),
                 analysis_kind: None,
@@ -14205,6 +14242,7 @@ fn empty_workspace_readiness_result(
             request: LlmPreviewPromptParams {
                 action: LlmPromptActionKind::WorkspaceReadiness,
                 profile_id: None,
+                app_language: None,
                 skill_instance_id: None,
                 instance_ids: Vec::new(),
                 analysis_kind: None,
@@ -14908,6 +14946,7 @@ fn empty_remediation_plan_result(
             request: LlmPreviewPromptParams {
                 action: LlmPromptActionKind::RemediationPlan,
                 profile_id: None,
+                app_language: None,
                 skill_instance_id: None,
                 instance_ids: Vec::new(),
                 analysis_kind: None,
@@ -15361,6 +15400,7 @@ fn empty_remediation_preview_drafts_result(
             request: LlmPreviewPromptParams {
                 action: LlmPromptActionKind::RemediationPreviewDrafts,
                 profile_id: None,
+                app_language: None,
                 skill_instance_id: None,
                 instance_ids: Vec::new(),
                 analysis_kind: None,
@@ -15479,6 +15519,7 @@ fn empty_remediation_preview_impact_result(
             request: LlmPreviewPromptParams {
                 action: LlmPromptActionKind::RemediationPreviewImpact,
                 profile_id: None,
+                app_language: None,
                 skill_instance_id: None,
                 instance_ids: Vec::new(),
                 analysis_kind: None,
@@ -15617,6 +15658,7 @@ fn empty_remediation_batch_review_result(
             request: LlmPreviewPromptParams {
                 action: LlmPromptActionKind::RemediationBatchReview,
                 profile_id: None,
+                app_language: None,
                 skill_instance_id: None,
                 instance_ids: Vec::new(),
                 analysis_kind: None,
@@ -16996,6 +17038,7 @@ fn empty_task_readiness_result(
             request: LlmPreviewPromptParams {
                 action: LlmPromptActionKind::TaskReadiness,
                 profile_id: None,
+                app_language: None,
                 skill_instance_id: None,
                 instance_ids: Vec::new(),
                 analysis_kind: None,
@@ -17508,6 +17551,7 @@ fn empty_agent_readiness_comparison(
             request: LlmPreviewPromptParams {
                 action: LlmPromptActionKind::TaskReadiness,
                 profile_id: None,
+                app_language: None,
                 skill_instance_id: None,
                 instance_ids: Vec::new(),
                 analysis_kind: None,
@@ -18499,6 +18543,7 @@ fn routing_accuracy_prompt_request(
         request: LlmPreviewPromptParams {
             action: LlmPromptActionKind::RoutingConfidence,
             profile_id: None,
+            app_language: None,
             skill_instance_id: None,
             instance_ids,
             analysis_kind: None,
@@ -19068,6 +19113,7 @@ fn task_benchmark_prompt_request(
         request: LlmPreviewPromptParams {
             action: LlmPromptActionKind::RoutingConfidence,
             profile_id: None,
+            app_language: None,
             skill_instance_id: None,
             instance_ids,
             analysis_kind: None,
@@ -19518,6 +19564,7 @@ fn skill_route_ranking_from_readiness(readiness: TaskReadinessResult) -> SkillRo
             request: LlmPreviewPromptParams {
                 action: LlmPromptActionKind::RoutingConfidence,
                 profile_id: None,
+                app_language: None,
                 skill_instance_id: None,
                 instance_ids: prompt_instance_ids,
                 analysis_kind: None,
@@ -26918,6 +26965,7 @@ mod tests {
             method: "llm.previewPrompt".to_string(),
             params: json!({
                 "action": "quality_score",
+                "app_language": "zh-Hans",
                 "skill_instance_id": "llm-skill-id",
                 "user_intent": "explain quality without leaking token=fixture-redacted-value"
             }),
@@ -26943,6 +26991,8 @@ mod tests {
             .unwrap_or(false));
         let serialized = serde_json::to_string(&result).expect("serialize quality preview");
         assert!(serialized.contains("Quality score evidence"));
+        assert!(serialized.contains("Output language: Simplified Chinese (zh-Hans)"));
+        assert!(serialized.contains("Write all prose"));
         assert!(serialized.contains("<redacted>"));
         assert!(!serialized.contains("fixture-redacted-value"));
         assert!(!serialized.contains("OPENAI_API_KEY"));

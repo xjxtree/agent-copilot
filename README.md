@@ -6,7 +6,7 @@
 
 **当前阶段**：V2.61 AI Analysis UX / Prompt Run History 已完成。V2.61 聚焦两个可见问题：single-skill Analysis 页面只保留 3 个高价值合并项目；provider-backed AI 分析等待上限提高到 10 分钟，并把 redacted prompt run task/result metadata 与 copy-only draft output 持久化到 app-local history，重启后可展示最新结果，重新触发会追加新记录。
 
-**近期主线**：后续统一为 **AI-native Task-centered Skills Governance**。本地 scanner/rules/catalog 继续负责事实层；复杂分析、任务可用性、routing 置信度、质量判断、修复建议和治理报告优先接入用户自配大模型。短期不做全平台 UI 适配、正式签名 release、notarization、DMG/ZIP 或 public distribution。OpenClaw/Hermes writable/install 与 Pi install 仍保持 blocked；Pi production toggle 仅限 V2.37 evidence-backed guarded native scope，不自动开放兼容根写入。
+**近期主线**：后续统一为 **AI-native Skill Review and Observability**。本地 scanner/rules/catalog 继续负责事实层；围绕真实 agent 会话的 skill 发现/选择/漏用/错用审查、本地 skill map、provider 调用可观测性、task-first cockpit、skill lifecycle timeline 和 guided cleanup 作为连续短期规划。短期不做全平台 UI 适配、正式签名 release、notarization、DMG/ZIP 或 public distribution。OpenClaw/Hermes writable/install 与 Pi install 仍保持 blocked；Pi production toggle 仅限 V2.37 evidence-backed guarded native scope，不自动开放兼容根写入。
 
 **已集成能力**：
 
@@ -60,7 +60,7 @@
 | V2.51-V2.55 | Drift / knowledge / taxonomy / workspace readiness | 已完成：stale/drift、local knowledge search、similar skill grouping、capability taxonomy、workspace readiness |
 | V2.56-V2.60 | AI remediation workflow | 已完成：remediation plan、fix preview draft、impact preview、batch review、app-local remediation history |
 | V2.61 | AI Analysis UX / Prompt Run History | 已完成：Analysis 页面精简为 3 个合并项目；provider-backed AI 分析 10 分钟超时；app-local redacted prompt run history 支持重启展示与 rerun 追加 |
-| V2.62-V2.70 | Review / policy / governance | Planned：AI review session、governance report、policy pack、compliance report、local skill map、完整 provider observability、safe write expansion planning |
+| V2.62-V2.67 | Skill review / map / observability / cockpit / lifecycle / guided cleanup | Planned：V2.62 审查真实 agent 会话中的 skill 使用；V2.63 构建本地 skill map；V2.64 完善 provider 调用可观测性；V2.65 汇总 task-first cockpit；V2.66 展示 skill lifecycle timeline；V2.67 做 guided cleanup flow |
 
 ## 它做什么
 
@@ -111,7 +111,7 @@
 | 内核 | Rust workspace crates：core / adapters / scanner / catalog / ai-core / commands / service。 |
 | Service protocol | typed JSON / JSON-RPC stdio sidecar，位于 `crates/service`。 |
 | 持久化 | SQLite catalog + JSON runtime state。 |
-| LLM / AI Analysis | V2.7/V2.30 optional assist gate；当前只有 provider preference、gate 和 prepare/estimate 边界，没有真实 provider client、网络调用或 credential storage。V2.41+ 规划支持用户自配 OpenAI-compatible / Claude-compatible endpoint。 |
+| LLM / AI Analysis | V2.41+ 已支持用户自配 OpenAI-compatible / Claude-compatible endpoint、Keychain-first API key、prompt preview/redaction/confirmation 和 provider-backed draft output；V2.61 起 provider-backed 分析 10 分钟等待并保存 redacted prompt run history。所有输出仍为 copy-only，不写 skill/config、不执行脚本、不保存 raw prompt/raw response/secrets。 |
 
 ## 开发运行
 

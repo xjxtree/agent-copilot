@@ -674,6 +674,10 @@
 "llm.promptPreview.copyOnly" = "Copy-only output";
 "llm.promptPreview.output" = "Provider output";
 "llm.promptPreview.copyOutput" = "Copy Output";
+"llm.promptPreview.viewDetails" = "View Details";
+"llm.promptPreview.copyFullText" = "Copy Full Text";
+"llm.promptPreview.closeDetails" = "Close";
+"llm.promptPreview.historyNote" = "Latest provider output is shown here and saved in local prompt run history.";
 "scriptExecution.safety" = "Script Execution Safety";
 "scriptExecution.previewOnly" = "Preview-only";
 "scriptExecution.unavailable" = "Script execution preflight is unavailable in this service build. Scripts remain non-executable from the native UI.";

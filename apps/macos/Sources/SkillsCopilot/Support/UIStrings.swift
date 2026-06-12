@@ -865,6 +865,10 @@ enum UIStrings {
     static var llmPromptCopyOnly: String { text("llm.promptPreview.copyOnly", "Copy-only output") }
     static var llmPromptOutput: String { text("llm.promptPreview.output", "Provider output") }
     static var llmPromptCopyOutput: String { text("llm.promptPreview.copyOutput", "Copy Output") }
+    static var llmPromptViewDetails: String { text("llm.promptPreview.viewDetails", "View Details") }
+    static var llmPromptCopyFullText: String { text("llm.promptPreview.copyFullText", "Copy Full Text") }
+    static var llmPromptCloseDetails: String { text("llm.promptPreview.closeDetails", "Close") }
+    static var llmPromptHistoryNote: String { text("llm.promptPreview.historyNote", "Latest provider output is shown here and saved in local prompt run history.") }
     static var scriptExecutionSafety: String { text("scriptExecution.safety", "Script Execution Safety") }
     static var scriptExecutionPreviewOnly: String { text("scriptExecution.previewOnly", "Preview-only") }
     static var scriptExecutionUnavailable: String { text("scriptExecution.unavailable", "Script execution preflight is unavailable in this service build. Scripts remain non-executable from the native UI.") }

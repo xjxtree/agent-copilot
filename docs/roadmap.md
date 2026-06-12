@@ -6,7 +6,7 @@
 >
 > 当前阶段：**V2.61 AI Analysis UX / Prompt Run History complete**。V2.21-V2.61 已完成范围保持不变（scan accuracy/dedupe、finding/conflict 语义、Health/Adapter Capability UX、single-skill Detail 诊断口径、Agent-config timeline、Finding explainability、Skill identity/provenance dedupe、Conflict semantic closeout、Finding triage persistence、AI skill analysis workflow、Cleanup Queue、Rule tuning / suppression、Safe batch actions、Cross-agent comparison view、Local report export、Pi writable evidence harness、Pi guarded writable toggle、Hermes explicit external roots、OpenClaw workspace 深化、Adapter diagnostics、AI Provider Foundation、Prompt Preview / Redaction、AI Skill Quality Score、AI Task Readiness Check、AI Routing Confidence、Task Benchmark Set、Routing Regression Detection、Agent Behavior Trace Import、Routing Accuracy Dashboard、Cross-agent Task Readiness、Stale / Drift Detection、Local Knowledge Index、Similar Skill Grouping、Capability Taxonomy、Workspace Readiness、AI Remediation Planner、Fix Preview Drafts、Impact Preview、Batch Review Workflow、Remediation History、Prompt Run History）。V2.61 consolidates the single-skill Analysis page to 3 high-value items, raises provider-backed AI analysis timeout to 10 minutes, and persists app-local redacted prompt run task/result metadata plus copy-only draft output for restart hydration and reruns. V2.42+ provider-backed 分析仍必须 preview/redact/estimate/destination-visible/explicit-confirm 后才发送。
 >
-> 近期主线：继续围绕 AI agent skills 的管理、检查、分析和配置审计打磨体验。V2.41 Provider Foundation、V2.42 Prompt Preview / Redaction、V2.43 AI Skill Quality Score、V2.44 AI Task Readiness Check、V2.45 AI Routing Confidence、V2.46 Task Benchmark Set、V2.47 Routing Regression Detection、V2.48 Agent Behavior Trace Import、V2.49 Routing Accuracy Dashboard、V2.50 Cross-agent Task Readiness、V2.51 Stale / Drift Detection、V2.52 Local Knowledge Index、V2.53 Similar Skill Grouping、V2.54 Capability Taxonomy、V2.55 Workspace Readiness、V2.56 AI Remediation Planner、V2.57 Fix Preview Drafts、V2.58 Impact Preview、V2.59 Batch Review Workflow、V2.60 Remediation History 与 V2.61 Prompt Run History 已完成；后续进入 review sessions / governance reports / provider observability。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
+> 近期主线：继续围绕 AI agent skills 的管理、检查、分析和配置审计打磨体验。V2.41 Provider Foundation、V2.42 Prompt Preview / Redaction、V2.43 AI Skill Quality Score、V2.44 AI Task Readiness Check、V2.45 AI Routing Confidence、V2.46 Task Benchmark Set、V2.47 Routing Regression Detection、V2.48 Agent Behavior Trace Import、V2.49 Routing Accuracy Dashboard、V2.50 Cross-agent Task Readiness、V2.51 Stale / Drift Detection、V2.52 Local Knowledge Index、V2.53 Similar Skill Grouping、V2.54 Capability Taxonomy、V2.55 Workspace Readiness、V2.56 AI Remediation Planner、V2.57 Fix Preview Drafts、V2.58 Impact Preview、V2.59 Batch Review Workflow、V2.60 Remediation History 与 V2.61 Prompt Run History 已完成；后续连续规划 V2.62 Agent Session Skill Review、V2.63 Local Skill Map、V2.64 AI Provider Observability、V2.65 Task-first Cockpit、V2.66 Skill Lifecycle Timeline 与 V2.67 Guided Cleanup Flow。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
 
 > V2.46 已完成：`task.listBenchmarks` / `task.saveBenchmark` / `task.deleteBenchmark` / `task.evaluateBenchmarks` 将任务路由检查升级为 app-local benchmark set，可保存 task、expected skill refs/names、acceptable agent/scope 与成功标准，并用 V2.44/V2.45 本地 readiness/routing evidence 进行 deterministic read-only 评估；本地评估不发起 provider 请求。
 > V2.47 已完成：`task.saveRoutingBaseline` / `task.detectRoutingRegression` 在 V2.46 基准集基础上增加 routing regression 检测；依赖 app-local baseline 快照与 V2.46 benchmark 输出的可复用证据，默认不发 provider 请求、可选解释继续走 V2.42 preview/redaction/confirmation/copy-only。
@@ -994,15 +994,15 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 | V2.39 | OpenClaw workspace 深化 | 已完成：精准识别 OpenClaw workspace scope，只扫描 confirmed workspace roots，不推断任意 repo。 |
 | V2.40 | Adapter diagnostics | 已完成：新增 read-only adapter diagnostics protocol/status/state fields、scan activity summary 与 sidebar Adapter Capabilities 诊断展示；保持无新增写入/执行/provider/credential/telemetry 路径。 |
 
-## 4.41-V2.70 AI-native Task-centered Skills Governance
+## 4.41-V2.67 AI-native Skill Review and Observability
 
 该阶段不是多个产品方向分支，而是一条统一工作流：
 
 1. 本地扫描和规则引擎生成可验证事实：agent、scope、state、metadata、findings、conflicts、analysis、adapter diagnostics。
-2. 用户显式配置 OpenAI-compatible 或 Claude-compatible provider 后，AI 参与复杂判断：quality、task readiness、routing confidence、capability gap、trace accuracy、remediation、policy explanation。
-3. 用户围绕真实任务和工作区进行 review session，形成本地治理报告和可追溯处理历史。
+2. 用户显式配置 OpenAI-compatible 或 Claude-compatible provider 后，AI 参与复杂判断：quality、task readiness、routing confidence、capability gap、trace accuracy、remediation explanation、session review summary。
+3. 用户围绕真实 agent 会话或导入 trace 审查 skill 发现、选择、漏用、错用和歧义；本 app 自身 AI 分析历史只作为辅助证据。
 
-当前代码检查结论：主线已有 `llm.status` / `llm.prepareAction` / `llm.prepareSkillAnalysis`、provider/model DTO、token/cost estimate、macOS read-only preview UI、V2.41 provider profile 配置/Keychain-first API key storage/显式 Test Connection/预算字段/最小 redacted test-call metadata、V2.42 `llm.previewPrompt` / `llm.confirmPromptAndSend` provider-backed prompt preview/redaction/confirmed draft output、V2.43 `analysis.scoreSkillQuality` deterministic read-only skill quality score、V2.44 `task.checkReadiness` deterministic read-only task readiness、V2.45 `task.rankSkillRoutes` deterministic read-only routing confidence、V2.46 `task.listBenchmarks` / `task.saveBenchmark` / `task.deleteBenchmark` / `task.evaluateBenchmarks` app-local deterministic task benchmark set、V2.47 `task.saveRoutingBaseline` / `task.detectRoutingRegression` app-local deterministic routing regression detection、V2.48 `trace.importLocal` / `trace.listImports` / `trace.deleteImport` app-local deterministic trace import、V2.49 `routing.accuracyDashboard` read-only routing accuracy dashboard、V2.50 `task.compareAgentReadiness` read-only cross-agent task readiness、V2.51 `analysis.detectStaleDrift` read-only stale/drift detection、V2.52 `knowledge.search` read-only local knowledge index、V2.53 `knowledge.groupSimilarSkills` read-only similar skill grouping、V2.54 `knowledge.buildCapabilityTaxonomy` read-only capability taxonomy、V2.55 `workspace.checkReadiness` read-only workspace readiness，以及 V2.56 `remediation.plan` read-only remediation planner。V2.57+ remediation draft/impact/history surfaces 与 full provider observability 仍未实现。
+当前代码检查结论：主线已有 `llm.status` / `llm.prepareAction` / `llm.prepareSkillAnalysis`、provider/model DTO、token/cost estimate、macOS read-only preview UI、V2.41 provider profile 配置/Keychain-first API key storage/显式 Test Connection/预算字段/最小 redacted test-call metadata、V2.42 `llm.previewPrompt` / `llm.confirmPromptAndSend` provider-backed prompt preview/redaction/confirmed draft output、V2.43 `analysis.scoreSkillQuality` deterministic read-only skill quality score、V2.44 `task.checkReadiness` deterministic read-only task readiness、V2.45 `task.rankSkillRoutes` deterministic read-only routing confidence、V2.46 `task.listBenchmarks` / `task.saveBenchmark` / `task.deleteBenchmark` / `task.evaluateBenchmarks` app-local deterministic task benchmark set、V2.47 `task.saveRoutingBaseline` / `task.detectRoutingRegression` app-local deterministic routing regression detection、V2.48 `trace.importLocal` / `trace.listImports` / `trace.deleteImport` app-local deterministic trace import、V2.49 `routing.accuracyDashboard` read-only routing accuracy dashboard、V2.50 `task.compareAgentReadiness` read-only cross-agent task readiness、V2.51 `analysis.detectStaleDrift` read-only stale/drift detection、V2.52 `knowledge.search` read-only local knowledge index、V2.53 `knowledge.groupSimilarSkills` read-only similar skill grouping、V2.54 `knowledge.buildCapabilityTaxonomy` read-only capability taxonomy、V2.55 `workspace.checkReadiness` read-only workspace readiness、V2.56 `remediation.plan` read-only remediation planner、V2.57 `remediation.previewDrafts` read-only fix preview drafts、V2.58 `remediation.previewImpact` read-only impact preview、V2.59 `remediation.batchReview` read-only batch review、V2.60 app-local remediation history 与 V2.61 app-local prompt run history。V2.62 Agent Session Skill Review、V2.63 Local Skill Map、V2.64 full provider observability、V2.65 Task-first Cockpit、V2.66 Skill Lifecycle Timeline 与 V2.67 Guided Cleanup Flow 仍未实现。
 
 | Version | Goal | Completion signal |
 | --- | --- | --- |
@@ -1027,15 +1027,25 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 | V2.59 | Batch Review Workflow | 已完成：`remediation.batchReview` 与 native Analysis UI 基于本地 remediation/cleanup/finding/task/adapter/writable evidence 按 task/risk/rule/agent/workspace 聚合 review groups/items、safe next-step labels、gap/blocker notes、evidence refs、prompt metadata 与 safety flags；不 apply、不改 triage、不写 skill/config、不创建/回滚 snapshot、不发 provider。 |
 | V2.60 | Remediation History | 已完成：`remediation.listHistory` / `remediation.recordHistory` / `remediation.deleteHistory` 记录本地 remediation decisions、recurrence、reopened issues、readiness/routing improvements 与 redacted app-local history records；无 provider/network/skill-write/agent-config/script/credential/raw prompt/raw response/raw trace/cloud/telemetry 路径。 |
 | V2.61 | AI Analysis UX / Prompt Run History | 已完成：single-skill Analysis 页面精简为 3 个合并项目；provider-backed AI analysis timeout 调整为 10 分钟；确认发送后的 redacted prompt run task/result metadata 与 copy-only draft output 写入 app-local history，重启后可展示最新结果，rerun 追加新记录。 |
-| V2.62 | AI Review Session | 围绕 task/workspace/agent set 组织 review session，生成 AI summary、下一步队列和本地 session record。 |
-| V2.63 | AI Governance Report | 导出本地脱敏治理报告，覆盖 task readiness、routing accuracy、quality、policy、remediation 和 provider usage metadata。 |
-| V2.64 | Policy Pack Schema | 定义本地 policy pack：质量、风险、权限、task readiness、routing confidence、provider usage 和写入门槛。 |
-| V2.65 | Policy Import / Export | 本地导入/导出 policy pack，做版本兼容和隐私校验，不云同步。 |
-| V2.66 | Agent / Workspace Policy Profile | 为不同 agent/workspace 应用不同 policy profile，不自动写 skill 或 agent config。 |
-| V2.67 | Policy Compliance Report | 基于 deterministic evidence + AI explanation 输出合规报告，并区分 must-fix / should-review / accepted risk。 |
-| V2.68 | Local Skill Map | 本地可视化 skill 关系、来源、能力域、相似组、冲突、任务覆盖和风险。 |
-| V2.69 | AI Provider Observability | 在 V2.41-V2.42 最小审计字段基础上做完整体验：调用历史 UI、成本趋势、失败/限流分析、provider 可用性、清理策略、导出/保留策略；默认不存 raw prompt/response，不存 secrets。 |
-| V2.70 | Safe Write Expansion Planning | 基于现有 governance/evidence 输出后续 writable 扩展计划；没有 rollback-safe evidence 的 agent/root 继续 blocked。 |
+| V2.62 | Agent Session Skill Review | 从 V2.48 imported trace、用户粘贴/导入的 agent transcript，或未来显式选择的本地 agent 会话创建只读 review session；审查真实 agent 是否正确发现/选择/使用 skill、是否漏用更合适 skill、是否被相似/重复 skill 干扰，并生成本地 redacted session record 与安全下一步队列。本 app 的 AI prompt run history 只作为辅助证据，不作为主审查对象。 |
+| V2.63 | Local Skill Map | 本地可视化 skill 关系、来源、能力域、相似组、冲突、任务覆盖和风险。 |
+| V2.64 | AI Provider Observability | 在 V2.41-V2.42 最小审计字段基础上做完整体验：调用历史 UI、成本趋势、失败/限流分析、provider 可用性、清理策略、导出/保留策略；默认不存 raw prompt/response，不存 secrets。 |
+| V2.65 | Task-first Cockpit | 以用户任务为入口，把 task readiness、routing confidence、benchmark/regression、trace/session review、remediation next steps 与 evidence refs 聚合成一个任务工作台；默认 local/read-only，不创建新写入路径。 |
+| V2.66 | Skill Lifecycle Timeline | 以单个 skill / agent / workspace 为维度展示 discovered、changed、stale/drift、triage、remediation decision、prompt analysis 和 review evidence 的时间线；只保存/显示 redacted metadata，不持久化 raw content。 |
+| V2.67 | Guided Cleanup Flow | 把 findings、similar groups、drift、readiness gaps、remediation plan/drafts/impact/batch review 串成可跟进流程；任何实际 enable/disable/edit 仍只能走既有 preview-first、explicit-confirm、安全写入路径。 |
+
+### V2.62-V2.67 用户体验方向
+
+后续版本以用户管理和使用 skills 的真实问题为中心：
+
+1. 用户先要知道有哪些 skills、来自哪个 agent/root、是否 enabled、是否有风险或重复。
+2. 用户输入真实任务时，app 应能解释哪个 skill/agent 最适合、为什么、有什么缺口。
+3. 用户拿到 agent 会话后，app 应能审查实际 skill 使用是否命中、漏选、错选或被相似 skill 干扰。
+4. 用户需要一张本地 skill map，把相似组、能力域、冲突、任务覆盖和风险连接起来，而不是在多个分析面板之间跳。
+5. 用户配置 provider 后，需要能看见慢调用、失败、成本、重试、历史和清理策略；不能把 observability 变成 raw prompt/raw response 或 secret 存储。
+6. 用户围绕某个任务排查时，需要一个 task-first cockpit，而不是在 readiness、routing、session review、remediation 等面板间来回跳。
+7. 用户维护 skill 时，需要 skill lifecycle timeline 看清楚它何时出现、何时变化、为什么变成风险或过期。
+8. 用户清理问题时，需要 guided cleanup 把建议变成可复查步骤；写入仍必须 preview-first、explicit-confirm，并且只使用已有 verified writable path。
 
 ### V2.41 Verification Checklist（文档同步）
 

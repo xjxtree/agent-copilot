@@ -34,6 +34,8 @@
 >
 > V2.60 Remediation History 是 user-triggered、app-local metadata-only 边界：`remediation.recordHistory` 只把用户显式复查过的 remediation decision、source refs、recurrence/reopened marker、readiness/routing improvement note、blocker/gap note、evidence refs 与 redaction summary 保存到 app data `remediation-history.json`；`remediation.listHistory` / `remediation.deleteHistory` 只读/删该本地 metadata。它不能默认发起 provider traffic，不能写 skill 文件或 agent config，不能变更 triage，不能创建或回滚 snapshot，不能执行脚本，不能读 credentials，不能持久化 raw prompt/response/trace，也不能同步云端或发 telemetry。任何 AI wording 仍必须走 V2.42 preview/redaction/confirmation，且保持 copy-only。
 >
+> V2.61 Prompt Run History 是 user-triggered、prompt-previewed、redacted、explicit-confirm 的 app-local history 边界：`llm.confirmPromptAndSend` 最多等待 10 分钟 foreground provider response，并只把 redacted task/result metadata、status/error/duration/token/cost、provider/model/destination、redaction summary、copy-only draft output 与 safety flags 保存到 app data `prompt-runs.json`；`llm.listPromptRuns` 只读该本地 metadata。它不能保存 raw prompt、raw provider response JSON、API key、credentials、raw trace、unredacted local path，也不能写 skill 文件或 agent config、变更 triage、创建/回滚 snapshot、执行脚本、同步云端或发 telemetry。
+>
 > V2.10 skill execution safety 当前是 default-deny 边界：
 >
 > - 没有真实执行能力默认开启。
@@ -177,7 +179,7 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
 - LLM 输出**永远不**进入 IPC 命令、不进入 catalog
 - UI 渲染 LLM 文本时按纯文本处理（不解析 markdown 里的链接作为命令）
 - 用户从 LLM 拿到的 `draft_frontmatter` 只是草稿展示/复制内容，不存在 Apply / Write；真实写入必须由用户进入正常编辑/保存路径，并经 Rust service 的格式校验、snapshot、原子写和回读验证
-- AI task readiness、routing confidence、trace analysis、remediation planner、policy explanation 等都属于 judgment output；它们不能直接触发 toggle、install、rollback、script execution、triage mutation 或 policy mutation
+- AI task readiness、routing confidence、trace analysis、remediation planner、session review summary 等都属于 judgment output；它们不能直接触发 toggle、install、rollback、script execution、triage mutation 或 hidden state mutation
 
 ### 2.4.1 Skill execution safety boundary（V2.10）
 
@@ -199,7 +201,7 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
 - V2.30 草稿输出仅作 `review` 与复制使用，不能直接 apply；不会持久化 triage 状态（`Open / Reviewed / Ignored / Needs follow-up`）。
 - 当前阶段不读取或写入 LLM credentials；未来 provider 路径需显式 opt-in，并延续 V2.7 的 Keychain 优先边界。
 
-### 2.4.3 V2.41-V2.70 AI-native provider boundary（planned）
+### 2.4.3 V2.41-V2.67 AI-native provider boundary（planned）
 
 **风险**：AI-native 分析会引入真实出站请求、用户配置的 endpoint/API key、prompt 内容、模型响应和成本/调用历史；如果边界不清晰，可能泄露本地路径、skill 内容、agent config、凭据或让 AI 输出绕过安全写入流程。
 
@@ -214,11 +216,15 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
   - included/excluded fields
   - redaction summary
   - token/cost estimate
-  - 是否会发送 skill body、frontmatter、finding summary、trace excerpt 或 policy context
+  - 是否会发送 skill body、frontmatter、finding summary、trace excerpt 或 remediation/analysis context
 - Prompt preview 和 redaction 结果可以短暂显示；默认不持久化 raw prompt/response。
 - V2.41-V2.42 必须先保存最小非敏感调用审计 metadata：timestamp、provider type、model、destination host、status/error、duration、token/cost、confirmation id、redaction status。保存 raw prompt/response 需要单独设计和明确用户 opt-in，且不得进入普通 report export。
-- V2.69 provider observability 只能在上述最小 metadata 上做完整 UI、趋势、失败/限流分析、清理/保留策略和可选脱敏导出；不得把 observability 扩展成 secrets/raw prompt/raw response 存储。
+- V2.64 provider observability 只能在上述最小 metadata 上做完整 UI、趋势、失败/限流分析、清理/保留策略和可选脱敏导出；不得把 observability 扩展成 secrets/raw prompt/raw response 存储。
 - Imported trace/log 必须本地脱敏后再允许进入 provider prompt；默认不得发送 credentials、tokens、real home paths、temp paths、private URLs 或 raw config secrets。
+- V2.62 Agent Session Skill Review 必须由用户显式导入/粘贴 trace 或未来显式选择本地 agent 会话后触发；不得后台索引全量 agent 历史，不得保存 raw transcript。仅允许保存 redacted metadata/excerpt、skill usage evidence refs、review outcome 与 safety flags。
+- V2.65 Task-first Cockpit 只能聚合现有 local evidence 与 redacted provider/run metadata；不得创建新的 hidden task state source，不得自动触发 provider 请求或写入。
+- V2.66 Skill Lifecycle Timeline 只能保存/展示 redacted lifecycle metadata；不得保存 raw skill content、raw prompt/response、raw transcript、credentials 或 unredacted local paths。
+- V2.67 Guided Cleanup Flow 只能组织现有 evidence 与 metadata-only step state；实际 enable/disable/edit 必须跳转或调用既有 preview-first、explicit-confirm safe write path，不能在 guided flow 内隐藏 apply。
 - AI 输出永远是 untrusted suggestion；写入仍必须走已有 safe write path：preview-first、explicit confirm、snapshot、atomic write、readback verify、rollback。
 - AI 不能成为 `ExecutionRequester`，不能创建 `Completed` execution record，不能确认脚本执行。
 

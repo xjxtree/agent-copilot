@@ -7295,18 +7295,373 @@ private struct DraftTextBlock: View {
     let text: String
 
     var body: some View {
+        LongTextReviewBlock(
+            title: title,
+            text: text,
+            emptyText: UIStrings.llmSkillAnalysisNoDraft,
+            systemImage: "doc.on.doc"
+        )
+    }
+}
+
+private enum LongTextRenderMode {
+    case plain
+    case markdown
+}
+
+private struct LongTextReviewBlock: View {
+    let title: String
+    let text: String
+    let emptyText: String
+    let systemImage: String
+    var renderMode: LongTextRenderMode = .plain
+    @State private var isShowingDetails = false
+
+    private var hasText: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var displayText: String {
+        hasText ? text : emptyText
+    }
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label(title, systemImage: "doc.on.doc")
-                .font(.caption.bold())
-                .foregroundStyle(.secondary)
-            Text(text.isEmpty ? UIStrings.llmSkillAnalysisNoDraft : text)
-                .font(.system(.callout, design: .monospaced))
-                .foregroundStyle(text.isEmpty ? .secondary : .primary)
-                .textSelection(.enabled)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Label(title, systemImage: systemImage)
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if hasText {
+                    Button {
+                        isShowingDetails = true
+                    } label: {
+                        Label(UIStrings.llmPromptViewDetails, systemImage: "arrow.up.left.and.arrow.down.right")
+                    }
+                    Button {
+                        copyToPasteboard(displayText)
+                    } label: {
+                        Label(UIStrings.llmPromptCopyFullText, systemImage: "doc.on.doc")
+                    }
+                }
+            }
+            RenderedLongText(
+                text: displayText,
+                renderMode: renderMode,
+                isEmpty: !hasText,
+                lineLimit: hasText ? 5 : nil
+            )
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(10)
                 .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
         }
+        .sheet(isPresented: $isShowingDetails) {
+            LongTextDetailSheet(title: title, text: displayText, renderMode: renderMode)
+        }
+    }
+
+    private func copyToPasteboard(_ value: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
+    }
+}
+
+private struct LongTextDetailSheet: View {
+    let title: String
+    let text: String
+    let renderMode: LongTextRenderMode
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(title)
+                    .font(.headline)
+                Spacer()
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(text, forType: .string)
+                } label: {
+                    Label(UIStrings.llmPromptCopyFullText, systemImage: "doc.on.doc")
+                }
+                Button(UIStrings.llmPromptCloseDetails) {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+            }
+
+            ScrollView {
+                RenderedLongText(
+                    text: text,
+                    renderMode: renderMode,
+                    isEmpty: false,
+                    lineLimit: nil
+                )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+            }
+            .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
+        }
+        .padding()
+        .frame(minWidth: 680, minHeight: 460)
+    }
+}
+
+private struct RenderedLongText: View {
+    let text: String
+    let renderMode: LongTextRenderMode
+    let isEmpty: Bool
+    let lineLimit: Int?
+
+    var body: some View {
+        Group {
+            if renderMode == .markdown {
+                RenderedMarkdownDocument(
+                    text: text,
+                    isEmpty: isEmpty,
+                    maxBlocks: lineLimit
+                )
+            } else {
+                Text(text)
+                    .font(.system(.callout, design: .monospaced))
+                    .lineLimit(lineLimit)
+            }
+        }
+        .foregroundStyle(isEmpty ? .secondary : .primary)
+        .textSelection(.enabled)
+    }
+}
+
+private struct RenderedMarkdownDocument: View {
+    let text: String
+    let isEmpty: Bool
+    let maxBlocks: Int?
+
+    private var document: MarkdownRenderDocument {
+        MarkdownRenderDocument(text: text, maxBlocks: maxBlocks)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            ForEach(Array(document.blocks.enumerated()), id: \.offset) { _, block in
+                blockView(block)
+            }
+            if document.isTruncated {
+                Text("...")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .foregroundStyle(isEmpty ? .secondary : .primary)
+    }
+
+    @ViewBuilder
+    private func blockView(_ block: MarkdownRenderBlock) -> some View {
+        switch block {
+        case let .heading(level, value):
+            MarkdownInlineText(value, font: level <= 2 ? .headline : .subheadline.bold())
+        case let .paragraph(value):
+            MarkdownInlineText(value, font: .callout)
+        case let .bullet(value):
+            HStack(alignment: .firstTextBaseline, spacing: 7) {
+                Text("•")
+                    .font(.callout.bold())
+                MarkdownInlineText(value, font: .callout)
+            }
+        case let .numbered(marker, value):
+            HStack(alignment: .firstTextBaseline, spacing: 7) {
+                Text(marker)
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                MarkdownInlineText(value, font: .callout)
+            }
+        case .rule:
+            Divider()
+        case let .code(value):
+            Text(value)
+                .font(.system(.callout, design: .monospaced))
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 4))
+        }
+    }
+}
+
+private struct MarkdownInlineText: View {
+    let value: String
+    let font: Font
+
+    init(_ value: String, font: Font) {
+        self.value = value
+        self.font = font
+    }
+
+    var body: some View {
+        if let attributed = try? AttributedString(markdown: value) {
+            Text(attributed)
+                .font(font)
+        } else {
+            Text(value)
+                .font(font)
+        }
+    }
+}
+
+private enum MarkdownRenderBlock {
+    case heading(level: Int, String)
+    case paragraph(String)
+    case bullet(String)
+    case numbered(marker: String, String)
+    case rule
+    case code(String)
+}
+
+private struct MarkdownRenderDocument {
+    let blocks: [MarkdownRenderBlock]
+    let isTruncated: Bool
+
+    init(text: String, maxBlocks: Int?) {
+        let parsedBlocks = Self.parse(text: text)
+        if let maxBlocks, parsedBlocks.count > maxBlocks {
+            self.blocks = Array(parsedBlocks.prefix(maxBlocks))
+            self.isTruncated = true
+        } else {
+            self.blocks = parsedBlocks
+            self.isTruncated = false
+        }
+    }
+
+    private static func parse(text: String) -> [MarkdownRenderBlock] {
+        let lines = normalizeMarkdownBlocks(in: text).components(separatedBy: "\n")
+        var blocks: [MarkdownRenderBlock] = []
+        var paragraphLines: [String] = []
+        var codeLines: [String] = []
+        var isInCodeBlock = false
+
+        func flushParagraph() {
+            let paragraph = paragraphLines
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .joined(separator: " ")
+            if !paragraph.isEmpty {
+                blocks.append(.paragraph(paragraph))
+            }
+            paragraphLines.removeAll()
+        }
+
+        func flushCodeBlock() {
+            blocks.append(.code(codeLines.joined(separator: "\n")))
+            codeLines.removeAll()
+        }
+
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.hasPrefix("```") {
+                if isInCodeBlock {
+                    flushCodeBlock()
+                    isInCodeBlock = false
+                } else {
+                    flushParagraph()
+                    isInCodeBlock = true
+                }
+                continue
+            }
+
+            if isInCodeBlock {
+                codeLines.append(line)
+                continue
+            }
+
+            guard !trimmed.isEmpty else {
+                flushParagraph()
+                continue
+            }
+
+            if let heading = headingBlock(from: trimmed) {
+                flushParagraph()
+                blocks.append(heading)
+            } else if isRule(trimmed) {
+                flushParagraph()
+                blocks.append(.rule)
+            } else if let bullet = bulletBlock(from: trimmed) {
+                flushParagraph()
+                blocks.append(bullet)
+            } else if let numbered = numberedBlock(from: trimmed) {
+                flushParagraph()
+                blocks.append(numbered)
+            } else {
+                paragraphLines.append(line)
+            }
+        }
+
+        if isInCodeBlock {
+            flushCodeBlock()
+        }
+        flushParagraph()
+        return blocks.isEmpty ? [.paragraph(text)] : blocks
+    }
+
+    private static func normalizeMarkdownBlocks(in text: String) -> String {
+        var normalized = text.replacingOccurrences(of: "\r\n", with: "\n")
+        normalized = normalized.replacingOccurrences(of: "\r", with: "\n")
+
+        for marker in [" --- ", " *** ", " ___ "] {
+            normalized = normalized.replacingOccurrences(of: marker, with: "\n\(marker.trimmingCharacters(in: .whitespaces))\n")
+        }
+
+        let headingMarkers = [
+            " ###### ",
+            " ##### ",
+            " #### ",
+            " ### ",
+            " ## ",
+            " # "
+        ]
+        for marker in headingMarkers {
+            normalized = normalized.replacingOccurrences(of: marker, with: "\n\(marker.trimmingCharacters(in: .whitespaces)) ")
+        }
+
+        normalized = normalized.replacingOccurrences(of: " - ", with: "\n- ")
+        normalized = normalized.replacingOccurrences(of: " * ", with: "\n* ")
+        normalized = normalized.replacingOccurrences(of: " + ", with: "\n+ ")
+
+        return normalized
+    }
+
+    private static func headingBlock(from trimmed: String) -> MarkdownRenderBlock? {
+        let hashes = trimmed.prefix { $0 == "#" }.count
+        guard hashes > 0, hashes <= 6 else { return nil }
+        let markerEnd = trimmed.index(trimmed.startIndex, offsetBy: hashes)
+        guard markerEnd < trimmed.endIndex, trimmed[markerEnd] == " " else { return nil }
+        let contentStart = trimmed.index(after: markerEnd)
+        let content = String(trimmed[contentStart...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty else { return nil }
+        return .heading(level: hashes, content)
+    }
+
+    private static func bulletBlock(from trimmed: String) -> MarkdownRenderBlock? {
+        for marker in ["- ", "* ", "+ ", "• "] where trimmed.hasPrefix(marker) {
+            let content = String(trimmed.dropFirst(marker.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            return content.isEmpty ? nil : .bullet(content)
+        }
+        return nil
+    }
+
+    private static func numberedBlock(from trimmed: String) -> MarkdownRenderBlock? {
+        guard let dotIndex = trimmed.firstIndex(of: ".") else { return nil }
+        let number = String(trimmed[..<dotIndex])
+        guard !number.isEmpty, number.allSatisfy(\.isNumber) else { return nil }
+        let contentStart = trimmed.index(after: dotIndex)
+        guard contentStart < trimmed.endIndex, trimmed[contentStart] == " " else { return nil }
+        let content = String(trimmed[trimmed.index(after: contentStart)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty else { return nil }
+        return .numbered(marker: "\(number).", content)
+    }
+
+    private static func isRule(_ trimmed: String) -> Bool {
+        guard trimmed.count >= 3 else { return false }
+        let characters = Set(trimmed)
+        return characters == ["-"] || characters == ["*"] || characters == ["_"]
     }
 }
 
@@ -7675,26 +8030,16 @@ private struct LLMPromptSendResultView: View {
             }
 
             if let output = result.outputText, !output.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Label(UIStrings.llmPromptOutput, systemImage: "doc.on.doc")
-                            .font(.caption.bold())
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Button {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(output, forType: .string)
-                        } label: {
-                            Label(UIStrings.llmPromptCopyOutput, systemImage: "doc.on.doc")
-                        }
-                    }
-                    Text(output)
-                        .font(.system(.callout, design: .monospaced))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(10)
-                        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
-                }
+                Label(UIStrings.llmPromptHistoryNote, systemImage: "clock.arrow.circlepath")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                LongTextReviewBlock(
+                    title: UIStrings.llmPromptOutput,
+                    text: output,
+                    emptyText: UIStrings.llmSkillAnalysisNoDraft,
+                    systemImage: "doc.on.doc",
+                    renderMode: .markdown
+                )
             }
 
             Label(UIStrings.llmReviewNoActions, systemImage: "nosign")

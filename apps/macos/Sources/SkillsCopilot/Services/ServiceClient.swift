@@ -582,6 +582,7 @@ private struct PreviewLLMPromptParams: Encodable {
     let taskText: String?
     let userIntent: String?
     let candidateInstanceIDs: [String]?
+    let appLanguage: String = UIStrings.currentLanguage.rawValue
 
     enum CodingKeys: String, CodingKey {
         case action
@@ -595,6 +596,7 @@ private struct PreviewLLMPromptParams: Encodable {
         case taskText = "task_text"
         case userIntent = "user_intent"
         case candidateInstanceIDs = "candidate_instance_ids"
+        case appLanguage = "app_language"
     }
 }
 
