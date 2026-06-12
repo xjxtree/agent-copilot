@@ -1039,16 +1039,14 @@ private struct AnalysisSection: View {
             VStack(alignment: .leading, spacing: 10) {
                 Label(UIStrings.text("analysis.workbench", "Read-only Analysis / Insights workbench"), systemImage: "sparkles.rectangle.stack")
                     .font(.headline)
-                Text(UIStrings.text("analysis.workbench.summary", "Use offline/AI-assisted review to understand purpose, risk, findings, and cross-agent duplicate/source-overlap insights. This panel does not write config, modify skills, or execute scripts."))
+                Text(UIStrings.text("analysis.workbench.summary.compact", "Focused single-skill review: compare cross-agent overlap, score local quality, and test task fit/routing. Provider-backed explanations remain previewed, confirmed, copy-only, and persisted as local redacted run history."))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 Label(UIStrings.text("analysis.crossAgentNote", "Cross-agent duplicates and source overlap live here as analysis insights; same-agent runtime/name collisions remain in Conflicts."), systemImage: "rectangle.3.group.bubble")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
-            .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
-            .adaptiveMaterialSurface()
 
             CrossAgentComparisonPanel(
                 skill: skill,
@@ -1072,186 +1070,30 @@ private struct AnalysisSection: View {
                 onSendPrompt: onSendQualityPrompt
             )
 
-            TaskReadinessPanel(
+            TaskRoutingAssessmentPanel(
                 skill: skill,
-                taskText: $taskReadinessText,
-                result: taskReadinessResult(skill),
-                isChecking: isCheckingTaskReadiness(skill),
-                promptPreview: taskReadinessPromptPreview(skill),
-                isPreviewingPrompt: isPreviewingTaskReadinessPrompt(skill),
-                isSendingPrompt: isSendingTaskReadinessPrompt(skill),
-                promptSendResult: taskReadinessPromptSendResult(skill),
-                canSendPrompt: canSendTaskReadinessPrompt(skill),
-                onCheck: onCheckTaskReadiness,
-                onPreviewPrompt: onPreviewTaskReadinessPrompt,
-                onSendPrompt: onSendTaskReadinessPrompt
-            )
-
-            RoutingConfidencePanel(
-                skill: skill,
-                taskText: $routingConfidenceText,
-                result: routingConfidenceResult(skill),
-                isRanking: isRankingRoutingConfidence(skill),
-                promptPreview: routingConfidencePromptPreview(skill),
-                isPreviewingPrompt: isPreviewingRoutingConfidencePrompt(skill),
-                isSendingPrompt: isSendingRoutingConfidencePrompt(skill),
-                promptSendResult: routingConfidencePromptSendResult(skill),
-                canSendPrompt: canSendRoutingConfidencePrompt(skill),
-                onRank: onRankRoutingConfidence,
-                onPreviewPrompt: onPreviewRoutingConfidencePrompt,
-                onSendPrompt: onSendRoutingConfidencePrompt
-            )
-
-            CrossAgentReadinessPanel(
-                taskText: $crossAgentReadinessText,
-                currentTaskText: crossAgentReadinessInput,
-                result: crossAgentReadinessResult,
-                isComparing: isComparingCrossAgentReadiness,
-                onCompare: onCompareCrossAgentReadiness
-            )
-
-            RoutingAccuracyDashboardPanel(
-                dashboard: routingAccuracyDashboard,
-                isLoading: isLoadingRoutingAccuracyDashboard,
-                onLoad: onLoadRoutingAccuracyDashboard
-            )
-
-            StaleDriftDetectionPanel(
-                result: staleDriftDetection,
-                isDetecting: isDetectingStaleDrift,
-                onDetect: onDetectStaleDrift
-            )
-
-            SimilarSkillGroupingPanel(
-                result: similarSkillGroupingResult,
-                isGrouping: isGroupingSimilarSkills,
-                onGroup: onGroupSimilarSkills
-            )
-
-            CapabilityTaxonomyPanel(
-                result: capabilityTaxonomyResult,
-                isBuilding: isBuildingCapabilityTaxonomy,
-                onBuild: onBuildCapabilityTaxonomy
-            )
-
-            WorkspaceReadinessPanel(
-                result: workspaceReadinessResult,
-                isChecking: isCheckingWorkspaceReadiness,
-                onCheck: onCheckWorkspaceReadiness
-            )
-
-            RemediationPlanPanel(
-                result: remediationPlanResult,
-                isPlanning: isPlanningRemediation,
-                onPlan: onPlanRemediation
-            )
-
-            RemediationPreviewDraftsPanel(
-                result: remediationPreviewDraftsResult,
-                isPreviewing: isPreviewingRemediationDrafts,
-                onPreview: onPreviewRemediationDrafts
-            )
-
-            RemediationImpactPreviewPanel(
-                result: remediationImpactPreviewResult,
-                isPreviewing: isPreviewingRemediationImpact,
-                onPreview: onPreviewRemediationImpact
-            )
-
-            RemediationBatchReviewPanel(
-                result: remediationBatchReviewResult,
-                isReviewing: isReviewingRemediationBatch,
-                onReview: onReviewRemediationBatch
-            )
-
-            RemediationHistoryPanel(
-                result: remediationHistoryResult,
-                recordResult: remediationHistoryRecordResult,
-                isLoading: isLoadingRemediationHistory,
-                isRecording: isRecordingRemediationHistory,
-                onLoad: onLoadRemediationHistory,
-                onRecord: onRecordRemediationHistory
-            )
-
-            KnowledgeSearchPanel(
-                query: $knowledgeSearchText,
-                result: knowledgeSearchResult,
-                isSearching: isSearchingKnowledge,
-                onSearch: onSearchKnowledge
-            )
-
-            TaskBenchmarkPanel(
-                skill: skill,
-                taskText: $taskBenchmarkText,
-                currentTaskText: taskBenchmarkInput,
-                listResult: taskBenchmarkList,
-                evaluation: taskBenchmarkEvaluation,
-                deleteResult: taskBenchmarkDeleteResult,
-                routingRegressionBaseline: routingRegressionBaseline,
-                routingRegressionDetection: routingRegressionDetection,
-                isLoading: isLoadingTaskBenchmarks,
-                isSaving: isSavingTaskBenchmark,
-                isEvaluating: isEvaluatingTaskBenchmarks,
-                isSavingRoutingBaseline: isSavingRoutingBaseline,
-                isDetectingRoutingRegression: isDetectingRoutingRegression,
-                isDeleting: isDeletingTaskBenchmark,
-                onLoad: onLoadTaskBenchmarks,
-                onSave: onSaveTaskBenchmark,
-                onEvaluate: onEvaluateTaskBenchmarks,
-                onSaveRoutingBaseline: onSaveRoutingBaseline,
-                onDetectRoutingRegression: onDetectRoutingRegression,
-                onDelete: onDeleteTaskBenchmark
-            )
-
-            AgentTraceImportPanel(
-                traceText: $traceImportText,
-                title: $traceImportTitle,
-                taskText: $traceImportTask,
-                expectedSkills: $traceImportExpectedSkills,
-                listResult: traceImportList,
-                importResult: traceImportResult,
-                deleteResult: traceImportDeleteResult,
-                latestRecord: latestTraceImportRecord,
-                isLoading: isLoadingTraceImports,
-                isImporting: isImportingTrace,
-                isDeleting: isDeletingTraceImport,
-                onLoad: onLoadTraceImports,
-                onImport: onImportTrace,
-                onDelete: onDeleteTraceImport
-            )
-
-            SkillAnalysisPreparePanel(
-                result: skillAnalysisResult,
-                isPreparing: isPreparingSkillAnalysis,
-                promptPreview: skillAnalysisPromptPreview,
-                isPreviewingPrompt: isPreviewingSkillAnalysisPrompt,
-                isSendingPrompt: isSendingSkillAnalysisPrompt,
-                promptSendResult: skillAnalysisPromptSendResult,
-                canSendPrompt: canSendSkillAnalysisPrompt,
-                onPreviewPrompt: onPreviewSkillAnalysisPrompt,
-                onSendPrompt: onSendSkillAnalysisPrompt,
-                onPrepare: onPrepareSkillAnalysis
-            )
-
-            LLMAssistPanel(
-                status: llmStatus,
-                isPreparing: isPreparing,
-                result: result,
-                promptPreview: promptPreview,
-                isPreviewingPrompt: isPreviewingPrompt,
-                isSendingPrompt: isSendingPrompt,
-                promptSendResult: promptSendResult,
-                canSendPrompt: canSendPrompt,
-                onPreviewPrompt: onPreviewPrompt,
-                onSendPrompt: onSendPrompt,
-                onPrepare: onPrepare
-            )
-
-            ScriptExecutionSafetyCard(
-                skill: skill,
-                preview: scriptPreview,
-                isPreviewing: isPreviewingScript,
-                onPreview: onPreviewScript
+                readinessText: $taskReadinessText,
+                readinessResult: taskReadinessResult(skill),
+                isCheckingReadiness: isCheckingTaskReadiness(skill),
+                readinessPromptPreview: taskReadinessPromptPreview(skill),
+                isPreviewingReadinessPrompt: isPreviewingTaskReadinessPrompt(skill),
+                isSendingReadinessPrompt: isSendingTaskReadinessPrompt(skill),
+                readinessPromptSendResult: taskReadinessPromptSendResult(skill),
+                canSendReadinessPrompt: canSendTaskReadinessPrompt(skill),
+                routingText: $routingConfidenceText,
+                routingResult: routingConfidenceResult(skill),
+                isRankingRouting: isRankingRoutingConfidence(skill),
+                routingPromptPreview: routingConfidencePromptPreview(skill),
+                isPreviewingRoutingPrompt: isPreviewingRoutingConfidencePrompt(skill),
+                isSendingRoutingPrompt: isSendingRoutingConfidencePrompt(skill),
+                routingPromptSendResult: routingConfidencePromptSendResult(skill),
+                canSendRoutingPrompt: canSendRoutingConfidencePrompt(skill),
+                onCheckReadiness: onCheckTaskReadiness,
+                onPreviewReadinessPrompt: onPreviewTaskReadinessPrompt,
+                onSendReadinessPrompt: onSendTaskReadinessPrompt,
+                onRankRouting: onRankRoutingConfidence,
+                onPreviewRoutingPrompt: onPreviewRoutingConfidencePrompt,
+                onSendRoutingPrompt: onSendRoutingConfidencePrompt
             )
         }
     }
@@ -1764,6 +1606,141 @@ private struct TaskReadinessPanel: View {
                 onPreview: onPreviewPrompt,
                 onSend: onSendPrompt
             )
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct TaskRoutingAssessmentPanel: View {
+    let skill: SkillRecord
+    @Binding var readinessText: String
+    let readinessResult: TaskReadinessResult?
+    let isCheckingReadiness: Bool
+    let readinessPromptPreview: LLMPromptPreview?
+    let isPreviewingReadinessPrompt: Bool
+    let isSendingReadinessPrompt: Bool
+    let readinessPromptSendResult: LLMPromptSendResult?
+    let canSendReadinessPrompt: Bool
+    @Binding var routingText: String
+    let routingResult: SkillRoutingConfidenceResult?
+    let isRankingRouting: Bool
+    let routingPromptPreview: LLMPromptPreview?
+    let isPreviewingRoutingPrompt: Bool
+    let isSendingRoutingPrompt: Bool
+    let routingPromptSendResult: LLMPromptSendResult?
+    let canSendRoutingPrompt: Bool
+    let onCheckReadiness: () -> Void
+    let onPreviewReadinessPrompt: () -> Void
+    let onSendReadinessPrompt: () -> Void
+    let onRankRouting: () -> Void
+    let onPreviewRoutingPrompt: () -> Void
+    let onSendRoutingPrompt: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.text("analysis.taskRouting.title", "Task Fit & Routing"), systemImage: "point.3.connected.trianglepath.dotted")
+                    .font(.headline)
+                Spacer()
+                Label(UIStrings.readOnlyPreview, systemImage: "lock.shield")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(UIStrings.text("analysis.taskRouting.boundary", "Use one real task to check whether this skill is ready for the work and whether routing to it is confident. Local scoring stays deterministic; provider output is optional, confirmed, and copy-only."))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+
+            VStack(alignment: .leading, spacing: 12) {
+                Label(UIStrings.taskReadinessTitle, systemImage: "checklist.checked")
+                    .font(.subheadline.bold())
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    TextField(UIStrings.taskReadinessTaskPlaceholder, text: $readinessText, axis: .vertical)
+                        .textFieldStyle(.roundedBorder)
+                        .lineLimit(2...4)
+                        .labelsHidden()
+
+                    Button {
+                        onCheckReadiness()
+                    } label: {
+                        Label(UIStrings.taskReadinessCheckAction, systemImage: "checklist")
+                    }
+                    .disabled(isCheckingReadiness || readinessText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .help(UIStrings.taskReadinessBoundary)
+                }
+
+                if isCheckingReadiness {
+                    Label(UIStrings.llmPreparing, systemImage: "hourglass")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let readinessResult {
+                    TaskReadinessResultView(result: readinessResult)
+                } else {
+                    Label(UIStrings.taskReadinessTaskRequired, systemImage: "info.circle")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+
+                PromptPreviewControls(
+                    preview: readinessPromptPreview,
+                    sendResult: readinessPromptSendResult,
+                    isPreviewing: isPreviewingReadinessPrompt,
+                    isSending: isSendingReadinessPrompt,
+                    canSend: canSendReadinessPrompt,
+                    onPreview: onPreviewReadinessPrompt,
+                    onSend: onSendReadinessPrompt
+                )
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 12) {
+                Label(UIStrings.routingConfidenceTitle, systemImage: "arrow.up.arrow.down.square")
+                    .font(.subheadline.bold())
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    TextField(UIStrings.routingConfidenceTaskPlaceholder, text: $routingText, axis: .vertical)
+                        .textFieldStyle(.roundedBorder)
+                        .lineLimit(2...4)
+                        .labelsHidden()
+
+                    Button {
+                        onRankRouting()
+                    } label: {
+                        Label(UIStrings.routingConfidenceAction, systemImage: "arrow.up.arrow.down.square")
+                    }
+                    .disabled(isRankingRouting || routingText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .help(UIStrings.routingConfidenceBoundary)
+                }
+
+                if isRankingRouting {
+                    Label(UIStrings.llmPreparing, systemImage: "hourglass")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let routingResult {
+                    RoutingConfidenceResultView(result: routingResult)
+                } else {
+                    Label(UIStrings.routingConfidenceTaskRequired, systemImage: "info.circle")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+
+                PromptPreviewControls(
+                    preview: routingPromptPreview,
+                    sendResult: routingPromptSendResult,
+                    isPreviewing: isPreviewingRoutingPrompt,
+                    isSending: isSendingRoutingPrompt,
+                    canSend: canSendRoutingPrompt,
+                    onPreview: onPreviewRoutingPrompt,
+                    onSend: onSendRoutingPrompt
+                )
+            }
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)

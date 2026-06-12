@@ -658,7 +658,7 @@
 "llm.promptPreview.title" = "提示词预览";
 "llm.promptPreview.action" = "预览提示词";
 "llm.promptPreview.confirmSend" = "确认并发送";
-"llm.promptPreview.sending" = "正在发送提供方请求...";
+"llm.promptPreview.sending" = "正在等待提供方返回；长响应模型最长可能需要 10 分钟。";
 "llm.promptPreview.providerRequired" = "发送前请先配置并保存 AI 提供方。";
 "llm.promptPreview.previewRequired" = "发送前请先预览当前提示词。";
 "llm.promptPreview.sendSucceeded" = "已收到提供方响应。";

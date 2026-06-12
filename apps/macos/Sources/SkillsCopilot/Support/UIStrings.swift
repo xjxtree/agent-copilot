@@ -849,7 +849,7 @@ enum UIStrings {
     static var llmPromptPreviewTitle: String { text("llm.promptPreview.title", "Prompt Preview") }
     static var llmPromptPreviewAction: String { text("llm.promptPreview.action", "Preview Prompt") }
     static var llmPromptConfirmSend: String { text("llm.promptPreview.confirmSend", "Confirm & Send") }
-    static var llmPromptSending: String { text("llm.promptPreview.sending", "Sending provider request...") }
+    static var llmPromptSending: String { text("llm.promptPreview.sending", "Waiting for provider response; long-running models may take up to 10 minutes.") }
     static var llmPromptProviderRequired: String { text("llm.promptPreview.providerRequired", "Configure and save an AI provider before sending.") }
     static var llmPromptPreviewRequired: String { text("llm.promptPreview.previewRequired", "Preview the current prompt before sending.") }
     static var llmPromptSendSucceeded: String { text("llm.promptPreview.sendSucceeded", "Provider response received.") }

@@ -18,6 +18,8 @@ struct LLMModelTests {
         try promptPreviewDecodesV242Payload()
         try promptPreviewDecodesServiceArrayScopePayload()
         try promptSendResultDecodesCopyOnlyAuditPayload()
+        try promptSendResultUsesAuditErrorMessage()
+        try promptRunListDecodesPersistedCopyOnlyResult()
     }
 
     private struct ServiceEnvelope<ResultPayload: Decodable>: Decodable {
@@ -927,6 +929,120 @@ struct LLMModelTests {
         try expectFalse(result.writeBackAllowed, "Prompt send must not allow write-back.")
         try expectFalse(result.scriptExecutionAllowed, "Prompt send must not allow script execution.")
         try expectEqual(result.audit?.auditID, "audit-42", "Prompt send should decode audit metadata.")
+    }
+
+    private func promptSendResultUsesAuditErrorMessage() throws {
+        let data = Data(
+            """
+            {
+              "preview_id": "preview-timeout",
+              "status": "failed",
+              "draft_copy_only": true,
+              "raw_prompt_persisted": false,
+              "raw_response_persisted": false,
+              "write_back_allowed": false,
+              "script_execution_allowed": false,
+              "audit": {
+                "status": "failed",
+                "provider_type": "openai-compatible",
+                "model": "deepseek-v4-flash",
+                "destination_host": "localhost:8317",
+                "redaction_status": "redacted-preview-confirmed-required",
+                "raw_prompt_persisted": false,
+                "raw_response_persisted": false,
+                "estimated_input_tokens": 1325,
+                "estimated_output_tokens": 650,
+                "error_code": "network_error",
+                "error_message": "timed out reading response"
+              }
+            }
+            """.utf8
+        )
+
+        let result = try JSONDecoder().decode(LLMPromptSendResult.self, from: data)
+
+        try expectFalse(result.success, "Failed prompt send should not decode as success.")
+        try expectEqual(result.message, "network_error: timed out reading response", "Prompt send should surface audit error details.")
+        try expectEqual(result.audit?.errorCode, "network_error", "Prompt send should decode audit error code.")
+        try expectEqual(result.audit?.errorMessage, "timed out reading response", "Prompt send should decode audit error message.")
+    }
+
+    private func promptRunListDecodesPersistedCopyOnlyResult() throws {
+        let data = Data(
+            """
+            {
+              "runs": [
+                {
+                  "run_id": "run-1",
+                  "preview_id": "preview-1",
+                  "confirmation_id": "confirm-1",
+                  "action": "task_readiness",
+                  "request_kind": "task_readiness",
+                  "analysis_kind": null,
+                  "scope": "single-skill",
+                  "instance_id": "skill-1",
+                  "instance_ids": ["skill-1"],
+                  "task": "Review release readiness",
+                  "provider": "openai-compatible",
+                  "model": "gpt-5",
+                  "destination_host": "llm.example.com",
+                  "status": "succeeded",
+                  "message": "Provider request completed.",
+                  "error_code": null,
+                  "error_message": null,
+                  "duration_ms": 1234,
+                  "input_tokens": 600,
+                  "output_tokens": 120,
+                  "estimated_cost_usd": 0.012,
+                  "draft_output": "Copy-only persisted explanation.",
+                  "draft_copy_only": true,
+                  "raw_prompt_persisted": false,
+                  "raw_response_persisted": false,
+                  "raw_secret_returned": false,
+                  "redaction": {
+                    "status": "redacted",
+                    "redacted_fields": ["local paths"],
+                    "placeholders": ["<project-root>"]
+                  },
+                  "safety_flags": {
+                    "provider_request_sent": true,
+                    "write_back_allowed": false,
+                    "script_execution_allowed": false,
+                    "config_mutation_allowed": false,
+                    "snapshot_created": false,
+                    "triage_mutation_allowed": false,
+                    "credential_accessed": false,
+                    "raw_prompt_persisted": false,
+                    "raw_response_persisted": false,
+                    "raw_secret_returned": false,
+                    "cloud_sync_enabled": false,
+                    "telemetry_enabled": false
+                  },
+                  "created_at": 1781260000000,
+                  "completed_at": 1781260001234
+                }
+              ],
+              "provider_request_sent": false,
+              "raw_prompt_persisted": false,
+              "raw_response_persisted": false,
+              "raw_secret_returned": false
+            }
+            """.utf8
+        )
+
+        let list = try JSONDecoder().decode(LLMPromptRunListResult.self, from: data)
+        guard let run = list.runs.first else {
+            throw NativeModelTestFailure(description: "Prompt run list should decode a run.")
+        }
+        let sendResult = run.sendResult
+
+        try expectEqual(list.runs.count, 1, "Prompt run list should decode runs.")
+        try expectEqual(run.requestKind, "task_readiness", "Prompt run should decode request kind.")
+        try expectEqual(run.task, "Review release readiness", "Prompt run should decode redacted task text.")
+        try expectEqual(sendResult.outputText, "Copy-only persisted explanation.", "Prompt run should hydrate copy-only output.")
+        try expectFalse(sendResult.rawPromptPersisted, "Prompt run must not persist raw prompts.")
+        try expectFalse(sendResult.rawResponsePersisted, "Prompt run must not persist raw responses.")
+        try expectFalse(run.rawSecretReturned, "Prompt run must not return raw secrets.")
     }
 
 }

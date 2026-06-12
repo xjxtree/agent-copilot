@@ -434,8 +434,12 @@ struct LLMPromptSendResult: Decodable, Identifiable, Hashable {
         success = try container.decodeIfPresent(Bool.self, forKey: .success)
             ?? container.decodeIfPresent(Bool.self, forKey: .ok)
             ?? ["ok", "success", "succeeded", "completed"].contains(decodedStatus.lowercased())
+        let decodedAudit = try container.decodeIfPresent(AIProviderCallAuditMetadata.self, forKey: .audit)
+            ?? container.decodeIfPresent(AIProviderCallAuditMetadata.self, forKey: .auditMetadata)
+            ?? container.decodeIfPresent(AIProviderCallAuditMetadata.self, forKey: .metadata)
         message = try container.decodeIfPresent(String.self, forKey: .message)
             ?? container.decodeIfPresent(String.self, forKey: .reason)
+            ?? LLMPromptSendResult.messageFromAudit(decodedAudit, success: success)
             ?? (success ? UIStrings.llmPromptSendSucceeded : UIStrings.llmPromptSendFailed)
         let decodedOutputText = try container.decodeIfPresent(String.self, forKey: .outputText)
         let decodedResponseText = try container.decodeIfPresent(String.self, forKey: .responseText)
@@ -463,9 +467,7 @@ struct LLMPromptSendResult: Decodable, Identifiable, Hashable {
         scriptExecutionAllowed = try container.decodeIfPresent(Bool.self, forKey: .scriptExecutionAllowed)
             ?? container.decodeIfPresent(Bool.self, forKey: .executionActionsAvailable)
             ?? false
-        audit = try container.decodeIfPresent(AIProviderCallAuditMetadata.self, forKey: .audit)
-            ?? container.decodeIfPresent(AIProviderCallAuditMetadata.self, forKey: .auditMetadata)
-            ?? container.decodeIfPresent(AIProviderCallAuditMetadata.self, forKey: .metadata)
+        audit = decodedAudit
     }
 
     static func unavailable(previewID: String = "", reason: String) -> LLMPromptSendResult {
@@ -478,6 +480,202 @@ struct LLMPromptSendResult: Decodable, Identifiable, Hashable {
             draftCopyOnly: true,
             rawPromptPersisted: false,
             rawResponsePersisted: false,
+            writeBackAllowed: false,
+            scriptExecutionAllowed: false,
+            audit: nil
+        )
+    }
+
+    private static func messageFromAudit(_ audit: AIProviderCallAuditMetadata?, success: Bool) -> String? {
+        guard !success, let audit else { return nil }
+        if let errorCode = audit.errorCode, let errorMessage = audit.errorMessage, !errorMessage.isEmpty {
+            return "\(errorCode): \(errorMessage)"
+        }
+        if let errorMessage = audit.errorMessage, !errorMessage.isEmpty {
+            return errorMessage
+        }
+        if let errorCode = audit.errorCode, !errorCode.isEmpty {
+            return errorCode
+        }
+        return nil
+    }
+}
+
+struct LLMPromptRunListResult: Decodable, Hashable {
+    let generatedBy: String
+    let count: Int
+    let runs: [LLMPromptRunRecord]
+    let appLocalOnly: Bool
+    let providerRequestSent: Bool
+    let rawPromptPersisted: Bool
+    let rawResponsePersisted: Bool
+    let rawSecretReturned: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case generatedBy = "generated_by"
+        case count
+        case runs
+        case appLocalOnly = "app_local_only"
+        case providerRequestSent = "provider_request_sent"
+        case rawPromptPersisted = "raw_prompt_persisted"
+        case rawResponsePersisted = "raw_response_persisted"
+        case rawSecretReturned = "raw_secret_returned"
+    }
+
+    init(
+        generatedBy: String,
+        count: Int,
+        runs: [LLMPromptRunRecord],
+        appLocalOnly: Bool,
+        providerRequestSent: Bool,
+        rawPromptPersisted: Bool,
+        rawResponsePersisted: Bool,
+        rawSecretReturned: Bool
+    ) {
+        self.generatedBy = generatedBy
+        self.count = count
+        self.runs = runs
+        self.appLocalOnly = appLocalOnly
+        self.providerRequestSent = providerRequestSent
+        self.rawPromptPersisted = rawPromptPersisted
+        self.rawResponsePersisted = rawResponsePersisted
+        self.rawSecretReturned = rawSecretReturned
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        runs = try container.decodeIfPresent([LLMPromptRunRecord].self, forKey: .runs) ?? []
+        generatedBy = try container.decodeIfPresent(String.self, forKey: .generatedBy) ?? "local-v2.61"
+        count = try container.decodeIfPresent(Int.self, forKey: .count) ?? runs.count
+        appLocalOnly = try container.decodeIfPresent(Bool.self, forKey: .appLocalOnly) ?? true
+        providerRequestSent = try container.decodeIfPresent(Bool.self, forKey: .providerRequestSent) ?? false
+        rawPromptPersisted = try container.decodeIfPresent(Bool.self, forKey: .rawPromptPersisted) ?? false
+        rawResponsePersisted = try container.decodeIfPresent(Bool.self, forKey: .rawResponsePersisted) ?? false
+        rawSecretReturned = try container.decodeIfPresent(Bool.self, forKey: .rawSecretReturned) ?? false
+    }
+
+    static func unavailable() -> LLMPromptRunListResult {
+        LLMPromptRunListResult(
+            generatedBy: "unavailable",
+            count: 0,
+            runs: [],
+            appLocalOnly: true,
+            providerRequestSent: false,
+            rawPromptPersisted: false,
+            rawResponsePersisted: false,
+            rawSecretReturned: false
+        )
+    }
+}
+
+struct LLMPromptRunRecord: Decodable, Identifiable, Hashable {
+    let id: String
+    let previewID: String
+    let confirmationID: String
+    let action: String
+    let requestKind: String
+    let analysisKind: String?
+    let scope: String?
+    let instanceID: String?
+    let instanceIDs: [String]
+    let task: String?
+    let profileID: String
+    let provider: String
+    let model: String
+    let destinationHost: String
+    let status: String
+    let errorCode: String?
+    let errorMessage: String?
+    let durationMS: Int
+    let draftOutput: String?
+    let draftRequiresUserCopy: Bool
+    let providerRequestSent: Bool
+    let credentialAccessed: Bool
+    let rawPromptPersisted: Bool
+    let rawResponsePersisted: Bool
+    let rawSecretReturned: Bool
+    let completedAt: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case previewID = "preview_id"
+        case confirmationID = "confirmation_id"
+        case action
+        case requestKind = "request_kind"
+        case analysisKind = "analysis_kind"
+        case scope
+        case instanceID = "instance_id"
+        case instanceIDs = "instance_ids"
+        case task
+        case profileID = "profile_id"
+        case provider
+        case model
+        case destinationHost = "destination_host"
+        case status
+        case errorCode = "error_code"
+        case errorMessage = "error_message"
+        case durationMS = "duration_ms"
+        case draftOutput = "draft_output"
+        case draftRequiresUserCopy = "draft_requires_user_copy"
+        case providerRequestSent = "provider_request_sent"
+        case credentialAccessed = "credential_accessed"
+        case rawPromptPersisted = "raw_prompt_persisted"
+        case rawResponsePersisted = "raw_response_persisted"
+        case rawSecretReturned = "raw_secret_returned"
+        case completedAt = "completed_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(String.self, forKey: .id) ?? ""
+        previewID = try container.decodeIfPresent(String.self, forKey: .previewID) ?? id
+        confirmationID = try container.decodeIfPresent(String.self, forKey: .confirmationID) ?? ""
+        action = try container.decodeIfPresent(String.self, forKey: .action) ?? "unknown"
+        requestKind = try container.decodeIfPresent(String.self, forKey: .requestKind) ?? action
+        analysisKind = try container.decodeIfPresent(String.self, forKey: .analysisKind)
+        scope = try container.decodeIfPresent(String.self, forKey: .scope)
+        instanceID = try container.decodeIfPresent(String.self, forKey: .instanceID)
+        instanceIDs = try container.decodeIfPresent([String].self, forKey: .instanceIDs) ?? []
+        task = try container.decodeIfPresent(String.self, forKey: .task)
+        profileID = try container.decodeIfPresent(String.self, forKey: .profileID) ?? ""
+        provider = try container.decodeIfPresent(String.self, forKey: .provider) ?? UIStrings.unknown
+        model = try container.decodeIfPresent(String.self, forKey: .model) ?? UIStrings.unknown
+        destinationHost = try container.decodeIfPresent(String.self, forKey: .destinationHost) ?? UIStrings.unknown
+        status = try container.decodeIfPresent(String.self, forKey: .status) ?? "unknown"
+        errorCode = try container.decodeIfPresent(String.self, forKey: .errorCode)
+        errorMessage = try container.decodeIfPresent(String.self, forKey: .errorMessage)
+        durationMS = try container.decodeIfPresent(Int.self, forKey: .durationMS) ?? 0
+        draftOutput = try container.decodeIfPresent(String.self, forKey: .draftOutput)
+        draftRequiresUserCopy = try container.decodeIfPresent(Bool.self, forKey: .draftRequiresUserCopy) ?? true
+        providerRequestSent = try container.decodeIfPresent(Bool.self, forKey: .providerRequestSent) ?? false
+        credentialAccessed = try container.decodeIfPresent(Bool.self, forKey: .credentialAccessed) ?? false
+        rawPromptPersisted = try container.decodeIfPresent(Bool.self, forKey: .rawPromptPersisted) ?? false
+        rawResponsePersisted = try container.decodeIfPresent(Bool.self, forKey: .rawResponsePersisted) ?? false
+        rawSecretReturned = try container.decodeIfPresent(Bool.self, forKey: .rawSecretReturned) ?? false
+        completedAt = try container.decodeIfPresent(Int.self, forKey: .completedAt)
+    }
+
+    var sendResult: LLMPromptSendResult {
+        let success = ["ok", "success", "succeeded", "completed"].contains(status.lowercased())
+        let message: String
+        if success {
+            message = UIStrings.llmPromptSendSucceeded
+        } else if let errorCode, let errorMessage, !errorMessage.isEmpty {
+            message = "\(errorCode): \(errorMessage)"
+        } else if let errorMessage, !errorMessage.isEmpty {
+            message = errorMessage
+        } else {
+            message = UIStrings.llmPromptSendFailed
+        }
+        return LLMPromptSendResult(
+            previewID: previewID,
+            success: success,
+            status: status,
+            message: message,
+            outputText: draftOutput,
+            draftCopyOnly: draftRequiresUserCopy,
+            rawPromptPersisted: rawPromptPersisted,
+            rawResponsePersisted: rawResponsePersisted,
             writeBackAllowed: false,
             scriptExecutionAllowed: false,
             audit: nil

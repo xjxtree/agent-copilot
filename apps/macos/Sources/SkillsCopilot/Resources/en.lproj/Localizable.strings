@@ -658,7 +658,7 @@
 "llm.promptPreview.title" = "Prompt Preview";
 "llm.promptPreview.action" = "Preview Prompt";
 "llm.promptPreview.confirmSend" = "Confirm & Send";
-"llm.promptPreview.sending" = "Sending provider request...";
+"llm.promptPreview.sending" = "Waiting for provider response; long-running models may take up to 10 minutes.";
 "llm.promptPreview.providerRequired" = "Configure and save an AI provider before sending.";
 "llm.promptPreview.previewRequired" = "Preview the current prompt before sending.";
 "llm.promptPreview.sendSucceeded" = "Provider response received.";

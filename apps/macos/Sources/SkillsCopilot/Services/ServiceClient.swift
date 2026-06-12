@@ -602,11 +602,27 @@ private struct ConfirmLLMPromptParams: Encodable {
     let previewID: String
     let confirmationID: String
     let request: PreviewLLMPromptParams
+    let timeoutMS: Int
 
     enum CodingKeys: String, CodingKey {
         case previewID = "preview_id"
         case confirmationID = "confirmation_id"
         case request
+        case timeoutMS = "timeout_ms"
+    }
+}
+
+private struct ListLLMPromptRunsParams: Encodable {
+    let instanceId: String?
+    let action: String?
+    let requestKind: String?
+    let limit: Int
+
+    enum CodingKeys: String, CodingKey {
+        case instanceId = "instance_id"
+        case action
+        case requestKind = "request_kind"
+        case limit
     }
 }
 
@@ -1603,11 +1619,26 @@ final class ServiceClient {
         return try await confirmPromptAndSend(previewID: previewID, request: request)
     }
 
+    func listLLMPromptRuns(skill: SkillRecord? = nil, limit: Int = 80) async throws -> LLMPromptRunListResult {
+        let params = ListLLMPromptRunsParams(
+            instanceId: skill?.id,
+            action: nil,
+            requestKind: nil,
+            limit: limit
+        )
+        do {
+            return try await call(method: "llm.listPromptRuns", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
     private func confirmPromptAndSend(previewID: String, request: PreviewLLMPromptParams) async throws -> LLMPromptSendResult {
         let params = ConfirmLLMPromptParams(
             previewID: previewID,
             confirmationID: "prompt-confirm-\(UUID().uuidString)",
-            request: request
+            request: request,
+            timeoutMS: 600_000
         )
         do {
             return try await call(method: "llm.confirmPromptAndSend", params: params)

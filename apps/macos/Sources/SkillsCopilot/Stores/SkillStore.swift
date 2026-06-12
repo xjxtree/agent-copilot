@@ -79,6 +79,8 @@ final class SkillStore: ObservableObject {
     @Published private(set) var previewingLLMPromptKeys: Set<String> = []
     @Published private(set) var sendingLLMPromptKeys: Set<String> = []
     @Published private(set) var llmPromptSendResults: [String: LLMPromptSendResult] = [:]
+    @Published private(set) var llmPromptRunList = LLMPromptRunListResult.unavailable()
+    @Published private(set) var isLoadingLLMPromptRuns = false
     @Published private(set) var scriptExecutionPreviews: [SkillRecord.ID: ScriptExecutionPreview] = [:]
     @Published private(set) var previewingScriptExecutionSkillIDs: Set<SkillRecord.ID> = []
     @Published private(set) var batchTogglePreview: BatchTogglePreview?
@@ -532,7 +534,9 @@ final class SkillStore: ObservableObject {
 
     func taskReadinessPromptSendResult(for skill: SkillRecord) -> LLMPromptSendResult? {
         let taskText = normalizedTaskReadinessText
-        guard !taskText.isEmpty else { return nil }
+        guard !taskText.isEmpty else {
+            return latestPromptRun(for: skill, requestKind: "task_readiness")?.sendResult
+        }
         return llmPromptSendResults[taskReadinessPromptKey(skillID: skill.id, taskText: taskText)]
     }
 
@@ -570,7 +574,9 @@ final class SkillStore: ObservableObject {
 
     func routingConfidencePromptSendResult(for skill: SkillRecord) -> LLMPromptSendResult? {
         let taskText = normalizedRoutingConfidenceText
-        guard !taskText.isEmpty else { return nil }
+        guard !taskText.isEmpty else {
+            return latestPromptRun(for: skill, requestKind: "routing_confidence")?.sendResult
+        }
         return llmPromptSendResults[routingConfidencePromptKey(skillID: skill.id, taskText: taskText)]
     }
 
@@ -1914,6 +1920,15 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func loadLLMPromptRuns() async {
+        guard !isLoadingLLMPromptRuns else { return }
+        isLoadingLLMPromptRuns = true
+        defer { isLoadingLLMPromptRuns = false }
+
+        llmPromptRunList = await fetchLLMPromptRuns()
+        hydratePromptSendResultsFromRuns(currentSkillIDs: Set(skills.map(\.id)))
+    }
+
     @discardableResult
     func saveAIProviderSettings(draft: AIProviderSettingsDraft) async -> Bool {
         guard !isRefreshBusy else {
@@ -1962,6 +1977,9 @@ final class SkillStore: ObservableObject {
 
         do {
             let result = try await service.testAIProviderConnection(draft: draft)
+            if let refreshedStatus = try? await service.aiProviderStatus() {
+                aiProviderStatus = refreshedStatus
+            }
             aiProviderTestResult = result
             aiProviderMessage = result.success ? UIStrings.aiProviderTestSucceeded : nil
             if !result.success {
@@ -2081,6 +2099,7 @@ final class SkillStore: ObservableObject {
         async let appStateSnapshot = service.appStateSnapshot()
         async let llmStatus = service.llmStatus()
         async let aiProviderStatus = fetchAIProviderStatus()
+        async let llmPromptRuns = fetchLLMPromptRuns()
         async let projectContextState = service.getProjectContext()
         async let agentConfigSnapshots = fetchAgentConfigSnapshots()
         async let ruleTuning = service.listRuleTuning()
@@ -2089,6 +2108,7 @@ final class SkillStore: ObservableObject {
         self.llmStatus = try await llmStatus
         self.aiProviderStatus = await aiProviderStatus
         self.aiProviderTestResult = self.aiProviderStatus.lastTest ?? aiProviderTestResult
+        self.llmPromptRunList = await llmPromptRuns
         self.projectContextState = try await projectContextState
         self.skills = snapshot.skills
         self.findings = snapshot.findings
@@ -2098,6 +2118,7 @@ final class SkillStore: ObservableObject {
         self.agentConfigSnapshots = try await agentConfigSnapshots
         let currentSkillIDs = Set(snapshot.skills.map(\.id))
         scriptExecutionPreviews = scriptExecutionPreviews.filter { currentSkillIDs.contains($0.key) }
+        hydratePromptSendResultsFromRuns(currentSkillIDs: currentSkillIDs)
         skillQualityScores = skillQualityScores.filter { currentSkillIDs.contains($0.key) }
         scoringSkillQualityIDs = scoringSkillQualityIDs.filter { currentSkillIDs.contains($0) }
         if let checkedSkillID = taskReadinessCheckedSkillID, !currentSkillIDs.contains(checkedSkillID) {
@@ -2151,6 +2172,14 @@ final class SkillStore: ObservableObject {
             return try await service.aiProviderStatus()
         } catch {
             return .unavailable(reason: error.localizedDescription)
+        }
+    }
+
+    private func fetchLLMPromptRuns() async -> LLMPromptRunListResult {
+        do {
+            return try await service.listLLMPromptRuns()
+        } catch {
+            return .unavailable()
         }
     }
 
@@ -2311,6 +2340,99 @@ final class SkillStore: ObservableObject {
             && !preview.rawResponsePersisted
     }
 
+    private func hydratePromptSendResultsFromRuns(currentSkillIDs: Set<SkillRecord.ID>) {
+        var hydrated = llmPromptSendResults
+        for run in llmPromptRunList.runs {
+            guard runMatchesCurrentCatalog(run, currentSkillIDs: currentSkillIDs),
+                  let key = llmPromptKey(for: run),
+                  !sendingLLMPromptKeys.contains(key),
+                  !previewingLLMPromptKeys.contains(key)
+            else {
+                continue
+            }
+            if hydrated[key] == nil {
+                hydrated[key] = run.sendResult
+            }
+            hydrateTaskInputIfNeeded(from: run)
+        }
+        llmPromptSendResults = hydrated
+    }
+
+    private func runMatchesCurrentCatalog(_ run: LLMPromptRunRecord, currentSkillIDs: Set<SkillRecord.ID>) -> Bool {
+        if currentSkillIDs.isEmpty { return true }
+        if let instanceID = run.instanceID, currentSkillIDs.contains(instanceID) {
+            return true
+        }
+        return run.instanceIDs.contains { currentSkillIDs.contains($0) }
+    }
+
+    private func hydrateTaskInputIfNeeded(from run: LLMPromptRunRecord) {
+        guard let selectedSkill, runBelongsTo(run, skillID: selectedSkill.id) else { return }
+        switch run.requestKind {
+        case "task_readiness":
+            if normalizedTaskReadinessText.isEmpty, let task = run.task, !task.isEmpty {
+                taskReadinessText = task
+            }
+        case "routing_confidence":
+            if normalizedRoutingConfidenceText.isEmpty, let task = run.task, !task.isEmpty {
+                routingConfidenceText = task
+            }
+        default:
+            break
+        }
+    }
+
+    private func runBelongsTo(_ run: LLMPromptRunRecord, skillID: SkillRecord.ID) -> Bool {
+        run.instanceID == skillID || run.instanceIDs.contains(skillID)
+    }
+
+    private func latestPromptRun(for skill: SkillRecord, requestKind: String) -> LLMPromptRunRecord? {
+        llmPromptRunList.runs.first { run in
+            run.requestKind == requestKind && runBelongsTo(run, skillID: skill.id)
+        }
+    }
+
+    private func llmPromptKey(for run: LLMPromptRunRecord) -> String? {
+        let skillID = run.instanceID ?? run.instanceIDs.first
+        switch run.requestKind {
+        case "quality_score":
+            return skillID.map { skillQualityPromptKey(skillID: $0) }
+        case "task_readiness":
+            guard let skillID, let task = run.task, !task.isEmpty else { return nil }
+            return taskReadinessPromptKey(skillID: skillID, taskText: task)
+        case "routing_confidence":
+            guard let skillID, let task = run.task, !task.isEmpty else { return nil }
+            return routingConfidencePromptKey(skillID: skillID, taskText: task)
+        case "skill_analysis":
+            guard
+                let kindValue = run.analysisKind,
+                let kind = LLMSkillAnalysisKind(rawValue: kindValue),
+                let scopeValue = run.scope,
+                let scope = llmSkillAnalysisScope(for: scopeValue)
+            else { return nil }
+            let instanceIDs = run.instanceIDs.isEmpty ? skillID.map { [$0] } ?? [] : run.instanceIDs
+            guard !instanceIDs.isEmpty else { return nil }
+            return skillAnalysisPromptKey(kind: kind, scope: scope, instanceIDs: instanceIDs)
+        case "action":
+            guard let skillID, let action = LLMAction(rawValue: run.action) else { return nil }
+            return llmPromptActionKey(action: action, skillID: skillID)
+        default:
+            guard let skillID, let action = LLMAction(rawValue: run.action) else { return nil }
+            return llmPromptActionKey(action: action, skillID: skillID)
+        }
+    }
+
+    private func llmSkillAnalysisScope(for value: String) -> LLMSkillAnalysisRequestScope? {
+        switch value {
+        case LLMSkillAnalysisRequestScope.selected.key:
+            return .selected
+        case LLMSkillAnalysisRequestScope.visible.key:
+            return .visible
+        default:
+            return nil
+        }
+    }
+
     private func confirmLLMPrompt(
         key: String,
         send: (String) async throws -> LLMPromptSendResult
@@ -2333,6 +2455,7 @@ final class SkillStore: ObservableObject {
 
         do {
             llmPromptSendResults[key] = try await send(preview.previewID)
+            await loadLLMPromptRuns()
         } catch {
             llmPromptSendResults[key] = .unavailable(previewID: preview.previewID, reason: error.localizedDescription)
         }

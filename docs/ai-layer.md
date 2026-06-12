@@ -147,11 +147,14 @@ Provider 配置原则：
 | V2.58（实现） | impact preview / `remediation.previewImpact` | User-triggered, local-only, deterministic impact preview before enable/disable/edit/remediation actions; previews impacted tasks、agents、skills、risk deltas、snapshot/rollback plan、writable capability/filtering/blockers、evidence refs; no apply/write/snapshot mutation/triage/script/credential/cloud/telemetry/default-provider side effects; any provider wording stays V2.42 gated copy-only |
 | V2.59（实现） | batch review / `remediation.batchReview` | User-triggered, local-only deterministic batch review over task, risk, rule, agent, and workspace groups; review groups/items, safe next-step labels, evidence refs, gap/blocker notes, prompt metadata, and safety flags; no apply/write/snapshot/triage/script/credential/provider side effects |
 | V2.60（实现） | remediation history / `remediation.listHistory`、`remediation.recordHistory`、`remediation.deleteHistory` | local app-data remediation history with redacted metadata only; user-triggered record/list/delete behavior for decisions、recurrence、reopened issues、readiness/routing improvement notes、evidence refs and safety flags; no provider/write/script/config/credential/raw prompt/raw response/raw trace/cloud/telemetry side effects |
-| V2.61-V2.70 | review session、governance report、policy packs、skill map、full provider observability、safe write planning | local reports, policy profiles, V2.41-V2.42 call metadata, evidence gates |
+| V2.61（实现） | AI analysis UX / prompt run history / `llm.listPromptRuns` | provider-backed AI analysis remains preview/redaction/confirmation-gated and copy-only; request timeout is 10 minutes; confirmed runs persist app-local redacted task/result metadata and extracted draft output for restart hydration and reruns, without raw prompt/raw response/secrets/write/script/config/snapshot/triage/cloud/telemetry side effects |
+| V2.62-V2.70 | review session、governance report、policy packs、skill map、full provider observability、safe write planning | local reports, policy profiles, V2.41-V2.42 call metadata, evidence gates |
 
 V2.57 的 preview drafts 只生成可复制/可编辑的草稿建议，不提供直接 apply/write；任何 provider wording 都必须经过 V2.42 的 prompt preview / redaction / confirmation，并继续作为 copy-only 输出。
 
 V2.60 remediation history 已完成：`remediation.recordHistory` 只在 app data 写入 redacted remediation metadata，`remediation.listHistory` / `remediation.deleteHistory` 只读/删该本地 history metadata。它不引入 provider/network/skill-write/agent-config/script/credential/raw prompt/raw response/raw trace/cloud/telemetry 路径；任何 provider wording 仍必须走 V2.42 preview/redaction/confirmation 且保持 copy-only。
+
+V2.61 prompt run history 只用于改善慢速 provider-backed 分析体验：`llm.confirmPromptAndSend` 仍由用户显式确认触发，并把 redacted task metadata、status/error/duration/token/cost、provider/model/destination、redaction summary、copy-only draft output 和 safety flags 写入 app data `prompt-runs.json`；`llm.listPromptRuns` 只读该本地记录。该路径不持久化 raw prompt、raw provider response JSON、API key、credential、raw trace 或 unredacted local path，也不提供写回、执行、config/snapshot/triage mutation、cloud sync 或 telemetry。
 
 ## 2. 规则引擎
 

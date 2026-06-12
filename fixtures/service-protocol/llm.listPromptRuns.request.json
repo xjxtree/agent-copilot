@@ -1,0 +1,7 @@
+{
+  "id": "fixture-llm-list-prompt-runs",
+  "method": "llm.listPromptRuns",
+  "params": {
+    "limit": 20
+  }
+}

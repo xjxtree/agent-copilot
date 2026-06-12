@@ -94,6 +94,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "llm.testProviderConnection",
     "llm.previewPrompt",
     "llm.confirmPromptAndSend",
+    "llm.listPromptRuns",
     "llm.prepareAction",
     "llm.prepareSkillAnalysis",
     "cleanup.listQueue",
@@ -2734,6 +2735,18 @@ pub struct LlmConfirmPromptAndSendParams {
     pub timeout_ms: Option<u64>,
 }
 
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct LlmPromptRunListParams {
+    #[serde(default, alias = "instance_id")]
+    pub skill_instance_id: Option<String>,
+    #[serde(default)]
+    pub action: Option<String>,
+    #[serde(default)]
+    pub request_kind: Option<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LlmSkillAnalysisKind {
@@ -2936,6 +2949,94 @@ pub struct LlmConfirmPromptAndSendResult {
     pub raw_secret_returned: bool,
     pub raw_prompt_persisted: bool,
     pub raw_response_persisted: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LlmPromptRunRedactionSummary {
+    pub status: String,
+    pub redacted_value_count: usize,
+    pub redacted_fields: Vec<String>,
+    pub placeholders: Vec<String>,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_trace_persisted: bool,
+    pub raw_secret_returned: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct LlmPromptRunSafetyFlags {
+    pub app_local_only: bool,
+    pub provider_request_sent: bool,
+    pub credential_accessed: bool,
+    pub draft_copy_only: bool,
+    pub write_back_allowed: bool,
+    pub write_actions_available: bool,
+    pub skill_files_mutated: bool,
+    pub agent_config_mutated: bool,
+    pub script_execution_allowed: bool,
+    pub execution_actions_available: bool,
+    pub config_mutation_allowed: bool,
+    pub snapshot_created: bool,
+    pub triage_mutation_allowed: bool,
+    pub raw_secret_returned: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_trace_persisted: bool,
+    pub cloud_sync_performed: bool,
+    pub telemetry_emitted: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LlmPromptRunRecord {
+    pub id: String,
+    pub preview_id: String,
+    pub confirmation_id: String,
+    pub action: String,
+    pub request_kind: String,
+    pub analysis_kind: Option<String>,
+    pub scope: Option<String>,
+    pub instance_id: Option<String>,
+    pub instance_ids: Vec<String>,
+    pub definition_id: Option<String>,
+    pub agent: Option<String>,
+    pub task: Option<String>,
+    pub profile_id: String,
+    pub provider: String,
+    pub model: String,
+    pub destination_host: String,
+    pub status: String,
+    pub error_code: Option<String>,
+    pub error_message: Option<String>,
+    pub duration_ms: u64,
+    pub estimated_input_tokens: u32,
+    pub estimated_output_tokens: u32,
+    pub estimated_total_tokens: u32,
+    pub estimated_cost_usd: f64,
+    pub draft_output: Option<String>,
+    pub draft_requires_user_copy: bool,
+    pub provider_request_sent: bool,
+    pub credential_accessed: bool,
+    pub raw_secret_returned: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub redaction_summary: LlmPromptRunRedactionSummary,
+    pub created_at: i64,
+    pub completed_at: i64,
+    pub safety_flags: LlmPromptRunSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LlmPromptRunListResult {
+    pub generated_by: &'static str,
+    pub count: usize,
+    pub runs: Vec<LlmPromptRunRecord>,
+    pub app_local_only: bool,
+    pub runs_file: &'static str,
+    pub provider_request_sent: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_secret_returned: bool,
+    pub safety_flags: LlmPromptRunSafetyFlags,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -3489,6 +3590,14 @@ impl ServiceHost {
             "llm.confirmPromptAndSend" => {
                 let params: LlmConfirmPromptAndSendParams = serde_json::from_value(request.params)?;
                 serde_json::to_value(self.confirm_llm_prompt_and_send(params)?).map_err(Into::into)
+            }
+            "llm.listPromptRuns" => {
+                let params: LlmPromptRunListParams = if request.params.is_null() {
+                    LlmPromptRunListParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.list_llm_prompt_runs(params)?).map_err(Into::into)
             }
             "llm.prepareAction" => {
                 let params: LlmPrepareActionParams = serde_json::from_value(request.params)?;
@@ -4511,6 +4620,7 @@ impl ServiceHost {
                 timeout_ms: params.timeout_ms,
             },
         )?;
+        self.record_llm_prompt_run(&params, &preview, &send)?;
 
         Ok(LlmConfirmPromptAndSendResult {
             preview_id: params.preview_id,
@@ -4534,6 +4644,61 @@ impl ServiceHost {
             raw_secret_returned: send.raw_secret_returned,
             raw_prompt_persisted: send.raw_prompt_persisted,
             raw_response_persisted: send.raw_response_persisted,
+        })
+    }
+
+    pub fn list_llm_prompt_runs(
+        &self,
+        params: LlmPromptRunListParams,
+    ) -> Result<LlmPromptRunListResult, ServiceError> {
+        let limit = params.limit.unwrap_or(50).clamp(1, 500);
+        let action = params
+            .action
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| value.to_ascii_lowercase());
+        let request_kind = params
+            .request_kind
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| value.to_ascii_lowercase());
+        let instance_id = params
+            .skill_instance_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned);
+        let mut runs = self
+            .load_llm_prompt_runs()?
+            .into_iter()
+            .filter(|run| {
+                let action_matches = action
+                    .as_deref()
+                    .is_none_or(|filter| run.action.eq_ignore_ascii_case(filter));
+                let request_matches = request_kind
+                    .as_deref()
+                    .is_none_or(|filter| run.request_kind.eq_ignore_ascii_case(filter));
+                let instance_matches = instance_id.as_deref().is_none_or(|filter| {
+                    run.instance_id.as_deref() == Some(filter)
+                        || run.instance_ids.iter().any(|id| id == filter)
+                });
+                action_matches && request_matches && instance_matches
+            })
+            .collect::<Vec<_>>();
+        runs.truncate(limit);
+        Ok(LlmPromptRunListResult {
+            generated_by: "local-v2.61",
+            count: runs.len(),
+            runs,
+            app_local_only: true,
+            runs_file: "prompt-runs.json",
+            provider_request_sent: false,
+            raw_prompt_persisted: false,
+            raw_response_persisted: false,
+            raw_secret_returned: false,
+            safety_flags: llm_prompt_run_safety_flags(false, false),
         })
     }
 
@@ -9910,6 +10075,10 @@ impl ServiceHost {
         self.app_data_dir.join("trace-imports.json")
     }
 
+    fn llm_prompt_runs_path(&self) -> PathBuf {
+        self.app_data_dir.join("prompt-runs.json")
+    }
+
     fn remediation_history_path(&self) -> PathBuf {
         self.app_data_dir.join("remediation-history.json")
     }
@@ -9990,6 +10159,126 @@ impl ServiceHost {
         });
         let content = serde_json::to_string_pretty(&sorted)?;
         fs::write(path, content)?;
+        Ok(())
+    }
+
+    fn load_llm_prompt_runs(&self) -> Result<Vec<LlmPromptRunRecord>, ServiceError> {
+        let path = self.llm_prompt_runs_path();
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        let content = fs::read_to_string(path)?;
+        let mut runs: Vec<LlmPromptRunRecord> = serde_json::from_str(&content)?;
+        runs.sort_by(llm_prompt_run_record_sort);
+        Ok(runs)
+    }
+
+    fn save_llm_prompt_runs(&self, runs: &[LlmPromptRunRecord]) -> Result<(), ServiceError> {
+        fs::create_dir_all(&self.app_data_dir)?;
+        let path = self.llm_prompt_runs_path();
+        let mut sorted = runs.to_vec();
+        sorted.sort_by(llm_prompt_run_record_sort);
+        let content = serde_json::to_string_pretty(&sorted)?;
+        fs::write(path, content)?;
+        Ok(())
+    }
+
+    fn record_llm_prompt_run(
+        &self,
+        params: &LlmConfirmPromptAndSendParams,
+        preview: &LlmPreviewPromptResult,
+        send: &provider::SendProviderPromptResult,
+    ) -> Result<(), ServiceError> {
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let roots = self.trace_redaction_roots(&adapter_ctx);
+        let mut redactor = PromptRedactor::new(&roots);
+        let task = params
+            .request
+            .user_intent
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| truncate_chars(&redactor.redact(value), 500));
+        let error_message = send
+            .error_message
+            .as_deref()
+            .map(|value| truncate_chars(&redactor.redact(value), 500));
+        let request_redaction = redactor.summary();
+        let completed_at = unix_timestamp_millis();
+        let estimated_total_tokens = preview
+            .estimated_input_tokens
+            .saturating_add(preview.estimated_output_tokens);
+        let mut instance_ids = params.request.instance_ids.clone();
+        if let Some(instance_id) = params.request.skill_instance_id.as_deref() {
+            if !instance_id.trim().is_empty() && !instance_ids.iter().any(|id| id == instance_id) {
+                instance_ids.push(instance_id.to_string());
+            }
+        }
+        instance_ids = normalize_string_list(instance_ids);
+
+        let record = LlmPromptRunRecord {
+            id: generated_llm_prompt_run_id(
+                &params.preview_id,
+                &params.confirmation_id,
+                completed_at,
+            ),
+            preview_id: params.preview_id.clone(),
+            confirmation_id: params.confirmation_id.clone(),
+            action: params.request.action.as_str().to_string(),
+            request_kind: params.request.action.as_str().to_string(),
+            analysis_kind: params
+                .request
+                .analysis_kind
+                .map(|kind| kind.as_str().to_string()),
+            scope: inferred_llm_prompt_scope(&params.request),
+            instance_id: params
+                .request
+                .skill_instance_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToOwned::to_owned),
+            instance_ids,
+            definition_id: None,
+            agent: None,
+            task,
+            profile_id: send.profile_id.clone(),
+            provider: send.provider_type.as_str().to_string(),
+            model: send.model.clone(),
+            destination_host: send.destination_host.clone(),
+            status: send.status.clone(),
+            error_code: send.error_code.clone(),
+            error_message,
+            duration_ms: u64::try_from(send.duration_ms).unwrap_or(u64::MAX),
+            estimated_input_tokens: preview.estimated_input_tokens,
+            estimated_output_tokens: preview.estimated_output_tokens,
+            estimated_total_tokens,
+            estimated_cost_usd: preview.estimated_cost_usd,
+            draft_output: send
+                .output_text
+                .as_deref()
+                .map(|value| truncate_chars(&redact_for_llm_preview(value), 12_000)),
+            draft_requires_user_copy: true,
+            provider_request_sent: send.provider_request_sent,
+            credential_accessed: send.credential_accessed,
+            raw_secret_returned: false,
+            raw_prompt_persisted: false,
+            raw_response_persisted: false,
+            redaction_summary: llm_prompt_run_redaction_summary_from(
+                preview.redaction.clone(),
+                request_redaction,
+            ),
+            created_at: completed_at,
+            completed_at,
+            safety_flags: llm_prompt_run_safety_flags(
+                send.provider_request_sent,
+                send.credential_accessed,
+            ),
+        };
+
+        let mut runs = self.load_llm_prompt_runs()?;
+        runs.push(record);
+        self.save_llm_prompt_runs(&runs)?;
         Ok(())
     }
 
@@ -10925,6 +11214,16 @@ fn llm_prompt_action_type(params: &LlmPreviewPromptParams) -> String {
                 .as_str()
         ),
         other => other.as_str().to_string(),
+    }
+}
+
+fn inferred_llm_prompt_scope(params: &LlmPreviewPromptParams) -> Option<String> {
+    if params.instance_ids.len() > 1 {
+        Some("visible".to_string())
+    } else if params.skill_instance_id.is_some() || params.instance_ids.len() == 1 {
+        Some("selected".to_string())
+    } else {
+        None
     }
 }
 
@@ -18248,6 +18547,91 @@ fn trace_import_redaction_summary_default() -> TraceImportRedactionSummary {
     }
 }
 
+fn llm_prompt_run_redaction_summary_from(
+    preview_summary: LlmPromptRedactionSummary,
+    request_summary: LlmPromptRedactionSummary,
+) -> LlmPromptRunRedactionSummary {
+    let mut redacted_fields = preview_summary.redacted_fields;
+    redacted_fields.extend(request_summary.redacted_fields);
+    redacted_fields.sort();
+    redacted_fields.dedup();
+    let mut placeholders = preview_summary
+        .placeholders
+        .into_iter()
+        .chain(request_summary.placeholders)
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    placeholders.sort();
+    placeholders.dedup();
+    LlmPromptRunRedactionSummary {
+        status: "redacted-local-only".to_string(),
+        redacted_value_count: preview_summary
+            .redacted_value_count
+            .saturating_add(request_summary.redacted_value_count),
+        redacted_fields,
+        placeholders,
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+        raw_trace_persisted: false,
+        raw_secret_returned: preview_summary.raw_secret_returned
+            || request_summary.raw_secret_returned,
+    }
+}
+
+fn llm_prompt_run_safety_flags(
+    provider_request_sent: bool,
+    credential_accessed: bool,
+) -> LlmPromptRunSafetyFlags {
+    LlmPromptRunSafetyFlags {
+        app_local_only: true,
+        provider_request_sent,
+        credential_accessed,
+        draft_copy_only: true,
+        write_back_allowed: false,
+        write_actions_available: false,
+        skill_files_mutated: false,
+        agent_config_mutated: false,
+        script_execution_allowed: false,
+        execution_actions_available: false,
+        config_mutation_allowed: false,
+        snapshot_created: false,
+        triage_mutation_allowed: false,
+        raw_secret_returned: false,
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+        raw_trace_persisted: false,
+        cloud_sync_performed: false,
+        telemetry_emitted: false,
+    }
+}
+
+fn llm_prompt_run_record_sort(
+    left: &LlmPromptRunRecord,
+    right: &LlmPromptRunRecord,
+) -> std::cmp::Ordering {
+    right
+        .completed_at
+        .cmp(&left.completed_at)
+        .then_with(|| right.created_at.cmp(&left.created_at))
+        .then_with(|| left.action.cmp(&right.action))
+        .then_with(|| left.id.cmp(&right.id))
+}
+
+fn generated_llm_prompt_run_id(
+    preview_id: &str,
+    confirmation_id: &str,
+    completed_at: i64,
+) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(preview_id.as_bytes());
+    hasher.update(b"\0");
+    hasher.update(confirmation_id.as_bytes());
+    hasher.update(b"\0");
+    hasher.update(completed_at.to_string().as_bytes());
+    let digest = hasher.finalize();
+    format!("prompt-run-{}", hex_prefix(&digest, 12))
+}
+
 fn trace_content_hash(content: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(content.as_bytes());
@@ -21385,6 +21769,7 @@ mod tests {
         assert!(methods.contains(&Value::String("llm.testProviderConnection".to_string())));
         assert!(methods.contains(&Value::String("llm.previewPrompt".to_string())));
         assert!(methods.contains(&Value::String("llm.confirmPromptAndSend".to_string())));
+        assert!(methods.contains(&Value::String("llm.listPromptRuns".to_string())));
         assert!(methods.contains(&Value::String("llm.prepareAction".to_string())));
         assert!(methods.contains(&Value::String("llm.prepareSkillAnalysis".to_string())));
         assert!(methods.contains(&Value::String("cleanup.listQueue".to_string())));
@@ -22111,6 +22496,179 @@ mod tests {
         assert!(!audit_content.contains("connection test"));
         assert!(!audit_content.contains("api_key"));
         assert!(!host.script_execution_audit_path().exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn llm_test_provider_connection_uses_preserved_key_after_blank_save() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-provider-preserve-key-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let (base_url, server) = spawn_mock_openai_server();
+        let host = test_host(app_data_dir.clone());
+        let profile_id = format!("mock-openai-preserve-{}", unique_suffix());
+        let secret_env = provider_test_secret_env_name(&profile_id);
+        std::env::set_var(&secret_env, "test-secret-key");
+
+        let save = host.handle(ServiceRequest {
+            id: Some("provider-save".to_string()),
+            method: "llm.saveProviderProfile".to_string(),
+            params: json!({
+                "id": profile_id,
+                "display_name": "Mock OpenAI Preserve",
+                "provider_type": "openai-compatible",
+                "base_url": base_url,
+                "model": "mock-model",
+                "enabled": true,
+                "single_request_token_limit": 4096,
+                "monthly_budget_usd": 10.0
+            }),
+        });
+        assert!(save.ok, "{:?}", save.error);
+        assert_eq!(
+            save.result
+                .as_ref()
+                .and_then(|result| result.pointer("/profile/credential_status/secret_available"))
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+
+        let blank_resave = host.handle(ServiceRequest {
+            id: Some("provider-resave".to_string()),
+            method: "llm.saveProviderProfile".to_string(),
+            params: json!({
+                "id": profile_id,
+                "display_name": "Mock OpenAI Preserve",
+                "provider_type": "openai-compatible",
+                "base_url": base_url,
+                "model": "mock-model-updated",
+                "enabled": true,
+                "single_request_token_limit": 4096,
+                "monthly_budget_usd": 10.0
+            }),
+        });
+        assert!(blank_resave.ok, "{:?}", blank_resave.error);
+        assert_eq!(
+            blank_resave
+                .result
+                .as_ref()
+                .and_then(|result| result.pointer("/profile/credential_status/secret_available"))
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+
+        let test = host.handle(ServiceRequest {
+            id: Some("provider-test".to_string()),
+            method: "llm.testProviderConnection".to_string(),
+            params: json!({
+                "profile_id": profile_id,
+                "confirmation_id": "confirm-preserved-key",
+                "timeout_ms": 2_000
+            }),
+        });
+        std::env::remove_var(&secret_env);
+
+        assert!(test.ok, "{:?}", test.error);
+        let result = test.result.expect("test connection");
+        assert_eq!(
+            result.get("status").and_then(Value::as_str),
+            Some("succeeded")
+        );
+        assert_eq!(
+            result.get("provider_request_sent").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result.get("credential_accessed").and_then(Value::as_bool),
+            Some(true)
+        );
+
+        let request_text = server.join().expect("mock server thread");
+        assert!(request_text
+            .to_lowercase()
+            .contains("authorization: bearer test-secret-key"));
+        let audit_content =
+            fs::read_to_string(provider_call_metadata_path(&app_data_dir)).expect("audit content");
+        assert!(audit_content.contains("\"status\":\"succeeded\""));
+        assert!(!audit_content.contains("test-secret-key"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn llm_test_provider_connection_downgrades_stale_credential_metadata() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-provider-stale-key-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+        let profile_id = format!("mock-openai-stale-{}", unique_suffix());
+        let secret_env = provider_test_secret_env_name(&profile_id);
+        std::env::set_var(&secret_env, "test-secret-key");
+
+        let save = host.handle(ServiceRequest {
+            id: Some("provider-save".to_string()),
+            method: "llm.saveProviderProfile".to_string(),
+            params: json!({
+                "id": profile_id,
+                "display_name": "Mock OpenAI Stale",
+                "provider_type": "openai-compatible",
+                "base_url": "http://localhost:8317/v1",
+                "model": "mock-model",
+                "enabled": true,
+                "single_request_token_limit": 4096,
+                "monthly_budget_usd": 10.0
+            }),
+        });
+        assert!(save.ok, "{:?}", save.error);
+        std::env::remove_var(&secret_env);
+
+        let test = host.handle(ServiceRequest {
+            id: Some("provider-test".to_string()),
+            method: "llm.testProviderConnection".to_string(),
+            params: json!({
+                "profile_id": profile_id,
+                "confirmation_id": "confirm-stale-key",
+                "timeout_ms": 250
+            }),
+        });
+        assert!(test.ok, "{:?}", test.error);
+        let result = test.result.expect("test connection");
+        assert_eq!(
+            result.get("status").and_then(Value::as_str),
+            Some("blocked")
+        );
+        assert_eq!(
+            result.pointer("/audit/error_code").and_then(Value::as_str),
+            Some("credential_unavailable")
+        );
+
+        let list = host.handle(ServiceRequest {
+            id: Some("provider-list".to_string()),
+            method: "llm.listProviderProfiles".to_string(),
+            params: Value::Null,
+        });
+        assert!(list.ok, "{:?}", list.error);
+        assert_eq!(
+            list.result
+                .as_ref()
+                .and_then(|result| result.pointer("/profiles/0/credential_status/secret_available"))
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            list.result
+                .as_ref()
+                .and_then(
+                    |result| result.pointer("/profiles/0/credential_reference/secret_persisted")
+                )
+                .and_then(Value::as_bool),
+            Some(false)
+        );
 
         let _ = fs::remove_dir_all(app_data_dir);
     }
@@ -26743,6 +27301,47 @@ mod tests {
         assert!(!audit_content.contains("OPENAI_API_KEY"));
         assert!(!audit_content.contains("test-secret-key"));
 
+        let list_runs = host.handle(ServiceRequest {
+            id: Some("runs".to_string()),
+            method: "llm.listPromptRuns".to_string(),
+            params: json!({ "instance_id": "llm-skill-id" }),
+        });
+        assert!(list_runs.ok, "{:?}", list_runs.error);
+        let runs = list_runs.result.expect("prompt runs");
+        assert_eq!(runs.get("count").and_then(Value::as_u64), Some(1));
+        assert_eq!(
+            runs.pointer("/runs/0/status").and_then(Value::as_str),
+            Some("succeeded")
+        );
+        assert_eq!(
+            runs.pointer("/runs/0/draft_output").and_then(Value::as_str),
+            Some("Draft-only review from mock provider.")
+        );
+        assert_eq!(
+            runs.pointer("/runs/0/raw_prompt_persisted")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            runs.pointer("/runs/0/raw_response_persisted")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            runs.pointer("/runs/0/safety_flags/write_back_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let prompt_run_content =
+            fs::read_to_string(host.llm_prompt_runs_path()).expect("prompt run content");
+        assert!(prompt_run_content.contains("Draft-only review from mock provider."));
+        assert!(prompt_run_content.contains("\"request_kind\": \"analyze\""));
+        assert!(!prompt_run_content.contains("test-secret-key"));
+        assert!(!prompt_run_content.contains("fixture-redacted-value"));
+        assert!(!prompt_run_content.contains(&skill_path.to_string_lossy().to_string()));
+        assert!(!prompt_run_content.contains("\"choices\""));
+
         let _ = fs::remove_dir_all(app_data_dir);
     }
 
@@ -30041,6 +30640,29 @@ mod tests {
                 assert!(!confirmed.raw_prompt_persisted);
                 assert!(!confirmed.raw_response_persisted);
             }
+            "llm.listPromptRuns" => {
+                let runs: WireLlmPromptRunListResult = decode_fixture_result(method, result, path);
+                assert_eq!(runs.generated_by, "local-v2.61");
+                assert_eq!(runs.count, runs.runs.len());
+                assert!(runs.app_local_only);
+                assert!(!runs.provider_request_sent);
+                assert!(!runs.raw_prompt_persisted);
+                assert!(!runs.raw_response_persisted);
+                assert!(!runs.raw_secret_returned);
+                assert!(runs.safety_flags.app_local_only);
+                assert!(!runs.safety_flags.raw_prompt_persisted);
+                assert!(!runs.safety_flags.raw_response_persisted);
+                assert!(!runs.safety_flags.raw_secret_returned);
+                for run in &runs.runs {
+                    assert!(run.safety_flags.app_local_only);
+                    assert!(!run.safety_flags.write_back_allowed);
+                    assert!(!run.safety_flags.script_execution_allowed);
+                    assert!(!run.safety_flags.raw_prompt_persisted);
+                    assert!(!run.safety_flags.raw_response_persisted);
+                    assert!(!run.redaction_summary.raw_prompt_persisted);
+                    assert!(!run.redaction_summary.raw_response_persisted);
+                }
+            }
             "llm.prepareAction" => {
                 let prepare: WireLlmPrepareActionResult =
                     decode_fixture_result(method, result, path);
@@ -30610,6 +31232,9 @@ mod tests {
                     "action": "recommend",
                     "user_intent": "fixture"
                 }
+            }),
+            "llm.listPromptRuns" => json!({
+                "limit": 4
             }),
             "llm.prepareSkillAnalysis" => {
                 json!({ "instance_ids": ["missing-skill"], "analysis_kind": "overview" })
@@ -33354,6 +33979,102 @@ mod tests {
     #[allow(dead_code)]
     #[derive(Debug, Deserialize)]
     #[serde(deny_unknown_fields)]
+    struct WireLlmPromptRunListResult {
+        generated_by: String,
+        count: usize,
+        runs: Vec<WireLlmPromptRunRecord>,
+        app_local_only: bool,
+        runs_file: String,
+        provider_request_sent: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+        raw_secret_returned: bool,
+        safety_flags: WireLlmPromptRunSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireLlmPromptRunRecord {
+        id: String,
+        preview_id: String,
+        confirmation_id: String,
+        action: String,
+        request_kind: String,
+        analysis_kind: Option<String>,
+        scope: Option<String>,
+        instance_id: Option<String>,
+        instance_ids: Vec<String>,
+        definition_id: Option<String>,
+        agent: Option<String>,
+        task: Option<String>,
+        profile_id: String,
+        provider: String,
+        model: String,
+        destination_host: String,
+        status: String,
+        error_code: Option<String>,
+        error_message: Option<String>,
+        duration_ms: u64,
+        estimated_input_tokens: u32,
+        estimated_output_tokens: u32,
+        estimated_total_tokens: u32,
+        estimated_cost_usd: f64,
+        draft_output: Option<String>,
+        draft_requires_user_copy: bool,
+        provider_request_sent: bool,
+        credential_accessed: bool,
+        raw_secret_returned: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+        redaction_summary: WireLlmPromptRunRedactionSummary,
+        created_at: i64,
+        completed_at: i64,
+        safety_flags: WireLlmPromptRunSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireLlmPromptRunRedactionSummary {
+        status: String,
+        redacted_value_count: usize,
+        redacted_fields: Vec<String>,
+        placeholders: Vec<String>,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+        raw_trace_persisted: bool,
+        raw_secret_returned: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireLlmPromptRunSafetyFlags {
+        app_local_only: bool,
+        provider_request_sent: bool,
+        credential_accessed: bool,
+        draft_copy_only: bool,
+        write_back_allowed: bool,
+        write_actions_available: bool,
+        skill_files_mutated: bool,
+        agent_config_mutated: bool,
+        script_execution_allowed: bool,
+        execution_actions_available: bool,
+        config_mutation_allowed: bool,
+        snapshot_created: bool,
+        triage_mutation_allowed: bool,
+        raw_secret_returned: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+        raw_trace_persisted: bool,
+        cloud_sync_performed: bool,
+        telemetry_emitted: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
     struct WireLlmSkillAnalysisIncludedSkill {
         instance_id: String,
         name: String,
@@ -34781,5 +35502,20 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .expect("system clock")
             .as_nanos()
+    }
+
+    fn provider_test_secret_env_name(profile_id: &str) -> String {
+        let account = format!("provider:{profile_id}");
+        let suffix = account
+            .chars()
+            .map(|ch| {
+                if ch.is_ascii_alphanumeric() {
+                    ch.to_ascii_uppercase()
+                } else {
+                    '_'
+                }
+            })
+            .collect::<String>();
+        format!("SKILLS_COPILOT_TEST_SECRET_{suffix}")
     }
 }

@@ -308,29 +308,34 @@ pub fn save_provider_profile(
         .monthly_budget_usd
         .unwrap_or(DEFAULT_MONTHLY_BUDGET_USD)
         .clamp(0.0, 10_000.0);
-    let mut credential_reference = keychain_reference(&profile_id);
-    let credential_status = match params.api_key.as_deref().map(str::trim) {
-        Some(secret) if !secret.is_empty() => match store_secret(&credential_reference, secret) {
-            Ok(()) => ProviderCredentialStatus {
-                state: "available".to_string(),
-                reason: "API key stored in the OS credential store.".to_string(),
-                secret_available: true,
-                fallback_available: false,
-            },
-            Err(error) => ProviderCredentialStatus {
-                state: "unavailable".to_string(),
-                reason: error.to_string(),
-                secret_available: false,
-                fallback_available: false,
-            },
-        },
-        _ => existing_credential_status(&credential_reference),
-    };
-    credential_reference.secret_persisted = credential_status.secret_available;
-    let previous_created_at = store
+    let previous_profile = store
         .profiles
         .iter()
         .find(|profile| profile.id == profile_id)
+        .cloned();
+    let has_new_secret = params
+        .api_key
+        .as_deref()
+        .map(str::trim)
+        .is_some_and(|secret| !secret.is_empty());
+    let mut credential_reference = if has_new_secret {
+        keychain_reference(&profile_id)
+    } else {
+        previous_profile
+            .as_ref()
+            .map(|profile| profile.credential_reference.clone())
+            .unwrap_or_else(|| keychain_reference(&profile_id))
+    };
+    let credential_status = match params.api_key.as_deref().map(str::trim) {
+        Some(secret) if !secret.is_empty() => {
+            store_and_verify_secret(&credential_reference, secret)?;
+            available_credential_status("API key stored in the OS credential store.")
+        }
+        _ => existing_credential_status(&credential_reference),
+    };
+    credential_reference.secret_persisted = credential_status.secret_available;
+    let previous_created_at = previous_profile
+        .as_ref()
         .map(|profile| profile.created_at)
         .unwrap_or(now);
     let profile = ProviderProfileRecord {
@@ -409,7 +414,7 @@ pub fn test_provider_connection(
     params: TestProviderConnectionParams,
 ) -> Result<TestProviderConnectionResult, ProviderError> {
     let store = load_store(app_data_dir)?;
-    let profile = store
+    let mut profile = store
         .profiles
         .iter()
         .find(|profile| profile.id == params.profile_id)
@@ -476,8 +481,20 @@ pub fn test_provider_connection(
     }
 
     let secret = match load_secret(&profile.credential_reference) {
-        Ok(secret) => secret,
+        Ok(secret) => {
+            mark_profile_credential_status(
+                app_data_dir,
+                &mut profile,
+                available_credential_status("API key is available from the OS credential store."),
+            );
+            secret
+        }
         Err(error) => {
+            mark_profile_credential_status(
+                app_data_dir,
+                &mut profile,
+                missing_credential_status(error.to_string()),
+            );
             return finish_test(
                 app_data_dir,
                 &profile,
@@ -553,7 +570,7 @@ pub fn send_provider_prompt(
     params: SendProviderPromptParams,
 ) -> Result<SendProviderPromptResult, ProviderError> {
     let store = load_store(app_data_dir)?;
-    let profile = store
+    let mut profile = store
         .profiles
         .iter()
         .find(|profile| profile.id == params.profile_id)
@@ -661,8 +678,20 @@ pub fn send_provider_prompt(
     }
 
     let secret = match load_secret(&profile.credential_reference) {
-        Ok(secret) => secret,
+        Ok(secret) => {
+            mark_profile_credential_status(
+                app_data_dir,
+                &mut profile,
+                available_credential_status("API key is available from the OS credential store."),
+            );
+            secret
+        }
         Err(error) => {
+            mark_profile_credential_status(
+                app_data_dir,
+                &mut profile,
+                missing_credential_status(error.to_string()),
+            );
             return finish_prompt(
                 app_data_dir,
                 &profile,
@@ -680,7 +709,7 @@ pub fn send_provider_prompt(
             );
         }
     };
-    let timeout = Duration::from_millis(params.timeout_ms.unwrap_or(15_000).clamp(250, 60_000));
+    let timeout = Duration::from_millis(params.timeout_ms.unwrap_or(600_000).clamp(250, 600_000));
     let call_result = send_prompt_request(&profile, &secret, &params.prompt, &params, timeout);
     drop(secret);
 
@@ -1067,6 +1096,25 @@ fn store_secret(
         .map_err(|error| ProviderError::CredentialStorageUnavailable(error.to_string()))
 }
 
+fn store_and_verify_secret(
+    reference: &ProviderCredentialReference,
+    secret: &str,
+) -> Result<(), ProviderError> {
+    store_secret(reference, secret)?;
+    let stored = load_secret(reference).map_err(|error| {
+        ProviderError::CredentialStorageUnavailable(format!(
+            "saved API key could not be read back from the OS credential store: {error}"
+        ))
+    })?;
+    if stored == secret && !stored.is_empty() {
+        Ok(())
+    } else {
+        Err(ProviderError::CredentialStorageUnavailable(
+            "saved API key could not be verified in the OS credential store".to_string(),
+        ))
+    }
+}
+
 fn load_secret(reference: &ProviderCredentialReference) -> Result<String, ProviderError> {
     #[cfg(test)]
     if let Ok(secret) = std::env::var(test_secret_env_name(&reference.account)) {
@@ -1103,27 +1151,60 @@ fn delete_secret(reference: &ProviderCredentialReference) -> Result<bool, Provid
     }
 }
 
+fn available_credential_status(reason: &str) -> ProviderCredentialStatus {
+    ProviderCredentialStatus {
+        state: "available".to_string(),
+        reason: reason.to_string(),
+        secret_available: true,
+        fallback_available: false,
+    }
+}
+
+fn missing_credential_status(reason: String) -> ProviderCredentialStatus {
+    ProviderCredentialStatus {
+        state: "missing".to_string(),
+        reason,
+        secret_available: false,
+        fallback_available: false,
+    }
+}
+
 fn existing_credential_status(reference: &ProviderCredentialReference) -> ProviderCredentialStatus {
     match load_secret(reference) {
-        Ok(secret) if !secret.is_empty() => ProviderCredentialStatus {
-            state: "available".to_string(),
-            reason: "API key is available from the OS credential store.".to_string(),
-            secret_available: true,
-            fallback_available: false,
-        },
-        Ok(_) => ProviderCredentialStatus {
-            state: "missing".to_string(),
-            reason: "No API key is stored for this profile.".to_string(),
-            secret_available: false,
-            fallback_available: false,
-        },
-        Err(error) => ProviderCredentialStatus {
-            state: "missing".to_string(),
-            reason: error.to_string(),
-            secret_available: false,
-            fallback_available: false,
-        },
+        Ok(secret) if !secret.is_empty() => {
+            available_credential_status("API key is available from the OS credential store.")
+        }
+        Ok(_) => missing_credential_status("No API key is stored for this profile.".to_string()),
+        Err(error) => missing_credential_status(error.to_string()),
     }
+}
+
+fn mark_profile_credential_status(
+    app_data_dir: &Path,
+    profile: &mut ProviderProfileRecord,
+    status: ProviderCredentialStatus,
+) {
+    profile.credential_reference.secret_persisted = status.secret_available;
+    profile.credential_status = status;
+    let _ = persist_profile_credential_status(app_data_dir, profile);
+}
+
+fn persist_profile_credential_status(
+    app_data_dir: &Path,
+    profile: &ProviderProfileRecord,
+) -> Result<(), ProviderError> {
+    let mut store = load_store(app_data_dir)?;
+    if let Some(stored_profile) = store
+        .profiles
+        .iter_mut()
+        .find(|stored_profile| stored_profile.id == profile.id)
+    {
+        stored_profile.credential_reference = profile.credential_reference.clone();
+        stored_profile.credential_status = profile.credential_status.clone();
+        stored_profile.updated_at = unix_timestamp();
+        save_store(app_data_dir, &store)?;
+    }
+    Ok(())
 }
 
 fn budget_status(profile: &ProviderProfileRecord) -> ProviderBudgetStatus {
