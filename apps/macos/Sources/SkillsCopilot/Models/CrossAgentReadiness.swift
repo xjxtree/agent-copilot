@@ -670,8 +670,10 @@ struct CrossAgentReadinessSafety: Decodable, Hashable {
         case rawTracePersisted = "raw_trace_persisted"
         case rawTraceStored = "raw_trace_stored"
         case cloudSyncEnabled = "cloud_sync_enabled"
+        case cloudSyncPerformed = "cloud_sync_performed"
         case cloudSync = "cloud_sync"
         case telemetryEnabled = "telemetry_enabled"
+        case telemetryEmitted = "telemetry_emitted"
         case telemetry
         case rawSecretReturned = "raw_secret_returned"
         case notes
@@ -741,9 +743,11 @@ struct CrossAgentReadinessSafety: Decodable, Hashable {
                 ?? container.decodeIfPresent(Bool.self, forKey: .rawTraceStored)
                 ?? false,
             cloudSyncEnabled: try container.decodeIfPresent(Bool.self, forKey: .cloudSyncEnabled)
+                ?? container.decodeIfPresent(Bool.self, forKey: .cloudSyncPerformed)
                 ?? container.decodeIfPresent(Bool.self, forKey: .cloudSync)
                 ?? false,
             telemetryEnabled: try container.decodeIfPresent(Bool.self, forKey: .telemetryEnabled)
+                ?? container.decodeIfPresent(Bool.self, forKey: .telemetryEmitted)
                 ?? container.decodeIfPresent(Bool.self, forKey: .telemetry)
                 ?? false,
             rawSecretReturned: try container.decodeIfPresent(Bool.self, forKey: .rawSecretReturned) ?? false,

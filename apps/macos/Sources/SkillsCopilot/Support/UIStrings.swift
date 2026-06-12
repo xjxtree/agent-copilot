@@ -824,6 +824,35 @@ enum UIStrings {
     static var traceImportNoSkills: String { text("traceImport.empty.skills", "No skills returned.") }
     static var traceImportNoExcerpt: String { text("traceImport.empty.excerpt", "No redacted excerpt returned.") }
     static var traceImportNoReasons: String { text("traceImport.empty.reasons", "No reasons returned.") }
+    static var agentSessionReviewTitle: String { text("sessionReview.title", "Agent Session Skill Review") }
+    static var agentSessionReviewBoundary: String { text("sessionReview.boundary", "User-triggered app-local session review for pasted transcript metadata. It detects skill use, expected matches, interference, safe next steps, and safety flags without provider calls, skill writes, agent config mutation, snapshots, triage changes, scripts, credentials, raw prompt/response persistence, cloud sync, or telemetry.") }
+    static var agentSessionReviewNoWriteBoundary: String { text("sessionReview.noWriteBoundary", "Review only. No Apply, Confirm, Write, Snapshot, Rollback, Script, Provider Send, or Triage action is exposed here.") }
+    static var agentSessionReviewAppLocal: String { text("sessionReview.appLocal", "App-local metadata") }
+    static var agentSessionReviewTranscriptPlaceholder: String { text("sessionReview.placeholder.transcript", "Paste session transcript or agent log text") }
+    static var agentSessionReviewTaskPlaceholder: String { text("sessionReview.placeholder.task", "Optional task text") }
+    static var agentSessionReviewExpectedPlaceholder: String { text("sessionReview.placeholder.expected", "Optional expected skill names, separated by commas") }
+    static var agentSessionReviewAction: String { text("sessionReview.action.review", "Review Session") }
+    static var agentSessionReviewLoadAction: String { text("sessionReview.action.load", "Load Reviews") }
+    static var agentSessionReviewDeleteAction: String { text("sessionReview.action.delete", "Delete review") }
+    static var agentSessionReviewInputRequired: String { text("sessionReview.inputRequired", "Paste a session transcript before reviewing.") }
+    static var agentSessionReviewUnavailable: String { text("sessionReview.unavailable", "Agent session skill review is unavailable in this service build.") }
+    static var agentSessionReviewDeleteUnavailable: String { text("sessionReview.deleteUnavailable", "Deleting session skill reviews is unavailable in this service build.") }
+    static var agentSessionReviewLatest: String { text("sessionReview.latest", "Latest session review") }
+    static var agentSessionReviewReviews: String { text("sessionReview.reviews", "Session reviews") }
+    static var agentSessionReviewNoReviews: String { text("sessionReview.empty.reviews", "No session skill reviews returned.") }
+    static var agentSessionReviewRecord: String { text("sessionReview.record", "Session review") }
+    static var agentSessionReviewOutcome: String { text("sessionReview.outcome", "Outcome") }
+    static var agentSessionReviewDetectedSkills: String { text("sessionReview.detectedSkills", "Detected skills") }
+    static var agentSessionReviewExpectedSkills: String { text("sessionReview.expectedSkills", "Expected skills") }
+    static var agentSessionReviewInterference: String { text("sessionReview.interference", "Interference") }
+    static var agentSessionReviewNoInterference: String { text("sessionReview.empty.interference", "No interference returned.") }
+    static var agentSessionReviewSafeNextSteps: String { text("sessionReview.safeNextSteps", "Safe next steps") }
+    static var agentSessionReviewNoSafeNextSteps: String { text("sessionReview.empty.safeNextSteps", "No safe next steps returned.") }
+    static var agentSessionReviewRedactedExcerpt: String { text("sessionReview.redactedExcerpt", "Redacted excerpt") }
+    static var agentSessionReviewNoExcerpt: String { text("sessionReview.empty.excerpt", "No redacted excerpt returned.") }
+    static var agentSessionReviewReasons: String { text("sessionReview.reasons", "Review notes") }
+    static var agentSessionReviewNoReasons: String { text("sessionReview.empty.reasons", "No review notes returned.") }
+    static var agentSessionReviewNoSkills: String { text("sessionReview.empty.skills", "No skills returned.") }
     static var llmAssist: String { text("llm.assist", "LLM Assist") }
     static var llmEnabled: String { text("llm.enabled", "Enabled") }
     static var llmDisabled: String { text("llm.disabled", "Disabled") }

@@ -556,6 +556,70 @@ private struct AgentTraceDeleteParams: Encodable {
     }
 }
 
+private struct AgentSessionSkillReviewParams: Encodable {
+    let transcriptText: String
+    let task: String?
+    let expectedSkillNames: [String]
+    let candidateInstanceIDs: [String]?
+    let agent: String?
+    let selectedSkillID: String?
+    let selectedSkillName: String?
+    let selectedSkillAgent: String?
+    let selectedSkillPath: String?
+    let projectRoot: String?
+    let currentCWD: String?
+    let workspace: String?
+
+    enum CodingKeys: String, CodingKey {
+        case transcriptText = "transcript_text"
+        case task
+        case expectedSkillNames = "expected_skill_names"
+        case candidateInstanceIDs = "candidate_instance_ids"
+        case agent
+        case selectedSkillID = "selected_skill_id"
+        case selectedSkillName = "selected_skill_name"
+        case selectedSkillAgent = "selected_skill_agent"
+        case selectedSkillPath = "selected_skill_path"
+        case projectRoot = "project_root"
+        case currentCWD = "current_cwd"
+        case workspace
+    }
+}
+
+private struct AgentSessionSkillReviewListParams: Encodable {
+    let task: String?
+    let agent: String?
+    let selectedSkillID: String?
+    let selectedSkillName: String?
+    let selectedSkillAgent: String?
+    let selectedSkillPath: String?
+    let projectRoot: String?
+    let currentCWD: String?
+    let workspace: String?
+    let limit: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case task
+        case agent
+        case selectedSkillID = "selected_skill_id"
+        case selectedSkillName = "selected_skill_name"
+        case selectedSkillAgent = "selected_skill_agent"
+        case selectedSkillPath = "selected_skill_path"
+        case projectRoot = "project_root"
+        case currentCWD = "current_cwd"
+        case workspace
+        case limit
+    }
+}
+
+private struct AgentSessionSkillReviewDeleteParams: Encodable {
+    let reviewID: String
+
+    enum CodingKeys: String, CodingKey {
+        case reviewID = "review_id"
+    }
+}
+
 private struct PrepareLLMActionParams: Encodable {
     let action: LLMAction
     let instanceId: String
@@ -1417,6 +1481,73 @@ final class ServiceClient {
     func deleteTraceImport(importID: String) async throws -> AgentTraceImportDeleteResult {
         do {
             return try await call(method: "trace.deleteImport", params: AgentTraceDeleteParams(importID: importID))
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func reviewAgentSessionSkillUse(
+        transcriptText: String,
+        taskText: String?,
+        expectedSkillNames: [String],
+        skill: SkillRecord?,
+        project: ProjectContext?
+    ) async throws -> AgentSessionSkillReviewResult {
+        let normalizedTask = taskText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let params = AgentSessionSkillReviewParams(
+            transcriptText: transcriptText,
+            task: normalizedTask?.isEmpty == true ? nil : normalizedTask,
+            expectedSkillNames: expectedSkillNames,
+            candidateInstanceIDs: skill.map { [$0.id] },
+            agent: skill?.agent,
+            selectedSkillID: skill?.id,
+            selectedSkillName: skill?.name,
+            selectedSkillAgent: skill?.agent,
+            selectedSkillPath: skill?.displayPath.isEmpty == false ? skill?.displayPath : skill?.path,
+            projectRoot: project?.rootPath,
+            currentCWD: project?.currentCWD,
+            workspace: project?.name
+        )
+        do {
+            return try await call(method: "session.reviewAgentSkillUse", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func listAgentSessionSkillReviews(
+        taskText: String? = nil,
+        agent: String? = nil,
+        skill: SkillRecord? = nil,
+        project: ProjectContext? = nil,
+        limit: Int? = 20
+    ) async throws -> AgentSessionSkillReviewListResult {
+        let normalizedTask = taskText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let params = AgentSessionSkillReviewListParams(
+            task: normalizedTask?.isEmpty == true ? nil : normalizedTask,
+            agent: agent ?? skill?.agent,
+            selectedSkillID: skill?.id,
+            selectedSkillName: skill?.name,
+            selectedSkillAgent: skill?.agent,
+            selectedSkillPath: skill?.displayPath.isEmpty == false ? skill?.displayPath : skill?.path,
+            projectRoot: project?.rootPath,
+            currentCWD: project?.currentCWD,
+            workspace: project?.name,
+            limit: limit
+        )
+        do {
+            return try await call(method: "session.listSkillReviews", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func deleteAgentSessionSkillReview(reviewID: String) async throws -> AgentSessionSkillReviewDeleteResult {
+        do {
+            return try await call(
+                method: "session.deleteSkillReview",
+                params: AgentSessionSkillReviewDeleteParams(reviewID: reviewID)
+            )
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .unavailable()
         }

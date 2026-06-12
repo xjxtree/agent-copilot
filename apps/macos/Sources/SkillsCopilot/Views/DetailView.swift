@@ -352,6 +352,31 @@ struct DetailView: View {
                             isLoadingTraceImports: store.isLoadingTraceImports,
                             isImportingTrace: store.isImportingTrace,
                             isDeletingTraceImport: { record in store.isDeletingTraceImport(record) },
+                            agentSessionSkillReviewTranscript: $store.agentSessionSkillReviewTranscript,
+                            agentSessionSkillReviewTask: $store.agentSessionSkillReviewTask,
+                            agentSessionSkillReviewExpectedSkills: $store.agentSessionSkillReviewExpectedSkills,
+                            agentSessionSkillReviewList: store.agentSessionSkillReviewList,
+                            agentSessionSkillReviewResult: store.agentSessionSkillReviewResult,
+                            agentSessionSkillReviewDeleteResult: store.agentSessionSkillReviewDeleteResult,
+                            latestAgentSessionSkillReview: store.latestAgentSessionSkillReview,
+                            isLoadingAgentSessionSkillReviews: store.isLoadingAgentSessionSkillReviews,
+                            isReviewingAgentSessionSkillUse: store.isReviewingAgentSessionSkillUse,
+                            isDeletingAgentSessionSkillReview: { record in store.isDeletingAgentSessionSkillReview(record) },
+                            onLoadAgentSessionSkillReviews: {
+                                Task {
+                                    await store.loadAgentSessionSkillReviews()
+                                }
+                            },
+                            onReviewAgentSessionSkillUse: {
+                                Task {
+                                    await store.reviewAgentSessionSkillUse()
+                                }
+                            },
+                            onDeleteAgentSessionSkillReview: { record in
+                                Task {
+                                    await store.deleteAgentSessionSkillReview(record)
+                                }
+                            },
                             onLoadTraceImports: {
                                 Task {
                                     await store.loadTraceImports()
@@ -1007,6 +1032,19 @@ private struct AnalysisSection: View {
     let isLoadingTraceImports: Bool
     let isImportingTrace: Bool
     let isDeletingTraceImport: (AgentTraceImportRecord) -> Bool
+    @Binding var agentSessionSkillReviewTranscript: String
+    @Binding var agentSessionSkillReviewTask: String
+    @Binding var agentSessionSkillReviewExpectedSkills: String
+    let agentSessionSkillReviewList: AgentSessionSkillReviewListResult
+    let agentSessionSkillReviewResult: AgentSessionSkillReviewResult?
+    let agentSessionSkillReviewDeleteResult: AgentSessionSkillReviewDeleteResult?
+    let latestAgentSessionSkillReview: AgentSessionSkillReviewRecord?
+    let isLoadingAgentSessionSkillReviews: Bool
+    let isReviewingAgentSessionSkillUse: Bool
+    let isDeletingAgentSessionSkillReview: (AgentSessionSkillReviewRecord) -> Bool
+    let onLoadAgentSessionSkillReviews: () -> Void
+    let onReviewAgentSessionSkillUse: () -> Void
+    let onDeleteAgentSessionSkillReview: (AgentSessionSkillReviewRecord) -> Void
     let onLoadTraceImports: () -> Void
     let onImportTrace: () -> Void
     let onDeleteTraceImport: (AgentTraceImportRecord) -> Void
@@ -1039,7 +1077,7 @@ private struct AnalysisSection: View {
             VStack(alignment: .leading, spacing: 10) {
                 Label(UIStrings.text("analysis.workbench", "Read-only Analysis / Insights workbench"), systemImage: "sparkles.rectangle.stack")
                     .font(.headline)
-                Text(UIStrings.text("analysis.workbench.summary.compact", "Focused single-skill review: compare cross-agent overlap, score local quality, and test task fit/routing. Provider-backed explanations remain previewed, confirmed, copy-only, and persisted as local redacted run history."))
+                Text(UIStrings.text("analysis.workbench.summary.compact", "Focused single-skill review: compare cross-agent overlap, score local quality, test task fit/routing, and review session skill use. Provider-backed explanations remain previewed, confirmed, copy-only, and persisted as local redacted run history."))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 Label(UIStrings.text("analysis.crossAgentNote", "Cross-agent duplicates and source overlap live here as analysis insights; same-agent runtime/name collisions remain in Conflicts."), systemImage: "rectangle.3.group.bubble")
@@ -1094,6 +1132,22 @@ private struct AnalysisSection: View {
                 onRankRouting: onRankRoutingConfidence,
                 onPreviewRoutingPrompt: onPreviewRoutingConfidencePrompt,
                 onSendRoutingPrompt: onSendRoutingConfidencePrompt
+            )
+
+            AgentSessionSkillReviewPanel(
+                transcriptText: $agentSessionSkillReviewTranscript,
+                taskText: $agentSessionSkillReviewTask,
+                expectedSkills: $agentSessionSkillReviewExpectedSkills,
+                listResult: agentSessionSkillReviewList,
+                reviewResult: agentSessionSkillReviewResult,
+                deleteResult: agentSessionSkillReviewDeleteResult,
+                latestRecord: latestAgentSessionSkillReview,
+                isLoading: isLoadingAgentSessionSkillReviews,
+                isReviewing: isReviewingAgentSessionSkillUse,
+                isDeleting: isDeletingAgentSessionSkillReview,
+                onLoad: onLoadAgentSessionSkillReviews,
+                onReview: onReviewAgentSessionSkillUse,
+                onDelete: onDeleteAgentSessionSkillReview
             )
         }
     }
@@ -6911,6 +6965,379 @@ private struct AgentTraceImportPanel: View {
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
         .adaptiveMaterialSurface()
+    }
+}
+
+private struct AgentSessionSkillReviewPanel: View {
+    @Binding var transcriptText: String
+    @Binding var taskText: String
+    @Binding var expectedSkills: String
+    let listResult: AgentSessionSkillReviewListResult
+    let reviewResult: AgentSessionSkillReviewResult?
+    let deleteResult: AgentSessionSkillReviewDeleteResult?
+    let latestRecord: AgentSessionSkillReviewRecord?
+    let isLoading: Bool
+    let isReviewing: Bool
+    let isDeleting: (AgentSessionSkillReviewRecord) -> Bool
+    let onLoad: () -> Void
+    let onReview: () -> Void
+    let onDelete: (AgentSessionSkillReviewRecord) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.agentSessionReviewTitle, systemImage: "person.crop.rectangle.stack")
+                    .font(.headline)
+                Spacer()
+                Label(UIStrings.agentSessionReviewAppLocal, systemImage: "archivebox")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(UIStrings.agentSessionReviewBoundary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+            Label(UIStrings.agentSessionReviewNoWriteBoundary, systemImage: "nosign")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 8) {
+                TextField(UIStrings.agentSessionReviewTaskPlaceholder, text: $taskText, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(1...3)
+                TextField(UIStrings.agentSessionReviewExpectedPlaceholder, text: $expectedSkills, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(1...2)
+                ZStack(alignment: .topLeading) {
+                    if transcriptText.isEmpty {
+                        Text(UIStrings.agentSessionReviewTranscriptPlaceholder)
+                            .font(.callout)
+                            .foregroundStyle(.tertiary)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 8)
+                    }
+                    TextEditor(text: $transcriptText)
+                        .font(.system(.callout, design: .monospaced))
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 84, maxHeight: 126)
+                        .background(.quaternary.opacity(0.22), in: RoundedRectangle(cornerRadius: 6))
+                }
+            }
+
+            HStack(spacing: 8) {
+                Button {
+                    onReview()
+                } label: {
+                    Label(UIStrings.agentSessionReviewAction, systemImage: "checkmark.bubble")
+                }
+                .disabled(isReviewing || transcriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                Button {
+                    onLoad()
+                } label: {
+                    Label(UIStrings.agentSessionReviewLoadAction, systemImage: "arrow.clockwise")
+                }
+                .disabled(isLoading || isReviewing)
+
+                Spacer()
+            }
+
+            if isLoading || isReviewing {
+                Label(UIStrings.llmPreparing, systemImage: "hourglass")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let reason = reviewResult?.fallbackReason, !reason.isEmpty {
+                Label(reason, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            if let latestRecord {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(UIStrings.agentSessionReviewLatest)
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
+                    AgentSessionSkillReviewRecordView(record: latestRecord, compact: false)
+                }
+            } else if listResult.reviews.isEmpty {
+                Label(UIStrings.agentSessionReviewNoReviews, systemImage: "clock.badge.questionmark")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            AgentSessionSkillReviewListView(
+                result: listResult,
+                deleteResult: deleteResult,
+                isDeleting: isDeleting,
+                onDelete: onDelete
+            )
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct AgentSessionSkillReviewListView: View {
+    let result: AgentSessionSkillReviewListResult
+    let deleteResult: AgentSessionSkillReviewDeleteResult?
+    let isDeleting: (AgentSessionSkillReviewRecord) -> Bool
+    let onDelete: (AgentSessionSkillReviewRecord) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(UIStrings.agentSessionReviewReviews)
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(result.reviews.count)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            if let fallbackReason = result.fallbackReason, !fallbackReason.isEmpty {
+                Label(fallbackReason, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            if result.reviews.isEmpty {
+                Text(UIStrings.agentSessionReviewNoReviews)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(result.reviews.prefix(10)) { record in
+                        VStack(alignment: .leading, spacing: 7) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(record.title.isEmpty ? (record.taskText.isEmpty ? record.id : record.taskText) : record.title)
+                                    .font(.caption.bold())
+                                    .lineLimit(2)
+                                    .textSelection(.enabled)
+                                Spacer()
+                                Button {
+                                    onDelete(record)
+                                } label: {
+                                    Image(systemName: "trash")
+                                }
+                                .buttonStyle(.borderless)
+                                .disabled(isDeleting(record))
+                                .help(UIStrings.agentSessionReviewDeleteAction)
+                            }
+                            AgentSessionSkillReviewRecordView(record: record, compact: true)
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+            }
+
+            if let deleteResult, let reason = deleteResult.fallbackReason, !reason.isEmpty {
+                Label(reason, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+        }
+    }
+}
+
+private struct AgentSessionSkillReviewRecordView: View {
+    let record: AgentSessionSkillReviewRecord
+    let compact: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: compact ? 7 : 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(record.outcome.isEmpty ? UIStrings.unknown : record.outcome)
+                    .font(.caption2.bold())
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(outcomeTint.opacity(0.16), in: Capsule())
+                    .foregroundStyle(outcomeTint)
+                if !record.taskText.isEmpty {
+                    Text(record.taskText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(compact ? 1 : 2)
+                        .textSelection(.enabled)
+                }
+                Spacer()
+            }
+
+            if !compact {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 10)], alignment: .leading, spacing: 10) {
+                    SummaryChip(title: UIStrings.agentSessionReviewDetectedSkills, value: "\(record.detectedSkills.count)", systemImage: "wrench.and.screwdriver")
+                    SummaryChip(title: UIStrings.agentSessionReviewInterference, value: "\(record.interference.count)", systemImage: "exclamationmark.triangle")
+                    SummaryChip(title: UIStrings.agentSessionReviewSafeNextSteps, value: "\(record.safeNextSteps.count)", systemImage: "arrow.right.circle")
+                    SummaryChip(title: UIStrings.knowledgeSafetyFlags, value: "\(record.safetyFlags.count + record.safety.notes.count)", systemImage: "checkmark.shield")
+                }
+
+                Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                    MetadataRow(label: UIStrings.agentSessionReviewOutcome, value: record.outcome.isEmpty ? UIStrings.unknown : record.outcome)
+                    if let agent = record.agent, !agent.isEmpty {
+                        MetadataRow(label: UIStrings.agent, value: DisplayText.agent(agent))
+                    }
+                    if let createdAt = record.createdAt, !createdAt.isEmpty {
+                        MetadataRow(label: UIStrings.remediationHistoryRecordedAt, value: createdAt)
+                    }
+                    MetadataRow(label: UIStrings.skillQualityProviderNotSent, value: record.safety.providerRequestSent ? UIStrings.llmSkillAnalysisEnabledUnsafe : UIStrings.llmDisabled)
+                    MetadataRow(label: UIStrings.skillQualityWritesBlocked, value: readOnlyValue(!record.safety.writeBackAllowed && !record.safety.writeActionsAvailable))
+                    MetadataRow(label: UIStrings.skillQualityScriptsBlocked, value: readOnlyValue(!record.safety.scriptExecutionAllowed && !record.safety.executionActionsAvailable))
+                    MetadataRow(label: UIStrings.skillQualityMutationsBlocked, value: readOnlyValue(!record.safety.configMutationAllowed && !record.safety.snapshotCreated && !record.safety.triageMutationAllowed))
+                    MetadataRow(label: UIStrings.skillQualityCredentialsBlocked, value: readOnlyValue(!record.safety.credentialAccessed && !record.safety.rawSecretReturned))
+                }
+            }
+
+            if !record.summary.isEmpty {
+                Text(record.summary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(compact ? 3 : nil)
+                    .textSelection(.enabled)
+            }
+
+            AgentSessionSkillRefList(title: UIStrings.agentSessionReviewDetectedSkills, skills: record.detectedSkills)
+            AgentSessionSkillRefList(title: UIStrings.agentSessionReviewExpectedSkills, skills: record.expectedSkills)
+            AgentSessionInterferenceList(items: record.interference, compact: compact)
+            RoutingInlineList(title: UIStrings.agentSessionReviewSafeNextSteps, empty: UIStrings.agentSessionReviewNoSafeNextSteps, values: record.safeNextSteps, systemImage: "arrow.right.circle")
+
+            if !compact || !record.redactedExcerpt.isEmpty {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(UIStrings.agentSessionReviewRedactedExcerpt)
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
+                    Text(record.redactedExcerpt.isEmpty ? UIStrings.agentSessionReviewNoExcerpt : record.redactedExcerpt)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(record.redactedExcerpt.isEmpty ? .secondary : .primary)
+                        .lineLimit(compact ? 3 : nil)
+                        .textSelection(.enabled)
+                }
+            }
+
+            RoutingInlineList(title: UIStrings.agentSessionReviewReasons, empty: UIStrings.agentSessionReviewNoReasons, values: record.reasons, systemImage: "text.bubble")
+            RoutingInlineList(title: UIStrings.knowledgeSafetyFlags, empty: UIStrings.taskBenchmarkNoSafetyFlags, values: record.safetyFlags, systemImage: "lock.shield")
+            CrossAgentReadinessEvidenceList(evidence: record.evidenceReferences)
+            if !compact {
+                CrossAgentReadinessSafetyList(safety: record.safety)
+            }
+        }
+        .padding(compact ? 0 : 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(compact ? Color.clear : Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var outcomeTint: Color {
+        switch record.outcome.lowercased() {
+        case "hit", "matched", "expected_match", "expected-match", "correct":
+            return .green
+        case "miss", "wrong_pick", "wrong-pick", "interference":
+            return .red
+        case "ambiguous", "partial":
+            return .orange
+        default:
+            return .secondary
+        }
+    }
+
+    private func readOnlyValue(_ isBlocked: Bool) -> String {
+        isBlocked ? UIStrings.llmSkillAnalysisBlocked : UIStrings.llmSkillAnalysisEnabledUnsafe
+    }
+}
+
+private struct AgentSessionSkillRefList: View {
+    let title: String
+    let skills: [TaskBenchmarkSkillRef]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if skills.isEmpty {
+                Text(UIStrings.agentSessionReviewNoSkills)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text(skills.map(skillLabel).joined(separator: ", "))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .textSelection(.enabled)
+            }
+        }
+    }
+
+    private func skillLabel(_ skill: TaskBenchmarkSkillRef) -> String {
+        if skill.agent == UIStrings.unknown || skill.agent.isEmpty {
+            return skill.name
+        }
+        return "\(skill.name) (\(DisplayText.agent(skill.agent)))"
+    }
+}
+
+private struct AgentSessionInterferenceList: View {
+    let items: [AgentSessionInterferenceSignal]
+    let compact: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(UIStrings.agentSessionReviewInterference)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if items.isEmpty {
+                Text(UIStrings.agentSessionReviewNoInterference)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(items.prefix(compact ? 2 : 6)) { item in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Label(item.title, systemImage: "exclamationmark.triangle")
+                                .font(.caption.bold())
+                                .lineLimit(1)
+                            Spacer()
+                            Text(item.severity)
+                                .font(.caption2.bold())
+                                .foregroundStyle(.secondary)
+                        }
+                        if let agent = item.agent, !agent.isEmpty {
+                            Text(DisplayText.agent(agent))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        if let skill = item.skill {
+                            Text(skillLabel(skill))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        Text(item.detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(compact ? 2 : nil)
+                            .textSelection(.enabled)
+                        RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: item.evidenceRefs, systemImage: "checklist")
+                    }
+                    .padding(compact ? 0 : 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(compact ? Color.clear : Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
+                }
+            }
+        }
+    }
+
+    private func skillLabel(_ skill: TaskBenchmarkSkillRef) -> String {
+        if skill.agent == UIStrings.unknown || skill.agent.isEmpty {
+            return skill.name
+        }
+        return "\(skill.name) (\(DisplayText.agent(skill.agent)))"
     }
 }
 

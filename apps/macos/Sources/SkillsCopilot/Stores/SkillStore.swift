@@ -54,6 +54,9 @@ final class SkillStore: ObservableObject {
     @Published private(set) var traceImportList = AgentTraceImportListResult(imports: [])
     @Published private(set) var traceImportResult: AgentTraceImportResult?
     @Published private(set) var traceImportDeleteResult: AgentTraceImportDeleteResult?
+    @Published private(set) var agentSessionSkillReviewList = AgentSessionSkillReviewListResult(reviews: [])
+    @Published private(set) var agentSessionSkillReviewResult: AgentSessionSkillReviewResult?
+    @Published private(set) var agentSessionSkillReviewDeleteResult: AgentSessionSkillReviewDeleteResult?
     @Published private(set) var isLoadingTaskBenchmarks = false
     @Published private(set) var isSavingTaskBenchmark = false
     @Published private(set) var isEvaluatingTaskBenchmarks = false
@@ -73,8 +76,11 @@ final class SkillStore: ObservableObject {
     @Published private(set) var isRecordingRemediationHistory = false
     @Published private(set) var isLoadingTraceImports = false
     @Published private(set) var isImportingTrace = false
+    @Published private(set) var isLoadingAgentSessionSkillReviews = false
+    @Published private(set) var isReviewingAgentSessionSkillUse = false
     @Published private(set) var deletingTaskBenchmarkIDs: Set<String> = []
     @Published private(set) var deletingTraceImportIDs: Set<String> = []
+    @Published private(set) var deletingAgentSessionSkillReviewIDs: Set<String> = []
     @Published private(set) var llmPromptPreviews: [String: LLMPromptPreview] = [:]
     @Published private(set) var previewingLLMPromptKeys: Set<String> = []
     @Published private(set) var sendingLLMPromptKeys: Set<String> = []
@@ -128,6 +134,9 @@ final class SkillStore: ObservableObject {
             remediationBatchReviewResult = nil
             remediationHistoryResult = nil
             remediationHistoryRecordResult = nil
+            agentSessionSkillReviewResult = nil
+            agentSessionSkillReviewDeleteResult = nil
+            agentSessionSkillReviewList = AgentSessionSkillReviewListResult(reviews: [])
             Task { await loadAgentConfigSnapshots() }
             Task { await loadCleanupQueue() }
             Task { await loadCrossAgentComparisons() }
@@ -184,6 +193,9 @@ final class SkillStore: ObservableObject {
     @Published var traceImportTitle = ""
     @Published var traceImportTask = ""
     @Published var traceImportExpectedSkills = ""
+    @Published var agentSessionSkillReviewTranscript = ""
+    @Published var agentSessionSkillReviewTask = ""
+    @Published var agentSessionSkillReviewExpectedSkills = ""
     @Published var errorMessage: String?
 
     private let service: ServiceClient
@@ -202,7 +214,7 @@ final class SkillStore: ObservableObject {
     }
 
     private var isTaskBenchmarkBusy: Bool {
-        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isGroupingSimilarSkills || isBuildingCapabilityTaxonomy || isCheckingWorkspaceReadiness || isPlanningRemediation || isPreviewingRemediationDrafts || isPreviewingRemediationImpact || isReviewingRemediationBatch || isLoadingRemediationHistory || isRecordingRemediationHistory || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty
+        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isGroupingSimilarSkills || isBuildingCapabilityTaxonomy || isCheckingWorkspaceReadiness || isPlanningRemediation || isPreviewingRemediationDrafts || isPreviewingRemediationImpact || isReviewingRemediationBatch || isLoadingRemediationHistory || isRecordingRemediationHistory || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || isLoadingAgentSessionSkillReviews || isReviewingAgentSessionSkillUse || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty || !deletingAgentSessionSkillReviewIDs.isEmpty
     }
 
     private var isLLMPromptBusy: Bool {
@@ -615,6 +627,14 @@ final class SkillStore: ObservableObject {
 
     func isDeletingTraceImport(_ record: AgentTraceImportRecord) -> Bool {
         deletingTraceImportIDs.contains(record.id)
+    }
+
+    var latestAgentSessionSkillReview: AgentSessionSkillReviewRecord? {
+        agentSessionSkillReviewResult?.review ?? agentSessionSkillReviewList.reviews.first
+    }
+
+    func isDeletingAgentSessionSkillReview(_ record: AgentSessionSkillReviewRecord) -> Bool {
+        deletingAgentSessionSkillReviewIDs.contains(record.id)
     }
 
     func scriptExecutionPreview(for skill: SkillRecord) -> ScriptExecutionPreview? {
@@ -1814,6 +1834,102 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func loadAgentSessionSkillReviews() async {
+        guard !isLoadingAgentSessionSkillReviews else { return }
+        guard !isRefreshBusy else {
+            agentSessionSkillReviewList = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        isLoadingAgentSessionSkillReviews = true
+        defer { isLoadingAgentSessionSkillReviews = false }
+
+        let agent = agentFilter == .all ? nil : agentFilter.rawValue
+        do {
+            agentSessionSkillReviewList = try await service.listAgentSessionSkillReviews(
+                taskText: normalizedOptional(agentSessionSkillReviewTask),
+                agent: agent,
+                skill: selectedSkill,
+                project: activeProjectContext,
+                limit: 20
+            )
+        } catch {
+            agentSessionSkillReviewList = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
+    func reviewAgentSessionSkillUse() async {
+        let transcriptText = normalizedAgentSessionSkillReviewTranscript
+        guard !transcriptText.isEmpty else {
+            agentSessionSkillReviewResult = .unavailable(reason: UIStrings.agentSessionReviewInputRequired)
+            return
+        }
+        guard !isRefreshBusy else {
+            agentSessionSkillReviewResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        isReviewingAgentSessionSkillUse = true
+        defer { isReviewingAgentSessionSkillUse = false }
+
+        do {
+            let result = try await service.reviewAgentSessionSkillUse(
+                transcriptText: transcriptText,
+                taskText: normalizedOptional(agentSessionSkillReviewTask),
+                expectedSkillNames: normalizedAgentSessionExpectedSkillNames,
+                skill: selectedSkill,
+                project: activeProjectContext
+            )
+            agentSessionSkillReviewResult = result
+            var returnedReviews = result.reviews
+            if let review = result.review, !returnedReviews.contains(where: { $0.id == review.id }) {
+                returnedReviews.insert(review, at: 0)
+            }
+            for review in returnedReviews.reversed() {
+                upsertAgentSessionSkillReview(review)
+            }
+            if result.review != nil || !result.reviews.isEmpty {
+                agentSessionSkillReviewDeleteResult = nil
+                agentSessionSkillReviewTranscript = ""
+            } else if let reason = result.fallbackReason {
+                agentSessionSkillReviewList = .unavailable(reason: reason)
+            }
+        } catch {
+            agentSessionSkillReviewResult = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
+    func deleteAgentSessionSkillReview(_ record: AgentSessionSkillReviewRecord) async {
+        guard !isRefreshBusy else {
+            agentSessionSkillReviewDeleteResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        deletingAgentSessionSkillReviewIDs.insert(record.id)
+        defer { deletingAgentSessionSkillReviewIDs.remove(record.id) }
+
+        do {
+            let result = try await service.deleteAgentSessionSkillReview(reviewID: record.id)
+            agentSessionSkillReviewDeleteResult = result
+            guard result.deleted else { return }
+            agentSessionSkillReviewList = AgentSessionSkillReviewListResult(
+                generatedBy: agentSessionSkillReviewList.generatedBy,
+                catalogAvailable: agentSessionSkillReviewList.catalogAvailable,
+                filters: agentSessionSkillReviewList.filters,
+                summary: agentSessionSkillReviewList.summary,
+                reviews: agentSessionSkillReviewList.reviews.filter { $0.id != record.id },
+                evidenceReferences: agentSessionSkillReviewList.evidenceReferences,
+                safetyFlags: agentSessionSkillReviewList.safetyFlags,
+                fallbackReason: agentSessionSkillReviewList.fallbackReason
+            )
+            if agentSessionSkillReviewResult?.review?.id == record.id {
+                agentSessionSkillReviewResult = nil
+            }
+        } catch {
+            agentSessionSkillReviewDeleteResult = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
     func deleteTaskBenchmark(_ benchmark: TaskBenchmarkRecord) async {
         guard !isRefreshBusy else {
             taskBenchmarkDeleteResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
@@ -2305,8 +2421,19 @@ final class SkillStore: ObservableObject {
         traceImportText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private var normalizedAgentSessionSkillReviewTranscript: String {
+        agentSessionSkillReviewTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private var normalizedTraceExpectedSkillNames: [String] {
         traceImportExpectedSkills
+            .split(whereSeparator: { $0 == "," || $0 == "\n" || $0 == ";" })
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private var normalizedAgentSessionExpectedSkillNames: [String] {
+        agentSessionSkillReviewExpectedSkills
             .split(whereSeparator: { $0 == "," || $0 == "\n" || $0 == ";" })
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
@@ -2327,6 +2454,12 @@ final class SkillStore: ObservableObject {
         var imports = traceImportList.imports.filter { $0.id != record.id }
         imports.insert(record, at: 0)
         traceImportList = AgentTraceImportListResult(imports: imports, fallbackReason: nil)
+    }
+
+    private func upsertAgentSessionSkillReview(_ record: AgentSessionSkillReviewRecord) {
+        var reviews = agentSessionSkillReviewList.reviews.filter { $0.id != record.id }
+        reviews.insert(record, at: 0)
+        agentSessionSkillReviewList = AgentSessionSkillReviewListResult(reviews: reviews, fallbackReason: nil)
     }
 
     private func canSendLLMPrompt(_ preview: LLMPromptPreview) -> Bool {
@@ -2498,6 +2631,9 @@ final class SkillStore: ObservableObject {
         routingRegressionDetection = nil
         remediationHistoryResult = nil
         remediationHistoryRecordResult = nil
+        agentSessionSkillReviewResult = nil
+        agentSessionSkillReviewDeleteResult = nil
+        agentSessionSkillReviewList = AgentSessionSkillReviewListResult(reviews: [])
         Task { @MainActor [weak self] in
             await self?.loadSelectedDetail()
             await self?.loadCrossAgentComparisons()

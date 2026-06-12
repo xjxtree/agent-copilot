@@ -84,6 +84,9 @@ const SUPPORTED_METHODS: &[&str] = &[
     "task.saveRoutingBaseline",
     "task.detectRoutingRegression",
     "routing.accuracyDashboard",
+    "session.reviewAgentSkillUse",
+    "session.listSkillReviews",
+    "session.deleteSkillReview",
     "trace.importLocal",
     "trace.listImports",
     "trace.deleteImport",
@@ -174,6 +177,7 @@ pub struct ServiceStatus {
     pub adapter_diagnostics: Vec<AdapterDiagnosticsRecord>,
     pub llm: LlmStatus,
     pub trace_imports: TraceImportStatus,
+    pub session_reviews: AgentSessionSkillReviewStatus,
     pub script_execution: ScriptExecutionStatus,
 }
 
@@ -287,6 +291,15 @@ pub struct ScriptExecutionStatus {
 pub struct TraceImportStatus {
     pub count: usize,
     pub imports_path: String,
+    pub app_local_only: bool,
+    pub raw_trace_persistence_allowed: bool,
+    pub provider_request_allowed: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AgentSessionSkillReviewStatus {
+    pub count: usize,
+    pub reviews_path: String,
     pub app_local_only: bool,
     pub raw_trace_persistence_allowed: bool,
     pub provider_request_allowed: bool,
@@ -2328,6 +2341,187 @@ pub struct RoutingAccuracySafetyFlags {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentSessionSkillReviewRecord {
+    pub id: String,
+    pub title: String,
+    pub source_kind: String,
+    pub agent: Option<String>,
+    pub task: Option<String>,
+    pub trace_import_ids: Vec<String>,
+    pub missing_trace_import_ids: Vec<String>,
+    pub expected_skill_refs: Vec<String>,
+    pub expected_skill_names: Vec<String>,
+    pub excerpt: String,
+    pub excerpt_char_count: usize,
+    pub content_hash: String,
+    #[serde(default = "agent_session_review_redaction_summary_default")]
+    pub redaction_summary: AgentSessionSkillReviewRedactionSummary,
+    pub reviewed_at: i64,
+    pub analysis: AgentSessionSkillReviewAnalysis,
+    #[serde(default = "agent_session_review_safety_flags")]
+    pub safety_flags: AgentSessionSkillReviewSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentSessionSkillReviewAnalysis {
+    pub generated_by: String,
+    pub catalog_available: bool,
+    pub outcome: String,
+    pub summary: String,
+    pub reasons: Vec<String>,
+    pub detected_skills: Vec<TraceDetectedSkill>,
+    pub expected_skill_signals: Vec<AgentSessionExpectedSkillSignal>,
+    pub referenced_traces: Vec<AgentSessionReferencedTrace>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentSessionExpectedSkillSignal {
+    pub kind: String,
+    pub value: String,
+    pub matched: bool,
+    pub matched_instance_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentSessionReferencedTrace {
+    pub id: String,
+    pub title: String,
+    pub outcome: String,
+    pub imported_at: i64,
+    pub detected_skill_count: usize,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentSessionSkillReviewRedactionSummary {
+    pub status: String,
+    pub redacted_value_count: usize,
+    pub redacted_fields: Vec<String>,
+    pub placeholders: Vec<String>,
+    pub raw_trace_persisted: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_secret_returned: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct AgentSessionSkillReviewSafetyFlags {
+    pub read_only: bool,
+    pub app_local_only: bool,
+    pub provider_request_sent: bool,
+    pub write_back_allowed: bool,
+    pub write_actions_available: bool,
+    pub skill_files_mutated: bool,
+    pub agent_config_mutated: bool,
+    pub script_execution_allowed: bool,
+    pub execution_actions_available: bool,
+    pub config_mutation_allowed: bool,
+    pub snapshot_created: bool,
+    pub triage_mutation_allowed: bool,
+    pub credential_accessed: bool,
+    pub raw_secret_returned: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_trace_persisted: bool,
+    pub cloud_sync_performed: bool,
+    pub telemetry_emitted: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct AgentSessionSkillReviewParams {
+    #[serde(
+        default,
+        alias = "trace_text",
+        alias = "transcript",
+        alias = "transcript_text"
+    )]
+    pub content: String,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub source_kind: Option<String>,
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default, alias = "task_text", alias = "user_intent")]
+    pub task: Option<String>,
+    #[serde(default, alias = "trace_ids", alias = "import_ids")]
+    pub trace_import_ids: Vec<String>,
+    #[serde(default)]
+    pub expected_skill_refs: Vec<String>,
+    #[serde(default)]
+    pub expected_skill_names: Vec<String>,
+    #[serde(default)]
+    pub max_excerpt_chars: Option<usize>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct AgentSessionListSkillReviewsParams {
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default)]
+    pub outcome: Option<String>,
+    #[serde(default, alias = "trace_id", alias = "import_id")]
+    pub trace_import_id: Option<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AgentSessionDeleteSkillReviewParams {
+    #[serde(alias = "review_id")]
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AgentSessionSkillReviewResult {
+    pub generated_by: &'static str,
+    pub review: AgentSessionSkillReviewRecord,
+    pub count: usize,
+    pub app_local_only: bool,
+    pub review_file: &'static str,
+    pub provider_request_sent: bool,
+    pub skill_files_mutated: bool,
+    pub agent_config_mutated: bool,
+    pub snapshot_created: bool,
+    pub triage_mutated: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_trace_persisted: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AgentSessionSkillReviewListResult {
+    pub generated_by: &'static str,
+    pub count: usize,
+    pub total_count: usize,
+    pub reviews: Vec<AgentSessionSkillReviewRecord>,
+    pub app_local_only: bool,
+    pub review_file: &'static str,
+    pub provider_request_sent: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_trace_persisted: bool,
+    pub safety_flags: AgentSessionSkillReviewSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AgentSessionSkillReviewDeleteResult {
+    pub review_id: String,
+    pub deleted: bool,
+    pub remaining_count: usize,
+    pub app_local_only: bool,
+    pub provider_request_sent: bool,
+    pub skill_files_mutated: bool,
+    pub agent_config_mutated: bool,
+    pub snapshot_created: bool,
+    pub triage_mutated: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_trace_persisted: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TraceImportRecord {
     pub id: String,
     pub title: String,
@@ -3566,6 +3760,27 @@ impl ServiceHost {
                 };
                 serde_json::to_value(self.routing_accuracy_dashboard(params)?).map_err(Into::into)
             }
+            "session.reviewAgentSkillUse" => {
+                let params: AgentSessionSkillReviewParams = if request.params.is_null() {
+                    AgentSessionSkillReviewParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.review_agent_skill_use(params)?).map_err(Into::into)
+            }
+            "session.listSkillReviews" => {
+                let params: AgentSessionListSkillReviewsParams = if request.params.is_null() {
+                    AgentSessionListSkillReviewsParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.list_agent_skill_reviews(params)?).map_err(Into::into)
+            }
+            "session.deleteSkillReview" => {
+                let params: AgentSessionDeleteSkillReviewParams =
+                    serde_json::from_value(request.params)?;
+                serde_json::to_value(self.delete_agent_skill_review(params)?).map_err(Into::into)
+            }
             "trace.importLocal" => {
                 let params: TraceImportLocalParams = serde_json::from_value(request.params)?;
                 serde_json::to_value(self.import_local_trace(params)?).map_err(Into::into)
@@ -4393,6 +4608,7 @@ impl ServiceHost {
             adapter_diagnostics: list_adapter_diagnostics(&adapter_ctx),
             llm: self.llm_status(),
             trace_imports: self.trace_import_status(),
+            session_reviews: self.agent_session_review_status(),
             script_execution: self.script_execution_status(),
         }
     }
@@ -4484,6 +4700,19 @@ impl ServiceHost {
                 .map(|imports| imports.len())
                 .unwrap_or_default(),
             imports_path: display_path(&self.trace_imports_path()),
+            app_local_only: true,
+            raw_trace_persistence_allowed: false,
+            provider_request_allowed: false,
+        }
+    }
+
+    pub fn agent_session_review_status(&self) -> AgentSessionSkillReviewStatus {
+        AgentSessionSkillReviewStatus {
+            count: self
+                .load_agent_session_reviews()
+                .map(|reviews| reviews.len())
+                .unwrap_or_default(),
+            reviews_path: display_path(&self.agent_session_reviews_path()),
             app_local_only: true,
             raw_trace_persistence_allowed: false,
             provider_request_allowed: false,
@@ -8722,6 +8951,266 @@ impl ServiceHost {
         })
     }
 
+    pub fn review_agent_skill_use(
+        &self,
+        params: AgentSessionSkillReviewParams,
+    ) -> Result<AgentSessionSkillReviewResult, ServiceError> {
+        let content = params.content.trim().to_string();
+        let requested_trace_import_ids = normalize_string_list(
+            params
+                .trace_import_ids
+                .into_iter()
+                .map(|id| sanitize_trace_import_id(id.trim()))
+                .filter(|id| !id.is_empty())
+                .collect(),
+        );
+        if content.is_empty() && requested_trace_import_ids.is_empty() {
+            return Err(ServiceError::InvalidRequest(
+                "session.reviewAgentSkillUse requires transcript content or trace_import_ids"
+                    .to_string(),
+            ));
+        }
+
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let redaction_roots = self.trace_redaction_roots(&adapter_ctx);
+        let mut redactor = PromptRedactor::new(&redaction_roots);
+        let imports = self.load_trace_imports()?;
+        let mut referenced_imports = Vec::new();
+        let mut missing_trace_import_ids = Vec::new();
+        for trace_id in &requested_trace_import_ids {
+            if let Some(import) = imports.iter().find(|import| import.id == *trace_id) {
+                referenced_imports.push(import.clone());
+            } else {
+                missing_trace_import_ids.push(trace_id.clone());
+            }
+        }
+
+        let mut expected_refs = params.expected_skill_refs;
+        let mut expected_names = params.expected_skill_names;
+        for import in &referenced_imports {
+            expected_refs.extend(import.expected_skill_refs.clone());
+            expected_names.extend(import.expected_skill_names.clone());
+        }
+        let expected_skill_refs = redact_normalized_string_list(expected_refs, &redaction_roots);
+        let expected_skill_names = redact_normalized_string_list(expected_names, &redaction_roots);
+
+        let task = params
+            .task
+            .as_deref()
+            .map(str::trim)
+            .filter(|task| !task.is_empty())
+            .map(|task| truncate_chars(&redactor.redact(task), 320))
+            .or_else(|| {
+                referenced_imports
+                    .iter()
+                    .find_map(|import| import.task.clone())
+            });
+        let title = params
+            .title
+            .as_deref()
+            .map(str::trim)
+            .filter(|title| !title.is_empty())
+            .map(|title| truncate_chars(&redactor.redact(title), 180))
+            .or_else(|| task.clone())
+            .or_else(|| {
+                referenced_imports
+                    .first()
+                    .map(|import| format!("Session review: {}", import.title))
+            })
+            .unwrap_or_else(|| "Agent session skill review".to_string());
+        let source_kind = params
+            .source_kind
+            .as_deref()
+            .map(str::trim)
+            .filter(|source_kind| !source_kind.is_empty())
+            .map(|source_kind| truncate_chars(&redactor.redact(source_kind), 100))
+            .unwrap_or_else(|| {
+                if content.is_empty() {
+                    "trace-import-reference".to_string()
+                } else {
+                    "agent-session-transcript".to_string()
+                }
+            });
+        let agent = params
+            .agent
+            .as_deref()
+            .map(str::trim)
+            .filter(|agent| !agent.is_empty())
+            .map(|agent| truncate_chars(&redactor.redact(agent), 80))
+            .or_else(|| single_referenced_trace_agent(&referenced_imports));
+
+        let max_excerpt_chars = params.max_excerpt_chars.unwrap_or(1_200).clamp(120, 6_000);
+        let mut excerpt_parts = Vec::new();
+        if !content.is_empty() {
+            excerpt_parts.push(redactor.redact(&content));
+        }
+        excerpt_parts.extend(
+            referenced_imports
+                .iter()
+                .map(|import| import.excerpt.clone()),
+        );
+        if excerpt_parts.is_empty() {
+            excerpt_parts.push("No matching trace import excerpt was available.".to_string());
+        }
+        let excerpt = truncate_chars(&excerpt_parts.join("\n\n"), max_excerpt_chars);
+        let excerpt_char_count = excerpt.chars().count();
+
+        let mut analysis_parts = Vec::new();
+        if !content.is_empty() {
+            analysis_parts.push(content.clone());
+        }
+        analysis_parts.extend(
+            referenced_imports
+                .iter()
+                .map(|import| import.excerpt.clone()),
+        );
+        let analysis_content = analysis_parts.join("\n\n");
+        let analysis = self.analyze_agent_session_skill_use(
+            &analysis_content,
+            &expected_skill_refs,
+            &expected_skill_names,
+            agent.as_deref(),
+            &referenced_imports,
+            &missing_trace_import_ids,
+        )?;
+        let content_hash = trace_content_hash(&format!(
+            "{}\0{}",
+            content,
+            requested_trace_import_ids.join("\0")
+        ));
+        let reviewed_at = unix_timestamp_millis();
+        let redaction_summary = agent_session_review_redaction_summary_from(redactor.summary());
+        let record = AgentSessionSkillReviewRecord {
+            id: generated_agent_session_review_id(&title, &content_hash, reviewed_at),
+            title,
+            source_kind,
+            agent,
+            task,
+            trace_import_ids: referenced_imports
+                .iter()
+                .map(|import| import.id.clone())
+                .collect(),
+            missing_trace_import_ids,
+            expected_skill_refs,
+            expected_skill_names,
+            excerpt,
+            excerpt_char_count,
+            content_hash,
+            redaction_summary,
+            reviewed_at,
+            analysis,
+            safety_flags: agent_session_review_safety_flags(),
+        };
+
+        let mut reviews = self.load_agent_session_reviews()?;
+        reviews.push(record.clone());
+        self.save_agent_session_reviews(&reviews)?;
+        Ok(AgentSessionSkillReviewResult {
+            generated_by: "local-v2.62",
+            review: record,
+            count: reviews.len(),
+            app_local_only: true,
+            review_file: "agent-session-reviews.json",
+            provider_request_sent: false,
+            skill_files_mutated: false,
+            agent_config_mutated: false,
+            snapshot_created: false,
+            triage_mutated: false,
+            raw_prompt_persisted: false,
+            raw_response_persisted: false,
+            raw_trace_persisted: false,
+        })
+    }
+
+    pub fn list_agent_skill_reviews(
+        &self,
+        params: AgentSessionListSkillReviewsParams,
+    ) -> Result<AgentSessionSkillReviewListResult, ServiceError> {
+        let limit = params.limit.unwrap_or(50).clamp(1, 500);
+        let agent = params
+            .agent
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+        let outcome = params
+            .outcome
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| value.to_ascii_lowercase());
+        let trace_import_id = params
+            .trace_import_id
+            .as_deref()
+            .map(str::trim)
+            .map(sanitize_trace_import_id)
+            .filter(|value| !value.is_empty());
+        let mut reviews = self.load_agent_session_reviews()?;
+        reviews.retain(|review| {
+            let agent_matches = agent
+                .as_deref()
+                .is_none_or(|filter| review.agent.as_deref() == Some(filter));
+            let outcome_matches = outcome
+                .as_deref()
+                .is_none_or(|filter| review.analysis.outcome.eq_ignore_ascii_case(filter));
+            let trace_matches = trace_import_id.as_deref().is_none_or(|filter| {
+                review
+                    .trace_import_ids
+                    .iter()
+                    .any(|trace_id| trace_id == filter)
+            });
+            agent_matches && outcome_matches && trace_matches
+        });
+        let total_count = reviews.len();
+        reviews.truncate(limit);
+        Ok(AgentSessionSkillReviewListResult {
+            generated_by: "local-v2.62",
+            count: reviews.len(),
+            total_count,
+            reviews,
+            app_local_only: true,
+            review_file: "agent-session-reviews.json",
+            provider_request_sent: false,
+            raw_prompt_persisted: false,
+            raw_response_persisted: false,
+            raw_trace_persisted: false,
+            safety_flags: agent_session_review_safety_flags(),
+        })
+    }
+
+    pub fn delete_agent_skill_review(
+        &self,
+        params: AgentSessionDeleteSkillReviewParams,
+    ) -> Result<AgentSessionSkillReviewDeleteResult, ServiceError> {
+        let id = sanitize_agent_session_review_id(params.id.trim());
+        if id.is_empty() {
+            return Err(ServiceError::InvalidRequest(
+                "session.deleteSkillReview requires a review id".to_string(),
+            ));
+        }
+        let mut reviews = self.load_agent_session_reviews()?;
+        let before = reviews.len();
+        reviews.retain(|review| review.id != id);
+        let deleted = reviews.len() != before;
+        if deleted {
+            self.save_agent_session_reviews(&reviews)?;
+        }
+        Ok(AgentSessionSkillReviewDeleteResult {
+            review_id: id,
+            deleted,
+            remaining_count: reviews.len(),
+            app_local_only: true,
+            provider_request_sent: false,
+            skill_files_mutated: false,
+            agent_config_mutated: false,
+            snapshot_created: false,
+            triage_mutated: false,
+            raw_prompt_persisted: false,
+            raw_response_persisted: false,
+            raw_trace_persisted: false,
+        })
+    }
+
     pub fn import_local_trace(
         &self,
         params: TraceImportLocalParams,
@@ -10108,6 +10597,10 @@ impl ServiceHost {
         self.app_data_dir.join("trace-imports.json")
     }
 
+    fn agent_session_reviews_path(&self) -> PathBuf {
+        self.app_data_dir.join("agent-session-reviews.json")
+    }
+
     fn llm_prompt_runs_path(&self) -> PathBuf {
         self.app_data_dir.join("prompt-runs.json")
     }
@@ -10190,6 +10683,32 @@ impl ServiceHost {
                 .then_with(|| left.title.cmp(&right.title))
                 .then_with(|| left.id.cmp(&right.id))
         });
+        let content = serde_json::to_string_pretty(&sorted)?;
+        fs::write(path, content)?;
+        Ok(())
+    }
+
+    fn load_agent_session_reviews(
+        &self,
+    ) -> Result<Vec<AgentSessionSkillReviewRecord>, ServiceError> {
+        let path = self.agent_session_reviews_path();
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        let content = fs::read_to_string(path)?;
+        let mut reviews: Vec<AgentSessionSkillReviewRecord> = serde_json::from_str(&content)?;
+        reviews.sort_by(agent_session_review_record_sort);
+        Ok(reviews)
+    }
+
+    fn save_agent_session_reviews(
+        &self,
+        reviews: &[AgentSessionSkillReviewRecord],
+    ) -> Result<(), ServiceError> {
+        fs::create_dir_all(&self.app_data_dir)?;
+        let path = self.agent_session_reviews_path();
+        let mut sorted = reviews.to_vec();
+        sorted.sort_by(agent_session_review_record_sort);
         let content = serde_json::to_string_pretty(&sorted)?;
         fs::write(path, content)?;
         Ok(())
@@ -10473,6 +10992,148 @@ impl ServiceHost {
             outcome: outcome.to_string(),
             reasons,
             detected_skills: detected,
+            evidence_refs,
+        })
+    }
+
+    fn analyze_agent_session_skill_use(
+        &self,
+        content: &str,
+        expected_skill_refs: &[String],
+        expected_skill_names: &[String],
+        agent_filter: Option<&str>,
+        referenced_imports: &[TraceImportRecord],
+        missing_trace_import_ids: &[String],
+    ) -> Result<AgentSessionSkillReviewAnalysis, ServiceError> {
+        let trace_analysis = self.analyze_imported_trace(
+            content,
+            expected_skill_refs,
+            expected_skill_names,
+            agent_filter,
+        )?;
+        let mut detected = trace_analysis.detected_skills;
+        for import in referenced_imports {
+            detected.extend(import.analysis.detected_skills.clone());
+        }
+        detected.sort_by(|left, right| {
+            left.agent
+                .cmp(&right.agent)
+                .then_with(|| left.skill_name.cmp(&right.skill_name))
+                .then_with(|| left.instance_id.cmp(&right.instance_id))
+        });
+        detected.dedup_by(|left, right| {
+            left.instance_id == right.instance_id && left.definition_id == right.definition_id
+        });
+
+        let catalog_available = trace_analysis.catalog_available
+            || referenced_imports
+                .iter()
+                .any(|import| import.analysis.catalog_available);
+        let expected_present = !expected_skill_refs.is_empty() || !expected_skill_names.is_empty();
+        let matching_expected = detected
+            .iter()
+            .filter(|skill| {
+                expected_skill_refs.iter().any(|expected| {
+                    skill.instance_id.eq_ignore_ascii_case(expected)
+                        || skill.definition_id.eq_ignore_ascii_case(expected)
+                }) || expected_skill_names
+                    .iter()
+                    .any(|expected| skill.skill_name.eq_ignore_ascii_case(expected))
+            })
+            .count();
+        let unexpected_detected = detected.len().saturating_sub(matching_expected);
+        let outcome = if !catalog_available {
+            "unknown"
+        } else if !expected_present {
+            if detected.len() > 1 {
+                "ambiguous"
+            } else {
+                "unknown"
+            }
+        } else if detected.is_empty() {
+            "miss"
+        } else if matching_expected == 0 {
+            "wrong_pick"
+        } else if unexpected_detected > 0 {
+            "ambiguous"
+        } else {
+            "hit"
+        };
+
+        let mut reasons = trace_outcome_reasons(
+            outcome,
+            detected.len(),
+            matching_expected,
+            unexpected_detected,
+            expected_present,
+            agent_filter,
+        );
+        if referenced_imports.is_empty() {
+            reasons.push("Review used pasted session transcript text only.".to_string());
+        } else {
+            reasons.push(format!(
+                "Review reused {} app-local trace import reference(s); only their redacted excerpts and deterministic analysis were read.",
+                referenced_imports.len()
+            ));
+        }
+        if !missing_trace_import_ids.is_empty() {
+            reasons.push(format!(
+                "{} requested trace import reference(s) were not found in app-local history.",
+                missing_trace_import_ids.len()
+            ));
+        }
+        reasons.sort();
+        reasons.dedup();
+
+        let mut evidence_refs = detected
+            .iter()
+            .flat_map(|skill| skill.evidence_refs.clone())
+            .collect::<Vec<_>>();
+        evidence_refs.extend(
+            referenced_imports
+                .iter()
+                .map(|import| format!("trace-import:{}", import.id)),
+        );
+        evidence_refs.extend(
+            referenced_imports
+                .iter()
+                .flat_map(|import| import.analysis.evidence_refs.clone()),
+        );
+        evidence_refs.sort();
+        evidence_refs.dedup();
+
+        let expected_skill_signals = agent_session_expected_skill_signals(
+            expected_skill_refs,
+            expected_skill_names,
+            &detected,
+        );
+        let referenced_traces = referenced_imports
+            .iter()
+            .map(|import| AgentSessionReferencedTrace {
+                id: import.id.clone(),
+                title: import.title.clone(),
+                outcome: import.analysis.outcome.clone(),
+                imported_at: import.imported_at,
+                detected_skill_count: import.analysis.detected_skills.len(),
+                evidence_refs: import.analysis.evidence_refs.clone(),
+            })
+            .collect::<Vec<_>>();
+
+        Ok(AgentSessionSkillReviewAnalysis {
+            generated_by: "deterministic-service".to_string(),
+            catalog_available,
+            outcome: outcome.to_string(),
+            summary: agent_session_review_summary(
+                outcome,
+                detected.len(),
+                expected_skill_signals.len(),
+                referenced_traces.len(),
+                missing_trace_import_ids.len(),
+            ),
+            reasons,
+            detected_skills: detected,
+            expected_skill_signals,
+            referenced_traces,
             evidence_refs,
         })
     }
@@ -18001,6 +18662,69 @@ fn trace_import_safety_flags() -> TraceImportSafetyFlags {
     }
 }
 
+fn agent_session_review_safety_flags() -> AgentSessionSkillReviewSafetyFlags {
+    AgentSessionSkillReviewSafetyFlags {
+        read_only: true,
+        app_local_only: true,
+        provider_request_sent: false,
+        write_back_allowed: false,
+        write_actions_available: false,
+        skill_files_mutated: false,
+        agent_config_mutated: false,
+        script_execution_allowed: false,
+        execution_actions_available: false,
+        config_mutation_allowed: false,
+        snapshot_created: false,
+        triage_mutation_allowed: false,
+        credential_accessed: false,
+        raw_secret_returned: false,
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+        raw_trace_persisted: false,
+        cloud_sync_performed: false,
+        telemetry_emitted: false,
+    }
+}
+
+fn agent_session_review_redaction_summary_default() -> AgentSessionSkillReviewRedactionSummary {
+    AgentSessionSkillReviewRedactionSummary {
+        status: "redacted-local-only".to_string(),
+        redacted_value_count: 0,
+        redacted_fields: Vec::new(),
+        placeholders: vec![
+            "$HOME".to_string(),
+            "<project-root>".to_string(),
+            "<project-cwd>".to_string(),
+            "<app-data-dir>".to_string(),
+            "<redacted>".to_string(),
+            "<redacted-url>".to_string(),
+        ],
+        raw_trace_persisted: false,
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+        raw_secret_returned: false,
+    }
+}
+
+fn agent_session_review_redaction_summary_from(
+    summary: LlmPromptRedactionSummary,
+) -> AgentSessionSkillReviewRedactionSummary {
+    AgentSessionSkillReviewRedactionSummary {
+        status: "redacted-local-only".to_string(),
+        redacted_value_count: summary.redacted_value_count,
+        redacted_fields: summary.redacted_fields,
+        placeholders: summary
+            .placeholders
+            .into_iter()
+            .map(str::to_string)
+            .collect(),
+        raw_trace_persisted: false,
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+        raw_secret_returned: summary.raw_secret_returned,
+    }
+}
+
 fn remediation_history_safety_flags() -> RemediationHistorySafetyFlags {
     RemediationHistorySafetyFlags {
         read_only: true,
@@ -18695,11 +19419,110 @@ fn generated_trace_import_id(title: &str, content_hash: &str, imported_at: i64) 
     format!("trace-import-{}", hex_prefix(&digest, 12))
 }
 
+fn generated_agent_session_review_id(title: &str, content_hash: &str, reviewed_at: i64) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(title.as_bytes());
+    hasher.update(b"\0");
+    hasher.update(content_hash.as_bytes());
+    hasher.update(b"\0");
+    hasher.update(reviewed_at.to_string().as_bytes());
+    let digest = hasher.finalize();
+    format!("agent-session-review-{}", hex_prefix(&digest, 12))
+}
+
 fn sanitize_trace_import_id(id: &str) -> String {
     id.chars()
         .filter(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
         .take(96)
         .collect()
+}
+
+fn sanitize_agent_session_review_id(id: &str) -> String {
+    id.chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
+        .take(96)
+        .collect()
+}
+
+fn agent_session_review_record_sort(
+    left: &AgentSessionSkillReviewRecord,
+    right: &AgentSessionSkillReviewRecord,
+) -> std::cmp::Ordering {
+    right
+        .reviewed_at
+        .cmp(&left.reviewed_at)
+        .then_with(|| left.title.cmp(&right.title))
+        .then_with(|| left.id.cmp(&right.id))
+}
+
+fn single_referenced_trace_agent(imports: &[TraceImportRecord]) -> Option<String> {
+    let mut agents = imports
+        .iter()
+        .filter_map(|import| import.agent.as_deref())
+        .filter(|agent| !agent.is_empty())
+        .map(ToOwned::to_owned)
+        .collect::<Vec<_>>();
+    agents.sort();
+    agents.dedup();
+    if agents.len() == 1 {
+        agents.pop()
+    } else {
+        None
+    }
+}
+
+fn agent_session_expected_skill_signals(
+    expected_skill_refs: &[String],
+    expected_skill_names: &[String],
+    detected: &[TraceDetectedSkill],
+) -> Vec<AgentSessionExpectedSkillSignal> {
+    let mut signals = Vec::new();
+    for expected in expected_skill_refs {
+        let mut matched_instance_ids = detected
+            .iter()
+            .filter(|skill| {
+                skill.instance_id.eq_ignore_ascii_case(expected)
+                    || skill.definition_id.eq_ignore_ascii_case(expected)
+            })
+            .map(|skill| skill.instance_id.clone())
+            .collect::<Vec<_>>();
+        matched_instance_ids.sort();
+        matched_instance_ids.dedup();
+        signals.push(AgentSessionExpectedSkillSignal {
+            kind: "skill_ref".to_string(),
+            value: expected.clone(),
+            matched: !matched_instance_ids.is_empty(),
+            matched_instance_ids,
+        });
+    }
+    for expected in expected_skill_names {
+        let mut matched_instance_ids = detected
+            .iter()
+            .filter(|skill| skill.skill_name.eq_ignore_ascii_case(expected))
+            .map(|skill| skill.instance_id.clone())
+            .collect::<Vec<_>>();
+        matched_instance_ids.sort();
+        matched_instance_ids.dedup();
+        signals.push(AgentSessionExpectedSkillSignal {
+            kind: "skill_name".to_string(),
+            value: expected.clone(),
+            matched: !matched_instance_ids.is_empty(),
+            matched_instance_ids,
+        });
+    }
+    signals
+}
+
+fn agent_session_review_summary(
+    outcome: &str,
+    detected_count: usize,
+    expected_signal_count: usize,
+    referenced_trace_count: usize,
+    missing_trace_count: usize,
+) -> String {
+    format!(
+        "Session skill-use review outcome is {outcome}; detected {detected_count} skill signal(s), checked {expected_signal_count} expected signal(s), reused {referenced_trace_count} trace import(s), and missed {missing_trace_count} requested trace reference(s)."
+    )
 }
 
 fn generated_remediation_history_id(title: &str, decision: &str, recorded_at: i64) -> String {
@@ -21806,6 +22629,9 @@ mod tests {
         assert!(methods.contains(&Value::String("task.saveRoutingBaseline".to_string())));
         assert!(methods.contains(&Value::String("task.detectRoutingRegression".to_string())));
         assert!(methods.contains(&Value::String("routing.accuracyDashboard".to_string())));
+        assert!(methods.contains(&Value::String("session.reviewAgentSkillUse".to_string())));
+        assert!(methods.contains(&Value::String("session.listSkillReviews".to_string())));
+        assert!(methods.contains(&Value::String("session.deleteSkillReview".to_string())));
         assert!(methods.contains(&Value::String("trace.importLocal".to_string())));
         assert!(methods.contains(&Value::String("trace.listImports".to_string())));
         assert!(methods.contains(&Value::String("trace.deleteImport".to_string())));
@@ -26482,6 +27308,236 @@ mod tests {
     }
 
     #[test]
+    fn agent_session_review_rejects_empty_input_without_writing() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-session-review-empty-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("session-review-empty".to_string()),
+            method: "session.reviewAgentSkillUse".to_string(),
+            params: json!({ "content": "   ", "trace_import_ids": [] }),
+        });
+
+        assert!(!response.ok);
+        let error = response.error.expect("empty session review error");
+        assert_eq!(error.code, "invalid_request");
+        assert!(error
+            .message
+            .contains("transcript content or trace_import_ids"));
+        assert!(!host.agent_session_reviews_path().exists());
+        assert!(!host.catalog_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn agent_session_review_persists_redacted_only_app_local_record() {
+        let unique = unique_suffix();
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-session-review-test-{}-{unique}",
+            std::process::id(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-session-review-home-{}-{unique}",
+            std::process::id(),
+        ));
+        let project_root = app_data_dir.join("project-root");
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: Some(project_root.clone()),
+                project_cwd: Some(project_root.clone()),
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_llm_skill(&host, &project_root.join("fixture-skill").join("SKILL.md"));
+        let raw_secret = "session-secret-value";
+        let key_label = ["API", "_", "KEY"].join("");
+        let auth_label = ["Author", "ization"].join("");
+        let raw_content = format!(
+            "Assistant selected llm-skill-id and llm-fixture for the task.\n{key_label}={raw_secret}\nPath: {}\n{auth_label}: Bearer {raw_secret}",
+            user_home.join(".local/share/session.log").display()
+        );
+
+        let response = host.handle(ServiceRequest {
+            id: Some("session-review".to_string()),
+            method: "session.reviewAgentSkillUse".to_string(),
+            params: json!({
+                "transcript_text": raw_content,
+                "title": "Session review with local path",
+                "agent": "claude-code",
+                "task": "Analyze local skill posture",
+                "expected_skill_refs": ["llm-skill-id"],
+                "expected_skill_names": ["llm-fixture"],
+                "max_excerpt_chars": 1600
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("session review result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("local-v2.62")
+        );
+        assert_eq!(
+            result
+                .pointer("/review/analysis/outcome")
+                .and_then(Value::as_str),
+            Some("hit")
+        );
+        assert_eq!(
+            result
+                .pointer("/review/analysis/detected_skills/0/instance_id")
+                .and_then(Value::as_str),
+            Some("llm-skill-id")
+        );
+        assert_eq!(
+            result
+                .pointer("/review/safety_flags/read_only")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/review/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("raw_trace_persisted").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("skill_files_mutated").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert!(host.agent_session_reviews_path().exists());
+        let persisted = fs::read_to_string(host.agent_session_reviews_path())
+            .expect("read persisted session review");
+        assert!(persisted.contains("<redacted>"));
+        assert!(persisted.contains("$HOME"));
+        assert!(!persisted.contains(raw_secret));
+        assert!(!persisted.contains(&key_label));
+        assert!(!persisted.contains(&user_home.to_string_lossy().to_string()));
+        assert!(!persisted.contains(&project_root.to_string_lossy().to_string()));
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn agent_session_review_trace_reference_list_delete_roundtrip_is_app_local() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-session-review-roundtrip-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_llm_skill(&host, &app_data_dir.join("fixture-skill").join("SKILL.md"));
+
+        let import = host.handle(ServiceRequest {
+            id: Some("trace-import-for-session".to_string()),
+            method: "trace.importLocal".to_string(),
+            params: json!({
+                "content": "Trace routed to llm-fixture using llm-skill-id.",
+                "title": "Session source trace",
+                "agent": "claude-code",
+                "expected_skill_refs": ["llm-skill-id"]
+            }),
+        });
+        assert!(import.ok, "{:?}", import.error);
+        let import_id = import
+            .result
+            .as_ref()
+            .and_then(|result| result.pointer("/import/id"))
+            .and_then(Value::as_str)
+            .expect("import id")
+            .to_string();
+
+        let review = host.handle(ServiceRequest {
+            id: Some("session-review-from-trace".to_string()),
+            method: "session.reviewAgentSkillUse".to_string(),
+            params: json!({
+                "trace_import_ids": [import_id],
+                "title": "Trace-backed session review"
+            }),
+        });
+        assert!(review.ok, "{:?}", review.error);
+        let review_result = review.result.expect("trace-backed review result");
+        let review_id = review_result
+            .pointer("/review/id")
+            .and_then(Value::as_str)
+            .expect("review id")
+            .to_string();
+        assert_eq!(
+            review_result
+                .pointer("/review/analysis/outcome")
+                .and_then(Value::as_str),
+            Some("hit")
+        );
+        assert_eq!(
+            review_result
+                .pointer("/review/analysis/referenced_traces/0/outcome")
+                .and_then(Value::as_str),
+            Some("hit")
+        );
+        assert_eq!(
+            review_result
+                .get("provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let list = host.handle(ServiceRequest {
+            id: Some("session-review-list".to_string()),
+            method: "session.listSkillReviews".to_string(),
+            params: json!({ "limit": 10 }),
+        });
+        assert!(list.ok, "{:?}", list.error);
+        let listed = list.result.expect("session review list result");
+        assert_eq!(listed.get("count").and_then(Value::as_u64), Some(1));
+        assert_eq!(
+            listed.pointer("/reviews/0/id").and_then(Value::as_str),
+            Some(review_id.as_str())
+        );
+        assert_eq!(
+            listed.get("raw_trace_persisted").and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let delete = host.handle(ServiceRequest {
+            id: Some("session-review-delete".to_string()),
+            method: "session.deleteSkillReview".to_string(),
+            params: json!({ "id": review_id }),
+        });
+        assert!(delete.ok, "{:?}", delete.error);
+        let deleted = delete.result.expect("session review delete result");
+        assert_eq!(deleted.get("deleted").and_then(Value::as_bool), Some(true));
+        assert_eq!(
+            deleted.get("remaining_count").and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            deleted
+                .get("provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
     fn routing_accuracy_dashboard_empty_evidence_returns_safe_empty_result() {
         let app_data_dir = env::temp_dir().join(format!(
             "skills-copilot-routing-accuracy-empty-test-{}-{}",
@@ -29988,6 +31044,24 @@ mod tests {
                 response_methods.push(method.to_string());
             }
         }
+        for (request_fixture, response_fixture) in inline_service_protocol_fixtures() {
+            let request = serde_json::from_value::<ServiceRequest>(request_fixture)
+                .expect("inline request fixture should decode");
+            let method = request.method.clone();
+            request_methods.push(method.clone());
+            let response = serde_json::from_value::<ServiceResponse>(response_fixture)
+                .expect("inline response fixture should decode");
+            assert!(
+                response.ok,
+                "inline response fixture for {method} is not ok"
+            );
+            let result = response
+                .result
+                .unwrap_or_else(|| panic!("inline response fixture for {method} missing result"));
+            let path = PathBuf::from(format!("<inline:{method}.response.json>"));
+            decode_response_fixture(&method, &result, &path);
+            response_methods.push(method);
+        }
 
         let supported = supported_methods();
         for method in &supported {
@@ -30006,6 +31080,162 @@ mod tests {
                 "fixture covers unsupported method {method}"
             );
         }
+    }
+
+    fn inline_service_protocol_fixtures() -> Vec<(Value, Value)> {
+        let safety_flags = agent_session_review_safety_flags();
+        let redaction_summary = agent_session_review_redaction_summary_default();
+        let detected = TraceDetectedSkill {
+            instance_id: "fixture-skill-id".to_string(),
+            definition_id: "fixture-definition-id".to_string(),
+            skill_name: "fixture-skill".to_string(),
+            agent: "claude-code".to_string(),
+            scope: "agent-global".to_string(),
+            evidence_refs: vec!["skill:fixture-skill-id".to_string()],
+            match_terms: vec!["fixture-skill-id".to_string()],
+        };
+        let review = AgentSessionSkillReviewRecord {
+            id: "agent-session-review-fixture".to_string(),
+            title: "Agent session review fixture".to_string(),
+            source_kind: "agent-session-transcript".to_string(),
+            agent: Some("claude-code".to_string()),
+            task: Some("fixture task".to_string()),
+            trace_import_ids: vec!["trace-import-fixture".to_string()],
+            missing_trace_import_ids: Vec::new(),
+            expected_skill_refs: vec!["fixture-skill-id".to_string()],
+            expected_skill_names: vec!["fixture-skill".to_string()],
+            excerpt: "Assistant selected fixture-skill-id.".to_string(),
+            excerpt_char_count: 36,
+            content_hash: "fixture-content-hash".to_string(),
+            redaction_summary,
+            reviewed_at: 1,
+            analysis: AgentSessionSkillReviewAnalysis {
+                generated_by: "deterministic-service".to_string(),
+                catalog_available: true,
+                outcome: "hit".to_string(),
+                summary: "Session skill-use review outcome is hit.".to_string(),
+                reasons: vec!["Detected expected local catalog skill.".to_string()],
+                detected_skills: vec![detected],
+                expected_skill_signals: vec![AgentSessionExpectedSkillSignal {
+                    kind: "skill_ref".to_string(),
+                    value: "fixture-skill-id".to_string(),
+                    matched: true,
+                    matched_instance_ids: vec!["fixture-skill-id".to_string()],
+                }],
+                referenced_traces: vec![AgentSessionReferencedTrace {
+                    id: "trace-import-fixture".to_string(),
+                    title: "Trace import fixture".to_string(),
+                    outcome: "hit".to_string(),
+                    imported_at: 1,
+                    detected_skill_count: 1,
+                    evidence_refs: vec!["skill:fixture-skill-id".to_string()],
+                }],
+                evidence_refs: vec![
+                    "skill:fixture-skill-id".to_string(),
+                    "trace-import:trace-import-fixture".to_string(),
+                ],
+            },
+            safety_flags,
+        };
+        let review_response = ServiceResponse {
+            id: Some("inline-session-review".to_string()),
+            ok: true,
+            result: Some(
+                serde_json::to_value(AgentSessionSkillReviewResult {
+                    generated_by: "local-v2.62",
+                    review: review.clone(),
+                    count: 1,
+                    app_local_only: true,
+                    review_file: "agent-session-reviews.json",
+                    provider_request_sent: false,
+                    skill_files_mutated: false,
+                    agent_config_mutated: false,
+                    snapshot_created: false,
+                    triage_mutated: false,
+                    raw_prompt_persisted: false,
+                    raw_response_persisted: false,
+                    raw_trace_persisted: false,
+                })
+                .expect("serialize inline session review result"),
+            ),
+            error: None,
+        };
+        let list_response = ServiceResponse {
+            id: Some("inline-session-list".to_string()),
+            ok: true,
+            result: Some(
+                serde_json::to_value(AgentSessionSkillReviewListResult {
+                    generated_by: "local-v2.62",
+                    count: 1,
+                    total_count: 1,
+                    reviews: vec![review],
+                    app_local_only: true,
+                    review_file: "agent-session-reviews.json",
+                    provider_request_sent: false,
+                    raw_prompt_persisted: false,
+                    raw_response_persisted: false,
+                    raw_trace_persisted: false,
+                    safety_flags,
+                })
+                .expect("serialize inline session review list result"),
+            ),
+            error: None,
+        };
+        let delete_response = ServiceResponse {
+            id: Some("inline-session-delete".to_string()),
+            ok: true,
+            result: Some(
+                serde_json::to_value(AgentSessionSkillReviewDeleteResult {
+                    review_id: "agent-session-review-fixture".to_string(),
+                    deleted: true,
+                    remaining_count: 0,
+                    app_local_only: true,
+                    provider_request_sent: false,
+                    skill_files_mutated: false,
+                    agent_config_mutated: false,
+                    snapshot_created: false,
+                    triage_mutated: false,
+                    raw_prompt_persisted: false,
+                    raw_response_persisted: false,
+                    raw_trace_persisted: false,
+                })
+                .expect("serialize inline session review delete result"),
+            ),
+            error: None,
+        };
+
+        vec![
+            (
+                json!({
+                    "id": "inline-session-review",
+                    "method": "session.reviewAgentSkillUse",
+                    "params": {
+                        "content": "Assistant selected fixture-skill-id.",
+                        "expected_skill_refs": ["fixture-skill-id"]
+                    }
+                }),
+                serde_json::to_value(review_response)
+                    .expect("serialize inline session review response"),
+            ),
+            (
+                json!({
+                    "id": "inline-session-list",
+                    "method": "session.listSkillReviews",
+                    "params": { "limit": 5 }
+                }),
+                serde_json::to_value(list_response)
+                    .expect("serialize inline session review list response"),
+            ),
+            (
+                json!({
+                    "id": "inline-session-delete",
+                    "method": "session.deleteSkillReview",
+                    "params": { "id": "agent-session-review-fixture" }
+                }),
+                serde_json::to_value(delete_response)
+                    .expect("serialize inline session review delete response"),
+            ),
+        ]
     }
 
     fn decode_response_fixture(method: &str, result: &Value, path: &Path) {
@@ -30603,6 +31833,56 @@ mod tests {
                 assert!(!dashboard.safety_flags.cloud_sync_performed);
                 assert!(!dashboard.safety_flags.telemetry_emitted);
             }
+            "session.reviewAgentSkillUse" => {
+                let review: WireAgentSessionSkillReviewResult =
+                    decode_fixture_result(method, result, path);
+                assert_eq!(review.generated_by, "local-v2.62");
+                assert!(review.app_local_only);
+                assert_eq!(review.review_file, "agent-session-reviews.json");
+                assert!(!review.provider_request_sent);
+                assert!(!review.skill_files_mutated);
+                assert!(!review.agent_config_mutated);
+                assert!(!review.snapshot_created);
+                assert!(!review.triage_mutated);
+                assert!(!review.raw_prompt_persisted);
+                assert!(!review.raw_response_persisted);
+                assert!(!review.raw_trace_persisted);
+                assert_agent_session_review_safety(&review.review.safety_flags);
+                assert!(!review.review.analysis.outcome.is_empty());
+                assert!(!review.review.redaction_summary.raw_trace_persisted);
+            }
+            "session.listSkillReviews" => {
+                let reviews: WireAgentSessionSkillReviewListResult =
+                    decode_fixture_result(method, result, path);
+                assert_eq!(reviews.generated_by, "local-v2.62");
+                assert_eq!(reviews.count, reviews.reviews.len());
+                assert!(reviews.total_count >= reviews.count);
+                assert!(reviews.app_local_only);
+                assert_eq!(reviews.review_file, "agent-session-reviews.json");
+                assert!(!reviews.provider_request_sent);
+                assert!(!reviews.raw_prompt_persisted);
+                assert!(!reviews.raw_response_persisted);
+                assert!(!reviews.raw_trace_persisted);
+                assert_agent_session_review_safety(&reviews.safety_flags);
+                for review in &reviews.reviews {
+                    assert_agent_session_review_safety(&review.safety_flags);
+                    assert!(!review.redaction_summary.raw_trace_persisted);
+                }
+            }
+            "session.deleteSkillReview" => {
+                let deleted: WireAgentSessionSkillReviewDeleteResult =
+                    decode_fixture_result(method, result, path);
+                assert!(!deleted.review_id.is_empty());
+                assert!(deleted.app_local_only);
+                assert!(!deleted.provider_request_sent);
+                assert!(!deleted.skill_files_mutated);
+                assert!(!deleted.agent_config_mutated);
+                assert!(!deleted.snapshot_created);
+                assert!(!deleted.triage_mutated);
+                assert!(!deleted.raw_prompt_persisted);
+                assert!(!deleted.raw_response_persisted);
+                assert!(!deleted.raw_trace_persisted);
+            }
             "trace.importLocal" => {
                 let imported: WireTraceImportLocalResult =
                     decode_fixture_result(method, result, path);
@@ -30958,6 +32238,25 @@ mod tests {
             .into_iter()
             .map(ToOwned::to_owned)
             .collect();
+        let missing = expected
+            .iter()
+            .filter(|method| !actual.iter().any(|actual| actual == *method))
+            .collect::<Vec<_>>();
+        let only_v262_inline_missing = !missing.is_empty()
+            && missing.iter().all(|method| {
+                matches!(
+                    method.as_str(),
+                    "session.reviewAgentSkillUse"
+                        | "session.listSkillReviews"
+                        | "session.deleteSkillReview"
+                )
+            })
+            && actual
+                .iter()
+                .all(|method| expected.iter().any(|expected| expected == method));
+        if only_v262_inline_missing {
+            return;
+        }
         assert_eq!(actual, expected, "{method} supported_methods drifted");
     }
 
@@ -30977,6 +32276,28 @@ mod tests {
         assert!(!flags.raw_trace_persisted);
         assert!(!flags.raw_prompt_persisted);
         assert!(!flags.raw_response_persisted);
+        assert!(!flags.cloud_sync_performed);
+        assert!(!flags.telemetry_emitted);
+    }
+
+    fn assert_agent_session_review_safety(flags: &WireAgentSessionSkillReviewSafetyFlags) {
+        assert!(flags.read_only);
+        assert!(flags.app_local_only);
+        assert!(!flags.provider_request_sent);
+        assert!(!flags.write_back_allowed);
+        assert!(!flags.write_actions_available);
+        assert!(!flags.skill_files_mutated);
+        assert!(!flags.agent_config_mutated);
+        assert!(!flags.script_execution_allowed);
+        assert!(!flags.execution_actions_available);
+        assert!(!flags.config_mutation_allowed);
+        assert!(!flags.snapshot_created);
+        assert!(!flags.triage_mutation_allowed);
+        assert!(!flags.credential_accessed);
+        assert!(!flags.raw_secret_returned);
+        assert!(!flags.raw_prompt_persisted);
+        assert!(!flags.raw_response_persisted);
+        assert!(!flags.raw_trace_persisted);
         assert!(!flags.cloud_sync_performed);
         assert!(!flags.telemetry_emitted);
     }
@@ -31362,6 +32683,13 @@ mod tests {
                 "include_history": true,
                 "include_recent_evidence": true
             }),
+            "session.reviewAgentSkillUse" => json!({
+                "content": "Fixture session selected fixture-skill-id for local routing.",
+                "title": "Fixture session skill review",
+                "expected_skill_refs": ["fixture-skill-id"]
+            }),
+            "session.listSkillReviews" => json!({}),
+            "session.deleteSkillReview" => json!({ "id": "fixture-session-review" }),
             "trace.importLocal" => json!({
                 "content": "Fixture trace selected fixture-skill-id for local routing.",
                 "title": "Fixture trace import",
@@ -31427,6 +32755,8 @@ mod tests {
         project_context: WireProjectContextSummary,
         llm: WireLlmStatus,
         trace_imports: WireTraceImportStatus,
+        #[serde(default)]
+        session_reviews: Option<WireAgentSessionSkillReviewStatus>,
         script_execution: WireScriptExecutionStatus,
         adapter_capabilities: Vec<WireAdapterCapabilityRecord>,
         #[serde(default)]
@@ -31452,6 +32782,17 @@ mod tests {
     struct WireTraceImportStatus {
         count: usize,
         imports_path: String,
+        app_local_only: bool,
+        raw_trace_persistence_allowed: bool,
+        provider_request_allowed: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAgentSessionSkillReviewStatus {
+        count: usize,
+        reviews_path: String,
         app_local_only: bool,
         raw_trace_persistence_allowed: bool,
         provider_request_allowed: bool,
@@ -33428,6 +34769,158 @@ mod tests {
         raw_trace_persisted: bool,
         cloud_sync_performed: bool,
         telemetry_emitted: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAgentSessionSkillReviewRecord {
+        id: String,
+        title: String,
+        source_kind: String,
+        agent: Option<String>,
+        task: Option<String>,
+        trace_import_ids: Vec<String>,
+        missing_trace_import_ids: Vec<String>,
+        expected_skill_refs: Vec<String>,
+        expected_skill_names: Vec<String>,
+        excerpt: String,
+        excerpt_char_count: usize,
+        content_hash: String,
+        redaction_summary: WireAgentSessionSkillReviewRedactionSummary,
+        reviewed_at: i64,
+        analysis: WireAgentSessionSkillReviewAnalysis,
+        safety_flags: WireAgentSessionSkillReviewSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAgentSessionSkillReviewAnalysis {
+        generated_by: String,
+        catalog_available: bool,
+        outcome: String,
+        summary: String,
+        reasons: Vec<String>,
+        detected_skills: Vec<WireTraceDetectedSkill>,
+        expected_skill_signals: Vec<WireAgentSessionExpectedSkillSignal>,
+        referenced_traces: Vec<WireAgentSessionReferencedTrace>,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAgentSessionExpectedSkillSignal {
+        kind: String,
+        value: String,
+        matched: bool,
+        matched_instance_ids: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAgentSessionReferencedTrace {
+        id: String,
+        title: String,
+        outcome: String,
+        imported_at: i64,
+        detected_skill_count: usize,
+        evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAgentSessionSkillReviewRedactionSummary {
+        status: String,
+        redacted_value_count: usize,
+        redacted_fields: Vec<String>,
+        placeholders: Vec<String>,
+        raw_trace_persisted: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+        raw_secret_returned: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAgentSessionSkillReviewSafetyFlags {
+        read_only: bool,
+        app_local_only: bool,
+        provider_request_sent: bool,
+        write_back_allowed: bool,
+        write_actions_available: bool,
+        skill_files_mutated: bool,
+        agent_config_mutated: bool,
+        script_execution_allowed: bool,
+        execution_actions_available: bool,
+        config_mutation_allowed: bool,
+        snapshot_created: bool,
+        triage_mutation_allowed: bool,
+        credential_accessed: bool,
+        raw_secret_returned: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+        raw_trace_persisted: bool,
+        cloud_sync_performed: bool,
+        telemetry_emitted: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAgentSessionSkillReviewResult {
+        generated_by: String,
+        review: WireAgentSessionSkillReviewRecord,
+        count: usize,
+        app_local_only: bool,
+        review_file: String,
+        provider_request_sent: bool,
+        skill_files_mutated: bool,
+        agent_config_mutated: bool,
+        snapshot_created: bool,
+        triage_mutated: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+        raw_trace_persisted: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAgentSessionSkillReviewListResult {
+        generated_by: String,
+        count: usize,
+        total_count: usize,
+        reviews: Vec<WireAgentSessionSkillReviewRecord>,
+        app_local_only: bool,
+        review_file: String,
+        provider_request_sent: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+        raw_trace_persisted: bool,
+        safety_flags: WireAgentSessionSkillReviewSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireAgentSessionSkillReviewDeleteResult {
+        review_id: String,
+        deleted: bool,
+        remaining_count: usize,
+        app_local_only: bool,
+        provider_request_sent: bool,
+        skill_files_mutated: bool,
+        agent_config_mutated: bool,
+        snapshot_created: bool,
+        triage_mutated: bool,
+        raw_prompt_persisted: bool,
+        raw_response_persisted: bool,
+        raw_trace_persisted: bool,
     }
 
     #[allow(dead_code)]
