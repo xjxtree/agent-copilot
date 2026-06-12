@@ -33,6 +33,7 @@
         "task.rankSkillRoutes",
         "task.compareAgentReadiness",
         "task.buildCockpit",
+        "skill.lifecycleTimeline",
         "task.listBenchmarks",
         "task.saveBenchmark",
         "task.deleteBenchmark",

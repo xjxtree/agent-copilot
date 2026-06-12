@@ -587,6 +587,20 @@ enum UIStrings {
     static var localSkillMapRelation: String { text("localSkillMap.relation", "Relation") }
     static var localSkillMapStrength: String { text("localSkillMap.strength", "Strength") }
     static var localSkillMapNodeIDs: String { text("localSkillMap.nodeIDs", "Node IDs") }
+    static var skillLifecycleTimelineTitle: String { text("skillLifecycleTimeline.title", "Skill Lifecycle Timeline") }
+    static var skillLifecycleTimelineBoundary: String { text("skillLifecycleTimeline.boundary", "User-triggered, deterministic, read-only lifecycle timeline from existing local catalog, scan, finding, routing, session, provider-observability, remediation, and provenance evidence. It cannot send provider requests, write skill files, mutate agent config, create snapshots, change triage, execute scripts, read credentials, persist raw prompts/responses/traces, sync cloud data, or emit telemetry.") }
+    static var skillLifecycleTimelineAction: String { text("skillLifecycleTimeline.action.load", "Load Timeline") }
+    static var skillLifecycleTimelineUnavailable: String { text("skillLifecycleTimeline.unavailable", "Skill lifecycle timeline is unavailable in this service build.") }
+    static var skillLifecycleTimelineNoResult: String { text("skillLifecycleTimeline.empty.result", "No skill lifecycle timeline loaded.") }
+    static var skillLifecycleTimelineEvents: String { text("skillLifecycleTimeline.events", "Timeline events") }
+    static var skillLifecycleTimelineSkillRows: String { text("skillLifecycleTimeline.skillRows", "Skill rows") }
+    static var skillLifecycleTimelineAgentRows: String { text("skillLifecycleTimeline.agentRows", "Agent rows") }
+    static var skillLifecycleTimelineNoRows: String { text("skillLifecycleTimeline.empty.rows", "No lifecycle rows returned.") }
+    static var skillLifecycleTimelineEventTypes: String { text("skillLifecycleTimeline.eventTypes", "Event types") }
+    static var skillLifecycleTimelineStages: String { text("skillLifecycleTimeline.stages", "Lifecycle stages") }
+    static var skillLifecycleTimelineOccurredAt: String { text("skillLifecycleTimeline.occurredAt", "Occurred") }
+    static var skillLifecycleTimelineEventType: String { text("skillLifecycleTimeline.eventType", "Event type") }
+    static var skillLifecycleTimelineLifecycleStage: String { text("skillLifecycleTimeline.lifecycleStage", "Lifecycle stage") }
     static var providerObservabilityTitle: String { text("providerObservability.title", "Provider Observability") }
     static var providerObservabilityBoundary: String { text("providerObservability.boundary", "User-triggered, deterministic, read-only dashboard from redacted app-local prompt-run and provider-call metadata. It does not send provider requests, read credentials, expose raw prompts or responses, write files, mutate agent config, create snapshots, execute scripts, sync cloud data, or emit telemetry.") }
     static var providerObservabilityAction: String { text("providerObservability.action.build", "Build Observability") }

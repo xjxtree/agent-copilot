@@ -473,7 +473,7 @@ CREATE TABLE config_snapshot (
 
 ## V2.41-V2.67 AI-native skill review models
 
-The AI-native line introduces analysis models incrementally and evidence-first. V2.41 adds app-data provider profile metadata and Keychain credential references, V2.61 adds redacted prompt run history, V2.62 adds app-local redacted Agent Session Skill Review metadata, V2.63 adds a derived Local Skill Map response, V2.64 adds a completed Provider Observability view, and V2.65 adds a completed Task-first Cockpit response. V2.66 Skill Lifecycle Timeline and V2.67 Guided Cleanup Flow remain planned.
+The AI-native line introduces analysis models incrementally and evidence-first. V2.41 adds app-data provider profile metadata and Keychain credential references, V2.61 adds redacted prompt run history, V2.62 adds app-local redacted Agent Session Skill Review metadata, V2.63 adds a derived Local Skill Map response, V2.64 adds a completed Provider Observability view, V2.65 adds a completed Task-first Cockpit response, and V2.66 adds a completed Skill Lifecycle Timeline response. V2.67 Guided Cleanup Flow remains planned.
 
 Model families:
 
@@ -573,7 +573,10 @@ Model families:
   - `retention_recommendations` are recommendations; the observability view does not imply hidden deletion/export writes.
   - Safety boundary: user-triggered, deterministic/read-only, app-local evidence only; no skill/config writes, no triage/snapshot mutation, no script execution, no default provider/network request, no cloud sync, and no telemetry.
 - `TaskCockpitView`（V2.65 completed）：derived task-first workspace view over readiness, routing, benchmark/regression, trace/session review, provider-run metadata, remediation next steps, and evidence refs. It stores no new source of truth by default and must not mutate skills, agent config, triage, snapshots, or cleanup records.
-- `SkillLifecycleEvent` / `SkillLifecycleTimeline`（V2.66 future）：redacted metadata timeline for a skill, agent, or workspace. Events may reference scan/provenance changes, stale/drift rows, triage transitions, remediation history, prompt analysis runs, and session review outcomes. It must not persist raw skill content, raw prompt/response, raw transcript, credentials, or unredacted local paths.
+- `SkillLifecycleEvent` / `SkillLifecycleTimeline`（V2.66 completed）：user-triggered deterministic/read-only response from `skill.lifecycleTimeline` for a skill, agent, or workspace. The view builds lifecycle timeline rows from existing catalog evidence, scan/provenance/fingerprint state, stale/drift rows, finding/triage/remediation history, prompt run metadata, provider observability metadata, and session review outcomes where available.
+  - Response shape: `{ generated_by, catalog_available, filters, summary, timeline_rows, skill_rows, agent_rows, gap_notes, blocker_notes, evidence_references, prompt_request, safety_flags }`.
+  - Timeline rows should include stable row ids, timestamp or coarse ordering evidence, subject type (`skill` / `agent` / `workspace`), event type (`discovered` / `changed` / `stale` / `drift` / `finding` / `triage` / `remediation` / `prompt_run` / `provider_observability` / `session_review`), skill/agent/workspace refs where available, redacted labels, reason text, evidence refs, and safety flags.
+  - Safety boundary: no new raw lifecycle artifact persistence by default, no skill/config writes, no triage mutation, no snapshot creation/rollback, no script execution, no default provider/network request, no credential reads, no raw prompt/raw response/raw trace/secret/unredacted-path persistence, no cloud sync, and no telemetry.
 - `GuidedCleanupFlow` / `GuidedCleanupStep`（V2.67 future）：app-local guided flow metadata derived from findings, similar groups, drift, readiness gaps, remediation plan/drafts/impact/batch review, and safe next-step labels. Recording a guided step is metadata-only; actual enable/disable/edit actions must call existing preview-first, explicit-confirm safe write methods and cannot be hidden inside the guided flow.
 
 Cross-cutting constraints:

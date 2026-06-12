@@ -53,6 +53,8 @@ struct SkillStoreTests {
         try await knowledgeSearchUsesReadOnlyServiceContract()
         try await localSkillMapUsesReadOnlyServiceContract()
         try await localSkillMapFallsBackWhenMethodUnavailable()
+        try await skillLifecycleTimelineUsesReadOnlyServiceContract()
+        try await skillLifecycleTimelineFallsBackWhenMethodUnavailable()
         try await providerObservabilityUsesReadOnlyServiceContract()
         try await providerObservabilityFallsBackWhenMethodUnavailable()
         try await taskCockpitUsesReadOnlyServiceContract()
@@ -1451,6 +1453,91 @@ struct SkillStoreTests {
         try expectContains(fake.calls(), "knowledge.buildLocalSkillMap", "Fallback should still prove the intended V2.63 method was attempted.")
     }
 
+    private func skillLifecycleTimelineUsesReadOnlyServiceContract() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+        let snapshotCallsBeforeTimeline = countOccurrences("snapshot.", in: fake.calls())
+        await store.loadSkillLifecycleTimeline()
+
+        let result = store.skillLifecycleTimelineResult
+        try expectEqual(result?.generatedBy, "local-v2.66", "Skill lifecycle timeline should expose generator metadata.")
+        try expectEqual(result?.summary.eventCount, 3, "Skill lifecycle timeline should expose event count.")
+        try expectEqual(result?.summary.skillCount, 1, "Skill lifecycle timeline should expose skill aggregate count.")
+        try expectEqual(result?.summary.agentCount, 1, "Skill lifecycle timeline should expose agent aggregate count.")
+        try expectEqual(result?.timelineRows.first?.title, "Beta loaded from project root", "Skill lifecycle timeline should expose timeline rows.")
+        try expectEqual(result?.timelineRows.first?.eventType, "scan.detected", "Skill lifecycle timeline should expose event type.")
+        try expectEqual(result?.timelineRows.first?.lifecycleStage, "discovered", "Skill lifecycle timeline should expose lifecycle stage.")
+        try expectEqual(result?.skillRows.first?.skillName, "Beta", "Skill lifecycle timeline should expose skill aggregate rows.")
+        try expectEqual(result?.skillRows.first?.count, 3, "Skill lifecycle timeline should expose aggregate counts.")
+        try expectEqual(result?.agentRows.first?.agent, "claude-code", "Skill lifecycle timeline should expose agent aggregate rows.")
+        try expectEqual(result?.gapNotes.first, "No Codex lifecycle evidence for this selected skill.", "Skill lifecycle timeline should expose gap notes.")
+        try expectEqual(result?.blockerNotes.first, "Lifecycle timeline is read-only and does not create snapshots.", "Skill lifecycle timeline should expose blocker notes.")
+        try expectEqual(result?.evidenceReferences.first?.source, "skill.lifecycleTimeline", "Skill lifecycle timeline should expose evidence references.")
+        try expectEqual(result?.promptRequest?.requestKind, "skill_lifecycle_timeline", "Skill lifecycle timeline should expose prompt metadata.")
+        try expectFalse(result?.safetyFlags.providerRequestSent ?? true, "Skill lifecycle timeline must not send provider requests.")
+        try expectFalse(result?.safetyFlags.writeBackAllowed ?? true, "Skill lifecycle timeline must not allow write-back.")
+        try expectFalse(result?.safetyFlags.writeActionsAvailable ?? true, "Skill lifecycle timeline must not expose write actions.")
+        try expectFalse(result?.safetyFlags.scriptExecutionAllowed ?? true, "Skill lifecycle timeline must not allow script execution.")
+        try expectFalse(result?.safetyFlags.executionActionsAvailable ?? true, "Skill lifecycle timeline must not expose execution actions.")
+        try expectFalse(result?.safetyFlags.configMutationAllowed ?? true, "Skill lifecycle timeline must not mutate config.")
+        try expectFalse(result?.safetyFlags.snapshotCreated ?? true, "Skill lifecycle timeline must not create snapshots.")
+        try expectFalse(result?.safetyFlags.triageMutationAllowed ?? true, "Skill lifecycle timeline must not mutate triage.")
+        try expectFalse(result?.safetyFlags.credentialAccessed ?? true, "Skill lifecycle timeline must not access credentials.")
+        try expectFalse(result?.safetyFlags.rawPromptPersisted ?? true, "Skill lifecycle timeline must not persist raw prompts.")
+        try expectFalse(result?.safetyFlags.rawResponsePersisted ?? true, "Skill lifecycle timeline must not persist raw responses.")
+        try expectFalse(result?.safetyFlags.rawTracePersisted ?? true, "Skill lifecycle timeline must not persist raw traces.")
+        try expectFalse(result?.safetyFlags.cloudSyncEnabled ?? true, "Skill lifecycle timeline must not sync cloud data.")
+        try expectFalse(result?.safetyFlags.telemetryEnabled ?? true, "Skill lifecycle timeline must not emit telemetry.")
+        try expectFalse(store.isLoadingSkillLifecycleTimeline, "Skill lifecycle timeline should reset loading state.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "skill.lifecycleTimeline", "Skill lifecycle timeline should call the V2.66 lifecycle method.")
+        try expectContains(calls, "\"agent\":\"claude-code\"", "Skill lifecycle timeline should pass the current agent filter.")
+        try expectContains(calls, "\"selected_skill_id\":\"beta\"", "Skill lifecycle timeline should pass selected skill id.")
+        try expectContains(calls, "\"selected_skill_name\":\"Beta\"", "Skill lifecycle timeline should pass selected skill name.")
+        try expectContains(calls, "\"selected_skill_agent\":\"claude-code\"", "Skill lifecycle timeline should pass selected skill agent.")
+        try expectContains(calls, "\"candidate_instance_ids\":[\"beta\"]", "Skill lifecycle timeline should include selected skill candidate context.")
+        try expectContains(calls, "\"project_root\":\"\\/tmp\\/project\"", "Skill lifecycle timeline should pass active project root.")
+        try expectContains(calls, "\"current_cwd\":\"\\/tmp\\/project\"", "Skill lifecycle timeline should pass active project cwd.")
+        try expectContains(calls, "\"workspace\":\"Fixture Project\"", "Skill lifecycle timeline should pass active workspace name.")
+        try expectContains(calls, "\"limit\":20", "Skill lifecycle timeline should pass timeline limit.")
+        try expectContains(calls, "\"include_skill_rows\":true", "Skill lifecycle timeline should request skill aggregates.")
+        try expectContains(calls, "\"include_agent_rows\":true", "Skill lifecycle timeline should request agent aggregates.")
+        try expectContains(calls, "\"include_evidence\":true", "Skill lifecycle timeline should request evidence rows.")
+        try expectContains(calls, "\"include_safety_flags\":true", "Skill lifecycle timeline should request safety flags.")
+        try expectFalse(calls.contains("llm.previewPrompt"), "Skill lifecycle timeline must not prepare provider prompts.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Skill lifecycle timeline must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Skill lifecycle timeline must not call config write paths.")
+        try expectFalse(calls.contains("script.execute"), "Skill lifecycle timeline must not call execution paths.")
+        try expectEqual(countOccurrences("snapshot.", in: calls), snapshotCallsBeforeTimeline, "Skill lifecycle timeline must not call snapshot paths.")
+        try expectFalse(calls.contains("credential"), "Skill lifecycle timeline must not call credential paths.")
+    }
+
+    private func skillLifecycleTimelineFallsBackWhenMethodUnavailable() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "normal")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+        await store.loadSkillLifecycleTimeline()
+
+        try expectEqual(store.skillLifecycleTimelineResult?.isUnavailable, true, "Skill lifecycle timeline should expose unavailable fallback for older services.")
+        try expectEqual(store.skillLifecycleTimelineResult?.fallbackReason, UIStrings.skillLifecycleTimelineUnavailable, "Unknown method fallback should use the localized unavailable copy.")
+        try expectFalse(store.isLoadingSkillLifecycleTimeline, "Unavailable lifecycle timeline should reset loading state.")
+        try expectContains(fake.calls(), "skill.lifecycleTimeline", "Fallback should still prove the intended V2.66 method was attempted.")
+        try expectFalse(fake.calls().contains("llm.previewPrompt"), "Unavailable lifecycle timeline must not fall back to provider prompt preview.")
+        try expectFalse(fake.calls().contains("llm.confirmPromptAndSend"), "Unavailable lifecycle timeline must not send to provider.")
+        try expectFalse(fake.calls().contains("config.toggleSkill"), "Unavailable lifecycle timeline must not call config write paths.")
+        try expectFalse(fake.calls().contains("script.execute"), "Unavailable lifecycle timeline must not call execution paths.")
+    }
+
     private func providerObservabilityUsesReadOnlyServiceContract() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -2665,6 +2752,12 @@ private final class FakeServiceScript {
               respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.63","catalog_available":true,"filters":{"agent":"claude-code","selected_skill_id":"beta","selected_skill_name":"Beta","selected_skill_agent":"claude-code","project_root":"/tmp/project","current_cwd":"/tmp/project","workspace":"Fixture Project","limit":30,"include_edges":true,"include_clusters":true},"summary":{"node_count":2,"edge_count":1,"cluster_count":1,"domain_count":1,"skill_count":2,"agent_count":1,"gap_count":1,"blocker_count":0,"evidence_count":1,"selected_skill_context":"Beta in Claude Code project scope","summary":"Beta anchors the release audit local skill map."},"selected_skill":{"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","quality_score":82,"readiness_score":78,"reasons":["Selected skill anchors this map."],"evidence_refs":["catalog:beta"],"safety_flags":["provider not sent"]},"nodes":[{"node_id":"skill:beta","label":"Beta","kind":"skill","instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","domain":"Release audit","cluster_id":"cluster:audit","weight":0.91,"reasons":["Selected skill anchors this map."],"evidence_refs":["catalog:beta"],"safety_flags":["provider not sent"]},{"node_id":"skill:alpha","label":"Alpha","kind":"skill","instance_id":"alpha","definition_id":"def.alpha","skill_name":"Alpha","agent":"claude-code","scope":"agent-global","enabled":true,"state":"loaded","domain":"Release audit","cluster_id":"cluster:audit","weight":0.64,"reasons":["Similar purpose wording."],"evidence_refs":["catalog:alpha"],"safety_flags":["provider not sent"]}],"edges":[{"source_id":"skill:beta","target_id":"skill:alpha","relation_kind":"similar-purpose","label":"Shared audit purpose","strength":0.74,"direction":"undirected","reasons":["Shared audit keywords and rg tool use."],"evidence_refs":["similar:audit"],"safety_flags":["provider not sent"]}],"clusters":[{"cluster_id":"cluster:audit","name":"Release audit","kind":"domain","summary":"Skills that support release audit workflows.","node_ids":["skill:beta","skill:alpha"],"agents":["claude-code"],"capabilities":["release-audit"],"gap_notes":["No Codex project route."],"blocker_notes":[],"evidence_refs":["domain:audit"],"safety_flags":["provider not sent"]}],"gap_rows":[{"title":"Missing Codex route","detail":"No Codex project route.","severity":"warning","agent":"codex","evidence_refs":["workspace:codex-gap"]}],"blocker_rows":[],"evidence_references":[{"title":"Local skill map","detail":"Map derived from local catalog and analysis evidence.","source":"knowledge.buildLocalSkillMap","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"local_skill_map","summary":"Provider explanation is copy-only and preview-gated.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent"]}}}'
             fi
             respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: knowledge.buildLocalSkillMap"}}'
+            ;;
+          *\\"skill.lifecycleTimeline\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.66","catalog_available":true,"filters":{"agent":"claude-code","selected_skill_id":"beta","selected_skill_name":"Beta","selected_skill_agent":"claude-code","project_root":"/tmp/project","current_cwd":"/tmp/project","workspace":"Fixture Project","limit":20,"include_skill_rows":true,"include_agent_rows":true,"include_evidence":true,"include_safety_flags":true},"summary":{"event_count":3,"skill_count":1,"agent_count":1,"event_type_count":3,"stage_count":3,"gap_count":1,"blocker_count":1,"evidence_count":1,"safety_flag_count":1,"first_event_at":"2026-06-10T09:00:00Z","latest_event_at":"2026-06-12T08:00:00Z","summary":"Beta lifecycle was reconstructed from local catalog, scan, routing, and remediation evidence."},"timeline_rows":[{"id":"life-scan-beta","occurred_at":"2026-06-10T09:00:00Z","event_type":"scan.detected","lifecycle_stage":"discovered","title":"Beta loaded from project root","summary":"Catalog scan detected the selected skill.","agent":"claude-code","skill_name":"Beta","instance_id":"beta","definition_id":"def.beta","source":"catalog.scanAll","severity":"info","status":"loaded","evidence_refs":["catalog:beta"],"safety_flags":["provider not sent"]},{"id":"life-route-beta","occurred_at":"2026-06-12T08:00:00Z","event_type":"routing.selected","lifecycle_stage":"in-use","title":"Beta selected for release audit task","summary":"Routing confidence ranked Beta first.","agent":"claude-code","skill_name":"Beta","instance_id":"beta","definition_id":"def.beta","source":"task.rankSkillRoutes","severity":"info","status":"ready","evidence_refs":["route:beta"],"safety_flags":["provider not sent"]}],"skill_rows":[{"id":"skill-beta","event_type":"skill.aggregate","lifecycle_stage":"active","title":"Beta lifecycle","summary":"Three local lifecycle events reference Beta.","agent":"claude-code","skill_name":"Beta","instance_id":"beta","definition_id":"def.beta","source":"skill.lifecycleTimeline","status":"active","count":3,"evidence_refs":["catalog:beta"],"safety_flags":["provider not sent"]}],"agent_rows":[{"id":"agent-claude","event_type":"agent.aggregate","lifecycle_stage":"active","title":"Claude Code lifecycle coverage","summary":"Claude Code has selected skill lifecycle evidence.","agent":"claude-code","source":"skill.lifecycleTimeline","status":"covered","count":3,"evidence_refs":["agent:claude-code"],"safety_flags":["provider not sent"]}],"gap_notes":["No Codex lifecycle evidence for this selected skill."],"blocker_notes":["Lifecycle timeline is read-only and does not create snapshots."],"evidence_references":[{"title":"Lifecycle timeline","detail":"Derived from local catalog and analysis evidence.","source":"skill.lifecycleTimeline","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"skill_lifecycle_timeline","summary":"No provider request is prepared or sent.","draft_copy_only":true,"redacted":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent","read-only timeline"]}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: skill.lifecycleTimeline"}}'
             ;;
           *\\"llm.providerObservability\\"*)
             if [ "$scenario" = "prompt-ready" ]; then

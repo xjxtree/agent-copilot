@@ -176,6 +176,8 @@ struct DetailView: View {
                             isSearchingKnowledge: store.isSearchingKnowledge,
                             localSkillMapResult: store.localSkillMapResult,
                             isBuildingLocalSkillMap: store.isBuildingLocalSkillMap,
+                            skillLifecycleTimelineResult: store.skillLifecycleTimelineResult,
+                            isLoadingSkillLifecycleTimeline: store.isLoadingSkillLifecycleTimeline,
                             providerObservabilityResult: store.providerObservabilityResult,
                             isLoadingProviderObservability: store.isLoadingProviderObservability,
                             similarSkillGroupingResult: store.similarSkillGroupingResult,
@@ -269,6 +271,11 @@ struct DetailView: View {
                             onBuildLocalSkillMap: {
                                 Task {
                                     await store.buildLocalSkillMap()
+                                }
+                            },
+                            onLoadSkillLifecycleTimeline: {
+                                Task {
+                                    await store.loadSkillLifecycleTimeline()
                                 }
                             },
                             onLoadProviderObservability: {
@@ -991,6 +998,8 @@ private struct AnalysisSection: View {
     let isSearchingKnowledge: Bool
     let localSkillMapResult: LocalSkillMapResult?
     let isBuildingLocalSkillMap: Bool
+    let skillLifecycleTimelineResult: SkillLifecycleTimelineResult?
+    let isLoadingSkillLifecycleTimeline: Bool
     let providerObservabilityResult: ProviderObservabilityResult?
     let isLoadingProviderObservability: Bool
     let similarSkillGroupingResult: SimilarSkillGroupingResult?
@@ -1026,6 +1035,7 @@ private struct AnalysisSection: View {
     let onDetectStaleDrift: () -> Void
     let onSearchKnowledge: () -> Void
     let onBuildLocalSkillMap: () -> Void
+    let onLoadSkillLifecycleTimeline: () -> Void
     let onLoadProviderObservability: () -> Void
     let onGroupSimilarSkills: () -> Void
     let onBuildCapabilityTaxonomy: () -> Void
@@ -1181,6 +1191,13 @@ private struct AnalysisSection: View {
                 result: localSkillMapResult,
                 isBuilding: isBuildingLocalSkillMap,
                 onBuild: onBuildLocalSkillMap
+            )
+
+            SkillLifecycleTimelinePanel(
+                skill: skill,
+                result: skillLifecycleTimelineResult,
+                isLoading: isLoadingSkillLifecycleTimeline,
+                onLoad: onLoadSkillLifecycleTimeline
             )
 
             ProviderObservabilityPanel(
@@ -6786,6 +6803,307 @@ private struct LocalSkillMapPanel: View {
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
         .adaptiveMaterialSurface()
+    }
+}
+
+private struct SkillLifecycleTimelinePanel: View {
+    let skill: SkillRecord
+    let result: SkillLifecycleTimelineResult?
+    let isLoading: Bool
+    let onLoad: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.skillLifecycleTimelineTitle, systemImage: "timeline.selection")
+                    .font(.headline)
+                Spacer()
+                Label(UIStrings.readOnlyPreview, systemImage: "lock.shield")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(UIStrings.skillLifecycleTimelineBoundary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+
+            HStack(spacing: 8) {
+                Button {
+                    onLoad()
+                } label: {
+                    Label(UIStrings.skillLifecycleTimelineAction, systemImage: "clock.arrow.circlepath")
+                }
+                .disabled(isLoading)
+                .help(UIStrings.skillLifecycleTimelineBoundary)
+
+                if isLoading {
+                    Label(UIStrings.loading, systemImage: "hourglass")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            LocalSkillMapSelectedContext(skill: skill, selectedSkill: nil)
+
+            if let result {
+                SkillLifecycleTimelineResultView(result: result)
+            } else {
+                Label(UIStrings.skillLifecycleTimelineNoResult, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Label(UIStrings.llmReviewNoActions, systemImage: "nosign")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct SkillLifecycleTimelineResultView: View {
+    let result: SkillLifecycleTimelineResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let fallbackReason = result.fallbackReason, !fallbackReason.isEmpty {
+                Label(fallbackReason, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 10)], alignment: .leading, spacing: 10) {
+                SummaryChip(title: UIStrings.skillLifecycleTimelineEvents, value: "\(eventCount)", systemImage: "timeline.selection")
+                SummaryChip(title: UIStrings.skillLifecycleTimelineSkillRows, value: "\(skillCount)", systemImage: "target")
+                SummaryChip(title: UIStrings.skillLifecycleTimelineAgentRows, value: "\(agentCount)", systemImage: "person.3")
+                SummaryChip(title: UIStrings.skillLifecycleTimelineEventTypes, value: "\(eventTypeCount)", systemImage: "tag")
+                SummaryChip(title: UIStrings.skillLifecycleTimelineStages, value: "\(stageCount)", systemImage: "flag")
+                SummaryChip(title: UIStrings.knowledgeGapNotes, value: "\(gapCount)", systemImage: "puzzlepiece.extension")
+                SummaryChip(title: UIStrings.knowledgeBlockerNotes, value: "\(blockerCount)", systemImage: "exclamationmark.octagon")
+                SummaryChip(title: UIStrings.crossAgentReadinessEvidence, value: "\(evidenceCount)", systemImage: "checklist")
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                MetadataRow(label: UIStrings.routingAccuracyGeneratedBy, value: result.generatedBy)
+                MetadataRow(label: UIStrings.routingAccuracyCatalog, value: result.catalogAvailable ? UIStrings.routingAccuracyAvailable : UIStrings.routingAccuracyUnavailableShort)
+                MetadataRow(label: UIStrings.agent, value: agentFilterLabel)
+                if let selectedSkillID = result.filters.selectedSkillID, !selectedSkillID.isEmpty {
+                    MetadataRow(label: UIStrings.localSkillMapSelectedContext, value: result.filters.selectedSkillName ?? selectedSkillID)
+                }
+                if let projectRoot = result.filters.projectRoot, !projectRoot.isEmpty {
+                    MetadataRow(label: UIStrings.text("projectContext.root", "Project root"), value: projectRoot)
+                }
+                if let currentCWD = result.filters.currentCWD, !currentCWD.isEmpty {
+                    MetadataRow(label: UIStrings.text("projectContext.currentCWD", "Current CWD"), value: currentCWD)
+                }
+                if let limit = result.filters.limit {
+                    MetadataRow(label: UIStrings.text("filter.limit", "Limit"), value: "\(limit)")
+                }
+                if let firstEventAt = result.summary.firstEventAt, !firstEventAt.isEmpty {
+                    MetadataRow(label: UIStrings.text("skillLifecycleTimeline.firstEvent", "First event"), value: firstEventAt)
+                }
+                if let latestEventAt = result.summary.latestEventAt, !latestEventAt.isEmpty {
+                    MetadataRow(label: UIStrings.text("skillLifecycleTimeline.latestEvent", "Latest event"), value: latestEventAt)
+                }
+                if let promptRequest = result.promptRequest {
+                    MetadataRow(label: UIStrings.routingAccuracyPromptRequest, value: promptRequestLabel(promptRequest))
+                }
+            }
+
+            if !result.summary.summaryText.isEmpty {
+                Text(result.summary.summaryText)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            SkillLifecycleTimelineRowList(
+                title: UIStrings.skillLifecycleTimelineEvents,
+                rows: result.timelineRows,
+                systemImage: "timeline.selection"
+            )
+            SkillLifecycleTimelineRowList(
+                title: UIStrings.skillLifecycleTimelineSkillRows,
+                rows: result.skillRows,
+                systemImage: "target"
+            )
+            SkillLifecycleTimelineRowList(
+                title: UIStrings.skillLifecycleTimelineAgentRows,
+                rows: result.agentRows,
+                systemImage: "person.3"
+            )
+            RoutingInlineList(title: UIStrings.knowledgeGapNotes, empty: UIStrings.routingAccuracyNoGaps, values: result.gapNotes, systemImage: "puzzlepiece.extension")
+            RoutingInlineList(title: UIStrings.knowledgeBlockerNotes, empty: UIStrings.routingAccuracyNoBlockers, values: result.blockerNotes, systemImage: "exclamationmark.octagon")
+            ProviderObservabilityEvidenceList(evidence: result.evidenceReferences)
+            ProviderObservabilitySafetyList(safety: result.safetyFlags)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var eventCount: Int {
+        result.summary.eventCount > 0 ? result.summary.eventCount : result.timelineRows.count
+    }
+
+    private var skillCount: Int {
+        result.summary.skillCount > 0 ? result.summary.skillCount : result.skillRows.count
+    }
+
+    private var agentCount: Int {
+        result.summary.agentCount > 0 ? result.summary.agentCount : result.agentRows.count
+    }
+
+    private var eventTypeCount: Int {
+        if result.summary.eventTypeCount > 0 {
+            return result.summary.eventTypeCount
+        }
+        return Set(result.timelineRows.map(\.eventType)).count
+    }
+
+    private var stageCount: Int {
+        if result.summary.stageCount > 0 {
+            return result.summary.stageCount
+        }
+        return Set(result.timelineRows.map(\.lifecycleStage)).count
+    }
+
+    private var gapCount: Int {
+        result.summary.gapCount > 0 ? result.summary.gapCount : result.gapNotes.count
+    }
+
+    private var blockerCount: Int {
+        result.summary.blockerCount > 0 ? result.summary.blockerCount : result.blockerNotes.count
+    }
+
+    private var evidenceCount: Int {
+        result.summary.evidenceCount > 0 ? result.summary.evidenceCount : result.evidenceReferences.count
+    }
+
+    private var agentFilterLabel: String {
+        if !result.filters.agents.isEmpty {
+            return result.filters.agents.map(DisplayText.agent).joined(separator: ", ")
+        }
+        return result.filters.agent.map(DisplayText.agent) ?? UIStrings.text("health.allAgents", "All Agents")
+    }
+
+    private func promptRequestLabel(_ promptRequest: SkillLifecycleTimelinePromptRequest) -> String {
+        let state = promptRequest.enabled ? UIStrings.llmEnabled : UIStrings.llmDisabled
+        let copy = promptRequest.copyOnly ? UIStrings.llmPromptCopyOnly : UIStrings.llmSkillAnalysisEnabledUnsafe
+        let redaction = promptRequest.redacted ? UIStrings.aiProviderAuditRedaction : UIStrings.llmSkillAnalysisEnabledUnsafe
+        return "\(promptRequest.requestKind) · \(state) · \(copy) · \(redaction)"
+    }
+}
+
+private struct SkillLifecycleTimelineRowList: View {
+    let title: String
+    let rows: [SkillLifecycleTimelineRow]
+    let systemImage: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if rows.isEmpty {
+                Text(UIStrings.skillLifecycleTimelineNoRows)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(rows.prefix(10)) { row in
+                        SkillLifecycleTimelineRowItem(row: row, systemImage: systemImage)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct SkillLifecycleTimelineRowItem: View {
+    let row: SkillLifecycleTimelineRow
+    let systemImage: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(row.title, systemImage: iconName)
+                    .font(.callout.bold())
+                    .lineLimit(1)
+                Spacer()
+                if let status = row.displayStatus, !status.isEmpty {
+                    Text(status)
+                        .font(.caption2.bold())
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
+                if let occurredAt = row.occurredAt, !occurredAt.isEmpty {
+                    MetadataRow(label: UIStrings.skillLifecycleTimelineOccurredAt, value: occurredAt)
+                }
+                MetadataRow(label: UIStrings.skillLifecycleTimelineEventType, value: row.eventType)
+                MetadataRow(label: UIStrings.skillLifecycleTimelineLifecycleStage, value: row.lifecycleStage)
+                if let agent = row.agent, !agent.isEmpty {
+                    MetadataRow(label: UIStrings.agent, value: DisplayText.agent(agent))
+                }
+                if let skillName = row.skillName, !skillName.isEmpty {
+                    MetadataRow(label: UIStrings.text("metadata.name", "Name"), value: skillName)
+                }
+                if let definitionID = row.definitionID, !definitionID.isEmpty {
+                    MetadataRow(label: UIStrings.definition, value: definitionID)
+                }
+                if let instanceID = row.instanceID, !instanceID.isEmpty {
+                    MetadataRow(label: UIStrings.text("metadata.instance", "Instance"), value: instanceID)
+                }
+                if let source = row.source, !source.isEmpty {
+                    MetadataRow(label: UIStrings.remediationHistorySourceMethod, value: source)
+                }
+                if let count = row.count {
+                    MetadataRow(label: UIStrings.providerObservabilityCalls, value: "\(count)")
+                }
+            }
+
+            if !row.summary.isEmpty {
+                Text(row.summary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: row.evidenceRefs, systemImage: "checklist")
+            RoutingInlineList(title: UIStrings.knowledgeSafetyFlags, empty: UIStrings.taskBenchmarkNoSafetyFlags, values: row.safetyFlags, systemImage: "checkmark.shield")
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var iconName: String {
+        let normalized = "\(row.eventType) \(row.lifecycleStage)".lowercased()
+        if normalized.contains("block") || normalized.contains("risk") || normalized.contains("finding") {
+            return "exclamationmark.triangle"
+        }
+        if normalized.contains("route") || normalized.contains("task") || normalized.contains("session") {
+            return "point.topleft.down.curvedto.point.bottomright.up"
+        }
+        if normalized.contains("remediation") || normalized.contains("fix") || normalized.contains("cleanup") {
+            return "wand.and.sparkles"
+        }
+        if normalized.contains("provider") || normalized.contains("prompt") {
+            return "waveform.path.ecg.rectangle"
+        }
+        if normalized.contains("agent") {
+            return "person.3"
+        }
+        if normalized.contains("skill") {
+            return "target"
+        }
+        return systemImage
     }
 }
 

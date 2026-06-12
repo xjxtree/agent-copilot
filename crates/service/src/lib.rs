@@ -86,6 +86,7 @@ const SUPPORTED_METHODS: &[&str] = &[
     "task.saveRoutingBaseline",
     "task.detectRoutingRegression",
     "routing.accuracyDashboard",
+    "skill.lifecycleTimeline",
     "session.reviewAgentSkillUse",
     "session.listSkillReviews",
     "session.deleteSkillReview",
@@ -986,6 +987,147 @@ pub struct TaskCockpitRemediationNextStep {
 }
 
 pub type TaskCockpitSafetyFlags = AgentReadinessSafetyFlags;
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct SkillLifecycleTimelineParams {
+    #[serde(default, alias = "task_text", alias = "user_intent")]
+    pub task: Option<String>,
+    #[serde(default, alias = "target_agent")]
+    pub agent: Option<String>,
+    #[serde(default, alias = "instance_id", alias = "skill_id")]
+    pub selected_skill_id: Option<String>,
+    #[serde(default)]
+    pub selected_skill_name: Option<String>,
+    #[serde(default, alias = "target_skill_agent")]
+    pub selected_skill_agent: Option<String>,
+    #[serde(default)]
+    pub definition_id: Option<String>,
+    #[serde(default, alias = "workspace_path")]
+    pub project_root: Option<String>,
+    #[serde(default)]
+    pub current_cwd: Option<String>,
+    #[serde(default, alias = "workspace_root", alias = "workspace_label")]
+    pub workspace: Option<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+    #[serde(default = "default_true")]
+    pub include_prompt_runs: bool,
+    #[serde(default = "default_true")]
+    pub include_session_reviews: bool,
+    #[serde(default = "default_true")]
+    pub include_remediation_history: bool,
+    #[serde(default = "default_true")]
+    pub include_stale_drift: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SkillLifecycleTimelineResult {
+    pub generated_by: &'static str,
+    pub catalog_available: bool,
+    pub filters: SkillLifecycleTimelineFilters,
+    pub summary: SkillLifecycleTimelineSummary,
+    pub timeline_rows: Vec<SkillLifecycleTimelineRow>,
+    pub skill_rows: Vec<SkillLifecycleSkillRow>,
+    pub agent_rows: Vec<SkillLifecycleAgentRow>,
+    pub gap_notes: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub evidence_references: Vec<TaskReadinessEvidenceReference>,
+    pub prompt_request: AgentReadinessPromptRequest,
+    pub safety_flags: SkillLifecycleTimelineSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SkillLifecycleTimelineFilters {
+    pub task: Option<String>,
+    pub agent: Option<String>,
+    pub selected_skill_id: Option<String>,
+    pub selected_skill_name: Option<String>,
+    pub selected_skill_agent: Option<String>,
+    pub definition_id: Option<String>,
+    pub project_root: Option<String>,
+    pub current_cwd: Option<String>,
+    pub workspace: Option<String>,
+    pub limit: usize,
+    pub include_prompt_runs: bool,
+    pub include_session_reviews: bool,
+    pub include_remediation_history: bool,
+    pub include_stale_drift: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct SkillLifecycleTimelineSummary {
+    pub total_event_count: usize,
+    pub skill_count: usize,
+    pub agent_count: usize,
+    pub finding_event_count: usize,
+    pub drift_event_count: usize,
+    pub remediation_event_count: usize,
+    pub prompt_event_count: usize,
+    pub session_review_event_count: usize,
+    pub first_event_at: Option<i64>,
+    pub latest_event_at: Option<i64>,
+    pub selected_skill_name: Option<String>,
+    pub selected_agent: Option<String>,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SkillLifecycleTimelineRow {
+    pub id: String,
+    pub occurred_at: Option<i64>,
+    pub event_type: &'static str,
+    pub lifecycle_stage: &'static str,
+    pub title: String,
+    pub summary: String,
+    pub agent: Option<String>,
+    pub skill_name: Option<String>,
+    pub instance_id: Option<String>,
+    pub definition_id: Option<String>,
+    pub source: &'static str,
+    pub severity: Option<String>,
+    pub status: Option<String>,
+    pub evidence_refs: Vec<String>,
+    pub safety_flags: SkillLifecycleTimelineSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SkillLifecycleSkillRow {
+    pub instance_id: String,
+    pub definition_id: String,
+    pub skill_name: String,
+    pub agent: String,
+    pub scope: String,
+    pub enabled: bool,
+    pub state: String,
+    pub event_count: usize,
+    pub finding_event_count: usize,
+    pub drift_event_count: usize,
+    pub remediation_event_count: usize,
+    pub prompt_event_count: usize,
+    pub session_review_event_count: usize,
+    pub first_event_at: Option<i64>,
+    pub latest_event_at: Option<i64>,
+    pub evidence_refs: Vec<String>,
+    pub safety_flags: SkillLifecycleTimelineSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SkillLifecycleAgentRow {
+    pub agent: String,
+    pub skill_count: usize,
+    pub event_count: usize,
+    pub finding_event_count: usize,
+    pub drift_event_count: usize,
+    pub remediation_event_count: usize,
+    pub prompt_event_count: usize,
+    pub session_review_event_count: usize,
+    pub first_event_at: Option<i64>,
+    pub latest_event_at: Option<i64>,
+    pub evidence_refs: Vec<String>,
+    pub safety_flags: SkillLifecycleTimelineSafetyFlags,
+}
+
+pub type SkillLifecycleTimelineSafetyFlags = AgentReadinessSafetyFlags;
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct KnowledgeSearchParams {
@@ -3287,6 +3429,7 @@ pub enum LlmPromptActionKind {
     TaskReadiness,
     RoutingConfidence,
     TaskCockpit,
+    SkillLifecycleTimeline,
 }
 
 impl LlmPromptActionKind {
@@ -3311,6 +3454,7 @@ impl LlmPromptActionKind {
             Self::TaskReadiness => "task_readiness",
             Self::RoutingConfidence => "routing_confidence",
             Self::TaskCockpit => "task_cockpit",
+            Self::SkillLifecycleTimeline => "skill_lifecycle_timeline",
         }
     }
 }
@@ -4311,6 +4455,15 @@ impl ServiceHost {
                     serde_json::from_value(request.params)?
                 };
                 serde_json::to_value(self.routing_accuracy_dashboard(params)?).map_err(Into::into)
+            }
+            "skill.lifecycleTimeline" => {
+                let params: SkillLifecycleTimelineParams = if request.params.is_null() {
+                    SkillLifecycleTimelineParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.build_skill_lifecycle_timeline(params)?)
+                    .map_err(Into::into)
             }
             "session.reviewAgentSkillUse" => {
                 let params: AgentSessionSkillReviewParams = if request.params.is_null() {
@@ -10036,6 +10189,358 @@ impl ServiceHost {
         })
     }
 
+    pub fn build_skill_lifecycle_timeline(
+        &self,
+        params: SkillLifecycleTimelineParams,
+    ) -> Result<SkillLifecycleTimelineResult, ServiceError> {
+        if matches!(params.limit, Some(0)) {
+            return Err(ServiceError::InvalidRequest(
+                "skill.lifecycleTimeline limit must be greater than zero".to_string(),
+            ));
+        }
+
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let roots = self.trace_redaction_roots(&adapter_ctx);
+        let filters = skill_lifecycle_filters(&params, &adapter_ctx, &roots);
+        let Some(catalog) = self.open_existing_catalog_read_only()? else {
+            return Ok(empty_skill_lifecycle_timeline_result(filters, false));
+        };
+
+        let mut evidence_references = Vec::new();
+        let mut gap_notes = Vec::new();
+        let mut blocker_notes = Vec::new();
+        let skills = catalog
+            .list_skill_instances_for_project_context(adapter_ctx.project_root.as_deref())?
+            .into_iter()
+            .filter(|skill| !is_pi_plain_markdown_instance_noise(skill))
+            .map(skill_lifecycle_meta_from_instance)
+            .collect::<Vec<_>>();
+        let skill_by_id = skills
+            .iter()
+            .map(|skill| (skill.instance_id.clone(), skill.clone()))
+            .collect::<BTreeMap<_, _>>();
+        let visible_ids = skill_lifecycle_visible_ids(&filters, &skills);
+
+        if !skill_lifecycle_has_skill_filter(&filters) && skills.is_empty() {
+            gap_notes.push(
+                "No visible local skill rows are available for the current project context."
+                    .to_string(),
+            );
+        }
+        if skill_lifecycle_has_skill_filter(&filters) && visible_ids.is_empty() {
+            gap_notes
+                .push("No visible local skill matched the selected lifecycle filters.".to_string());
+        }
+
+        let findings = list_findings(&catalog)?;
+        let conflicts = list_conflicts(&catalog)?;
+        let analysis = analyze_catalog(&catalog, &adapter_ctx)?;
+        let mut rows = Vec::new();
+
+        for skill in &skills {
+            if !visible_ids.contains(&skill.instance_id) {
+                continue;
+            }
+            let evidence_id = push_task_readiness_evidence(
+                &mut evidence_references,
+                "skill",
+                &skill.instance_id,
+                format!(
+                    "Catalog lifecycle metadata for `{}` ({}, {}, enabled={})",
+                    redact_for_llm_preview(&skill.skill_name),
+                    redact_for_llm_preview(&skill.agent),
+                    redact_for_llm_preview(&skill.scope),
+                    skill.enabled
+                ),
+                None,
+                Some(skill.instance_id.clone()),
+            );
+            rows.push(skill_lifecycle_skill_seen_row(skill, &evidence_id));
+            if skill.last_seen != skill.first_seen {
+                rows.push(skill_lifecycle_skill_observed_row(skill, &evidence_id));
+            }
+        }
+
+        for finding in findings
+            .iter()
+            .filter(|finding| skill_lifecycle_finding_matches(&filters, finding, &skill_by_id))
+        {
+            let skill = skill_lifecycle_finding_skill(finding, &skill_by_id);
+            let evidence_id = push_task_readiness_evidence(
+                &mut evidence_references,
+                "finding",
+                &finding.id,
+                format!(
+                    "{} finding `{}`: {}",
+                    redact_for_llm_preview(&finding.effective_severity),
+                    redact_for_llm_preview(&finding.rule_id),
+                    redact_for_llm_preview(&finding.message)
+                ),
+                Some(finding.effective_severity.clone()),
+                skill
+                    .map(|skill| skill.instance_id.clone())
+                    .or_else(|| finding.instance_id.clone()),
+            );
+            rows.push(skill_lifecycle_finding_row(finding, skill, &evidence_id));
+            if let Some(updated_at) = finding.triage_updated_at {
+                rows.push(skill_lifecycle_finding_triage_row(
+                    finding,
+                    skill,
+                    updated_at,
+                    &evidence_id,
+                ));
+            }
+        }
+
+        for conflict in conflicts
+            .iter()
+            .filter(|conflict| skill_lifecycle_conflict_matches(&filters, conflict, &skill_by_id))
+        {
+            let skill = skill_lifecycle_conflict_skill(conflict, &skill_by_id, &visible_ids);
+            let evidence_id = push_task_readiness_evidence(
+                &mut evidence_references,
+                "conflict",
+                &conflict.id,
+                format!(
+                    "Same-agent conflict `{}` covers {} instance(s)",
+                    redact_for_llm_preview(&conflict.reason),
+                    conflict.instance_ids.len()
+                ),
+                Some("warning".to_string()),
+                skill
+                    .map(|skill| skill.instance_id.clone())
+                    .or_else(|| conflict.winner_id.clone()),
+            );
+            rows.push(skill_lifecycle_conflict_row(conflict, skill, &evidence_id));
+        }
+
+        for group in analysis.groups.iter().filter(|group| {
+            skill_lifecycle_analysis_matches(&filters, group, &skill_by_id, &visible_ids)
+        }) {
+            let skill = skill_lifecycle_analysis_skill(group, &skill_by_id, &visible_ids);
+            let evidence_id = push_task_readiness_evidence(
+                &mut evidence_references,
+                "analysis",
+                &group.id,
+                format!(
+                    "{} analysis `{}`: {}",
+                    redact_for_llm_preview(&group.severity),
+                    redact_for_llm_preview(&group.kind),
+                    redact_for_llm_preview(&group.title)
+                ),
+                Some(group.severity.clone()),
+                skill.map(|skill| skill.instance_id.clone()),
+            );
+            rows.push(skill_lifecycle_analysis_row(group, skill, &evidence_id));
+        }
+
+        if filters.include_stale_drift {
+            let stale = self.detect_stale_drift(DetectStaleDriftParams {
+                agent: filters
+                    .selected_skill_agent
+                    .clone()
+                    .or_else(|| filters.agent.clone()),
+                candidate_instance_ids: if visible_ids.is_empty() {
+                    Vec::new()
+                } else {
+                    visible_ids.iter().cloned().collect()
+                },
+                limit: Some(filters.limit.clamp(50, 100)),
+                stale_days: None,
+                thresholds: StaleDriftThresholds::default(),
+            })?;
+            extend_evidence_references(&mut evidence_references, stale.evidence_references);
+            gap_notes.extend(stale.gap_notes);
+            blocker_notes.extend(stale.blocker_notes);
+            for stale_row in stale.stale_drift_rows.iter().filter(|row| {
+                skill_lifecycle_stale_row_matches(&filters, row, &skill_by_id, &visible_ids)
+            }) {
+                if stale_row.stale_drift_score == 0 {
+                    continue;
+                }
+                rows.push(skill_lifecycle_stale_drift_row(stale_row));
+            }
+        }
+
+        if filters.include_remediation_history {
+            if !self.remediation_history_path().exists() {
+                gap_notes.push("No app-local remediation history records are saved.".to_string());
+            }
+            for record in self.load_remediation_history()?.iter().filter(|record| {
+                skill_lifecycle_remediation_history_matches(
+                    &filters,
+                    record,
+                    &skill_by_id,
+                    &visible_ids,
+                )
+            }) {
+                let related_instance_id = skill_lifecycle_related_instance_for_strings(
+                    record
+                        .source_item_refs
+                        .iter()
+                        .chain(record.batch_review_item_ids.iter())
+                        .chain(record.evidence_refs.iter()),
+                    &skill_by_id,
+                );
+                let evidence_id = push_task_readiness_evidence(
+                    &mut evidence_references,
+                    "remediation_history",
+                    &record.id,
+                    format!(
+                        "App-local remediation history `{}` with decision `{}` and status `{}`",
+                        redact_for_llm_preview(&record.title),
+                        redact_for_llm_preview(&record.decision),
+                        redact_for_llm_preview(&record.status)
+                    ),
+                    Some(record.status.clone()),
+                    related_instance_id.clone(),
+                );
+                rows.push(skill_lifecycle_remediation_history_row(
+                    record,
+                    related_instance_id
+                        .as_deref()
+                        .and_then(|id| skill_by_id.get(id)),
+                    &evidence_id,
+                ));
+            }
+        }
+
+        if filters.include_prompt_runs {
+            if !self.llm_prompt_runs_path().exists() {
+                gap_notes.push("No app-local prompt run metadata records are saved.".to_string());
+            }
+            for run in self.load_llm_prompt_runs()?.iter().filter(|run| {
+                skill_lifecycle_prompt_run_matches(&filters, run, &skill_by_id, &visible_ids)
+            }) {
+                let related_instance_id = skill_lifecycle_related_instance_for_strings(
+                    run.instance_ids
+                        .iter()
+                        .chain(run.instance_id.iter())
+                        .chain(run.definition_id.iter()),
+                    &skill_by_id,
+                );
+                let evidence_id = push_task_readiness_evidence(
+                    &mut evidence_references,
+                    "prompt_run",
+                    &run.id,
+                    format!(
+                        "App-local prompt run metadata `{}` action `{}` status `{}`",
+                        redact_for_llm_preview(&run.id),
+                        redact_for_llm_preview(&run.action),
+                        redact_for_llm_preview(&run.status)
+                    ),
+                    Some(run.status.clone()),
+                    related_instance_id,
+                );
+                rows.push(skill_lifecycle_prompt_run_row(
+                    run,
+                    &skill_by_id,
+                    &evidence_id,
+                ));
+            }
+        }
+
+        if filters.include_session_reviews {
+            if !self.agent_session_reviews_path().exists() {
+                gap_notes.push("No app-local agent session skill reviews are saved.".to_string());
+            }
+            for review in self.load_agent_session_reviews()?.iter().filter(|review| {
+                skill_lifecycle_session_review_matches(&filters, review, &skill_by_id, &visible_ids)
+            }) {
+                let related_instance_id = review
+                    .analysis
+                    .detected_skills
+                    .iter()
+                    .find(|skill| skill_by_id.contains_key(&skill.instance_id))
+                    .map(|skill| skill.instance_id.clone())
+                    .or_else(|| {
+                        skill_lifecycle_related_instance_for_strings(
+                            review
+                                .expected_skill_refs
+                                .iter()
+                                .chain(review.analysis.evidence_refs.iter()),
+                            &skill_by_id,
+                        )
+                    });
+                let evidence_id = push_task_readiness_evidence(
+                    &mut evidence_references,
+                    "session_review",
+                    &review.id,
+                    format!(
+                        "App-local session review `{}` outcome `{}`",
+                        redact_for_llm_preview(&review.title),
+                        redact_for_llm_preview(&review.analysis.outcome)
+                    ),
+                    Some(review.analysis.outcome.clone()),
+                    related_instance_id,
+                );
+                rows.push(skill_lifecycle_session_review_row(
+                    review,
+                    &skill_by_id,
+                    &evidence_id,
+                ));
+            }
+        }
+
+        rows.sort_by(skill_lifecycle_row_sort);
+        rows.truncate(filters.limit);
+        if rows.is_empty() {
+            gap_notes.push(
+                "No deterministic local lifecycle events matched the current filters.".to_string(),
+            );
+        }
+        blocker_notes.push(
+            "Skill lifecycle timeline is read-only; it does not write skills, mutate agent config, create snapshots, execute scripts, send provider requests, or change triage."
+                .to_string(),
+        );
+        normalize_note_list(&mut gap_notes);
+        normalize_note_list(&mut blocker_notes);
+        dedupe_evidence_references(&mut evidence_references);
+
+        let skill_rows = skill_lifecycle_skill_rows(&rows, &skill_by_id);
+        let agent_rows = skill_lifecycle_agent_rows(&rows, &skill_by_id);
+        let summary = skill_lifecycle_summary(&rows, &skill_rows, &agent_rows, &filters);
+        let prompt_instance_ids = skill_rows
+            .iter()
+            .take(12)
+            .map(|row| row.instance_id.clone())
+            .collect::<Vec<_>>();
+
+        Ok(SkillLifecycleTimelineResult {
+            generated_by: "local-v2.66",
+            catalog_available: true,
+            filters,
+            summary,
+            timeline_rows: rows,
+            skill_rows,
+            agent_rows,
+            gap_notes,
+            blocker_notes,
+            evidence_references,
+            prompt_request: AgentReadinessPromptRequest {
+                available: !prompt_instance_ids.is_empty(),
+                preview_method: "llm.previewPrompt",
+                confirm_method: "llm.confirmPromptAndSend",
+                action: "skill_lifecycle_timeline",
+                request: LlmPreviewPromptParams {
+                    action: LlmPromptActionKind::SkillLifecycleTimeline,
+                    profile_id: None,
+                    app_language: None,
+                    skill_instance_id: None,
+                    instance_ids: prompt_instance_ids,
+                    analysis_kind: None,
+                    user_intent: Some(
+                        "Explain deterministic skill lifecycle timeline rows using only local redacted evidence."
+                            .to_string(),
+                    ),
+                },
+                note: "Optional provider-backed lifecycle wording must be requested through prompt preview and explicit confirmation; skill.lifecycleTimeline never sends provider traffic and remains copy-only."
+                    .to_string(),
+            },
+            safety_flags: skill_lifecycle_timeline_safety_flags(),
+        })
+    }
+
     pub fn list_task_benchmarks(
         &self,
         params: ListTaskBenchmarksParams,
@@ -11701,6 +12206,59 @@ impl ServiceHost {
                 ]);
                 sections.push(render_task_cockpit_prompt_section(&cockpit, &mut redactor));
             }
+            LlmPromptActionKind::SkillLifecycleTimeline => {
+                let timeline =
+                    self.build_skill_lifecycle_timeline(SkillLifecycleTimelineParams {
+                        task: params.user_intent.clone(),
+                        agent: None,
+                        selected_skill_id: params
+                            .skill_instance_id
+                            .clone()
+                            .or_else(|| params.instance_ids.first().cloned()),
+                        selected_skill_name: None,
+                        selected_skill_agent: None,
+                        definition_id: None,
+                        project_root: None,
+                        current_cwd: None,
+                        workspace: None,
+                        limit: Some(12),
+                        include_prompt_runs: true,
+                        include_session_reviews: true,
+                        include_remediation_history: true,
+                        include_stale_drift: true,
+                    })?;
+                prompt_scope.extend([
+                    "deterministic skill lifecycle timeline rows".to_string(),
+                    "skill and agent lifecycle aggregates".to_string(),
+                    "local finding, drift, remediation, prompt, and session-review event counts"
+                        .to_string(),
+                    "gap, blocker, evidence, and safety summaries".to_string(),
+                ]);
+                included_fields.extend([
+                    "redacted task or lifecycle intent".to_string(),
+                    "timeline event ids, types, stages, statuses, and severities".to_string(),
+                    "candidate skill ids, names, agents, scopes, enabled states, and states"
+                        .to_string(),
+                    "app-local remediation/prompt/session metadata without raw prompt, response, or trace content"
+                        .to_string(),
+                    "evidence ids and read-only safety flags".to_string(),
+                ]);
+                excluded_fields.extend([
+                    "raw source paths".to_string(),
+                    "raw provider prompt".to_string(),
+                    "raw provider response".to_string(),
+                    "provider API keys or credentials".to_string(),
+                    "raw trace content".to_string(),
+                    "agent config contents".to_string(),
+                    "raw skill body".to_string(),
+                    "write/apply instructions".to_string(),
+                    "snapshot creation or rollback commands".to_string(),
+                ]);
+                sections.push(render_skill_lifecycle_timeline_prompt_section(
+                    &timeline,
+                    &mut redactor,
+                ));
+            }
         }
 
         sections.push("Required output: concise Markdown draft guidance in the requested output language, with evidence notes, uncertainty, and safe next steps. Mark all suggestions copy-only.".to_string());
@@ -11727,6 +12285,7 @@ impl ServiceHost {
             LlmPromptActionKind::TaskReadiness => 750,
             LlmPromptActionKind::RoutingConfidence => 850,
             LlmPromptActionKind::TaskCockpit => 950,
+            LlmPromptActionKind::SkillLifecycleTimeline => 850,
         };
         let prompt_preview = sections.join("\n\n");
         let redaction = redactor.summary();
@@ -20191,6 +20750,1229 @@ fn task_readiness_safety_flags() -> TaskReadinessSafetyFlags {
     }
 }
 
+#[derive(Debug, Clone)]
+struct SkillLifecycleSkillMeta {
+    instance_id: String,
+    definition_id: String,
+    skill_name: String,
+    agent: String,
+    scope: String,
+    enabled: bool,
+    state: String,
+    first_seen: i64,
+    last_seen: i64,
+    mtime: i64,
+}
+
+#[derive(Debug, Clone, Default)]
+struct SkillLifecycleAggregateCounts {
+    event_count: usize,
+    finding_event_count: usize,
+    drift_event_count: usize,
+    remediation_event_count: usize,
+    prompt_event_count: usize,
+    session_review_event_count: usize,
+    first_event_at: Option<i64>,
+    latest_event_at: Option<i64>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn skill_lifecycle_timeline_safety_flags() -> SkillLifecycleTimelineSafetyFlags {
+    agent_readiness_safety_flags()
+}
+
+fn skill_lifecycle_filters(
+    params: &SkillLifecycleTimelineParams,
+    adapter_ctx: &AdapterContext,
+    roots: &[(String, &'static str)],
+) -> SkillLifecycleTimelineFilters {
+    SkillLifecycleTimelineFilters {
+        task: skill_lifecycle_filter_text(params.task.as_deref(), roots, 320),
+        agent: skill_lifecycle_filter_token(params.agent.as_deref(), roots, 80),
+        selected_skill_id: skill_lifecycle_filter_token(
+            params.selected_skill_id.as_deref(),
+            roots,
+            120,
+        ),
+        selected_skill_name: skill_lifecycle_filter_text(
+            params.selected_skill_name.as_deref(),
+            roots,
+            180,
+        ),
+        selected_skill_agent: skill_lifecycle_filter_token(
+            params.selected_skill_agent.as_deref(),
+            roots,
+            80,
+        ),
+        definition_id: skill_lifecycle_filter_token(params.definition_id.as_deref(), roots, 160),
+        project_root: params
+            .project_root
+            .as_deref()
+            .map(|value| skill_lifecycle_filter_path_text(value, roots, 240))
+            .or_else(|| {
+                adapter_ctx.project_root.as_ref().map(|path| {
+                    skill_lifecycle_filter_path_text(&path.to_string_lossy(), roots, 240)
+                })
+            }),
+        current_cwd: params
+            .current_cwd
+            .as_deref()
+            .map(|value| skill_lifecycle_filter_path_text(value, roots, 240))
+            .or_else(|| {
+                adapter_ctx.project_cwd.as_ref().map(|path| {
+                    skill_lifecycle_filter_path_text(&path.to_string_lossy(), roots, 240)
+                })
+            }),
+        workspace: skill_lifecycle_filter_text(params.workspace.as_deref(), roots, 240),
+        limit: params.limit.unwrap_or(50).clamp(1, 500),
+        include_prompt_runs: params.include_prompt_runs,
+        include_session_reviews: params.include_session_reviews,
+        include_remediation_history: params.include_remediation_history,
+        include_stale_drift: params.include_stale_drift,
+    }
+}
+
+fn skill_lifecycle_filter_text(
+    value: Option<&str>,
+    roots: &[(String, &'static str)],
+    max_chars: usize,
+) -> Option<String> {
+    let value = value.map(str::trim).filter(|value| !value.is_empty())?;
+    let mut redactor = PromptRedactor::new(roots);
+    Some(truncate_chars(&redactor.redact(value), max_chars))
+}
+
+fn skill_lifecycle_filter_token(
+    value: Option<&str>,
+    roots: &[(String, &'static str)],
+    max_chars: usize,
+) -> Option<String> {
+    skill_lifecycle_filter_text(value, roots, max_chars)
+}
+
+fn skill_lifecycle_filter_path_text(
+    value: &str,
+    roots: &[(String, &'static str)],
+    max_chars: usize,
+) -> String {
+    let redacted = truncate_chars(&redact_string(value.trim(), roots), max_chars);
+    if redacted.starts_with('/') || redacted.contains(":\\") {
+        "<local-path>".to_string()
+    } else {
+        redacted
+    }
+}
+
+fn skill_lifecycle_meta_from_instance(skill: SkillInstance) -> SkillLifecycleSkillMeta {
+    SkillLifecycleSkillMeta {
+        instance_id: skill.id,
+        definition_id: skill.definition_id,
+        skill_name: skill.name,
+        agent: skill.agent.as_str().to_string(),
+        scope: skill.scope.as_str().to_string(),
+        enabled: skill.enabled,
+        state: skill.state.as_str().to_string(),
+        first_seen: skill.first_seen,
+        last_seen: skill.last_seen,
+        mtime: skill.mtime,
+    }
+}
+
+fn empty_skill_lifecycle_timeline_result(
+    filters: SkillLifecycleTimelineFilters,
+    catalog_available: bool,
+) -> SkillLifecycleTimelineResult {
+    SkillLifecycleTimelineResult {
+        generated_by: "local-v2.66",
+        catalog_available,
+        filters,
+        summary: SkillLifecycleTimelineSummary {
+            summary:
+                "No local catalog is available, so lifecycle timeline has no skill evidence."
+                    .to_string(),
+            ..SkillLifecycleTimelineSummary::default()
+        },
+        timeline_rows: Vec::new(),
+        skill_rows: Vec::new(),
+        agent_rows: Vec::new(),
+        gap_notes: vec![
+            "Run a local scan before relying on skill lifecycle timeline evidence.".to_string(),
+        ],
+        blocker_notes: vec![
+            "No provider request was sent and no fallback network lookup was attempted.".to_string(),
+        ],
+        evidence_references: Vec::new(),
+        prompt_request: AgentReadinessPromptRequest {
+            available: false,
+            preview_method: "llm.previewPrompt",
+            confirm_method: "llm.confirmPromptAndSend",
+            action: "skill_lifecycle_timeline",
+            request: LlmPreviewPromptParams {
+                action: LlmPromptActionKind::SkillLifecycleTimeline,
+                profile_id: None,
+                app_language: None,
+                skill_instance_id: None,
+                instance_ids: Vec::new(),
+                analysis_kind: None,
+                user_intent: Some(
+                    "Explain deterministic skill lifecycle timeline rows using only local redacted evidence."
+                        .to_string(),
+                ),
+            },
+            note: "Prompt preview is unavailable until local catalog evidence produces lifecycle timeline rows."
+                .to_string(),
+        },
+        safety_flags: skill_lifecycle_timeline_safety_flags(),
+    }
+}
+
+fn skill_lifecycle_has_skill_filter(filters: &SkillLifecycleTimelineFilters) -> bool {
+    filters.agent.is_some()
+        || filters.selected_skill_id.is_some()
+        || filters.selected_skill_name.is_some()
+        || filters.selected_skill_agent.is_some()
+        || filters.definition_id.is_some()
+}
+
+fn skill_lifecycle_visible_ids(
+    filters: &SkillLifecycleTimelineFilters,
+    skills: &[SkillLifecycleSkillMeta],
+) -> BTreeSet<String> {
+    skills
+        .iter()
+        .filter(|skill| skill_lifecycle_skill_matches(filters, skill))
+        .map(|skill| skill.instance_id.clone())
+        .collect()
+}
+
+fn skill_lifecycle_skill_matches(
+    filters: &SkillLifecycleTimelineFilters,
+    skill: &SkillLifecycleSkillMeta,
+) -> bool {
+    if !skill_lifecycle_optional_eq(filters.agent.as_deref(), &skill.agent) {
+        return false;
+    }
+    if !skill_lifecycle_optional_eq(filters.selected_skill_agent.as_deref(), &skill.agent) {
+        return false;
+    }
+    if !skill_lifecycle_optional_eq(filters.selected_skill_id.as_deref(), &skill.instance_id) {
+        return false;
+    }
+    if !skill_lifecycle_optional_eq(filters.definition_id.as_deref(), &skill.definition_id) {
+        return false;
+    }
+    if let Some(name) = filters.selected_skill_name.as_deref() {
+        if !skill.skill_name.eq_ignore_ascii_case(name) {
+            return false;
+        }
+    }
+    true
+}
+
+fn skill_lifecycle_optional_eq(filter: Option<&str>, value: &str) -> bool {
+    filter.is_none_or(|filter| value.eq_ignore_ascii_case(filter))
+}
+
+fn skill_lifecycle_relation_matches(
+    filters: &SkillLifecycleTimelineFilters,
+    instance_id: Option<&str>,
+    definition_id: Option<&str>,
+    agent: Option<&str>,
+    skill_name: Option<&str>,
+    skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
+    visible_ids: &BTreeSet<String>,
+) -> bool {
+    let related = skill_lifecycle_related_ids(instance_id, definition_id, skill_by_id);
+    if let Some(filter) = filters.selected_skill_id.as_deref() {
+        if let Some(instance_id) = instance_id {
+            if !instance_id.eq_ignore_ascii_case(filter) {
+                return false;
+            }
+        } else if !related.iter().any(|id| id.eq_ignore_ascii_case(filter)) {
+            return false;
+        }
+    }
+    if let Some(filter) = filters.definition_id.as_deref() {
+        let direct = definition_id.is_some_and(|id| id.eq_ignore_ascii_case(filter));
+        let related_match = related
+            .iter()
+            .filter_map(|id| skill_by_id.get(id))
+            .any(|skill| skill.definition_id.eq_ignore_ascii_case(filter));
+        if !direct && !related_match {
+            return false;
+        }
+    }
+    if let Some(filter) = filters.selected_skill_name.as_deref() {
+        let direct = skill_name.is_some_and(|name| name.eq_ignore_ascii_case(filter));
+        let related_match = related
+            .iter()
+            .filter_map(|id| skill_by_id.get(id))
+            .any(|skill| skill.skill_name.eq_ignore_ascii_case(filter));
+        if !direct && !related_match {
+            return false;
+        }
+    }
+    for filter in [
+        filters.agent.as_deref(),
+        filters.selected_skill_agent.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        let direct = agent.is_some_and(|agent| agent.eq_ignore_ascii_case(filter));
+        let related_match = related
+            .iter()
+            .filter_map(|id| skill_by_id.get(id))
+            .any(|skill| skill.agent.eq_ignore_ascii_case(filter));
+        if !direct && !related_match {
+            return false;
+        }
+    }
+    if skill_lifecycle_has_skill_filter(filters) {
+        related.is_empty() || related.iter().any(|id| visible_ids.contains(id))
+    } else {
+        true
+    }
+}
+
+fn skill_lifecycle_related_ids(
+    instance_id: Option<&str>,
+    definition_id: Option<&str>,
+    skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
+) -> BTreeSet<String> {
+    let mut related = BTreeSet::new();
+    if let Some(instance_id) = instance_id {
+        if skill_by_id.contains_key(instance_id) {
+            related.insert(instance_id.to_string());
+        }
+    }
+    if let Some(definition_id) = definition_id {
+        related.extend(
+            skill_by_id
+                .values()
+                .filter(|skill| skill.definition_id == definition_id)
+                .map(|skill| skill.instance_id.clone()),
+        );
+    }
+    related
+}
+
+fn skill_lifecycle_text_contains_filter(value: Option<&str>, filter: Option<&str>) -> bool {
+    match filter {
+        Some(filter) => value
+            .map(|value| {
+                value
+                    .to_ascii_lowercase()
+                    .contains(&filter.to_ascii_lowercase())
+            })
+            .unwrap_or(false),
+        None => true,
+    }
+}
+
+fn skill_lifecycle_finding_matches(
+    filters: &SkillLifecycleTimelineFilters,
+    finding: &RuleFindingRecord,
+    skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
+) -> bool {
+    let skills = skill_by_id.values().cloned().collect::<Vec<_>>();
+    let visible_ids = skill_lifecycle_visible_ids(filters, &skills);
+    skill_lifecycle_relation_matches(
+        filters,
+        finding.instance_id.as_deref(),
+        finding.definition_id.as_deref(),
+        finding
+            .instance_id
+            .as_deref()
+            .and_then(|id| skill_by_id.get(id))
+            .map(|skill| skill.agent.as_str()),
+        finding
+            .instance_id
+            .as_deref()
+            .and_then(|id| skill_by_id.get(id))
+            .map(|skill| skill.skill_name.as_str()),
+        skill_by_id,
+        &visible_ids,
+    )
+}
+
+fn skill_lifecycle_finding_skill<'a>(
+    finding: &RuleFindingRecord,
+    skill_by_id: &'a BTreeMap<String, SkillLifecycleSkillMeta>,
+) -> Option<&'a SkillLifecycleSkillMeta> {
+    finding
+        .instance_id
+        .as_deref()
+        .and_then(|id| skill_by_id.get(id))
+        .or_else(|| {
+            finding.definition_id.as_deref().and_then(|definition_id| {
+                skill_by_id
+                    .values()
+                    .find(|skill| skill.definition_id == definition_id)
+            })
+        })
+}
+
+fn skill_lifecycle_conflict_matches(
+    filters: &SkillLifecycleTimelineFilters,
+    conflict: &ConflictGroupRecord,
+    skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
+) -> bool {
+    let skills = skill_by_id.values().cloned().collect::<Vec<_>>();
+    let visible_ids = skill_lifecycle_visible_ids(filters, &skills);
+    conflict
+        .instance_ids
+        .iter()
+        .any(|id| visible_ids.contains(id))
+        || skill_lifecycle_relation_matches(
+            filters,
+            conflict.winner_id.as_deref(),
+            Some(conflict.definition_id.as_str()),
+            None,
+            None,
+            skill_by_id,
+            &visible_ids,
+        )
+}
+
+fn skill_lifecycle_conflict_skill<'a>(
+    conflict: &ConflictGroupRecord,
+    skill_by_id: &'a BTreeMap<String, SkillLifecycleSkillMeta>,
+    visible_ids: &BTreeSet<String>,
+) -> Option<&'a SkillLifecycleSkillMeta> {
+    conflict
+        .winner_id
+        .as_deref()
+        .and_then(|id| skill_by_id.get(id))
+        .or_else(|| {
+            conflict
+                .instance_ids
+                .iter()
+                .find(|id| visible_ids.contains(*id))
+                .and_then(|id| skill_by_id.get(id))
+        })
+        .or_else(|| {
+            conflict
+                .instance_ids
+                .iter()
+                .find_map(|id| skill_by_id.get(id))
+        })
+}
+
+fn skill_lifecycle_analysis_matches(
+    filters: &SkillLifecycleTimelineFilters,
+    group: &CrossAgentAnalysisGroup,
+    skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
+    visible_ids: &BTreeSet<String>,
+) -> bool {
+    let agent_match = filters.agent.as_deref().is_none_or(|agent| {
+        group
+            .agents
+            .iter()
+            .any(|group_agent| group_agent.eq_ignore_ascii_case(agent))
+    });
+    let selected_agent_match = filters.selected_skill_agent.as_deref().is_none_or(|agent| {
+        group
+            .agents
+            .iter()
+            .any(|group_agent| group_agent.eq_ignore_ascii_case(agent))
+    });
+    let name_match = filters.selected_skill_name.as_deref().is_none_or(|name| {
+        group
+            .canonical_name
+            .as_deref()
+            .is_some_and(|canonical| canonical.eq_ignore_ascii_case(name))
+            || group.instance_ids.iter().any(|id| {
+                skill_by_id
+                    .get(id)
+                    .is_some_and(|skill| skill.skill_name.eq_ignore_ascii_case(name))
+            })
+    });
+    let definition_match = filters
+        .definition_id
+        .as_deref()
+        .is_none_or(|definition_id| {
+            group.instance_ids.iter().any(|id| {
+                skill_by_id
+                    .get(id)
+                    .is_some_and(|skill| skill.definition_id.eq_ignore_ascii_case(definition_id))
+            })
+        });
+    let selected_id_match = filters
+        .selected_skill_id
+        .as_deref()
+        .is_none_or(|selected| group.instance_ids.iter().any(|id| id == selected));
+    let visible_match = !skill_lifecycle_has_skill_filter(filters)
+        || group.instance_ids.iter().any(|id| visible_ids.contains(id));
+    agent_match
+        && selected_agent_match
+        && name_match
+        && definition_match
+        && selected_id_match
+        && visible_match
+}
+
+fn skill_lifecycle_analysis_skill<'a>(
+    group: &CrossAgentAnalysisGroup,
+    skill_by_id: &'a BTreeMap<String, SkillLifecycleSkillMeta>,
+    visible_ids: &BTreeSet<String>,
+) -> Option<&'a SkillLifecycleSkillMeta> {
+    group
+        .instance_ids
+        .iter()
+        .find(|id| visible_ids.contains(*id))
+        .and_then(|id| skill_by_id.get(id))
+        .or_else(|| group.instance_ids.iter().find_map(|id| skill_by_id.get(id)))
+}
+
+fn skill_lifecycle_stale_row_matches(
+    filters: &SkillLifecycleTimelineFilters,
+    row: &StaleDriftRow,
+    skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
+    visible_ids: &BTreeSet<String>,
+) -> bool {
+    skill_lifecycle_relation_matches(
+        filters,
+        Some(row.instance_id.as_str()),
+        Some(row.definition_id.as_str()),
+        Some(row.agent.as_str()),
+        Some(row.skill_name.as_str()),
+        skill_by_id,
+        visible_ids,
+    )
+}
+
+fn skill_lifecycle_remediation_history_matches(
+    filters: &SkillLifecycleTimelineFilters,
+    record: &RemediationHistoryRecord,
+    skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
+    visible_ids: &BTreeSet<String>,
+) -> bool {
+    if !skill_lifecycle_text_contains_filter(record.task.as_deref(), filters.task.as_deref()) {
+        return false;
+    }
+    if let Some(workspace) = filters.workspace.as_deref() {
+        if !record
+            .workspace
+            .as_deref()
+            .is_some_and(|value| value.contains(workspace))
+        {
+            return false;
+        }
+    }
+    if let Some(agent) = filters
+        .selected_skill_agent
+        .as_deref()
+        .or(filters.agent.as_deref())
+    {
+        if !record
+            .agent
+            .as_deref()
+            .is_some_and(|value| value.eq_ignore_ascii_case(agent))
+        {
+            return false;
+        }
+    }
+    if !skill_lifecycle_has_skill_filter(filters) {
+        return true;
+    }
+    skill_lifecycle_strings_match_filters(
+        filters,
+        record
+            .source_item_refs
+            .iter()
+            .chain(record.batch_review_item_ids.iter())
+            .chain(record.evidence_refs.iter()),
+        skill_by_id,
+        visible_ids,
+    )
+}
+
+fn skill_lifecycle_prompt_run_matches(
+    filters: &SkillLifecycleTimelineFilters,
+    run: &LlmPromptRunRecord,
+    skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
+    visible_ids: &BTreeSet<String>,
+) -> bool {
+    if !skill_lifecycle_text_contains_filter(run.task.as_deref(), filters.task.as_deref()) {
+        return false;
+    }
+    let instance_id = run.instance_id.as_deref().or_else(|| {
+        run.instance_ids
+            .iter()
+            .find(|id| skill_by_id.contains_key(*id))
+            .map(String::as_str)
+    });
+    skill_lifecycle_relation_matches(
+        filters,
+        instance_id,
+        run.definition_id.as_deref(),
+        run.agent.as_deref(),
+        None,
+        skill_by_id,
+        visible_ids,
+    )
+}
+
+fn skill_lifecycle_session_review_matches(
+    filters: &SkillLifecycleTimelineFilters,
+    review: &AgentSessionSkillReviewRecord,
+    skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
+    visible_ids: &BTreeSet<String>,
+) -> bool {
+    if !skill_lifecycle_text_contains_filter(review.task.as_deref(), filters.task.as_deref()) {
+        return false;
+    }
+    for filter in [
+        filters.agent.as_deref(),
+        filters.selected_skill_agent.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        let review_agent = review
+            .agent
+            .as_deref()
+            .is_some_and(|agent| agent.eq_ignore_ascii_case(filter));
+        let detected_agent = review
+            .analysis
+            .detected_skills
+            .iter()
+            .any(|skill| skill.agent.eq_ignore_ascii_case(filter));
+        if !review_agent && !detected_agent {
+            return false;
+        }
+    }
+    if !skill_lifecycle_has_skill_filter(filters) {
+        return true;
+    }
+    let detected_match = review.analysis.detected_skills.iter().any(|skill| {
+        skill_lifecycle_relation_matches(
+            filters,
+            Some(skill.instance_id.as_str()),
+            Some(skill.definition_id.as_str()),
+            Some(skill.agent.as_str()),
+            Some(skill.skill_name.as_str()),
+            skill_by_id,
+            visible_ids,
+        )
+    });
+    let expected_match = skill_lifecycle_strings_match_filters(
+        filters,
+        review
+            .expected_skill_refs
+            .iter()
+            .chain(review.expected_skill_names.iter())
+            .chain(review.analysis.evidence_refs.iter()),
+        skill_by_id,
+        visible_ids,
+    );
+    detected_match || expected_match
+}
+
+fn skill_lifecycle_strings_match_filters<'a>(
+    filters: &SkillLifecycleTimelineFilters,
+    values: impl Iterator<Item = &'a String>,
+    skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
+    visible_ids: &BTreeSet<String>,
+) -> bool {
+    let values = values.collect::<Vec<_>>();
+    if let Some(filter) = filters.selected_skill_id.as_deref() {
+        if !values.iter().any(|value| value.contains(filter)) {
+            return false;
+        }
+    }
+    if let Some(filter) = filters.definition_id.as_deref() {
+        let value_match = values.iter().any(|value| value.contains(filter));
+        let skill_match = visible_ids.iter().any(|id| {
+            skill_by_id
+                .get(id)
+                .is_some_and(|skill| skill.definition_id.eq_ignore_ascii_case(filter))
+        });
+        if !value_match && !skill_match {
+            return false;
+        }
+    }
+    if let Some(filter) = filters.selected_skill_name.as_deref() {
+        let value_match = values
+            .iter()
+            .any(|value| value.eq_ignore_ascii_case(filter) || value.contains(filter));
+        let skill_match = visible_ids.iter().any(|id| {
+            skill_by_id
+                .get(id)
+                .is_some_and(|skill| skill.skill_name.eq_ignore_ascii_case(filter))
+        });
+        if !value_match && !skill_match {
+            return false;
+        }
+    }
+    true
+}
+
+fn skill_lifecycle_related_instance_for_strings<'a>(
+    values: impl Iterator<Item = &'a String>,
+    skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
+) -> Option<String> {
+    let values = values.collect::<Vec<_>>();
+    skill_by_id.values().find_map(|skill| {
+        if values.iter().any(|value| {
+            value.contains(&skill.instance_id)
+                || value.contains(&skill.definition_id)
+                || value.eq_ignore_ascii_case(&skill.skill_name)
+        }) {
+            Some(skill.instance_id.clone())
+        } else {
+            None
+        }
+    })
+}
+
+fn skill_lifecycle_skill_seen_row(
+    skill: &SkillLifecycleSkillMeta,
+    evidence_id: &str,
+) -> SkillLifecycleTimelineRow {
+    SkillLifecycleTimelineRow {
+        id: format!("lifecycle:skill-seen:{}", skill.instance_id),
+        occurred_at: Some(skill.first_seen),
+        event_type: "skill_seen",
+        lifecycle_stage: "discovery",
+        title: format!(
+            "Skill discovered: {}",
+            redact_for_llm_preview(&skill.skill_name)
+        ),
+        summary: format!(
+            "`{}` is a {} {} skill for {} and is currently {}.",
+            redact_for_llm_preview(&skill.skill_name),
+            redact_for_llm_preview(&skill.scope),
+            redact_for_llm_preview(&skill.state),
+            redact_for_llm_preview(&skill.agent),
+            if skill.enabled { "enabled" } else { "disabled" }
+        ),
+        agent: Some(skill.agent.clone()),
+        skill_name: Some(redact_for_llm_preview(&skill.skill_name)),
+        instance_id: Some(skill.instance_id.clone()),
+        definition_id: Some(skill.definition_id.clone()),
+        source: "catalog",
+        severity: None,
+        status: Some(skill.state.clone()),
+        evidence_refs: vec![evidence_id.to_string()],
+        safety_flags: skill_lifecycle_timeline_safety_flags(),
+    }
+}
+
+fn skill_lifecycle_skill_observed_row(
+    skill: &SkillLifecycleSkillMeta,
+    evidence_id: &str,
+) -> SkillLifecycleTimelineRow {
+    SkillLifecycleTimelineRow {
+        id: format!("lifecycle:skill-observed:{}", skill.instance_id),
+        occurred_at: Some(skill.last_seen),
+        event_type: "skill_observed",
+        lifecycle_stage: "scan",
+        title: format!(
+            "Skill observed: {}",
+            redact_for_llm_preview(&skill.skill_name)
+        ),
+        summary: format!(
+            "Latest local catalog observation recorded state `{}` with source mtime {}.",
+            redact_for_llm_preview(&skill.state),
+            skill.mtime
+        ),
+        agent: Some(skill.agent.clone()),
+        skill_name: Some(redact_for_llm_preview(&skill.skill_name)),
+        instance_id: Some(skill.instance_id.clone()),
+        definition_id: Some(skill.definition_id.clone()),
+        source: "catalog",
+        severity: None,
+        status: Some(skill.state.clone()),
+        evidence_refs: vec![evidence_id.to_string()],
+        safety_flags: skill_lifecycle_timeline_safety_flags(),
+    }
+}
+
+fn skill_lifecycle_finding_row(
+    finding: &RuleFindingRecord,
+    skill: Option<&SkillLifecycleSkillMeta>,
+    evidence_id: &str,
+) -> SkillLifecycleTimelineRow {
+    SkillLifecycleTimelineRow {
+        id: format!("lifecycle:finding:{}", finding.id),
+        occurred_at: Some(finding.created_at),
+        event_type: "finding",
+        lifecycle_stage: "risk",
+        title: format!(
+            "{} finding: {}",
+            redact_for_llm_preview(&finding.rule_id),
+            skill
+                .map(|skill| redact_for_llm_preview(&skill.skill_name))
+                .unwrap_or_else(|| "catalog definition".to_string())
+        ),
+        summary: redact_for_llm_preview(&finding.message),
+        agent: skill.map(|skill| skill.agent.clone()),
+        skill_name: skill.map(|skill| redact_for_llm_preview(&skill.skill_name)),
+        instance_id: finding
+            .instance_id
+            .clone()
+            .or_else(|| skill.map(|skill| skill.instance_id.clone())),
+        definition_id: finding
+            .definition_id
+            .clone()
+            .or_else(|| skill.map(|skill| skill.definition_id.clone())),
+        source: "catalog:finding",
+        severity: Some(finding.effective_severity.clone()),
+        status: Some(finding.triage_status.clone()),
+        evidence_refs: vec![evidence_id.to_string()],
+        safety_flags: skill_lifecycle_timeline_safety_flags(),
+    }
+}
+
+fn skill_lifecycle_finding_triage_row(
+    finding: &RuleFindingRecord,
+    skill: Option<&SkillLifecycleSkillMeta>,
+    updated_at: i64,
+    evidence_id: &str,
+) -> SkillLifecycleTimelineRow {
+    SkillLifecycleTimelineRow {
+        id: format!("lifecycle:finding-triage:{}", finding.id),
+        occurred_at: Some(updated_at),
+        event_type: "finding_triage",
+        lifecycle_stage: "triage",
+        title: format!(
+            "Finding triage: {}",
+            redact_for_llm_preview(&finding.rule_id)
+        ),
+        summary: format!(
+            "Finding triage status is `{}`{}.",
+            redact_for_llm_preview(&finding.triage_status),
+            finding
+                .triage_note
+                .as_deref()
+                .map(|note| format!(" with note `{}`", redact_for_llm_preview(note)))
+                .unwrap_or_default()
+        ),
+        agent: skill.map(|skill| skill.agent.clone()),
+        skill_name: skill.map(|skill| redact_for_llm_preview(&skill.skill_name)),
+        instance_id: finding
+            .instance_id
+            .clone()
+            .or_else(|| skill.map(|skill| skill.instance_id.clone())),
+        definition_id: finding
+            .definition_id
+            .clone()
+            .or_else(|| skill.map(|skill| skill.definition_id.clone())),
+        source: "catalog:finding-triage",
+        severity: Some(finding.effective_severity.clone()),
+        status: Some(finding.triage_status.clone()),
+        evidence_refs: vec![evidence_id.to_string()],
+        safety_flags: skill_lifecycle_timeline_safety_flags(),
+    }
+}
+
+fn skill_lifecycle_conflict_row(
+    conflict: &ConflictGroupRecord,
+    skill: Option<&SkillLifecycleSkillMeta>,
+    evidence_id: &str,
+) -> SkillLifecycleTimelineRow {
+    SkillLifecycleTimelineRow {
+        id: format!("lifecycle:conflict:{}", conflict.id),
+        occurred_at: None,
+        event_type: "conflict",
+        lifecycle_stage: "conflict",
+        title: format!("Conflict: {}", redact_for_llm_preview(&conflict.reason)),
+        summary: format!(
+            "{} instance(s) share definition `{}`; winner is {}.",
+            conflict.instance_ids.len(),
+            redact_for_llm_preview(&conflict.definition_id),
+            conflict
+                .winner_id
+                .as_deref()
+                .map(redact_for_llm_preview)
+                .unwrap_or_else(|| "not selected".to_string())
+        ),
+        agent: skill.map(|skill| skill.agent.clone()),
+        skill_name: skill.map(|skill| redact_for_llm_preview(&skill.skill_name)),
+        instance_id: skill
+            .map(|skill| skill.instance_id.clone())
+            .or_else(|| conflict.winner_id.clone()),
+        definition_id: Some(conflict.definition_id.clone()),
+        source: "catalog:conflict",
+        severity: Some("warning".to_string()),
+        status: Some(conflict.reason.clone()),
+        evidence_refs: vec![evidence_id.to_string()],
+        safety_flags: skill_lifecycle_timeline_safety_flags(),
+    }
+}
+
+fn skill_lifecycle_analysis_row(
+    group: &CrossAgentAnalysisGroup,
+    skill: Option<&SkillLifecycleSkillMeta>,
+    evidence_id: &str,
+) -> SkillLifecycleTimelineRow {
+    SkillLifecycleTimelineRow {
+        id: format!("lifecycle:analysis:{}", group.id),
+        occurred_at: None,
+        event_type: "analysis",
+        lifecycle_stage: "analysis",
+        title: redact_for_llm_preview(&group.title),
+        summary: redact_for_llm_preview(&group.explanation),
+        agent: skill
+            .map(|skill| skill.agent.clone())
+            .or_else(|| group.agents.first().cloned()),
+        skill_name: skill
+            .map(|skill| redact_for_llm_preview(&skill.skill_name))
+            .or_else(|| group.canonical_name.as_deref().map(redact_for_llm_preview)),
+        instance_id: skill
+            .map(|skill| skill.instance_id.clone())
+            .or_else(|| group.instance_ids.first().cloned()),
+        definition_id: skill.map(|skill| skill.definition_id.clone()),
+        source: "catalog:analysis",
+        severity: Some(group.severity.clone()),
+        status: Some(group.kind.clone()),
+        evidence_refs: vec![evidence_id.to_string()],
+        safety_flags: skill_lifecycle_timeline_safety_flags(),
+    }
+}
+
+fn skill_lifecycle_stale_drift_row(row: &StaleDriftRow) -> SkillLifecycleTimelineRow {
+    SkillLifecycleTimelineRow {
+        id: format!("lifecycle:stale-drift:{}", row.instance_id),
+        occurred_at: None,
+        event_type: "stale_drift",
+        lifecycle_stage: "drift",
+        title: format!(
+            "Stale/drift signal: {}",
+            redact_for_llm_preview(&row.skill_name)
+        ),
+        summary: format!(
+            "Stale/drift score {} ({}) with {} local reason(s).",
+            row.stale_drift_score,
+            row.stale_drift_band,
+            row.reasons.len()
+        ),
+        agent: Some(row.agent.clone()),
+        skill_name: Some(redact_for_llm_preview(&row.skill_name)),
+        instance_id: Some(row.instance_id.clone()),
+        definition_id: Some(row.definition_id.clone()),
+        source: "analysis.detectStaleDrift",
+        severity: Some(row.stale_drift_band.to_string()),
+        status: row
+            .readiness_impact
+            .as_ref()
+            .map(|impact| impact.impact_level.to_string()),
+        evidence_refs: row.evidence_refs.clone(),
+        safety_flags: skill_lifecycle_timeline_safety_flags(),
+    }
+}
+
+fn skill_lifecycle_remediation_history_row(
+    record: &RemediationHistoryRecord,
+    skill: Option<&SkillLifecycleSkillMeta>,
+    evidence_id: &str,
+) -> SkillLifecycleTimelineRow {
+    SkillLifecycleTimelineRow {
+        id: format!("lifecycle:remediation-history:{}", record.id),
+        occurred_at: Some(record.updated_at),
+        event_type: "remediation_history",
+        lifecycle_stage: "remediation",
+        title: redact_for_llm_preview(&record.title),
+        summary: format!(
+            "Decision `{}` has status `{}`; {} evidence ref(s).",
+            redact_for_llm_preview(&record.decision),
+            redact_for_llm_preview(&record.status),
+            record.evidence_refs.len()
+        ),
+        agent: record
+            .agent
+            .clone()
+            .or_else(|| skill.map(|skill| skill.agent.clone())),
+        skill_name: skill.map(|skill| redact_for_llm_preview(&skill.skill_name)),
+        instance_id: skill.map(|skill| skill.instance_id.clone()),
+        definition_id: skill.map(|skill| skill.definition_id.clone()),
+        source: "app-local:remediation-history.json",
+        severity: record.risk_levels.first().cloned(),
+        status: Some(record.status.clone()),
+        evidence_refs: vec![evidence_id.to_string()],
+        safety_flags: skill_lifecycle_timeline_safety_flags(),
+    }
+}
+
+fn skill_lifecycle_prompt_run_row(
+    run: &LlmPromptRunRecord,
+    skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
+    evidence_id: &str,
+) -> SkillLifecycleTimelineRow {
+    let skill = run
+        .instance_id
+        .as_deref()
+        .and_then(|id| skill_by_id.get(id))
+        .or_else(|| run.instance_ids.iter().find_map(|id| skill_by_id.get(id)));
+    SkillLifecycleTimelineRow {
+        id: format!("lifecycle:prompt-run:{}", run.id),
+        occurred_at: Some(run.completed_at),
+        event_type: "prompt_run",
+        lifecycle_stage: "provider_preview",
+        title: format!("Prompt run: {}", redact_for_llm_preview(&run.action)),
+        summary: format!(
+            "Prompt run metadata status `{}` for request `{}`; draft copy-only={}.",
+            redact_for_llm_preview(&run.status),
+            redact_for_llm_preview(&run.request_kind),
+            run.draft_requires_user_copy
+        ),
+        agent: run
+            .agent
+            .clone()
+            .or_else(|| skill.map(|skill| skill.agent.clone())),
+        skill_name: skill.map(|skill| redact_for_llm_preview(&skill.skill_name)),
+        instance_id: run
+            .instance_id
+            .clone()
+            .or_else(|| skill.map(|skill| skill.instance_id.clone())),
+        definition_id: run
+            .definition_id
+            .clone()
+            .or_else(|| skill.map(|skill| skill.definition_id.clone())),
+        source: "app-local:prompt-runs.json",
+        severity: run.error_code.clone(),
+        status: Some(run.status.clone()),
+        evidence_refs: vec![evidence_id.to_string()],
+        safety_flags: skill_lifecycle_timeline_safety_flags(),
+    }
+}
+
+fn skill_lifecycle_session_review_row(
+    review: &AgentSessionSkillReviewRecord,
+    skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
+    evidence_id: &str,
+) -> SkillLifecycleTimelineRow {
+    let detected = review
+        .analysis
+        .detected_skills
+        .iter()
+        .find(|skill| skill_by_id.contains_key(&skill.instance_id));
+    SkillLifecycleTimelineRow {
+        id: format!("lifecycle:session-review:{}", review.id),
+        occurred_at: Some(review.reviewed_at),
+        event_type: "session_review",
+        lifecycle_stage: "session_review",
+        title: redact_for_llm_preview(&review.title),
+        summary: redact_for_llm_preview(&review.analysis.summary),
+        agent: review
+            .agent
+            .clone()
+            .or_else(|| detected.map(|skill| skill.agent.clone())),
+        skill_name: detected.map(|skill| redact_for_llm_preview(&skill.skill_name)),
+        instance_id: detected.map(|skill| skill.instance_id.clone()),
+        definition_id: detected.map(|skill| skill.definition_id.clone()),
+        source: "app-local:agent-session-reviews.json",
+        severity: Some(review.analysis.outcome.clone()),
+        status: Some(review.analysis.outcome.clone()),
+        evidence_refs: vec![evidence_id.to_string()],
+        safety_flags: skill_lifecycle_timeline_safety_flags(),
+    }
+}
+
+fn skill_lifecycle_row_sort(
+    left: &SkillLifecycleTimelineRow,
+    right: &SkillLifecycleTimelineRow,
+) -> std::cmp::Ordering {
+    right
+        .occurred_at
+        .unwrap_or(i64::MIN)
+        .cmp(&left.occurred_at.unwrap_or(i64::MIN))
+        .then_with(|| left.event_type.cmp(right.event_type))
+        .then_with(|| left.title.cmp(&right.title))
+        .then_with(|| left.id.cmp(&right.id))
+}
+
+fn skill_lifecycle_count_row(
+    counts: &mut SkillLifecycleAggregateCounts,
+    row: &SkillLifecycleTimelineRow,
+) {
+    counts.event_count += 1;
+    match row.event_type {
+        "finding" | "finding_triage" => counts.finding_event_count += 1,
+        "stale_drift" => counts.drift_event_count += 1,
+        "remediation_history" => counts.remediation_event_count += 1,
+        "prompt_run" => counts.prompt_event_count += 1,
+        "session_review" => counts.session_review_event_count += 1,
+        _ => {}
+    }
+    if let Some(occurred_at) = row.occurred_at {
+        counts.first_event_at = Some(
+            counts
+                .first_event_at
+                .map(|current| current.min(occurred_at))
+                .unwrap_or(occurred_at),
+        );
+        counts.latest_event_at = Some(
+            counts
+                .latest_event_at
+                .map(|current| current.max(occurred_at))
+                .unwrap_or(occurred_at),
+        );
+    }
+}
+
+fn skill_lifecycle_skill_rows(
+    rows: &[SkillLifecycleTimelineRow],
+    skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
+) -> Vec<SkillLifecycleSkillRow> {
+    let mut counts_by_skill =
+        BTreeMap::<String, (SkillLifecycleAggregateCounts, BTreeSet<String>)>::new();
+    for row in rows {
+        let Some(instance_id) = row.instance_id.as_deref() else {
+            continue;
+        };
+        let Some(skill) = skill_by_id.get(instance_id) else {
+            continue;
+        };
+        let entry = counts_by_skill
+            .entry(skill.instance_id.clone())
+            .or_insert_with(|| (SkillLifecycleAggregateCounts::default(), BTreeSet::new()));
+        skill_lifecycle_count_row(&mut entry.0, row);
+        entry.1.extend(row.evidence_refs.iter().cloned());
+    }
+    let mut skill_rows = counts_by_skill
+        .into_iter()
+        .filter_map(|(instance_id, (counts, evidence_refs))| {
+            let skill = skill_by_id.get(&instance_id)?;
+            Some(SkillLifecycleSkillRow {
+                instance_id: skill.instance_id.clone(),
+                definition_id: skill.definition_id.clone(),
+                skill_name: redact_for_llm_preview(&skill.skill_name),
+                agent: skill.agent.clone(),
+                scope: skill.scope.clone(),
+                enabled: skill.enabled,
+                state: skill.state.clone(),
+                event_count: counts.event_count,
+                finding_event_count: counts.finding_event_count,
+                drift_event_count: counts.drift_event_count,
+                remediation_event_count: counts.remediation_event_count,
+                prompt_event_count: counts.prompt_event_count,
+                session_review_event_count: counts.session_review_event_count,
+                first_event_at: counts.first_event_at,
+                latest_event_at: counts.latest_event_at,
+                evidence_refs: evidence_refs.into_iter().collect(),
+                safety_flags: skill_lifecycle_timeline_safety_flags(),
+            })
+        })
+        .collect::<Vec<_>>();
+    skill_rows.sort_by(|left, right| {
+        right
+            .event_count
+            .cmp(&left.event_count)
+            .then_with(|| left.agent.cmp(&right.agent))
+            .then_with(|| left.skill_name.cmp(&right.skill_name))
+            .then_with(|| left.instance_id.cmp(&right.instance_id))
+    });
+    skill_rows
+}
+
+fn skill_lifecycle_agent_rows(
+    rows: &[SkillLifecycleTimelineRow],
+    skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
+) -> Vec<SkillLifecycleAgentRow> {
+    let mut counts_by_agent = BTreeMap::<
+        String,
+        (
+            SkillLifecycleAggregateCounts,
+            BTreeSet<String>,
+            BTreeSet<String>,
+        ),
+    >::new();
+    for row in rows {
+        let agent = row.agent.clone().or_else(|| {
+            row.instance_id
+                .as_deref()
+                .and_then(|id| skill_by_id.get(id))
+                .map(|skill| skill.agent.clone())
+        });
+        let Some(agent) = agent else {
+            continue;
+        };
+        let entry = counts_by_agent.entry(agent).or_insert_with(|| {
+            (
+                SkillLifecycleAggregateCounts::default(),
+                BTreeSet::new(),
+                BTreeSet::new(),
+            )
+        });
+        skill_lifecycle_count_row(&mut entry.0, row);
+        if let Some(instance_id) = row.instance_id.as_deref() {
+            entry.1.insert(instance_id.to_string());
+        }
+        entry.2.extend(row.evidence_refs.iter().cloned());
+    }
+    counts_by_agent
+        .into_iter()
+        .map(
+            |(agent, (counts, skill_ids, evidence_refs))| SkillLifecycleAgentRow {
+                agent,
+                skill_count: skill_ids.len(),
+                event_count: counts.event_count,
+                finding_event_count: counts.finding_event_count,
+                drift_event_count: counts.drift_event_count,
+                remediation_event_count: counts.remediation_event_count,
+                prompt_event_count: counts.prompt_event_count,
+                session_review_event_count: counts.session_review_event_count,
+                first_event_at: counts.first_event_at,
+                latest_event_at: counts.latest_event_at,
+                evidence_refs: evidence_refs.into_iter().collect(),
+                safety_flags: skill_lifecycle_timeline_safety_flags(),
+            },
+        )
+        .collect()
+}
+
+fn skill_lifecycle_summary(
+    rows: &[SkillLifecycleTimelineRow],
+    skill_rows: &[SkillLifecycleSkillRow],
+    agent_rows: &[SkillLifecycleAgentRow],
+    filters: &SkillLifecycleTimelineFilters,
+) -> SkillLifecycleTimelineSummary {
+    let mut counts = SkillLifecycleAggregateCounts::default();
+    for row in rows {
+        skill_lifecycle_count_row(&mut counts, row);
+    }
+    let selected_skill_name = filters
+        .selected_skill_name
+        .clone()
+        .or_else(|| skill_rows.first().map(|row| row.skill_name.clone()));
+    let selected_agent = filters
+        .selected_skill_agent
+        .clone()
+        .or_else(|| filters.agent.clone())
+        .or_else(|| agent_rows.first().map(|row| row.agent.clone()));
+    let summary = if rows.is_empty() {
+        "No lifecycle events matched the current local filters.".to_string()
+    } else {
+        format!(
+            "Lifecycle timeline returned {} event(s) across {} skill(s) and {} agent(s) using deterministic local evidence only.",
+            rows.len(),
+            skill_rows.len(),
+            agent_rows.len()
+        )
+    };
+    SkillLifecycleTimelineSummary {
+        total_event_count: counts.event_count,
+        skill_count: skill_rows.len(),
+        agent_count: agent_rows.len(),
+        finding_event_count: counts.finding_event_count,
+        drift_event_count: counts.drift_event_count,
+        remediation_event_count: counts.remediation_event_count,
+        prompt_event_count: counts.prompt_event_count,
+        session_review_event_count: counts.session_review_event_count,
+        first_event_at: counts.first_event_at,
+        latest_event_at: counts.latest_event_at,
+        selected_skill_name,
+        selected_agent,
+        summary,
+    }
+}
+
 fn task_cockpit_safety_flags() -> TaskCockpitSafetyFlags {
     AgentReadinessSafetyFlags {
         read_only: true,
@@ -26363,6 +28145,126 @@ fn render_routing_confidence_prompt_section(
     )
 }
 
+fn render_skill_lifecycle_timeline_prompt_section(
+    timeline: &SkillLifecycleTimelineResult,
+    redactor: &mut PromptRedactor<'_>,
+) -> String {
+    let events = timeline
+        .timeline_rows
+        .iter()
+        .take(12)
+        .map(|row| {
+            format!(
+                "- {} stage={} status={} severity={} skill={} agent={} summary={}",
+                row.event_type,
+                row.lifecycle_stage,
+                row.status
+                    .as_deref()
+                    .map(|status| redactor.redact(status))
+                    .unwrap_or_else(|| "none".to_string()),
+                row.severity
+                    .as_deref()
+                    .map(|severity| redactor.redact(severity))
+                    .unwrap_or_else(|| "none".to_string()),
+                row.skill_name
+                    .as_deref()
+                    .map(|skill| redactor.redact(skill))
+                    .unwrap_or_else(|| "none".to_string()),
+                row.agent
+                    .as_deref()
+                    .map(|agent| redactor.redact(agent))
+                    .unwrap_or_else(|| "none".to_string()),
+                redactor.redact(&row.summary)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let skills = timeline
+        .skill_rows
+        .iter()
+        .take(8)
+        .map(|row| {
+            format!(
+                "- {} ({}, {}, enabled={}, state={}) events={} findings={} drift={} remediation={} prompt={} session={}",
+                redactor.redact(&row.skill_name),
+                redactor.redact(&row.agent),
+                redactor.redact(&row.scope),
+                row.enabled,
+                redactor.redact(&row.state),
+                row.event_count,
+                row.finding_event_count,
+                row.drift_event_count,
+                row.remediation_event_count,
+                row.prompt_event_count,
+                row.session_review_event_count
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let agents = timeline
+        .agent_rows
+        .iter()
+        .take(8)
+        .map(|row| {
+            format!(
+                "- {} skills={} events={} findings={} drift={} remediation={} prompt={} session={}",
+                redactor.redact(&row.agent),
+                row.skill_count,
+                row.event_count,
+                row.finding_event_count,
+                row.drift_event_count,
+                row.remediation_event_count,
+                row.prompt_event_count,
+                row.session_review_event_count
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let gaps = timeline
+        .gap_notes
+        .iter()
+        .take(8)
+        .map(|note| format!("- {}", redactor.redact(note)))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let blockers = timeline
+        .blocker_notes
+        .iter()
+        .take(8)
+        .map(|note| format!("- {}", redactor.redact(note)))
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "Skill lifecycle timeline evidence:\n- total_event_count: {}\n- skill_count: {}\n- agent_count: {}\n- finding_event_count: {}\n- drift_event_count: {}\n- remediation_event_count: {}\n- prompt_event_count: {}\n- session_review_event_count: {}\n- selected_skill_name: {}\n- selected_agent: {}\n- summary: {}\n\nTimeline rows:\n{}\n\nSkill rows:\n{}\n\nAgent rows:\n{}\n\nGap notes:\n{}\n\nBlocker notes:\n{}\n\nSafety flags: read_only=true, app_local_only=true, provider_request_sent=false, credential_accessed=false, write_back_allowed=false, write_actions_available=false, skill_files_mutated=false, agent_config_mutated=false, script_execution_allowed=false, execution_actions_available=false, config_mutation_allowed=false, snapshot_created=false, triage_mutation_allowed=false, raw_secret_returned=false, raw_prompt_persisted=false, raw_response_persisted=false, raw_trace_persisted=false, cloud_sync_performed=false, telemetry_emitted=false.",
+        timeline.summary.total_event_count,
+        timeline.summary.skill_count,
+        timeline.summary.agent_count,
+        timeline.summary.finding_event_count,
+        timeline.summary.drift_event_count,
+        timeline.summary.remediation_event_count,
+        timeline.summary.prompt_event_count,
+        timeline.summary.session_review_event_count,
+        timeline
+            .summary
+            .selected_skill_name
+            .as_deref()
+            .map(|skill| redactor.redact(skill))
+            .unwrap_or_else(|| "none".to_string()),
+        timeline
+            .summary
+            .selected_agent
+            .as_deref()
+            .map(|agent| redactor.redact(agent))
+            .unwrap_or_else(|| "none".to_string()),
+        redactor.redact(&timeline.summary.summary),
+        if events.is_empty() { "none" } else { &events },
+        if skills.is_empty() { "none" } else { &skills },
+        if agents.is_empty() { "none" } else { &agents },
+        if gaps.is_empty() { "none" } else { &gaps },
+        if blockers.is_empty() { "none" } else { &blockers },
+    )
+}
+
 fn render_task_cockpit_prompt_section(
     cockpit: &TaskCockpitResult,
     redactor: &mut PromptRedactor<'_>,
@@ -30803,6 +32705,336 @@ mod tests {
             "missing-catalog task cockpit must not initialize catalog.sqlite"
         );
         assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    }
+
+    #[test]
+    fn skill_lifecycle_timeline_filters_local_evidence() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-lifecycle-filter-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-lifecycle-filter-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_cleanup_queue_fixture(&host);
+
+        let review = host.handle(ServiceRequest {
+            id: Some("lifecycle-review".to_string()),
+            method: "session.reviewAgentSkillUse".to_string(),
+            params: json!({
+                "content": "The agent selected codex-alpha for local cleanup posture.",
+                "title": "Lifecycle session review fixture",
+                "task": "Review codex-alpha lifecycle",
+                "agent": "codex",
+                "expected_skill_refs": ["codex-alpha"]
+            }),
+        });
+        assert!(review.ok, "{:?}", review.error);
+        let history = host.handle(ServiceRequest {
+            id: Some("lifecycle-history".to_string()),
+            method: "remediation.recordHistory".to_string(),
+            params: json!({
+                "id": "lifecycle-history-codex-alpha",
+                "title": "Lifecycle history fixture",
+                "decision": "reviewed",
+                "status": "recorded",
+                "source_method": "remediation.batchReview",
+                "source_item_refs": ["codex-alpha"],
+                "agent": "codex",
+                "task": "Review codex-alpha lifecycle",
+                "evidence_refs": ["skill:codex-alpha"]
+            }),
+        });
+        assert!(history.ok, "{:?}", history.error);
+        host.save_llm_prompt_runs(&[LlmPromptRunRecord {
+            id: "prompt-run-lifecycle-fixture".to_string(),
+            preview_id: "prompt-preview-lifecycle-fixture".to_string(),
+            confirmation_id: "confirmation-lifecycle-fixture".to_string(),
+            action: "skill_lifecycle_timeline".to_string(),
+            request_kind: "skill_lifecycle_timeline".to_string(),
+            analysis_kind: None,
+            scope: Some("selected".to_string()),
+            instance_id: Some("codex-alpha".to_string()),
+            instance_ids: vec!["codex-alpha".to_string()],
+            definition_id: Some("shared-fixture".to_string()),
+            agent: Some("codex".to_string()),
+            task: Some("Review codex-alpha lifecycle".to_string()),
+            profile_id: "fixture-profile".to_string(),
+            provider: "openai-compatible".to_string(),
+            model: "fixture-model".to_string(),
+            destination_host: "example.invalid".to_string(),
+            status: "succeeded".to_string(),
+            error_code: None,
+            error_message: None,
+            duration_ms: 12,
+            estimated_input_tokens: 10,
+            estimated_output_tokens: 5,
+            estimated_total_tokens: 15,
+            estimated_cost_usd: 0.0,
+            draft_output: Some("Draft-only lifecycle wording.".to_string()),
+            draft_requires_user_copy: true,
+            provider_request_sent: false,
+            credential_accessed: false,
+            raw_secret_returned: false,
+            raw_prompt_persisted: false,
+            raw_response_persisted: false,
+            redaction_summary: LlmPromptRunRedactionSummary {
+                status: "redacted-local-only".to_string(),
+                redacted_value_count: 0,
+                redacted_fields: Vec::new(),
+                placeholders: Vec::new(),
+                raw_prompt_persisted: false,
+                raw_response_persisted: false,
+                raw_trace_persisted: false,
+                raw_secret_returned: false,
+            },
+            created_at: 10,
+            completed_at: 11,
+            safety_flags: llm_prompt_run_safety_flags(false, false),
+        }])
+        .expect("save prompt run fixture");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("lifecycle".to_string()),
+            method: "skill.lifecycleTimeline".to_string(),
+            params: json!({
+                "agent": "codex",
+                "selected_skill_id": "codex-alpha",
+                "task": "Review codex-alpha lifecycle",
+                "limit": 50
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("lifecycle result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("local-v2.66")
+        );
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/filters/selected_skill_id")
+                .and_then(Value::as_str),
+            Some("codex-alpha")
+        );
+        assert_eq!(
+            result.pointer("/filters/agent").and_then(Value::as_str),
+            Some("codex")
+        );
+        assert!(result
+            .get("timeline_rows")
+            .and_then(Value::as_array)
+            .is_some_and(|rows| rows
+                .iter()
+                .any(|row| row.get("event_type").and_then(Value::as_str) == Some("finding"))));
+        assert!(result
+            .get("timeline_rows")
+            .and_then(Value::as_array)
+            .is_some_and(|rows| rows
+                .iter()
+                .any(
+                    |row| row.get("event_type").and_then(Value::as_str) == Some("session_review")
+                )));
+        assert!(result
+            .get("timeline_rows")
+            .and_then(Value::as_array)
+            .is_some_and(|rows| rows
+                .iter()
+                .any(|row| row.get("event_type").and_then(Value::as_str) == Some("prompt_run"))));
+        assert!(result
+            .get("timeline_rows")
+            .and_then(Value::as_array)
+            .is_some_and(|rows| rows
+                .iter()
+                .any(|row| row.get("event_type").and_then(Value::as_str)
+                    == Some("remediation_history"))));
+        assert_eq!(
+            result
+                .pointer("/summary/skill_count")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/selected_agent")
+                .and_then(Value::as_str),
+            Some("codex")
+        );
+        assert_eq!(
+            result
+                .pointer("/prompt_request/action")
+                .and_then(Value::as_str),
+            Some("skill_lifecycle_timeline")
+        );
+        assert_eq!(
+            result
+                .pointer("/prompt_request/request/action")
+                .and_then(Value::as_str),
+            Some("skill_lifecycle_timeline")
+        );
+        assert_agent_readiness_safety(&result);
+
+        let serialized = serde_json::to_string(&result).expect("serialize lifecycle");
+        assert!(!serialized.contains(&app_data_dir.to_string_lossy().to_string()));
+        assert!(!serialized.contains(&user_home.to_string_lossy().to_string()));
+        assert!(!serialized.contains("OPENAI_API_KEY"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn skill_lifecycle_timeline_missing_catalog_returns_safe_empty_result() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-lifecycle-missing-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("lifecycle-missing".to_string()),
+            method: "skill.lifecycleTimeline".to_string(),
+            params: json!({ "selected_skill_id": "missing-skill", "limit": 4 }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("missing lifecycle result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("local-v2.66")
+        );
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/total_event_count")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert!(result
+            .get("timeline_rows")
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty));
+        assert!(result
+            .get("skill_rows")
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty));
+        assert!(result
+            .get("agent_rows")
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_agent_readiness_safety(&result);
+        assert!(
+            !host.catalog_path().exists(),
+            "missing-catalog lifecycle timeline must not initialize catalog.sqlite"
+        );
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    }
+
+    #[test]
+    fn skill_lifecycle_timeline_preserves_read_only_boundaries() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-lifecycle-read-only-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-lifecycle-read-only-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_cleanup_queue_fixture(&host);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("lifecycle-read-only".to_string()),
+            method: "skill.lifecycleTimeline".to_string(),
+            params: json!({
+                "agent": "codex",
+                "include_prompt_runs": true,
+                "include_session_reviews": true,
+                "include_remediation_history": true,
+                "include_stale_drift": true,
+                "limit": 12
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("read-only lifecycle result");
+        assert_agent_readiness_safety(&result);
+        assert_eq!(
+            result
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+        assert!(!host.llm_prompt_runs_path().exists());
+        assert!(!host.agent_session_reviews_path().exists());
+        assert!(!host.remediation_history_path().exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
     }
 
     #[test]
@@ -36862,6 +39094,32 @@ mod tests {
                     assert_agent_readiness_safety_flags(&section.safety_flags);
                 }
             }
+            "skill.lifecycleTimeline" => {
+                let timeline: WireSkillLifecycleTimelineResult =
+                    decode_fixture_result(method, result, path);
+                assert_eq!(timeline.generated_by, "local-v2.66");
+                assert_eq!(
+                    timeline.summary.total_event_count,
+                    timeline.timeline_rows.len()
+                );
+                assert_eq!(timeline.summary.skill_count, timeline.skill_rows.len());
+                assert_eq!(timeline.summary.agent_count, timeline.agent_rows.len());
+                assert_eq!(timeline.prompt_request.action, "skill_lifecycle_timeline");
+                assert_eq!(
+                    timeline.prompt_request.request.action,
+                    LlmPromptActionKind::SkillLifecycleTimeline
+                );
+                assert_agent_readiness_safety_flags(&timeline.safety_flags);
+                for row in &timeline.timeline_rows {
+                    assert_agent_readiness_safety_flags(&row.safety_flags);
+                }
+                for row in &timeline.skill_rows {
+                    assert_agent_readiness_safety_flags(&row.safety_flags);
+                }
+                for row in &timeline.agent_rows {
+                    assert_agent_readiness_safety_flags(&row.safety_flags);
+                }
+            }
             "task.listBenchmarks" => {
                 let benchmarks: WireTaskBenchmarkListResult =
                     decode_fixture_result(method, result, path);
@@ -37923,6 +40181,11 @@ mod tests {
                 "window_days": 30,
                 "include_history": true,
                 "include_recent_evidence": true
+            }),
+            "skill.lifecycleTimeline" => json!({
+                "agent": "codex",
+                "selected_skill_id": "fixture-skill-id",
+                "limit": 4
             }),
             "session.reviewAgentSkillUse" => json!({
                 "content": "Fixture session selected fixture-skill-id for local routing.",
@@ -39923,6 +42186,125 @@ mod tests {
         blocker_notes: Vec<String>,
         gap_notes: Vec<String>,
         evidence_refs: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireSkillLifecycleTimelineResult {
+        generated_by: String,
+        catalog_available: bool,
+        filters: WireSkillLifecycleTimelineFilters,
+        summary: WireSkillLifecycleTimelineSummary,
+        timeline_rows: Vec<WireSkillLifecycleTimelineRow>,
+        skill_rows: Vec<WireSkillLifecycleSkillRow>,
+        agent_rows: Vec<WireSkillLifecycleAgentRow>,
+        gap_notes: Vec<String>,
+        blocker_notes: Vec<String>,
+        evidence_references: Vec<WireTaskReadinessEvidenceReference>,
+        prompt_request: WireAgentReadinessPromptRequest,
+        safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireSkillLifecycleTimelineFilters {
+        task: Option<String>,
+        agent: Option<String>,
+        selected_skill_id: Option<String>,
+        selected_skill_name: Option<String>,
+        selected_skill_agent: Option<String>,
+        definition_id: Option<String>,
+        project_root: Option<String>,
+        current_cwd: Option<String>,
+        workspace: Option<String>,
+        limit: usize,
+        include_prompt_runs: bool,
+        include_session_reviews: bool,
+        include_remediation_history: bool,
+        include_stale_drift: bool,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireSkillLifecycleTimelineSummary {
+        total_event_count: usize,
+        skill_count: usize,
+        agent_count: usize,
+        finding_event_count: usize,
+        drift_event_count: usize,
+        remediation_event_count: usize,
+        prompt_event_count: usize,
+        session_review_event_count: usize,
+        first_event_at: Option<i64>,
+        latest_event_at: Option<i64>,
+        selected_skill_name: Option<String>,
+        selected_agent: Option<String>,
+        summary: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireSkillLifecycleTimelineRow {
+        id: String,
+        occurred_at: Option<i64>,
+        event_type: String,
+        lifecycle_stage: String,
+        title: String,
+        summary: String,
+        agent: Option<String>,
+        skill_name: Option<String>,
+        instance_id: Option<String>,
+        definition_id: Option<String>,
+        source: String,
+        severity: Option<String>,
+        status: Option<String>,
+        evidence_refs: Vec<String>,
+        safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireSkillLifecycleSkillRow {
+        instance_id: String,
+        definition_id: String,
+        skill_name: String,
+        agent: String,
+        scope: String,
+        enabled: bool,
+        state: String,
+        event_count: usize,
+        finding_event_count: usize,
+        drift_event_count: usize,
+        remediation_event_count: usize,
+        prompt_event_count: usize,
+        session_review_event_count: usize,
+        first_event_at: Option<i64>,
+        latest_event_at: Option<i64>,
+        evidence_refs: Vec<String>,
+        safety_flags: WireAgentReadinessSafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireSkillLifecycleAgentRow {
+        agent: String,
+        skill_count: usize,
+        event_count: usize,
+        finding_event_count: usize,
+        drift_event_count: usize,
+        remediation_event_count: usize,
+        prompt_event_count: usize,
+        session_review_event_count: usize,
+        first_event_at: Option<i64>,
+        latest_event_at: Option<i64>,
+        evidence_refs: Vec<String>,
+        safety_flags: WireAgentReadinessSafetyFlags,
     }
 
     #[allow(dead_code)]

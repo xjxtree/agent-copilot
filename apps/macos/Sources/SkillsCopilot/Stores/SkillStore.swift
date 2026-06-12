@@ -43,6 +43,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var staleDriftDetection: StaleDriftDetectionResult?
     @Published private(set) var knowledgeSearchResult: KnowledgeSearchResult?
     @Published private(set) var localSkillMapResult: LocalSkillMapResult?
+    @Published private(set) var skillLifecycleTimelineResult: SkillLifecycleTimelineResult?
     @Published private(set) var similarSkillGroupingResult: SimilarSkillGroupingResult?
     @Published private(set) var capabilityTaxonomyResult: CapabilityTaxonomyResult?
     @Published private(set) var workspaceReadinessResult: WorkspaceReadinessResult?
@@ -67,6 +68,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var isDetectingStaleDrift = false
     @Published private(set) var isSearchingKnowledge = false
     @Published private(set) var isBuildingLocalSkillMap = false
+    @Published private(set) var isLoadingSkillLifecycleTimeline = false
     @Published private(set) var isGroupingSimilarSkills = false
     @Published private(set) var isBuildingCapabilityTaxonomy = false
     @Published private(set) var isCheckingWorkspaceReadiness = false
@@ -132,6 +134,7 @@ final class SkillStore: ObservableObject {
             staleDriftDetection = nil
             knowledgeSearchResult = nil
             localSkillMapResult = nil
+            skillLifecycleTimelineResult = nil
             taskCockpitResult = nil
             similarSkillGroupingResult = nil
             capabilityTaxonomyResult = nil
@@ -238,7 +241,7 @@ final class SkillStore: ObservableObject {
     }
 
     private var isTaskBenchmarkBusy: Bool {
-        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isBuildingLocalSkillMap || isLoadingProviderObservability || isBuildingTaskCockpit || isGroupingSimilarSkills || isBuildingCapabilityTaxonomy || isCheckingWorkspaceReadiness || isPlanningRemediation || isPreviewingRemediationDrafts || isPreviewingRemediationImpact || isReviewingRemediationBatch || isLoadingRemediationHistory || isRecordingRemediationHistory || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || isLoadingAgentSessionSkillReviews || isReviewingAgentSessionSkillUse || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty || !deletingAgentSessionSkillReviewIDs.isEmpty
+        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isBuildingLocalSkillMap || isLoadingSkillLifecycleTimeline || isLoadingProviderObservability || isBuildingTaskCockpit || isGroupingSimilarSkills || isBuildingCapabilityTaxonomy || isCheckingWorkspaceReadiness || isPlanningRemediation || isPreviewingRemediationDrafts || isPreviewingRemediationImpact || isReviewingRemediationBatch || isLoadingRemediationHistory || isRecordingRemediationHistory || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || isLoadingAgentSessionSkillReviews || isReviewingAgentSessionSkillUse || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty || !deletingAgentSessionSkillReviewIDs.isEmpty
     }
 
     private var isLLMPromptBusy: Bool {
@@ -1565,6 +1568,33 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func loadSkillLifecycleTimeline() async {
+        guard !isLoadingSkillLifecycleTimeline else { return }
+        guard !isRefreshBusy else {
+            skillLifecycleTimelineResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        isLoadingSkillLifecycleTimeline = true
+        defer { isLoadingSkillLifecycleTimeline = false }
+
+        let agent = agentFilter == .all ? nil : agentFilter.rawValue
+        do {
+            skillLifecycleTimelineResult = try await service.loadSkillLifecycleTimeline(
+                agent: agent,
+                project: activeProjectContext,
+                selectedSkill: selectedSkill,
+                limit: 20,
+                includeSkillRows: true,
+                includeAgentRows: true,
+                includeEvidence: true,
+                includeSafetyFlags: true
+            )
+        } catch {
+            skillLifecycleTimelineResult = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
     func buildTaskCockpit() async {
         let taskText = selectedTaskCockpitInput
         guard !taskText.isEmpty else {
@@ -2374,6 +2404,9 @@ final class SkillStore: ObservableObject {
         if localSkillMapResult?.isUnavailable == true {
             localSkillMapResult = nil
         }
+        if skillLifecycleTimelineResult?.isUnavailable == true {
+            skillLifecycleTimelineResult = nil
+        }
         if capabilityTaxonomyResult?.isUnavailable == true {
             capabilityTaxonomyResult = nil
         }
@@ -2752,6 +2785,7 @@ final class SkillStore: ObservableObject {
         routingRegressionBaseline = nil
         routingRegressionDetection = nil
         localSkillMapResult = nil
+        skillLifecycleTimelineResult = nil
         remediationHistoryResult = nil
         remediationHistoryRecordResult = nil
         agentSessionSkillReviewResult = nil

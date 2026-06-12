@@ -350,6 +350,40 @@ private struct LocalSkillMapParams: Encodable {
     }
 }
 
+private struct SkillLifecycleTimelineParams: Encodable {
+    let agent: String?
+    let projectRoot: String?
+    let currentCWD: String?
+    let workspace: String?
+    let selectedSkillID: String?
+    let selectedSkillName: String?
+    let selectedSkillAgent: String?
+    let selectedSkillPath: String?
+    let candidateInstanceIDs: [String]?
+    let limit: Int?
+    let includeSkillRows: Bool
+    let includeAgentRows: Bool
+    let includeEvidence: Bool
+    let includeSafetyFlags: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case agent
+        case projectRoot = "project_root"
+        case currentCWD = "current_cwd"
+        case workspace
+        case selectedSkillID = "selected_skill_id"
+        case selectedSkillName = "selected_skill_name"
+        case selectedSkillAgent = "selected_skill_agent"
+        case selectedSkillPath = "selected_skill_path"
+        case candidateInstanceIDs = "candidate_instance_ids"
+        case limit
+        case includeSkillRows = "include_skill_rows"
+        case includeAgentRows = "include_agent_rows"
+        case includeEvidence = "include_evidence"
+        case includeSafetyFlags = "include_safety_flags"
+    }
+}
+
 private struct SimilarSkillGroupingParams: Encodable {
     let agent: String?
     let limit: Int?
@@ -1331,6 +1365,39 @@ final class ServiceClient {
         )
         do {
             return try await call(method: "knowledge.buildLocalSkillMap", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func loadSkillLifecycleTimeline(
+        agent: String? = nil,
+        project: ProjectContext? = nil,
+        selectedSkill: SkillRecord? = nil,
+        limit: Int? = 20,
+        includeSkillRows: Bool = true,
+        includeAgentRows: Bool = true,
+        includeEvidence: Bool = true,
+        includeSafetyFlags: Bool = true
+    ) async throws -> SkillLifecycleTimelineResult {
+        let params = SkillLifecycleTimelineParams(
+            agent: agent,
+            projectRoot: project?.rootPath,
+            currentCWD: project?.currentCWD,
+            workspace: project?.name,
+            selectedSkillID: selectedSkill?.id,
+            selectedSkillName: selectedSkill?.name,
+            selectedSkillAgent: selectedSkill?.agent,
+            selectedSkillPath: selectedSkill?.displayPath.isEmpty == false ? selectedSkill?.displayPath : selectedSkill?.path,
+            candidateInstanceIDs: selectedSkill.map { [$0.id] },
+            limit: limit,
+            includeSkillRows: includeSkillRows,
+            includeAgentRows: includeAgentRows,
+            includeEvidence: includeEvidence,
+            includeSafetyFlags: includeSafetyFlags
+        )
+        do {
+            return try await call(method: "skill.lifecycleTimeline", params: params)
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .unavailable()
         }
