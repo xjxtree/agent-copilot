@@ -49,6 +49,7 @@
       "llm.previewPrompt",
       "llm.confirmPromptAndSend",
       "llm.listPromptRuns",
+      "llm.providerObservability",
       "llm.prepareAction",
       "llm.prepareSkillAnalysis",
       "cleanup.listQueue",

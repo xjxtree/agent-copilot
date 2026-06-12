@@ -53,6 +53,8 @@ struct SkillStoreTests {
         try await knowledgeSearchUsesReadOnlyServiceContract()
         try await localSkillMapUsesReadOnlyServiceContract()
         try await localSkillMapFallsBackWhenMethodUnavailable()
+        try await providerObservabilityUsesReadOnlyServiceContract()
+        try await providerObservabilityFallsBackWhenMethodUnavailable()
         try await similarSkillGroupingUsesReadOnlyServiceContract()
         try await similarSkillGroupingFallsBackWhenMethodUnavailable()
         try await capabilityTaxonomyUsesReadOnlyServiceContract()
@@ -1447,6 +1449,83 @@ struct SkillStoreTests {
         try expectContains(fake.calls(), "knowledge.buildLocalSkillMap", "Fallback should still prove the intended V2.63 method was attempted.")
     }
 
+    private func providerObservabilityUsesReadOnlyServiceContract() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+        let snapshotCallsBeforeObservability = countOccurrences("snapshot.", in: fake.calls())
+        await store.loadProviderObservability()
+
+        let result = store.providerObservabilityResult
+        try expectEqual(result?.generatedBy, "local-v2.64", "Provider observability should expose generator metadata.")
+        try expectEqual(result?.summary.callCount, 3, "Provider observability should expose call count.")
+        try expectEqual(result?.summary.successCount, 1, "Provider observability should expose success count.")
+        try expectEqual(result?.summary.failureCount, 1, "Provider observability should expose failure count.")
+        try expectEqual(result?.summary.blockedCount, 1, "Provider observability should expose blocked count.")
+        try expectEqual(result?.summary.estimatedTotalTokens, 1300, "Provider observability should expose token estimates.")
+        try expectEqual(result?.callRows.first?.requestKind, "task_readiness", "Provider observability should expose recent call rows.")
+        try expectEqual(result?.providerRows.first?.label, "OpenAI-compatible", "Provider observability should expose provider rows.")
+        try expectEqual(result?.modelRows.first?.label, "gpt-5", "Provider observability should expose model rows.")
+        try expectEqual(result?.destinationRows.first?.destinationHost, "llm.example.com", "Provider observability should expose destination rows.")
+        try expectEqual(result?.errorRows.first?.title, "Timeout", "Provider observability should expose error rows.")
+        try expectEqual(result?.budgetHints.first?.title, "Monthly budget healthy", "Provider observability should expose budget hints.")
+        try expectEqual(result?.retentionRows.first?.title, "Retain metadata only", "Provider observability should expose retention rows.")
+        try expectEqual(result?.cleanupRecommendationRows.first?.title, "No cleanup required", "Provider observability should expose cleanup rows.")
+        try expectEqual(result?.evidenceReferences.first?.title, "Prompt run history", "Provider observability should expose evidence references.")
+        try expectEqual(result?.promptRequest?.requestKind, "provider_observability", "Provider observability should expose prompt metadata.")
+        try expectFalse(result?.safetyFlags.providerRequestSent ?? true, "Provider observability must not send provider requests.")
+        try expectFalse(result?.safetyFlags.writeBackAllowed ?? true, "Provider observability must not allow write-back.")
+        try expectFalse(result?.safetyFlags.writeActionsAvailable ?? true, "Provider observability must not expose write actions.")
+        try expectFalse(result?.safetyFlags.scriptExecutionAllowed ?? true, "Provider observability must not allow script execution.")
+        try expectFalse(result?.safetyFlags.executionActionsAvailable ?? true, "Provider observability must not expose execution actions.")
+        try expectFalse(result?.safetyFlags.configMutationAllowed ?? true, "Provider observability must not mutate config.")
+        try expectFalse(result?.safetyFlags.snapshotCreated ?? true, "Provider observability must not create snapshots.")
+        try expectFalse(result?.safetyFlags.triageMutationAllowed ?? true, "Provider observability must not mutate triage.")
+        try expectFalse(result?.safetyFlags.credentialAccessed ?? true, "Provider observability must not access credentials.")
+        try expectFalse(result?.safetyFlags.rawPromptPersisted ?? true, "Provider observability must not persist raw prompts.")
+        try expectFalse(result?.safetyFlags.rawResponsePersisted ?? true, "Provider observability must not persist raw responses.")
+        try expectFalse(result?.safetyFlags.rawTracePersisted ?? true, "Provider observability must not persist raw traces.")
+        try expectFalse(result?.safetyFlags.cloudSyncEnabled ?? true, "Provider observability must not sync cloud data.")
+        try expectFalse(result?.safetyFlags.telemetryEnabled ?? true, "Provider observability must not emit telemetry.")
+        try expectFalse(result?.safetyFlags.rawSecretReturned ?? true, "Provider observability must not expose raw secrets.")
+        try expectFalse(store.isLoadingProviderObservability, "Provider observability should reset loading state.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "llm.providerObservability", "Provider observability should call the V2.64 observability method.")
+        try expectContains(calls, "\"window_days\":30", "Provider observability should pass the dashboard window.")
+        try expectContains(calls, "\"limit\":30", "Provider observability should pass the dashboard limit.")
+        try expectContains(calls, "\"include_history\":true", "Provider observability should request history rows.")
+        try expectContains(calls, "\"include_budget_hints\":true", "Provider observability should request budget hints.")
+        try expectContains(calls, "\"include_retention_recommendations\":true", "Provider observability should request retention recommendations.")
+        try expectContains(calls, "\"include_evidence\":true", "Provider observability should request evidence rows.")
+        try expectFalse(calls.contains("llm.previewPrompt"), "Provider observability must not prepare provider prompts.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Provider observability must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Provider observability must not call config write paths.")
+        try expectFalse(calls.contains("script.execute"), "Provider observability must not call execution paths.")
+        try expectEqual(countOccurrences("snapshot.", in: calls), snapshotCallsBeforeObservability, "Provider observability must not call snapshot paths.")
+        try expectFalse(calls.contains("credential"), "Provider observability must not call credential paths.")
+    }
+
+    private func providerObservabilityFallsBackWhenMethodUnavailable() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "normal")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        await store.reload()
+        await store.loadProviderObservability()
+
+        try expectEqual(store.providerObservabilityResult?.isUnavailable, true, "Provider observability should expose unavailable fallback for older services.")
+        try expectEqual(store.providerObservabilityResult?.fallbackReason, UIStrings.providerObservabilityUnavailable, "Unknown method fallback should use the localized unavailable copy.")
+        try expectFalse(store.isLoadingProviderObservability, "Unavailable provider observability should reset loading state.")
+        try expectContains(fake.calls(), "llm.providerObservability", "Fallback should still prove the intended V2.64 method was attempted.")
+    }
+
     private func similarSkillGroupingUsesReadOnlyServiceContract() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -2495,6 +2574,12 @@ private final class FakeServiceScript {
               respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.63","catalog_available":true,"filters":{"agent":"claude-code","selected_skill_id":"beta","selected_skill_name":"Beta","selected_skill_agent":"claude-code","project_root":"/tmp/project","current_cwd":"/tmp/project","workspace":"Fixture Project","limit":30,"include_edges":true,"include_clusters":true},"summary":{"node_count":2,"edge_count":1,"cluster_count":1,"domain_count":1,"skill_count":2,"agent_count":1,"gap_count":1,"blocker_count":0,"evidence_count":1,"selected_skill_context":"Beta in Claude Code project scope","summary":"Beta anchors the release audit local skill map."},"selected_skill":{"instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","quality_score":82,"readiness_score":78,"reasons":["Selected skill anchors this map."],"evidence_refs":["catalog:beta"],"safety_flags":["provider not sent"]},"nodes":[{"node_id":"skill:beta","label":"Beta","kind":"skill","instance_id":"beta","definition_id":"def.beta","skill_name":"Beta","agent":"claude-code","scope":"agent-project","enabled":true,"state":"loaded","domain":"Release audit","cluster_id":"cluster:audit","weight":0.91,"reasons":["Selected skill anchors this map."],"evidence_refs":["catalog:beta"],"safety_flags":["provider not sent"]},{"node_id":"skill:alpha","label":"Alpha","kind":"skill","instance_id":"alpha","definition_id":"def.alpha","skill_name":"Alpha","agent":"claude-code","scope":"agent-global","enabled":true,"state":"loaded","domain":"Release audit","cluster_id":"cluster:audit","weight":0.64,"reasons":["Similar purpose wording."],"evidence_refs":["catalog:alpha"],"safety_flags":["provider not sent"]}],"edges":[{"source_id":"skill:beta","target_id":"skill:alpha","relation_kind":"similar-purpose","label":"Shared audit purpose","strength":0.74,"direction":"undirected","reasons":["Shared audit keywords and rg tool use."],"evidence_refs":["similar:audit"],"safety_flags":["provider not sent"]}],"clusters":[{"cluster_id":"cluster:audit","name":"Release audit","kind":"domain","summary":"Skills that support release audit workflows.","node_ids":["skill:beta","skill:alpha"],"agents":["claude-code"],"capabilities":["release-audit"],"gap_notes":["No Codex project route."],"blocker_notes":[],"evidence_refs":["domain:audit"],"safety_flags":["provider not sent"]}],"gap_rows":[{"title":"Missing Codex route","detail":"No Codex project route.","severity":"warning","agent":"codex","evidence_refs":["workspace:codex-gap"]}],"blocker_rows":[],"evidence_references":[{"title":"Local skill map","detail":"Map derived from local catalog and analysis evidence.","source":"knowledge.buildLocalSkillMap","agent":"claude-code"}],"prompt_request":{"enabled":false,"request_kind":"local_skill_map","summary":"Provider explanation is copy-only and preview-gated.","draft_copy_only":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["provider not sent"]}}}'
             fi
             respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: knowledge.buildLocalSkillMap"}}'
+            ;;
+          *\\"llm.providerObservability\\"*)
+            if [ "$scenario" = "prompt-ready" ]; then
+              respond '{"id":"test","ok":true,"result":{"generated_by":"local-v2.64","app_local_only":true,"metadata_redacted":true,"filters":{"window_days":30,"limit":30,"include_history":true,"include_budget_hints":true,"include_retention_recommendations":true,"include_evidence":true},"summary":{"call_count":3,"success_count":1,"failure_count":1,"blocked_count":1,"provider_count":1,"model_count":2,"destination_count":1,"error_count":1,"estimated_input_tokens":980,"estimated_output_tokens":320,"estimated_total_tokens":1300,"estimated_cost_usd":0.041,"total_duration_ms":1800,"average_duration_ms":600,"budget_hint_count":1,"retention_recommendation_count":2,"summary":"Three redacted provider-call metadata rows were reviewed locally."},"call_rows":[{"id":"call-1","preview_id":"preview-1","confirmation_id":"confirm-1","request_kind":"task_readiness","action":"task_readiness","provider":"openai-compatible","model":"gpt-5","destination_host":"llm.example.com","status":"succeeded","duration_ms":720,"input_tokens":420,"output_tokens":120,"total_tokens":540,"estimated_cost_usd":0.014,"completed_at":1781260000000,"draft_copy_only":true,"provider_request_sent":true,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_secret_returned":false,"evidence_refs":["prompt-run:preview-1"],"safety_flags":["copy-only","raw prompt not stored"],"detail":"Provider response metadata was stored without raw prompt or response."},{"id":"call-2","request_kind":"quality_score","provider":"openai-compatible","model":"gpt-5-mini","destination_host":"llm.example.com","status":"failed","error_code":"timeout","error_message":"Provider request timed out.","duration_ms":1080,"input_tokens":560,"output_tokens":0,"total_tokens":560,"estimated_cost_usd":0.027,"draft_copy_only":true,"provider_request_sent":true,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_secret_returned":false,"evidence_refs":["prompt-run:timeout"],"safety_flags":["raw response not stored"]}],"provider_rows":[{"kind":"provider","label":"OpenAI-compatible","provider":"openai-compatible","call_count":3,"success_count":1,"failure_count":1,"blocked_count":1,"estimated_tokens":1300,"estimated_cost_usd":0.041,"average_duration_ms":600,"status":"partial","notes":["One timeout and one blocked local preview."],"evidence_refs":["provider:openai-compatible"]}],"model_rows":[{"kind":"model","label":"gpt-5","model":"gpt-5","call_count":1,"success_count":1,"estimated_tokens":540,"status":"ok"},{"kind":"model","label":"gpt-5-mini","model":"gpt-5-mini","call_count":1,"failure_count":1,"estimated_tokens":560,"status":"warning"}],"destination_rows":[{"kind":"destination","label":"llm.example.com","destination_host":"llm.example.com","call_count":2,"status":"partial"}],"status_rows":[{"severity":"info","status":"succeeded","title":"Succeeded","detail":"One call completed.","count":1},{"severity":"warning","status":"blocked","title":"Blocked locally","detail":"One preview never sent a provider request.","count":1}],"error_rows":[{"severity":"warning","status":"failed","title":"Timeout","detail":"Provider request timed out.","count":1,"provider":"openai-compatible","model":"gpt-5-mini","evidence_refs":["prompt-run:timeout"]}],"budget_hints":[{"severity":"info","title":"Monthly budget healthy","detail":"Estimated spend is below the configured budget.","value":"0.041","threshold":"25.00","recommendation":"Keep monitoring prompt-run history."}],"usage_hints":[{"severity":"info","title":"Token usage available","detail":"Estimated token totals are derived from redacted metadata.","value":"1300"}],"retention_rows":[{"severity":"info","title":"Retain metadata only","detail":"Keep redacted prompt-run metadata; do not retain raw prompts.","recommendation":"Review old metadata periodically."}],"cleanup_recommendations":[{"severity":"info","title":"No cleanup required","detail":"No unsafe raw prompt or response payloads were observed."}],"gap_notes":["No raw response bodies are available for observability by design."],"blocker_notes":[],"evidence_references":[{"title":"Prompt run history","detail":"Read from app-local prompt-runs metadata.","source":"llm.providerObservability"}],"prompt_request":{"enabled":false,"request_kind":"provider_observability","summary":"No provider request is prepared or sent by observability.","draft_copy_only":true,"redacted":true},"safety_flags":{"provider_request_sent":false,"write_back_allowed":false,"write_actions_available":false,"script_execution_allowed":false,"execution_actions_available":false,"config_mutation_allowed":false,"snapshot_created":false,"triage_mutation_allowed":false,"credential_accessed":false,"raw_prompt_persisted":false,"raw_response_persisted":false,"raw_trace_persisted":false,"cloud_sync_enabled":false,"telemetry_enabled":false,"raw_secret_returned":false,"notes":["observability did not send a provider request"]}}}'
+            fi
+            respond '{"id":"test","ok":false,"result":null,"error":{"code":"unknown_method","message":"unknown method: llm.providerObservability"}}'
             ;;
           *\\"knowledge.groupSimilarSkills\\"*)
             if [ "$scenario" = "prompt-ready" ]; then

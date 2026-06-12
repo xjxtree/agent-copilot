@@ -1,0 +1,146 @@
+{
+  "id": "fixture-llm-provider-observability",
+  "ok": true,
+  "result": {
+    "generated_by": "local-v2.64",
+    "status": "ready",
+    "summary": {
+      "total_prompt_run_count": 0,
+      "total_call_metadata_count": 0,
+      "returned_prompt_run_count": 0,
+      "returned_call_row_count": 0,
+      "provider_profile_count": 0,
+      "enabled_profile_count": 0,
+      "grouping_count": 0,
+      "observed_provider_request_row_count": 0,
+      "observed_credential_access_row_count": 0,
+      "succeeded_count": 0,
+      "failed_count": 0,
+      "estimated_input_tokens": 0,
+      "estimated_output_tokens": 0,
+      "estimated_total_tokens": 0,
+      "estimated_cost_usd": 0.0,
+      "latest_activity_at": null,
+      "summary": "No app-local provider prompt-run or call metadata matched the selected filters."
+    },
+    "call_rows": [],
+    "history_rows": [],
+    "grouping_rows": [],
+    "status_rows": [
+      {
+        "id": "status-row-prompt-runs-absent",
+        "source": "prompt-runs.json",
+        "status": "absent",
+        "severity": "info",
+        "message": "No app-local prompt run history file exists yet.",
+        "count": 0,
+        "evidence_refs": [
+          "app-data:prompt-runs.json"
+        ]
+      },
+      {
+        "id": "status-row-provider-call-metadata-absent",
+        "source": "provider-call-metadata.jsonl",
+        "status": "absent",
+        "severity": "info",
+        "message": "No app-local provider call metadata file exists yet.",
+        "count": 0,
+        "evidence_refs": [
+          "app-data:llm/provider-call-metadata.jsonl"
+        ]
+      },
+      {
+        "id": "status-row-provider-profiles-absent",
+        "source": "provider-profiles.json",
+        "status": "absent",
+        "severity": "info",
+        "message": "No provider profile metadata file exists yet.",
+        "count": 0,
+        "evidence_refs": [
+          "app-data:llm/provider-profiles.json"
+        ]
+      }
+    ],
+    "budget_usage_hints": [],
+    "retention_recommendations": [
+      {
+        "id": "retention:prompt-runs",
+        "source_file": "prompt-runs.json",
+        "current_record_count": 0,
+        "recommendation": "No prompt run metadata cleanup is needed.",
+        "cleanup_action_available": false,
+        "write_action_available": false,
+        "evidence_refs": [
+          "app-data:prompt-runs.json"
+        ]
+      },
+      {
+        "id": "retention:provider-call-metadata",
+        "source_file": "provider-call-metadata.jsonl",
+        "current_record_count": 0,
+        "recommendation": "No provider call metadata cleanup is needed.",
+        "cleanup_action_available": false,
+        "write_action_available": false,
+        "evidence_refs": [
+          "app-data:llm/provider-call-metadata.jsonl"
+        ]
+      }
+    ],
+    "gap_notes": [
+      "No provider profile metadata is configured; observability can still show historical app-local call metadata if present.",
+      "No app-local prompt run or provider call metadata has been recorded for the selected filters."
+    ],
+    "blocker_notes": [],
+    "evidence_references": [
+      {
+        "id": "app-data:llm/provider-call-metadata.jsonl",
+        "kind": "app-local-file",
+        "label": "provider-call-metadata.jsonl",
+        "source": "llm/provider-call-metadata.jsonl"
+      },
+      {
+        "id": "app-data:llm/provider-profiles.json",
+        "kind": "app-local-file",
+        "label": "provider-profiles.json",
+        "source": "llm/provider-profiles.json"
+      },
+      {
+        "id": "app-data:prompt-runs.json",
+        "kind": "app-local-file",
+        "label": "prompt-runs.json",
+        "source": "prompt-runs.json"
+      }
+    ],
+    "prompt_metadata": {
+      "available": false,
+      "preview_method": "llm.previewPrompt",
+      "confirm_method": "llm.confirmPromptAndSend",
+      "provider_request_sent": false,
+      "copy_only": true,
+      "note": "Provider observability is a deterministic local read model; this method never sends provider traffic or reads credentials."
+    },
+    "safety_flags": {
+      "read_only": true,
+      "app_local_only": true,
+      "provider_request_sent": false,
+      "credential_accessed": false,
+      "draft_copy_only": true,
+      "write_back_allowed": false,
+      "write_actions_available": false,
+      "skill_files_mutated": false,
+      "agent_config_mutated": false,
+      "script_execution_allowed": false,
+      "execution_actions_available": false,
+      "config_mutation_allowed": false,
+      "snapshot_created": false,
+      "triage_mutation_allowed": false,
+      "raw_secret_returned": false,
+      "raw_prompt_persisted": false,
+      "raw_response_persisted": false,
+      "raw_trace_persisted": false,
+      "unredacted_paths_returned": false,
+      "cloud_sync_performed": false,
+      "telemetry_emitted": false
+    }
+  }
+}

@@ -587,6 +587,32 @@ enum UIStrings {
     static var localSkillMapRelation: String { text("localSkillMap.relation", "Relation") }
     static var localSkillMapStrength: String { text("localSkillMap.strength", "Strength") }
     static var localSkillMapNodeIDs: String { text("localSkillMap.nodeIDs", "Node IDs") }
+    static var providerObservabilityTitle: String { text("providerObservability.title", "Provider Observability") }
+    static var providerObservabilityBoundary: String { text("providerObservability.boundary", "User-triggered, deterministic, read-only dashboard from redacted app-local prompt-run and provider-call metadata. It does not send provider requests, read credentials, expose raw prompts or responses, write files, mutate agent config, create snapshots, execute scripts, sync cloud data, or emit telemetry.") }
+    static var providerObservabilityAction: String { text("providerObservability.action.build", "Build Observability") }
+    static var providerObservabilityUnavailable: String { text("providerObservability.unavailable", "Provider observability is unavailable in this service build.") }
+    static var providerObservabilityNoResult: String { text("providerObservability.empty.result", "No provider observability dashboard loaded.") }
+    static var providerObservabilityCalls: String { text("providerObservability.calls", "Calls") }
+    static var providerObservabilitySuccesses: String { text("providerObservability.successes", "Succeeded") }
+    static var providerObservabilityFailures: String { text("providerObservability.failures", "Failed") }
+    static var providerObservabilityBlocked: String { text("providerObservability.blocked", "Blocked") }
+    static var providerObservabilityProviders: String { text("providerObservability.providers", "Providers") }
+    static var providerObservabilityModels: String { text("providerObservability.models", "Models") }
+    static var providerObservabilityDestinations: String { text("providerObservability.destinations", "Destinations") }
+    static var providerObservabilityRecentCalls: String { text("providerObservability.recentCalls", "Recent calls") }
+    static var providerObservabilityStatusRows: String { text("providerObservability.statusRows", "Status rows") }
+    static var providerObservabilityErrorRows: String { text("providerObservability.errorRows", "Errors") }
+    static var providerObservabilityBudgetHints: String { text("providerObservability.budgetHints", "Budget hints") }
+    static var providerObservabilityUsageHints: String { text("providerObservability.usageHints", "Usage hints") }
+    static var providerObservabilityRetention: String { text("providerObservability.retention", "Retention / cleanup") }
+    static var providerObservabilityNoCalls: String { text("providerObservability.empty.calls", "No recent redacted provider calls returned.") }
+    static var providerObservabilityNoRows: String { text("providerObservability.empty.rows", "No rows returned.") }
+    static var providerObservabilityMetadataRedacted: String { text("providerObservability.metadataRedacted", "Metadata redacted") }
+    static var providerObservabilityAppLocalOnly: String { text("providerObservability.appLocalOnly", "App-local only") }
+    static var providerObservabilityDuration: String { text("providerObservability.duration", "Duration") }
+    static var providerObservabilityAverageDuration: String { text("providerObservability.averageDuration", "Average duration") }
+    static var providerObservabilityEstimatedTokens: String { text("providerObservability.estimatedTokens", "Estimated tokens") }
+    static var providerObservabilityEstimatedCost: String { text("providerObservability.estimatedCost", "Estimated cost") }
     static var similarGroupingTitle: String { text("similarGrouping.title", "Similar Skill Grouping") }
     static var similarGroupingBoundary: String { text("similarGrouping.boundary", "User-triggered, read-only local grouping for duplicate, similar, and confusable skills across catalog evidence. It cannot call a provider, write skill files, mutate agent config, create snapshots, change triage, execute scripts, read credentials, persist raw prompts/responses/traces, sync cloud data, or emit telemetry.") }
     static var similarGroupingAction: String { text("similarGrouping.action.group", "Group Similar Skills") }

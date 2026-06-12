@@ -201,7 +201,7 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
 - V2.30 草稿输出仅作 `review` 与复制使用，不能直接 apply；不会持久化 triage 状态（`Open / Reviewed / Ignored / Needs follow-up`）。
 - 当前阶段不读取或写入 LLM credentials；未来 provider 路径需显式 opt-in，并延续 V2.7 的 Keychain 优先边界。
 
-### 2.4.3 V2.41-V2.67 AI-native provider boundary（planned）
+### 2.4.3 V2.41-V2.67 AI-native provider boundary
 
 **风险**：AI-native 分析会引入真实出站请求、用户配置的 endpoint/API key、prompt 内容、模型响应和成本/调用历史；如果边界不清晰，可能泄露本地路径、skill 内容、agent config、凭据或让 AI 输出绕过安全写入流程。
 
@@ -219,7 +219,8 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
   - 是否会发送 skill body、frontmatter、finding summary、trace excerpt 或 remediation/analysis context
 - Prompt preview 和 redaction 结果可以短暂显示；默认不持久化 raw prompt/response。
 - V2.41-V2.42 必须先保存最小非敏感调用审计 metadata：timestamp、provider type、model、destination host、status/error、duration、token/cost、confirmation id、redaction status。保存 raw prompt/response 需要单独设计和明确用户 opt-in，且不得进入普通 report export。
-- V2.64 provider observability 只能在上述最小 metadata 上做完整 UI、趋势、失败/限流分析、清理/保留策略和可选脱敏导出；不得把 observability 扩展成 secrets/raw prompt/raw response 存储。
+- V2.64 provider observability uses `llm.providerObservability` and can only derive read-only summary, call/history rows, provider/model/destination grouping rows, status rows, budget usage hints, retention recommendations, evidence refs, prompt metadata, and safety flags from app-local V2.61 prompt run metadata plus existing minimal provider call metadata. It must not persist or return raw prompt, raw response JSON, API keys, credentials, raw traces, secrets, or unredacted local paths.
+- V2.64 export/cleanup is recommendation-only in this slice. Any future export/cleanup controls must be redacted, app-local, user-triggered, explicit, and separately validated.
 - Imported trace/log 必须本地脱敏后再允许进入 provider prompt；默认不得发送 credentials、tokens、real home paths、temp paths、private URLs 或 raw config secrets。
 - V2.62 Agent Session Skill Review 必须由用户显式导入/粘贴 trace 或未来显式选择本地 agent 会话后触发；不得后台索引全量 agent 历史，不得保存 raw transcript。仅允许保存 redacted metadata/excerpt、skill usage evidence refs、review outcome 与 safety flags。
 - V2.63 Local Skill Map 必须由用户显式触发，且只派生 existing catalog evidence、knowledge tags、similar groups、capability taxonomy、conflict/cross-agent analysis、task readiness/routing/session-review context、stale/drift 与 risk evidence。它不得创建新的 source of truth，不得默认持久化 map artifact，不得写 skill/config、snapshot、triage，不得执行脚本，不得默认发送 provider request，也不得保存 raw prompt/raw response/raw trace/secrets/unredacted local paths。

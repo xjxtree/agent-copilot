@@ -89,6 +89,8 @@ final class SkillStore: ObservableObject {
     @Published private(set) var llmPromptSendResults: [String: LLMPromptSendResult] = [:]
     @Published private(set) var llmPromptRunList = LLMPromptRunListResult.unavailable()
     @Published private(set) var isLoadingLLMPromptRuns = false
+    @Published private(set) var providerObservabilityResult: ProviderObservabilityResult?
+    @Published private(set) var isLoadingProviderObservability = false
     @Published private(set) var scriptExecutionPreviews: [SkillRecord.ID: ScriptExecutionPreview] = [:]
     @Published private(set) var previewingScriptExecutionSkillIDs: Set<SkillRecord.ID> = []
     @Published private(set) var batchTogglePreview: BatchTogglePreview?
@@ -217,7 +219,7 @@ final class SkillStore: ObservableObject {
     }
 
     private var isTaskBenchmarkBusy: Bool {
-        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isBuildingLocalSkillMap || isGroupingSimilarSkills || isBuildingCapabilityTaxonomy || isCheckingWorkspaceReadiness || isPlanningRemediation || isPreviewingRemediationDrafts || isPreviewingRemediationImpact || isReviewingRemediationBatch || isLoadingRemediationHistory || isRecordingRemediationHistory || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || isLoadingAgentSessionSkillReviews || isReviewingAgentSessionSkillUse || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty || !deletingAgentSessionSkillReviewIDs.isEmpty
+        isSavingTaskBenchmark || isEvaluatingTaskBenchmarks || isSavingRoutingBaseline || isDetectingRoutingRegression || isLoadingRoutingAccuracyDashboard || isDetectingStaleDrift || isSearchingKnowledge || isBuildingLocalSkillMap || isLoadingProviderObservability || isGroupingSimilarSkills || isBuildingCapabilityTaxonomy || isCheckingWorkspaceReadiness || isPlanningRemediation || isPreviewingRemediationDrafts || isPreviewingRemediationImpact || isReviewingRemediationBatch || isLoadingRemediationHistory || isRecordingRemediationHistory || isComparingCrossAgentReadiness || isLoadingTraceImports || isImportingTrace || isLoadingAgentSessionSkillReviews || isReviewingAgentSessionSkillUse || !deletingTaskBenchmarkIDs.isEmpty || !deletingTraceImportIDs.isEmpty || !deletingAgentSessionSkillReviewIDs.isEmpty
     }
 
     private var isLLMPromptBusy: Bool {
@@ -2072,6 +2074,30 @@ final class SkillStore: ObservableObject {
 
         llmPromptRunList = await fetchLLMPromptRuns()
         hydratePromptSendResultsFromRuns(currentSkillIDs: Set(skills.map(\.id)))
+    }
+
+    func loadProviderObservability() async {
+        guard !isLoadingProviderObservability else { return }
+        guard !isRefreshBusy else {
+            providerObservabilityResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        isLoadingProviderObservability = true
+        defer { isLoadingProviderObservability = false }
+
+        do {
+            providerObservabilityResult = try await service.providerObservability(
+                windowDays: 30,
+                limit: 30,
+                includeHistory: true,
+                includeBudgetHints: true,
+                includeRetentionRecommendations: true,
+                includeEvidence: true
+            )
+        } catch {
+            providerObservabilityResult = .unavailable(reason: error.localizedDescription)
+        }
     }
 
     @discardableResult

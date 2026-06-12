@@ -722,6 +722,26 @@ private struct ListLLMPromptRunsParams: Encodable {
     }
 }
 
+private struct ProviderObservabilityParams: Encodable {
+    let windowDays: Int
+    let limit: Int
+    let includeHistory: Bool
+    let includeBudgetHints: Bool
+    let includeRetentionRecommendations: Bool
+    let includeEvidence: Bool
+    let appLanguage: String = UIStrings.currentLanguage.rawValue
+
+    enum CodingKeys: String, CodingKey {
+        case windowDays = "window_days"
+        case limit
+        case includeHistory = "include_history"
+        case includeBudgetHints = "include_budget_hints"
+        case includeRetentionRecommendations = "include_retention_recommendations"
+        case includeEvidence = "include_evidence"
+        case appLanguage = "app_language"
+    }
+}
+
 private struct ScriptExecutionParams: Encodable {
     let instanceId: String
     let definitionId: String
@@ -1821,6 +1841,29 @@ final class ServiceClient {
         )
         do {
             return try await call(method: "llm.listPromptRuns", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
+    func providerObservability(
+        windowDays: Int = 30,
+        limit: Int = 30,
+        includeHistory: Bool = true,
+        includeBudgetHints: Bool = true,
+        includeRetentionRecommendations: Bool = true,
+        includeEvidence: Bool = true
+    ) async throws -> ProviderObservabilityResult {
+        let params = ProviderObservabilityParams(
+            windowDays: windowDays,
+            limit: limit,
+            includeHistory: includeHistory,
+            includeBudgetHints: includeBudgetHints,
+            includeRetentionRecommendations: includeRetentionRecommendations,
+            includeEvidence: includeEvidence
+        )
+        do {
+            return try await call(method: "llm.providerObservability", params: params)
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .unavailable()
         }
