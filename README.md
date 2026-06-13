@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-**当前阶段**：V2.67 Guided Cleanup Flow 已完成。V2.67 defines `cleanup.planGuidedFlow` as user-triggered deterministic/read-only guidance over existing local evidence, and `cleanup.recordGuidedStep` as app-local redacted guided cleanup step metadata only. `cleanup.planGuidedFlow` 只能基于 findings、cleanup queue、similar groups、stale/drift、readiness/routing/task cockpit、lifecycle timeline、remediation plan/drafts/impact/batch review、adapter diagnostics 与 source provenance 派生；`cleanup.recordGuidedStep` 最多写入 app-local `guided-cleanup-steps.json` 这类 redacted metadata。实际 enable/disable/edit/remediation 仍必须走既有 preview-first / explicit-confirm safe methods。
+**当前阶段**：V2.68 Task Cockpit 主入口 / Analysis IA 重组已完成。Task Cockpit 现在是默认 task-centered 入口；sidebar 首屏先展示 Work surfaces，Detail section switcher 改为菜单式导航，Analysis 被拆成 Task Cockpit、Skill Map、Guided Cleanup、Provider Observability、Review 等明确区域。V2.68 仅复用 existing read-only service methods，不新增 provider 默认调用、hidden task state、skill/config write path、triage mutation、snapshot、script execution、cloud sync 或 telemetry。
 
-**近期主线**：V2.68-V2.72 进入 **post-V2.67 consolidation** 规划。事实层仍由本地 scanner/rules/catalog 提供；重点从继续叠加分析端点，转向 task-first cockpit 主入口、Analysis 信息架构收束、隐私/截图模式、本地化和路径展示治理、Swift/Rust feature module 拆分、Guided Cleanup 到既有安全动作的 deep links，以及锁屏/黑屏截图验证加固。短期不做全平台 UI 适配、正式签名 release、notarization、DMG/ZIP 或 public distribution。OpenClaw/Hermes writable/install 与 Pi install 仍保持 blocked；Pi production toggle 仅限 V2.37 evidence-backed guarded native scope，不自动开放兼容根写入。
+**近期主线**：V2.69-V2.72 继续 **post-V2.67 consolidation**。事实层仍由本地 scanner/rules/catalog 提供；重点转向隐私/截图模式、本地化和路径展示治理、Swift/Rust feature module 拆分、Guided Cleanup 到既有安全动作的 deep links，以及锁屏/黑屏截图验证加固。短期不做全平台 UI 适配、正式签名 release、notarization、DMG/ZIP 或 public distribution。OpenClaw/Hermes writable/install 与 Pi install 仍保持 blocked；Pi production toggle 仅限 V2.37 evidence-backed guarded native scope，不自动开放兼容根写入。
 
 **已集成能力**：
 
@@ -23,12 +23,13 @@
 - V2.14 Hermes evidence-gate closeout 与 V2.17 Hermes read-only scanner：active/profile Hermes home `skills/**/SKILL.md` 只读进入 catalog。
 - V2.15 OpenClaw evidence-gate closeout 与 V2.16 OpenClaw read-only scanner：workspace/global documented filesystem roots 只读进入 catalog。
 - V2.18-V2.40：cross-agent analysis、skill health dashboard、read-only AI skill analysis、scan accuracy/dedupe、finding/conflict 语义、Health/Adapter Capability UX、Detail 诊断口径、Agent-config timeline、Finding explainability、skill identity/provenance dedupe、conflict semantic closeout、finding triage persistence、AI skill analysis workflow、Cleanup Queue、Rule tuning / suppression、Safe batch actions、Cross-agent comparison view、Local report export、Pi writable evidence harness、Pi guarded writable toggle、Hermes external roots、OpenClaw workspace deepening、Adapter diagnostics 已收口。
-- V2.41-V2.67：AI Provider Foundation、Prompt Preview/Redaction、AI Skill Quality、AI Task Readiness、AI Routing Confidence、Task Benchmark/Regression、Trace Analysis、Routing Accuracy Dashboard、Local Knowledge Index、Remediation Workflow、Remediation History、Prompt Run History、Agent Session Skill Review、Local Skill Map、AI Provider Observability、Task-first Cockpit、Skill Lifecycle Timeline 与 Guided Cleanup Flow 已完成。
+- V2.41-V2.68：AI Provider Foundation、Prompt Preview/Redaction、AI Skill Quality、AI Task Readiness、AI Routing Confidence、Task Benchmark/Regression、Trace Analysis、Routing Accuracy Dashboard、Local Knowledge Index、Remediation Workflow、Remediation History、Prompt Run History、Agent Session Skill Review、Local Skill Map、AI Provider Observability、Task-first Cockpit、Skill Lifecycle Timeline、Guided Cleanup Flow 与 Task Cockpit primary entry / Analysis IA 重组已完成。
 - 2026-06-12 V2.63 真实本机 app validation 通过：当前 `dist/SkillsCopilot.app` 的 single-skill Analysis 页显示 Local Skill Map，点击 `Build Map` 后渲染真实 local map 输出（nodes、edges、clusters、evidence、safety sections）。真实本机截图未提交，因为 live UI 会暴露本地路径；fixture smoke 截图仍只作为自动化证据。V2.63 focused Rust/protocol、Swift/model/store、`pnpm check:macos`、`pnpm check:privacy` 与 `git diff --check` 均已通过；后续 coordinator 复测 exact-path Computer Use 时因重复同 bundle app 进程出现 `cgWindowNotFound` / `remoteConnection`，记录为工具/窗口层 blocker。
 - 2026-06-12 V2.64 validation：focused Rust/protocol checks、full service tests、focused/full Swift decode/store checks、service protocol fixture decode、`pnpm check:macos`、`pnpm check:privacy` 与 `git diff --check` 已通过；fixture macOS smoke 成功启动并捕获 `dist/SkillsCopilot.app` 窗口。真实本机验证中当前 bundle 进程可启动，但 System Events 在 activation 与 clean relaunch 后仍看到 0 个窗口，Computer Use 返回 `cgWindowNotFound`；该项记录为 V2.64 window/tool-layer blocker。真实本机截图未提交，因为 live UI 会暴露本地路径。
 - 2026-06-12 V2.65 validation：focused Rust/protocol checks、full service tests、focused/full Swift model/store checks、service protocol fixture decode、`pnpm check:macos`、`pnpm check:privacy` 与 `git diff --check` 已通过；fixture macOS smoke 成功启动并捕获 `dist/SkillsCopilot.app` 窗口。真实本机验证中当前 bundle 进程可启动且 System Events 能看到 `SkillsCopilot` 进程，但 activation 后仍报告 0 windows，Computer Use 返回 `cgWindowNotFound`；该项记录为 V2.65 window/tool-layer blocker。真实本机截图未提交，因为 live UI 会暴露本地路径。
 - 2026-06-12 V2.66 validation：focused Rust lifecycle/protocol checks、service protocol fixture decode、full service tests、focused/full Swift model/store checks、`pnpm check:macos`、`pnpm check:privacy`、`git diff --check` 与 fixture screenshot inspection 已通过；fixture smoke 成功启动并捕获 `dist/SkillsCopilot.app` 窗口。真实本机验证中当前 bundle 进程可启动且直接 capture helper 找到 app 窗口，但 System Events 仍报告 0 AX windows，Computer Use 对绝对 app path 返回 `cgWindowNotFound`；该项记录为 V2.66 window/tool-layer blocker。真实本机截图未提交，因为 live UI 会暴露本地路径。
 - 2026-06-12 V2.67 validation：focused Rust guided-cleanup/protocol checks、full service tests、focused/full Swift model/store checks、`pnpm check:macos`、fixture screenshot inspection、`pnpm check:privacy`、`git diff --check` 与 `git diff --cached --check` 已通过；fixture smoke 成功启动并捕获 `dist/SkillsCopilot.app` 窗口。真实本机验证中当前 bundle 进程可启动且 direct capture helper 找到 app 窗口，但 System Events 仍报告 0 AX windows，Computer Use 对绝对 app path 返回 `cgWindowNotFound`；该项记录为 V2.67 window/tool-layer blocker。真实本机截图未提交，因为 live UI 会暴露本地路径。
+- 2026-06-13 V2.68 validation：V2.68 multi-agent analysis completed, focused Rust service/protocol checks, Swift tests, native layout checks, full `pnpm check:macos`, fixture screenshot inspection, `pnpm check:privacy`, and `git diff --check` passed. Fixture smoke captured the cockpit-first IA with Work surfaces visible before diagnostic cards. Real local launch against the current bundle succeeded and CG window metadata found the `SkillsCopilot` window, but the macOS session was locked (`CGSSessionScreenIsLocked=Yes`), Computer Use timed out, and the final direct capture was all black; this is recorded as the V2.68 locked-session/window-capture blocker. No real-local screenshot was committed.
 
 **当前产品 UI**：SwiftUI/AppKit macOS 原生壳 + Rust service protocol。
 
@@ -67,8 +68,8 @@
 | V2.62 | Agent Session Skill Review | 已完成：`session.reviewAgentSkillUse` / `session.listSkillReviews` / `session.deleteSkillReview`，用户触发、deterministic/read-only、app-local redacted metadata only；审查 pasted/imported agent sessions/traces 的 skill hit/miss/wrong-pick/ambiguity/unknown、expected vs detected skills、similar/duplicate interference、safe next steps 与 evidence refs |
 | V2.63 | Local Skill Map | 已完成：`knowledge.buildLocalSkillMap` 基于 existing catalog/knowledge/similar/taxonomy/conflict/task/risk evidence 构建本地 skill map；用户触发、deterministic/read-only、no new source of truth、no map artifact persistence by default、无 skill/config writes、snapshot、triage、script、default provider、raw prompt/response/trace/secret、cloud/telemetry 路径 |
 | V2.64 | AI Provider Observability | 已完成：`llm.providerObservability` 从 V2.61 prompt run metadata 与最小 provider call metadata 派生 read-only/app-local observability；输出调用历史、provider/model/destination grouping、status rows、budget usage hints、retention recommendations、evidence refs、prompt metadata 与 safety flags；无 provider/default network/write/execute/telemetry 路径 |
-| V2.65-V2.67 | Cockpit / lifecycle / guided cleanup | 已完成：V2.65 Task-first Cockpit、V2.66 Skill Lifecycle Timeline、V2.67 Guided Cleanup Flow |
-| V2.68 | Task Cockpit 主入口 / Analysis IA 重组 | 规划：把用户任务作为默认入口，将 Analysis 拆成 Task Cockpit、Skill Map、Cleanup Flow、Observability 等明确区域；默认复用 existing service methods，不新增写入/provider 默认调用 |
+| V2.65-V2.68 | Cockpit / lifecycle / guided cleanup / IA | 已完成：V2.65 Task-first Cockpit、V2.66 Skill Lifecycle Timeline、V2.67 Guided Cleanup Flow、V2.68 Task Cockpit primary entry / Analysis IA 重组 |
+| V2.68 | Task Cockpit 主入口 / Analysis IA 重组 | 已完成：Task Cockpit 默认入口、Sidebar Work surfaces、菜单式 detail section switcher、Analysis 拆分为 Task Cockpit / Skill Map / Guided Cleanup / Observability / Review；复用 existing service methods，不新增写入/provider 默认调用 |
 | V2.69 | Privacy / Screenshot Mode + 本地化收束 | 规划：增加截图/演示友好的路径脱敏与长路径折叠策略，统一中英文混排文案，保证真实本机验证可产出不泄露本地路径的证据 |
 | V2.70 | Swift / Rust feature modularization | 规划：拆分 `DetailView.swift`、`SkillStore.swift` 与 `crates/service/src/lib.rs` 等高负载文件，按功能模块整理模型、协议和视图；默认不改变 service 语义 |
 | V2.71 | Guided Cleanup safe-action deep links | 规划：让 guided cleanup 步骤跳转到既有 `remediation.previewImpact`、`remediation.batchReview`、safe batch preview、详情筛选等安全入口；实际写入仍 preview-first / explicit-confirm |
@@ -83,7 +84,7 @@
 - **Tool-global skill 池**：本地目录导入到 app-controlled staging，审计后 read-only preview，并可经确认安装到 Claude/Codex verified skill root。
 - **Cleanup Queue**：把 open findings、完整性问题和 analysis insights 聚合成可处理队列，主要支持查看详情、跳转到现有安全动作入口、或获取建议草稿进行人工处理。
 - **Skill 执行安全边界**：默认不真实执行脚本；任何未来执行请求都必须展示 cwd/env/network/files 预览并逐次确认。
-- **AI-native 分析 gate**：规则引擎和 scanner 默认离线提供事实层；provider-backed explanation 只在用户完成 prompt preview/redaction/confirmation 后发送，输出保持 copy-only。V2.61 起，已确认发送的 AI 分析会保存 redacted prompt run metadata 与 copy-only draft output，用于重启后恢复展示；V2.62 起，Agent Session Skill Review 只保存 app-local redacted review metadata 且不发送 provider requests；V2.63 起，Local Skill Map 只派生本地 read-only map，不创建新的 source of truth 或默认持久化 artifact；V2.64 起，Provider Observability 只汇总 app-local redacted prompt/call metadata 并返回 cleanup/retention recommendations；V2.65 起，Task-first Cockpit 只聚合现有 local task/readiness/routing/session/provider/remediation evidence，不创建 hidden task state；V2.66 起，Skill Lifecycle Timeline 只从 existing local catalog/evidence/history metadata 派生生命周期行，不默认持久化 raw lifecycle artifacts；V2.67 起，Guided Cleanup Flow 只把现有 evidence 组织成可复查步骤，`cleanup.recordGuidedStep` 仅可写 app-local redacted metadata。它们都不保存 raw transcript、raw prompt、raw response JSON、API key、credential、raw trace 或未脱敏本地路径，也不写 skill/config、不改 triage、不执行脚本、不发 telemetry。
+- **AI-native 分析 gate**：规则引擎和 scanner 默认离线提供事实层；provider-backed explanation 只在用户完成 prompt preview/redaction/confirmation 后发送，输出保持 copy-only。V2.61 起，已确认发送的 AI 分析会保存 redacted prompt run metadata 与 copy-only draft output，用于重启后恢复展示；V2.62 起，Agent Session Skill Review 只保存 app-local redacted review metadata 且不发送 provider requests；V2.63 起，Local Skill Map 只派生本地 read-only map，不创建新的 source of truth 或默认持久化 artifact；V2.64 起，Provider Observability 只汇总 app-local redacted prompt/call metadata 并返回 cleanup/retention recommendations；V2.65 起，Task-first Cockpit 只聚合现有 local task/readiness/routing/session/provider/remediation evidence，不创建 hidden task state；V2.66 起，Skill Lifecycle Timeline 只从 existing local catalog/evidence/history metadata 派生生命周期行，不默认持久化 raw lifecycle artifacts；V2.67 起，Guided Cleanup Flow 只把现有 evidence 组织成可复查步骤，`cleanup.recordGuidedStep` 仅可写 app-local redacted metadata；V2.68 起，Task Cockpit 成为默认可见入口但仍只是 UI/IA consolidation。它们都不保存 raw transcript、raw prompt、raw response JSON、API key、credential、raw trace 或未脱敏本地路径，也不写 skill/config、不改 triage、不执行脚本、不发 telemetry。
 
 ## 它不做什么
 
@@ -93,7 +94,7 @@
 - 不触发后台自动分析；LLM 不会在未显式用户操作时发起 provider 请求。
 - 不让 LLM 触发执行、写入或确认用户动作。
 - 不在 Cleanup Queue 或 Guided Cleanup Flow 阶段新增自动清理、隐藏 apply、自动写入或自动执行链路。
-- 不把 V2.68-V2.72 规划文档视为已实现能力；对应版本必须完成代码、验证和文档 closeout 后才能标记 completed。
+- 不把 V2.69-V2.72 规划文档视为已实现能力；对应版本必须完成代码、验证和文档 closeout 后才能标记 completed。
 
 ## 文档导航
 
@@ -115,6 +116,7 @@
 | 当前开发任务清单 | [`docs/development-tasks.md`](./docs/development-tasks.md) |
 | V2.66 验证清单 | [`docs/v2.66-verification-checklist.md`](./docs/v2.66-verification-checklist.md) |
 | V2.67 验证清单 | [`docs/v2.67-verification-checklist.md`](./docs/v2.67-verification-checklist.md) |
+| V2.68 验证清单 | [`docs/v2.68-verification-checklist.md`](./docs/v2.68-verification-checklist.md) |
 | MVP 施工图 | [`docs/mvp-implementation-plan.md`](./docs/mvp-implementation-plan.md) |
 | 路线图 | [`docs/roadmap.md`](./docs/roadmap.md) |
 
@@ -126,7 +128,7 @@
 | 内核 | Rust workspace crates：core / adapters / scanner / catalog / ai-core / commands / service。 |
 | Service protocol | typed JSON / JSON-RPC stdio sidecar，位于 `crates/service`。 |
 | 持久化 | SQLite catalog + JSON runtime state。 |
-| LLM / AI Analysis | V2.41+ 已支持用户自配 OpenAI-compatible / Claude-compatible endpoint、Keychain-first API key、prompt preview/redaction/confirmation 和 provider-backed draft output；V2.61 起 provider-backed 分析 10 分钟等待并保存 redacted prompt run history；V2.62 起支持 `session.*` deterministic Agent Session Skill Review 的 app-local redacted metadata；V2.63 起支持 `knowledge.buildLocalSkillMap` deterministic/read-only local skill map；V2.64 起支持 `llm.providerObservability` read-only/app-local provider observability；V2.65 起支持 `task.buildCockpit` task-first cockpit；V2.66 支持 `skill.lifecycleTimeline` deterministic/read-only lifecycle rows；V2.67 支持 `cleanup.planGuidedFlow` read-only guidance and `cleanup.recordGuidedStep` app-local redacted step metadata。所有输出仍为 copy-only/read-only，不写 skill/config、不执行脚本、不保存 raw transcript/raw prompt/raw response JSON/secrets/unredacted paths。 |
+| LLM / AI Analysis | V2.41+ 已支持用户自配 OpenAI-compatible / Claude-compatible endpoint、Keychain-first API key、prompt preview/redaction/confirmation 和 provider-backed draft output；V2.61 起 provider-backed 分析 10 分钟等待并保存 redacted prompt run history；V2.62 起支持 `session.*` deterministic Agent Session Skill Review 的 app-local redacted metadata；V2.63 起支持 `knowledge.buildLocalSkillMap` deterministic/read-only local skill map；V2.64 起支持 `llm.providerObservability` read-only/app-local provider observability；V2.65 起支持 `task.buildCockpit` task-first cockpit；V2.66 支持 `skill.lifecycleTimeline` deterministic/read-only lifecycle rows；V2.67 支持 `cleanup.planGuidedFlow` read-only guidance and `cleanup.recordGuidedStep` app-local redacted step metadata；V2.68 把这些既有 read-only surfaces 重新组织为 cockpit-first IA。所有输出仍为 copy-only/read-only，不写 skill/config、不执行脚本、不保存 raw transcript/raw prompt/raw response JSON/secrets/unredacted paths。 |
 
 ## 开发运行
 

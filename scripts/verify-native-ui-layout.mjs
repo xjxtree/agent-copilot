@@ -58,9 +58,24 @@ const checks = [
     pattern: /Picker\(UIStrings\.sort,\s*selection:\s*\$store\.sortOrder\)/,
   },
   {
-    label: "detail sections use segmented picker",
+    label: "detail sections use bounded menu picker",
     text: files.detail,
-    pattern: /\.pickerStyle\(\.segmented\)/,
+    pattern: /\.pickerStyle\(\.menu\)[\s\S]*?\.labelsHidden\(\)[\s\S]*?\.frame\(width:\s*240,\s*alignment:\s*\.leading\)/,
+  },
+  {
+    label: "detail sections expose task-first IA summaries",
+    text: files.detail,
+    pattern: /static var primaryWorkCases:[\s\S]*?\[\.taskCockpit,\s*\.skillMap,\s*\.guidedCleanup,\s*\.observability,\s*\.analysis\][\s\S]*?UIStrings\.taskCockpitTitle[\s\S]*?UIStrings\.guidedCleanupFlowTitle[\s\S]*?UIStrings\.providerObservabilityTitle/,
+  },
+  {
+    label: "task cockpit renders before empty detail fallback",
+    text: files.detail,
+    pattern: /if store\.selectedDetailSection == \.taskCockpit[\s\S]*?TaskCockpitPanel\([\s\S]*?else if let skill[\s\S]*?EmptyDetailView\(\)/,
+  },
+  {
+    label: "sidebar exposes primary work surfaces",
+    text: files.sidebar,
+    pattern: /Text\(UIStrings\.text\("nav\.work",\s*"Work"\)\)[\s\S]*?ForEach\(DetailSection\.primaryWorkCases\)/,
   },
   {
     label: "findings expose severity filter",

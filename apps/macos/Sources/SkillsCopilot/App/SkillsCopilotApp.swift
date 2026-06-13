@@ -40,20 +40,25 @@ struct SkillsCopilotApp: App {
             }
 
             CommandMenu(UIStrings.menuSkills) {
+                Button(UIStrings.menuShowTaskCockpit) {
+                    store.selectedDetailSection = .taskCockpit
+                }
+                .keyboardShortcut("1", modifiers: [.command])
+
                 Button(UIStrings.menuShowOverview) {
                     store.selectedDetailSection = .overview
                 }
-                .keyboardShortcut("1", modifiers: [.command])
+                .keyboardShortcut("2", modifiers: [.command])
 
                 Button(UIStrings.menuShowFindings) {
                     store.selectedDetailSection = .findings
                 }
-                .keyboardShortcut("2", modifiers: [.command])
+                .keyboardShortcut("3", modifiers: [.command])
 
                 Button(UIStrings.menuShowConflicts) {
                     store.selectedDetailSection = .conflicts
                 }
-                .keyboardShortcut("3", modifiers: [.command])
+                .keyboardShortcut("4", modifiers: [.command])
 
                 Divider()
 

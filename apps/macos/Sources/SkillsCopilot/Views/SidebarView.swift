@@ -110,6 +110,37 @@ struct SidebarView: View {
     }
 }
 
+private struct SidebarWorkSurfaceRow: View {
+    let section: DetailSection
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(section.title)
+                        .font(.callout.weight(isSelected ? .semibold : .regular))
+                        .lineLimit(1)
+                    Text(section.summary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            } icon: {
+                Image(systemName: section.systemImage)
+                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                    .frame(width: 18)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.vertical, 3)
+        .background(isSelected ? Color.accentColor.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+    }
+}
+
 private struct LocalReportExportPanel: View {
     @EnvironmentObject private var store: SkillStore
 
@@ -442,6 +473,25 @@ private struct AgentWorkspaceHeader: View {
             }
             .pickerStyle(.menu)
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(UIStrings.text("nav.work", "Work"))
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+
+                ForEach(DetailSection.primaryWorkCases) { section in
+                    SidebarWorkSurfaceRow(
+                        section: section,
+                        isSelected: store.selectedDetailSection == section,
+                        action: {
+                            if store.selectedSkillID == nil {
+                                store.selectedSkillID = store.filteredSkills.first?.id ?? store.skills.first?.id
+                            }
+                            store.selectedDetailSection = section
+                        }
+                    )
+                }
+            }
 
             if let capability = store.selectedAdapterCapability {
                 AdapterCapabilityCard(

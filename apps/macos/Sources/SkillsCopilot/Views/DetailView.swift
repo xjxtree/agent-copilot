@@ -2,8 +2,12 @@ import AppKit
 import SwiftUI
 
 enum DetailSection: String, CaseIterable, Identifiable {
+    case taskCockpit
     case overview
+    case skillMap
     case cleanup
+    case guidedCleanup
+    case observability
     case findings
     case conflicts
     case history
@@ -15,12 +19,24 @@ enum DetailSection: String, CaseIterable, Identifiable {
         Self.allCases
     }
 
+    static var primaryWorkCases: [DetailSection] {
+        [.taskCockpit, .skillMap, .guidedCleanup, .observability, .analysis]
+    }
+
     var title: String {
         switch self {
+        case .taskCockpit:
+            return UIStrings.taskCockpitTitle
         case .overview:
             return UIStrings.overview
+        case .skillMap:
+            return UIStrings.text("detail.skillMap", "Skill Map")
         case .cleanup:
             return UIStrings.cleanupQueue
+        case .guidedCleanup:
+            return UIStrings.guidedCleanupFlowTitle
+        case .observability:
+            return UIStrings.providerObservabilityTitle
         case .findings:
             return UIStrings.findings
         case .conflicts:
@@ -28,7 +44,57 @@ enum DetailSection: String, CaseIterable, Identifiable {
         case .history:
             return UIStrings.text("detail.history", "History")
         case .analysis:
-            return UIStrings.text("detail.analysis", "Analysis")
+            return UIStrings.text("detail.analysisReview", "Review")
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .taskCockpit:
+            return "rectangle.grid.2x2"
+        case .overview:
+            return "stethoscope"
+        case .skillMap:
+            return "point.3.connected.trianglepath.dotted"
+        case .cleanup:
+            return "tray.full"
+        case .guidedCleanup:
+            return "sparkles.square.filled.on.square"
+        case .observability:
+            return "waveform.path.ecg.rectangle"
+        case .findings:
+            return "exclamationmark.triangle"
+        case .conflicts:
+            return "rectangle.2.swap"
+        case .history:
+            return "clock.arrow.circlepath"
+        case .analysis:
+            return "doc.text.magnifyingglass"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .taskCockpit:
+            return UIStrings.text("detail.section.taskCockpit.summary", "Start from the current task and review readiness, routes, agents, skills, session context, provider context, gaps, blockers, and evidence in one read-only cockpit.")
+        case .overview:
+            return UIStrings.text("detail.section.overview.summary", "Inspect the selected skill metadata, permissions, provenance, and raw catalog details.")
+        case .skillMap:
+            return UIStrings.text("detail.section.skillMap.summary", "Review the local skill map and lifecycle timeline derived from existing catalog, task, risk, provenance, and history evidence.")
+        case .cleanup:
+            return UIStrings.text("detail.section.cleanup.summary", "Review the read-only Cleanup Queue for open findings, integrity issues, conflicts, and analysis insights.")
+        case .guidedCleanup:
+            return UIStrings.text("detail.section.guidedCleanup.summary", "Plan guided cleanup steps and record app-local redacted step metadata without applying fixes or changing agent config.")
+        case .observability:
+            return UIStrings.text("detail.section.observability.summary", "Inspect redacted app-local provider call and prompt-run metadata without sending provider requests.")
+        case .findings:
+            return UIStrings.text("detail.section.findings.summary", "Explain selected-skill finding groups with rules, affected instances, remediation text, and evidence.")
+        case .conflicts:
+            return UIStrings.text("detail.section.conflicts.summary", "Review current-agent runtime/name collisions only; cross-agent duplicate and source-overlap evidence stays in Review.")
+        case .history:
+            return UIStrings.text("detail.section.history.summary", "Review selected-skill toggle and config history.")
+        case .analysis:
+            return UIStrings.text("detail.section.analysis.summary", "Use focused review panels for cross-agent comparison, quality, task fit, routing, and session skill-use review.")
         }
     }
 }
@@ -49,7 +115,52 @@ struct DetailView: View {
                     SuccessBanner(message: message)
                 }
 
-                if let skill {
+                if store.selectedDetailSection == .taskCockpit {
+                    DetailSectionSwitcher(selection: $store.selectedDetailSection)
+
+                    TaskCockpitPanel(
+                        taskText: $store.taskCockpitText,
+                        currentTaskText: store.selectedTaskCockpitInput,
+                        result: store.taskCockpitResult,
+                        isBuilding: store.isBuildingTaskCockpit,
+                        onBuild: {
+                            Task {
+                                await store.buildTaskCockpit()
+                            }
+                        }
+                    )
+                } else if store.selectedDetailSection == .guidedCleanup {
+                    DetailSectionSwitcher(selection: $store.selectedDetailSection)
+
+                    GuidedCleanupFlowPanel(
+                        result: store.guidedCleanupFlowResult,
+                        recordResult: store.guidedCleanupRecordResult,
+                        isPlanning: store.isPlanningGuidedCleanupFlow,
+                        isRecording: store.isRecordingGuidedCleanupStep,
+                        onLoad: {
+                            Task {
+                                await store.planGuidedCleanupFlow()
+                            }
+                        },
+                        onRecord: { step in
+                            Task {
+                                await store.recordGuidedCleanupStep(step)
+                            }
+                        }
+                    )
+                } else if store.selectedDetailSection == .observability {
+                    DetailSectionSwitcher(selection: $store.selectedDetailSection)
+
+                    ProviderObservabilityPanel(
+                        result: store.providerObservabilityResult,
+                        isLoading: store.isLoadingProviderObservability,
+                        onLoad: {
+                            Task {
+                                await store.loadProviderObservability()
+                            }
+                        }
+                    )
+                } else if let skill {
                     let selectedFindingGroups = FindingDisplayModel.issueGroups(
                         findings: store.selectedFindings,
                         severityFilter: FindingDisplayModel.allFilterValue,
@@ -74,6 +185,8 @@ struct DetailView: View {
                     DetailSectionSwitcher(selection: $store.selectedDetailSection)
 
                     switch store.selectedDetailSection {
+                    case .taskCockpit, .guidedCleanup, .observability:
+                        EmptyView()
                     case .overview:
                         VStack(alignment: .leading, spacing: 16) {
                             SkillSummaryCard(
@@ -102,6 +215,30 @@ struct DetailView: View {
                             if DisplayText.isToolGlobal(skill) {
                                 ToolGlobalPreviewCard(skill: skill)
                             }
+                        }
+                    case .skillMap:
+                        VStack(alignment: .leading, spacing: 16) {
+                            LocalSkillMapPanel(
+                                skill: skill,
+                                result: store.localSkillMapResult,
+                                isBuilding: store.isBuildingLocalSkillMap,
+                                onBuild: {
+                                    Task {
+                                        await store.buildLocalSkillMap()
+                                    }
+                                }
+                            )
+
+                            SkillLifecycleTimelinePanel(
+                                skill: skill,
+                                result: store.skillLifecycleTimelineResult,
+                                isLoading: store.isLoadingSkillLifecycleTimeline,
+                                onLoad: {
+                                    Task {
+                                        await store.loadSkillLifecycleTimeline()
+                                    }
+                                }
+                            )
                         }
                     case .cleanup:
                         CleanupQueueSection(
@@ -840,24 +977,28 @@ private struct DetailSectionSwitcher: View {
     @Binding var selection: DetailSection
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(UIStrings.detailSection)
-                .font(.caption.bold())
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Label(UIStrings.detailSection, systemImage: selection.systemImage)
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
 
-            Picker(UIStrings.detailSection, selection: $selection) {
-                ForEach(DetailSection.visibleCases) { item in
-                    Text(item.title).tag(item)
+                Picker(UIStrings.detailSection, selection: $selection) {
+                    ForEach(DetailSection.visibleCases) { item in
+                        Label(item.title, systemImage: item.systemImage).tag(item)
+                    }
                 }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(maxWidth: 560, alignment: .leading)
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .frame(width: 240, alignment: .leading)
 
-            Text(UIStrings.text("detail.sectionScopeHint", "Conflicts are current-agent runtime/name collisions. Cross-agent duplicate names and source overlap are Analysis insights."))
+                Spacer()
+            }
+
+            Text(selection.summary)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .lineLimit(2)
+                .lineLimit(3)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1150,14 +1291,6 @@ private struct AnalysisSection: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            TaskCockpitPanel(
-                taskText: $taskCockpitText,
-                currentTaskText: taskCockpitInput,
-                result: taskCockpitResult,
-                isBuilding: isBuildingTaskCockpit,
-                onBuild: onBuildTaskCockpit
-            )
-
             CrossAgentComparisonPanel(
                 skill: skill,
                 result: comparisonResult,
@@ -1204,35 +1337,6 @@ private struct AnalysisSection: View {
                 onRankRouting: onRankRoutingConfidence,
                 onPreviewRoutingPrompt: onPreviewRoutingConfidencePrompt,
                 onSendRoutingPrompt: onSendRoutingConfidencePrompt
-            )
-
-            LocalSkillMapPanel(
-                skill: skill,
-                result: localSkillMapResult,
-                isBuilding: isBuildingLocalSkillMap,
-                onBuild: onBuildLocalSkillMap
-            )
-
-            SkillLifecycleTimelinePanel(
-                skill: skill,
-                result: skillLifecycleTimelineResult,
-                isLoading: isLoadingSkillLifecycleTimeline,
-                onLoad: onLoadSkillLifecycleTimeline
-            )
-
-            GuidedCleanupFlowPanel(
-                result: guidedCleanupFlowResult,
-                recordResult: guidedCleanupRecordResult,
-                isPlanning: isPlanningGuidedCleanupFlow,
-                isRecording: isRecordingGuidedCleanupStep,
-                onLoad: onPlanGuidedCleanupFlow,
-                onRecord: onRecordGuidedCleanupStep
-            )
-
-            ProviderObservabilityPanel(
-                result: providerObservabilityResult,
-                isLoading: isLoadingProviderObservability,
-                onLoad: onLoadProviderObservability
             )
 
             AgentSessionSkillReviewPanel(

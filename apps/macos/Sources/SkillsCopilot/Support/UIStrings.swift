@@ -1041,6 +1041,7 @@ enum UIStrings {
     static var menuScanSkills: String { text("menu.scanSkills", "Scan Skills") }
     static var menuReloadSkills: String { text("menu.reloadSkills", "Reload Skills") }
     static var menuSkills: String { text("menu.skills", "Skills") }
+    static var menuShowTaskCockpit: String { text("menu.showTaskCockpit", "Show Task Cockpit") }
     static var menuShowOverview: String { text("menu.showOverview", "Show Overview") }
     static var menuShowFindings: String { text("menu.showFindings", "Show Findings") }
     static var menuShowConflicts: String { text("menu.showConflicts", "Show Same-agent Conflicts") }

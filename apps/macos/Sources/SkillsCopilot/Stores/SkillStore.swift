@@ -127,7 +127,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var aiProviderMessage: String?
     @Published private(set) var aiProviderErrorMessage: String?
     @Published var selectedSkillID: SkillRecord.ID?
-    @Published var selectedDetailSection: DetailSection = .overview
+    @Published var selectedDetailSection: DetailSection = .taskCockpit
     @Published var searchText = "" {
         didSet { handleListCriteriaChanged() }
     }

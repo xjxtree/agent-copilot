@@ -4,6 +4,7 @@ import Foundation
 @MainActor
 struct SkillStoreTests {
     func run() async throws {
+        try defaultNavigationStartsAtTaskCockpit()
         try await reloadKeepsSelectedSkillWhenItStillExists()
         try await reloadFallsBackToFirstSkillWhenSelectionIsMissing()
         try await emptyCatalogKeepsFriendlyEmptyModel()
@@ -82,6 +83,11 @@ struct SkillStoreTests {
         try await llmPreparePreviewIsScopedToSelectedSkillAndReadOnly()
         try await promptPreviewRequiresConfiguredProviderAndExplicitSend()
         try await previewScriptExecutionSafetyStoresBlockedPreviewWithoutExecute()
+    }
+
+    private func defaultNavigationStartsAtTaskCockpit() throws {
+        let store = SkillStore(service: ServiceClient())
+        try expectEqual(store.selectedDetailSection, .taskCockpit, "V2.68 should make Task Cockpit the default detail entry.")
     }
 
     private func reloadKeepsSelectedSkillWhenItStillExists() async throws {

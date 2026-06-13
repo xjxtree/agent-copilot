@@ -16,12 +16,17 @@ struct SkillListModelTests {
     private func detailWorkbenchSectionsExposeDiagnostics() throws {
         try expectEqual(
             DetailSection.visibleCases,
-            [.overview, .cleanup, .findings, .conflicts, .history, .analysis],
+            [.taskCockpit, .overview, .skillMap, .cleanup, .guidedCleanup, .observability, .findings, .conflicts, .history, .analysis],
             "Skill detail should expose the full diagnostic workbench section order."
         )
+        try expectEqual(DetailSection.primaryWorkCases, [.taskCockpit, .skillMap, .guidedCleanup, .observability, .analysis], "Primary work surfaces should keep Task Cockpit first.")
+        try expectEqual(DetailSection.taskCockpit.title, "Task-first Cockpit", "Task Cockpit should be the primary work surface.")
+        try expectEqual(DetailSection.skillMap.title, "Skill Map", "Skill Map section title")
+        try expectEqual(DetailSection.guidedCleanup.title, "Guided Cleanup Flow", "Guided Cleanup section title")
+        try expectEqual(DetailSection.observability.title, "Provider Observability", "Provider Observability section title")
         try expectEqual(DetailSection.conflicts.title, "Same-agent Conflicts", "Conflicts tab should advertise same-agent scope.")
         try expectEqual(DetailSection.history.title, "History", "History section title")
-        try expectEqual(DetailSection.analysis.title, "Analysis", "Analysis section title")
+        try expectEqual(DetailSection.analysis.title, "Review", "Review section title")
     }
 
     private func findingIssueGroupsPreserveRemediationAndImpactCounts() throws {

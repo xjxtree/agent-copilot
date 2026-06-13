@@ -129,6 +129,8 @@ Date: 2026-06-08
 - Completed UI screenshot: `docs/ui-artifacts/native-macos-shell/completed.png`
 - Screenshot capture rule: window-only capture. Full-desktop screenshots are forbidden.
 - Latest screenshots were regenerated on 2026-06-09 after real local Computer Use validation with the sidebar hidden. The capture script used the `SkillsCopilot` window id and Quartz window capture, so the evidence contains the complete app window only and avoids visible local path disclosure.
+- V2.68 screenshot was regenerated on 2026-06-13 by `pnpm check:macos` fixture smoke after cockpit-first IA changes. Manual inspection confirmed Task Cockpit is selected by default, Work surfaces appear before Adapter/Health diagnostics, and the detail picker no longer duplicates the "Detail Section" label.
+- V2.68 real-local launch found the current `SkillsCopilot` window via CG metadata, but the macOS session was locked (`CGSSessionScreenIsLocked=Yes`), Computer Use timed out, and the direct real-local capture was black. The black screenshot was rejected and not committed.
 
 ## Notes
 

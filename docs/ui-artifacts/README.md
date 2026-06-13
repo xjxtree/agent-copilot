@@ -29,3 +29,7 @@ Current artifacts:
 - `native-macos-shell/prototype-notes.md`: first split-view prototype notes.
 - `native-macos-shell/completed.png`: completed screenshot after launch and interaction validation.
 - `native-macos-shell/verification.md`: macOS Computer Use verification record.
+- `v2.68-task-cockpit-ia/brief.md`: cockpit-first IA feature brief.
+- `v2.68-task-cockpit-ia/completed.png`: fixture app-window screenshot for V2.68.
+- `v2.68-task-cockpit-ia/prototype-notes.md`: V2.68 IA notes.
+- `v2.68-task-cockpit-ia/verification.md`: V2.68 command and screenshot verification record.
