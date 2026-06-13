@@ -407,6 +407,7 @@ pub struct GuidedCleanupFlowStep {
     pub recommended_action_label: String,
     pub safe_entry_method: &'static str,
     pub existing_safe_method: Option<&'static str>,
+    pub safe_action_deep_link: GuidedCleanupSafeActionDeepLink,
     pub requires_explicit_confirmation: bool,
     pub evidence_refs: Vec<String>,
     pub blocker_notes: Vec<String>,
@@ -439,6 +440,24 @@ pub struct GuidedCleanupSafeNextAction {
     pub requires_preview: bool,
     pub requires_confirmation: bool,
     pub copy_only: bool,
+    pub deep_link: GuidedCleanupSafeActionDeepLink,
+    pub related_step_ids: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub safety_flags: GuidedCleanupSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GuidedCleanupSafeActionDeepLink {
+    pub label: String,
+    pub target: &'static str,
+    pub detail_section: &'static str,
+    pub method: &'static str,
+    pub trigger: &'static str,
+    pub preview_only: bool,
+    pub requires_confirmation: bool,
+    pub copy_only: bool,
+    pub can_apply: bool,
+    pub instance_ids: Vec<String>,
     pub related_step_ids: Vec<String>,
     pub evidence_refs: Vec<String>,
     pub safety_flags: GuidedCleanupSafetyFlags,
@@ -474,9 +493,9 @@ pub struct GuidedCleanupStepRecord {
 pub struct GuidedCleanupRecordStepParams {
     #[serde(default)]
     pub id: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "step_id")]
     pub flow_step_id: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "step_title")]
     pub title: Option<String>,
     #[serde(default)]
     pub decision: Option<String>,
@@ -29343,8 +29362,10 @@ fn guided_cleanup_step_from_batch_item(item: &RemediationBatchReviewItem) -> Gui
                     .map(redact_for_llm_preview),
             )
         });
+    let id = format!("guided:batch:{}", item.id);
+    let instance_ids = instance_id.iter().cloned().collect::<Vec<_>>();
     GuidedCleanupFlowStep {
-        id: format!("guided:batch:{}", item.id),
+        id: id.clone(),
         rank: 0,
         step_type: guided_cleanup_step_type(item.source),
         phase: guided_cleanup_step_phase(item.source),
@@ -29361,6 +29382,13 @@ fn guided_cleanup_step_from_batch_item(item: &RemediationBatchReviewItem) -> Gui
         recommended_action_label: item.recommended_next_step_label.clone(),
         safe_entry_method: source_method,
         existing_safe_method: Some(source_method),
+        safe_action_deep_link: guided_cleanup_deep_link_for_method(
+            source_method,
+            &item.recommended_next_step_label,
+            vec![id],
+            instance_ids,
+            item.evidence_refs.clone(),
+        ),
         requires_explicit_confirmation: false,
         evidence_refs: item.evidence_refs.clone(),
         blocker_notes: guided_cleanup_step_blockers(&item.blocker_notes),
@@ -29374,12 +29402,14 @@ fn guided_cleanup_step_from_next_label(
     label: &str,
     task: &Option<String>,
 ) -> GuidedCleanupFlowStep {
+    let id = stable_guided_cleanup_step_id("next-action", label, &[]);
+    let safe_label = redact_for_llm_preview(label);
     GuidedCleanupFlowStep {
-        id: stable_guided_cleanup_step_id("next-action", label, &[]),
+        id: id.clone(),
         rank: 0,
         step_type: "safe_next_action",
         phase: "review",
-        title: redact_for_llm_preview(label),
+        title: safe_label.clone(),
         summary: task
             .as_ref()
             .map(|task| format!("Review this safe next step for task `{}`.", task))
@@ -29394,9 +29424,16 @@ fn guided_cleanup_step_from_next_label(
         skill_name: None,
         instance_id: None,
         definition_id: None,
-        recommended_action_label: redact_for_llm_preview(label),
+        recommended_action_label: safe_label.clone(),
         safe_entry_method: "remediation.batchReview",
         existing_safe_method: Some("remediation.batchReview"),
+        safe_action_deep_link: guided_cleanup_deep_link_for_method(
+            "remediation.batchReview",
+            &safe_label,
+            vec![id],
+            Vec::new(),
+            Vec::new(),
+        ),
         requires_explicit_confirmation: false,
         evidence_refs: Vec::new(),
         blocker_notes: vec![
@@ -29409,8 +29446,10 @@ fn guided_cleanup_step_from_next_label(
 }
 
 fn guided_cleanup_step_from_lifecycle(row: &SkillLifecycleTimelineRow) -> GuidedCleanupFlowStep {
+    let id = format!("guided:lifecycle:{}", row.id);
+    let instance_ids = row.instance_id.iter().cloned().collect::<Vec<_>>();
     GuidedCleanupFlowStep {
-        id: format!("guided:lifecycle:{}", row.id),
+        id: id.clone(),
         rank: 0,
         step_type: "lifecycle_context",
         phase: "context",
@@ -29430,6 +29469,13 @@ fn guided_cleanup_step_from_lifecycle(row: &SkillLifecycleTimelineRow) -> Guided
         recommended_action_label: "Review lifecycle timeline context".to_string(),
         safe_entry_method: "skill.lifecycleTimeline",
         existing_safe_method: Some("skill.lifecycleTimeline"),
+        safe_action_deep_link: guided_cleanup_deep_link_for_method(
+            "skill.lifecycleTimeline",
+            "Review lifecycle timeline context",
+            vec![id],
+            instance_ids,
+            row.evidence_refs.clone(),
+        ),
         requires_explicit_confirmation: false,
         evidence_refs: row.evidence_refs.clone(),
         blocker_notes: vec![
@@ -29444,8 +29490,9 @@ fn guided_cleanup_step_from_lifecycle(row: &SkillLifecycleTimelineRow) -> Guided
 fn guided_cleanup_step_from_cockpit(
     next: &TaskCockpitRemediationNextStep,
 ) -> GuidedCleanupFlowStep {
+    let id = format!("guided:cockpit:{}", next.id);
     GuidedCleanupFlowStep {
-        id: format!("guided:cockpit:{}", next.id),
+        id: id.clone(),
         rank: 0,
         step_type: "task_context",
         phase: "task_context",
@@ -29462,6 +29509,13 @@ fn guided_cleanup_step_from_cockpit(
         recommended_action_label: next.suggested_safe_next_action.clone(),
         safe_entry_method: "task.buildCockpit",
         existing_safe_method: Some("task.buildCockpit"),
+        safe_action_deep_link: guided_cleanup_deep_link_for_method(
+            "task.buildCockpit",
+            &next.suggested_safe_next_action,
+            vec![id],
+            Vec::new(),
+            next.evidence_refs.clone(),
+        ),
         requires_explicit_confirmation: false,
         evidence_refs: next.evidence_refs.clone(),
         blocker_notes: guided_cleanup_step_blockers(&next.blocker_notes),
@@ -29685,6 +29739,13 @@ fn guided_cleanup_safe_next_actions(
             requires_preview: false,
             requires_confirmation: true,
             copy_only: false,
+            deep_link: guided_cleanup_deep_link_for_method(
+                "cleanup.recordGuidedStep",
+                "Record guided cleanup step metadata",
+                steps.iter().take(8).map(|step| step.id.clone()).collect(),
+                Vec::new(),
+                Vec::new(),
+            ),
             related_step_ids: steps.iter().take(8).map(|step| step.id.clone()).collect(),
             evidence_refs: Vec::new(),
             safety_flags: guided_cleanup_safety_flags(),
@@ -29700,6 +29761,30 @@ fn guided_cleanup_safe_next_actions(
                 requires_preview: true,
                 requires_confirmation: true,
                 copy_only: false,
+                deep_link: guided_cleanup_deep_link_for_method(
+                    "batch.previewSkillToggles",
+                    "Preview enable/disable with existing safe batch toggle flow",
+                    steps
+                        .iter()
+                        .filter(|step| step.instance_id.is_some())
+                        .take(8)
+                        .map(|step| step.id.clone())
+                        .collect(),
+                    steps
+                        .iter()
+                        .filter_map(|step| step.instance_id.clone())
+                        .collect::<BTreeSet<_>>()
+                        .into_iter()
+                        .take(8)
+                        .collect(),
+                    steps
+                        .iter()
+                        .flat_map(|step| step.evidence_refs.iter().cloned())
+                        .collect::<BTreeSet<_>>()
+                        .into_iter()
+                        .take(8)
+                        .collect(),
+                ),
                 related_step_ids: steps
                     .iter()
                     .filter(|step| step.instance_id.is_some())
@@ -29770,6 +29855,23 @@ fn guided_cleanup_safe_next_action_for_method(
         requires_preview: matches!(method, "batch.previewSkillToggles"),
         requires_confirmation: false,
         copy_only,
+        deep_link: guided_cleanup_deep_link_for_method(
+            method,
+            label,
+            rows.iter().take(8).map(|step| step.id.clone()).collect(),
+            rows.iter()
+                .filter_map(|step| step.instance_id.clone())
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .take(8)
+                .collect(),
+            rows.iter()
+                .flat_map(|step| step.evidence_refs.iter().cloned())
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .take(8)
+                .collect(),
+        ),
         related_step_ids: rows.iter().take(8).map(|step| step.id.clone()).collect(),
         evidence_refs: rows
             .iter()
@@ -29778,6 +29880,114 @@ fn guided_cleanup_safe_next_action_for_method(
             .into_iter()
             .take(8)
             .collect(),
+        safety_flags: guided_cleanup_safety_flags(),
+    }
+}
+
+fn guided_cleanup_deep_link_for_method(
+    method: &'static str,
+    label: &str,
+    related_step_ids: Vec<String>,
+    instance_ids: Vec<String>,
+    evidence_refs: Vec<String>,
+) -> GuidedCleanupSafeActionDeepLink {
+    let (target, detail_section, trigger, preview_only, requires_confirmation, copy_only) =
+        match method {
+            "cleanup.listQueue" => (
+                "detail_section",
+                "cleanup",
+                "selectDetailSection",
+                true,
+                false,
+                false,
+            ),
+            "remediation.plan" => (
+                "analysis_action",
+                "analysis",
+                "planRemediation",
+                true,
+                false,
+                false,
+            ),
+            "remediation.previewDrafts" => (
+                "analysis_action",
+                "analysis",
+                "previewRemediationDrafts",
+                true,
+                false,
+                true,
+            ),
+            "remediation.previewImpact" => (
+                "analysis_action",
+                "analysis",
+                "previewRemediationImpact",
+                true,
+                false,
+                false,
+            ),
+            "remediation.batchReview" => (
+                "analysis_action",
+                "analysis",
+                "reviewRemediationBatch",
+                true,
+                false,
+                false,
+            ),
+            "skill.lifecycleTimeline" => (
+                "detail_section",
+                "skillMap",
+                "loadSkillLifecycleTimeline",
+                true,
+                false,
+                false,
+            ),
+            "task.buildCockpit" => (
+                "detail_section",
+                "taskCockpit",
+                "buildTaskCockpit",
+                true,
+                false,
+                false,
+            ),
+            "batch.previewSkillToggles" => (
+                "sidebar_preview",
+                "cleanup",
+                "openSafeBatchPreviewPanel",
+                true,
+                true,
+                false,
+            ),
+            "cleanup.recordGuidedStep" => (
+                "guided_metadata",
+                "guidedCleanup",
+                "recordGuidedStep",
+                false,
+                true,
+                false,
+            ),
+            _ => (
+                "analysis_action",
+                "analysis",
+                "reviewRemediationBatch",
+                true,
+                false,
+                false,
+            ),
+        };
+
+    GuidedCleanupSafeActionDeepLink {
+        label: label.to_string(),
+        target,
+        detail_section,
+        method,
+        trigger,
+        preview_only,
+        requires_confirmation,
+        copy_only,
+        can_apply: false,
+        instance_ids,
+        related_step_ids,
+        evidence_refs,
         safety_flags: guided_cleanup_safety_flags(),
     }
 }
@@ -30562,6 +30772,56 @@ mod tests {
                 .pointer("/safety_flags/provider_request_sent")
                 .and_then(Value::as_bool)
                 == Some(false)));
+        let forbidden_deep_link_methods = [
+            "batch.applySkillToggles",
+            "config.toggleSkill",
+            "script.execute",
+            "llm.confirmPromptAndSend",
+        ];
+        for step in result
+            .get("flow_steps")
+            .and_then(Value::as_array)
+            .expect("flow steps")
+        {
+            let link = step
+                .get("safe_action_deep_link")
+                .expect("flow step safe action deep link");
+            assert_eq!(link.get("can_apply").and_then(Value::as_bool), Some(false));
+            assert_eq!(
+                link.pointer("/safety_flags/provider_request_sent")
+                    .and_then(Value::as_bool),
+                Some(false)
+            );
+            let method = link
+                .get("method")
+                .and_then(Value::as_str)
+                .expect("deep link method");
+            assert!(
+                !forbidden_deep_link_methods.contains(&method),
+                "guided cleanup deep link method must not target unsafe path: {method}"
+            );
+        }
+        for action in result
+            .get("safe_next_actions")
+            .and_then(Value::as_array)
+            .expect("safe next actions")
+        {
+            let link = action.get("deep_link").expect("safe action deep link");
+            assert_eq!(link.get("can_apply").and_then(Value::as_bool), Some(false));
+            assert_eq!(
+                link.pointer("/safety_flags/provider_request_sent")
+                    .and_then(Value::as_bool),
+                Some(false)
+            );
+            let method = link
+                .get("method")
+                .and_then(Value::as_str)
+                .expect("deep link method");
+            assert!(
+                !forbidden_deep_link_methods.contains(&method),
+                "guided cleanup safe action deep link method must not target unsafe path: {method}"
+            );
+        }
 
         let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
         assert_eq!(
@@ -41111,6 +41371,15 @@ mod tests {
                 for step in &flow.flow_steps {
                     assert!(step.rank > 0);
                     assert_remediation_history_safety(&step.safety_flags);
+                    assert_remediation_history_safety(&step.safe_action_deep_link.safety_flags);
+                    assert!(!step.safe_action_deep_link.can_apply);
+                    assert!(!matches!(
+                        step.safe_action_deep_link.method.as_str(),
+                        "batch.applySkillToggles"
+                            | "config.toggleSkill"
+                            | "script.execute"
+                            | "llm.confirmPromptAndSend"
+                    ));
                     assert!(step
                         .side_effect_flags
                         .iter()
@@ -41125,6 +41394,15 @@ mod tests {
                 }
                 for action in &flow.safe_next_actions {
                     assert_remediation_history_safety(&action.safety_flags);
+                    assert_remediation_history_safety(&action.deep_link.safety_flags);
+                    assert!(!action.deep_link.can_apply);
+                    assert!(!matches!(
+                        action.deep_link.method.as_str(),
+                        "batch.applySkillToggles"
+                            | "config.toggleSkill"
+                            | "script.execute"
+                            | "llm.confirmPromptAndSend"
+                    ));
                 }
                 for record in &flow.recorded_steps {
                     assert_remediation_history_safety(&record.safety_flags);
@@ -45630,6 +45908,7 @@ mod tests {
         recommended_action_label: String,
         safe_entry_method: String,
         existing_safe_method: Option<String>,
+        safe_action_deep_link: WireGuidedCleanupSafeActionDeepLink,
         requires_explicit_confirmation: bool,
         evidence_refs: Vec<String>,
         blocker_notes: Vec<String>,
@@ -45666,6 +45945,26 @@ mod tests {
         requires_preview: bool,
         requires_confirmation: bool,
         copy_only: bool,
+        deep_link: WireGuidedCleanupSafeActionDeepLink,
+        related_step_ids: Vec<String>,
+        evidence_refs: Vec<String>,
+        safety_flags: WireRemediationHistorySafetyFlags,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct WireGuidedCleanupSafeActionDeepLink {
+        label: String,
+        target: String,
+        detail_section: String,
+        method: String,
+        trigger: String,
+        preview_only: bool,
+        requires_confirmation: bool,
+        copy_only: bool,
+        can_apply: bool,
+        instance_ids: Vec<String>,
         related_step_ids: Vec<String>,
         evidence_refs: Vec<String>,
         safety_flags: WireRemediationHistorySafetyFlags,

@@ -58,6 +58,23 @@ struct GuidedCleanupFlowModelTests {
                     "priority": "high",
                     "order": "1",
                     "action_label": "Open Findings and Fix Preview Drafts",
+                    "safe_entry_method": "remediation.previewDrafts",
+                    "existing_safe_method": "remediation.previewDrafts",
+                    "safe_action_deep_link": {
+                      "label": "Open Findings and Fix Preview Drafts",
+                      "target": "analysis_action",
+                      "detail_section": "analysis",
+                      "method": "remediation.previewDrafts",
+                      "trigger": "previewRemediationDrafts",
+                      "preview_only": true,
+                      "requires_confirmation": false,
+                      "copy_only": true,
+                      "can_apply": false,
+                      "instance_ids": ["beta"],
+                      "related_step_ids": ["step-review-permission"],
+                      "evidence_refs": ["finding:permissions.network-declared"],
+                      "safety_flags": ["provider not sent", "no write"]
+                    },
                     "review_area": "Fix Preview Drafts",
                     "agent": "claude-code",
                     "skill": {
@@ -101,11 +118,31 @@ struct GuidedCleanupFlowModelTests {
                     "action_id": "open-fix-preview",
                     "title": "Open Fix Preview Drafts",
                     "kind": "existing_safe_entry",
+                    "entry_method": "remediation.previewDrafts",
                     "review_area": "Fix Preview Drafts",
                     "detail": "Use the existing copy-only draft surface.",
+                    "requires_preview": true,
+                    "requires_confirmation": false,
+                    "copy_only": true,
                     "requires_existing_safe_entry": true,
                     "app_local_only": true,
                     "can_apply_fix": false,
+                    "related_step_ids": ["step-review-permission"],
+                    "deep_link": {
+                      "label": "Open Fix Preview Drafts",
+                      "target": "analysis_action",
+                      "detail_section": "analysis",
+                      "method": "remediation.previewDrafts",
+                      "trigger": "previewRemediationDrafts",
+                      "preview_only": true,
+                      "requires_confirmation": false,
+                      "copy_only": true,
+                      "can_apply": false,
+                      "instance_ids": ["beta"],
+                      "related_step_ids": ["step-review-permission"],
+                      "evidence_refs": ["draft:permissions"],
+                      "safety_flags": ["provider not sent", "no write"]
+                    },
                     "evidence_refs": ["draft:permissions"]
                   },
                   "Open Remediation History"
@@ -171,9 +208,19 @@ struct GuidedCleanupFlowModelTests {
         try expectEqual(result.flowSteps.first?.skill?.skillName, "Beta", "Guided cleanup step should decode skill context.")
         try expectEqual(result.flowSteps.first?.recommended, true, "Guided cleanup should decode recommended step.")
         try expectEqual(result.flowSteps.first?.appLocalRecordOnly, true, "Guided cleanup should decode record-only state.")
+        try expectEqual(result.flowSteps.first?.safeEntryMethod, "remediation.previewDrafts", "Guided cleanup step should decode existing safe entry method.")
+        try expectEqual(result.flowSteps.first?.safeActionDeepLink.trigger, "previewRemediationDrafts", "Guided cleanup step should decode safe link trigger.")
+        try expectEqual(result.flowSteps.first?.safeActionDeepLink.canApply, false, "Guided cleanup step safe link must remain non-applying.")
+        try expectEqual(result.flowSteps.first?.safeActionDeepLink.copyOnly, true, "Guided cleanup step safe link should preserve copy-only draft semantics.")
         try expectEqual(result.recommendedStep?.id, "step-review-permission", "Guided cleanup should expose recommended step.")
         try expectEqual(result.issueGroups.first?.count, 1, "Guided cleanup issue groups should decode counts.")
         try expectEqual(result.safeNextActions.first?.canApplyFix, false, "Safe actions should decode no-apply fix flag.")
+        try expectEqual(result.safeNextActions.first?.entryMethod, "remediation.previewDrafts", "Safe actions should decode the safe entry method.")
+        try expectEqual(result.safeNextActions.first?.requiresPreview, true, "Safe actions should decode preview requirements.")
+        try expectEqual(result.safeNextActions.first?.copyOnly, true, "Safe actions should decode copy-only requirements.")
+        try expectEqual(result.safeNextActions.first?.relatedStepIDs, ["step-review-permission"], "Safe actions should decode related flow steps.")
+        try expectEqual(result.safeNextActions.first?.deepLink.trigger, "previewRemediationDrafts", "Safe actions should decode deep link triggers.")
+        try expectEqual(result.safeNextActions.first?.deepLink.canApply, false, "Safe action deep links must remain non-applying.")
         try expectEqual(result.recordedSteps.first?.sourceMethod, "cleanup.recordGuidedStep", "Recorded steps should decode source method.")
         try expectEqual(result.evidenceReferences.first?.source, "cleanup.planGuidedFlow", "Guided cleanup evidence should decode source.")
         try expectEqual(result.promptRequest?.requestKind, "guided_cleanup_flow", "Guided cleanup should decode prompt metadata.")

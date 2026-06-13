@@ -190,6 +190,9 @@ struct GuidedCleanupFlowStep: Decodable, Identifiable, Hashable {
     let priority: String
     let order: Int?
     let actionLabel: String
+    let safeEntryMethod: String?
+    let existingSafeMethod: String?
+    let safeActionDeepLink: GuidedCleanupSafeActionDeepLink
     let reviewArea: String?
     let agent: String?
     let skill: CapabilityTaxonomySkill?
@@ -223,7 +226,16 @@ struct GuidedCleanupFlowStep: Decodable, Identifiable, Hashable {
         case actionLabelAlt = "actionLabel"
         case safeActionLabel = "safe_action_label"
         case suggestedAction = "suggested_action"
+        case recommendedActionLabel = "recommended_action_label"
+        case recommendedActionLabelAlt = "recommendedActionLabel"
         case action
+        case safeEntryMethod = "safe_entry_method"
+        case safeEntryMethodAlt = "safeEntryMethod"
+        case existingSafeMethod = "existing_safe_method"
+        case existingSafeMethodAlt = "existingSafeMethod"
+        case safeActionDeepLink = "safe_action_deep_link"
+        case safeActionDeepLinkAlt = "safeActionDeepLink"
+        case deepLink = "deep_link"
         case reviewArea = "review_area"
         case reviewAreaAlt = "reviewArea"
         case nextArea = "next_area"
@@ -268,6 +280,9 @@ struct GuidedCleanupFlowStep: Decodable, Identifiable, Hashable {
             priority = UIStrings.unknown
             order = nil
             actionLabel = UIStrings.guidedCleanupFlowRecordGuidance
+            safeEntryMethod = nil
+            existingSafeMethod = nil
+            safeActionDeepLink = GuidedCleanupSafeActionDeepLink.fallback(label: UIStrings.guidedCleanupFlowRecordGuidance)
             reviewArea = nil
             agent = nil
             skill = nil
@@ -288,7 +303,9 @@ struct GuidedCleanupFlowStep: Decodable, Identifiable, Hashable {
         status = try container.decodeGuidedCleanupString(keys: [.status, .state]) ?? UIStrings.guidedCleanupFlowPreviewOnly
         priority = try container.decodeGuidedCleanupString(keys: [.priority, .severity]) ?? UIStrings.unknown
         order = try container.decodeGuidedCleanupInt(keys: [.order, .rank])
-        actionLabel = try container.decodeGuidedCleanupString(keys: [.actionLabel, .actionLabelAlt, .safeActionLabel, .suggestedAction, .action]) ?? UIStrings.guidedCleanupFlowRecordGuidance
+        actionLabel = try container.decodeGuidedCleanupString(keys: [.actionLabel, .actionLabelAlt, .safeActionLabel, .suggestedAction, .recommendedActionLabel, .recommendedActionLabelAlt, .action]) ?? UIStrings.guidedCleanupFlowRecordGuidance
+        safeEntryMethod = try container.decodeGuidedCleanupString(keys: [.safeEntryMethod, .safeEntryMethodAlt])
+        existingSafeMethod = try container.decodeGuidedCleanupString(keys: [.existingSafeMethod, .existingSafeMethodAlt])
         reviewArea = try container.decodeGuidedCleanupString(keys: [.reviewArea, .reviewAreaAlt, .nextArea])
         agent = try container.decodeGuidedCleanupString(keys: [.agent])
         skill = try container.decodeIfPresent(CapabilityTaxonomySkill.self, forKey: .skill)
@@ -303,6 +320,20 @@ struct GuidedCleanupFlowStep: Decodable, Identifiable, Hashable {
         blockerNotes = try container.decodeGuidedCleanupStringArray(keys: [.blockerNotes, .blockerNotesAlt, .blockers])
         safetyFlags = try container.decodeGuidedCleanupStringArray(keys: [.safetyFlags, .safetyFlagsAlt, .safety, .flags])
         id = try container.decodeGuidedCleanupString(keys: [.id, .stepID, .stepIDAlt, .itemID]) ?? "\(kind):\(title)"
+        let explicitDeepLink = try container.decodeIfPresent(GuidedCleanupSafeActionDeepLink.self, forKey: .safeActionDeepLink)
+        let explicitDeepLinkAlt = try container.decodeIfPresent(GuidedCleanupSafeActionDeepLink.self, forKey: .safeActionDeepLinkAlt)
+        let genericDeepLink = try container.decodeIfPresent(GuidedCleanupSafeActionDeepLink.self, forKey: .deepLink)
+        safeActionDeepLink = explicitDeepLink
+            ?? explicitDeepLinkAlt
+            ?? genericDeepLink
+            ?? GuidedCleanupSafeActionDeepLink.fallback(
+                label: actionLabel,
+                method: safeEntryMethod ?? existingSafeMethod,
+                detailSection: reviewArea,
+                instanceIDs: [skill?.instanceID].compactMap { $0 },
+                relatedStepIDs: [id],
+                evidenceRefs: evidenceRefs
+            )
     }
 }
 
@@ -394,11 +425,17 @@ struct GuidedCleanupSafeAction: Decodable, Identifiable, Hashable {
     let id: String
     let title: String
     let kind: String
+    let entryMethod: String?
     let reviewArea: String?
     let description: String
+    let requiresPreview: Bool
+    let requiresConfirmation: Bool
+    let copyOnly: Bool
     let requiresExistingSafeEntry: Bool
     let appLocalOnly: Bool
     let canApplyFix: Bool
+    let relatedStepIDs: [String]
+    let deepLink: GuidedCleanupSafeActionDeepLink
     let evidenceRefs: [String]
     let safetyFlags: [String]
 
@@ -411,18 +448,30 @@ struct GuidedCleanupSafeAction: Decodable, Identifiable, Hashable {
         case kind
         case category
         case type
+        case entryMethod = "entry_method"
+        case entryMethodAlt = "entryMethod"
         case reviewArea = "review_area"
         case reviewAreaAlt = "reviewArea"
         case nextArea = "next_area"
         case description
         case detail
         case summary
+        case requiresPreview = "requires_preview"
+        case requiresPreviewAlt = "requiresPreview"
+        case requiresConfirmation = "requires_confirmation"
+        case requiresConfirmationAlt = "requiresConfirmation"
+        case copyOnly = "copy_only"
+        case copyOnlyAlt = "copyOnly"
         case requiresExistingSafeEntry = "requires_existing_safe_entry"
         case existingSafeEntry = "existing_safe_entry"
         case appLocalOnly = "app_local_only"
         case metadataOnly = "metadata_only"
         case canApplyFix = "can_apply_fix"
         case applyAllowed = "apply_allowed"
+        case relatedStepIDs = "related_step_ids"
+        case relatedStepIDsAlt = "relatedStepIDs"
+        case deepLink = "deep_link"
+        case deepLinkAlt = "deepLink"
         case evidenceRefs = "evidence_refs"
         case evidence
         case safetyFlags = "safety_flags"
@@ -435,11 +484,17 @@ struct GuidedCleanupSafeAction: Decodable, Identifiable, Hashable {
             id = text
             title = text
             kind = UIStrings.guidedCleanupFlowSafeAction
+            entryMethod = nil
             reviewArea = nil
             description = text
+            requiresPreview = true
+            requiresConfirmation = false
+            copyOnly = false
             requiresExistingSafeEntry = true
             appLocalOnly = true
             canApplyFix = false
+            relatedStepIDs = []
+            deepLink = GuidedCleanupSafeActionDeepLink.fallback(label: text)
             evidenceRefs = []
             safetyFlags = []
             return
@@ -448,14 +503,222 @@ struct GuidedCleanupSafeAction: Decodable, Identifiable, Hashable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         title = try container.decodeGuidedCleanupString(keys: [.title, .name, .label]) ?? UIStrings.guidedCleanupFlowSafeAction
         kind = try container.decodeGuidedCleanupString(keys: [.kind, .category, .type]) ?? UIStrings.unknown
+        entryMethod = try container.decodeGuidedCleanupString(keys: [.entryMethod, .entryMethodAlt])
         reviewArea = try container.decodeGuidedCleanupString(keys: [.reviewArea, .reviewAreaAlt, .nextArea])
         description = try container.decodeGuidedCleanupString(keys: [.description, .detail, .summary]) ?? ""
+        requiresPreview = try container.decodeGuidedCleanupBool(keys: [.requiresPreview, .requiresPreviewAlt]) ?? true
+        requiresConfirmation = try container.decodeGuidedCleanupBool(keys: [.requiresConfirmation, .requiresConfirmationAlt]) ?? false
+        copyOnly = try container.decodeGuidedCleanupBool(keys: [.copyOnly, .copyOnlyAlt]) ?? false
         requiresExistingSafeEntry = try container.decodeGuidedCleanupBool(keys: [.requiresExistingSafeEntry, .existingSafeEntry]) ?? true
         appLocalOnly = try container.decodeGuidedCleanupBool(keys: [.appLocalOnly, .metadataOnly]) ?? true
         canApplyFix = try container.decodeGuidedCleanupBool(keys: [.canApplyFix, .applyAllowed]) ?? false
+        relatedStepIDs = try container.decodeGuidedCleanupStringArray(keys: [.relatedStepIDs, .relatedStepIDsAlt])
         evidenceRefs = try container.decodeGuidedCleanupStringArray(keys: [.evidenceRefs, .evidence])
         safetyFlags = try container.decodeGuidedCleanupStringArray(keys: [.safetyFlags, .safety])
         id = try container.decodeGuidedCleanupString(keys: [.id, .actionID]) ?? "\(kind):\(title)"
+        let explicitDeepLink = try container.decodeIfPresent(GuidedCleanupSafeActionDeepLink.self, forKey: .deepLink)
+        let explicitDeepLinkAlt = try container.decodeIfPresent(GuidedCleanupSafeActionDeepLink.self, forKey: .deepLinkAlt)
+        deepLink = explicitDeepLink
+            ?? explicitDeepLinkAlt
+            ?? GuidedCleanupSafeActionDeepLink.fallback(
+                label: title,
+                method: entryMethod,
+                detailSection: reviewArea,
+                relatedStepIDs: relatedStepIDs,
+                evidenceRefs: evidenceRefs,
+                requiresPreview: requiresPreview,
+                requiresConfirmation: requiresConfirmation,
+                copyOnly: copyOnly,
+                canApply: canApplyFix
+            )
+    }
+}
+
+struct GuidedCleanupSafeActionDeepLink: Decodable, Hashable {
+    let label: String
+    let target: String
+    let detailSection: String?
+    let method: String?
+    let trigger: String
+    let previewOnly: Bool
+    let requiresConfirmation: Bool
+    let copyOnly: Bool
+    let canApply: Bool
+    let instanceIDs: [String]
+    let relatedStepIDs: [String]
+    let evidenceRefs: [String]
+    let safetyFlags: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case label
+        case title
+        case target
+        case detailSection = "detail_section"
+        case detailSectionAlt = "detailSection"
+        case section
+        case method
+        case entryMethod = "entry_method"
+        case entryMethodAlt = "entryMethod"
+        case trigger
+        case action
+        case previewOnly = "preview_only"
+        case previewOnlyAlt = "previewOnly"
+        case requiresConfirmation = "requires_confirmation"
+        case requiresConfirmationAlt = "requiresConfirmation"
+        case copyOnly = "copy_only"
+        case copyOnlyAlt = "copyOnly"
+        case canApply = "can_apply"
+        case canApplyAlt = "canApply"
+        case applyAllowed = "apply_allowed"
+        case instanceIDs = "instance_ids"
+        case instanceIDsAlt = "instanceIDs"
+        case relatedStepIDs = "related_step_ids"
+        case relatedStepIDsAlt = "relatedStepIDs"
+        case evidenceRefs = "evidence_refs"
+        case evidenceRefsAlt = "evidenceRefs"
+        case evidence
+        case safetyFlags = "safety_flags"
+        case safetyFlagsAlt = "safetyFlags"
+        case safety
+    }
+
+    init(
+        label: String,
+        target: String = "detail_section",
+        detailSection: String? = nil,
+        method: String? = nil,
+        trigger: String = "selectDetailSection",
+        previewOnly: Bool = true,
+        requiresConfirmation: Bool = false,
+        copyOnly: Bool = false,
+        canApply: Bool = false,
+        instanceIDs: [String] = [],
+        relatedStepIDs: [String] = [],
+        evidenceRefs: [String] = [],
+        safetyFlags: [String] = []
+    ) {
+        self.label = label
+        self.target = target
+        self.detailSection = detailSection
+        self.method = method
+        self.trigger = trigger
+        self.previewOnly = previewOnly
+        self.requiresConfirmation = requiresConfirmation
+        self.copyOnly = copyOnly
+        self.canApply = canApply
+        self.instanceIDs = instanceIDs
+        self.relatedStepIDs = relatedStepIDs
+        self.evidenceRefs = evidenceRefs
+        self.safetyFlags = safetyFlags
+    }
+
+    init(from decoder: Decoder) throws {
+        if let value = try? decoder.singleValueContainer().decode(String.self),
+           let text = value.guidedCleanupNonEmpty {
+            self = .fallback(label: text)
+            return
+        }
+
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let method = try container.decodeGuidedCleanupString(keys: [.method, .entryMethod, .entryMethodAlt])
+        let detailSection = try container.decodeGuidedCleanupString(keys: [.detailSection, .detailSectionAlt, .section])
+        self.init(
+            label: try container.decodeGuidedCleanupString(keys: [.label, .title]) ?? "Open safe entry",
+            target: try container.decodeGuidedCleanupString(keys: [.target]) ?? GuidedCleanupSafeActionDeepLink.defaultTarget(method: method, detailSection: detailSection),
+            detailSection: detailSection ?? GuidedCleanupSafeActionDeepLink.defaultDetailSection(for: method),
+            method: method,
+            trigger: try container.decodeGuidedCleanupString(keys: [.trigger, .action]) ?? GuidedCleanupSafeActionDeepLink.defaultTrigger(for: method),
+            previewOnly: try container.decodeGuidedCleanupBool(keys: [.previewOnly, .previewOnlyAlt]) ?? true,
+            requiresConfirmation: try container.decodeGuidedCleanupBool(keys: [.requiresConfirmation, .requiresConfirmationAlt]) ?? false,
+            copyOnly: try container.decodeGuidedCleanupBool(keys: [.copyOnly, .copyOnlyAlt]) ?? false,
+            canApply: try container.decodeGuidedCleanupBool(keys: [.canApply, .canApplyAlt, .applyAllowed]) ?? false,
+            instanceIDs: try container.decodeGuidedCleanupStringArray(keys: [.instanceIDs, .instanceIDsAlt]),
+            relatedStepIDs: try container.decodeGuidedCleanupStringArray(keys: [.relatedStepIDs, .relatedStepIDsAlt]),
+            evidenceRefs: try container.decodeGuidedCleanupStringArray(keys: [.evidenceRefs, .evidenceRefsAlt, .evidence]),
+            safetyFlags: try container.decodeGuidedCleanupStringArray(keys: [.safetyFlags, .safetyFlagsAlt, .safety])
+        )
+    }
+
+    static func fallback(
+        label: String,
+        method: String? = nil,
+        detailSection: String? = nil,
+        instanceIDs: [String] = [],
+        relatedStepIDs: [String] = [],
+        evidenceRefs: [String] = [],
+        requiresPreview: Bool = true,
+        requiresConfirmation: Bool = false,
+        copyOnly: Bool = false,
+        canApply: Bool = false
+    ) -> GuidedCleanupSafeActionDeepLink {
+        GuidedCleanupSafeActionDeepLink(
+            label: label,
+            target: defaultTarget(method: method, detailSection: detailSection),
+            detailSection: detailSection ?? defaultDetailSection(for: method),
+            method: method,
+            trigger: defaultTrigger(for: method),
+            previewOnly: requiresPreview,
+            requiresConfirmation: requiresConfirmation,
+            copyOnly: copyOnly,
+            canApply: canApply,
+            instanceIDs: instanceIDs,
+            relatedStepIDs: relatedStepIDs,
+            evidenceRefs: evidenceRefs,
+            safetyFlags: []
+        )
+    }
+
+    private static func defaultTarget(method: String?, detailSection: String?) -> String {
+        if method == "batch.previewSkillToggles" {
+            return "sidebar_preview"
+        }
+        if method == "cleanup.recordGuidedStep" {
+            return "guided_metadata"
+        }
+        if detailSection != nil || method == nil || method == "cleanup.listQueue" || method == "skill.lifecycleTimeline" || method == "task.buildCockpit" {
+            return "detail_section"
+        }
+        return "analysis_action"
+    }
+
+    private static func defaultDetailSection(for method: String?) -> String? {
+        switch method {
+        case "cleanup.listQueue", "batch.previewSkillToggles":
+            return "cleanup"
+        case "skill.lifecycleTimeline":
+            return "skillMap"
+        case "task.buildCockpit":
+            return "taskCockpit"
+        case "cleanup.recordGuidedStep":
+            return "guidedCleanup"
+        case "remediation.plan", "remediation.previewDrafts", "remediation.previewImpact", "remediation.batchReview":
+            return "analysis"
+        default:
+            return nil
+        }
+    }
+
+    private static func defaultTrigger(for method: String?) -> String {
+        switch method {
+        case "remediation.plan":
+            return "planRemediation"
+        case "remediation.previewDrafts":
+            return "previewRemediationDrafts"
+        case "remediation.previewImpact":
+            return "previewRemediationImpact"
+        case "remediation.batchReview":
+            return "reviewRemediationBatch"
+        case "skill.lifecycleTimeline":
+            return "loadSkillLifecycleTimeline"
+        case "task.buildCockpit":
+            return "buildTaskCockpit"
+        case "batch.previewSkillToggles":
+            return "openSafeBatchPreviewPanel"
+        case "cleanup.recordGuidedStep":
+            return "recordGuidedStep"
+        default:
+            return "selectDetailSection"
+        }
     }
 }
 

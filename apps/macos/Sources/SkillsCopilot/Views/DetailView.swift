@@ -146,6 +146,11 @@ struct DetailView: View {
                             Task {
                                 await store.recordGuidedCleanupStep(step)
                             }
+                        },
+                        onOpenSafeLink: { link, step in
+                            Task {
+                                await store.openGuidedCleanupSafeLink(link, step: step)
+                            }
                         }
                     )
                 } else if store.selectedDetailSection == .observability {
@@ -1298,6 +1303,39 @@ private struct AnalysisSection: View {
                 onRankRouting: onRankRoutingConfidence,
                 onPreviewRoutingPrompt: onPreviewRoutingConfidencePrompt,
                 onSendRoutingPrompt: onSendRoutingConfidencePrompt
+            )
+
+            RemediationPlanPanel(
+                result: remediationPlanResult,
+                isPlanning: isPlanningRemediation,
+                onPlan: onPlanRemediation
+            )
+
+            RemediationPreviewDraftsPanel(
+                result: remediationPreviewDraftsResult,
+                isPreviewing: isPreviewingRemediationDrafts,
+                onPreview: onPreviewRemediationDrafts
+            )
+
+            RemediationImpactPreviewPanel(
+                result: remediationImpactPreviewResult,
+                isPreviewing: isPreviewingRemediationImpact,
+                onPreview: onPreviewRemediationImpact
+            )
+
+            RemediationBatchReviewPanel(
+                result: remediationBatchReviewResult,
+                isReviewing: isReviewingRemediationBatch,
+                onReview: onReviewRemediationBatch
+            )
+
+            RemediationHistoryPanel(
+                result: remediationHistoryResult,
+                recordResult: remediationHistoryRecordResult,
+                isLoading: isLoadingRemediationHistory,
+                isRecording: isRecordingRemediationHistory,
+                onLoad: onLoadRemediationHistory,
+                onRecord: onRecordRemediationHistory
             )
 
             AgentSessionSkillReviewPanel(
@@ -6777,6 +6815,7 @@ private struct GuidedCleanupFlowPanel: View {
     let isRecording: Bool
     let onLoad: () -> Void
     let onRecord: (GuidedCleanupFlowStep) -> Void
+    let onOpenSafeLink: (GuidedCleanupSafeActionDeepLink, GuidedCleanupFlowStep?) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -6824,7 +6863,7 @@ private struct GuidedCleanupFlowPanel: View {
             }
 
             if let result {
-                GuidedCleanupFlowResultView(result: result)
+                GuidedCleanupFlowResultView(result: result, onOpenSafeLink: onOpenSafeLink)
             } else {
                 Label(UIStrings.guidedCleanupFlowNoResult, systemImage: "info.circle")
                     .font(.callout)
@@ -6843,6 +6882,7 @@ private struct GuidedCleanupFlowPanel: View {
 
 private struct GuidedCleanupFlowResultView: View {
     let result: GuidedCleanupFlowResult
+    let onOpenSafeLink: (GuidedCleanupSafeActionDeepLink, GuidedCleanupFlowStep?) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -6891,9 +6931,9 @@ private struct GuidedCleanupFlowResultView: View {
                     .textSelection(.enabled)
             }
 
-            GuidedCleanupStepList(steps: result.flowSteps)
+            GuidedCleanupStepList(steps: result.flowSteps, onOpenSafeLink: onOpenSafeLink)
             GuidedCleanupIssueGroupList(groups: result.issueGroups)
-            GuidedCleanupSafeActionList(actions: result.safeNextActions)
+            GuidedCleanupSafeActionList(actions: result.safeNextActions, onOpenSafeLink: onOpenSafeLink)
             GuidedCleanupRecordedStepList(records: result.recordedSteps)
             RoutingInlineList(title: UIStrings.knowledgeGapNotes, empty: UIStrings.routingAccuracyNoGaps, values: result.gapNotes, systemImage: "puzzlepiece.extension")
             RoutingInlineList(title: UIStrings.knowledgeBlockerNotes, empty: UIStrings.routingAccuracyNoBlockers, values: result.blockerNotes, systemImage: "exclamationmark.octagon")
@@ -6997,6 +7037,7 @@ private struct GuidedCleanupRecordResultView: View {
 
 private struct GuidedCleanupStepList: View {
     let steps: [GuidedCleanupFlowStep]
+    let onOpenSafeLink: (GuidedCleanupSafeActionDeepLink, GuidedCleanupFlowStep?) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -7010,7 +7051,7 @@ private struct GuidedCleanupStepList: View {
             } else {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 8)], alignment: .leading, spacing: 8) {
                     ForEach(steps.prefix(10)) { step in
-                        GuidedCleanupStepCard(step: step)
+                        GuidedCleanupStepCard(step: step, onOpenSafeLink: onOpenSafeLink)
                     }
                 }
             }
@@ -7020,6 +7061,7 @@ private struct GuidedCleanupStepList: View {
 
 private struct GuidedCleanupStepCard: View {
     let step: GuidedCleanupFlowStep
+    let onOpenSafeLink: (GuidedCleanupSafeActionDeepLink, GuidedCleanupFlowStep?) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -7072,6 +7114,10 @@ private struct GuidedCleanupStepCard: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
+
+            GuidedCleanupSafeLinkButton(link: step.safeActionDeepLink) {
+                onOpenSafeLink(step.safeActionDeepLink, step)
+            }
 
             RoutingInlineList(title: UIStrings.knowledgeGapNotes, empty: UIStrings.routingAccuracyNoGaps, values: step.gapNotes, systemImage: "puzzlepiece.extension")
             RoutingInlineList(title: UIStrings.knowledgeBlockerNotes, empty: UIStrings.routingAccuracyNoBlockers, values: step.blockerNotes, systemImage: "exclamationmark.octagon")
@@ -7136,6 +7182,7 @@ private struct GuidedCleanupIssueGroupList: View {
 
 private struct GuidedCleanupSafeActionList: View {
     let actions: [GuidedCleanupSafeAction]
+    let onOpenSafeLink: (GuidedCleanupSafeActionDeepLink, GuidedCleanupFlowStep?) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -7163,6 +7210,12 @@ private struct GuidedCleanupSafeActionList: View {
                                 if let reviewArea = action.reviewArea, !reviewArea.isEmpty {
                                     MetadataRow(label: UIStrings.remediationBatchReviewReviewArea, value: reviewArea)
                                 }
+                                if let entryMethod = action.entryMethod, !entryMethod.isEmpty {
+                                    MetadataRow(label: UIStrings.text("guidedCleanup.safeAction.entryMethod", "Entry method"), value: entryMethod)
+                                }
+                                MetadataRow(label: UIStrings.text("guidedCleanup.safeAction.previewRequired", "Preview required"), value: action.requiresPreview ? UIStrings.stateEnabled : UIStrings.stateDisabled)
+                                MetadataRow(label: UIStrings.text("guidedCleanup.safeAction.confirmationRequired", "Confirmation required"), value: action.requiresConfirmation ? UIStrings.stateEnabled : UIStrings.stateDisabled)
+                                MetadataRow(label: UIStrings.llmPromptCopyOnly, value: action.copyOnly ? UIStrings.stateEnabled : UIStrings.stateDisabled)
                                 MetadataRow(label: UIStrings.guidedCleanupFlowExistingSafeEntry, value: action.requiresExistingSafeEntry ? UIStrings.stateEnabled : UIStrings.stateDisabled)
                                 MetadataRow(label: UIStrings.guidedCleanupFlowAppLocalOnly, value: action.appLocalOnly ? UIStrings.stateEnabled : UIStrings.llmSkillAnalysisEnabledUnsafe)
                                 MetadataRow(label: UIStrings.guidedCleanupFlowCanApplyFix, value: action.canApplyFix ? UIStrings.llmSkillAnalysisEnabledUnsafe : UIStrings.stateDisabled)
@@ -7173,6 +7226,10 @@ private struct GuidedCleanupSafeActionList: View {
                                     .foregroundStyle(.secondary)
                                     .textSelection(.enabled)
                             }
+                            GuidedCleanupSafeLinkButton(link: action.deepLink) {
+                                onOpenSafeLink(action.deepLink, nil)
+                            }
+                            RoutingInlineList(title: UIStrings.guidedCleanupFlowSteps, empty: UIStrings.guidedCleanupFlowNoSteps, values: action.relatedStepIDs, systemImage: "list.clipboard")
                             RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: action.evidenceRefs, systemImage: "checklist")
                             RoutingInlineList(title: UIStrings.knowledgeSafetyFlags, empty: UIStrings.taskBenchmarkNoSafetyFlags, values: action.safetyFlags, systemImage: "checkmark.shield")
                         }
@@ -7183,6 +7240,55 @@ private struct GuidedCleanupSafeActionList: View {
                 }
             }
         }
+    }
+}
+
+private struct GuidedCleanupSafeLinkButton: View {
+    let link: GuidedCleanupSafeActionDeepLink
+    let onOpen: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Button {
+                    onOpen()
+                } label: {
+                    Label(link.label.isEmpty ? UIStrings.text("guidedCleanup.safeLink.open", "Open safe entry") : link.label, systemImage: "arrowshape.turn.up.right")
+                }
+                .buttonStyle(.bordered)
+                .disabled(link.canApply)
+                .help(link.canApply ? UIStrings.text("guidedCleanup.safeLink.applyBlocked", "Guided cleanup links cannot apply changes.") : UIStrings.text("guidedCleanup.safeLink.help", "Open an existing safe preview or read-only review entry."))
+
+                Label(UIStrings.guidedCleanupFlowPreviewOnly, systemImage: "eye")
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+                if link.requiresConfirmation {
+                    Label(UIStrings.scriptExecutionConfirmationRequired, systemImage: "checkmark.shield")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.secondary)
+                }
+                if link.copyOnly {
+                    Label(UIStrings.llmPromptCopyOnly, systemImage: "doc.on.doc")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
+                MetadataRow(label: UIStrings.text("guidedCleanup.safeLink.target", "Safe link target"), value: link.target)
+                MetadataRow(label: UIStrings.text("guidedCleanup.safeLink.trigger", "Safe link trigger"), value: link.trigger)
+                if let method = link.method, !method.isEmpty {
+                    MetadataRow(label: UIStrings.text("guidedCleanup.safeAction.entryMethod", "Entry method"), value: method)
+                }
+                if let detailSection = link.detailSection, !detailSection.isEmpty {
+                    MetadataRow(label: UIStrings.detailSection, value: detailSection)
+                }
+                MetadataRow(label: UIStrings.guidedCleanupFlowCanApplyFix, value: link.canApply ? UIStrings.llmSkillAnalysisEnabledUnsafe : UIStrings.stateDisabled)
+            }
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.24), in: RoundedRectangle(cornerRadius: 6))
     }
 }
 

@@ -12,9 +12,11 @@ const files = {
   detail: await read("apps/macos/Sources/SkillsCopilot/Views/DetailView.swift"),
   detailPrimitives: await read("apps/macos/Sources/SkillsCopilot/Views/DetailPresentationPrimitives.swift"),
   formatter: await read("apps/macos/Sources/SkillsCopilot/Support/Formatters.swift"),
+  guidedCleanupModel: await read("apps/macos/Sources/SkillsCopilot/Models/GuidedCleanupFlow.swift"),
   privacyPath: await read("apps/macos/Sources/SkillsCopilot/Views/PrivacyPathView.swift"),
   settings: await read("apps/macos/Sources/SkillsCopilot/Views/SettingsView.swift"),
   sidebar: await read("apps/macos/Sources/SkillsCopilot/Views/SidebarView.swift"),
+  store: await read("apps/macos/Sources/SkillsCopilot/Stores/SkillStore.swift"),
   taskCockpit: await read("apps/macos/Sources/SkillsCopilot/Views/TaskCockpitPanel.swift"),
   material: await read("apps/macos/Sources/SkillsCopilot/Views/AdaptiveMaterialSurface.swift"),
   localizable: await read("apps/macos/Sources/SkillsCopilot/Resources/en.lproj/Localizable.strings"),
@@ -76,6 +78,31 @@ const checks = [
     label: "task cockpit renders before empty detail fallback",
     text: files.detail,
     pattern: /if store\.selectedDetailSection == \.taskCockpit[\s\S]*?TaskCockpitPanel\([\s\S]*?else if let skill[\s\S]*?EmptyDetailView\(\)/,
+  },
+  {
+    label: "guided cleanup renders safe-link buttons",
+    text: files.detail,
+    pattern: /GuidedCleanupSafeLinkButton\(link:\s*step\.safeActionDeepLink\)[\s\S]*?GuidedCleanupSafeLinkButton\(link:\s*action\.deepLink\)/,
+  },
+  {
+    label: "guided cleanup safe links route through the store",
+    text: files.store,
+    pattern: /func openGuidedCleanupSafeLink\([\s\S]*?guard !link\.canApply[\s\S]*?case "selectDetailSection",\s*"openSafeBatchPreviewPanel":[\s\S]*?return[\s\S]*?case "previewRemediationDrafts":[\s\S]*?await previewRemediationDrafts\(\)/,
+  },
+  {
+    label: "guided cleanup safe batch links do not apply changes directly",
+    text: files.store,
+    pattern: /case "selectDetailSection",\s*"openSafeBatchPreviewPanel":\s*return/,
+  },
+  {
+    label: "guided cleanup model decodes safe-action deep links",
+    text: files.guidedCleanupModel,
+    pattern: /struct GuidedCleanupSafeActionDeepLink:[\s\S]*?case canApply = "can_apply"[\s\S]*?defaultTrigger\(for method:[\s\S]*?case "batch\.previewSkillToggles":[\s\S]*?return "openSafeBatchPreviewPanel"/,
+  },
+  {
+    label: "analysis section mounts remediation safe entry panels",
+    text: files.detail,
+    pattern: /TaskRoutingAssessmentPanel\([\s\S]*?RemediationPlanPanel\([\s\S]*?RemediationPreviewDraftsPanel\([\s\S]*?RemediationImpactPreviewPanel\([\s\S]*?RemediationBatchReviewPanel\([\s\S]*?RemediationHistoryPanel\([\s\S]*?AgentSessionSkillReviewPanel\(/,
   },
   {
     label: "task cockpit panel lives in a dedicated module file",

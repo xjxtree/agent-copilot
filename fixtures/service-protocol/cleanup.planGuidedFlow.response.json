@@ -94,6 +94,48 @@
           "raw_trace_persisted": false,
           "cloud_sync_performed": false,
           "telemetry_emitted": false
+        },
+        "safe_action_deep_link": {
+          "label": "Review finding",
+          "target": "detail_section",
+          "detail_section": "cleanup",
+          "method": "cleanup.listQueue",
+          "trigger": "selectDetailSection",
+          "preview_only": true,
+          "requires_confirmation": false,
+          "copy_only": false,
+          "can_apply": false,
+          "instance_ids": [
+            "fixture-codex-skill-id"
+          ],
+          "related_step_ids": [
+            "guided:batch:batch-review:cleanup:cleanup:finding:fixture-error-finding"
+          ],
+          "evidence_refs": [
+            "cleanup:fixture-error-finding"
+          ],
+          "safety_flags": {
+            "read_only": true,
+            "app_local_only": true,
+            "provider_request_sent": false,
+            "write_back_allowed": false,
+            "write_actions_available": false,
+            "skill_files_mutated": false,
+            "agent_config_mutated": false,
+            "script_execution_allowed": false,
+            "execution_actions_available": false,
+            "config_mutation_allowed": false,
+            "snapshot_created": false,
+            "rollback_performed": false,
+            "triage_mutation_allowed": false,
+            "credential_accessed": false,
+            "raw_secret_returned": false,
+            "raw_prompt_persisted": false,
+            "raw_response_persisted": false,
+            "raw_trace_persisted": false,
+            "cloud_sync_performed": false,
+            "telemetry_emitted": false
+          }
         }
       },
       {
@@ -159,6 +201,48 @@
           "raw_trace_persisted": false,
           "cloud_sync_performed": false,
           "telemetry_emitted": false
+        },
+        "safe_action_deep_link": {
+          "label": "Open the finding or skill detail and decide whether an existing reviewed flow is appropriate; this plan does not apply changes.",
+          "target": "analysis_action",
+          "detail_section": "analysis",
+          "method": "remediation.plan",
+          "trigger": "planRemediation",
+          "preview_only": true,
+          "requires_confirmation": false,
+          "copy_only": false,
+          "can_apply": false,
+          "instance_ids": [
+            "fixture-codex-skill-id"
+          ],
+          "related_step_ids": [
+            "guided:batch:batch-review:plan:remediation-4a9f2c7e9d21"
+          ],
+          "evidence_refs": [
+            "finding:fixture-warning-finding"
+          ],
+          "safety_flags": {
+            "read_only": true,
+            "app_local_only": true,
+            "provider_request_sent": false,
+            "write_back_allowed": false,
+            "write_actions_available": false,
+            "skill_files_mutated": false,
+            "agent_config_mutated": false,
+            "script_execution_allowed": false,
+            "execution_actions_available": false,
+            "config_mutation_allowed": false,
+            "snapshot_created": false,
+            "rollback_performed": false,
+            "triage_mutation_allowed": false,
+            "credential_accessed": false,
+            "raw_secret_returned": false,
+            "raw_prompt_persisted": false,
+            "raw_response_persisted": false,
+            "raw_trace_persisted": false,
+            "cloud_sync_performed": false,
+            "telemetry_emitted": false
+          }
         }
       }
     ],
@@ -280,6 +364,48 @@
           "raw_trace_persisted": false,
           "cloud_sync_performed": false,
           "telemetry_emitted": false
+        },
+        "deep_link": {
+          "label": "Review cleanup queue evidence",
+          "target": "detail_section",
+          "detail_section": "cleanup",
+          "method": "cleanup.listQueue",
+          "trigger": "selectDetailSection",
+          "preview_only": false,
+          "requires_confirmation": false,
+          "copy_only": false,
+          "can_apply": false,
+          "instance_ids": [
+            "fixture-codex-skill-id"
+          ],
+          "related_step_ids": [
+            "guided:batch:batch-review:cleanup:cleanup:finding:fixture-error-finding"
+          ],
+          "evidence_refs": [
+            "cleanup:fixture-error-finding"
+          ],
+          "safety_flags": {
+            "read_only": true,
+            "app_local_only": true,
+            "provider_request_sent": false,
+            "write_back_allowed": false,
+            "write_actions_available": false,
+            "skill_files_mutated": false,
+            "agent_config_mutated": false,
+            "script_execution_allowed": false,
+            "execution_actions_available": false,
+            "config_mutation_allowed": false,
+            "snapshot_created": false,
+            "rollback_performed": false,
+            "triage_mutation_allowed": false,
+            "credential_accessed": false,
+            "raw_secret_returned": false,
+            "raw_prompt_persisted": false,
+            "raw_response_persisted": false,
+            "raw_trace_persisted": false,
+            "cloud_sync_performed": false,
+            "telemetry_emitted": false
+          }
         }
       },
       {
@@ -316,6 +442,47 @@
           "raw_trace_persisted": false,
           "cloud_sync_performed": false,
           "telemetry_emitted": false
+        },
+        "deep_link": {
+          "label": "Record guided cleanup step metadata",
+          "target": "guided_metadata",
+          "detail_section": "guidedCleanup",
+          "method": "cleanup.recordGuidedStep",
+          "trigger": "recordGuidedStep",
+          "preview_only": false,
+          "requires_confirmation": true,
+          "copy_only": false,
+          "can_apply": false,
+          "instance_ids": [
+            "fixture-codex-skill-id"
+          ],
+          "related_step_ids": [
+            "guided:batch:batch-review:cleanup:cleanup:finding:fixture-error-finding",
+            "guided:batch:batch-review:plan:remediation-4a9f2c7e9d21"
+          ],
+          "evidence_refs": [],
+          "safety_flags": {
+            "read_only": true,
+            "app_local_only": true,
+            "provider_request_sent": false,
+            "write_back_allowed": false,
+            "write_actions_available": false,
+            "skill_files_mutated": false,
+            "agent_config_mutated": false,
+            "script_execution_allowed": false,
+            "execution_actions_available": false,
+            "config_mutation_allowed": false,
+            "snapshot_created": false,
+            "rollback_performed": false,
+            "triage_mutation_allowed": false,
+            "credential_accessed": false,
+            "raw_secret_returned": false,
+            "raw_prompt_persisted": false,
+            "raw_response_persisted": false,
+            "raw_trace_persisted": false,
+            "cloud_sync_performed": false,
+            "telemetry_emitted": false
+          }
         }
       },
       {
@@ -355,6 +522,50 @@
           "raw_trace_persisted": false,
           "cloud_sync_performed": false,
           "telemetry_emitted": false
+        },
+        "deep_link": {
+          "label": "Preview enable/disable with existing safe batch toggle flow",
+          "target": "sidebar_preview",
+          "detail_section": "cleanup",
+          "method": "batch.previewSkillToggles",
+          "trigger": "openSafeBatchPreviewPanel",
+          "preview_only": true,
+          "requires_confirmation": true,
+          "copy_only": false,
+          "can_apply": false,
+          "instance_ids": [
+            "fixture-codex-skill-id"
+          ],
+          "related_step_ids": [
+            "guided:batch:batch-review:cleanup:cleanup:finding:fixture-error-finding",
+            "guided:batch:batch-review:plan:remediation-4a9f2c7e9d21"
+          ],
+          "evidence_refs": [
+            "cleanup:fixture-error-finding",
+            "finding:fixture-warning-finding"
+          ],
+          "safety_flags": {
+            "read_only": true,
+            "app_local_only": true,
+            "provider_request_sent": false,
+            "write_back_allowed": false,
+            "write_actions_available": false,
+            "skill_files_mutated": false,
+            "agent_config_mutated": false,
+            "script_execution_allowed": false,
+            "execution_actions_available": false,
+            "config_mutation_allowed": false,
+            "snapshot_created": false,
+            "rollback_performed": false,
+            "triage_mutation_allowed": false,
+            "credential_accessed": false,
+            "raw_secret_returned": false,
+            "raw_prompt_persisted": false,
+            "raw_response_persisted": false,
+            "raw_trace_persisted": false,
+            "cloud_sync_performed": false,
+            "telemetry_emitted": false
+          }
         }
       }
     ],
