@@ -5,6 +5,7 @@ struct SettingsView: View {
     @EnvironmentObject private var store: SkillStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(AppLanguage.storageKey) private var appLanguageRawValue = AppLanguage.defaultLanguage.rawValue
+    @AppStorage(DisplayText.screenshotPrivacyModeStorageKey) private var screenshotPrivacyModeEnabled = true
     @State private var draft = ""
     @State private var hasEditedDraft = false
     @State private var providerDraft = AIProviderSettingsDraft(status: .unavailable())
@@ -131,7 +132,20 @@ struct SettingsView: View {
                         .pickerStyle(.segmented)
                         .frame(width: 280)
                     }
+
+                    GridRow {
+                        Text(UIStrings.privacyScreenshotMode)
+                            .foregroundStyle(.secondary)
+                        Toggle(UIStrings.privacyScreenshotMode, isOn: $screenshotPrivacyModeEnabled)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
                 }
+
+                Text(UIStrings.privacyScreenshotBoundary)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 SettingsBanner(message: UIStrings.languageAppliesImmediately, systemImage: "checkmark.circle.fill", color: .green)
 
@@ -349,8 +363,8 @@ struct SettingsView: View {
                     Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
                         SettingsMetadataRow(label: UIStrings.version, value: store.status?.version ?? UIStrings.unknown)
                         SettingsMetadataRow(label: UIStrings.protocolLabel, value: "\(store.status?.protocolVersion ?? 0)")
-                        SettingsMetadataRow(label: UIStrings.catalog, value: store.status?.catalogPath ?? UIStrings.notLoaded)
-                        SettingsMetadataRow(label: UIStrings.userHome, value: store.status?.userHome ?? UIStrings.unknown)
+                        PrivacyPathRow(label: UIStrings.catalog, path: store.status?.catalogPath ?? UIStrings.notLoaded)
+                        PrivacyPathRow(label: UIStrings.userHome, path: store.status?.userHome ?? UIStrings.unknown)
                         SettingsMetadataRow(label: UIStrings.methods, value: "\(store.status?.supportedMethods.count ?? 0)")
                     }
                     .padding(.top, 8)

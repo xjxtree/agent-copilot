@@ -11,6 +11,8 @@ enum SkillStatusKind: Int {
 }
 
 enum DisplayText {
+    static let screenshotPrivacyModeStorageKey = "privacy.screenshotMode"
+
     private static let snapshotDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
@@ -202,5 +204,87 @@ enum DisplayText {
     static func timestamp(_ milliseconds: Int64) -> String {
         let date = Date(timeIntervalSince1970: TimeInterval(milliseconds) / 1_000)
         return snapshotDateFormatter.string(from: date)
+    }
+
+    static func privacyPath(_ value: String, privacyModeEnabled: Bool, revealFull: Bool = false) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return value }
+
+        if privacyModeEnabled && !revealFull {
+            return collapsePath(redactLocalPath(trimmed), limit: 84)
+        }
+
+        if revealFull {
+            return trimmed
+        }
+
+        return collapsePath(trimmed, limit: 96)
+    }
+
+    static func redactLocalPath(_ value: String) -> String {
+        var redacted = value
+        let environment = ProcessInfo.processInfo.environment
+        let replacements: [(String?, String)] = [
+            (environment["SKILLS_COPILOT_PROJECT_ROOT"], "<project-root>"),
+            (environment["SKILLS_COPILOT_PROJECT_CWD"], "<project-cwd>"),
+            (environment["SKILLS_COPILOT_APP_DATA_DIR"], "<app-data-dir>"),
+            (environment["SKILLS_COPILOT_HOME"], "$HOME"),
+            (FileManager.default.homeDirectoryForCurrentUser.path, "$HOME"),
+        ]
+
+        for (prefix, token) in replacements {
+            guard let prefix else { continue }
+            let normalized = prefix.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            guard !normalized.isEmpty else { continue }
+            let absolutePrefix = "/" + normalized
+            if redacted == absolutePrefix {
+                redacted = token
+            } else if redacted.hasPrefix(absolutePrefix + "/") {
+                redacted = token + String(redacted.dropFirst(absolutePrefix.count))
+            }
+        }
+
+        let macHomePattern = "/" + "Users" + #"/[^/\s]+"#
+        let varFoldersPattern = "/" + "var" + #"/folders/[^/\s]+/[^/\s]+/[^/\s]+"#
+        let privateVarFoldersPattern = "/" + "private" + varFoldersPattern
+
+        redacted = redacted.replacingOccurrences(
+            of: macHomePattern,
+            with: "$HOME",
+            options: .regularExpression
+        )
+        redacted = redacted.replacingOccurrences(
+            of: varFoldersPattern,
+            with: "<temp>",
+            options: .regularExpression
+        )
+        redacted = redacted.replacingOccurrences(
+            of: privateVarFoldersPattern,
+            with: "<temp>",
+            options: .regularExpression
+        )
+        return redacted
+    }
+
+    static func collapsePath(_ value: String, limit: Int = 84) -> String {
+        let characters = Array(value)
+        guard characters.count > limit, limit >= 24 else { return value }
+        let headCount = max(10, limit / 2 - 4)
+        let tailCount = max(10, limit - headCount - 5)
+        let head = String(characters.prefix(headCount))
+        let tail = String(characters.suffix(tailCount))
+        return "\(head)/.../\(tail)"
+    }
+
+    static func isLikelyPath(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.hasPrefix("/")
+            || trimmed.hasPrefix("~/")
+            || trimmed.hasPrefix("$HOME/")
+            || trimmed.hasPrefix("<project-root>")
+            || trimmed.hasPrefix("<project-cwd>")
+            || trimmed.hasPrefix("<app-data-dir>")
+            || trimmed.contains("/SKILL.md")
+            || trimmed.contains("\\")
     }
 }

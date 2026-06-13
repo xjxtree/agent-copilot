@@ -12,8 +12,9 @@ credential placeholders, and sensitive strings embedded in tracked binary
 artifacts. It intentionally allows fixture paths such as /tmp/home and
 documentation placeholders such as $HOME, <repo>, and <project-root>.
 
-Note: binary string scanning does not perform OCR. New screenshots must still
-be manually inspected before commit.
+Note: binary string scanning does not perform OCR. Run
+pnpm verify:screenshot-artifacts for PNG validity/black-image checks, then
+manually inspect new screenshots before commit.
 EOF
 }
 

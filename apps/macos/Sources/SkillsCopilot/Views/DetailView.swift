@@ -661,6 +661,7 @@ private struct SkillSummaryCard: View {
     let detail: SkillDetailRecord?
     let scriptPreview: ScriptExecutionPreview?
     let isLoading: Bool
+    @AppStorage(DisplayText.screenshotPrivacyModeStorageKey) private var screenshotPrivacyModeEnabled = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -687,7 +688,7 @@ private struct SkillSummaryCard: View {
                 SummaryChip(title: UIStrings.provenanceRoot, value: SkillProvenanceDisplay.rootClass(for: skill), systemImage: "externaldrive")
                 SummaryChip(title: UIStrings.provenanceKind, value: SkillProvenanceDisplay.kind(for: skill), systemImage: "tag")
                 SummaryChip(title: UIStrings.definition, value: skill.definitionId, systemImage: "number")
-                SummaryChip(title: UIStrings.source, value: skill.displayPath, systemImage: "doc")
+                SummaryChip(title: UIStrings.source, value: DisplayText.privacyPath(skill.displayPath, privacyModeEnabled: screenshotPrivacyModeEnabled), systemImage: "doc")
             }
 
             OverviewRiskPanel(
@@ -1915,12 +1916,7 @@ private struct CrossAgentComparisonMemberRow: View {
             }
 
             if !member.displayPath.isEmpty {
-                Text(member.displayPath)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .textSelection(.enabled)
+                PrivacyPathText(path: member.displayPath, font: .caption, lineLimit: 1)
             }
 
             if !member.differences.isEmpty {
@@ -4225,12 +4221,7 @@ private struct SimilarSkillMemberList: View {
                         }
 
                         if let sourcePath = member.sourcePath, !sourcePath.isEmpty {
-                            Text(sourcePath)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .textSelection(.enabled)
+                            PrivacyPathText(path: sourcePath, font: .caption2, lineLimit: 1)
                         }
 
                         RoutingInlineList(title: UIStrings.routingConfidenceMatchReasons, empty: UIStrings.routingConfidenceNoReasons, values: member.reasons, systemImage: "text.bubble")
@@ -4681,7 +4672,7 @@ private struct WorkspaceReadinessResultView: View {
                 MetadataRow(label: UIStrings.routingAccuracyCatalog, value: result.catalogAvailable ? UIStrings.routingAccuracyAvailable : UIStrings.routingAccuracyUnavailableShort)
                 MetadataRow(label: UIStrings.agent, value: agentFilterLabel)
                 if let projectRoot = result.filters.projectRoot, !projectRoot.isEmpty {
-                    MetadataRow(label: UIStrings.project, value: projectRoot)
+                    PrivacyPathRow(label: UIStrings.project, path: projectRoot)
                 }
                 if let workspace = result.filters.workspace, !workspace.isEmpty {
                     MetadataRow(label: UIStrings.workspaceReadinessTitle, value: workspace)
@@ -5003,7 +4994,7 @@ private struct RemediationPlanResultView: View {
                 MetadataRow(label: UIStrings.routingAccuracyCatalog, value: result.catalogAvailable ? UIStrings.routingAccuracyAvailable : UIStrings.routingAccuracyUnavailableShort)
                 MetadataRow(label: UIStrings.agent, value: agentFilterLabel)
                 if let projectRoot = result.filters.projectRoot, !projectRoot.isEmpty {
-                    MetadataRow(label: UIStrings.project, value: projectRoot)
+                    PrivacyPathRow(label: UIStrings.project, path: projectRoot)
                 }
                 if let workspace = result.filters.workspace, !workspace.isEmpty {
                     MetadataRow(label: UIStrings.workspaceReadinessTitle, value: workspace)
@@ -5680,7 +5671,7 @@ private struct RemediationImpactPreviewResultView: View {
                 MetadataRow(label: UIStrings.routingAccuracyCatalog, value: result.catalogAvailable ? UIStrings.routingAccuracyAvailable : UIStrings.routingAccuracyUnavailableShort)
                 MetadataRow(label: UIStrings.agent, value: agentFilterLabel)
                 if let projectRoot = result.filters.projectRoot, !projectRoot.isEmpty {
-                    MetadataRow(label: UIStrings.project, value: projectRoot)
+                    PrivacyPathRow(label: UIStrings.project, path: projectRoot)
                 }
                 if let workspace = result.filters.workspace, !workspace.isEmpty {
                     MetadataRow(label: UIStrings.workspaceReadinessTitle, value: workspace)
@@ -5987,7 +5978,7 @@ private struct RemediationBatchReviewResultView: View {
                     MetadataRow(label: UIStrings.remediationBatchReviewRuleIDs, value: result.filters.ruleIDs.joined(separator: ", "))
                 }
                 if let projectRoot = result.filters.projectRoot, !projectRoot.isEmpty {
-                    MetadataRow(label: UIStrings.project, value: projectRoot)
+                    PrivacyPathRow(label: UIStrings.project, path: projectRoot)
                 }
                 if let workspace = result.filters.workspace, !workspace.isEmpty {
                     MetadataRow(label: UIStrings.workspaceReadinessTitle, value: workspace)
@@ -6415,7 +6406,7 @@ private struct RemediationHistoryResultView: View {
                     MetadataRow(label: UIStrings.remediationHistoryStatuses, value: result.filters.statuses.joined(separator: ", "))
                 }
                 if let projectRoot = result.filters.projectRoot, !projectRoot.isEmpty {
-                    MetadataRow(label: UIStrings.project, value: projectRoot)
+                    PrivacyPathRow(label: UIStrings.project, path: projectRoot)
                 }
                 if let workspace = result.filters.workspace, !workspace.isEmpty {
                     MetadataRow(label: UIStrings.workspaceReadinessTitle, value: workspace)
@@ -7028,7 +7019,7 @@ private struct SkillLifecycleTimelineResultView: View {
                     MetadataRow(label: UIStrings.localSkillMapSelectedContext, value: result.filters.selectedSkillName ?? selectedSkillID)
                 }
                 if let projectRoot = result.filters.projectRoot, !projectRoot.isEmpty {
-                    MetadataRow(label: UIStrings.text("projectContext.root", "Project root"), value: projectRoot)
+                    PrivacyPathRow(label: UIStrings.text("projectContext.root", "Project root"), path: projectRoot)
                 }
                 if let currentCWD = result.filters.currentCWD, !currentCWD.isEmpty {
                     MetadataRow(label: UIStrings.text("projectContext.currentCWD", "Current CWD"), value: currentCWD)
@@ -8280,7 +8271,7 @@ private struct LocalSkillMapResultView: View {
                     MetadataRow(label: UIStrings.localSkillMapSelectedContext, value: selectedSkillContext)
                 }
                 if let projectRoot = result.filters.projectRoot, !projectRoot.isEmpty {
-                    MetadataRow(label: UIStrings.text("projectContext.root", "Project root"), value: projectRoot)
+                    PrivacyPathRow(label: UIStrings.text("projectContext.root", "Project root"), path: projectRoot)
                 }
                 if let limit = result.filters.limit {
                     MetadataRow(label: UIStrings.text("filter.limit", "Limit"), value: "\(limit)")
@@ -8558,7 +8549,7 @@ private struct LocalSkillMapIssueList: View {
                                 MetadataRow(label: UIStrings.agent, value: DisplayText.agent(agent))
                             }
                             if let source = row.source, !source.isEmpty {
-                                MetadataRow(label: UIStrings.source, value: source)
+                                PrivacyPathRow(label: UIStrings.source, path: source)
                             }
                         }
                         RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: row.evidenceRefs, systemImage: "checklist")
@@ -11359,7 +11350,7 @@ private struct SkillDetailCard: View {
                 MetadataRow(label: UIStrings.provenanceKind, value: SkillProvenanceDisplay.kind(for: skill))
                 MetadataRow(label: UIStrings.definition, value: skill.definitionId)
                 MetadataRow(label: UIStrings.catalogID, value: skill.id)
-                MetadataRow(label: UIStrings.source, value: skill.displayPath)
+                PrivacyPathRow(label: UIStrings.source, path: skill.displayPath)
                 if DisplayText.isToolGlobal(skill) {
                     MetadataRow(label: UIStrings.access, value: UIStrings.toolGlobalAccessStatus(DisplayText.agent(skill.agent)))
                 }
@@ -11511,10 +11502,10 @@ private struct ToolGlobalInstallPreviewSheet: View {
             }
 
             Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 10) {
-                MetadataRow(label: UIStrings.source, value: preview.sourcePath)
+                PrivacyPathRow(label: UIStrings.source, path: preview.sourcePath)
                 MetadataRow(label: UIStrings.toolGlobalTargetAgent, value: preview.target.title)
                 if let targetPath = preview.targetPath {
-                    MetadataRow(label: UIStrings.target, value: targetPath)
+                    PrivacyPathRow(label: UIStrings.target, path: targetPath)
                 }
             }
 

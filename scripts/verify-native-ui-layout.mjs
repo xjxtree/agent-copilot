@@ -10,6 +10,8 @@ const files = {
   app: await read("apps/macos/Sources/SkillsCopilot/App/SkillsCopilotApp.swift"),
   content: await read("apps/macos/Sources/SkillsCopilot/Views/ContentView.swift"),
   detail: await read("apps/macos/Sources/SkillsCopilot/Views/DetailView.swift"),
+  formatter: await read("apps/macos/Sources/SkillsCopilot/Support/Formatters.swift"),
+  privacyPath: await read("apps/macos/Sources/SkillsCopilot/Views/PrivacyPathView.swift"),
   settings: await read("apps/macos/Sources/SkillsCopilot/Views/SettingsView.swift"),
   sidebar: await read("apps/macos/Sources/SkillsCopilot/Views/SidebarView.swift"),
   material: await read("apps/macos/Sources/SkillsCopilot/Views/AdaptiveMaterialSurface.swift"),
@@ -118,6 +120,31 @@ const checks = [
     pattern: /\.frame\(minWidth:\s*760,\s*idealWidth:\s*860,\s*minHeight:\s*620,\s*idealHeight:\s*680\)/,
   },
   {
+    label: "settings exposes screenshot privacy mode as app-local preference",
+    text: files.settings,
+    pattern: /@AppStorage\(DisplayText\.screenshotPrivacyModeStorageKey\)[\s\S]*?screenshotPrivacyModeEnabled[\s\S]*?Toggle\(UIStrings\.privacyScreenshotMode,\s*isOn:\s*\$screenshotPrivacyModeEnabled\)/,
+  },
+  {
+    label: "privacy path helper redacts and collapses local paths",
+    text: files.formatter,
+    pattern: /screenshotPrivacyModeStorageKey[\s\S]*?static func privacyPath[\s\S]*?redactLocalPath[\s\S]*?collapsePath/,
+  },
+  {
+    label: "privacy path view supports explicit reveal",
+    text: files.privacyPath,
+    pattern: /struct PrivacyPathRow[\s\S]*?@AppStorage\(DisplayText\.screenshotPrivacyModeStorageKey\)[\s\S]*?UIStrings\.privacyRevealPath[\s\S]*?UIStrings\.privacyScreenshotSafe/,
+  },
+  {
+    label: "detail uses privacy path rows for high-risk paths",
+    text: files.detail,
+    pattern: /PrivacyPathRow\(label:\s*UIStrings\.source,\s*path:\s*skill\.displayPath\)[\s\S]*?PrivacyPathRow\(label:\s*UIStrings\.source,\s*path:\s*preview\.sourcePath\)/,
+  },
+  {
+    label: "sidebar uses privacy path display for report, project, roots, and catalog paths",
+    text: files.sidebar,
+    pattern: /PrivacyPathText\(path:\s*result\.displayPath[\s\S]*?PrivacyPathLabel\(path:\s*value[\s\S]*?PrivacyPathText\(path:\s*rootPath[\s\S]*?PrivacyPathLabel\(path:\s*store\.status\?\.catalogPath/,
+  },
+  {
     label: "material surfaces respect reduced transparency",
     text: files.material,
     pattern: /accessibilityReduceTransparency/,
@@ -186,6 +213,16 @@ const checks = [
     label: "localized adapter capability labels are present",
     text: files.localizable,
     pattern: /"sidebar\.adapterCapabilities".*"adapter\.capability\.scan".*"adapter\.capability\.toggle".*"adapter\.capability\.install"/s,
+  },
+  {
+    label: "localized screenshot privacy labels are present",
+    text: files.localizable,
+    pattern: /"settings\.privacy\.screenshotMode".*"settings\.privacy\.screenshotBoundary".*"privacy\.path\.reveal".*"privacy\.path\.screenshotSafe"/s,
+  },
+  {
+    label: "localized task cockpit labels are present",
+    text: files.localizable,
+    pattern: /"taskCockpit\.boundary".*"taskCockpit\.action\.build".*"taskCockpit\.empty\.result".*"taskCockpit\.recommendedSkill"/s,
   },
   {
     label: "localized remediation and permissions labels are present",

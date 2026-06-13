@@ -91,6 +91,9 @@ Fixture mode uses only temporary `HOME`, app data, and project roots. It must av
 Screenshot privacy rules:
 
 - Smoke and real-local screenshots must not expose actual local `HOME`, app data, `/var/folders`, temporary fixture roots, tokens, or credential placeholders.
+- Keep screenshot privacy mode enabled by default for committed evidence. Native UI path rows should show screenshot-safe placeholders and collapsed paths unless the reviewer explicitly reveals a full path for local debugging.
+- `script/capture_app_window.sh` fails fast for locked macOS sessions and rejects near-black, mostly transparent, or near-flat captures.
+- Run `pnpm verify:screenshot-artifacts` after regenerating screenshots.
 - Redact visible sensitive values before committing evidence.
 - Run `pnpm check:privacy`.
 - New screenshots still require manual visual inspection.

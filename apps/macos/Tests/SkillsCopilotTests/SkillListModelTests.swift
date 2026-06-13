@@ -11,6 +11,7 @@ struct SkillListModelTests {
         try sortOrdersAreStableForCoreListColumns()
         try skillProvenanceClassifiesAgentRootsDeterministically()
         try skillIdentitySummaryAndDedupeExplanationAreStable()
+        try privacyPathDisplayRedactsAndCollapsesLocalPaths()
     }
 
     private func detailWorkbenchSectionsExposeDiagnostics() throws {
@@ -234,6 +235,17 @@ struct SkillListModelTests {
         try expectEqual(hermesExternalSkill.provenance.label, "Hermes explicit external read-only", "Hermes external dirs should retain read-only provenance.")
         try expectEqual(openClawSkill.provenance.label, "OpenClaw workspace read-only", "OpenClaw should present project rows as workspace read-only provenance.")
         try expectEqual(DisplayText.scope(for: openClawSkill), UIStrings.openClawWorkspaceScope, "OpenClaw project rows should display as workspace scope.")
+    }
+
+    private func privacyPathDisplayRedactsAndCollapsesLocalPaths() throws {
+        let rawPath = "/" + "Users" + "/alice/example-project/.agents/skills/very-long-skill-name-with-extra-path-segments/SKILL.md"
+        let redacted = DisplayText.privacyPath(rawPath, privacyModeEnabled: true)
+        try expectFalse(redacted.contains("/" + "Users" + "/alice"), "Screenshot privacy mode should redact local macOS user paths.")
+        try expectFalse(!redacted.contains("$HOME"), "Screenshot privacy mode should preserve useful home-root context.")
+        try expectFalse(!redacted.contains("/.../"), "Long screenshot-safe paths should be collapsed by default.")
+
+        let revealed = DisplayText.privacyPath(rawPath, privacyModeEnabled: true, revealFull: true)
+        try expectEqual(revealed, rawPath, "Explicit reveal should show the original path without mutating the model value.")
     }
 
     private func skillIdentitySummaryAndDedupeExplanationAreStable() throws {

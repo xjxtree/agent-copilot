@@ -55,7 +55,7 @@ Run the privacy gate before commit, push, or handoff:
 pnpm check:privacy
 ```
 
-If it fails on reachable history, rewrite the affected local branch history before pushing. If new screenshots were added, visually inspect them because the automated binary check does not perform OCR.
+If it fails on reachable history, rewrite the affected local branch history before pushing. If new screenshots were added, run `pnpm verify:screenshot-artifacts` and visually inspect them because the automated binary check does not perform OCR.
 
 ## 4. Fixture Smoke Boundary
 

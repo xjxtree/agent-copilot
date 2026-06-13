@@ -206,11 +206,7 @@ private struct LocalReportExportResultView: View {
                 .lineLimit(2)
 
             if !result.isUnavailable {
-                Text(result.displayPath)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-                    .lineLimit(2)
+                PrivacyPathText(path: result.displayPath, font: .caption2, lineLimit: 2)
             }
 
             Text(result.summary)
@@ -1129,7 +1125,7 @@ private struct AdapterPathList: View {
                     .foregroundStyle(.tertiary)
             } else {
                 ForEach(Array(values.prefix(3)), id: \.self) { value in
-                    Label(value, systemImage: "folder")
+                    PrivacyPathLabel(path: value, systemImage: "folder")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
@@ -1585,10 +1581,14 @@ private struct ProjectContextControls: View {
                 Text(store.activeProjectContext?.name ?? UIStrings.text("project.globalRoots", "Global roots"))
                     .font(.callout.bold())
                     .lineLimit(1)
-                Text(store.activeProjectContext?.rootPath ?? UIStrings.text("project.chooseShortPrompt", "Choose a project to include project-scoped skills."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                if let rootPath = store.activeProjectContext?.rootPath {
+                    PrivacyPathText(path: rootPath, font: .caption, lineLimit: 2)
+                } else {
+                    Text(UIStrings.text("project.chooseShortPrompt", "Choose a project to include project-scoped skills."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
             }
 
             if let validationMessage = store.projectValidationMessage {
@@ -1757,7 +1757,7 @@ private struct RefreshStatusView: View {
 
             DisclosureGroup(UIStrings.text("refresh.details", "Refresh Details")) {
                 VStack(alignment: .leading, spacing: 7) {
-                    Label(store.status?.catalogPath ?? UIStrings.catalogNotLoaded, systemImage: "shippingbox")
+                    PrivacyPathLabel(path: store.status?.catalogPath ?? UIStrings.catalogNotLoaded, systemImage: "shippingbox")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)

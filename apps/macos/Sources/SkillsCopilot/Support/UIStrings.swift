@@ -316,6 +316,11 @@ enum UIStrings {
     static var languageSimplifiedChinese: String { text("settings.language.simplifiedChinese", "Simplified Chinese") }
     static var languageBoundary: String { text("settings.language.boundary", "Language is stored as an app-local preference. It does not write agent config, skill files, provider settings, credentials, reports, or prompts.") }
     static var languageAppliesImmediately: String { text("settings.language.appliesImmediately", "The main window and Settings update immediately after selection.") }
+    static var privacyScreenshotMode: String { text("settings.privacy.screenshotMode", "Screenshot privacy mode") }
+    static var privacyScreenshotBoundary: String { text("settings.privacy.screenshotBoundary", "When enabled, local paths shown in the native UI use screenshot-safe placeholders and long-path collapse by default. Reveal is explicit and local to the current view.") }
+    static var privacyRevealPath: String { text("privacy.path.reveal", "Reveal") }
+    static var privacyHidePath: String { text("privacy.path.hide", "Hide") }
+    static var privacyScreenshotSafe: String { text("privacy.path.screenshotSafe", "Screenshot safe") }
     static var version: String { text("settings.version", "Version") }
     static var protocolLabel: String { text("settings.protocol", "Protocol") }
     static var catalog: String { text("settings.catalog", "Catalog") }

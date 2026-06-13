@@ -212,6 +212,7 @@ private struct TaskCockpitParams: Encodable {
     let includeProviderObservability: Bool
     let includeRemediationContext: Bool
     let includeEvidence: Bool
+    let appLanguage: String = UIStrings.currentLanguage.rawValue
 
     enum CodingKeys: String, CodingKey {
         case task
@@ -229,6 +230,7 @@ private struct TaskCockpitParams: Encodable {
         case includeProviderObservability = "include_provider_observability"
         case includeRemediationContext = "include_remediation_context"
         case includeEvidence = "include_evidence"
+        case appLanguage = "app_language"
     }
 }
 
@@ -634,6 +636,7 @@ private struct GuidedCleanupFlowParams: Encodable {
     let includeRecordedSteps: Bool
     let includeEvidence: Bool
     let includeSafetyFlags: Bool
+    let appLanguage: String = UIStrings.currentLanguage.rawValue
 
     enum CodingKeys: String, CodingKey {
         case task
@@ -651,6 +654,7 @@ private struct GuidedCleanupFlowParams: Encodable {
         case includeRecordedSteps = "include_recorded_steps"
         case includeEvidence = "include_evidence"
         case includeSafetyFlags = "include_safety_flags"
+        case appLanguage = "app_language"
     }
 }
 
