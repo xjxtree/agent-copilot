@@ -10,13 +10,16 @@ const files = {
   app: await read("apps/macos/Sources/SkillsCopilot/App/SkillsCopilotApp.swift"),
   content: await read("apps/macos/Sources/SkillsCopilot/Views/ContentView.swift"),
   detail: await read("apps/macos/Sources/SkillsCopilot/Views/DetailView.swift"),
+  detailPrimitives: await read("apps/macos/Sources/SkillsCopilot/Views/DetailPresentationPrimitives.swift"),
   formatter: await read("apps/macos/Sources/SkillsCopilot/Support/Formatters.swift"),
   privacyPath: await read("apps/macos/Sources/SkillsCopilot/Views/PrivacyPathView.swift"),
   settings: await read("apps/macos/Sources/SkillsCopilot/Views/SettingsView.swift"),
   sidebar: await read("apps/macos/Sources/SkillsCopilot/Views/SidebarView.swift"),
+  taskCockpit: await read("apps/macos/Sources/SkillsCopilot/Views/TaskCockpitPanel.swift"),
   material: await read("apps/macos/Sources/SkillsCopilot/Views/AdaptiveMaterialSurface.swift"),
   localizable: await read("apps/macos/Sources/SkillsCopilot/Resources/en.lproj/Localizable.strings"),
 };
+files.detailSurface = [files.detail, files.detailPrimitives, files.taskCockpit].join("\n");
 
 const checks = [
   {
@@ -73,6 +76,16 @@ const checks = [
     label: "task cockpit renders before empty detail fallback",
     text: files.detail,
     pattern: /if store\.selectedDetailSection == \.taskCockpit[\s\S]*?TaskCockpitPanel\([\s\S]*?else if let skill[\s\S]*?EmptyDetailView\(\)/,
+  },
+  {
+    label: "task cockpit panel lives in a dedicated module file",
+    text: files.taskCockpit,
+    pattern: /struct TaskCockpitPanel:[\s\S]*?TaskCockpitResultView[\s\S]*?TaskCockpitSafetyList/,
+  },
+  {
+    label: "detail presentation primitives live in a dedicated module file",
+    text: files.detailPrimitives,
+    pattern: /struct SafetyPill:[\s\S]*?struct SummaryChip:[\s\S]*?struct RoutingInlineList:[\s\S]*?struct MetadataRow:/,
   },
   {
     label: "sidebar exposes primary work surfaces",
@@ -166,7 +179,7 @@ const checks = [
   },
   {
     label: "LLM review preview exposes no-action boundary",
-    text: files.detail,
+    text: files.detailSurface,
     pattern: /Label\(UIStrings\.llmReviewNoActions,\s*systemImage:\s*"nosign"\)/,
   },
   {
