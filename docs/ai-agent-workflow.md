@@ -96,7 +96,7 @@ pnpm dev:macos
 
 Then operate the real app with macOS Computer Use when the macOS session is confirmed unlocked and interactive.
 
-A valid `get_app_state` result for the target app window is enough to proceed. If `get_app_state` returns `remoteConnection`, `cgWindowNotFound`, an activation error, or another signal that the session/window is not interactable, stop Computer Use attempts for that pass and record the blocker. If Computer Use can observe the window but a specific action primitive such as click/key input fails, record that tool-action limitation and use another macOS AX path only when each operation is followed by Computer Use state read-back.
+A valid `get_app_state` result for the target app window is enough to proceed. If `get_app_state` returns `remoteConnection`, `cgWindowNotFound`, `timeoutReached`, an activation error, or another signal that the session/window is not interactable, stop Computer Use attempts for that pass and record the canonical blocker. Use `pnpm classify:validation-blocker -- "<tool output>"` when the raw tool text is ambiguous. If Computer Use can observe the window but a specific action primitive such as click/key input fails, record that tool-action limitation and use another macOS AX path only when each operation is followed by Computer Use state read-back.
 
 ## Screenshot Rules
 

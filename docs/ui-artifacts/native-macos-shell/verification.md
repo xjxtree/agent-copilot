@@ -132,6 +132,7 @@ Date: 2026-06-08
 - V2.68 screenshot was regenerated on 2026-06-13 by `pnpm check:macos` fixture smoke after cockpit-first IA changes. Manual inspection confirmed Task Cockpit is selected by default, Work surfaces appear before Adapter/Health diagnostics, and the detail picker no longer duplicates the "Detail Section" label.
 - V2.68 real-local launch found the current `SkillsCopilot` window via CG metadata, but the macOS session was locked (`CGSSessionScreenIsLocked=Yes`), Computer Use timed out, and the direct real-local capture was black. The black screenshot was rejected and not committed.
 - V2.69 screenshot evidence is generated with screenshot privacy mode available by default and checked by `pnpm verify:screenshot-artifacts`. The capture helper rejects locked-session, black-capture, mostly transparent, and near-flat screenshots before accepting evidence.
+- V2.72 validation hardening adds canonical blocker classification, `pnpm classify:validation-blocker`, `pnpm verify:validation-blockers`, smoke lock-session preflight, and screenshot verifier canonical failure labels. Current locked-session capture attempts are blockers, not completed screenshot evidence.
 
 ## Notes
 

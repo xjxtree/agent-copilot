@@ -201,7 +201,7 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
 - V2.30 草稿输出仅作 `review` 与复制使用，不能直接 apply；不会持久化 triage 状态（`Open / Reviewed / Ignored / Needs follow-up`）。
 - 当前阶段不读取或写入 LLM credentials；未来 provider 路径需显式 opt-in，并延续 V2.7 的 Keychain 优先边界。
 
-### 2.4.3 V2.41-V2.71 AI-native provider boundary
+### 2.4.3 V2.41-V2.72 AI-native provider boundary
 
 **风险**：AI-native 分析会引入真实出站请求、用户配置的 endpoint/API key、prompt 内容、模型响应和成本/调用历史；如果边界不清晰，可能泄露本地路径、skill 内容、agent config、凭据或让 AI 输出绕过安全写入流程。
 
@@ -228,6 +228,7 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
 - V2.66 Skill Lifecycle Timeline 已完成；`skill.lifecycleTimeline` 只能从 existing catalog evidence、scan/provenance/fingerprint state、stale/drift、finding/triage/remediation history、prompt run metadata、provider observability metadata 与 session review outcomes 派生 redacted lifecycle metadata。它不得默认持久化 new raw lifecycle artifacts，不得写 skill files 或 agent config，不得 mutate triage，不得创建/回滚 snapshots，不得执行 scripts，不得默认发送 provider/network requests，不得读取 credentials，不得保存 raw skill content、raw prompt/response、raw trace/transcript、secrets 或 unredacted local paths，不得 cloud sync 或 telemetry。
 - V2.67 Guided Cleanup Flow 是 completed；`cleanup.planGuidedFlow` 只能 user-triggered、deterministic/read-only 地组织 existing local evidence：findings、cleanup queue、similar groups、stale/drift、readiness/routing/task cockpit、lifecycle timeline、remediation plan/drafts/impact/batch review、adapter diagnostics 与 source provenance。`cleanup.recordGuidedStep` 最多写入 app-local redacted guided cleanup step metadata，例如 `guided-cleanup-steps.json`；它不得写 skill files 或 agent config、不得 mutate triage、不得创建/回滚 snapshots、不得执行 scripts、不得读取 credentials、不得默认发送 provider/network requests、不得持久化 raw prompt/raw response/raw trace/secrets/unredacted local paths、不得 cloud sync 或 telemetry。实际 enable/disable/edit/remediation 必须跳转或调用既有 preview-first、explicit-confirm safe write path，不能在 guided flow 内隐藏 apply。
 - V2.71 Guided Cleanup safe-action links 是 completed；`safe_action_deep_link` 与 `deep_link` 只能指向既有 read-only 或 preview-first 安全入口，且 `can_apply=false`。允许的目标包括 cleanup/detail、remediation plan/drafts/impact/batch review、skill lifecycle、task cockpit、safe batch preview panel context 和 guided step metadata record；禁止直接指向 `batch.applySkillToggles`、`config.toggleSkill`、script execution、provider confirmation 或任何隐藏写入/执行/确认路径。safe batch link 只打开上下文，不自动 preview/apply。
+- V2.72 Validation harness hardening 是 completed；只增加 validation blocker taxonomy、classifier CLI、lock-screen preflight、screenshot artifact failure labels 和 evidence matrix。它不改变 provider/network、skill/config write、triage、snapshot、script execution、credential、cloud sync 或 telemetry 边界。
 - AI 输出永远是 untrusted suggestion；写入仍必须走已有 safe write path：preview-first、explicit confirm、snapshot、atomic write、readback verify、rollback。
 - AI 不能成为 `ExecutionRequester`，不能创建 `Completed` execution record，不能确认脚本执行。
 

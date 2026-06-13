@@ -80,7 +80,7 @@ Abort if fixture smoke requires real user config, uses `--allow-stale-app` for r
 
 ## 5. Real Local Computer Use Gate
 
-Current mainline real local validation passed on 2026-06-09. Fixture smoke screenshots are still not a substitute for real local validation on future release candidates.
+Latest V2.72 real local validation attempt on 2026-06-13 is blocked by the locked macOS session and Computer Use `timeoutReached`. Fixture smoke screenshots are still not a substitute for real local validation on future release candidates.
 
 For each future user-visible, UI, or service protocol candidate, run the real local app against the developer's real environment:
 
@@ -106,7 +106,7 @@ Then operate the real app with macOS Computer Use and record:
 - [ ] Script execution is not presented as a completed working feature. If a future execution affordance is visible, it is default-denied, shows cwd/env/network/files preview before confirmation, and records blocked/cancelled/failure attempts without LLM-triggered execution.
 - [ ] Completed evidence is app-window-only.
 
-If the app process launches but the window cannot be resolved, record the blocker exactly and keep real local validation pending for that candidate. Do not replace this with smoke evidence.
+If the app process launches but the window cannot be resolved, record the canonical blocker exactly and keep real local validation pending for that candidate. `pnpm classify:validation-blocker -- "<tool output>"` should classify raw Computer Use/AX/capture text. Do not replace this with smoke evidence.
 
 ## 6. Artifact Boundary
 

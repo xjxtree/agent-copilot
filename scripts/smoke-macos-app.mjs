@@ -14,6 +14,7 @@ import {
 } from "node:fs";
 import { platform, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { formatValidationBlocker } from "./validation-blockers.mjs";
 
 const appName = "SkillsCopilot";
 const bundleId = "dev.skills-copilot.native";
@@ -181,7 +182,7 @@ function assertTargetFresh(label, targetPath, inputPaths) {
     .map((input) => `  - ${input.path}`)
     .join("\n");
   fail(
-    `${label} is older than source inputs.\n` +
+    `stale-bundle: ${label} is older than source inputs.\n` +
       `${examples}\n` +
       "Run ./script/build_and_run.sh --verify or pnpm check:macos before Smoke App Run.",
   );
@@ -446,7 +447,31 @@ function waitForWindow(timeoutMs = 10_000) {
     }
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
   }
-  fail(`timed out waiting for visible ${appName} window`);
+  const sessionBlocker = currentSessionBlocker();
+  fail(sessionBlocker ?? `window-not-found: timed out waiting for visible ${appName} window`);
+}
+
+function currentSessionBlocker() {
+  const swift = `
+import CoreGraphics
+import Foundation
+
+if let session = CGSessionCopyCurrentDictionary() as? [String: Any],
+   let locked = session["CGSSessionScreenIsLocked"] as? Bool,
+   locked {
+    print("locked-session: macOS session is locked; refusing UI evidence.")
+    exit(6)
+}
+exit(0)
+`;
+  const result = tryRun("swift", ["-e", swift]);
+  if (!result.ok) {
+    return result.stderr || result.stdout || "tool-layer-unknown: unable to read macOS session state";
+  }
+  if (result.stdout) {
+    return result.stdout;
+  }
+  return null;
 }
 
 function visibleWindowId() {
@@ -473,15 +498,20 @@ exit(1)
 }
 
 function captureAppWindow() {
+  const sessionBlocker = currentSessionBlocker();
+  if (sessionBlocker) {
+    fail(formatValidationBlocker(sessionBlocker, "capture-window"));
+  }
   tryRun("caffeinate", ["-u", "-t", "3"]);
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1_000);
   const result = tryRun("./script/capture_app_window.sh", [appName, screenshotPath]);
   if (!result.ok) {
-    fail(
+    fail(formatValidationBlocker(
       result.stderr ||
         result.stdout ||
-        "failed to capture app window; check macOS Screen Recording permission for the invoking terminal",
-    );
+        "screen-recording-permission: failed to capture app window; check macOS Screen Recording permission for the invoking terminal",
+      "capture-window",
+    ));
   }
   note(result.stdout);
 }

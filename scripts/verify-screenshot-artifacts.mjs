@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { inflateSync } from "node:zlib";
+import { formatValidationBlocker } from "./validation-blockers.mjs";
 
 const repoRoot = resolve(new URL("..", import.meta.url).pathname);
 const inputs = process.argv.slice(2);
@@ -81,10 +82,12 @@ function parsePng(buffer, path) {
   }
 
   if (width < 200 || height < 120) {
-    fail(`${path} dimensions are too small: ${width}x${height}`);
+    fail(formatValidationBlocker(`invalid-capture: ${path} dimensions are too small: ${width}x${height}`));
   }
   if (bitDepth !== 8 || ![0, 2, 6].includes(colorType) || interlace !== 0) {
-    fail(`${path} uses unsupported PNG format: bitDepth=${bitDepth}, colorType=${colorType}, interlace=${interlace}`);
+    fail(formatValidationBlocker(
+      `invalid-capture: ${path} uses unsupported PNG format: bitDepth=${bitDepth}, colorType=${colorType}, interlace=${interlace}`,
+    ));
   }
 
   const bytesPerPixel = colorType === 6 ? 4 : colorType === 2 ? 3 : 1;
@@ -167,13 +170,13 @@ function validateVisualSignal(path, parsed) {
   const variance = Math.max(0, brightnessSquaredSum / sampleCount - mean * mean);
   const opaqueRatio = opaqueCount / sampleCount;
   if (opaqueRatio < 0.2) {
-    fail(`${path} is mostly transparent`);
+    fail(formatValidationBlocker(`transparent-capture: ${path} is mostly transparent`));
   }
   if (mean < 0.025) {
-    fail(`${path} is near black`);
+    fail(formatValidationBlocker(`black-capture: ${path} is near black`));
   }
   if (variance < 0.000015) {
-    fail(`${path} has near-zero visual variance`);
+    fail(formatValidationBlocker(`flat-capture: ${path} has near-zero visual variance`));
   }
 }
 

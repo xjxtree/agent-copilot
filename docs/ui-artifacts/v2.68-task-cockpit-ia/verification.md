@@ -23,4 +23,4 @@ Date: 2026-06-13
 
 The current `dist/SkillsCopilot.app` launched against real local app data and CG window metadata found the app window. The session was locked (`CGSSessionScreenIsLocked=Yes`), Computer Use timed out, and final direct capture was black. The black screenshot was rejected and not committed.
 
-This is recorded as the V2.68 locked-session/window-capture blocker. Real-local visual validation should be retried after unlocking, and V2.69 should add screenshot/privacy mode plus black-image rejection.
+This is recorded as the V2.68 locked-session/window-capture blocker. V2.69 later added screenshot privacy plus black-image rejection, and V2.72 added canonical blocker classification; real-local visual validation should still be retried after unlocking.

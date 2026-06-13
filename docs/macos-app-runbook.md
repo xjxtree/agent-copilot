@@ -92,11 +92,21 @@ Screenshot privacy rules:
 
 - Smoke and real-local screenshots must not expose actual local `HOME`, app data, `/var/folders`, temporary fixture roots, tokens, or credential placeholders.
 - Keep screenshot privacy mode enabled by default for committed evidence. Native UI path rows should show screenshot-safe placeholders and collapsed paths unless the reviewer explicitly reveals a full path for local debugging.
-- `script/capture_app_window.sh` fails fast for locked macOS sessions and rejects near-black, mostly transparent, or near-flat captures.
+- `script/capture_app_window.sh` fails fast for locked macOS sessions and rejects near-black, mostly transparent, or near-flat captures with canonical blocker codes.
+- Use `pnpm classify:validation-blocker -- "<tool output>"` when Computer Use, AX, or direct capture returns raw text such as `timeoutReached`, `cgWindowNotFound`, or `remoteConnection`.
 - Run `pnpm verify:screenshot-artifacts` after regenerating screenshots.
 - Redact visible sensitive values before committing evidence.
 - Run `pnpm check:privacy`.
 - New screenshots still require manual visual inspection.
+
+V2.72 fixture/real evidence matrix:
+
+| Evidence | Valid use | Not valid for |
+| --- | --- | --- |
+| `pnpm smoke:macos-app -- --fixture-data` | Build/service health with temporary HOME/app data/project roots | Real-local visual completion |
+| `pnpm smoke:macos-app -- --fixture-data --capture-window` | Fixture app-window capture only when session is unlocked and image is nonblack/nonflat | Replacing blocked real-local Computer Use |
+| `pnpm verify:screenshot-artifacts` | Rejecting unreadable, black, transparent, flat, or sensitive PNG artifacts | OCR/manual visual layout judgment |
+| Real app + Computer Use + app-window screenshot | Required visual/interaction evidence for user-visible UI/protocol changes when session is unlocked | Committing raw local paths or accepting locked/black captures |
 
 ## Local App Run
 
@@ -106,9 +116,9 @@ Local App Run uses the developer's real environment:
 ./script/build_and_run.sh run
 ```
 
-Use it to inspect actual local behavior and visual quality. Any manual validation for code changes should operate this app with macOS Computer Use when the macOS session is unlocked and Computer Use can resolve the app window. The current mainline app passed this real local pass on 2026-06-10; future user-visible, UI, or service protocol candidates must rerun it.
+Use it to inspect actual local behavior and visual quality. Any manual validation for code changes should operate this app with macOS Computer Use when the macOS session is unlocked and Computer Use can resolve the app window. The latest V2.72 attempt on 2026-06-13 is blocked by the locked macOS session and Computer Use `timeoutReached`; future user-visible, UI, or service protocol candidates must rerun it after unlock.
 
-If the session is locked or Computer Use/AX cannot resolve the app window (for example `remoteConnection` / `cgWindowNotFound` / activation errors), record the blocker explicitly and keep the candidate pending. This is a valid blocker record, but it is not a substitute for real-local verification.
+If the session is locked or Computer Use/AX cannot resolve the app window, record the canonical blocker (`locked-session`, `computer-use-timeout`, `window-not-found`, `remote-connection`, `no-ax-window`, `activation-failed`, `screen-recording-permission`, `black-capture`, `flat-capture`, `transparent-capture`, `invalid-capture`, `stale-bundle`, or `tool-layer-unknown`) and keep the candidate pending. This is a valid blocker record, but it is not a substitute for real-local verification.
 
 ## V2.25 Agent-config Timeline Validation (完成口径)
 

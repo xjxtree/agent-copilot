@@ -58,7 +58,8 @@ Before taking or accepting app screenshots for completed UI evidence:
 - Confirm the macOS session is unlocked and interactive. Capture helpers should check `CGSessionCopyCurrentDictionary` / `CGSSessionScreenIsLocked`; if the session is locked, fail fast or record a locked-session blocker.
 - Reject all-black, near-all-black, or zero-useful-pixel captures. A black screenshot is evidence of a capture/session problem, not evidence that the UI rendered correctly.
 - A valid capture must show the target app window content, not only a window id, process id, or successful smoke command.
-- If Computer Use, AX, or direct capture disagree, record the exact blocker classification: locked session, no AX window, `cgWindowNotFound`, `remoteConnection`, black capture, stale bundle, or unknown tool-layer issue.
+- If Computer Use, AX, or direct capture disagree, record the exact V2.72 blocker classification: `locked-session`, `computer-use-timeout`, `window-not-found`, `remote-connection`, `no-ax-window`, `activation-failed`, `screen-recording-permission`, `black-capture`, `flat-capture`, `transparent-capture`, `invalid-capture`, `stale-bundle`, or `tool-layer-unknown`.
+- Use `pnpm classify:validation-blocker -- "<tool output>"` for raw Computer Use/AX/capture output.
 - Fixture smoke screenshots can support build health, but cannot replace a blocked real-local UI check for user-visible, UI, or service-protocol changes.
 
 ## 4. Required macOS App Verification
@@ -74,7 +75,7 @@ This includes:
 - Service protocol changes
 - Native macOS UI changes
 
-Documentation-only changes are exempt. If the app cannot be launched, the macOS session is locked or not clearly interactive, or Computer Use returns `remoteConnection`, `cgWindowNotFound`, or activation errors, record the blocker and keep the candidate pending; do not use smoke screenshots as a substitute for blocked real-local checks.
+Documentation-only changes are exempt. If the app cannot be launched, the macOS session is locked or not clearly interactive, or Computer Use returns `remoteConnection`, `cgWindowNotFound`, `timeoutReached`, or activation errors, record the canonical blocker and keep the candidate pending; do not use smoke screenshots as a substitute for blocked real-local checks.
 
 Minimum verification record:
 

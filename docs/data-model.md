@@ -471,9 +471,9 @@ CREATE TABLE config_snapshot (
 - Explicitly excluded from report data model: provider/AI outputs, credentials, signed package metadata, distribution targets, telemetry records, and script execution traces.
 - Completed without adding persistent catalog schema; exports are generated from existing read models and written as redacted local artifacts.
 
-## V2.41-V2.71 AI-native skill review models
+## V2.41-V2.72 AI-native skill review models
 
-The AI-native line introduces analysis models incrementally and evidence-first. V2.41 adds app-data provider profile metadata and Keychain credential references, V2.61 adds redacted prompt run history, V2.62 adds app-local redacted Agent Session Skill Review metadata, V2.63 adds a derived Local Skill Map response, V2.64 adds a completed Provider Observability view, V2.65 adds a completed Task-first Cockpit response, V2.66 adds a completed Skill Lifecycle Timeline response, V2.67 adds completed Guided Cleanup Flow response plus app-local redacted step metadata, and V2.71 adds navigation-only guided cleanup safe-action link metadata.
+The AI-native line introduces analysis models incrementally and evidence-first. V2.41 adds app-data provider profile metadata and Keychain credential references, V2.61 adds redacted prompt run history, V2.62 adds app-local redacted Agent Session Skill Review metadata, V2.63 adds a derived Local Skill Map response, V2.64 adds a completed Provider Observability view, V2.65 adds a completed Task-first Cockpit response, V2.66 adds a completed Skill Lifecycle Timeline response, V2.67 adds completed Guided Cleanup Flow response plus app-local redacted step metadata, V2.71 adds navigation-only guided cleanup safe-action link metadata, and V2.72 adds validation-only blocker taxonomy/tooling without changing persisted product models.
 
 Model families:
 

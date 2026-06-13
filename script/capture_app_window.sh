@@ -86,7 +86,7 @@ func validateImage(_ image: CGImage, expectedWidth: Double, expectedHeight: Doub
     let variance = max(0, brightnessSquaredSum / Double(sampleCount) - mean * mean)
 
     if opaqueRatio < 0.2 {
-        fputs("invalid-capture: screenshot is mostly transparent.\n", stderr)
+        fputs("transparent-capture: screenshot is mostly transparent.\n", stderr)
         return false
     }
     if mean < 0.025 {
@@ -118,7 +118,7 @@ for window in windows {
         CGWindowID(id),
         [.boundsIgnoreFraming, .bestResolution]
     ) else {
-        fputs("Unable to create image for \(owner) window \(id).\n", stderr)
+        fputs("screen-recording-permission: unable to create image for \(owner) window \(id).\n", stderr)
         exit(3)
     }
 
@@ -145,7 +145,7 @@ for window in windows {
     exit(0)
 }
 
-fputs("No visible \(owner) app window found.\n", stderr)
+fputs("window-not-found: No visible \(owner) app window found.\n", stderr)
 exit(1)
 ' "$APP_OWNER" "$OUTPUT_ABS"
 
