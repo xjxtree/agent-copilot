@@ -11,6 +11,7 @@ enum AppAccessibilityID {
     static let taskCockpitStatus = "skills-copilot.task-cockpit.status"
     static let taskCockpitCancelButton = "skills-copilot.task-cockpit.cancel"
     static let taskCockpitRetryButton = "skills-copilot.task-cockpit.retry"
+    static let taskCockpitStageProgress = "skills-copilot.task-cockpit.stage-progress"
     static let taskCockpitResult = "skills-copilot.task-cockpit.result"
 }
 

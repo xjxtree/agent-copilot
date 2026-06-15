@@ -686,6 +686,18 @@ enum UIStrings {
     static var taskCockpitNoRows: String { text("taskCockpit.empty.rows", "No rows returned.") }
     static var taskCockpitRecommendedAgent: String { text("taskCockpit.recommendedAgent", "Recommended agent") }
     static var taskCockpitRecommendedSkill: String { text("taskCockpit.recommendedSkill", "Recommended skill") }
+    static var taskCockpitProgressTitle: String { text("taskCockpit.progress.title", "Progressive feedback") }
+    static var taskCockpitProgressPending: String { text("taskCockpit.progress.pending", "Pending") }
+    static var taskCockpitProgressChecking: String { text("taskCockpit.progress.checking", "Checking") }
+    static var taskCockpitProgressReady: String { text("taskCockpit.progress.ready", "Ready") }
+    static var taskCockpitProgressNoRows: String { text("taskCockpit.progress.noRows", "No rows") }
+    static var taskCockpitProgressPartial: String { text("taskCockpit.progress.partial", "Partial") }
+    static var taskCockpitProgressSkipped: String { text("taskCockpit.progress.skipped", "Skipped") }
+    static var taskCockpitProgressUnavailable: String { text("taskCockpit.progress.unavailable", "Unavailable") }
+    static var taskCockpitProgressFallback: String { text("taskCockpit.progress.fallback", "Fallback / partial") }
+    static var taskCockpitProgressCancelled: String { text("taskCockpit.progress.cancelled", "Cancelled") }
+    static var taskCockpitProgressTimedOut: String { text("taskCockpit.progress.timedOut", "Timed out") }
+    static var taskCockpitProgressFailed: String { text("taskCockpit.progress.failed", "Stopped") }
 
     static func taskCockpitPreparingStatus(elapsedSeconds: Int, timeoutSeconds: Int) -> String {
         format("taskCockpit.preparingStatus", "Preparing local cockpit... %d/%d seconds before timeout.", elapsedSeconds, timeoutSeconds)
@@ -705,6 +717,14 @@ enum UIStrings {
 
     static func taskCockpitElapsedSeconds(_ elapsedSeconds: Int) -> String {
         format("taskCockpit.elapsedSeconds", "Elapsed: %d seconds.", elapsedSeconds)
+    }
+
+    static func taskCockpitProgressBlocked(_ blockerCount: Int) -> String {
+        format("taskCockpit.progress.blocked", "%d blockers", blockerCount)
+    }
+
+    static func taskCockpitProgressRows(_ rowCount: Int) -> String {
+        format("taskCockpit.progress.rows", "%d rows", rowCount)
     }
     static var similarGroupingTitle: String { text("similarGrouping.title", "Similar Skill Grouping") }
     static var similarGroupingBoundary: String { text("similarGrouping.boundary", "User-triggered, read-only local grouping for duplicate, similar, and confusable skills across catalog evidence. It cannot call a provider, write skill files, mutate agent config, create snapshots, change triage, execute scripts, read credentials, persist raw prompts/responses/traces, sync cloud data, or emit telemetry.") }

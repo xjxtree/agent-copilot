@@ -53,6 +53,12 @@ struct TaskCockpitPanel: View {
                 onRetry: onBuild
             )
 
+            TaskCockpitStageProgressView(
+                state: operationState,
+                isBuilding: isBuilding,
+                result: result
+            )
+
             if let result {
                 TaskCockpitResultView(result: result)
             } else if !isBuilding {
@@ -189,6 +195,276 @@ private struct TaskCockpitOperationStatusView: View {
     private func progress(now: Date) -> CGFloat {
         guard state.timeoutSeconds > 0 else { return 0 }
         return min(1, CGFloat(Double(state.elapsedSeconds(now: now)) / Double(state.timeoutSeconds)))
+    }
+}
+
+private struct TaskCockpitStageProgressView: View {
+    let state: TaskCockpitOperationState
+    let isBuilding: Bool
+    let result: TaskCockpitResult?
+
+    var body: some View {
+        if shouldRender {
+            TimelineView(.periodic(from: state.startedAt ?? Date(), by: 1)) { context in
+                let snapshot = TaskCockpitProgressSnapshot(
+                    operationState: state,
+                    result: result,
+                    now: context.date
+                )
+                content(snapshot: snapshot)
+            }
+        }
+    }
+
+    private var shouldRender: Bool {
+        isBuilding || result != nil || state.phase != .idle
+    }
+
+    private var blockerCount: Int {
+        guard let result else { return 0 }
+        return max(result.summary.blockerCount, result.blockerRows.count, result.aggregation?.blockerCodes.count ?? 0)
+    }
+
+    private func content(snapshot: TaskCockpitProgressSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Label(UIStrings.taskCockpitProgressTitle, systemImage: "list.bullet.clipboard")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                ForEach(indicators(snapshot: snapshot)) { indicator in
+                    Label(indicator.title, systemImage: indicator.systemImage)
+                        .font(.caption2.bold())
+                        .foregroundStyle(indicator.foregroundStyle)
+                        .lineLimit(1)
+                }
+            }
+
+            ProgressView(value: snapshot.estimatedProgress)
+                .controlSize(.small)
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], alignment: .leading, spacing: 8) {
+                ForEach(snapshot.stageRows) { row in
+                    TaskCockpitStageTile(row: row)
+                }
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.24), in: RoundedRectangle(cornerRadius: 6))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(AppAccessibilityID.taskCockpitStageProgress)
+        .accessibilityLabel(UIStrings.taskCockpitProgressTitle)
+        .accessibilityValue(accessibilitySummary(snapshot: snapshot))
+    }
+
+    private func indicators(snapshot: TaskCockpitProgressSnapshot) -> [TaskCockpitStageIndicator] {
+        var rows: [TaskCockpitStageIndicator] = []
+        if state.startedAt != nil || isBuilding {
+            rows.append(
+                TaskCockpitStageIndicator(
+                    id: "elapsed",
+                    title: UIStrings.taskCockpitElapsedSeconds(snapshot.elapsedSeconds),
+                    systemImage: "timer",
+                    foregroundStyle: AnyShapeStyle(.secondary)
+                )
+            )
+        }
+        if hasFallbackIndicator(snapshot: snapshot) {
+            rows.append(
+                TaskCockpitStageIndicator(
+                    id: "fallback",
+                    title: UIStrings.taskCockpitProgressFallback,
+                    systemImage: "exclamationmark.triangle",
+                    foregroundStyle: AnyShapeStyle(.secondary)
+                )
+            )
+        }
+        if blockerCount > 0 {
+            rows.append(
+                TaskCockpitStageIndicator(
+                    id: "blocked",
+                    title: UIStrings.taskCockpitProgressBlocked(blockerCount),
+                    systemImage: "exclamationmark.octagon",
+                    foregroundStyle: AnyShapeStyle(.orange)
+                )
+            )
+        }
+        if state.phase == .timedOut || result?.aggregation?.timedOut == true {
+            rows.append(
+                TaskCockpitStageIndicator(
+                    id: "timedOut",
+                    title: UIStrings.taskCockpitProgressTimedOut,
+                    systemImage: "clock.badge.exclamationmark",
+                    foregroundStyle: AnyShapeStyle(.orange)
+                )
+            )
+        }
+        return rows
+    }
+
+    private func hasFallbackIndicator(snapshot: TaskCockpitProgressSnapshot) -> Bool {
+        snapshot.stageRows.contains { row in
+            row.state == .fallback || row.state == .unavailable
+        } || result?.aggregation?.partial == true || result?.aggregation?.fallbackUsed == true
+    }
+
+    private func accessibilitySummary(snapshot: TaskCockpitProgressSnapshot) -> String {
+        let stageSummary = snapshot.stageRows
+            .map { "\($0.title): \(TaskCockpitStageTile.stateTitle($0.state))" }
+            .joined(separator: ", ")
+        let indicatorSummary = indicators(snapshot: snapshot)
+            .map(\.title)
+            .joined(separator: ", ")
+        guard !indicatorSummary.isEmpty else { return stageSummary }
+        return "\(indicatorSummary). \(stageSummary)"
+    }
+}
+
+private struct TaskCockpitStageIndicator: Identifiable {
+    let id: String
+    let title: String
+    let systemImage: String
+    let foregroundStyle: AnyShapeStyle
+}
+
+private struct TaskCockpitStageTile: View {
+    let row: TaskCockpitProgressRow
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Image(systemName: stageSystemImage(row.stage))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(row.title)
+                    .font(.caption.bold())
+                    .lineLimit(1)
+                Label(Self.stateTitle(row.state), systemImage: stateSystemImage(row.state))
+                    .font(.caption2)
+                    .foregroundStyle(stateForegroundStyle(row.state))
+                    .lineLimit(1)
+                if !row.detail.isEmpty {
+                    Text(row.detail)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+            Spacer(minLength: 4)
+            VStack(alignment: .trailing, spacing: 2) {
+                if row.count > 0 {
+                    Text("\(row.count)")
+                        .font(.caption.monospacedDigit().bold())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                if let score = row.score {
+                    Text("\(score)")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 8)
+        .frame(minHeight: 68, alignment: .center)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.32), in: RoundedRectangle(cornerRadius: 6))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(row.title)
+        .accessibilityValue(accessibilityValue)
+    }
+
+    static func stateTitle(_ state: TaskCockpitProgressState) -> String {
+        switch state {
+        case .idle, .queued:
+            return UIStrings.taskCockpitProgressPending
+        case .active:
+            return UIStrings.taskCockpitProgressChecking
+        case .completed:
+            return UIStrings.taskCockpitProgressReady
+        case .empty:
+            return UIStrings.taskCockpitProgressNoRows
+        case .fallback:
+            return UIStrings.taskCockpitProgressPartial
+        case .skipped:
+            return UIStrings.taskCockpitProgressSkipped
+        case .unavailable:
+            return UIStrings.taskCockpitProgressUnavailable
+        case .timedOut:
+            return UIStrings.taskCockpitProgressTimedOut
+        case .cancelled:
+            return UIStrings.taskCockpitProgressCancelled
+        case .failed:
+            return UIStrings.taskCockpitProgressFailed
+        }
+    }
+
+    private var accessibilityValue: String {
+        var parts = [Self.stateTitle(row.state)]
+        if row.count > 0 {
+            parts.append(UIStrings.taskCockpitProgressRows(row.count))
+        }
+        if !row.detail.isEmpty {
+            parts.append(row.detail)
+        }
+        return parts.joined(separator: ". ")
+    }
+
+    private func stageSystemImage(_ stage: TaskCockpitProgressStage) -> String {
+        switch stage {
+        case .readiness:
+            return "gauge.medium"
+        case .routing:
+            return "point.3.connected.trianglepath.dotted"
+        case .crossAgent:
+            return "person.3"
+        case .remediation:
+            return "wrench.and.screwdriver"
+        case .batchReview:
+            return "checklist"
+        case .provider:
+            return "network"
+        case .session:
+            return "text.bubble"
+        }
+    }
+
+    private func stateSystemImage(_ state: TaskCockpitProgressState) -> String {
+        switch state {
+        case .idle, .queued:
+            return "circle"
+        case .active:
+            return "hourglass"
+        case .completed:
+            return "checkmark.circle"
+        case .empty:
+            return "minus.circle"
+        case .fallback:
+            return "exclamationmark.triangle"
+        case .skipped:
+            return "forward.circle"
+        case .unavailable, .failed:
+            return "exclamationmark.octagon"
+        case .timedOut:
+            return "clock.badge.exclamationmark"
+        case .cancelled:
+            return "xmark.circle"
+        }
+    }
+
+    private func stateForegroundStyle(_ state: TaskCockpitProgressState) -> AnyShapeStyle {
+        switch state {
+        case .active:
+            return AnyShapeStyle(.primary)
+        case .unavailable, .timedOut, .failed:
+            return AnyShapeStyle(.orange)
+        case .idle, .queued, .completed, .empty, .fallback, .skipped, .cancelled:
+            return AnyShapeStyle(.secondary)
+        }
     }
 }
 

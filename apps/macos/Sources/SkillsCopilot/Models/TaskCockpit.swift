@@ -573,6 +573,7 @@ struct TaskCockpitResult: Decodable, Hashable {
     let blockerRows: [TaskCockpitContextRow]
     let evidenceReferences: [ProviderObservabilityEvidenceReference]
     let promptRequest: ProviderObservabilityPromptRequest?
+    let aggregation: TaskCockpitAggregation?
     let safetyFlags: ProviderObservabilitySafety
     let fallbackReason: String?
 
@@ -662,6 +663,7 @@ struct TaskCockpitResult: Decodable, Hashable {
         case evidence
         case promptRequest = "prompt_request"
         case promptRequestAlt = "promptRequest"
+        case aggregation
         case safetyFlags = "safety_flags"
         case safetyFlagsAlt = "safetyFlags"
         case safety
@@ -687,6 +689,7 @@ struct TaskCockpitResult: Decodable, Hashable {
         blockerRows: [TaskCockpitContextRow] = [],
         evidenceReferences: [ProviderObservabilityEvidenceReference] = [],
         promptRequest: ProviderObservabilityPromptRequest? = nil,
+        aggregation: TaskCockpitAggregation? = nil,
         safetyFlags: ProviderObservabilitySafety = ProviderObservabilitySafety(),
         fallbackReason: String? = nil
     ) {
@@ -707,6 +710,7 @@ struct TaskCockpitResult: Decodable, Hashable {
         self.blockerRows = blockerRows
         self.evidenceReferences = evidenceReferences
         self.promptRequest = promptRequest
+        self.aggregation = aggregation
         self.safetyFlags = safetyFlags
         self.fallbackReason = fallbackReason
     }
@@ -734,6 +738,7 @@ struct TaskCockpitResult: Decodable, Hashable {
             evidenceReferences: try container.decodeFlexibleTaskCockpitEvidence(keys: [.evidenceReferences, .evidenceReferencesAlt, .evidence]),
             promptRequest: try container.decodeIfPresent(ProviderObservabilityPromptRequest.self, forKey: .promptRequest)
                 ?? container.decodeIfPresent(ProviderObservabilityPromptRequest.self, forKey: .promptRequestAlt),
+            aggregation: try container.decodeIfPresent(TaskCockpitAggregation.self, forKey: .aggregation),
             safetyFlags: try container.decodeIfPresent(ProviderObservabilitySafety.self, forKey: .safetyFlags)
                 ?? container.decodeIfPresent(ProviderObservabilitySafety.self, forKey: .safetyFlagsAlt)
                 ?? container.decodeIfPresent(ProviderObservabilitySafety.self, forKey: .safety)

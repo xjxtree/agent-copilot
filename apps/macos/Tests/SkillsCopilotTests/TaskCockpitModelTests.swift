@@ -6,6 +6,9 @@ struct TaskCockpitModelTests {
         try decodesRealisticTaskCockpitPayload()
         try decodesAliasesAndStringForms()
         try classifiesFallbackAndPartialDiagnostics()
+        try derivesPreparingProgressRowsFromOperationState()
+        try derivesCompletedProgressRowsFromResultMetadata()
+        try derivesFallbackProgressRowsWithoutUnsafeCapabilities()
         try decodesServiceProtocolFixture()
     }
 
@@ -227,6 +230,135 @@ struct TaskCockpitModelTests {
         try expectEqual(partial.recoveryDiagnosticReason, UIStrings.taskCockpitCatalogUnavailableDiagnostic, "Catalog-unavailable payloads should surface a diagnostic even without fallback_reason.")
     }
 
+    private func derivesPreparingProgressRowsFromOperationState() throws {
+        let startedAt = Date(timeIntervalSinceReferenceDate: 1_000)
+        let now = Date(timeIntervalSinceReferenceDate: 1_004)
+        let state = TaskCockpitOperationState.preparing(
+            taskText: "Build a local skill routing cockpit.",
+            startedAt: startedAt,
+            timeoutSeconds: 14
+        )
+        let snapshot = TaskCockpitProgressSnapshot(operationState: state, result: nil, now: now)
+
+        try expectEqual(snapshot.stageRows.count, TaskCockpitProgressSnapshot.maximumStageCount, "Progress rows should stay bounded to the fixed cockpit stages.")
+        try expectEqual(
+            snapshot.stageRows.map(\.stage),
+            [.readiness, .routing, .crossAgent, .remediation, .batchReview, .provider, .session],
+            "Progress rows should preserve the stage order expected by the cockpit UI."
+        )
+        try expectEqual(snapshot.activeStage, .crossAgent, "Preparing progress should derive an active stage from elapsed bounded timeout.")
+        try expectEqual(snapshot.row(for: .crossAgent)?.state, .active, "The derived active stage should be marked active.")
+        try expectEqual(snapshot.row(for: .readiness)?.state, .queued, "Non-active loading stages should stay queued rather than pretending to be complete.")
+        try expectEqual(Int(snapshot.estimatedProgress * 100), 28, "Preparing progress should be clamped and derived from elapsed timeout.")
+        try expectEqual(snapshot.taskText, "Build a local skill routing cockpit.", "Progress snapshot should keep the exact operation task text.")
+    }
+
+    private func derivesCompletedProgressRowsFromResultMetadata() throws {
+        let result = TaskCockpitResult(
+            generatedBy: "local-v2.76",
+            catalogAvailable: true,
+            filters: TaskCockpitFilters(taskText: "Review local remediation readiness."),
+            summary: TaskCockpitSummary(
+                taskText: "Review local remediation readiness.",
+                routeCandidateCount: 1,
+                agentCandidateCount: 1,
+                skillCandidateCount: 1,
+                readinessSignalCount: 1,
+                sessionReviewCount: 1,
+                providerCallCount: 1,
+                remediationItemCount: 1,
+                recommendedAgent: "codex",
+                recommendedSkillName: "Fixture",
+                readinessScore: 82,
+                routingScore: 76
+            ),
+            routeCandidates: [
+                TaskCockpitCandidateRow(id: "route", title: "Route", routingScore: 76, summary: "Routing is medium.", evidenceRefs: ["routing:evidence"])
+            ],
+            agentCandidates: [
+                TaskCockpitCandidateRow(id: "agent", title: "Codex", agent: "codex", score: 80, summary: "Cross-agent row is available.", evidenceRefs: ["agent:evidence"])
+            ],
+            skillCandidates: [
+                TaskCockpitCandidateRow(id: "skill", title: "Fixture", agent: "codex", score: 78, evidenceRefs: ["skill:evidence"])
+            ],
+            readinessSignals: [
+                TaskCockpitContextRow(id: "readiness", title: "Readiness", detail: "Readiness is mostly ready.", evidenceRefs: ["readiness:evidence"])
+            ],
+            sessionReviewContext: [
+                TaskCockpitContextRow(id: "session", title: "Session", detail: "Session hit.", evidenceRefs: ["session:evidence"])
+            ],
+            providerObservabilityContext: [
+                TaskCockpitContextRow(id: "provider", title: "Provider", detail: "Provider metadata only.", evidenceRefs: ["provider:evidence"])
+            ],
+            remediationContext: [
+                TaskCockpitContextRow(id: "remediation", title: "Remediation", detail: "Open read-only plan.", source: "remediation.plan", evidenceRefs: ["remediation:evidence"])
+            ],
+            aggregation: TaskCockpitAggregation(
+                status: "complete",
+                elapsedMS: 12,
+                timeoutMS: 1_500,
+                completedStages: [
+                    "task-readiness",
+                    "routing",
+                    "agent-comparison",
+                    "remediation-plan",
+                    "batch-review",
+                    "provider-observability",
+                    "session-review"
+                ]
+            )
+        )
+        let operationState = TaskCockpitOperationState.preparing(
+            taskText: "Review local remediation readiness.",
+            startedAt: Date(timeIntervalSinceReferenceDate: 2_000),
+            timeoutSeconds: 15
+        ).finished(
+            phase: .completed,
+            message: UIStrings.taskCockpitLoaded,
+            finishedAt: Date(timeIntervalSinceReferenceDate: 2_001)
+        )
+
+        let snapshot = TaskCockpitProgressSnapshot(operationState: operationState, result: result)
+        try expectEqual(snapshot.completedStageCount, TaskCockpitProgressSnapshot.maximumStageCount, "Completed aggregation metadata should mark every known cockpit stage complete.")
+        try expectEqual(snapshot.row(for: .readiness)?.state, .completed, "Readiness rows should be complete when result evidence exists.")
+        try expectEqual(snapshot.row(for: .readiness)?.score, 82, "Readiness stage should surface the readiness score.")
+        try expectEqual(snapshot.row(for: .routing)?.count, 1, "Routing stage should infer a bounded route count from route or skill candidates.")
+        try expectEqual(snapshot.row(for: .routing)?.score, 76, "Routing stage should surface the routing score.")
+        try expectEqual(snapshot.row(for: .batchReview)?.state, .completed, "Batch review should be derived from aggregation metadata even without a separate service row.")
+        try expectEqual(snapshot.row(for: .batchReview)?.count, 0, "Batch review should not invent rows when only stage metadata is present.")
+        try expectEqual(snapshot.row(for: .provider)?.safetyFlagsClear, true, "Progress rows should preserve the read-only safety boundary.")
+    }
+
+    private func derivesFallbackProgressRowsWithoutUnsafeCapabilities() throws {
+        let fallbackReason = "Readiness subcall timed out; showing local fallback metadata."
+        let result = TaskCockpitResult(
+            generatedBy: "local-v2.76",
+            catalogAvailable: true,
+            filters: TaskCockpitFilters(taskText: "Review local fallback."),
+            summary: TaskCockpitSummary(taskText: "Review local fallback.", readinessScore: 60),
+            readinessSignals: [
+                TaskCockpitContextRow(id: "readiness", title: "Readiness fallback", detail: "Partial readiness metadata.")
+            ],
+            aggregation: TaskCockpitAggregation(partial: true, fallbackUsed: true, completedStages: ["task-readiness"]),
+            fallbackReason: fallbackReason
+        )
+        let operationState = TaskCockpitOperationState.preparing(
+            taskText: "Review local fallback.",
+            startedAt: Date(timeIntervalSinceReferenceDate: 3_000),
+            timeoutSeconds: 15
+        ).finished(
+            phase: .fallback,
+            message: UIStrings.taskCockpitLoadedWithFallback(fallbackReason),
+            finishedAt: Date(timeIntervalSinceReferenceDate: 3_001)
+        )
+
+        let snapshot = TaskCockpitProgressSnapshot(operationState: operationState, result: result)
+        try expectEqual(snapshot.diagnostic, fallbackReason, "Fallback progress should expose the service recovery diagnostic.")
+        try expectEqual(snapshot.row(for: .readiness)?.state, .fallback, "Stages with returned fallback evidence should be marked fallback.")
+        try expectEqual(snapshot.row(for: .routing)?.state, .unavailable, "Missing stages in a fallback result should be unavailable, not complete.")
+        try expectEqual(snapshot.stageRows.allSatisfy(\.safetyFlagsClear), true, "Fallback progress rows must not introduce provider, write, script, credential, cloud, or telemetry affordances.")
+    }
+
     private func decodesServiceProtocolFixture() throws {
         let fixtureURL = try repositoryRoot()
             .appendingPathComponent("fixtures/service-protocol/task.buildCockpit.response.json")
@@ -270,6 +402,8 @@ struct TaskCockpitModelTests {
         try expectEqual(result.evidenceReferences.count, 3, "Task cockpit should decode service evidence references.")
         try expectEqual(result.evidenceReferences.first?.source, "skill", "Task cockpit should decode evidence source type.")
         try expectEqual(result.evidenceReferences.first?.detail, "fixture-skill-id", "Task cockpit should decode evidence source id.")
+        try expectEqual(result.aggregation?.completedStages.count, 7, "Task cockpit should decode completed local aggregation stages.")
+        try expectEqual(result.aggregation?.completed(.batchReview), true, "Task cockpit aggregation should recognize batch-review stage metadata.")
         try expectEqual(result.promptRequest?.requestKind, "task_cockpit", "Task cockpit should decode prompt action metadata.")
         try expectContains(result.promptRequest?.summary, "explicit confirmation", "Task cockpit should surface prompt preview note.")
         try expectFalse(result.safetyFlags.providerRequestSent, "Task cockpit fixture must not send provider requests.")

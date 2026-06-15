@@ -24,6 +24,7 @@ struct MainWindowModelTests {
         try expectEqual(AppAccessibilityID.taskCockpitStatus, "skills-copilot.task-cockpit.status", "Task Cockpit status AX identifier should stay stable.")
         try expectEqual(AppAccessibilityID.taskCockpitCancelButton, "skills-copilot.task-cockpit.cancel", "Task Cockpit cancel AX identifier should stay stable.")
         try expectEqual(AppAccessibilityID.taskCockpitRetryButton, "skills-copilot.task-cockpit.retry", "Task Cockpit retry AX identifier should stay stable.")
+        try expectEqual(AppAccessibilityID.taskCockpitStageProgress, "skills-copilot.task-cockpit.stage-progress", "Task Cockpit staged progress AX identifier should stay stable.")
         try expectEqual(AppAccessibilityID.taskCockpitResult, "skills-copilot.task-cockpit.result", "Task Cockpit result AX identifier should stay stable.")
     }
 

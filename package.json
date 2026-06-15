@@ -21,6 +21,7 @@
     "verify:v2.73-docs": "node scripts/verify-v2-73-validation-docs.mjs",
     "verify:v2.74-docs": "node scripts/verify-v2-74-validation-docs.mjs",
     "verify:v2.75-docs": "node scripts/verify-v2-75-validation-docs.mjs",
+    "verify:v2.76-docs": "node scripts/verify-v2-76-validation-docs.mjs",
     "benchmark:10k": "node scripts/benchmark-10k.mjs",
     "test:macos-list-model": "node scripts/test-native-list-model.mjs",
     "benchmark:macos-list-model": "node scripts/benchmark-native-list-model.mjs",
