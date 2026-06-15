@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-**当前阶段**：V2.73 Task / remediation performance and timeout recovery 已完成。Task Cockpit 现在有 bounded local aggregation、阶段诊断、fallback/partial metadata、取消/重试 UI、stale completion 防护和真实本机 Computer Use 证据。V2.73 不改变 provider 默认调用、写入、执行、凭据、云同步或 telemetry 语义。
+**当前阶段**：V2.74 Real-local launch and window targeting stability 已完成。Dev launch、smoke 和截图 helper 现在以当前 workspace bundle path/PID/window identity 为准，重复同 bundle app 会 fail closed，Computer Use 可用精确 app path 定位主窗口。V2.74 不引入 signing、notarization、DMG/ZIP、public distribution、provider 默认调用、写入、执行、凭据、云同步或 telemetry 语义。
 
 **近期主线**：V2.68-V2.72 的 post-V2.67 consolidation 已收口。事实层仍由本地 scanner/rules/catalog 提供；当前重点是保持 task cockpit、guided cleanup、screenshot-safe evidence、module boundaries、safe links 和 hardened validation 稳定。短期不做全平台 UI 适配、正式签名 release、notarization、DMG/ZIP 或 public distribution。OpenClaw/Hermes writable/install 与 Pi install 仍保持 blocked；Pi production toggle 仅限 V2.37 evidence-backed guarded native scope，不自动开放兼容根写入。
 
@@ -23,7 +23,7 @@
 - V2.14 Hermes evidence-gate closeout 与 V2.17 Hermes read-only scanner：active/profile Hermes home `skills/**/SKILL.md` 只读进入 catalog。
 - V2.15 OpenClaw evidence-gate closeout 与 V2.16 OpenClaw read-only scanner：workspace/global documented filesystem roots 只读进入 catalog。
 - V2.18-V2.40：cross-agent analysis、skill health dashboard、read-only AI skill analysis、scan accuracy/dedupe、finding/conflict 语义、Health/Adapter Capability UX、Detail 诊断口径、Agent-config timeline、Finding explainability、skill identity/provenance dedupe、conflict semantic closeout、finding triage persistence、AI skill analysis workflow、Cleanup Queue、Rule tuning / suppression、Safe batch actions、Cross-agent comparison view、Local report export、Pi writable evidence harness、Pi guarded writable toggle、Hermes external roots、OpenClaw workspace deepening、Adapter diagnostics 已收口。
-- V2.41-V2.73：AI Provider Foundation、Prompt Preview/Redaction、AI Skill Quality、AI Task Readiness、AI Routing Confidence、Task Benchmark/Regression、Trace Analysis、Routing Accuracy Dashboard、Local Knowledge Index、Remediation Workflow、Remediation History、Prompt Run History、Agent Session Skill Review、Local Skill Map、AI Provider Observability、Task-first Cockpit、Skill Lifecycle Timeline、Guided Cleanup Flow、Task Cockpit primary entry / Analysis IA 重组、Privacy / Screenshot Mode + 本地化收束、Swift/Rust feature modularization、Guided Cleanup safe-action deep links、Validation harness hardening、Task/remediation performance + timeout recovery 已完成。
+- V2.41-V2.74：AI Provider Foundation、Prompt Preview/Redaction、AI Skill Quality、AI Task Readiness、AI Routing Confidence、Task Benchmark/Regression、Trace Analysis、Routing Accuracy Dashboard、Local Knowledge Index、Remediation Workflow、Remediation History、Prompt Run History、Agent Session Skill Review、Local Skill Map、AI Provider Observability、Task-first Cockpit、Skill Lifecycle Timeline、Guided Cleanup Flow、Task Cockpit primary entry / Analysis IA 重组、Privacy / Screenshot Mode + 本地化收束、Swift/Rust feature modularization、Guided Cleanup safe-action deep links、Validation harness hardening、Task/remediation performance + timeout recovery、Real-local launch/window targeting stability 已完成。
 - 2026-06-12 V2.63 真实本机 app validation 通过：当前 `dist/SkillsCopilot.app` 的 single-skill Analysis 页显示 Local Skill Map，点击 `Build Map` 后渲染真实 local map 输出（nodes、edges、clusters、evidence、safety sections）。真实本机截图未提交，因为 live UI 会暴露本地路径；fixture smoke 截图仍只作为自动化证据。V2.63 focused Rust/protocol、Swift/model/store、`pnpm check:macos`、`pnpm check:privacy` 与 `git diff --check` 均已通过；后续 coordinator 复测 exact-path Computer Use 时因重复同 bundle app 进程出现 `cgWindowNotFound` / `remoteConnection`，记录为工具/窗口层 blocker。
 - 2026-06-12 V2.64 validation：focused Rust/protocol checks、full service tests、focused/full Swift decode/store checks、service protocol fixture decode、`pnpm check:macos`、`pnpm check:privacy` 与 `git diff --check` 已通过；fixture macOS smoke 成功启动并捕获 `dist/SkillsCopilot.app` 窗口。真实本机验证中当前 bundle 进程可启动，但 System Events 在 activation 与 clean relaunch 后仍看到 0 个窗口，Computer Use 返回 `cgWindowNotFound`；该项记录为 V2.64 window/tool-layer blocker。真实本机截图未提交，因为 live UI 会暴露本地路径。
 - 2026-06-12 V2.65 validation：focused Rust/protocol checks、full service tests、focused/full Swift model/store checks、service protocol fixture decode、`pnpm check:macos`、`pnpm check:privacy` 与 `git diff --check` 已通过；fixture macOS smoke 成功启动并捕获 `dist/SkillsCopilot.app` 窗口。真实本机验证中当前 bundle 进程可启动且 System Events 能看到 `SkillsCopilot` 进程，但 activation 后仍报告 0 windows，Computer Use 返回 `cgWindowNotFound`；该项记录为 V2.65 window/tool-layer blocker。真实本机截图未提交，因为 live UI 会暴露本地路径。
@@ -34,7 +34,8 @@
 - 2026-06-13 V2.70 validation：V2.70 multi-agent analysis completed; Swift Task Cockpit/detail primitives and Rust cleanup queue were split into feature modules without service semantic changes. Focused Rust cleanup/protocol checks, Swift build/tests, native layout verification, screenshot artifact verification, no-capture fixture smoke, `pnpm check:privacy`, and `git diff --check` passed. Full `pnpm check:macos` passed build/test/service stages, then failed closed at fixture capture with `locked-session: macOS session is locked; refusing to create screenshot evidence`. Real-local Computer Use returned `timeoutReached`; `ioreg` reported `CGSSessionScreenIsLocked=Yes`; direct capture exited 6 with `locked-session`. No fresh V2.70 screenshot was committed, and real-local visual validation must be rerun after unlock.
 - 2026-06-13 V2.71 validation：V2.71 multi-agent analysis completed; service safe-link DTOs, protocol fixture, Swift decoders, Guided Cleanup UI buttons, store routing, Analysis remediation panel mounting, and native UI verifier checks were updated. Focused Rust guided-cleanup/protocol/dispatch checks, full Swift tests, native layout verification, screenshot artifact verification, rebuilt no-capture fixture smoke, `pnpm check:privacy`, and `git diff --check` passed. Full `pnpm check:macos` passed build/test/service stages, then failed closed at fixture capture with `locked-session: macOS session is locked; refusing to create screenshot evidence`. Real-local Computer Use returned `timeoutReached`; no fresh V2.71 screenshot was committed, and unlocked visual validation remains required.
 - 2026-06-13 V2.72 validation：V2.72 multi-agent analysis completed; validation blocker taxonomy, classifier CLI, smoke lock-session preflight, screenshot verifier canonical blocker failures, and validation docs/checklist were added. `pnpm verify:validation-blockers`, `pnpm classify:validation-blocker -- "Computer Use server error -10005: timeoutReached"`, synthetic black PNG rejection, `pnpm verify:screenshot-artifacts`, no-capture fixture smoke, `pnpm check:privacy`, and `git diff --check` passed. `pnpm smoke:macos-app -- --fixture-data --capture-window` and full `pnpm check:macos` fail closed at fixture capture with canonical `locked-session` in the current locked macOS session; real-local Computer Use still returns `timeoutReached`, so unlocked visual validation remains required.
-- 2026-06-15 V2.73 validation：multi-agent V2.73 implementation completed; focused Rust service/protocol checks, full workspace Rust tests, workspace clippy, focused/full Swift tests, native list/layout checks, `pnpm check:privacy`, `pnpm check:macos`, screenshot artifact verification, and `git diff --check` passed. Unlocked Computer Use targeted the current workspace `dist/SkillsCopilot.app`, exercised Task Cockpit input/loading/fallback/retry, and captured evidence at [`docs/ui-artifacts/v2.73-task-cockpit-timeout-recovery/completed.png`](./docs/ui-artifacts/v2.73-task-cockpit-timeout-recovery/completed.png). V2.74-V2.79 remain planned follow-ups.
+- 2026-06-15 V2.73 validation：multi-agent V2.73 implementation completed; focused Rust service/protocol checks, full workspace Rust tests, workspace clippy, focused/full Swift tests, native list/layout checks, `pnpm check:privacy`, `pnpm check:macos`, screenshot artifact verification, and `git diff --check` passed. Unlocked Computer Use targeted the current workspace `dist/SkillsCopilot.app`, exercised Task Cockpit input/loading/fallback/retry, and captured evidence at [`docs/ui-artifacts/v2.73-task-cockpit-timeout-recovery/completed.png`](./docs/ui-artifacts/v2.73-task-cockpit-timeout-recovery/completed.png).
+- 2026-06-15 V2.74 validation：multi-agent V2.74 implementation completed; launch/smoke/capture tooling now targets the current workspace bundle path/PID/window identity, duplicate same-bundle launches fail closed, the Swift app exposes a stable main-window identity and Task Cockpit accessibility IDs, `pnpm check:macos`, `pnpm check:privacy`, screenshot artifact verification, and `git diff --check` passed. Unlocked Computer Use targeted `dist/SkillsCopilot.app`, resolved PID `52193` and window ID `skills-copilot.main-window`, exercised Task Cockpit input/build/fallback result read-back, and captured evidence at [`docs/ui-artifacts/v2.74-launch-window-targeting/completed.png`](./docs/ui-artifacts/v2.74-launch-window-targeting/completed.png). V2.75-V2.79 remain planned follow-ups.
 
 **当前产品 UI**：SwiftUI/AppKit macOS 原生壳 + Rust service protocol。
 
@@ -80,7 +81,7 @@
 | V2.71 | Guided Cleanup safe-action deep links | 已完成：guided cleanup steps/actions 暴露 safe deep-link metadata，Swift UI 可打开既有 `remediation.plan` / `remediation.previewDrafts` / `remediation.previewImpact` / `remediation.batchReview` / lifecycle / cockpit / cleanup / safe batch preview / metadata record 入口；不隐藏 apply，不绕过 preview/confirm |
 | V2.72 | Validation harness hardening | 已完成：统一 validation blocker taxonomy、分类 CLI、新增 `verify:validation-blockers`、smoke 锁屏 preflight、截图 verifier canonical blocker 输出、fixture/real evidence matrix；锁屏/黑屏/单色/透明截图不能作为完成证据 |
 | V2.73 | Task / remediation performance and timeout recovery | 已完成：真实 catalog 下 task/readiness/routing/remediation 聚合有 bounded metadata、scan/detail limits、fallback/partial diagnostics、取消/重试 UI 和 unlocked real-local Computer Use evidence |
-| V2.74 | Real-local launch and window targeting stability | 规划：减少同 bundle id 多 worktree 干扰，稳定当前 bundle path/PID 启动、窗口恢复、AX/Computer Use 定位与 lock-screen preflight |
+| V2.74 | Real-local launch and window targeting stability | 已完成：dev launch/smoke/capture 以当前 bundle path/PID/window identity 为准；重复同 bundle app fail closed；主窗口和 Task Cockpit 暴露稳定 AX/Computer Use 标识；unlocked real-local evidence 已收口 |
 | V2.75 | Task input and input-method resilience | 规划：验证中文输入法、多行任务、粘贴、快捷键提交和自动化输入；避免输入法组合导致任务文本损坏 |
 | V2.76 | Progressive Cockpit feedback | 规划：把 Cockpit 的 readiness/routing/remediation/provider/session 阶段拆开呈现，避免单一 `Preparing...` 被误读为死锁 |
 | V2.77 | Real-local validation workbench | 规划：在 app/runbook 中集中展示锁屏、window-not-found、权限、旧 bundle、黑屏/单色截图等验证 blocker 与下一步 |
@@ -134,6 +135,7 @@
 | V2.71 验证清单 | [`docs/v2.71-verification-checklist.md`](./docs/v2.71-verification-checklist.md) |
 | V2.72 验证清单 | [`docs/v2.72-verification-checklist.md`](./docs/v2.72-verification-checklist.md) |
 | V2.73 验证清单（completed） | [`docs/v2.73-verification-checklist.md`](./docs/v2.73-verification-checklist.md) |
+| V2.74 验证清单（completed） | [`docs/v2.74-verification-checklist.md`](./docs/v2.74-verification-checklist.md) |
 | MVP 施工图 | [`docs/mvp-implementation-plan.md`](./docs/mvp-implementation-plan.md) |
 | 路线图 | [`docs/roadmap.md`](./docs/roadmap.md) |
 
@@ -168,6 +170,7 @@ pnpm benchmark:macos-list-model
 pnpm verify:macos-ui-layout
 pnpm verify:screenshot-artifacts
 pnpm verify:v2.73-docs
+pnpm verify:v2.74-docs
 ```
 
 ### App 运行入口
@@ -192,6 +195,7 @@ pnpm verify:v2.73-docs
 | `pnpm verify:macos-ui-layout` | 静态检查原生 macOS shell 的关键布局约束。 |
 | `pnpm verify:screenshot-artifacts` | 验证 `docs/ui-artifacts/**/*.png` 可读、非黑屏/非单色，并扫描二进制字符串中的明显路径或 token；仍需人工视觉复核。 |
 | `pnpm verify:v2.73-docs` | 验证 V2.73 completed checklist 覆盖 Cockpit bounded loading、timeout/fallback/cancel/retry、unlocked real-local Computer Use、截图证据、命令记录和 safety-boundary gates。 |
+| `pnpm verify:v2.74-docs` | 验证 V2.74 completed checklist 覆盖 exact workspace bundle/PID targeting、duplicate same-bundle detection、canonical blocker handling、unlocked real-local Computer Use evidence、截图证据和 no signing/notarization/distribution scope。 |
 
 ### Fixture smoke 说明
 

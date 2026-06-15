@@ -35,6 +35,8 @@ struct TaskCockpitPanel: View {
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(2...4)
                     .labelsHidden()
+                    .accessibilityIdentifier(AppAccessibilityID.taskCockpitInput)
+                    .accessibilityLabel(UIStrings.taskCockpitTaskPlaceholder)
 
                 Button {
                     onBuild()
@@ -43,6 +45,8 @@ struct TaskCockpitPanel: View {
                 }
                 .disabled(isBuilding || effectiveTaskText.isEmpty)
                 .help(UIStrings.taskCockpitBoundary)
+                .accessibilityIdentifier(AppAccessibilityID.taskCockpitBuildButton)
+                .accessibilityLabel(actionTitle)
             }
 
             TaskCockpitOperationStatusView(
@@ -67,6 +71,9 @@ struct TaskCockpitPanel: View {
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
         .adaptiveMaterialSurface()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(AppAccessibilityID.taskCockpitPanel)
+        .accessibilityLabel(UIStrings.taskCockpitTitle)
     }
 
     private var actionTitle: String {
@@ -105,6 +112,8 @@ private struct TaskCockpitOperationStatusView: View {
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
+                        .accessibilityIdentifier(AppAccessibilityID.taskCockpitCancelButton)
+                        .accessibilityLabel(UIStrings.cancel)
                     }
                     if state.canRetry {
                         Button {
@@ -114,11 +123,16 @@ private struct TaskCockpitOperationStatusView: View {
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
+                        .accessibilityIdentifier(AppAccessibilityID.taskCockpitRetryButton)
+                        .accessibilityLabel(UIStrings.taskCockpitRetry)
                     }
                 }
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(.quaternary.opacity(0.26), in: RoundedRectangle(cornerRadius: 6))
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier(AppAccessibilityID.taskCockpitStatus)
+                .accessibilityLabel(statusMessage(now: context.date))
                 .overlay(alignment: .bottomLeading) {
                     if state.phase == .preparing, state.timeoutSeconds > 0 {
                         GeometryReader { proxy in
@@ -239,6 +253,9 @@ private struct TaskCockpitResultView: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 6))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(AppAccessibilityID.taskCockpitResult)
+        .accessibilityLabel(UIStrings.taskCockpitTitle)
     }
 
     private var taskLabel: String {

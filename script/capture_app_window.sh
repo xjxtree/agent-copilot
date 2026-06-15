@@ -1,10 +1,32 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_OWNER="${1:-SkillsCopilot}"
+APP_TARGET="${1:-SkillsCopilot}"
 OUTPUT_PATH="${2:-docs/ui-artifacts/native-macos-shell/completed.png}"
+TARGET_PID="${SKILLS_COPILOT_TARGET_PID:-${3:-}}"
+TARGET_WINDOW_ID="${SKILLS_COPILOT_TARGET_WINDOW_ID:-${4:-}}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DEFAULT_APP_BUNDLE="$ROOT_DIR/dist/SkillsCopilot.app"
+TARGET_BUNDLE_PATH="${SKILLS_COPILOT_APP:-}"
+APP_OWNER="$APP_TARGET"
 OUTPUT_ABS="$OUTPUT_PATH"
+
+if [[ "$APP_TARGET" == *.app ]]; then
+  TARGET_BUNDLE_PATH="$APP_TARGET"
+  APP_OWNER="$(basename "$APP_TARGET" .app)"
+fi
+
+if [[ -z "$TARGET_BUNDLE_PATH" && -d "$DEFAULT_APP_BUNDLE" ]]; then
+  TARGET_BUNDLE_PATH="$DEFAULT_APP_BUNDLE"
+fi
+
+if [[ -n "$TARGET_BUNDLE_PATH" && "$TARGET_BUNDLE_PATH" != /* ]]; then
+  TARGET_BUNDLE_PATH="$ROOT_DIR/$TARGET_BUNDLE_PATH"
+fi
+
+if [[ -n "$TARGET_BUNDLE_PATH" && -d "$TARGET_BUNDLE_PATH" ]]; then
+  TARGET_BUNDLE_PATH="$(cd "$TARGET_BUNDLE_PATH" && pwd -P)"
+fi
 
 if [[ "$OUTPUT_ABS" != /* ]]; then
   OUTPUT_ABS="$ROOT_DIR/$OUTPUT_PATH"
@@ -13,14 +35,20 @@ fi
 mkdir -p "$(dirname "$OUTPUT_ABS")"
 
 swift -Xfrontend -disable-availability-checking -e '
+import AppKit
 import CoreGraphics
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
-let args = CommandLine.arguments.dropFirst()
-let owner = args.first ?? "SkillsCopilot"
-let outputPath = args.dropFirst().first ?? "completed.png"
+let args = Array(CommandLine.arguments.dropFirst())
+let owner = args.indices.contains(0) && !args[0].isEmpty ? args[0] : "SkillsCopilot"
+let outputPath = args.indices.contains(1) && !args[1].isEmpty ? args[1] : "completed.png"
+let targetPid = args.indices.contains(2) && !args[2].isEmpty ? Int32(args[2]) : nil
+let targetBundlePath = args.indices.contains(3) && !args[3].isEmpty
+    ? URL(fileURLWithPath: args[3]).resolvingSymlinksInPath().standardizedFileURL.path
+    : nil
+let targetWindowId = args.indices.contains(4) && !args[4].isEmpty ? UInt32(args[4]) : nil
 
 if let session = CGSessionCopyCurrentDictionary() as? [String: Any],
    let locked = session["CGSSessionScreenIsLocked"] as? Bool,
@@ -30,8 +58,30 @@ if let session = CGSessionCopyCurrentDictionary() as? [String: Any],
 }
 
 guard let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] else {
-    fputs("Unable to read window list.\n", stderr)
+    fputs("tool-layer-unknown: unable to read window list.\n", stderr)
     exit(2)
+}
+
+struct WindowCandidate {
+    let id: UInt32
+    let pid: pid_t
+    let ownerName: String
+    let width: Double
+    let height: Double
+    let bundlePath: String?
+}
+
+func runningBundlePath(pid: pid_t) -> String? {
+    NSRunningApplication(processIdentifier: pid)?
+        .bundleURL?
+        .resolvingSymlinksInPath()
+        .standardizedFileURL
+        .path
+}
+
+func describe(_ candidate: WindowCandidate) -> String {
+    let bundle = candidate.bundlePath ?? "<unknown-bundle>"
+    return "window=\(candidate.id) pid=\(candidate.pid) bundle=\(bundle)"
 }
 
 func validateImage(_ image: CGImage, expectedWidth: Double, expectedHeight: Double) -> Bool {
@@ -100,53 +150,113 @@ func validateImage(_ image: CGImage, expectedWidth: Double, expectedHeight: Doub
     return true
 }
 
-for window in windows {
-    guard (window[kCGWindowOwnerName as String] as? String) == owner else { continue }
-    guard let layer = window[kCGWindowLayer as String] as? Int, layer == 0 else { continue }
-    guard let id = window[kCGWindowNumber as String] as? UInt32 else { continue }
+let candidates: [WindowCandidate] = windows.compactMap { window in
+    guard let layer = window[kCGWindowLayer as String] as? Int, layer == 0 else { return nil }
+    guard let id = window[kCGWindowNumber as String] as? UInt32 else { return nil }
+    guard let pidValue = window[kCGWindowOwnerPID as String] as? Int32 else { return nil }
+    guard let ownerName = window[kCGWindowOwnerName as String] as? String else { return nil }
     guard let bounds = window[kCGWindowBounds as String] as? [String: Any],
           let width = bounds["Width"] as? Double,
           let height = bounds["Height"] as? Double,
           width > 0,
           height > 0 else {
-        continue
+        return nil
     }
 
-    guard let image = CGWindowListCreateImage(
-        .null,
-        .optionIncludingWindow,
-        CGWindowID(id),
-        [.boundsIgnoreFraming, .bestResolution]
-    ) else {
-        fputs("screen-recording-permission: unable to create image for \(owner) window \(id).\n", stderr)
-        exit(3)
-    }
+    let pid = pid_t(pidValue)
+    let bundlePath = runningBundlePath(pid: pid)
+    let ownerMatches = ownerName == owner
+    let pidMatches = targetPid.map { pid == pid_t($0) } ?? false
+    let bundleMatches = targetBundlePath.map { bundlePath == $0 } ?? false
+    let windowMatches = targetWindowId.map { id == $0 } ?? false
+    guard ownerMatches || pidMatches || bundleMatches || windowMatches else { return nil }
 
-    guard validateImage(image, expectedWidth: width, expectedHeight: height) else {
-        exit(7)
-    }
-
-    let url = URL(fileURLWithPath: outputPath) as CFURL
-    guard let destination = CGImageDestinationCreateWithURL(
-        url,
-        UTType.png.identifier as CFString,
-        1,
-        nil
-    ) else {
-        fputs("Unable to create image destination: \(outputPath)\n", stderr)
-        exit(4)
-    }
-    CGImageDestinationAddImage(destination, image, nil)
-    guard CGImageDestinationFinalize(destination) else {
-        fputs("Unable to finalize image: \(outputPath)\n", stderr)
-        exit(5)
-    }
-    print("Captured \(owner) window \(id) (\(Int(width))x\(Int(height))) -> \(outputPath)")
-    exit(0)
+    return WindowCandidate(
+        id: id,
+        pid: pid,
+        ownerName: ownerName,
+        width: width,
+        height: height,
+        bundlePath: bundlePath
+    )
 }
 
-fputs("window-not-found: No visible \(owner) app window found.\n", stderr)
-exit(1)
-' "$APP_OWNER" "$OUTPUT_ABS"
+let ownerWindows = candidates.filter { $0.ownerName == owner }
+let staleWindows = ownerWindows.filter { candidate in
+    guard let targetBundlePath else { return false }
+    guard let bundlePath = candidate.bundlePath else { return true }
+    return bundlePath != targetBundlePath
+}
+
+let matches: [WindowCandidate]
+if let targetWindowId {
+    matches = candidates.filter { $0.id == targetWindowId }
+} else if let targetPid {
+    matches = candidates.filter { $0.pid == pid_t(targetPid) }
+} else if let targetBundlePath {
+    matches = ownerWindows.filter { $0.bundlePath == targetBundlePath }
+} else {
+    matches = ownerWindows
+}
+
+if matches.isEmpty {
+    if !staleWindows.isEmpty {
+        let examples = staleWindows.prefix(3).map(describe).joined(separator: "; ")
+        fputs("stale-bundle: visible \(owner) windows are running from different bundle path than target \(targetBundlePath ?? "<unset>"): \(examples)\n", stderr)
+        exit(8)
+    }
+    let target = targetWindowId.map { "window \($0)" } ??
+        targetPid.map { "pid \($0)" } ??
+        targetBundlePath.map { "bundle \($0)" } ??
+        owner
+    fputs("window-not-found: No visible \(owner) app window found for \(target).\n", stderr)
+    exit(1)
+}
+
+if matches.count > 1 {
+    let examples = matches.prefix(5).map(describe).joined(separator: "; ")
+    fputs("window-not-found: multiple visible \(owner) windows create window ambiguity: \(examples)\n", stderr)
+    exit(1)
+}
+
+if !staleWindows.isEmpty && targetPid == nil && targetWindowId == nil {
+    let examples = staleWindows.prefix(3).map(describe).joined(separator: "; ")
+    fputs("stale-bundle: visible \(owner) windows include stale same-bundle instances while no exact PID/window was provided: \(examples)\n", stderr)
+    exit(8)
+}
+
+let target = matches[0]
+guard let image = CGWindowListCreateImage(
+    .null,
+    .optionIncludingWindow,
+    CGWindowID(target.id),
+    [.boundsIgnoreFraming, .bestResolution]
+) else {
+    fputs("screen-recording-permission: unable to create image for \(owner) window \(target.id).\n", stderr)
+    exit(3)
+}
+
+guard validateImage(image, expectedWidth: target.width, expectedHeight: target.height) else {
+    exit(7)
+}
+
+let url = URL(fileURLWithPath: outputPath) as CFURL
+guard let destination = CGImageDestinationCreateWithURL(
+    url,
+    UTType.png.identifier as CFString,
+    1,
+    nil
+) else {
+    fputs("invalid-capture: unable to create image destination: \(outputPath)\n", stderr)
+    exit(4)
+}
+CGImageDestinationAddImage(destination, image, nil)
+guard CGImageDestinationFinalize(destination) else {
+    fputs("invalid-capture: unable to finalize image: \(outputPath)\n", stderr)
+    exit(5)
+}
+print("Captured \(owner) window \(target.id) pid \(target.pid) (\(Int(target.width))x\(Int(target.height))) -> \(outputPath)")
+exit(0)
+' "$APP_OWNER" "$OUTPUT_ABS" "$TARGET_PID" "$TARGET_BUNDLE_PATH" "$TARGET_WINDOW_ID"
 
 file "$OUTPUT_ABS"

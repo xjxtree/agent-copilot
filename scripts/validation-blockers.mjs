@@ -41,7 +41,14 @@ const classifierRules = [
   },
   {
     code: "stale-bundle",
-    patterns: [/stale-bundle/i, /older than source inputs/i, /stale app/i],
+    patterns: [
+      /stale-bundle/i,
+      /older than source inputs/i,
+      /stale app/i,
+      /stale same-bundle/i,
+      /running .* from different bundle path/i,
+      /bundle path mismatch/i,
+    ],
   },
   {
     code: "computer-use-timeout",
@@ -57,11 +64,19 @@ const classifierRules = [
   },
   {
     code: "window-not-found",
-    patterns: [/cgWindowNotFound/i, /window-not-found/i, /No visible .*app window found/i, /timed out waiting for visible .* window/i],
+    patterns: [
+      /cgWindowNotFound/i,
+      /window-not-found/i,
+      /No visible .*app window found/i,
+      /timed out waiting for visible .* window/i,
+      /duplicate bundle id/i,
+      /window ambiguity/i,
+      /multiple visible .* windows/i,
+    ],
   },
   {
     code: "activation-failed",
-    patterns: [/activation error/i, /failed to activate/i, /activate.*failed/i],
+    patterns: [/activation error/i, /failed to activate/i, /activate.*failed/i, /unable to activate/i],
   },
 ];
 

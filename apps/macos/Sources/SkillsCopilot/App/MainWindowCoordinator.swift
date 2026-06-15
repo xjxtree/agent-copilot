@@ -1,0 +1,102 @@
+import AppKit
+import SwiftUI
+
+enum AppAccessibilityID {
+    static let mainWindow = "skills-copilot.main-window"
+    static let mainContent = "skills-copilot.main-content"
+    static let taskCockpitPanel = "skills-copilot.task-cockpit.panel"
+    static let taskCockpitInput = "skills-copilot.task-cockpit.input"
+    static let taskCockpitBuildButton = "skills-copilot.task-cockpit.build"
+    static let taskCockpitStatus = "skills-copilot.task-cockpit.status"
+    static let taskCockpitCancelButton = "skills-copilot.task-cockpit.cancel"
+    static let taskCockpitRetryButton = "skills-copilot.task-cockpit.retry"
+    static let taskCockpitResult = "skills-copilot.task-cockpit.result"
+}
+
+enum MainWindowCoordinator {
+    static let windowIdentifier = NSUserInterfaceItemIdentifier(AppAccessibilityID.mainWindow)
+    static let autosaveName = "SkillsCopilot.MainWindow"
+    static let minimumSize = NSSize(width: 920, height: 600)
+
+    static func activateApplication(_ app: NSApplication = .shared) {
+        app.setActivationPolicy(.regular)
+        app.activate(ignoringOtherApps: true)
+    }
+
+    @discardableResult
+    static func restoreMainWindow(in app: NSApplication = .shared) -> Bool {
+        activateApplication(app)
+
+        guard let window = preferredMainWindow(in: app.windows) else {
+            return false
+        }
+
+        configureWindow(window)
+        if window.isMiniaturized {
+            window.deminiaturize(nil)
+        }
+        window.makeKeyAndOrderFront(nil)
+        return true
+    }
+
+    static func configureWindows(_ windows: [NSWindow]) {
+        windows.filter(isMainWindowCandidate).forEach(configureWindow)
+    }
+
+    static func configureWindow(_ window: NSWindow) {
+        window.identifier = windowIdentifier
+        _ = window.setFrameAutosaveName(autosaveName)
+        window.minSize = minimumSize
+        if window.title.isEmpty {
+            window.title = UIStrings.appWindowTitle
+        }
+    }
+
+    static func mainWindowScore(identifier: NSUserInterfaceItemIdentifier?, title: String, canBecomeMain: Bool) -> Int {
+        var score = 0
+        if identifier == windowIdentifier {
+            score += 100
+        }
+        if title == UIStrings.appWindowTitle {
+            score += 50
+        }
+        if canBecomeMain {
+            score += 10
+        }
+        return score
+    }
+
+    private static func isMainWindowCandidate(_ window: NSWindow) -> Bool {
+        window.identifier == windowIdentifier || window.title == UIStrings.appWindowTitle
+    }
+
+    private static func preferredMainWindow(in windows: [NSWindow]) -> NSWindow? {
+        windows
+            .filter(\.canBecomeMain)
+            .max {
+                mainWindowScore(identifier: $0.identifier, title: $0.title, canBecomeMain: $0.canBecomeMain)
+                    < mainWindowScore(identifier: $1.identifier, title: $1.title, canBecomeMain: $1.canBecomeMain)
+            }
+    }
+}
+
+struct MainWindowConfigurator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        view.isHidden = true
+        configure(windowFor: view)
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        configure(windowFor: nsView)
+    }
+
+    private func configure(windowFor view: NSView) {
+        DispatchQueue.main.async {
+            if let window = view.window {
+                MainWindowCoordinator.configureWindow(window)
+            }
+        }
+    }
+}

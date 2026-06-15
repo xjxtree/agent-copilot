@@ -3,8 +3,21 @@ import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
+        MainWindowCoordinator.activateApplication()
+        DispatchQueue.main.async {
+            MainWindowCoordinator.restoreMainWindow()
+        }
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        MainWindowCoordinator.configureWindows(NSApp.windows)
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        DispatchQueue.main.async {
+            MainWindowCoordinator.restoreMainWindow(in: sender)
+        }
+        return true
     }
 }
 
@@ -23,6 +36,7 @@ struct SkillsCopilotApp: App {
                 .environment(\.locale, Locale(identifier: appLanguage.localeIdentifier))
                 .id(appLanguage.rawValue)
                 .frame(minWidth: 920, minHeight: 600)
+                .background(MainWindowConfigurator())
         }
         .commands {
             CommandGroup(after: .newItem) {

@@ -24,5 +24,7 @@ struct ContentView: View {
                 transaction.animation = nil
             }
         }
+        .accessibilityIdentifier(AppAccessibilityID.mainContent)
+        .accessibilityLabel(UIStrings.appWindowTitle)
     }
 }

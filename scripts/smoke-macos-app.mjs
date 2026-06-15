@@ -20,6 +20,7 @@ const appName = "SkillsCopilot";
 const bundleId = "dev.skills-copilot.native";
 const processName = appName;
 const appPath = resolve(process.env.SKILLS_COPILOT_APP ?? "dist/SkillsCopilot.app");
+const appBinary = join(appPath, "Contents", "MacOS", appName);
 const serviceBinary = join(appPath, "Contents", "Resources", "skills-copilot-service");
 const screenshotPath = resolve(
   process.env.SKILLS_COPILOT_SMOKE_SCREENSHOT ??
@@ -81,10 +82,84 @@ function tryRun(command, args, options = {}) {
   });
   return {
     ok: result.status === 0,
-    stdout: result.stdout.trim(),
-    stderr: result.stderr.trim(),
+    stdout: (result.stdout ?? "").trim(),
+    stderr: (result.stderr ?? "").trim(),
     status: result.status,
+    signal: result.signal,
+    error: result.error?.message ?? "",
   };
+}
+
+function sleepMs(milliseconds) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+}
+
+function canonicalPath(path) {
+  try {
+    return realpathSync(path);
+  } catch {
+    return resolve(path);
+  }
+}
+
+function targetBundlePath() {
+  return canonicalPath(appPath);
+}
+
+function runSwift(script, args = []) {
+  return tryRun("swift", ["-Xfrontend", "-disable-availability-checking", "-e", script, ...args]);
+}
+
+function queryRunningApps() {
+  const swift = `
+import AppKit
+import Foundation
+
+let args = Array(CommandLine.arguments.dropFirst())
+let bundleId = args.indices.contains(0) ? args[0] : ""
+let appName = args.indices.contains(1) ? args[1] : ""
+var rows: [[String: Any]] = []
+
+for app in NSWorkspace.shared.runningApplications {
+    let identifierMatches = app.bundleIdentifier == bundleId
+    let nameMatches = app.localizedName == appName
+    guard identifierMatches || nameMatches else { continue }
+    rows.append([
+        "pid": Int(app.processIdentifier),
+        "bundleIdentifier": app.bundleIdentifier ?? "",
+        "localizedName": app.localizedName ?? "",
+        "bundlePath": app.bundleURL?.resolvingSymlinksInPath().standardizedFileURL.path ?? "",
+        "executablePath": app.executableURL?.resolvingSymlinksInPath().standardizedFileURL.path ?? "",
+        "isActive": app.isActive,
+        "isTerminated": app.isTerminated,
+    ])
+}
+
+let data = try JSONSerialization.data(withJSONObject: rows, options: [])
+print(String(data: data, encoding: .utf8)!)
+`;
+  const result = runSwift(swift, [bundleId, appName]);
+  if (!result.ok) {
+    fail(formatValidationBlocker(
+      result.stderr || result.stdout || "tool-layer-unknown: unable to query running macOS applications",
+      "query-running-apps",
+    ));
+  }
+  try {
+    return JSON.parse(result.stdout || "[]");
+  } catch {
+    fail(`tool-layer-unknown: invalid running app query JSON: ${result.stdout}`);
+  }
+}
+
+function targetRunningApps() {
+  const target = targetBundlePath();
+  return queryRunningApps().filter((app) => app.bundlePath === target);
+}
+
+function staleSameBundleApps() {
+  const target = targetBundlePath();
+  return queryRunningApps().filter((app) => app.bundlePath && app.bundlePath !== target);
 }
 
 function verifyBundle() {
@@ -92,9 +167,8 @@ function verifyBundle() {
     fail("macOS app smoke only runs on darwin");
   }
   const infoPlist = join(appPath, "Contents", "Info.plist");
-  const binary = join(appPath, "Contents", "MacOS", appName);
   const icon = join(appPath, "Contents", "Resources", "AppIcon.icns");
-  for (const file of [appPath, infoPlist, binary, serviceBinary, icon]) {
+  for (const file of [appPath, infoPlist, appBinary, serviceBinary, icon]) {
     if (!existsSync(file)) {
       fail(`bundle is missing ${file}`);
     }
@@ -388,29 +462,49 @@ function unsetLaunchEnv(keys) {
   }
 }
 
-function quitApp() {
-  tryRun("osascript", ["-e", `tell application id "${bundleId}" to quit`]);
-}
+function terminateExistingApp() {
+  const apps = queryRunningApps();
+  if (apps.length === 0) {
+    return;
+  }
 
-function waitForNoProcess(timeoutMs = 5_000) {
+  const target = targetBundlePath();
+  for (const app of apps) {
+    if (app.bundlePath && app.bundlePath !== target) {
+      note(
+        `terminating stale same-bundle ${processName} pid ${app.pid} from ${app.bundlePath}`,
+      );
+    }
+    try {
+      process.kill(app.pid, "SIGTERM");
+    } catch {
+      // The app may have exited between NSWorkspace query and termination.
+    }
+  }
+
   const startedAt = Date.now();
-  while (Date.now() - startedAt < timeoutMs) {
-    const result = tryRun("pgrep", ["-x", processName]);
-    if (!result.ok || result.stdout.length === 0) {
+  while (Date.now() - startedAt < 5_000) {
+    if (queryRunningApps().length === 0) {
       return;
     }
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+    sleepMs(250);
   }
-  fail(`timed out waiting for existing ${processName} to exit`);
-}
 
-function terminateExistingApp() {
-  quitApp();
-  const result = tryRun("pgrep", ["-x", processName]);
-  if (result.ok && result.stdout.length > 0) {
-    tryRun("pkill", ["-x", processName]);
+  for (const app of queryRunningApps()) {
+    try {
+      process.kill(app.pid, "SIGKILL");
+    } catch {
+      // Best effort cleanup before reporting any remaining ambiguity.
+    }
   }
-  waitForNoProcess();
+
+  const remaining = queryRunningApps();
+  if (remaining.length > 0) {
+    const examples = remaining
+      .map((app) => `pid=${app.pid} bundle=${app.bundlePath || "<unknown>"}`)
+      .join("; ");
+    fail(`stale-bundle: unable to terminate existing ${processName} instances: ${examples}`);
+  }
 }
 
 function launchApp(env) {
@@ -418,10 +512,11 @@ function launchApp(env) {
   const result = tryRun("open", ["-n", appPath]);
   unsetLaunchEnv(Object.keys(env));
   if (!result.ok) {
-    fail(result.stderr || "failed to launch app with open");
+    fail(formatValidationBlocker(result.stderr || "activation-failed: failed to launch app with open"));
   }
   const pid = waitForProcess();
-  const windowId = waitForWindow();
+  activateApp(pid);
+  const windowId = waitForWindow(pid);
   note(`launched ${processName} pid ${pid} window ${windowId}`);
   return { pid, windowId };
 }
@@ -429,26 +524,65 @@ function launchApp(env) {
 function waitForProcess(timeoutMs = 10_000) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
-    const result = tryRun("pgrep", ["-x", processName]);
-    if (result.ok && result.stdout.length > 0) {
-      return result.stdout.split("\n")[0];
+    const apps = targetRunningApps();
+    if (apps.length === 1) {
+      return apps[0].pid;
     }
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+    if (apps.length > 1) {
+      const examples = apps.map((app) => `pid=${app.pid}`).join(", ");
+      fail(`activation-failed: duplicate current bundle processes for ${targetBundlePath()}: ${examples}`);
+    }
+    sleepMs(250);
   }
-  fail(`timed out waiting for ${processName} to start`);
+  const staleApps = staleSameBundleApps();
+  if (staleApps.length > 0) {
+    const examples = staleApps
+      .map((app) => `pid=${app.pid} bundle=${app.bundlePath || "<unknown>"}`)
+      .join("; ");
+    fail(`stale-bundle: running ${processName} instances are from different bundle path than target ${targetBundlePath()}: ${examples}`);
+  }
+  fail(`activation-failed: timed out waiting for ${processName} to start from ${targetBundlePath()}`);
 }
 
-function waitForWindow(timeoutMs = 10_000) {
+function activateApp(pid) {
+  const swift = `
+import AppKit
+import Foundation
+
+let rawPid = CommandLine.arguments.dropFirst().first ?? ""
+guard let pid = Int32(rawPid),
+      let app = NSRunningApplication(processIdentifier: pid_t(pid)) else {
+    fputs("activation-failed: unable to resolve running app pid \\(rawPid).\\n", stderr)
+    exit(2)
+}
+
+let activated = app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+if !activated {
+    fputs("activation-failed: failed to activate \\(app.localizedName ?? "target app") pid \\(pid).\\n", stderr)
+    exit(3)
+}
+`;
+  const result = runSwift(swift, [String(pid)]);
+  if (!result.ok) {
+    fail(formatValidationBlocker(result.stderr || result.stdout || "activation-failed: failed to activate app"));
+  }
+}
+
+function waitForWindow(pid, timeoutMs = 10_000) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
-    const result = visibleWindowId();
-    if (result) {
-      return result;
+    const windows = visibleWindowsForPid(pid);
+    if (windows.length === 1) {
+      return windows[0].id;
     }
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+    if (windows.length > 1) {
+      const examples = windows.map((window) => `window=${window.id}`).join(", ");
+      fail(`window-not-found: multiple visible ${appName} windows create window ambiguity for pid ${pid}: ${examples}`);
+    }
+    sleepMs(250);
   }
   const sessionBlocker = currentSessionBlocker();
-  fail(sessionBlocker ?? `window-not-found: timed out waiting for visible ${appName} window`);
+  fail(sessionBlocker ?? `window-not-found: timed out waiting for visible ${appName} window for pid ${pid}`);
 }
 
 function currentSessionBlocker() {
@@ -464,7 +598,7 @@ if let session = CGSessionCopyCurrentDictionary() as? [String: Any],
 }
 exit(0)
 `;
-  const result = tryRun("swift", ["-e", swift]);
+  const result = runSwift(swift);
   if (!result.ok) {
     return result.stderr || result.stdout || "tool-layer-unknown: unable to read macOS session state";
   }
@@ -474,42 +608,68 @@ exit(0)
   return null;
 }
 
-function visibleWindowId() {
+function visibleWindowsForPid(pid) {
   const swift = `
+import AppKit
 import CoreGraphics
 import Foundation
 
-let owner = CommandLine.arguments.dropFirst().first ?? "SkillsCopilot"
+let rawPid = CommandLine.arguments.dropFirst().first ?? ""
+guard let expectedPID = Int32(rawPid) else {
+    fputs("window-not-found: invalid app pid \\(rawPid).\\n", stderr)
+    exit(2)
+}
 guard let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] else {
     exit(2)
 }
 
+var rows: [[String: Any]] = []
 for window in windows {
-    guard (window[kCGWindowOwnerName as String] as? String) == owner else { continue }
     guard let layer = window[kCGWindowLayer as String] as? Int, layer == 0 else { continue }
-    guard let id = window[kCGWindowNumber as String] else { continue }
-    print(id)
-    exit(0)
+    guard let ownerPID = window[kCGWindowOwnerPID as String] as? Int32, ownerPID == expectedPID else { continue }
+    guard let id = window[kCGWindowNumber as String] as? UInt32 else { continue }
+    guard let bounds = window[kCGWindowBounds as String] as? [String: Any],
+          let width = bounds["Width"] as? Double,
+          let height = bounds["Height"] as? Double,
+          width > 0,
+          height > 0 else {
+        continue
+    }
+    rows.append(["id": Int(id), "pid": Int(ownerPID), "width": width, "height": height])
 }
-exit(1)
+let data = try JSONSerialization.data(withJSONObject: rows, options: [])
+print(String(data: data, encoding: .utf8)!)
 `;
-  const result = tryRun("swift", ["-e", swift, appName]);
-  return result.ok ? result.stdout : null;
+  const result = runSwift(swift, [String(pid)]);
+  if (!result.ok) {
+    fail(formatValidationBlocker(result.stderr || result.stdout || "window-not-found: failed to query app windows"));
+  }
+  try {
+    return JSON.parse(result.stdout || "[]");
+  } catch {
+    fail(`tool-layer-unknown: invalid window query JSON: ${result.stdout}`);
+  }
 }
 
-function captureAppWindow() {
+function captureAppWindow(pid, windowId) {
   const sessionBlocker = currentSessionBlocker();
   if (sessionBlocker) {
     fail(formatValidationBlocker(sessionBlocker, "capture-window"));
   }
   tryRun("caffeinate", ["-u", "-t", "3"]);
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1_000);
-  const result = tryRun("./script/capture_app_window.sh", [appName, screenshotPath]);
+  sleepMs(1_000);
+  const result = tryRun("./script/capture_app_window.sh", [
+    appPath,
+    screenshotPath,
+    String(pid),
+    String(windowId),
+  ]);
   if (!result.ok) {
     fail(formatValidationBlocker(
-      result.stderr ||
+      result.error ||
+        result.stderr ||
         result.stdout ||
-        "screen-recording-permission: failed to capture app window; check macOS Screen Recording permission for the invoking terminal",
+        `capture-window failed with status ${result.status ?? "unknown"} signal ${result.signal ?? "none"}`,
       "capture-window",
     ));
   }
@@ -999,9 +1159,10 @@ function main() {
       note(`fixture data enabled: ${fixture.root}`);
     }
     terminateExistingApp();
-    pid = launchApp(env).pid;
+    const launched = launchApp(env);
+    pid = launched.pid;
     if (captureWindow) {
-      captureAppWindow();
+      captureAppWindow(pid, launched.windowId);
     }
     if (fixture) {
       const status = runFixtureServiceSmoke(env);
