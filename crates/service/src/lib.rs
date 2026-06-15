@@ -30879,6 +30879,48 @@ mod tests {
     use skills_copilot_core::{
         AgentId, NetworkAccess, PermissionRequest, SkillInstance, SkillState,
     };
+    use std::{
+        ffi::{OsStr, OsString},
+        sync::{Mutex, MutexGuard},
+    };
+
+    static ENV_MUTATION_LOCK: Mutex<()> = Mutex::new(());
+
+    struct EnvVarGuard {
+        key: OsString,
+        previous: Option<OsString>,
+        _lock: MutexGuard<'static, ()>,
+    }
+
+    impl EnvVarGuard {
+        fn set(key: impl AsRef<OsStr>, value: impl AsRef<OsStr>) -> Self {
+            let key = key.as_ref().to_os_string();
+            let lock = ENV_MUTATION_LOCK
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let previous = env::var_os(&key);
+            std::env::set_var(&key, value.as_ref());
+            Self {
+                key,
+                previous,
+                _lock: lock,
+            }
+        }
+
+        fn remove_current(&self) {
+            std::env::remove_var(&self.key);
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            if let Some(previous) = self.previous.as_ref() {
+                std::env::set_var(&self.key, previous);
+            } else {
+                std::env::remove_var(&self.key);
+            }
+        }
+    }
 
     #[test]
     fn status_request_returns_supported_methods() {
@@ -32093,7 +32135,7 @@ mod tests {
         let host = test_host(app_data_dir.clone());
         let profile_id = format!("mock-openai-preserve-{}", unique_suffix());
         let secret_env = provider_test_secret_env_name(&profile_id);
-        std::env::set_var(&secret_env, "test-secret-key");
+        let _secret_env_guard = EnvVarGuard::set(&secret_env, "test-secret-key");
 
         let save = host.handle(ServiceRequest {
             id: Some("provider-save".to_string()),
@@ -32151,7 +32193,6 @@ mod tests {
                 "timeout_ms": 2_000
             }),
         });
-        std::env::remove_var(&secret_env);
 
         assert!(test.ok, "{:?}", test.error);
         let result = test.result.expect("test connection");
@@ -32190,7 +32231,7 @@ mod tests {
         let host = test_host(app_data_dir.clone());
         let profile_id = format!("mock-openai-stale-{}", unique_suffix());
         let secret_env = provider_test_secret_env_name(&profile_id);
-        std::env::set_var(&secret_env, "test-secret-key");
+        let secret_env_guard = EnvVarGuard::set(&secret_env, "test-secret-key");
 
         let save = host.handle(ServiceRequest {
             id: Some("provider-save".to_string()),
@@ -32207,7 +32248,7 @@ mod tests {
             }),
         });
         assert!(save.ok, "{:?}", save.error);
-        std::env::remove_var(&secret_env);
+        secret_env_guard.remove_current();
 
         let test = host.handle(ServiceRequest {
             id: Some("provider-test".to_string()),
@@ -38046,7 +38087,7 @@ mod tests {
             }),
         });
         assert!(save.ok, "{:?}", save.error);
-        std::env::set_var(
+        let _secret_env_guard = EnvVarGuard::set(
             "SKILLS_COPILOT_TEST_SECRET_PROVIDER_MOCK_OPENAI",
             "test-secret-key",
         );
@@ -38079,7 +38120,6 @@ mod tests {
                 "timeout_ms": 2_000
             }),
         });
-        std::env::remove_var("SKILLS_COPILOT_TEST_SECRET_PROVIDER_MOCK_OPENAI");
 
         assert!(confirm.ok, "{:?}", confirm.error);
         let result = confirm.result.expect("confirm result");

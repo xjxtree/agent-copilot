@@ -1126,7 +1126,7 @@ V2.78 records completed protocol/docs/gate parity requirements without changing 
 - Dispatch coverage: `supported_methods_have_dispatch_coverage` remains the focused test for ensuring every supported method has dispatch behavior.
 - Fixture coverage: `service_protocol_fixtures_decode` and the shared fixtures under `fixtures/service-protocol` remain the protocol shape regression gate.
 - Docs drift: `pnpm verify:service-protocol-drift` should compare protocol docs against `SUPPORTED_METHODS` and should not count JSON shapes, environment variable names, table result examples, or adapter status values as methods.
-- Gate parity: local and CI-equivalent checks include Rust fmt/test/clippy, focused service protocol tests, Swift tests, validation blocker verification, screenshot artifact verification, V2.73-V2.81 docs verifiers, `pnpm verify:gate-parity`, privacy scan, `pnpm check:macos`, and `git diff --check`.
+- Gate parity: local and CI-equivalent checks include Rust fmt/test/clippy, focused service protocol tests, Swift tests, validation blocker verification, screenshot artifact verification, V2.73-V2.82 docs verifiers, `pnpm verify:gate-parity`, privacy scan, `pnpm check:macos`, and `git diff --check`.
 - V2.46-V2.64 history: preserve the historical command evidence and explicit Computer Use/window/tool-layer blockers as recorded. Do not backfill screenshots, PIDs, or successful command claims for evidence that was not actually captured.
 - Safety boundary: no method rename, no payload expansion, no protocol version bump, no provider default call, no write/apply/script/credential/cloud/telemetry behavior, and no weakening of real-local validation standards.
 
@@ -1139,6 +1139,17 @@ V2.81 is a Swift bridge cleanup around the existing short-lived JSON stdio servi
 - Task Cockpit cancel and timeout paths cancel the active service task so UI recovery also propagates to the sidecar process.
 - Focused Swift tests cover cancelled service calls and TERM-ignoring fake sidecar cleanup.
 - No daemon/socket/XPC/network redesign, provider default call, write/apply path, hidden task state, scanner/catalog fact mutation, script execution, credential read, raw prompt/response/trace persistence, cloud sync, telemetry, public distribution, signing, notarization, DMG, or ZIP expansion is introduced.
+
+## V2.82 Test isolation and core model test floor (completed)
+
+V2.82 is a test hygiene and core model coverage slice only. It does not add, remove, rename, or reshape service protocol methods or payloads.
+
+- Provider-test work is limited to isolating existing explicitly confirmed provider tests that mutate process environment variables with serialized RAII cleanup.
+- Core model work is limited to wire/default/identity stability tests for `AgentId`, `Scope`, `PermissionRequest`, and core skill identity/state structs. `crates/core` remains serde-free.
+- `pnpm verify:v2.82-docs` guards the completed docs/gate closeout and remains part of `pnpm verify:gate-parity` after V2.81.
+- No provider credential persistence changes, provider default calls, write/apply paths, hidden task state, scanner/catalog fact mutation, script execution, or raw prompt/response/trace persistence.
+- No credential reads beyond existing explicitly confirmed provider tests.
+- No cloud sync, telemetry, public distribution, signing, notarization, DMG, or ZIP expansion is introduced.
 
 ## V2.35 Local report export (completed)
 

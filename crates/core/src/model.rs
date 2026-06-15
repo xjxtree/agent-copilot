@@ -171,3 +171,149 @@ pub struct ConflictGroup {
     pub instances: Vec<String>,
     pub winner_id: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_skill_instance() -> SkillInstance {
+        SkillInstance {
+            id: "codex:agent-project:skills/refactor/SKILL.md".to_string(),
+            agent: AgentId::Codex,
+            scope: Scope::AgentProject,
+            project_root: Some(PathBuf::from("workspace")),
+            path: PathBuf::from("skills/refactor/SKILL.md"),
+            display_path: PathBuf::from(".codex/skills/refactor/SKILL.md"),
+            definition_id: "skill:refactor".to_string(),
+            name: "refactor".to_string(),
+            display_name: "Refactor".to_string(),
+            description: "Safely refactor local code.".to_string(),
+            version: Some("1.2.3".to_string()),
+            state: SkillState::Loaded,
+            enabled: true,
+            frontmatter_raw: "name: refactor".to_string(),
+            body: "Use focused edits and tests.".to_string(),
+            scripts: vec![SkillScript {
+                name: "check".to_string(),
+                path: PathBuf::from("skills/refactor/scripts/check.sh"),
+                interpreter: Some("bash".to_string()),
+                description: Some("Run focused checks.".to_string()),
+                fingerprint: "sha256:script".to_string(),
+            }],
+            permissions: PermissionRequest::default(),
+            fingerprint: "sha256:instance".to_string(),
+            mtime: 1_700_000_000,
+            first_seen: 1_700_000_001,
+            last_seen: 1_700_000_002,
+        }
+    }
+
+    #[test]
+    fn agent_id_wire_values_are_stable() {
+        let cases = [
+            (AgentId::ToolGlobal, "tool-global"),
+            (AgentId::ClaudeCode, "claude-code"),
+            (AgentId::Codex, "codex"),
+            (AgentId::Pi, "pi"),
+            (AgentId::Hermes, "hermes"),
+            (AgentId::Openclaw, "openclaw"),
+            (AgentId::Opencode, "opencode"),
+        ];
+
+        for (agent, expected) in cases {
+            assert_eq!(agent.as_str(), expected);
+        }
+    }
+
+    #[test]
+    fn scope_wire_values_are_stable() {
+        let cases = [
+            (Scope::ToolGlobal, "tool-global"),
+            (Scope::AgentGlobal, "agent-global"),
+            (Scope::AgentProject, "agent-project"),
+        ];
+
+        for (scope, expected) in cases {
+            assert_eq!(scope.as_str(), expected);
+        }
+    }
+
+    #[test]
+    fn permission_request_default_is_safe_and_human_gated() {
+        let permissions = PermissionRequest::default();
+
+        assert!(permissions.tools.is_empty());
+        assert!(permissions.files.is_empty());
+        assert_eq!(permissions.network, NetworkAccess::None);
+        assert_eq!(permissions.network.as_str(), "none");
+        assert!(!permissions.network_declared);
+        assert!(!permissions.exec);
+        assert!(!permissions.exec_declared);
+        assert!(permissions.requires_human);
+        assert!(!permissions.requires_human_declared);
+    }
+
+    #[test]
+    fn skill_instance_preserves_identity_and_state_fields() {
+        let instance = sample_skill_instance();
+
+        assert_eq!(instance.id, "codex:agent-project:skills/refactor/SKILL.md");
+        assert_eq!(instance.definition_id, "skill:refactor");
+        assert_eq!(instance.agent, AgentId::Codex);
+        assert_eq!(instance.agent.as_str(), "codex");
+        assert_eq!(instance.scope, Scope::AgentProject);
+        assert_eq!(instance.scope.as_str(), "agent-project");
+        assert_eq!(instance.project_root, Some(PathBuf::from("workspace")));
+        assert_eq!(instance.path, PathBuf::from("skills/refactor/SKILL.md"));
+        assert_eq!(
+            instance.display_path,
+            PathBuf::from(".codex/skills/refactor/SKILL.md")
+        );
+        assert!(instance.enabled);
+        assert_eq!(instance.state, SkillState::Loaded);
+        assert_eq!(instance.state.as_str(), "loaded");
+        assert_eq!(instance.fingerprint, "sha256:instance");
+        assert_eq!(instance.permissions, PermissionRequest::default());
+        assert_eq!(instance.scripts.len(), 1);
+        assert_eq!(instance.scripts[0].fingerprint, "sha256:script");
+    }
+
+    #[test]
+    fn skill_definition_preserves_aggregate_identity_fields() {
+        let instance = sample_skill_instance();
+        let definition = SkillDefinition {
+            id: instance.definition_id.clone(),
+            canonical_name: instance.name.clone(),
+            description: instance.description.clone(),
+            instances: vec![
+                instance.id.clone(),
+                "codex:agent-global:refactor".to_string(),
+            ],
+            active_instance: Some(instance.id.clone()),
+            has_multiple_instances: true,
+            has_conflict: true,
+            fingerprint_set: vec![instance.fingerprint.clone(), "sha256:global".to_string()],
+        };
+
+        assert_eq!(definition.id, "skill:refactor");
+        assert_eq!(definition.canonical_name, "refactor");
+        assert_eq!(definition.description, "Safely refactor local code.");
+        assert_eq!(
+            definition.instances,
+            vec![
+                "codex:agent-project:skills/refactor/SKILL.md".to_string(),
+                "codex:agent-global:refactor".to_string()
+            ]
+        );
+        assert_eq!(
+            definition.active_instance,
+            Some("codex:agent-project:skills/refactor/SKILL.md".to_string())
+        );
+        assert!(definition.has_multiple_instances);
+        assert!(definition.has_conflict);
+        assert_eq!(
+            definition.fingerprint_set,
+            vec!["sha256:instance".to_string(), "sha256:global".to_string()]
+        );
+    }
+}
