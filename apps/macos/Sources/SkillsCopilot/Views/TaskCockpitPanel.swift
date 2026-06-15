@@ -5,7 +5,9 @@ struct TaskCockpitPanel: View {
     let currentTaskText: String
     let result: TaskCockpitResult?
     let isBuilding: Bool
+    let operationState: TaskCockpitOperationState
     let onBuild: () -> Void
+    let onCancel: () -> Void
 
     private var effectiveTaskText: String {
         let trimmed = taskText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -37,21 +39,22 @@ struct TaskCockpitPanel: View {
                 Button {
                     onBuild()
                 } label: {
-                    Label(UIStrings.taskCockpitAction, systemImage: "rectangle.grid.2x2")
+                    Label(actionTitle, systemImage: actionSystemImage)
                 }
                 .disabled(isBuilding || effectiveTaskText.isEmpty)
                 .help(UIStrings.taskCockpitBoundary)
             }
 
-            if isBuilding {
-                Label(UIStrings.llmPreparing, systemImage: "hourglass")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
+            TaskCockpitOperationStatusView(
+                state: operationState,
+                isBuilding: isBuilding,
+                onCancel: onCancel,
+                onRetry: onBuild
+            )
 
             if let result {
                 TaskCockpitResultView(result: result)
-            } else {
+            } else if !isBuilding {
                 Label(UIStrings.taskCockpitNoResult, systemImage: "info.circle")
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -64,6 +67,117 @@ struct TaskCockpitPanel: View {
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
         .adaptiveMaterialSurface()
+    }
+
+    private var actionTitle: String {
+        operationState.canRetry ? UIStrings.taskCockpitRetry : UIStrings.taskCockpitAction
+    }
+
+    private var actionSystemImage: String {
+        operationState.canRetry ? "arrow.clockwise" : "rectangle.grid.2x2"
+    }
+}
+
+private struct TaskCockpitOperationStatusView: View {
+    let state: TaskCockpitOperationState
+    let isBuilding: Bool
+    let onCancel: () -> Void
+    let onRetry: () -> Void
+
+    var body: some View {
+        if state.phase != .idle && state.phase != .completed {
+            TimelineView(.periodic(from: state.startedAt ?? Date(), by: 1)) { context in
+                HStack(alignment: .top, spacing: 10) {
+                    if state.phase == .preparing {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                    Label(statusMessage(now: context.date), systemImage: systemImage)
+                        .font(.callout)
+                        .foregroundStyle(foregroundStyle)
+                        .textSelection(.enabled)
+                    Spacer(minLength: 8)
+                    if state.canCancel && isBuilding {
+                        Button {
+                            onCancel()
+                        } label: {
+                            Label(UIStrings.cancel, systemImage: "xmark.circle")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                    if state.canRetry {
+                        Button {
+                            onRetry()
+                        } label: {
+                            Label(UIStrings.taskCockpitRetry, systemImage: "arrow.clockwise")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.quaternary.opacity(0.26), in: RoundedRectangle(cornerRadius: 6))
+                .overlay(alignment: .bottomLeading) {
+                    if state.phase == .preparing, state.timeoutSeconds > 0 {
+                        GeometryReader { proxy in
+                            Rectangle()
+                                .fill(.secondary.opacity(0.35))
+                                .frame(width: proxy.size.width * progress(now: context.date), height: 2)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                        }
+                        .allowsHitTesting(false)
+                    }
+                }
+            }
+        }
+    }
+
+    private var systemImage: String {
+        switch state.phase {
+        case .idle, .completed:
+            return "checkmark.circle"
+        case .preparing:
+            return "hourglass"
+        case .fallback:
+            return "exclamationmark.triangle"
+        case .timedOut:
+            return "clock.badge.exclamationmark"
+        case .cancelled:
+            return "xmark.circle"
+        case .failed:
+            return "exclamationmark.octagon"
+        }
+    }
+
+    private var foregroundStyle: AnyShapeStyle {
+        switch state.phase {
+        case .timedOut, .failed:
+            return AnyShapeStyle(.orange)
+        case .fallback, .cancelled:
+            return AnyShapeStyle(.secondary)
+        case .idle, .preparing, .completed:
+            return AnyShapeStyle(.secondary)
+        }
+    }
+
+    private func statusMessage(now: Date) -> String {
+        if state.phase == .preparing {
+            return UIStrings.taskCockpitPreparingStatus(
+                elapsedSeconds: state.elapsedSeconds(now: now),
+                timeoutSeconds: state.timeoutSeconds
+            )
+        }
+        if state.elapsedSeconds() > 0 {
+            return "\(state.message) \(UIStrings.taskCockpitElapsedSeconds(state.elapsedSeconds()))"
+        }
+        return state.message
+    }
+
+    private func progress(now: Date) -> CGFloat {
+        guard state.timeoutSeconds > 0 else { return 0 }
+        return min(1, CGFloat(Double(state.elapsedSeconds(now: now)) / Double(state.timeoutSeconds)))
     }
 }
 

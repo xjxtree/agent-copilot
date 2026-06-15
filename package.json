@@ -18,6 +18,7 @@
     "smoke:macos-app": "node scripts/smoke-macos-app.mjs",
     "verify:screenshot-artifacts": "node scripts/verify-screenshot-artifacts.mjs",
     "verify:validation-blockers": "node scripts/verify-validation-blockers.mjs",
+    "verify:v2.73-docs": "node scripts/verify-v2-73-validation-docs.mjs",
     "benchmark:10k": "node scripts/benchmark-10k.mjs",
     "test:macos-list-model": "node scripts/test-native-list-model.mjs",
     "benchmark:macos-list-model": "node scripts/benchmark-native-list-model.mjs",

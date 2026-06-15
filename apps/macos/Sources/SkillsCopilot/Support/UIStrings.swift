@@ -664,10 +664,15 @@ enum UIStrings {
     static var taskCockpitTitle: String { text("taskCockpit.title", "Task-first Cockpit") }
     static var taskCockpitBoundary: String { text("taskCockpit.boundary", "User-triggered, deterministic, read-only task cockpit from local readiness, routing, session-review, provider-observability, remediation, gap, blocker, and evidence metadata. It cannot send provider requests, write skill files, mutate agent config, create snapshots, change triage, execute scripts, read credentials, persist raw prompts/responses/traces, sync cloud data, or emit telemetry.") }
     static var taskCockpitAction: String { text("taskCockpit.action.build", "Build Cockpit") }
+    static var taskCockpitRetry: String { text("taskCockpit.action.retry", "Retry") }
     static var taskCockpitUnavailable: String { text("taskCockpit.unavailable", "Task-first cockpit is unavailable in this service build.") }
     static var taskCockpitTaskRequired: String { text("taskCockpit.taskRequired", "Enter a task before building the cockpit.") }
     static var taskCockpitTaskPlaceholder: String { text("taskCockpit.task.placeholder", "Describe the task, or leave blank to reuse the current readiness/routing task") }
     static var taskCockpitNoResult: String { text("taskCockpit.empty.result", "No task cockpit loaded.") }
+    static var taskCockpitLoaded: String { text("taskCockpit.loaded", "Task cockpit loaded from local evidence.") }
+    static var taskCockpitCancelled: String { text("taskCockpit.cancelled", "Task cockpit build was cancelled. No provider or write action was started.") }
+    static var taskCockpitCatalogUnavailableDiagnostic: String { text("taskCockpit.diagnostic.catalogUnavailable", "The service returned cockpit metadata without an available catalog.") }
+    static var taskCockpitPartialNoRows: String { text("taskCockpit.diagnostic.partialNoRows", "The service returned cockpit metadata, but no candidate, context, gap, blocker, or evidence rows.") }
     static var taskCockpitSections: String { text("taskCockpit.sections", "Cockpit sections") }
     static var taskCockpitTasks: String { text("taskCockpit.tasks", "Task rows") }
     static var taskCockpitRoutes: String { text("taskCockpit.routes", "Route candidates") }
@@ -680,6 +685,26 @@ enum UIStrings {
     static var taskCockpitNoRows: String { text("taskCockpit.empty.rows", "No rows returned.") }
     static var taskCockpitRecommendedAgent: String { text("taskCockpit.recommendedAgent", "Recommended agent") }
     static var taskCockpitRecommendedSkill: String { text("taskCockpit.recommendedSkill", "Recommended skill") }
+
+    static func taskCockpitPreparingStatus(elapsedSeconds: Int, timeoutSeconds: Int) -> String {
+        format("taskCockpit.preparingStatus", "Preparing local cockpit... %d/%d seconds before timeout.", elapsedSeconds, timeoutSeconds)
+    }
+
+    static func taskCockpitTimedOut(_ timeoutSeconds: Int) -> String {
+        format("taskCockpit.timedOut", "Task cockpit did not finish within %d seconds. No provider or write action was started; retry when the service is responsive.", timeoutSeconds)
+    }
+
+    static func taskCockpitFailed(_ reason: String) -> String {
+        format("taskCockpit.failed", "Task cockpit build stopped: %@.", reason)
+    }
+
+    static func taskCockpitLoadedWithFallback(_ reason: String) -> String {
+        format("taskCockpit.loadedWithFallback", "Loaded fallback or partial cockpit metadata: %@.", reason)
+    }
+
+    static func taskCockpitElapsedSeconds(_ elapsedSeconds: Int) -> String {
+        format("taskCockpit.elapsedSeconds", "Elapsed: %d seconds.", elapsedSeconds)
+    }
     static var similarGroupingTitle: String { text("similarGrouping.title", "Similar Skill Grouping") }
     static var similarGroupingBoundary: String { text("similarGrouping.boundary", "User-triggered, read-only local grouping for duplicate, similar, and confusable skills across catalog evidence. It cannot call a provider, write skill files, mutate agent config, create snapshots, change triage, execute scripts, read credentials, persist raw prompts/responses/traces, sync cloud data, or emit telemetry.") }
     static var similarGroupingAction: String { text("similarGrouping.action.group", "Group Similar Skills") }

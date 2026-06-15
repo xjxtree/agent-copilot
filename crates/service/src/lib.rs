@@ -2,7 +2,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     env, fs,
     path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use serde::{Deserialize, Serialize};
@@ -59,6 +59,13 @@ use provider::{
 
 const DEFAULT_BUNDLE_ID: &str = "dev.skills-copilot.native";
 const SERVICE_PROTOCOL_VERSION: u32 = 1;
+const TASK_READINESS_MAX_CANDIDATE_SCAN: usize = 160;
+const TASK_READINESS_MIN_CANDIDATE_SCAN: usize = 48;
+const TASK_READINESS_CANDIDATE_SCAN_MULTIPLIER: usize = 12;
+const TASK_AGGREGATION_TIMEOUT_MS: u64 = 2_000;
+const TASK_COCKPIT_TIMEOUT_MS: u64 = 1_500;
+const REMEDIATION_AGGREGATION_TIMEOUT_MS: u64 = 2_500;
+const REMEDIATION_MAX_DETAIL_SCAN: usize = 240;
 const SUPPORTED_METHODS: &[&str] = &[
     "app.version",
     "app.stateSnapshot",
@@ -706,6 +713,23 @@ pub struct SkillQualitySafetyFlags {
     pub raw_response_persisted: bool,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct AggregationRuntimeMetadata {
+    pub status: &'static str,
+    pub elapsed_ms: u64,
+    pub timeout_ms: u64,
+    pub timed_out: bool,
+    pub partial: bool,
+    pub fallback_used: bool,
+    pub limit: usize,
+    pub scanned_count: usize,
+    pub total_count: usize,
+    pub completed_stages: Vec<&'static str>,
+    pub skipped_stages: Vec<&'static str>,
+    pub blocker_codes: Vec<&'static str>,
+    pub notes: Vec<String>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct TaskReadinessParams {
     #[serde(alias = "user_intent", alias = "task_text")]
@@ -732,6 +756,7 @@ pub struct TaskReadinessResult {
     pub blocker_risk_notes: Vec<String>,
     pub evidence_references: Vec<TaskReadinessEvidenceReference>,
     pub prompt_request: TaskReadinessPromptRequest,
+    pub aggregation: AggregationRuntimeMetadata,
     pub safety_flags: TaskReadinessSafetyFlags,
 }
 
@@ -836,6 +861,7 @@ pub struct SkillRouteRankingResult {
     pub likely_miss_risks: Vec<String>,
     pub evidence_references: Vec<TaskReadinessEvidenceReference>,
     pub prompt_request: RoutingConfidencePromptRequest,
+    pub aggregation: AggregationRuntimeMetadata,
     pub safety_flags: RoutingConfidenceSafetyFlags,
 }
 
@@ -864,6 +890,7 @@ pub struct AgentReadinessComparisonResult {
     pub gap_issue_rows: Vec<AgentReadinessGapIssueRow>,
     pub evidence_references: Vec<TaskReadinessEvidenceReference>,
     pub prompt_request: AgentReadinessPromptRequest,
+    pub aggregation: AggregationRuntimeMetadata,
     pub safety_flags: AgentReadinessSafetyFlags,
 }
 
@@ -1009,12 +1036,24 @@ pub struct TaskCockpitParams {
     pub candidate_instance_ids: Vec<String>,
     #[serde(default)]
     pub limit: Option<usize>,
+    #[serde(default)]
+    pub include_session_review: Option<bool>,
+    #[serde(default)]
+    pub include_provider_observability: Option<bool>,
+    #[serde(default)]
+    pub include_remediation_context: Option<bool>,
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TaskCockpitResult {
     pub generated_by: &'static str,
     pub catalog_available: bool,
+    pub partial: bool,
+    pub elapsed_ms: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fallback_reason: Option<String>,
     pub filters: TaskCockpitFilters,
     pub summary: TaskCockpitSummary,
     pub cockpit_sections: Vec<TaskCockpitSection>,
@@ -1029,6 +1068,7 @@ pub struct TaskCockpitResult {
     pub blocker_notes: Vec<String>,
     pub evidence_references: Vec<TaskReadinessEvidenceReference>,
     pub prompt_request: AgentReadinessPromptRequest,
+    pub aggregation: AggregationRuntimeMetadata,
     pub safety_flags: TaskCockpitSafetyFlags,
 }
 
@@ -1038,6 +1078,10 @@ pub struct TaskCockpitFilters {
     pub agent: Option<String>,
     pub candidate_instance_ids: Vec<String>,
     pub limit: usize,
+    pub include_session_review: bool,
+    pub include_provider_observability: bool,
+    pub include_remediation_context: bool,
+    pub timeout_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1945,6 +1989,7 @@ pub struct RemediationPlanResult {
     pub blocker_notes: Vec<String>,
     pub evidence_references: Vec<TaskReadinessEvidenceReference>,
     pub prompt_request: RemediationPlanPromptRequest,
+    pub aggregation: AggregationRuntimeMetadata,
     pub safety_flags: RemediationPlanSafetyFlags,
 }
 
@@ -2321,6 +2366,7 @@ pub struct RemediationBatchReviewResult {
     pub blocker_notes: Vec<String>,
     pub evidence_references: Vec<TaskReadinessEvidenceReference>,
     pub prompt_request: RemediationBatchReviewPromptRequest,
+    pub aggregation: AggregationRuntimeMetadata,
     pub safety_flags: RemediationBatchReviewSafetyFlags,
 }
 
@@ -5259,6 +5305,10 @@ impl ServiceHost {
                 agent: agent.clone(),
                 candidate_instance_ids: candidate_instance_ids.clone(),
                 limit: Some(filters.limit.min(12)),
+                include_session_review: Some(true),
+                include_provider_observability: Some(true),
+                include_remediation_context: Some(true),
+                timeout_ms: None,
             })?)
         } else {
             None
@@ -8159,6 +8209,7 @@ impl ServiceHost {
         &self,
         params: RemediationPlanParams,
     ) -> Result<RemediationPlanResult, ServiceError> {
+        let started_at = Instant::now();
         if matches!(params.limit, Some(0)) {
             return Err(ServiceError::InvalidRequest(
                 "remediation.plan limit must be greater than zero".to_string(),
@@ -8173,17 +8224,49 @@ impl ServiceHost {
         };
 
         let skills = self.list_visible_skill_records(&catalog)?;
+        let mut aggregation_notes = Vec::new();
+        let mut skipped_stages = Vec::new();
+        let mut blocker_codes = Vec::new();
         let skill_ids = skills
             .iter()
             .map(|skill| skill.id.as_str())
             .collect::<BTreeSet<_>>();
-        let details = skills
+        let mut detail_skill_records = skills
             .iter()
             .filter(|skill| {
                 agent_matches(filters.agent.as_deref(), Some(skill.agent.as_str()))
                     && (filters.candidate_instance_ids.is_empty()
                         || filters.candidate_instance_ids.contains(&skill.id))
             })
+            .collect::<Vec<_>>();
+        let total_detail_candidate_count = detail_skill_records.len();
+        let detail_scan_limit = filters
+            .limit
+            .saturating_mul(12)
+            .clamp(80, REMEDIATION_MAX_DETAIL_SCAN);
+        if filters.candidate_instance_ids.is_empty()
+            && detail_skill_records.len() > detail_scan_limit
+        {
+            detail_skill_records.sort_by(|left, right| {
+                right
+                    .enabled
+                    .cmp(&left.enabled)
+                    .then_with(|| left.state.cmp(&right.state))
+                    .then_with(|| left.agent.cmp(&right.agent))
+                    .then_with(|| left.name.cmp(&right.name))
+                    .then_with(|| left.id.cmp(&right.id))
+            });
+            detail_skill_records.truncate(detail_scan_limit);
+            skipped_stages.push("detail-scan-overflow");
+            blocker_codes.push("bounded-detail-scan");
+            aggregation_notes.push(format!(
+                "Remediation planning loaded detail evidence for {} of {} visible candidate skill(s).",
+                detail_skill_records.len(),
+                total_detail_candidate_count
+            ));
+        }
+        let details = detail_skill_records
+            .iter()
             .filter_map(|skill| catalog.get_skill_detail(&skill.id).ok().flatten())
             .filter(|detail| {
                 workspace_detail_matches(params.project_root.as_deref().map(Path::new), detail)
@@ -8250,18 +8333,9 @@ impl ServiceHost {
                 })
             })
             .transpose()?;
-        let route_ranking = filters
-            .task
+        let route_ranking = task_readiness
             .as_ref()
-            .map(|task| {
-                self.rank_skill_routes(RankSkillRoutesParams {
-                    task: task.clone(),
-                    agent: filters.agent.clone(),
-                    candidate_instance_ids: candidate_instance_ids.clone(),
-                    limit: Some(filters.limit.min(20)),
-                })
-            })
-            .transpose()?;
+            .map(|readiness| skill_route_ranking_from_readiness(readiness.clone()));
 
         let mut evidence_by_id = BTreeMap::new();
         for evidence in taxonomy
@@ -8721,6 +8795,7 @@ impl ServiceHost {
         gap_notes.extend(taxonomy.gap_notes.iter().cloned());
         gap_notes.extend(stale_drift.gap_notes.iter().cloned());
         gap_notes.extend(similar.gap_notes.iter().cloned());
+        gap_notes.extend(aggregation_notes.iter().cloned());
         if details.is_empty() {
             gap_notes.push("No visible local skills matched the remediation filters.".to_string());
         }
@@ -8803,6 +8878,29 @@ impl ServiceHost {
                         .to_string()
                 },
             },
+            aggregation: aggregation_runtime_metadata(AggregationRuntimeInput {
+                started_at,
+                timeout_ms: REMEDIATION_AGGREGATION_TIMEOUT_MS,
+                limit: filters.limit,
+                scanned_count: details.len(),
+                total_count: total_detail_candidate_count,
+                completed_stages: vec![
+                    "catalog",
+                    "detail-scan",
+                    "finding-analysis",
+                    "cleanup-queue",
+                    "capability-taxonomy",
+                    "stale-drift",
+                    "similar-skills",
+                    "workspace-readiness",
+                    "task-readiness",
+                    "routing",
+                ],
+                skipped_stages,
+                blocker_codes,
+                fallback_used: !aggregation_notes.is_empty(),
+                notes: aggregation_notes,
+            }),
             safety_flags: remediation_plan_safety_flags(),
         })
     }
@@ -9434,6 +9532,8 @@ impl ServiceHost {
         &self,
         params: RemediationBatchReviewParams,
     ) -> Result<RemediationBatchReviewResult, ServiceError> {
+        let started_at = Instant::now();
+        let budget = Duration::from_millis(REMEDIATION_AGGREGATION_TIMEOUT_MS);
         if matches!(params.limit, Some(0)) {
             return Err(ServiceError::InvalidRequest(
                 "remediation.batchReview limit must be greater than zero".to_string(),
@@ -9483,45 +9583,85 @@ impl ServiceHost {
             candidate_instance_ids: selected_ids.clone(),
             include_deferred: true,
         })?;
-        let drafts = self.preview_remediation_drafts(RemediationPreviewDraftsParams {
-            agent: filters.agent.clone(),
-            task: filters.task.clone(),
-            skill_ids: selected_ids.clone(),
-            finding_ids: Vec::new(),
-            draft_types: Vec::new(),
-            limit: Some(filters.limit.saturating_mul(2).max(filters.limit)),
-            include_policy_drafts: true,
-        })?;
-        let impact = self.preview_remediation_impact(RemediationPreviewImpactParams {
-            action: Some("review".to_string()),
-            task: filters.task.clone(),
-            agent: filters.agent.clone(),
-            project_root: params.project_root.clone(),
-            skill_ids: selected_ids.clone(),
-            candidate_instance_ids: Vec::new(),
-            draft_ids: Vec::new(),
-            plan_item_ids: Vec::new(),
-            limit: Some(filters.limit.saturating_mul(2).max(filters.limit)),
-            include_snapshot_plan: true,
-            include_rollback_plan: true,
-            include_risk_impact: true,
-            include_task_impact: filters.task.is_some(),
-        })?;
+        let mut aggregation_notes = Vec::new();
+        let mut skipped_stages = Vec::new();
+        let mut blocker_codes = Vec::new();
+        let drafts = if !task_cockpit_budget_reached(started_at, budget)
+            && !plan.aggregation.timed_out
+        {
+            Some(
+                self.preview_remediation_drafts(RemediationPreviewDraftsParams {
+                    agent: filters.agent.clone(),
+                    task: filters.task.clone(),
+                    skill_ids: selected_ids.clone(),
+                    finding_ids: Vec::new(),
+                    draft_types: Vec::new(),
+                    limit: Some(filters.limit.saturating_mul(2).max(filters.limit)),
+                    include_policy_drafts: true,
+                })?,
+            )
+        } else {
+            skipped_stages.push("fix-preview-drafts");
+            blocker_codes.push("batch-review-budget");
+            aggregation_notes.push(
+                "Batch review returned plan/cleanup rows and skipped fix preview drafts after reaching the bounded aggregation budget."
+                    .to_string(),
+            );
+            None
+        };
+        let impact = if !task_cockpit_budget_reached(started_at, budget)
+            && !plan.aggregation.timed_out
+        {
+            Some(
+                self.preview_remediation_impact(RemediationPreviewImpactParams {
+                    action: Some("review".to_string()),
+                    task: filters.task.clone(),
+                    agent: filters.agent.clone(),
+                    project_root: params.project_root.clone(),
+                    skill_ids: selected_ids.clone(),
+                    candidate_instance_ids: Vec::new(),
+                    draft_ids: Vec::new(),
+                    plan_item_ids: Vec::new(),
+                    limit: Some(filters.limit.saturating_mul(2).max(filters.limit)),
+                    include_snapshot_plan: true,
+                    include_rollback_plan: true,
+                    include_risk_impact: true,
+                    include_task_impact: filters.task.is_some(),
+                })?,
+            )
+        } else {
+            skipped_stages.push("impact-preview");
+            blocker_codes.push("batch-review-budget");
+            aggregation_notes.push(
+                    "Batch review skipped impact preview after reaching the bounded aggregation budget."
+                        .to_string(),
+                );
+            None
+        };
         let cleanup = self.cleanup_list_queue(CleanupListQueueParams {
             agent: filters.agent.clone(),
             limit: Some(filters.limit.saturating_mul(2).max(filters.limit)),
         })?;
 
         let mut evidence_by_id = BTreeMap::new();
-        for evidence in plan
-            .evidence_references
-            .iter()
-            .chain(drafts.evidence_references.iter())
-            .chain(impact.evidence_references.iter())
-        {
+        for evidence in &plan.evidence_references {
             evidence_by_id
                 .entry(evidence.id.clone())
                 .or_insert_with(|| evidence.clone());
+        }
+        if let Some(drafts) = drafts.as_ref() {
+            for evidence in &drafts.evidence_references {
+                evidence_by_id
+                    .entry(evidence.id.clone())
+                    .or_insert_with(|| evidence.clone());
+            }
+        }
+        if let Some(impact) = impact.as_ref() {
+            for evidence in &impact.evidence_references {
+                evidence_by_id
+                    .entry(evidence.id.clone())
+                    .or_insert_with(|| evidence.clone());
+            }
         }
 
         let mut items = Vec::new();
@@ -9532,11 +9672,15 @@ impl ServiceHost {
                 &detail_by_id,
             ));
         }
-        for item in &drafts.draft_items {
-            items.push(remediation_batch_review_item_from_draft(item, &filters));
+        if let Some(drafts) = drafts.as_ref() {
+            for item in &drafts.draft_items {
+                items.push(remediation_batch_review_item_from_draft(item, &filters));
+            }
         }
-        for row in &impact.impact_rows {
-            items.push(remediation_batch_review_item_from_impact(row, &filters));
+        if let Some(impact) = impact.as_ref() {
+            for row in &impact.impact_rows {
+                items.push(remediation_batch_review_item_from_impact(row, &filters));
+            }
         }
         for item in &cleanup.items {
             items.push(remediation_batch_review_item_from_cleanup(
@@ -9557,8 +9701,13 @@ impl ServiceHost {
         let recommended_next_step_labels = remediation_batch_review_next_steps(&items);
 
         let mut gap_notes = plan.gap_notes.clone();
-        gap_notes.extend(drafts.gap_notes.clone());
-        gap_notes.extend(impact.gap_notes.clone());
+        if let Some(drafts) = drafts.as_ref() {
+            gap_notes.extend(drafts.gap_notes.clone());
+        }
+        if let Some(impact) = impact.as_ref() {
+            gap_notes.extend(impact.gap_notes.clone());
+        }
+        gap_notes.extend(aggregation_notes.iter().cloned());
         if details.is_empty() {
             gap_notes.push("No visible local skills matched the batch review filters.".to_string());
         }
@@ -9573,8 +9722,13 @@ impl ServiceHost {
         gap_notes.truncate(18);
 
         let mut blocker_notes = plan.blocker_notes.clone();
-        blocker_notes.extend(drafts.blocker_notes.clone());
-        blocker_notes.extend(impact.blocker_notes.clone());
+        if let Some(drafts) = drafts.as_ref() {
+            blocker_notes.extend(drafts.blocker_notes.clone());
+        }
+        if let Some(impact) = impact.as_ref() {
+            blocker_notes.extend(impact.blocker_notes.clone());
+        }
+        blocker_notes.extend(aggregation_notes.iter().cloned());
         blocker_notes.push(
             "Batch review is read-only; existing preview-first write flows may only be opened separately after explicit user confirmation."
                 .to_string(),
@@ -9597,6 +9751,19 @@ impl ServiceHost {
         let prompt_available = !items.is_empty();
         let summary =
             remediation_batch_review_summary(total_item_count, &items, &review_groups, &filters);
+        let mut completed_stages = vec![
+            "catalog",
+            "detail-scan",
+            "remediation-plan",
+            "cleanup-queue",
+            "batch-grouping",
+        ];
+        if drafts.is_some() {
+            completed_stages.push("fix-preview-drafts");
+        }
+        if impact.is_some() {
+            completed_stages.push("impact-preview");
+        }
 
         Ok(RemediationBatchReviewResult {
             generated_by: "local-v2.59",
@@ -9636,6 +9803,18 @@ impl ServiceHost {
                         .to_string()
                 },
             },
+            aggregation: aggregation_runtime_metadata(AggregationRuntimeInput {
+                started_at,
+                timeout_ms: REMEDIATION_AGGREGATION_TIMEOUT_MS,
+                limit: filters.limit,
+                scanned_count: details.len(),
+                total_count: details.len(),
+                completed_stages,
+                skipped_stages,
+                blocker_codes,
+                fallback_used: !aggregation_notes.is_empty(),
+                notes: aggregation_notes,
+            }),
             safety_flags: remediation_batch_review_safety_flags(),
         })
     }
@@ -9936,6 +10115,7 @@ impl ServiceHost {
         &self,
         params: TaskReadinessParams,
     ) -> Result<TaskReadinessResult, ServiceError> {
+        let started_at = Instant::now();
         let task = params.task.trim();
         if task.is_empty() {
             return Err(ServiceError::InvalidRequest(
@@ -9948,9 +10128,10 @@ impl ServiceHost {
             &self.redaction_roots(&adapter_ctx),
         );
         let limit = params.limit.unwrap_or(8).clamp(1, 20);
+        let candidate_instance_ids = normalize_string_list(params.candidate_instance_ids.clone());
         let filters = TaskReadinessFilters {
             agent: params.agent.clone(),
-            candidate_instance_ids: params.candidate_instance_ids.clone(),
+            candidate_instance_ids: candidate_instance_ids.clone(),
             limit,
         };
         let Some(catalog) = self.open_existing_catalog_read_only()? else {
@@ -9963,11 +10144,9 @@ impl ServiceHost {
         let analysis = analyze_catalog(&catalog, &adapter_ctx)?;
         let adapter_diagnostics = list_adapter_diagnostics(&adapter_ctx);
         let agent_filter = params.agent.as_deref().filter(|agent| !agent.is_empty());
-        let requested_ids = params
-            .candidate_instance_ids
+        let requested_ids = candidate_instance_ids
             .iter()
-            .filter(|id| !id.trim().is_empty())
-            .map(|id| id.as_str())
+            .map(String::as_str)
             .collect::<Vec<_>>();
         let task_terms = task_readiness_terms(&task);
 
@@ -9985,17 +10164,48 @@ impl ServiceHost {
             }
         }
 
+        let mut candidate_records = skills
+            .into_iter()
+            .filter(|skill| {
+                agent_filter.is_none_or(|agent| skill.agent == agent)
+                    && (requested_ids.is_empty() || requested_ids.contains(&skill.id.as_str()))
+            })
+            .collect::<Vec<_>>();
+        let total_candidate_count = candidate_records.len();
+        let scan_limit = task_readiness_candidate_scan_limit(limit, requested_ids.len());
+        let mut skipped_stages = Vec::new();
+        let mut blocker_codes = Vec::new();
+        let mut aggregation_notes = Vec::new();
+        if candidate_records.len() > scan_limit {
+            candidate_records.sort_by(|left, right| {
+                task_readiness_record_affinity(right, &task_terms)
+                    .cmp(&task_readiness_record_affinity(left, &task_terms))
+                    .then_with(|| right.enabled.cmp(&left.enabled))
+                    .then_with(|| left.agent.cmp(&right.agent))
+                    .then_with(|| left.name.cmp(&right.name))
+                    .then_with(|| left.id.cmp(&right.id))
+            });
+            candidate_records.truncate(scan_limit);
+            skipped_stages.push("candidate-scan-overflow");
+            blocker_codes.push("bounded-candidate-scan");
+            let note = format!(
+                "Task readiness evaluated the top {} of {} visible candidate(s) using deterministic prefiltering.",
+                candidate_records.len(),
+                total_candidate_count
+            );
+            missing_gap_notes.push(note.clone());
+            aggregation_notes.push(note);
+        }
+
+        let findings_by_instance = task_readiness_findings_by_instance(&findings);
+        let findings_by_definition = task_readiness_findings_by_definition(&findings);
+        let conflicts_by_instance = task_readiness_conflicts_by_instance(&conflicts);
+        let conflicts_by_definition = task_readiness_conflicts_by_definition(&conflicts);
+        let analysis_by_instance = task_readiness_analysis_by_instance(&analysis.groups);
+
         let mut evidence = Vec::new();
         let mut candidates = Vec::new();
-        for skill in skills {
-            if let Some(agent) = agent_filter {
-                if skill.agent != agent {
-                    continue;
-                }
-            }
-            if !requested_ids.is_empty() && !requested_ids.contains(&skill.id.as_str()) {
-                continue;
-            }
+        for skill in &candidate_records {
             let Some(detail) = catalog.get_skill_detail(&skill.id)? else {
                 missing_gap_notes.push(format!(
                     "Catalog row `{}` did not have detail evidence available.",
@@ -10003,46 +10213,27 @@ impl ServiceHost {
                 ));
                 continue;
             };
-            let related_findings = findings
-                .iter()
-                .filter(|finding| {
-                    finding.instance_id.as_deref() == Some(detail.id.as_str())
-                        || finding.definition_id.as_deref() == Some(detail.definition_id.as_str())
-                })
-                .cloned()
-                .collect::<Vec<_>>();
-            let related_conflicts = conflicts
-                .iter()
-                .filter(|conflict| {
-                    conflict.definition_id == detail.definition_id
-                        || conflict
-                            .instance_ids
-                            .iter()
-                            .any(|instance_id| instance_id == &detail.id)
-                })
-                .cloned()
-                .collect::<Vec<_>>();
-            let related_analysis = analysis
-                .groups
-                .iter()
-                .filter(|group| {
-                    group
-                        .instance_ids
-                        .iter()
-                        .any(|instance_id| instance_id == &detail.id)
-                })
-                .cloned()
-                .collect::<Vec<_>>();
+            let related_findings = task_readiness_related_findings(
+                &detail,
+                &findings_by_instance,
+                &findings_by_definition,
+            );
+            let related_conflicts = task_readiness_related_conflicts(
+                &detail,
+                &conflicts_by_instance,
+                &conflicts_by_definition,
+            );
+            let related_analysis = task_readiness_related_analysis(&detail, &analysis_by_instance);
             let diagnostic = adapter_diagnostics
                 .iter()
                 .find(|diagnostic| diagnostic.agent == detail.agent);
-            let quality = self
-                .score_skill_quality(ScoreSkillQualityParams {
-                    instance_id: detail.id.clone(),
-                    agent: Some(detail.agent.clone()),
-                    definition_id: Some(detail.definition_id.clone()),
-                })
-                .ok();
+            let quality = task_readiness_quality_signal(
+                &detail,
+                &related_findings,
+                &related_conflicts,
+                &related_analysis,
+                diagnostic,
+            );
             let candidate = task_readiness_candidate(
                 &task_terms,
                 &detail,
@@ -10051,7 +10242,7 @@ impl ServiceHost {
                     conflicts: &related_conflicts,
                     analysis_groups: &related_analysis,
                     diagnostic,
-                    quality: quality.as_ref(),
+                    quality: Some(&quality),
                 },
                 &mut evidence,
             );
@@ -10121,6 +10312,25 @@ impl ServiceHost {
                 note: "Optional provider-backed explanation must be requested through prompt preview and explicit confirmation; task.checkReadiness never sends provider traffic."
                     .to_string(),
             },
+            aggregation: aggregation_runtime_metadata(AggregationRuntimeInput {
+                started_at,
+                timeout_ms: TASK_AGGREGATION_TIMEOUT_MS,
+                limit,
+                scanned_count: candidate_records.len(),
+                total_count: total_candidate_count,
+                completed_stages: vec![
+                    "catalog",
+                    "finding-index",
+                    "conflict-index",
+                    "analysis-index",
+                    "candidate-scan",
+                    "quality-signal",
+                ],
+                skipped_stages,
+                blocker_codes,
+                fallback_used: !aggregation_notes.is_empty(),
+                notes: aggregation_notes,
+            }),
             safety_flags: task_readiness_safety_flags(),
         })
     }
@@ -10148,6 +10358,7 @@ impl ServiceHost {
         &self,
         params: CompareAgentReadinessParams,
     ) -> Result<AgentReadinessComparisonResult, ServiceError> {
+        let started_at = Instant::now();
         let task = params.task.trim();
         if task.is_empty() {
             return Err(ServiceError::InvalidRequest(
@@ -10181,6 +10392,7 @@ impl ServiceHost {
         let skills = self.list_visible_skill_records(&catalog)?;
         let agents =
             agent_readiness_agents_for_comparison(&skills, &adapter_ctx, &requested_agents);
+        let total_agent_count = agents.len();
         if agents.is_empty() {
             return Ok(empty_agent_readiness_comparison(
                 task,
@@ -10207,7 +10419,7 @@ impl ServiceHost {
             Some(agent_readiness_benchmark_context(
                 self.evaluate_task_benchmarks(EvaluateTaskBenchmarksParams {
                     ids: Vec::new(),
-                    limit: None,
+                    limit: Some(25),
                 })?,
             ))
         } else {
@@ -10275,6 +10487,22 @@ impl ServiceHost {
         let prompt_available = !prompt_instance_ids.is_empty();
         let summary = agent_readiness_summary(&rows, &gap_issue_rows, &recommended_agent);
         let evidence_references = evidence_by_id.into_values().collect::<Vec<_>>();
+        let returned_agent_count = rows.len();
+        let mut completed_stages = vec!["catalog", "agent-readiness", "agent-ranking"];
+        if params.include_routing_accuracy {
+            completed_stages.push("routing-accuracy-context");
+        }
+        if params.include_benchmarks {
+            completed_stages.push("benchmark-context");
+        }
+        let aggregation_notes = if params.include_benchmarks {
+            vec![
+                "Benchmark context is capped at 25 app-local benchmark rows for bounded comparison latency."
+                    .to_string(),
+            ]
+        } else {
+            Vec::new()
+        };
 
         Ok(AgentReadinessComparisonResult {
             generated_by: "deterministic-service",
@@ -10307,6 +10535,18 @@ impl ServiceHost {
                         .to_string()
                 },
             },
+            aggregation: aggregation_runtime_metadata(AggregationRuntimeInput {
+                started_at,
+                timeout_ms: TASK_AGGREGATION_TIMEOUT_MS,
+                limit: limit_per_agent,
+                scanned_count: returned_agent_count,
+                total_count: total_agent_count,
+                completed_stages,
+                skipped_stages: Vec::new(),
+                blocker_codes: Vec::new(),
+                fallback_used: false,
+                notes: aggregation_notes,
+            }),
             safety_flags: agent_readiness_safety_flags(),
         })
     }
@@ -10315,6 +10555,10 @@ impl ServiceHost {
         &self,
         params: TaskCockpitParams,
     ) -> Result<TaskCockpitResult, ServiceError> {
+        const MIN_TIMEOUT_MS: u64 = 500;
+        const MAX_TIMEOUT_MS: u64 = 30_000;
+
+        let started_at = Instant::now();
         let task = params.task.trim();
         if task.is_empty() {
             return Err(ServiceError::InvalidRequest(
@@ -10323,6 +10567,14 @@ impl ServiceHost {
         }
 
         let limit = params.limit.unwrap_or(8).clamp(1, 25);
+        let timeout_ms = params
+            .timeout_ms
+            .unwrap_or(TASK_COCKPIT_TIMEOUT_MS)
+            .clamp(MIN_TIMEOUT_MS, MAX_TIMEOUT_MS);
+        let budget = Duration::from_millis(timeout_ms);
+        let include_session_review = params.include_session_review.unwrap_or(true);
+        let include_provider_observability = params.include_provider_observability.unwrap_or(true);
+        let include_remediation_context = params.include_remediation_context.unwrap_or(true);
         let agent = params
             .agent
             .as_deref()
@@ -10330,6 +10582,7 @@ impl ServiceHost {
             .filter(|agent| !agent.is_empty())
             .map(ToOwned::to_owned);
         let candidate_instance_ids = normalize_string_list(params.candidate_instance_ids);
+        let mut fallback_reasons = Vec::new();
 
         let readiness = self.check_task_readiness(TaskReadinessParams {
             task: task.to_string(),
@@ -10337,79 +10590,164 @@ impl ServiceHost {
             candidate_instance_ids: candidate_instance_ids.clone(),
             limit: Some(limit),
         })?;
-        let ranking = self.rank_skill_routes(RankSkillRoutesParams {
-            task: readiness.task.clone(),
-            agent: agent.clone(),
-            candidate_instance_ids: candidate_instance_ids.clone(),
-            limit: Some(limit),
-        })?;
+        let ranking = skill_route_ranking_from_readiness(readiness.clone());
         let comparison = self.compare_agent_readiness(CompareAgentReadinessParams {
             task: readiness.task.clone(),
             agents: agent.clone().into_iter().collect(),
-            limit_per_agent: Some(limit.min(5)),
-            include_routing_accuracy: true,
-            include_benchmarks: true,
+            limit_per_agent: Some(limit.min(3)),
+            include_routing_accuracy: false,
+            include_benchmarks: false,
         })?;
-        let session_reviews =
+        let session_review_rows = if include_session_review
+            && readiness.catalog_available
+            && !task_cockpit_budget_reached(started_at, budget)
+        {
             self.list_agent_skill_reviews(AgentSessionListSkillReviewsParams {
                 agent: agent.clone(),
                 outcome: None,
                 trace_import_id: None,
                 limit: Some(limit),
-            })?;
-        let provider_observability =
-            self.llm_provider_observability(LlmProviderObservabilityParams {
-                profile_id: None,
-                provider: None,
-                model: None,
+            })?
+            .reviews
+            .iter()
+            .take(limit)
+            .map(task_cockpit_session_review_row)
+            .collect::<Vec<_>>()
+        } else {
+            if !include_session_review {
+                fallback_reasons.push(
+                    "Session-review context was skipped by the cockpit request filters."
+                        .to_string(),
+                );
+            } else if task_cockpit_budget_reached(started_at, budget) {
+                fallback_reasons.push(
+                    "Task cockpit reached its bounded time budget before session-review context."
+                        .to_string(),
+                );
+            }
+            Vec::new()
+        };
+        let provider_observability = if include_provider_observability
+            && readiness.catalog_available
+            && !task_cockpit_budget_reached(started_at, budget)
+        {
+            Some(
+                self.llm_provider_observability(LlmProviderObservabilityParams {
+                    profile_id: None,
+                    provider: None,
+                    model: None,
+                    status: None,
+                    action: None,
+                    limit: Some(limit),
+                })?,
+            )
+        } else {
+            if !include_provider_observability {
+                fallback_reasons.push(
+                    "Provider-observability context was skipped by the cockpit request filters."
+                        .to_string(),
+                );
+            } else if task_cockpit_budget_reached(started_at, budget) {
+                fallback_reasons.push(
+                    "Task cockpit reached its bounded time budget before provider-observability context."
+                        .to_string(),
+                );
+            }
+            None
+        };
+        let remediation_candidate_ids = if candidate_instance_ids.is_empty() {
+            ranking
+                .route_candidates
+                .iter()
+                .take(limit.min(5))
+                .map(|candidate| candidate.instance_id.clone())
+                .collect::<Vec<_>>()
+        } else {
+            candidate_instance_ids.clone()
+        };
+        let remediation_plan = if include_remediation_context
+            && readiness.catalog_available
+            && !task_cockpit_budget_reached(started_at, budget)
+        {
+            Some(self.plan_remediation(RemediationPlanParams {
+                agent: agent.clone(),
+                task: Some(readiness.task.clone()),
+                project_root: None,
+                focus: None,
+                focus_areas: vec![
+                    "finding".to_string(),
+                    "gap".to_string(),
+                    "ambiguity".to_string(),
+                    "drift".to_string(),
+                    "readiness".to_string(),
+                ],
+                limit: Some(limit.min(5)),
+                candidate_instance_ids: remediation_candidate_ids.clone(),
+                include_deferred: false,
+            })?)
+        } else {
+            if !include_remediation_context {
+                fallback_reasons.push(
+                    "Remediation context was skipped by the cockpit request filters.".to_string(),
+                );
+            } else if task_cockpit_budget_reached(started_at, budget) {
+                fallback_reasons.push(
+                    "Task cockpit reached its bounded time budget before remediation planning."
+                        .to_string(),
+                );
+            }
+            None
+        };
+        let batch_review = if include_remediation_context
+            && remediation_plan.is_some()
+            && !task_cockpit_budget_reached(started_at, budget)
+        {
+            Some(self.batch_review_remediation(RemediationBatchReviewParams {
+                task: Some(readiness.task.clone()),
+                agent: agent.clone(),
+                project_root: None,
+                workspace_label: None,
+                rule_id: None,
+                severity: None,
                 status: None,
-                action: None,
-                limit: Some(limit),
-            })?;
-        let remediation_plan = self.plan_remediation(RemediationPlanParams {
-            agent: agent.clone(),
-            task: Some(readiness.task.clone()),
-            project_root: None,
-            focus: None,
-            focus_areas: vec![
-                "finding".to_string(),
-                "gap".to_string(),
-                "ambiguity".to_string(),
-                "drift".to_string(),
-                "readiness".to_string(),
-            ],
-            limit: Some(limit),
-            candidate_instance_ids: candidate_instance_ids.clone(),
-            include_deferred: false,
-        })?;
-        let batch_review = self.batch_review_remediation(RemediationBatchReviewParams {
-            task: Some(readiness.task.clone()),
-            agent: agent.clone(),
-            project_root: None,
-            workspace_label: None,
-            rule_id: None,
-            severity: None,
-            status: None,
-            triage_status: None,
-            candidate_instance_ids: candidate_instance_ids.clone(),
-            group_by: vec![
-                "risk".to_string(),
-                "rule".to_string(),
-                "agent".to_string(),
-                "task".to_string(),
-            ],
-            limit: Some(limit),
-        })?;
+                triage_status: None,
+                candidate_instance_ids: remediation_candidate_ids,
+                group_by: vec![
+                    "risk".to_string(),
+                    "rule".to_string(),
+                    "agent".to_string(),
+                    "task".to_string(),
+                ],
+                limit: Some(limit.min(3)),
+            })?)
+        } else {
+            if include_remediation_context
+                && remediation_plan.is_some()
+                && task_cockpit_budget_reached(started_at, budget)
+            {
+                fallback_reasons.push(
+                    "Task cockpit returned remediation plan rows and skipped batch review after reaching its bounded time budget."
+                        .to_string(),
+                );
+            }
+            None
+        };
 
         let mut evidence_references = Vec::new();
         evidence_references.extend(readiness.evidence_references.clone());
         evidence_references.extend(ranking.evidence_references.clone());
         evidence_references.extend(comparison.evidence_references.clone());
-        evidence_references.extend(remediation_plan.evidence_references.clone());
-        evidence_references.extend(batch_review.evidence_references.clone());
-        evidence_references.extend(provider_observability_evidence_as_task_refs(
-            &provider_observability.evidence_references,
-        ));
+        if let Some(remediation_plan) = remediation_plan.as_ref() {
+            evidence_references.extend(remediation_plan.evidence_references.clone());
+        }
+        if let Some(batch_review) = batch_review.as_ref() {
+            evidence_references.extend(batch_review.evidence_references.clone());
+        }
+        if let Some(provider_observability) = provider_observability.as_ref() {
+            evidence_references.extend(provider_observability_evidence_as_task_refs(
+                &provider_observability.evidence_references,
+            ));
+        }
         dedupe_evidence_references(&mut evidence_references);
 
         let mut gap_notes = Vec::new();
@@ -10422,9 +10760,15 @@ impl ServiceHost {
                 .filter(|row| row.severity != "blocker")
                 .map(|row| row.detail.clone()),
         );
-        gap_notes.extend(provider_observability.gap_notes.clone());
-        gap_notes.extend(remediation_plan.gap_notes.clone());
-        gap_notes.extend(batch_review.gap_notes.clone());
+        if let Some(provider_observability) = provider_observability.as_ref() {
+            gap_notes.extend(provider_observability.gap_notes.clone());
+        }
+        if let Some(remediation_plan) = remediation_plan.as_ref() {
+            gap_notes.extend(remediation_plan.gap_notes.clone());
+        }
+        if let Some(batch_review) = batch_review.as_ref() {
+            gap_notes.extend(batch_review.gap_notes.clone());
+        }
         normalize_note_list(&mut gap_notes);
 
         let mut blocker_notes = Vec::new();
@@ -10437,9 +10781,16 @@ impl ServiceHost {
                 .filter(|row| row.severity == "blocker")
                 .map(|row| row.detail.clone()),
         );
-        blocker_notes.extend(provider_observability.blocker_notes.clone());
-        blocker_notes.extend(remediation_plan.blocker_notes.clone());
-        blocker_notes.extend(batch_review.blocker_notes.clone());
+        if let Some(provider_observability) = provider_observability.as_ref() {
+            blocker_notes.extend(provider_observability.blocker_notes.clone());
+        }
+        if let Some(remediation_plan) = remediation_plan.as_ref() {
+            blocker_notes.extend(remediation_plan.blocker_notes.clone());
+        }
+        if let Some(batch_review) = batch_review.as_ref() {
+            blocker_notes.extend(batch_review.blocker_notes.clone());
+        }
+        blocker_notes.extend(fallback_reasons.iter().cloned());
         normalize_note_list(&mut blocker_notes);
 
         let task_rows = vec![TaskCockpitTaskRow {
@@ -10487,16 +10838,15 @@ impl ServiceHost {
             })
             .collect::<Vec<_>>();
         let readiness_rows = task_cockpit_readiness_rows(&readiness, &ranking, &comparison, limit);
-        let session_review_rows = session_reviews
-            .reviews
-            .iter()
-            .take(limit)
-            .map(task_cockpit_session_review_row)
-            .collect::<Vec<_>>();
-        let provider_observability_rows =
-            task_cockpit_provider_observability_rows(&provider_observability, limit);
-        let remediation_next_steps =
-            task_cockpit_remediation_next_steps(&remediation_plan, &batch_review, limit);
+        let provider_observability_rows = provider_observability
+            .as_ref()
+            .map(|observability| task_cockpit_provider_observability_rows(observability, limit))
+            .unwrap_or_default();
+        let remediation_next_steps = task_cockpit_remediation_next_steps(
+            remediation_plan.as_ref(),
+            batch_review.as_ref(),
+            limit,
+        );
 
         let safety_flags = task_cockpit_safety_flags();
         let cockpit_sections = task_cockpit_sections(
@@ -10525,15 +10875,68 @@ impl ServiceHost {
             .take(8)
             .map(|candidate| candidate.instance_id.clone())
             .collect::<Vec<_>>();
+        let elapsed_ms = task_cockpit_elapsed_ms(started_at);
+        if elapsed_ms >= timeout_ms && fallback_reasons.is_empty() {
+            fallback_reasons.push(
+                "Task cockpit completed after its bounded time budget; results are shown with timeout diagnostics."
+                    .to_string(),
+            );
+        }
+        let partial = !fallback_reasons.is_empty();
+        let fallback_reason = if partial {
+            Some(fallback_reasons.join(" "))
+        } else {
+            None
+        };
+        let mut completed_stages = vec!["task-readiness", "routing", "agent-comparison"];
+        if !session_review_rows.is_empty() {
+            completed_stages.push("session-review");
+        }
+        if provider_observability.is_some() {
+            completed_stages.push("provider-observability");
+        }
+        if remediation_plan.is_some() {
+            completed_stages.push("remediation-plan");
+        }
+        if batch_review.is_some() {
+            completed_stages.push("batch-review");
+        }
+        let mut skipped_stages = Vec::new();
+        if (!include_session_review || session_review_rows.is_empty()) && partial {
+            skipped_stages.push("session-review");
+        }
+        if (!include_provider_observability || provider_observability.is_none()) && partial {
+            skipped_stages.push("provider-observability");
+        }
+        if (!include_remediation_context || remediation_plan.is_none()) && partial {
+            skipped_stages.push("remediation-plan");
+        }
+        if (!include_remediation_context || (remediation_plan.is_some() && batch_review.is_none()))
+            && partial
+        {
+            skipped_stages.push("batch-review");
+        }
+        let blocker_codes = if partial {
+            vec!["task-cockpit-partial"]
+        } else {
+            Vec::new()
+        };
 
         Ok(TaskCockpitResult {
-            generated_by: "local-v2.65",
+            generated_by: "local-v2.73",
             catalog_available: readiness.catalog_available || comparison.catalog_available,
+            partial,
+            elapsed_ms,
+            fallback_reason,
             filters: TaskCockpitFilters {
                 task: readiness.task.clone(),
                 agent,
                 candidate_instance_ids,
                 limit,
+                include_session_review,
+                include_provider_observability,
+                include_remediation_context,
+                timeout_ms,
             },
             summary,
             cockpit_sections,
@@ -10564,6 +10967,18 @@ impl ServiceHost {
                 note: "Optional provider-backed cockpit explanation must be requested through prompt preview and explicit confirmation; task.buildCockpit never sends provider traffic."
                     .to_string(),
             },
+            aggregation: aggregation_runtime_metadata(AggregationRuntimeInput {
+                started_at,
+                timeout_ms,
+                limit,
+                scanned_count: readiness.aggregation.scanned_count,
+                total_count: readiness.aggregation.total_count,
+                completed_stages,
+                skipped_stages,
+                blocker_codes,
+                fallback_used: partial,
+                notes: fallback_reasons,
+            }),
             safety_flags,
         })
     }
@@ -12599,6 +13014,10 @@ impl ServiceHost {
                     agent: None,
                     candidate_instance_ids: params.instance_ids.clone(),
                     limit: Some(8),
+                    include_session_review: Some(true),
+                    include_provider_observability: Some(true),
+                    include_remediation_context: Some(true),
+                    timeout_ms: None,
                 })?;
                 prompt_scope.extend([
                     "deterministic task-first cockpit summary".to_string(),
@@ -16206,7 +16625,7 @@ fn empty_similar_skill_grouping_result(
     SimilarSkillGroupingResult {
         generated_by: "deterministic-service",
         catalog_available,
-        filters,
+        filters: filters.clone(),
         summary: SimilarSkillGroupingSummary {
             indexed_skill_count: 0,
             candidate_skill_count: 0,
@@ -16982,7 +17401,7 @@ fn empty_capability_taxonomy_result(
     CapabilityTaxonomyResult {
         generated_by: "deterministic-service",
         catalog_available,
-        filters,
+        filters: filters.clone(),
         summary: CapabilityTaxonomySummary {
             indexed_skill_count: 0,
             candidate_skill_count: 0,
@@ -17779,7 +18198,7 @@ fn empty_local_skill_map_result(
     LocalSkillMapResult {
         generated_by: "deterministic-service",
         catalog_available,
-        filters,
+        filters: filters.clone(),
         summary: LocalSkillMapSummary {
             indexed_skill_count: 0,
             candidate_skill_count: 0,
@@ -18384,7 +18803,7 @@ fn empty_workspace_readiness_result(
     WorkspaceReadinessResult {
         generated_by: "deterministic-service",
         catalog_available,
-        filters,
+        filters: filters.clone(),
         summary: WorkspaceReadinessSummary {
             workspace_available: false,
             project_available: false,
@@ -19109,7 +19528,7 @@ fn empty_remediation_plan_result(
     RemediationPlanResult {
         generated_by: "deterministic-service",
         catalog_available,
-        filters,
+        filters: filters.clone(),
         summary: RemediationPlanSummary {
             total_item_count: 0,
             returned_item_count: 0,
@@ -19157,6 +19576,12 @@ fn empty_remediation_plan_result(
             },
             note: "Prompt preview is unavailable until local catalog evidence exists.".to_string(),
         },
+        aggregation: empty_aggregation_runtime(
+            REMEDIATION_AGGREGATION_TIMEOUT_MS,
+            filters.limit,
+            "remediation.plan",
+            "No local catalog was available; remediation planning returned an empty read-only result.",
+        ),
         safety_flags: remediation_plan_safety_flags(),
     }
 }
@@ -19569,7 +19994,7 @@ fn empty_remediation_preview_drafts_result(
     RemediationPreviewDraftsResult {
         generated_by: "local-v2.57",
         catalog_available,
-        filters,
+        filters: filters.clone(),
         summary: RemediationPreviewDraftsSummary {
             total_draft_count: 0,
             returned_draft_count: 0,
@@ -19685,7 +20110,7 @@ fn empty_remediation_preview_impact_result(
     RemediationPreviewImpactResult {
         generated_by: "local-v2.58",
         catalog_available,
-        filters,
+        filters: filters.clone(),
         summary: RemediationPreviewImpactSummary {
             total_impact_count: 0,
             returned_impact_count: 0,
@@ -19826,7 +20251,7 @@ fn empty_remediation_batch_review_result(
     RemediationBatchReviewResult {
         generated_by: "local-v2.59",
         catalog_available,
-        filters,
+        filters: filters.clone(),
         summary: RemediationBatchReviewSummary {
             total_item_count: 0,
             returned_item_count: 0,
@@ -19869,6 +20294,12 @@ fn empty_remediation_batch_review_result(
             },
             note: "Prompt preview is unavailable until local catalog evidence exists.".to_string(),
         },
+        aggregation: empty_aggregation_runtime(
+            REMEDIATION_AGGREGATION_TIMEOUT_MS,
+            filters.limit,
+            "remediation.batchReview",
+            "No local catalog was available; batch review returned an empty read-only result.",
+        ),
         safety_flags: remediation_batch_review_safety_flags(),
     }
 }
@@ -21344,7 +21775,7 @@ fn empty_skill_lifecycle_timeline_result(
     SkillLifecycleTimelineResult {
         generated_by: "local-v2.66",
         catalog_available,
-        filters,
+        filters: filters.clone(),
         summary: SkillLifecycleTimelineSummary {
             summary:
                 "No local catalog is available, so lifecycle timeline has no skill evidence."
@@ -22453,6 +22884,108 @@ fn task_cockpit_safety_flags() -> TaskCockpitSafetyFlags {
     }
 }
 
+fn task_cockpit_budget_reached(started_at: Instant, budget: Duration) -> bool {
+    started_at.elapsed() >= budget
+}
+
+fn task_cockpit_elapsed_ms(started_at: Instant) -> u64 {
+    started_at.elapsed().as_millis().min(u128::from(u64::MAX)) as u64
+}
+
+fn push_unique_stage(stages: &mut Vec<&'static str>, stage: &'static str) {
+    if !stages.contains(&stage) {
+        stages.push(stage);
+    }
+}
+
+fn normalize_aggregation_stages(stages: &mut Vec<&'static str>) {
+    let mut seen = BTreeSet::new();
+    stages.retain(|stage| seen.insert(*stage));
+}
+
+struct AggregationRuntimeInput {
+    started_at: Instant,
+    timeout_ms: u64,
+    limit: usize,
+    scanned_count: usize,
+    total_count: usize,
+    completed_stages: Vec<&'static str>,
+    skipped_stages: Vec<&'static str>,
+    blocker_codes: Vec<&'static str>,
+    fallback_used: bool,
+    notes: Vec<String>,
+}
+
+fn aggregation_runtime_metadata(input: AggregationRuntimeInput) -> AggregationRuntimeMetadata {
+    let AggregationRuntimeInput {
+        started_at,
+        timeout_ms,
+        limit,
+        scanned_count,
+        total_count,
+        mut completed_stages,
+        mut skipped_stages,
+        mut blocker_codes,
+        fallback_used,
+        notes,
+    } = input;
+    normalize_aggregation_stages(&mut completed_stages);
+    normalize_aggregation_stages(&mut skipped_stages);
+    normalize_aggregation_stages(&mut blocker_codes);
+    let elapsed_ms = task_cockpit_elapsed_ms(started_at);
+    let timed_out = elapsed_ms >= timeout_ms;
+    if timed_out {
+        push_unique_stage(&mut blocker_codes, "aggregation-timeout");
+    }
+    let partial = timed_out || fallback_used || !skipped_stages.is_empty();
+    AggregationRuntimeMetadata {
+        status: if partial { "partial" } else { "complete" },
+        elapsed_ms,
+        timeout_ms,
+        timed_out,
+        partial,
+        fallback_used,
+        limit,
+        scanned_count,
+        total_count,
+        completed_stages,
+        skipped_stages,
+        blocker_codes,
+        notes,
+    }
+}
+
+fn empty_aggregation_runtime(
+    timeout_ms: u64,
+    limit: usize,
+    completed_stage: &'static str,
+    note: impl Into<String>,
+) -> AggregationRuntimeMetadata {
+    AggregationRuntimeMetadata {
+        status: "complete",
+        elapsed_ms: 0,
+        timeout_ms,
+        timed_out: false,
+        partial: false,
+        fallback_used: false,
+        limit,
+        scanned_count: 0,
+        total_count: 0,
+        completed_stages: vec![completed_stage],
+        skipped_stages: Vec::new(),
+        blocker_codes: Vec::new(),
+        notes: vec![note.into()],
+    }
+}
+
+fn aggregation_with_completed_stage(
+    mut aggregation: AggregationRuntimeMetadata,
+    stage: &'static str,
+) -> AggregationRuntimeMetadata {
+    push_unique_stage(&mut aggregation.completed_stages, stage);
+    aggregation
+}
+
 struct TaskCockpitSummaryCounts {
     session_review_count: usize,
     provider_observability_row_count: usize,
@@ -22831,43 +23364,48 @@ fn task_cockpit_provider_observability_rows(
 }
 
 fn task_cockpit_remediation_next_steps(
-    plan: &RemediationPlanResult,
-    batch: &RemediationBatchReviewResult,
+    plan: Option<&RemediationPlanResult>,
+    batch: Option<&RemediationBatchReviewResult>,
     limit: usize,
 ) -> Vec<TaskCockpitRemediationNextStep> {
-    let mut steps = plan
-        .plan_items
-        .iter()
-        .map(|item| TaskCockpitRemediationNextStep {
-            id: item.id.clone(),
-            source: "remediation_plan",
-            priority: item.priority,
-            title: item.title.clone(),
-            suggested_safe_next_action: item.suggested_safe_next_action.clone(),
-            blocker_notes: item.blockers.clone(),
-            gap_notes: Vec::new(),
-            evidence_refs: item.evidence_refs.clone(),
-        })
-        .collect::<Vec<_>>();
-    steps.extend(
-        batch
-            .review_items
-            .iter()
-            .map(|item| TaskCockpitRemediationNextStep {
-                id: item.id.clone(),
-                source: "batch_review",
-                priority: match item.risk {
-                    "high" => "high",
-                    "medium" => "medium",
-                    _ => "low",
-                },
-                title: item.title.clone(),
-                suggested_safe_next_action: item.recommended_next_step_label.clone(),
-                blocker_notes: item.blocker_notes.clone(),
-                gap_notes: item.gap_notes.clone(),
-                evidence_refs: item.evidence_refs.clone(),
-            }),
-    );
+    let mut steps = Vec::new();
+    if let Some(plan) = plan {
+        steps.extend(
+            plan.plan_items
+                .iter()
+                .map(|item| TaskCockpitRemediationNextStep {
+                    id: item.id.clone(),
+                    source: "remediation_plan",
+                    priority: item.priority,
+                    title: item.title.clone(),
+                    suggested_safe_next_action: item.suggested_safe_next_action.clone(),
+                    blocker_notes: item.blockers.clone(),
+                    gap_notes: Vec::new(),
+                    evidence_refs: item.evidence_refs.clone(),
+                }),
+        );
+    }
+    if let Some(batch) = batch {
+        steps.extend(
+            batch
+                .review_items
+                .iter()
+                .map(|item| TaskCockpitRemediationNextStep {
+                    id: item.id.clone(),
+                    source: "batch_review",
+                    priority: match item.risk {
+                        "high" => "high",
+                        "medium" => "medium",
+                        _ => "low",
+                    },
+                    title: item.title.clone(),
+                    suggested_safe_next_action: item.recommended_next_step_label.clone(),
+                    blocker_notes: item.blocker_notes.clone(),
+                    gap_notes: item.gap_notes.clone(),
+                    evidence_refs: item.evidence_refs.clone(),
+                }),
+        );
+    }
     steps.truncate(limit);
     steps
 }
@@ -22902,7 +23440,7 @@ fn empty_task_readiness_result(
                 .to_string(),
         generated_by: "deterministic-service",
         catalog_available,
-        filters,
+        filters: filters.clone(),
         candidate_skills: Vec::new(),
         missing_gap_notes: vec![
             "Run a local scan before relying on task readiness for routing decisions.".to_string(),
@@ -22928,6 +23466,12 @@ fn empty_task_readiness_result(
             },
             note: "Prompt preview is unavailable until local catalog evidence exists.".to_string(),
         },
+        aggregation: empty_aggregation_runtime(
+            TASK_AGGREGATION_TIMEOUT_MS,
+            filters.limit,
+            "task.checkReadiness",
+            "No local catalog was available; task readiness returned an empty read-only result.",
+        ),
         safety_flags: task_readiness_safety_flags(),
     }
 }
@@ -22965,12 +23509,201 @@ fn task_readiness_terms(task: &str) -> Vec<String> {
         .collect()
 }
 
+fn task_readiness_candidate_scan_limit(limit: usize, requested_count: usize) -> usize {
+    if requested_count > 0 {
+        return requested_count
+            .max(limit)
+            .clamp(1, REMEDIATION_MAX_DETAIL_SCAN);
+    }
+    limit
+        .saturating_mul(TASK_READINESS_CANDIDATE_SCAN_MULTIPLIER)
+        .clamp(
+            TASK_READINESS_MIN_CANDIDATE_SCAN,
+            TASK_READINESS_MAX_CANDIDATE_SCAN,
+        )
+}
+
+fn task_readiness_record_affinity(skill: &SkillRecord, task_terms: &[String]) -> u16 {
+    let searchable = format!(
+        "{} {} {} {} {}",
+        skill.id, skill.definition_id, skill.name, skill.agent, skill.scope
+    )
+    .to_ascii_lowercase();
+    let mut score = task_terms
+        .iter()
+        .filter(|term| searchable.contains(term.as_str()))
+        .count() as u16
+        * 12;
+    if skill.enabled {
+        score += 4;
+    }
+    if skill.state == "loaded" {
+        score += 3;
+    }
+    score
+}
+
+fn task_readiness_findings_by_instance(
+    findings: &[RuleFindingRecord],
+) -> BTreeMap<String, Vec<RuleFindingRecord>> {
+    let mut by_instance = BTreeMap::<String, Vec<RuleFindingRecord>>::new();
+    for finding in findings {
+        if let Some(instance_id) = finding.instance_id.as_ref() {
+            by_instance
+                .entry(instance_id.clone())
+                .or_default()
+                .push(finding.clone());
+        }
+    }
+    by_instance
+}
+
+fn task_readiness_findings_by_definition(
+    findings: &[RuleFindingRecord],
+) -> BTreeMap<String, Vec<RuleFindingRecord>> {
+    let mut by_definition = BTreeMap::<String, Vec<RuleFindingRecord>>::new();
+    for finding in findings {
+        if let Some(definition_id) = finding.definition_id.as_ref() {
+            by_definition
+                .entry(definition_id.clone())
+                .or_default()
+                .push(finding.clone());
+        }
+    }
+    by_definition
+}
+
+fn task_readiness_conflicts_by_instance(
+    conflicts: &[ConflictGroupRecord],
+) -> BTreeMap<String, Vec<ConflictGroupRecord>> {
+    let mut by_instance = BTreeMap::<String, Vec<ConflictGroupRecord>>::new();
+    for conflict in conflicts {
+        for instance_id in &conflict.instance_ids {
+            by_instance
+                .entry(instance_id.clone())
+                .or_default()
+                .push(conflict.clone());
+        }
+    }
+    by_instance
+}
+
+fn task_readiness_conflicts_by_definition(
+    conflicts: &[ConflictGroupRecord],
+) -> BTreeMap<String, Vec<ConflictGroupRecord>> {
+    let mut by_definition = BTreeMap::<String, Vec<ConflictGroupRecord>>::new();
+    for conflict in conflicts {
+        by_definition
+            .entry(conflict.definition_id.clone())
+            .or_default()
+            .push(conflict.clone());
+    }
+    by_definition
+}
+
+fn task_readiness_analysis_by_instance(
+    groups: &[CrossAgentAnalysisGroup],
+) -> BTreeMap<String, Vec<CrossAgentAnalysisGroup>> {
+    let mut by_instance = BTreeMap::<String, Vec<CrossAgentAnalysisGroup>>::new();
+    for group in groups {
+        for instance_id in &group.instance_ids {
+            by_instance
+                .entry(instance_id.clone())
+                .or_default()
+                .push(group.clone());
+        }
+    }
+    by_instance
+}
+
+fn task_readiness_related_findings(
+    detail: &SkillDetailRecord,
+    by_instance: &BTreeMap<String, Vec<RuleFindingRecord>>,
+    by_definition: &BTreeMap<String, Vec<RuleFindingRecord>>,
+) -> Vec<RuleFindingRecord> {
+    let mut seen = BTreeSet::new();
+    by_instance
+        .get(&detail.id)
+        .into_iter()
+        .flatten()
+        .chain(
+            by_definition
+                .get(&detail.definition_id)
+                .into_iter()
+                .flatten(),
+        )
+        .filter(|finding| seen.insert(finding.id.clone()))
+        .cloned()
+        .collect()
+}
+
+fn task_readiness_related_conflicts(
+    detail: &SkillDetailRecord,
+    by_instance: &BTreeMap<String, Vec<ConflictGroupRecord>>,
+    by_definition: &BTreeMap<String, Vec<ConflictGroupRecord>>,
+) -> Vec<ConflictGroupRecord> {
+    let mut seen = BTreeSet::new();
+    by_instance
+        .get(&detail.id)
+        .into_iter()
+        .flatten()
+        .chain(
+            by_definition
+                .get(&detail.definition_id)
+                .into_iter()
+                .flatten(),
+        )
+        .filter(|conflict| seen.insert(conflict.id.clone()))
+        .cloned()
+        .collect()
+}
+
+fn task_readiness_related_analysis(
+    detail: &SkillDetailRecord,
+    by_instance: &BTreeMap<String, Vec<CrossAgentAnalysisGroup>>,
+) -> Vec<CrossAgentAnalysisGroup> {
+    by_instance.get(&detail.id).cloned().unwrap_or_default()
+}
+
+fn task_readiness_quality_signal(
+    skill: &SkillDetailRecord,
+    findings: &[RuleFindingRecord],
+    conflicts: &[ConflictGroupRecord],
+    analysis_groups: &[CrossAgentAnalysisGroup],
+    diagnostic: Option<&AdapterDiagnosticsRecord>,
+) -> TaskReadinessQualitySignal {
+    let (metadata_score, _, _) = quality_metadata_component(skill);
+    let (permission_score, _, _, _) = quality_permission_component(skill);
+    let (risk_score, _, _, _) = quality_risk_component(skill, findings);
+    let (conflict_score, _, _) = quality_conflict_component(conflicts, analysis_groups);
+    let (adapter_score, _, _) = quality_adapter_component(skill, diagnostic);
+    let score = [
+        metadata_score,
+        permission_score,
+        risk_score,
+        conflict_score,
+        adapter_score,
+    ]
+    .into_iter()
+    .map(u16::from)
+    .sum::<u16>()
+    .min(100) as u8;
+    let (_, band) = quality_grade_and_band(score);
+    TaskReadinessQualitySignal { score, band }
+}
+
 struct TaskReadinessCandidateSignals<'a> {
     findings: &'a [RuleFindingRecord],
     conflicts: &'a [ConflictGroupRecord],
     analysis_groups: &'a [CrossAgentAnalysisGroup],
     diagnostic: Option<&'a AdapterDiagnosticsRecord>,
-    quality: Option<&'a SkillQualityScoreResult>,
+    quality: Option<&'a TaskReadinessQualitySignal>,
+}
+
+#[derive(Debug, Clone)]
+struct TaskReadinessQualitySignal {
+    score: u8,
+    band: &'static str,
 }
 
 fn task_readiness_candidate(
@@ -23403,7 +24136,7 @@ fn empty_agent_readiness_comparison(
     AgentReadinessComparisonResult {
         generated_by: "deterministic-service",
         catalog_available,
-        filters,
+        filters: filters.clone(),
         summary: AgentReadinessComparisonSummary {
             agent_count: 0,
             candidate_count: 0,
@@ -23442,6 +24175,12 @@ fn empty_agent_readiness_comparison(
             note: "Prompt preview is unavailable until local catalog evidence produces cross-agent candidates."
                 .to_string(),
         },
+        aggregation: empty_aggregation_runtime(
+            TASK_AGGREGATION_TIMEOUT_MS,
+            filters.limit_per_agent,
+            "task.compareAgentReadiness",
+            note.to_string(),
+        ),
         safety_flags: agent_readiness_safety_flags(),
     }
 }
@@ -26395,6 +27134,7 @@ fn routing_regression_summary(
 }
 
 fn skill_route_ranking_from_readiness(readiness: TaskReadinessResult) -> SkillRouteRankingResult {
+    let aggregation = aggregation_with_completed_stage(readiness.aggregation.clone(), "routing");
     let top_score = readiness
         .candidate_skills
         .first()
@@ -26492,6 +27232,7 @@ fn skill_route_ranking_from_readiness(readiness: TaskReadinessResult) -> SkillRo
                     .to_string()
             },
         },
+        aggregation,
         safety_flags: routing_confidence_safety_flags(),
     }
 }
@@ -33773,6 +34514,69 @@ mod tests {
     }
 
     #[test]
+    fn task_check_readiness_bounds_large_candidate_scan_with_metadata() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-readiness-bounded-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_many_task_skills(&host, 90);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("readiness-bounded".to_string()),
+            method: "task.checkReadiness".to_string(),
+            params: json!({
+                "task": "Validate release readiness privacy evidence",
+                "agent": "codex",
+                "limit": 4
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("bounded readiness result");
+        assert_eq!(
+            result
+                .pointer("/aggregation/status")
+                .and_then(Value::as_str),
+            Some("partial")
+        );
+        assert_eq!(
+            result
+                .pointer("/aggregation/partial")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert!(
+            result
+                .pointer("/aggregation/scanned_count")
+                .and_then(Value::as_u64)
+                < result
+                    .pointer("/aggregation/total_count")
+                    .and_then(Value::as_u64)
+        );
+        assert!(result
+            .pointer("/aggregation/skipped_stages")
+            .and_then(Value::as_array)
+            .is_some_and(|stages| stages
+                .iter()
+                .any(|stage| stage.as_str() == Some("candidate-scan-overflow"))));
+        assert!(result
+            .get("candidate_skills")
+            .and_then(Value::as_array)
+            .is_some_and(|rows| rows.len() <= 4));
+        assert_eq!(
+            result
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
     fn task_rank_skill_routes_returns_local_read_only_ranking() {
         let app_data_dir = env::temp_dir().join(format!(
             "skills-copilot-routing-test-{}-{}",
@@ -34402,7 +35206,8 @@ mod tests {
             params: json!({
                 "task_text": "Review the shared fixture skill and local cleanup posture",
                 "agent": "codex",
-                "limit": 4
+                "limit": 4,
+                "timeout_ms": 30000
             }),
         });
 
@@ -34410,7 +35215,7 @@ mod tests {
         let result = response.result.expect("task cockpit result");
         assert_eq!(
             result.get("generated_by").and_then(Value::as_str),
-            Some("local-v2.65")
+            Some("local-v2.73")
         );
         assert_eq!(
             result.get("catalog_available").and_then(Value::as_bool),
@@ -34460,6 +35265,19 @@ mod tests {
                 .and_then(Value::as_str),
             Some("task_cockpit")
         );
+        assert_eq!(
+            result
+                .pointer("/aggregation/status")
+                .and_then(Value::as_str),
+            Some("complete")
+        );
+        assert!(result
+            .pointer("/aggregation/completed_stages")
+            .and_then(Value::as_array)
+            .is_some_and(|stages| stages
+                .iter()
+                .any(|stage| stage.as_str() == Some("task-readiness"))));
+        assert_eq!(result.get("partial").and_then(Value::as_bool), Some(false));
         assert_agent_readiness_safety(&result);
 
         let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
@@ -34542,7 +35360,7 @@ mod tests {
         let result = response.result.expect("missing catalog cockpit");
         assert_eq!(
             result.get("generated_by").and_then(Value::as_str),
-            Some("local-v2.65")
+            Some("local-v2.73")
         );
         assert_eq!(
             result.get("catalog_available").and_then(Value::as_bool),
@@ -34564,12 +35382,75 @@ mod tests {
                 .and_then(Value::as_bool),
             Some(false)
         );
+        assert_eq!(
+            result
+                .pointer("/aggregation/status")
+                .and_then(Value::as_str),
+            Some("complete")
+        );
+        assert_eq!(result.get("partial").and_then(Value::as_bool), Some(false));
         assert_agent_readiness_safety(&result);
         assert!(
             !host.catalog_path().exists(),
             "missing-catalog task cockpit must not initialize catalog.sqlite"
         );
         assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    }
+
+    #[test]
+    fn task_cockpit_skipped_context_returns_partial_diagnostics() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-task-cockpit-partial-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_cleanup_queue_fixture(&host);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("task-cockpit-partial".to_string()),
+            method: "task.buildCockpit".to_string(),
+            params: json!({
+                "task_text": "Review the shared fixture skill and local cleanup posture",
+                "agent": "codex",
+                "include_remediation_context": false,
+                "limit": 4
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("partial task cockpit");
+        assert_eq!(result.get("partial").and_then(Value::as_bool), Some(true));
+        assert!(result
+            .get("fallback_reason")
+            .and_then(Value::as_str)
+            .is_some_and(|reason| reason.contains("Remediation context was skipped")));
+        assert!(result
+            .pointer("/aggregation/skipped_stages")
+            .and_then(Value::as_array)
+            .is_some_and(|stages| stages
+                .iter()
+                .any(|stage| stage.as_str() == Some("remediation-plan"))));
+        assert_eq!(
+            result
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/write_actions_available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/script_execution_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let _ = fs::remove_dir_all(app_data_dir);
     }
 
     #[test]
@@ -39051,6 +39932,70 @@ mod tests {
     }
 
     #[test]
+    fn remediation_plan_bounds_large_detail_scan_with_metadata() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-remediation-bounded-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_many_task_skills(&host, 90);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let result = host
+            .plan_remediation(RemediationPlanParams {
+                agent: Some("codex".to_string()),
+                task: Some("Validate release readiness privacy evidence".to_string()),
+                project_root: None,
+                focus: None,
+                focus_areas: Vec::new(),
+                limit: Some(4),
+                candidate_instance_ids: Vec::new(),
+                include_deferred: true,
+            })
+            .expect("bounded remediation plan");
+
+        assert_eq!(result.aggregation.status, "partial");
+        assert!(result.aggregation.partial);
+        assert!(result.aggregation.scanned_count < result.aggregation.total_count);
+        assert!(result
+            .aggregation
+            .skipped_stages
+            .contains(&"detail-scan-overflow"));
+        assert!(result.plan_items.len() <= 4);
+        assert!(result.safety_flags.read_only);
+        assert!(!result.safety_flags.provider_request_sent);
+        assert!(!result.safety_flags.write_back_allowed);
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
     fn remediation_plan_rejects_invalid_limit_without_writes() {
         let app_data_dir = env::temp_dir().join(format!(
             "skills-copilot-remediation-invalid-test-{}-{}",
@@ -40931,7 +41876,7 @@ mod tests {
             }
             "task.buildCockpit" => {
                 let cockpit: WireTaskCockpitResult = decode_fixture_result(method, result, path);
-                assert_eq!(cockpit.generated_by, "local-v2.65");
+                assert_eq!(cockpit.generated_by, "local-v2.73");
                 assert_eq!(
                     cockpit.summary.candidate_count,
                     cockpit.skill_candidate_rows.len()
@@ -43227,6 +44172,25 @@ mod tests {
     #[allow(dead_code)]
     #[derive(Debug, Deserialize)]
     #[serde(deny_unknown_fields)]
+    struct WireAggregationRuntimeMetadata {
+        status: String,
+        elapsed_ms: u64,
+        timeout_ms: u64,
+        timed_out: bool,
+        partial: bool,
+        fallback_used: bool,
+        limit: usize,
+        scanned_count: usize,
+        total_count: usize,
+        completed_stages: Vec<String>,
+        skipped_stages: Vec<String>,
+        blocker_codes: Vec<String>,
+        notes: Vec<String>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
     struct WireRemediationPlanResult {
         generated_by: String,
         catalog_available: bool,
@@ -43238,6 +44202,7 @@ mod tests {
         blocker_notes: Vec<String>,
         evidence_references: Vec<WireTaskReadinessEvidenceReference>,
         prompt_request: WireAgentReadinessPromptRequest,
+        aggregation: WireAggregationRuntimeMetadata,
         safety_flags: WireAgentReadinessSafetyFlags,
     }
 
@@ -43569,6 +44534,7 @@ mod tests {
         blocker_notes: Vec<String>,
         evidence_references: Vec<WireTaskReadinessEvidenceReference>,
         prompt_request: WireAgentReadinessPromptRequest,
+        aggregation: WireAggregationRuntimeMetadata,
         safety_flags: WireAgentReadinessSafetyFlags,
     }
 
@@ -43668,6 +44634,7 @@ mod tests {
         blocker_risk_notes: Vec<String>,
         evidence_references: Vec<WireTaskReadinessEvidenceReference>,
         prompt_request: WireTaskReadinessPromptRequest,
+        aggregation: WireAggregationRuntimeMetadata,
         safety_flags: WireTaskReadinessSafetyFlags,
     }
 
@@ -43772,6 +44739,7 @@ mod tests {
         likely_miss_risks: Vec<String>,
         evidence_references: Vec<WireTaskReadinessEvidenceReference>,
         prompt_request: WireRoutingConfidencePromptRequest,
+        aggregation: WireAggregationRuntimeMetadata,
         safety_flags: WireRoutingConfidenceSafetyFlags,
     }
 
@@ -43843,6 +44811,7 @@ mod tests {
         gap_issue_rows: Vec<WireAgentReadinessGapIssueRow>,
         evidence_references: Vec<WireTaskReadinessEvidenceReference>,
         prompt_request: WireAgentReadinessPromptRequest,
+        aggregation: WireAggregationRuntimeMetadata,
         safety_flags: WireAgentReadinessSafetyFlags,
     }
 
@@ -44004,6 +44973,9 @@ mod tests {
     struct WireTaskCockpitResult {
         generated_by: String,
         catalog_available: bool,
+        partial: bool,
+        elapsed_ms: u64,
+        fallback_reason: Option<String>,
         filters: WireTaskCockpitFilters,
         summary: WireTaskCockpitSummary,
         cockpit_sections: Vec<WireTaskCockpitSection>,
@@ -44018,6 +44990,7 @@ mod tests {
         blocker_notes: Vec<String>,
         evidence_references: Vec<WireTaskReadinessEvidenceReference>,
         prompt_request: WireAgentReadinessPromptRequest,
+        aggregation: WireAggregationRuntimeMetadata,
         safety_flags: WireAgentReadinessSafetyFlags,
     }
 
@@ -44029,6 +45002,10 @@ mod tests {
         agent: Option<String>,
         candidate_instance_ids: Vec<String>,
         limit: usize,
+        include_session_review: bool,
+        include_provider_observability: bool,
+        include_remediation_context: bool,
+        timeout_ms: u64,
     }
 
     #[allow(dead_code)]
@@ -47309,6 +48286,50 @@ mod tests {
                 },
             ])
             .expect("refresh preview draft findings");
+    }
+
+    fn seed_catalog_with_many_task_skills(host: &ServiceHost, count: usize) {
+        fs::create_dir_all(&host.app_data_dir).expect("create app data");
+        let catalog = Catalog::open(&host.catalog_path()).expect("open catalog");
+        catalog.init().expect("init catalog");
+        let instances =
+            (0..count)
+                .map(|index| {
+                    let id = format!("bulk-readiness-{index:03}");
+                    let path = PathBuf::from(format!("/tmp/skills-copilot-bulk/{id}/SKILL.md"));
+                    SkillInstance {
+                    id: id.clone(),
+                    agent: AgentId::Codex,
+                    scope: Scope::AgentGlobal,
+                    project_root: None,
+                    path: path.clone(),
+                    display_path: path,
+                    definition_id: format!("bulk-readiness-definition-{index:03}"),
+                    name: format!("release-readiness-bulk-{index:03}"),
+                    display_name: format!("release-readiness-bulk-{index:03}"),
+                    description:
+                        "Release readiness validation fixture for bounded task aggregation."
+                            .to_string(),
+                    version: None,
+                    state: SkillState::Loaded,
+                    enabled: true,
+                    frontmatter_raw:
+                        "name: release-readiness-bulk\ndescription: Release readiness\n"
+                            .to_string(),
+                    body: "Validate release readiness, privacy evidence, and local catalog posture."
+                        .to_string(),
+                    scripts: Vec::new(),
+                    permissions: PermissionRequest::default(),
+                    fingerprint: format!("bulk-fingerprint-{index:03}"),
+                    mtime: index as i64 + 1,
+                    first_seen: 1,
+                    last_seen: index as i64 + 1,
+                }
+                })
+                .collect::<Vec<_>>();
+        catalog
+            .upsert_skill_instances(&instances)
+            .expect("upsert bulk readiness skills");
     }
 
     fn cleanup_skill(

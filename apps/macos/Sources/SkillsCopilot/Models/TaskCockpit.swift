@@ -1,5 +1,78 @@
 import Foundation
 
+struct TaskCockpitOperationState: Hashable {
+    enum Phase: String, Hashable {
+        case idle
+        case preparing
+        case completed
+        case fallback
+        case timedOut
+        case cancelled
+        case failed
+    }
+
+    let phase: Phase
+    let taskText: String
+    let message: String
+    let startedAt: Date?
+    let finishedAt: Date?
+    let timeoutSeconds: Int
+
+    static let idle = TaskCockpitOperationState(
+        phase: .idle,
+        taskText: "",
+        message: "",
+        startedAt: nil,
+        finishedAt: nil,
+        timeoutSeconds: 0
+    )
+
+    var isPreparing: Bool {
+        phase == .preparing
+    }
+
+    var canCancel: Bool {
+        phase == .preparing
+    }
+
+    var canRetry: Bool {
+        switch phase {
+        case .fallback, .timedOut, .cancelled, .failed:
+            return !taskText.isEmpty
+        case .idle, .preparing, .completed:
+            return false
+        }
+    }
+
+    func elapsedSeconds(now: Date = Date()) -> Int {
+        guard let startedAt else { return 0 }
+        let end = finishedAt ?? now
+        return max(0, Int(end.timeIntervalSince(startedAt).rounded(.down)))
+    }
+
+    static func preparing(taskText: String, startedAt: Date = Date(), timeoutSeconds: Int) -> TaskCockpitOperationState {
+        TaskCockpitOperationState(
+            phase: .preparing,
+            taskText: taskText,
+            message: UIStrings.taskCockpitPreparingStatus(elapsedSeconds: 0, timeoutSeconds: timeoutSeconds),
+            startedAt: startedAt,
+            finishedAt: nil,
+            timeoutSeconds: timeoutSeconds
+        )
+    }
+
+    func finished(phase: Phase, message: String, finishedAt: Date = Date()) -> TaskCockpitOperationState {
+        TaskCockpitOperationState(
+            phase: phase,
+            taskText: taskText,
+            message: message,
+            startedAt: startedAt,
+            finishedAt: finishedAt,
+            timeoutSeconds: timeoutSeconds
+        )
+    }
+}
+
 struct TaskCockpitFilters: Decodable, Hashable {
     let taskText: String
     let agent: String?
@@ -507,6 +580,32 @@ struct TaskCockpitResult: Decodable, Hashable {
         generatedBy == "unavailable" || fallbackReason != nil && routeCandidates.isEmpty && agentCandidates.isEmpty && skillCandidates.isEmpty
     }
 
+    var recoveryDiagnosticReason: String? {
+        if let fallbackReason, !fallbackReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return fallbackReason
+        }
+        if !catalogAvailable {
+            return UIStrings.taskCockpitCatalogUnavailableDiagnostic
+        }
+        if hasNoReturnedRows {
+            return UIStrings.taskCockpitPartialNoRows
+        }
+        return nil
+    }
+
+    private var hasNoReturnedRows: Bool {
+        routeCandidates.isEmpty
+            && agentCandidates.isEmpty
+            && skillCandidates.isEmpty
+            && readinessSignals.isEmpty
+            && sessionReviewContext.isEmpty
+            && providerObservabilityContext.isEmpty
+            && remediationContext.isEmpty
+            && gapRows.isEmpty
+            && blockerRows.isEmpty
+            && evidenceReferences.isEmpty
+    }
+
     enum CodingKeys: String, CodingKey {
         case generatedBy = "generated_by"
         case generatedByAlt = "generatedBy"
@@ -571,7 +670,7 @@ struct TaskCockpitResult: Decodable, Hashable {
     }
 
     init(
-        generatedBy: String = "local-v2.65",
+        generatedBy: String = "local-v2.73",
         catalogAvailable: Bool = true,
         filters: TaskCockpitFilters = TaskCockpitFilters(),
         summary: TaskCockpitSummary = TaskCockpitSummary(),
@@ -615,7 +714,7 @@ struct TaskCockpitResult: Decodable, Hashable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            generatedBy: try container.decodeFlexibleTaskCockpitString(keys: [.generatedBy, .generatedByAlt]) ?? "local-v2.65",
+            generatedBy: try container.decodeFlexibleTaskCockpitString(keys: [.generatedBy, .generatedByAlt]) ?? "local-v2.73",
             catalogAvailable: try container.decodeFlexibleTaskCockpitBool(keys: [.catalogAvailable, .catalogAvailableAlt]) ?? true,
             filters: try container.decodeIfPresent(TaskCockpitFilters.self, forKey: .filters) ?? TaskCockpitFilters(),
             summary: try container.decodeIfPresent(TaskCockpitSummary.self, forKey: .summary)

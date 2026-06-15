@@ -122,6 +122,29 @@
       },
       "note": "Optional provider-backed explanation must be requested through prompt preview and explicit confirmation; task.rankSkillRoutes never sends provider traffic."
     },
+    "aggregation": {
+      "status": "complete",
+      "elapsed_ms": 7,
+      "timeout_ms": 2000,
+      "timed_out": false,
+      "partial": false,
+      "fallback_used": false,
+      "limit": 5,
+      "scanned_count": 1,
+      "total_count": 1,
+      "completed_stages": [
+        "catalog",
+        "finding-index",
+        "conflict-index",
+        "analysis-index",
+        "candidate-scan",
+        "quality-signal",
+        "routing"
+      ],
+      "skipped_stages": [],
+      "blocker_codes": [],
+      "notes": []
+    },
     "safety_flags": {
       "read_only": true,
       "provider_request_sent": false,

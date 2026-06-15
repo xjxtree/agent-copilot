@@ -99,6 +99,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var isLoadingProviderObservability = false
     @Published private(set) var taskCockpitResult: TaskCockpitResult?
     @Published private(set) var isBuildingTaskCockpit = false
+    @Published private(set) var taskCockpitOperationState = TaskCockpitOperationState.idle
     @Published private(set) var scriptExecutionPreviews: [SkillRecord.ID: ScriptExecutionPreview] = [:]
     @Published private(set) var previewingScriptExecutionSkillIDs: Set<SkillRecord.ID> = []
     @Published private(set) var batchTogglePreview: BatchTogglePreview?
@@ -139,7 +140,7 @@ final class SkillStore: ObservableObject {
             knowledgeSearchResult = nil
             localSkillMapResult = nil
             skillLifecycleTimelineResult = nil
-            taskCockpitResult = nil
+            clearTaskCockpitTransientState()
             similarSkillGroupingResult = nil
             capabilityTaxonomyResult = nil
             workspaceReadinessResult = nil
@@ -179,7 +180,7 @@ final class SkillStore: ObservableObject {
                     crossAgentReadinessResult = nil
                 }
                 if normalizedTaskCockpitText.isEmpty {
-                    taskCockpitResult = nil
+                    clearTaskCockpitTransientState()
                 }
             }
         }
@@ -192,7 +193,7 @@ final class SkillStore: ObservableObject {
                     crossAgentReadinessResult = nil
                 }
                 if normalizedTaskCockpitText.isEmpty {
-                    taskCockpitResult = nil
+                    clearTaskCockpitTransientState()
                 }
             }
         }
@@ -202,7 +203,7 @@ final class SkillStore: ObservableObject {
             if oldValue != crossAgentReadinessText {
                 crossAgentReadinessResult = nil
                 if normalizedTaskCockpitText.isEmpty {
-                    taskCockpitResult = nil
+                    clearTaskCockpitTransientState()
                 }
             }
         }
@@ -210,7 +211,7 @@ final class SkillStore: ObservableObject {
     @Published var taskCockpitText = "" {
         didSet {
             if oldValue != taskCockpitText {
-                taskCockpitResult = nil
+                clearTaskCockpitTransientState()
             }
         }
     }
@@ -237,9 +238,13 @@ final class SkillStore: ObservableObject {
     private var taskReadinessCheckedSkillID: SkillRecord.ID?
     private var routingConfidenceRankedSkillID: SkillRecord.ID?
     private var agentConfigSnapshotLoadGeneration = 0
+    private var taskCockpitOperationID: UUID?
+    private var taskCockpitTimeoutTask: Task<Void, Never>?
+    private let taskCockpitTimeoutSeconds: TimeInterval
 
-    init(service: ServiceClient) {
+    init(service: ServiceClient, taskCockpitTimeoutSeconds: TimeInterval = 15) {
         self.service = service
+        self.taskCockpitTimeoutSeconds = max(0.05, taskCockpitTimeoutSeconds)
     }
 
     var isRefreshBusy: Bool {
@@ -1672,20 +1677,37 @@ final class SkillStore: ObservableObject {
         let taskText = selectedTaskCockpitInput
         guard !taskText.isEmpty else {
             taskCockpitResult = .unavailable(taskText: "", reason: UIStrings.taskCockpitTaskRequired)
+            taskCockpitOperationState = TaskCockpitOperationState.idle.finished(
+                phase: .failed,
+                message: UIStrings.taskCockpitTaskRequired
+            )
             return
         }
         guard !isBuildingTaskCockpit else { return }
         guard !isRefreshBusy else {
             taskCockpitResult = .unavailable(taskText: taskText, reason: UIStrings.operationUnavailableBusy)
+            taskCockpitOperationState = TaskCockpitOperationState.preparing(
+                taskText: taskText,
+                timeoutSeconds: roundedTaskCockpitTimeoutSeconds
+            ).finished(
+                phase: .failed,
+                message: UIStrings.operationUnavailableBusy
+            )
             return
         }
 
+        let operationID = UUID()
+        taskCockpitOperationID = operationID
         isBuildingTaskCockpit = true
-        defer { isBuildingTaskCockpit = false }
+        taskCockpitOperationState = .preparing(
+            taskText: taskText,
+            timeoutSeconds: roundedTaskCockpitTimeoutSeconds
+        )
+        scheduleTaskCockpitTimeout(operationID: operationID, taskText: taskText)
 
         let agent = agentFilter == .all ? nil : agentFilter.rawValue
         do {
-            taskCockpitResult = try await service.buildTaskCockpit(
+            let result = try await service.buildTaskCockpit(
                 taskText: taskText,
                 agent: agent,
                 project: activeProjectContext,
@@ -1696,9 +1718,52 @@ final class SkillStore: ObservableObject {
                 includeRemediationContext: true,
                 includeEvidence: true
             )
+            guard isCurrentTaskCockpitOperation(operationID) else { return }
+            taskCockpitResult = result
+            if let diagnosticReason = result.recoveryDiagnosticReason {
+                finishTaskCockpitOperation(
+                    operationID,
+                    phase: .fallback,
+                    message: UIStrings.taskCockpitLoadedWithFallback(diagnosticReason)
+                )
+            } else {
+                finishTaskCockpitOperation(
+                    operationID,
+                    phase: .completed,
+                    message: UIStrings.taskCockpitLoaded
+                )
+            }
         } catch {
+            guard isCurrentTaskCockpitOperation(operationID) else { return }
+            let message = error.localizedDescription
             taskCockpitResult = .unavailable(taskText: taskText, reason: error.localizedDescription)
+            finishTaskCockpitOperation(
+                operationID,
+                phase: .failed,
+                message: UIStrings.taskCockpitFailed(message)
+            )
         }
+    }
+
+    func cancelTaskCockpitBuild() {
+        cancelTaskCockpitBuild(publishFallbackResult: true)
+    }
+
+    private func cancelTaskCockpitBuild(publishFallbackResult: Bool) {
+        guard taskCockpitOperationID != nil, isBuildingTaskCockpit else { return }
+        let taskText = taskCockpitOperationState.taskText
+        let message = UIStrings.taskCockpitCancelled
+        taskCockpitTimeoutTask?.cancel()
+        taskCockpitTimeoutTask = nil
+        taskCockpitOperationID = nil
+        isBuildingTaskCockpit = false
+        if publishFallbackResult {
+            taskCockpitResult = .unavailable(taskText: taskText, reason: message)
+        }
+        taskCockpitOperationState = taskCockpitOperationState.finished(
+            phase: .cancelled,
+            message: message
+        )
     }
 
     func groupSimilarSkills() async {
@@ -2701,6 +2766,62 @@ final class SkillStore: ObservableObject {
 
     private var normalizedTaskCockpitText: String {
         taskCockpitText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func clearTaskCockpitTransientState() {
+        taskCockpitResult = nil
+        if isBuildingTaskCockpit {
+            cancelTaskCockpitBuild(publishFallbackResult: false)
+        } else {
+            taskCockpitOperationState = .idle
+        }
+    }
+
+    private var roundedTaskCockpitTimeoutSeconds: Int {
+        max(1, Int(taskCockpitTimeoutSeconds.rounded(.up)))
+    }
+
+    private func scheduleTaskCockpitTimeout(operationID: UUID, taskText: String) {
+        taskCockpitTimeoutTask?.cancel()
+        let timeoutSeconds = taskCockpitTimeoutSeconds
+        taskCockpitTimeoutTask = Task { [weak self] in
+            let nanoseconds = UInt64(max(0, timeoutSeconds) * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: nanoseconds)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                self?.timeOutTaskCockpitOperation(operationID: operationID, taskText: taskText)
+            }
+        }
+    }
+
+    private func timeOutTaskCockpitOperation(operationID: UUID, taskText: String) {
+        guard isCurrentTaskCockpitOperation(operationID) else { return }
+        let timeoutSeconds = roundedTaskCockpitTimeoutSeconds
+        let message = UIStrings.taskCockpitTimedOut(timeoutSeconds)
+        taskCockpitOperationID = nil
+        taskCockpitTimeoutTask = nil
+        isBuildingTaskCockpit = false
+        taskCockpitResult = .unavailable(taskText: taskText, reason: message)
+        taskCockpitOperationState = taskCockpitOperationState.finished(
+            phase: .timedOut,
+            message: message
+        )
+    }
+
+    private func finishTaskCockpitOperation(_ operationID: UUID, phase: TaskCockpitOperationState.Phase, message: String) {
+        guard isCurrentTaskCockpitOperation(operationID) else { return }
+        taskCockpitTimeoutTask?.cancel()
+        taskCockpitTimeoutTask = nil
+        taskCockpitOperationID = nil
+        isBuildingTaskCockpit = false
+        taskCockpitOperationState = taskCockpitOperationState.finished(
+            phase: phase,
+            message: message
+        )
+    }
+
+    private func isCurrentTaskCockpitOperation(_ operationID: UUID) -> Bool {
+        taskCockpitOperationID == operationID && isBuildingTaskCockpit
     }
 
     private var normalizedKnowledgeSearchText: String {

@@ -5,6 +5,7 @@ struct TaskCockpitModelTests {
     func run() throws {
         try decodesRealisticTaskCockpitPayload()
         try decodesAliasesAndStringForms()
+        try classifiesFallbackAndPartialDiagnostics()
         try decodesServiceProtocolFixture()
     }
 
@@ -201,6 +202,31 @@ struct TaskCockpitModelTests {
         try expectEqual(result.safetyFlags.notes, ["provider not sent"], "Safety string array should decode.")
     }
 
+    private func classifiesFallbackAndPartialDiagnostics() throws {
+        let fallbackJSON = """
+        {
+          "generated_by": "local-v2.65",
+          "catalog_available": true,
+          "summary": {"task_text": "Review release audit", "summary": "Fallback metadata only."},
+          "fallback_reason": "Readiness subcall timed out; showing local fallback metadata.",
+          "safety_flags": {"provider_request_sent": false, "write_back_allowed": false}
+        }
+        """
+        let fallback = try JSONDecoder().decode(TaskCockpitResult.self, from: Data(fallbackJSON.utf8))
+        try expectEqual(fallback.recoveryDiagnosticReason, "Readiness subcall timed out; showing local fallback metadata.", "Fallback reason should drive the recovery diagnostic.")
+
+        let partialJSON = """
+        {
+          "generated_by": "local-v2.65",
+          "catalog_available": false,
+          "summary": {"task_text": "Review release audit", "summary": "Catalog unavailable."},
+          "safety_flags": {"provider_request_sent": false, "write_back_allowed": false}
+        }
+        """
+        let partial = try JSONDecoder().decode(TaskCockpitResult.self, from: Data(partialJSON.utf8))
+        try expectEqual(partial.recoveryDiagnosticReason, UIStrings.taskCockpitCatalogUnavailableDiagnostic, "Catalog-unavailable payloads should surface a diagnostic even without fallback_reason.")
+    }
+
     private func decodesServiceProtocolFixture() throws {
         let fixtureURL = try repositoryRoot()
             .appendingPathComponent("fixtures/service-protocol/task.buildCockpit.response.json")
@@ -211,7 +237,7 @@ struct TaskCockpitModelTests {
         }
 
         try expectEqual(envelope.ok, true, "Task cockpit fixture envelope should decode ok.")
-        try expectEqual(result.generatedBy, "local-v2.65", "Task cockpit should decode service generator metadata.")
+        try expectEqual(result.generatedBy, "local-v2.73", "Task cockpit should decode service generator metadata.")
         try expectEqual(result.summary.recommendedAgent, "codex", "Task cockpit should decode service recommended agent.")
         try expectEqual(result.summary.recommendedSkillName, "fixture-skill", "Task cockpit should decode top skill name.")
         try expectEqual(result.summary.readinessScore, 72, "Task cockpit should decode readiness score.")

@@ -123,10 +123,14 @@ struct DetailView: View {
                         currentTaskText: store.selectedTaskCockpitInput,
                         result: store.taskCockpitResult,
                         isBuilding: store.isBuildingTaskCockpit,
+                        operationState: store.taskCockpitOperationState,
                         onBuild: {
                             Task {
                                 await store.buildTaskCockpit()
                             }
+                        },
+                        onCancel: {
+                            store.cancelTaskCockpitBuild()
                         }
                     )
                 } else if store.selectedDetailSection == .guidedCleanup {

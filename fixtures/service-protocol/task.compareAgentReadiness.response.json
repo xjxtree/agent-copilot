@@ -246,6 +246,29 @@
       },
       "note": "Optional provider-backed explanation must be requested through prompt preview and explicit confirmation; task.compareAgentReadiness never sends provider traffic."
     },
+    "aggregation": {
+      "status": "complete",
+      "elapsed_ms": 9,
+      "timeout_ms": 2000,
+      "timed_out": false,
+      "partial": false,
+      "fallback_used": false,
+      "limit": 3,
+      "scanned_count": 2,
+      "total_count": 2,
+      "completed_stages": [
+        "catalog",
+        "agent-readiness",
+        "agent-ranking",
+        "routing-accuracy-context",
+        "benchmark-context"
+      ],
+      "skipped_stages": [],
+      "blocker_codes": [],
+      "notes": [
+        "Benchmark context is capped at 25 app-local benchmark rows for bounded comparison latency."
+      ]
+    },
     "safety_flags": {
       "read_only": true,
       "app_local_only": true,

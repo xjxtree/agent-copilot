@@ -1048,19 +1048,21 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 2. V2.71：已让 Guided Cleanup 连接到既有安全预览入口，形成可执行但不隐藏 apply 的复查路径。
 3. V2.72：已把 AX 窗口解析失败、fixture smoke 与 real local validation 的证据口径写入脚本和文档，扩展 V2.69/V2.71 已记录的锁屏/黑屏拒绝，避免把无效截图误判为 UI 验证通过。
 
-### V2.73-V2.77 实机体验修复规划（planned）
+### V2.73 Closeout and V2.74-V2.77 实机体验修复规划
 
-2026-06-15 real-local audit 记录在 [`real-local-app-audit-2026-06-15.md`](./real-local-app-audit-2026-06-15.md)。当前锁屏状态阻止完整视觉验证，但已确认以下 planned follow-up：
+2026-06-15 real-local audit 记录在 [`real-local-app-audit-2026-06-15.md`](./real-local-app-audit-2026-06-15.md)。V2.73 已完成 Task / remediation performance and timeout recovery；后续 V2.74-V2.77 仍是 planned follow-up：
 
-| Version | Work area | Planned scope | Non-goals |
+| Version | Work area | Status / scope | Non-goals |
 | --- | --- | --- | --- |
-| V2.73 | Task / remediation performance and timeout recovery | Profile and optimize real-catalog `task.checkReadiness`, `task.rankSkillRoutes`, `task.compareAgentReadiness`, `remediation.plan`, `remediation.batchReview`, and `task.buildCockpit`; add bounded timeout/fallback/cancel/retry state so Task Cockpit cannot sit indefinitely in `Preparing...` | No provider default calls, no write/apply path, no weakening read-only safety flags |
+| V2.73 | Task / remediation performance and timeout recovery | Completed: real-catalog `task.checkReadiness`, `task.rankSkillRoutes`, `task.compareAgentReadiness`, `remediation.plan`, `remediation.batchReview`, and `task.buildCockpit` now expose bounded aggregation metadata, timeout/fallback diagnostics, cancel/retry UI, and unlocked Computer Use evidence | No provider default calls, no write/apply path, no weakening read-only safety flags |
 | V2.74 | Real-local launch and window targeting stability | Make dev launch and validation robust against stale same-bundle apps, hidden/no-window state, lock-screen state, AX/Computer Use ambiguity, and exact path/PID targeting | No public distribution/signing/notarization/DMG work |
 | V2.75 | Task input and input-method resilience | Validate and harden task entry for Chinese input method, pasted text, multiline tasks, keyboard shortcuts, focus restoration, and automation-safe input | No broad text editor rewrite or cloud prompt persistence |
 | V2.76 | Progressive Cockpit feedback | Split Cockpit loading into readiness/routing/remediation/provider/session stages with partial results, elapsed time, and visible blocked/fallback rows | No new analytic endpoint unless profiling proves it is needed |
 | V2.77 | Real-local validation workbench | Surface validation preflight status and blocker explanations for locked session, window-not-found, Screen Recording permission, stale bundle, duplicate bundle ids, black/flat/transparent captures, and Computer Use tool-layer failures | No replacement for unlocked manual visual review |
 
-These items remain planned. They become completed only after code, tests, docs, and unlocked real-local Computer Use validation prove the behavior.
+V2.74-V2.77 remain planned. They become completed only after code, tests, docs, and unlocked real-local Computer Use validation prove the behavior.
+
+V2.73 closeout evidence is tracked in [`v2.73-verification-checklist.md`](./v2.73-verification-checklist.md) and guarded by `pnpm verify:v2.73-docs`. The closeout includes `pnpm check:macos`, `pnpm check:privacy`, focused Rust/Swift tests, screenshot artifact verification, and unlocked Computer Use against the current workspace `dist/SkillsCopilot.app`.
 
 ### V2.72 Verification Checklist（完成）
 

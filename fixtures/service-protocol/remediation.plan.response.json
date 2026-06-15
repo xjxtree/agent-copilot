@@ -447,6 +447,32 @@
       },
       "note": "Optional provider-backed remediation explanation must be requested through prompt preview and explicit confirmation; remediation.plan never sends provider traffic and remains copy-only."
     },
+    "aggregation": {
+      "status": "complete",
+      "elapsed_ms": 11,
+      "timeout_ms": 2500,
+      "timed_out": false,
+      "partial": false,
+      "fallback_used": false,
+      "limit": 5,
+      "scanned_count": 5,
+      "total_count": 6,
+      "completed_stages": [
+        "catalog",
+        "detail-scan",
+        "finding-analysis",
+        "cleanup-queue",
+        "capability-taxonomy",
+        "stale-drift",
+        "similar-skills",
+        "workspace-readiness",
+        "task-readiness",
+        "routing"
+      ],
+      "skipped_stages": [],
+      "blocker_codes": [],
+      "notes": []
+    },
     "safety_flags": {
       "read_only": true,
       "app_local_only": true,

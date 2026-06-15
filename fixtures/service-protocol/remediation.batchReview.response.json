@@ -168,6 +168,29 @@
       },
       "note": "Optional provider-backed batch review explanation must be requested through prompt preview and explicit confirmation; remediation.batchReview never sends provider traffic and remains copy-only."
     },
+    "aggregation": {
+      "status": "complete",
+      "elapsed_ms": 10,
+      "timeout_ms": 2500,
+      "timed_out": false,
+      "partial": false,
+      "fallback_used": false,
+      "limit": 3,
+      "scanned_count": 1,
+      "total_count": 1,
+      "completed_stages": [
+        "catalog",
+        "detail-scan",
+        "remediation-plan",
+        "cleanup-queue",
+        "batch-grouping",
+        "fix-preview-drafts",
+        "impact-preview"
+      ],
+      "skipped_stages": [],
+      "blocker_codes": [],
+      "notes": []
+    },
     "safety_flags": {
       "read_only": true,
       "app_local_only": true,
