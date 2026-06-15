@@ -707,15 +707,20 @@ private struct TaskCockpitEvidenceList: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(UIStrings.crossAgentReadinessEvidence)
-                .font(.caption.bold())
-                .foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                Text(UIStrings.crossAgentReadinessEvidence)
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                if !evidence.isEmpty {
+                    DenseCountBadge(count: evidence.count)
+                }
+            }
             if evidence.isEmpty {
                 Text(UIStrings.crossAgentReadinessNoEvidence)
                     .font(.callout)
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(evidence.prefix(6)) { item in
+                DenseDisclosureList(evidence, visibleLimit: 6, spacing: 6) { item in
                     VStack(alignment: .leading, spacing: 2) {
                         Label(item.title, systemImage: "checklist")
                             .font(.callout)
@@ -759,10 +764,8 @@ private struct TaskCockpitSafetyList: View {
             }
 
             if !safety.notes.isEmpty {
-                ForEach(safety.notes.prefix(4), id: \.self) { note in
-                    Label(note, systemImage: "info.circle")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                DenseDisclosureList(safety.notes, visibleLimit: 4, spacing: 4) { note in
+                    PrivacyEvidenceLabel(value: note, systemImage: "info.circle", font: .caption, lineLimit: 2)
                 }
             }
         }

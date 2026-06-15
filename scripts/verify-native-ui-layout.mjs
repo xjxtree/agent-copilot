@@ -72,6 +72,16 @@ const checks = [
     pattern: /\.pickerStyle\(\.menu\)[\s\S]*?\.labelsHidden\(\)[\s\S]*?\.frame\(width:\s*240,\s*alignment:\s*\.leading\)/,
   },
   {
+    label: "V2.80 detail navigation has a stable scroll-to-top anchor",
+    text: files.detail,
+    pattern: /private static let topAnchorID = "skills-copilot\.detail\.top"[\s\S]*?ScrollViewReader\s*{\s*proxy\s+in[\s\S]*?\.id\(Self\.topAnchorID\)/,
+  },
+  {
+    label: "V2.80 detail navigation scrolls to top when the selected section changes",
+    text: files.detail,
+    pattern: /\.onChange\(of:\s*store\.selectedDetailSection\)[\s\S]*?proxy\.scrollTo\(Self\.topAnchorID,\s*anchor:\s*\.top\)/,
+  },
+  {
     label: "detail sections expose task-first IA summaries",
     text: files.detail,
     pattern: /static var primaryWorkCases:[\s\S]*?\[\.taskCockpit,\s*\.validationWorkbench,\s*\.skillMap,\s*\.guidedCleanup,\s*\.observability,\s*\.analysis\][\s\S]*?UIStrings\.taskCockpitTitle[\s\S]*?UIStrings\.validationWorkbenchTitle[\s\S]*?UIStrings\.guidedCleanupFlowTitle[\s\S]*?UIStrings\.providerObservabilityTitle/,
@@ -140,6 +150,21 @@ const checks = [
     label: "detail presentation primitives live in a dedicated module file",
     text: files.detailPrimitives,
     pattern: /struct SafetyPill:[\s\S]*?struct SummaryChip:[\s\S]*?struct RoutingInlineList:[\s\S]*?struct MetadataRow:/,
+  },
+  {
+    label: "dense disclosure list caps visible rows and reveals overflow",
+    text: files.detailPrimitives,
+    pattern: /struct DenseDisclosureList<Item,\s*RowContent:\s*View>:[\s\S]*?visibleLimit:\s*Int = 6[\s\S]*?ForEach\(Array\(items\.prefix\(visibleLimit\)\.enumerated\(\)\),\s*id:\s*\\\.offset\)[\s\S]*?DisclosureGroup\(isExpanded:\s*\$isExpanded\)[\s\S]*?items\.dropFirst\(visibleLimit\)/,
+  },
+  {
+    label: "dense inline evidence lists are counted, collapsible, and screenshot-safe",
+    text: files.detailPrimitives,
+    pattern: /struct RoutingInlineList:[\s\S]*?DenseCountBadge\(count:\s*values\.count\)[\s\S]*?DenseDisclosureList\(values,\s*visibleLimit:\s*3,\s*spacing:\s*3\)[\s\S]*?PrivacyEvidenceLabel\(value:\s*value,\s*systemImage:\s*systemImage,\s*font:\s*\.caption,\s*lineLimit:\s*2\)/,
+  },
+  {
+    label: "task cockpit evidence list is capped and screenshot-safe",
+    text: files.taskCockpit,
+    pattern: /struct TaskCockpitEvidenceList:[\s\S]*?DenseDisclosureList\(evidence,\s*visibleLimit:\s*6,\s*spacing:\s*6\)[\s\S]*?PrivacyEvidenceText\(value:\s*source,\s*font:\s*\.caption2,\s*lineLimit:\s*1\)[\s\S]*?PrivacyEvidenceText\(value:\s*item\.detail,\s*font:\s*\.caption,\s*lineLimit:\s*nil\)/,
   },
   {
     label: "sidebar exposes primary work surfaces",
@@ -298,7 +323,31 @@ const checks = [
   },
 ];
 
-const failures = checks.filter((check) => !check.pattern.test(check.text));
+const detailEvidenceLists = [
+  "SkillQualityEvidenceList",
+  "TaskReadinessEvidenceList",
+  "RoutingEvidenceList",
+  "CrossAgentReadinessEvidenceList",
+  "RoutingAccuracyEvidenceList",
+  "ProviderObservabilityEvidenceList",
+];
+
+const customChecks = [
+  {
+    label: "V2.80 detail evidence lists are row-capped and use privacy rendering",
+    passed: detailEvidenceLists.every((name) => {
+      const body = extractStructBody(files.detail, name);
+      return (body.includes("ForEach(evidence.prefix(") || body.includes("DenseDisclosureList(evidence, visibleLimit:"))
+        && body.includes("PrivacyEvidenceText(value: item.detail")
+        && body.includes("PrivacyEvidenceText(value: source");
+    }),
+  },
+];
+
+const failures = [
+  ...checks.filter((check) => !check.pattern.test(check.text)),
+  ...customChecks.filter((check) => !check.passed),
+];
 if (failures.length > 0) {
   for (const failure of failures) {
     console.error(`native-ui-layout-check: missing ${failure.label}`);
@@ -306,8 +355,36 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log(`native-ui-layout-check: ${checks.length} checks passed`);
+console.log(`native-ui-layout-check: ${checks.length + customChecks.length} checks passed`);
 
 async function read(path) {
   return readFile(join(repoRoot, path), "utf8");
+}
+
+function extractStructBody(text, structName) {
+  const marker = `struct ${structName}:`;
+  const start = text.indexOf(marker);
+  if (start === -1) {
+    return "";
+  }
+
+  const openBrace = text.indexOf("{", start);
+  if (openBrace === -1) {
+    return "";
+  }
+
+  let depth = 0;
+  for (let index = openBrace; index < text.length; index += 1) {
+    const char = text[index];
+    if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return text.slice(openBrace + 1, index);
+      }
+    }
+  }
+
+  return "";
 }

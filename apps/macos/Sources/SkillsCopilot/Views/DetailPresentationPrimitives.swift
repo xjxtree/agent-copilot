@@ -40,6 +40,66 @@ struct SummaryChip: View {
     }
 }
 
+struct DenseCountBadge: View {
+    let count: Int
+
+    var body: some View {
+        Text("\(count)")
+            .font(.caption2.monospacedDigit().bold())
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(.quaternary.opacity(0.45), in: Capsule())
+    }
+}
+
+struct DenseDisclosureList<Item, RowContent: View>: View {
+    let items: [Item]
+    let visibleLimit: Int
+    let spacing: CGFloat
+    let rowContent: (Item) -> RowContent
+    @State private var isExpanded = false
+
+    init(
+        _ items: [Item],
+        visibleLimit: Int = 6,
+        spacing: CGFloat = 4,
+        @ViewBuilder rowContent: @escaping (Item) -> RowContent
+    ) {
+        self.items = items
+        self.visibleLimit = max(0, visibleLimit)
+        self.spacing = spacing
+        self.rowContent = rowContent
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: spacing) {
+            ForEach(Array(items.prefix(visibleLimit).enumerated()), id: \.offset) { _, item in
+                rowContent(item)
+            }
+
+            if hiddenCount > 0 {
+                DisclosureGroup(isExpanded: $isExpanded) {
+                    VStack(alignment: .leading, spacing: spacing) {
+                        ForEach(Array(items.dropFirst(visibleLimit).enumerated()), id: \.offset) { _, item in
+                            rowContent(item)
+                        }
+                    }
+                    .padding(.top, 2)
+                } label: {
+                    Label("+\(hiddenCount)", systemImage: "ellipsis.circle")
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private var hiddenCount: Int {
+        max(0, items.count - visibleLimit)
+    }
+}
+
 struct RoutingInlineList: View {
     let title: String
     let empty: String
@@ -48,15 +108,20 @@ struct RoutingInlineList: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(title)
-                .font(.caption2.bold())
-                .foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                Text(title)
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+                if !values.isEmpty {
+                    DenseCountBadge(count: values.count)
+                }
+            }
             if values.isEmpty {
                 Text(empty)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(values.prefix(3), id: \.self) { value in
+                DenseDisclosureList(values, visibleLimit: 3, spacing: 3) { value in
                     PrivacyEvidenceLabel(value: value, systemImage: systemImage, font: .caption, lineLimit: 2)
                 }
             }
