@@ -18,6 +18,7 @@ const files = {
   sidebar: await read("apps/macos/Sources/SkillsCopilot/Views/SidebarView.swift"),
   store: await read("apps/macos/Sources/SkillsCopilot/Stores/SkillStore.swift"),
   taskCockpit: await read("apps/macos/Sources/SkillsCopilot/Views/TaskCockpitPanel.swift"),
+  taskInput: await read("apps/macos/Sources/SkillsCopilot/Views/TaskInputTextEditor.swift"),
   material: await read("apps/macos/Sources/SkillsCopilot/Views/AdaptiveMaterialSurface.swift"),
   localizable: await read("apps/macos/Sources/SkillsCopilot/Resources/en.lproj/Localizable.strings"),
 };
@@ -108,6 +109,21 @@ const checks = [
     label: "task cockpit panel lives in a dedicated module file",
     text: files.taskCockpit,
     pattern: /struct TaskCockpitPanel:[\s\S]*?TaskCockpitResultView[\s\S]*?TaskCockpitSafetyList/,
+  },
+  {
+    label: "task cockpit task input uses an AX-settable multiline TextField",
+    text: files.taskInput,
+    pattern: /struct TaskInputTextEditor:[\s\S]*?TextField\(placeholder,\s*text:\s*\$text,\s*axis:\s*\.vertical\)[\s\S]*?\.lineLimit\(3\.\.\.5\)[\s\S]*?\.frame\([\s\S]*?minHeight:\s*Self\.minHeight[\s\S]*?maxHeight:\s*Self\.maxHeight[\s\S]*?\.accessibilityIdentifier\(AppAccessibilityID\.taskCockpitInput\)/,
+  },
+  {
+    label: "task cockpit input model preserves raw text and trims only for submit state",
+    text: files.taskInput,
+    pattern: /struct TaskInputModel:[\s\S]*?let rawText:[\s\S]*?rawText\.trimmingCharacters\(in:\s*\.whitespacesAndNewlines\)[\s\S]*?var canSubmit:[\s\S]*?!trimmedText\.isEmpty/,
+  },
+  {
+    label: "task cockpit build button remains explicit and input-gated",
+    text: files.taskCockpit,
+    pattern: /Button\s*{[\s\S]*?onBuild\(\)[\s\S]*?\.disabled\(isBuilding \|\| !inputModel\.canSubmit\)/,
   },
   {
     label: "detail presentation primitives live in a dedicated module file",

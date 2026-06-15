@@ -668,6 +668,7 @@ enum UIStrings {
     static var taskCockpitUnavailable: String { text("taskCockpit.unavailable", "Task-first cockpit is unavailable in this service build.") }
     static var taskCockpitTaskRequired: String { text("taskCockpit.taskRequired", "Enter a task before building the cockpit.") }
     static var taskCockpitTaskPlaceholder: String { text("taskCockpit.task.placeholder", "Describe the task, or leave blank to reuse the current readiness/routing task") }
+    static var taskCockpitInputReady: String { text("taskCockpit.input.ready", "Ready for explicit submit.") }
     static var taskCockpitNoResult: String { text("taskCockpit.empty.result", "No task cockpit loaded.") }
     static var taskCockpitLoaded: String { text("taskCockpit.loaded", "Task cockpit loaded from local evidence.") }
     static var taskCockpitCancelled: String { text("taskCockpit.cancelled", "Task cockpit build was cancelled. No provider or write action was started.") }

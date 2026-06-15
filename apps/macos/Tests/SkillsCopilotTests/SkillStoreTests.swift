@@ -59,6 +59,8 @@ struct SkillStoreTests {
         try await providerObservabilityUsesReadOnlyServiceContract()
         try await providerObservabilityFallsBackWhenMethodUnavailable()
         try await taskCockpitUsesReadOnlyServiceContract()
+        try await taskCockpitPreservesExactUserInputInServiceContract()
+        try await taskCockpitWhitespaceOnlyInputUsesFallbackTask()
         try await taskCockpitFallsBackWhenMethodUnavailable()
         try await taskCockpitTimeoutShowsRecoveryAndIgnoresStaleResponse()
         try await taskCockpitCancelShowsRecoveryAndAllowsRetry()
@@ -1691,6 +1693,55 @@ struct SkillStoreTests {
         try expectFalse(calls.contains("script.execute"), "Task cockpit must not call execution paths.")
         try expectEqual(countOccurrences("snapshot.", in: calls), snapshotCallsBeforeCockpit, "Task cockpit must not call snapshot paths.")
         try expectFalse(calls.contains("credential"), "Task cockpit must not call credential paths.")
+    }
+
+    private func taskCockpitPreservesExactUserInputInServiceContract() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let exactTask = "  修复 Task Cockpit 🧪\n第二行\t带制表  "
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        store.taskCockpitText = exactTask
+        await store.reload()
+        await store.buildTaskCockpit()
+
+        try expectEqual(store.selectedTaskCockpitInput, exactTask, "Non-blank cockpit input should preserve the exact user text.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "task.buildCockpit", "Exact-input test should call the Task Cockpit method.")
+        try expectContains(calls, "\"task\":\"  修复 Task Cockpit 🧪\\n第二行\\t带制表  \"", "Task cockpit should pass Chinese, emoji, multiline text, tabs, and surrounding spaces unchanged.")
+        try expectFalse(calls.contains("\"task\":\"修复 Task Cockpit 🧪\\n第二行\\t带制表\""), "Task cockpit must not trim non-blank user text before submission.")
+        try expectFalse(calls.contains("llm.previewPrompt"), "Exact-input cockpit flow must not prepare provider prompts.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Exact-input cockpit flow must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Exact-input cockpit flow must not call config write paths.")
+        try expectFalse(calls.contains("script.execute"), "Exact-input cockpit flow must not call execution paths.")
+        try expectFalse(calls.contains("credential"), "Exact-input cockpit flow must not call credential paths.")
+    }
+
+    private func taskCockpitWhitespaceOnlyInputUsesFallbackTask() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        store.selectedSkillID = "beta"
+        store.routingConfidenceText = "Route a local audit release note task."
+        store.taskCockpitText = " \n\t "
+        await store.reload()
+        await store.buildTaskCockpit()
+
+        try expectEqual(store.selectedTaskCockpitInput, "Route a local audit release note task.", "Whitespace-only cockpit input should reuse the existing fallback task.")
+
+        let calls = fake.calls()
+        try expectContains(calls, "task.buildCockpit", "Whitespace fallback test should call the Task Cockpit method.")
+        try expectContains(calls, "\"task\":\"Route a local audit release note task.\"", "Whitespace-only cockpit input should submit the fallback task.")
+        try expectFalse(calls.contains("\"task\":\" \\n\\t \""), "Whitespace-only cockpit input must not be sent as the task.")
+        try expectFalse(calls.contains("llm.previewPrompt"), "Whitespace fallback cockpit flow must not prepare provider prompts.")
+        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Whitespace fallback cockpit flow must not send to provider.")
+        try expectFalse(calls.contains("config.toggleSkill"), "Whitespace fallback cockpit flow must not call config write paths.")
+        try expectFalse(calls.contains("script.execute"), "Whitespace fallback cockpit flow must not call execution paths.")
     }
 
     private func taskCockpitFallsBackWhenMethodUnavailable() async throws {

@@ -725,7 +725,7 @@ final class SkillStore: ObservableObject {
     var selectedTaskCockpitInput: String {
         let trimmedCockpit = normalizedTaskCockpitText
         if !trimmedCockpit.isEmpty {
-            return trimmedCockpit
+            return taskCockpitText
         }
         return selectedCrossAgentReadinessInput
     }

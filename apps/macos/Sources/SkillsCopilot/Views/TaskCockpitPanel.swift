@@ -9,9 +9,8 @@ struct TaskCockpitPanel: View {
     let onBuild: () -> Void
     let onCancel: () -> Void
 
-    private var effectiveTaskText: String {
-        let trimmed = taskText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? currentTaskText : trimmed
+    private var inputModel: TaskInputModel {
+        TaskInputModel(rawText: taskText)
     }
 
     var body: some View {
@@ -30,20 +29,18 @@ struct TaskCockpitPanel: View {
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
 
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                TextField(UIStrings.taskCockpitTaskPlaceholder, text: $taskText, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
-                    .lineLimit(2...4)
-                    .labelsHidden()
-                    .accessibilityIdentifier(AppAccessibilityID.taskCockpitInput)
-                    .accessibilityLabel(UIStrings.taskCockpitTaskPlaceholder)
+            HStack(alignment: .top, spacing: 10) {
+                TaskInputTextEditor(
+                    text: $taskText,
+                    placeholder: UIStrings.taskCockpitTaskPlaceholder
+                )
 
                 Button {
                     onBuild()
                 } label: {
                     Label(actionTitle, systemImage: actionSystemImage)
                 }
-                .disabled(isBuilding || effectiveTaskText.isEmpty)
+                .disabled(isBuilding || !inputModel.canSubmit)
                 .help(UIStrings.taskCockpitBoundary)
                 .accessibilityIdentifier(AppAccessibilityID.taskCockpitBuildButton)
                 .accessibilityLabel(actionTitle)
