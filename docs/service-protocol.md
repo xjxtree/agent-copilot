@@ -75,6 +75,9 @@ This stdio shape can later move behind a local socket without changing method pa
 | `catalog.getSkill` | No | Native macOS Overview detail / single skill detail workbench | `SkillDetailRecord` for `{ "instance_id": "..." }` |
 | `catalog.analysis` | No | Native macOS analysis/read flow（read-only/offline） | `CrossAgentAnalysisRecord` grouping duplicate names, canonical-name overlap, shared source paths, enabled-state mismatches, broken/missing rows, and supported precedence/shadowing explanations |
 | `catalog.listFindings` | No | Native macOS Findings segment（问题分组，issue groups） | `RuleFindingRecord[]` |
+| `catalog.listFindingTriage` | No | Native macOS Findings triage state load | App-local `FindingTriageRecord[]` for reviewed, ignored, and needs-follow-up issue state |
+| `catalog.setFindingTriage` | Yes, writes app-local triage metadata only | Native macOS Findings triage action | Updated `FindingTriageRecord`; no skill file, agent config, snapshot, script, provider, credential, cloud, or telemetry side effect |
+| `catalog.clearFindingTriage` | Yes, clears app-local triage metadata only | Native macOS Findings reopen / clear triage action | `true` when a stored triage row was cleared; no skill file or agent config mutation |
 | `catalog.listConflicts` | No | Native macOS Conflicts segment（仅当前 selected/current agent） | `ConflictGroupRecord[]` |
 | `catalog.importSkill` | Yes, writes app-controlled staging/catalog only | V2.9 tool-global import | imported read-only `SkillRecord`, staging path, filtered findings, and audit summary |
 | `catalog.scanAll` | Yes, refreshes catalog | Native macOS toolbar Scan action | scanned count, refreshed `SkillRecord[]`, and refresh activity summary for supported adapters |
@@ -105,6 +108,11 @@ This stdio shape can later move behind a local socket without changing method pa
 | `workspace.checkReadiness` | No | Integrated (V2.55) | Local-only deterministic workspace readiness over taxonomy, task readiness/routing, cross-agent readiness, stale/drift, findings/conflicts/analysis, adapter diagnostics, and source provenance |
 | `remediation.plan` | No | Integrated (V2.56) | Local-only deterministic remediation plan over findings, gaps, ambiguity, drift, readiness, taxonomy, workspace, and adapter evidence; no default provider/network/write path |
 | `remediation.batchReview` | No | Integrated (V2.59) | Local-only deterministic batch review over task, risk, rule, agent, and workspace groups; review groups/items, safe next-step labels, evidence refs, gap/blocker notes, prompt metadata, and safety flags; no default provider/network/write path |
+| `rules.listTuning` | No | Native macOS rule tuning / suppression state load | App-local rule tuning rows; no skill file, agent config, provider, or credential access |
+| `rules.setSeverityOverride` | Yes, writes app-local rule tuning metadata only | Native macOS rule severity tuning | Updated `RuleTuningRecord`; no skill file, agent config, snapshot, script, provider, credential, cloud, or telemetry side effect |
+| `rules.clearSeverityOverride` | Yes, clears app-local rule tuning metadata only | Native macOS rule severity reset | `true` when a stored override was cleared |
+| `rules.setSuppression` | Yes, writes app-local rule tuning metadata only | Native macOS rule suppression action | Updated `RuleTuningRecord` with suppression reason/note; no scanner/catalog fact mutation |
+| `rules.clearSuppression` | Yes, clears app-local rule tuning metadata only | Native macOS rule suppression reset | `true` when a stored suppression was cleared |
 | `cleanup.planGuidedFlow` | No | Integrated (V2.67) | User-triggered deterministic/read-only guided cleanup flow over existing local findings, cleanup queue, similar groups, stale/drift, readiness/routing/task cockpit, lifecycle timeline, remediation plan/drafts/impact/batch review, adapter diagnostics, and source provenance; no default provider/network/write path |
 | `cleanup.recordGuidedStep` | Yes, writes app-data metadata only | Integrated (V2.67) | Record redacted guided cleanup step metadata in app-local storage such as `guided-cleanup-steps.json`; no skill/config writes, triage mutation, snapshot creation/rollback, script execution, credentials, provider/network request, raw prompt/response/trace/secrets/unredacted paths, cloud sync, or telemetry |
 
