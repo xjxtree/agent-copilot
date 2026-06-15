@@ -101,6 +101,12 @@ jobs:
       - name: Verify native macOS layout
         run: pnpm verify:macos-ui-layout
 
+      - name: Verify local and CI gate parity
+        run: pnpm verify:gate-parity
+
+      - name: Test SwiftPM macOS app
+        run: swift test --package-path apps/macos
+
       - name: Build SwiftPM macOS app
         run: swift build --package-path apps/macos
 

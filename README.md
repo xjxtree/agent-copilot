@@ -4,11 +4,11 @@
 
 ## 当前状态
 
-**当前阶段**：V2.77 Real-local validation workbench 已完成。原生 app 现在有只读“验证工作台”，集中展示真实本机验证证据标准、13 个 canonical blocker、下一步动作、fixture smoke 仅辅助和稳定 `skills-copilot.validation-workbench` 可访问性标识。V2.77 不引入 raw prompt persistence、cloud sync、provider 默认调用、写入、执行、凭据、telemetry、scanner/catalog 事实层或新分析端点语义。
+**当前阶段**：V2.78 Protocol / validation gate parity 已完成。Service protocol 文档现在由 `pnpm verify:service-protocol-drift` 对齐 Rust `SUPPORTED_METHODS`、dispatch arms、`service.status.supported_methods` fixture 与 request/response fixture cases；`pnpm verify:gate-parity` 已进入 `pnpm check:macos` 和 CI macOS lane。V2.78 不引入 protocol rename、payload expansion、provider 默认调用、写入、执行、凭据、cloud sync 或 telemetry。
 
-**V2.77 validation**：`pnpm verify:v2.77-docs` now requires completed evidence, including unlocked Computer Use against `<repo>/dist/SkillsCopilot.app`, PID `34909`, stable `skills-copilot.validation-workbench`, and screenshot evidence at `docs/ui-artifacts/v2.77-validation-workbench/completed.png`. V2.78-V2.83 remain planned.
+**V2.78 validation**：multi-agent V2.78 implementation completed; `pnpm verify:service-protocol-drift`, `pnpm verify:v2.78-docs`, `pnpm verify:gate-parity`, focused service protocol tests, Swift tests, `pnpm check:macos`, `pnpm check:privacy`, and `git diff --check` passed. V2.79-V2.83 remain planned.
 
-**下一版本线**：V2.78 protocol / validation gate parity；V2.79 privacy fixture and evidence-surface localization sweep；V2.80 Detail navigation and visual density polish；V2.81 Swift service IPC cancellation cleanup；V2.82 provider-test env isolation + core model tests；V2.83 continued module splitting。2026-06-15 Minimax-m3 / GLM-5.1 review findings are assigned into V2.78-V2.83.
+**下一版本线**：V2.79 privacy fixture and evidence-surface localization sweep；V2.80 Detail navigation and visual density polish；V2.81 Swift service IPC cancellation cleanup；V2.82 provider-test env isolation + core model tests；V2.83 continued module splitting。2026-06-15 Minimax-m3 / GLM-5.1 review findings are assigned into V2.79-V2.83.
 
 **近期主线**：V2.68-V2.72 的 post-V2.67 consolidation 已收口。事实层仍由本地 scanner/rules/catalog 提供；当前重点是保持 task cockpit、guided cleanup、screenshot-safe evidence、module boundaries、safe links 和 hardened validation 稳定。短期不做全平台 UI 适配、正式签名 release、notarization、DMG/ZIP 或 public distribution。OpenClaw/Hermes writable/install 与 Pi install 仍保持 blocked；Pi production toggle 仅限 V2.37 evidence-backed guarded native scope，不自动开放兼容根写入。
 
@@ -27,7 +27,7 @@
 - V2.14 Hermes evidence-gate closeout 与 V2.17 Hermes read-only scanner：active/profile Hermes home `skills/**/SKILL.md` 只读进入 catalog。
 - V2.15 OpenClaw evidence-gate closeout 与 V2.16 OpenClaw read-only scanner：workspace/global documented filesystem roots 只读进入 catalog。
 - V2.18-V2.40：cross-agent analysis、skill health dashboard、read-only AI skill analysis、scan accuracy/dedupe、finding/conflict 语义、Health/Adapter Capability UX、Detail 诊断口径、Agent-config timeline、Finding explainability、skill identity/provenance dedupe、conflict semantic closeout、finding triage persistence、AI skill analysis workflow、Cleanup Queue、Rule tuning / suppression、Safe batch actions、Cross-agent comparison view、Local report export、Pi writable evidence harness、Pi guarded writable toggle、Hermes external roots、OpenClaw workspace deepening、Adapter diagnostics 已收口。
-- V2.41-V2.77：AI Provider Foundation、Prompt Preview/Redaction、AI Skill Quality、AI Task Readiness、AI Routing Confidence、Task Benchmark/Regression、Trace Analysis、Routing Accuracy Dashboard、Local Knowledge Index、Remediation Workflow、Remediation History、Prompt Run History、Agent Session Skill Review、Local Skill Map、AI Provider Observability、Task-first Cockpit、Skill Lifecycle Timeline、Guided Cleanup Flow、Task Cockpit primary entry / Analysis IA 重组、Privacy / Screenshot Mode + 本地化收束、Swift/Rust feature modularization、Guided Cleanup safe-action deep links、Validation harness hardening、Task/remediation performance + timeout recovery、Real-local launch/window targeting stability、Task input and input-method resilience、Progressive Cockpit feedback、Real-local validation workbench 已完成。
+- V2.41-V2.78：AI Provider Foundation、Prompt Preview/Redaction、AI Skill Quality、AI Task Readiness、AI Routing Confidence、Task Benchmark/Regression、Trace Analysis、Routing Accuracy Dashboard、Local Knowledge Index、Remediation Workflow、Remediation History、Prompt Run History、Agent Session Skill Review、Local Skill Map、AI Provider Observability、Task-first Cockpit、Skill Lifecycle Timeline、Guided Cleanup Flow、Task Cockpit primary entry / Analysis IA 重组、Privacy / Screenshot Mode + 本地化收束、Swift/Rust feature modularization、Guided Cleanup safe-action deep links、Validation harness hardening、Task/remediation performance + timeout recovery、Real-local launch/window targeting stability、Task input and input-method resilience、Progressive Cockpit feedback、Real-local validation workbench、Protocol / validation gate parity 已完成。
 - 2026-06-12 V2.63 真实本机 app validation 通过：当前 `dist/SkillsCopilot.app` 的 single-skill Analysis 页显示 Local Skill Map，点击 `Build Map` 后渲染真实 local map 输出（nodes、edges、clusters、evidence、safety sections）。真实本机截图未提交，因为 live UI 会暴露本地路径；fixture smoke 截图仍只作为自动化证据。V2.63 focused Rust/protocol、Swift/model/store、`pnpm check:macos`、`pnpm check:privacy` 与 `git diff --check` 均已通过；后续 coordinator 复测 exact-path Computer Use 时因重复同 bundle app 进程出现 `cgWindowNotFound` / `remoteConnection`，记录为工具/窗口层 blocker。
 - 2026-06-12 V2.64 validation：focused Rust/protocol checks、full service tests、focused/full Swift decode/store checks、service protocol fixture decode、`pnpm check:macos`、`pnpm check:privacy` 与 `git diff --check` 已通过；fixture macOS smoke 成功启动并捕获 `dist/SkillsCopilot.app` 窗口。真实本机验证中当前 bundle 进程可启动，但 System Events 在 activation 与 clean relaunch 后仍看到 0 个窗口，Computer Use 返回 `cgWindowNotFound`；该项记录为 V2.64 window/tool-layer blocker。真实本机截图未提交，因为 live UI 会暴露本地路径。
 - 2026-06-12 V2.65 validation：focused Rust/protocol checks、full service tests、focused/full Swift model/store checks、service protocol fixture decode、`pnpm check:macos`、`pnpm check:privacy` 与 `git diff --check` 已通过；fixture macOS smoke 成功启动并捕获 `dist/SkillsCopilot.app` 窗口。真实本机验证中当前 bundle 进程可启动且 System Events 能看到 `SkillsCopilot` 进程，但 activation 后仍报告 0 windows，Computer Use 返回 `cgWindowNotFound`；该项记录为 V2.65 window/tool-layer blocker。真实本机截图未提交，因为 live UI 会暴露本地路径。
@@ -42,7 +42,8 @@
 - 2026-06-15 V2.74 validation：multi-agent V2.74 implementation completed; launch/smoke/capture tooling now targets the current workspace bundle path/PID/window identity, duplicate same-bundle launches fail closed, the Swift app exposes a stable main-window identity and Task Cockpit accessibility IDs, `pnpm check:macos`, `pnpm check:privacy`, screenshot artifact verification, and `git diff --check` passed. Unlocked Computer Use targeted `dist/SkillsCopilot.app`, resolved PID `52193` and window ID `skills-copilot.main-window`, exercised Task Cockpit input/build/fallback result read-back, and captured evidence at [`docs/ui-artifacts/v2.74-launch-window-targeting/completed.png`](./docs/ui-artifacts/v2.74-launch-window-targeting/completed.png).
 - 2026-06-15 V2.75 validation：multi-agent V2.75 implementation completed; Task Cockpit task entry now uses an AX-settable multiline input with stable IDs, preserves exact nonblank service-call text while rejecting whitespace-only submissions, and keeps task execution behind explicit Build. Focused Swift model/store tests, `pnpm verify:macos-ui-layout`, `pnpm check:macos`, `pnpm check:privacy`, screenshot artifact verification, and `git diff --check` passed. Unlocked Computer Use targeted `dist/SkillsCopilot.app`, resolved PID `43079`, verified `skills-copilot.task-cockpit.input` / `skills-copilot.task-cockpit.input.status`, set Chinese/emoji/multiline task text, observed `Ready for explicit submit.`, clicked Build, and captured evidence at [`docs/ui-artifacts/v2.75-task-input-resilience/completed.png`](./docs/ui-artifacts/v2.75-task-input-resilience/completed.png).
 - 2026-06-15 V2.76 validation：multi-agent V2.76 implementation completed; Task Cockpit now shows progressive staged feedback for readiness/routing/cross-agent/remediation/provider/session, elapsed time, partial/fallback/skipped/blocked states, and stable `skills-copilot.task-cockpit.stage-progress` read-back while preserving V2.75 task input behavior. Focused Swift model/store tests, `pnpm verify:macos-ui-layout`, `pnpm check:macos`, `pnpm check:privacy`, screenshot artifact verification, `pnpm verify:v2.76-docs`, and `git diff --check` passed. Unlocked Computer Use targeted `dist/SkillsCopilot.app`, resolved PID `39728`, verified `skills-copilot.task-cockpit.input` / `skills-copilot.task-cockpit.input.status` / `skills-copilot.task-cockpit.stage-progress`, observed `耗时：5 秒` staged progress before fallback, then `耗时：6 秒`, `Fallback / 部分`, `10 个阻塞项`, `已超时`, partial and skipped stage rows, and captured evidence at [`docs/ui-artifacts/v2.76-progressive-cockpit-feedback/completed.png`](./docs/ui-artifacts/v2.76-progressive-cockpit-feedback/completed.png).
-- 2026-06-15 V2.77 validation：multi-agent V2.77 implementation completed; the native Work surface now exposes a read-only Validation Workbench / 验证工作台 with `skills-copilot.validation-workbench`, canonical blocker rows, evidence standards, fixture-smoke supporting-only guidance, and no runnable validation actions. Focused Swift model tests, `pnpm verify:macos-ui-layout`, `pnpm check:macos`, `pnpm check:privacy`, screenshot artifact verification, `pnpm verify:v2.77-docs`, and `git diff --check` passed. Unlocked Computer Use targeted `dist/SkillsCopilot.app`, resolved PID `34909`, verified `skills-copilot.validation-workbench`, `skills-copilot.validation-workbench.summary`, `skills-copilot.validation-workbench.evidence-standards`, canonical blocker rows, and captured evidence at [`docs/ui-artifacts/v2.77-validation-workbench/completed.png`](./docs/ui-artifacts/v2.77-validation-workbench/completed.png). V2.78-V2.83 remain planned follow-ups.
+- 2026-06-15 V2.77 validation：multi-agent V2.77 implementation completed; the native Work surface now exposes a read-only Validation Workbench / 验证工作台 with `skills-copilot.validation-workbench`, canonical blocker rows, evidence standards, fixture-smoke supporting-only guidance, and no runnable validation actions. Focused Swift model tests, `pnpm verify:macos-ui-layout`, `pnpm check:macos`, `pnpm check:privacy`, screenshot artifact verification, `pnpm verify:v2.77-docs`, and `git diff --check` passed. Unlocked Computer Use targeted `dist/SkillsCopilot.app`, resolved PID `34909`, verified `skills-copilot.validation-workbench`, `skills-copilot.validation-workbench.summary`, `skills-copilot.validation-workbench.evidence-standards`, canonical blocker rows, and captured evidence at [`docs/ui-artifacts/v2.77-validation-workbench/completed.png`](./docs/ui-artifacts/v2.77-validation-workbench/completed.png). V2.79-V2.83 remain planned follow-ups after V2.78 gate parity closeout.
+- 2026-06-15 V2.78 validation：multi-agent V2.78 implementation completed; service protocol docs now cover all 88 `SUPPORTED_METHODS`, file-level session review fixtures were added, `service.status.supported_methods` fixture is drift-checked, `pnpm verify:service-protocol-drift` and `pnpm verify:gate-parity` are wired into local/CI gates, and V2.46-V2.64 verification-history governance is documented without inventing missing evidence. `pnpm check:macos`, `pnpm check:privacy`, focused protocol tests, Swift tests, `pnpm verify:v2.78-docs`, and `git diff --check` passed. No fresh Computer Use screenshot is required for V2.78 because no user-visible native UI surface changed. V2.79-V2.83 remain planned follow-ups.
 
 **当前产品 UI**：SwiftUI/AppKit macOS 原生壳 + Rust service protocol。
 
@@ -92,7 +93,7 @@
 | V2.75 | Task input and input-method resilience | 已完成：AX-settable 多行任务输入、中文/emoji/换行/前后空格保留、空白任务禁用、显式 Build submit、Computer Use exact-path evidence 和截图证据已收口 |
 | V2.76 | Progressive Cockpit feedback | 已完成：把 Cockpit 的 readiness/routing/cross-agent/remediation/provider/session 阶段拆开呈现，显示 partial rows、elapsed time、timeout/fallback/blocked states；unlocked real-local Computer Use 和截图证据已收口 |
 | V2.77 | Real-local validation workbench | 已完成：新增只读验证工作台，展示 lock/window/AX/Screen Recording/stale or duplicate bundle/invalid capture/Computer Use blocker 解释，稳定 `skills-copilot.validation-workbench`，并保留 unlocked manual visual review |
-| V2.78 | Protocol / validation gate parity | 规划：同步 service protocol 方法文档与 gate，补 docs drift verifier、CI/local gate parity、V2.46-V2.64 verification-history 说明 |
+| V2.78 | Protocol / validation gate parity | 已完成：同步 service protocol 方法文档与 88 个 `SUPPORTED_METHODS`，补 docs drift verifier、CI/local gate parity、V2.46-V2.64 verification-history governance，且无 protocol/product-scope expansion |
 | V2.79 | Privacy fixture and evidence-surface localization sweep | 规划：替换 local host-port fixture，扩展隐私扫描，并统一 Guided Cleanup、Skill Map、Review、Cockpit 等证据面板的路径脱敏/折叠/reveal 与中文本地化 |
 | V2.80 | Detail navigation and visual density polish | 规划：切换 Work surface 时重置/恢复合理滚动位置，优化密集证据卡片、长列表、两列布局和阶段摘要，使真实 catalog 下的视觉层级更稳定 |
 | V2.81 | Swift service IPC cancellation cleanup | 规划：为短生命周期 stdio sidecar 调用增加取消/超时/子进程清理，不默认引入 daemon/socket |
@@ -150,6 +151,7 @@
 | V2.75 验证清单（completed） | [`docs/v2.75-verification-checklist.md`](./docs/v2.75-verification-checklist.md) |
 | V2.76 验证清单（completed） | [`docs/v2.76-verification-checklist.md`](./docs/v2.76-verification-checklist.md) |
 | V2.77 验证清单（completed） | [`docs/v2.77-verification-checklist.md`](./docs/v2.77-verification-checklist.md) |
+| V2.78 验证清单（completed） | [`docs/v2.78-verification-checklist.md`](./docs/v2.78-verification-checklist.md) |
 | MVP 施工图 | [`docs/mvp-implementation-plan.md`](./docs/mvp-implementation-plan.md) |
 | 路线图 | [`docs/roadmap.md`](./docs/roadmap.md) |
 
@@ -183,11 +185,14 @@ pnpm test:macos-list-model
 pnpm benchmark:macos-list-model
 pnpm verify:macos-ui-layout
 pnpm verify:screenshot-artifacts
+pnpm verify:service-protocol-drift
+pnpm verify:gate-parity
 pnpm verify:v2.73-docs
 pnpm verify:v2.74-docs
 pnpm verify:v2.75-docs
 pnpm verify:v2.76-docs
 pnpm verify:v2.77-docs
+pnpm verify:v2.78-docs
 ```
 
 ### App 运行入口
@@ -204,18 +209,21 @@ pnpm verify:v2.77-docs
 
 | 命令 | 覆盖内容 |
 | --- | --- |
-| `pnpm check:macos` | fmt / test / clippy / native list model / layout check / SwiftPM test / Swift build / Local App Launch Verify / Smoke App Run / screenshot artifact verification。 |
+| `pnpm check:macos` | fmt / test / clippy / native list model / layout check / CI/local gate parity / SwiftPM test / Swift build / Local App Launch Verify / Smoke App Run / screenshot artifact verification。 |
 | `pnpm check:privacy` | 检查真实本机路径、用户目录、临时 app-data 路径、常见 token/key 形态和二进制证据文件中的敏感字符串。 |
 | `pnpm benchmark:10k` | 生成 10k 个临时 Claude skills，跑 scan → catalog 基准并输出耗时与最大 RSS。 |
 | `pnpm test:macos-list-model` | 编译真实 Swift list model 并验证 search / filter / sort 行为。 |
 | `pnpm benchmark:macos-list-model` | 用 10k 条 synthetic native records 测量 Swift list model 搜索、过滤、排序性能。 |
 | `pnpm verify:macos-ui-layout` | 静态检查原生 macOS shell 的关键布局约束。 |
 | `pnpm verify:screenshot-artifacts` | 验证 `docs/ui-artifacts/**/*.png` 可读、非黑屏/非单色，并扫描二进制字符串中的明显路径或 token；仍需人工视觉复核。 |
+| `pnpm verify:service-protocol-drift` | Service protocol drift verifier：检查 `SUPPORTED_METHODS`、`handle_result` dispatch、`docs/service-protocol.md` method table、`service.status.supported_methods` fixture 与 request/response fixture cases 一致。 |
+| `pnpm verify:gate-parity` | V2.78 gate parity lane：把 protocol drift、V2.73-V2.78 docs verifiers、validation blocker verifier 和 screenshot artifact verifier 串成 CI/local 共享的 deterministic gate。 |
 | `pnpm verify:v2.73-docs` | 验证 V2.73 completed checklist 覆盖 Cockpit bounded loading、timeout/fallback/cancel/retry、unlocked real-local Computer Use、截图证据、命令记录和 safety-boundary gates。 |
 | `pnpm verify:v2.74-docs` | 验证 V2.74 completed checklist 覆盖 exact workspace bundle/PID targeting、duplicate same-bundle detection、canonical blocker handling、unlocked real-local Computer Use evidence、截图证据和 no signing/notarization/distribution scope。 |
 | `pnpm verify:v2.75-docs` | 验证 V2.75 completed checklist 覆盖 AX-settable task input、Chinese text、paste/automation text、multiline tasks、leading/trailing whitespace、emoji、explicit submit、focus/result stability、real-local Computer Use evidence、截图证据和 no raw prompt persistence/cloud/provider/write/execute/credential/telemetry scope。 |
 | `pnpm verify:v2.76-docs` | 验证 V2.76 completed checklist 覆盖 Progressive Cockpit staged feedback、partial rows、elapsed time、timeout/fallback/blocked states、real-local Computer Use evidence、截图证据，以及 no provider/write/execute/credential/cloud/telemetry safety gates。 |
 | `pnpm verify:v2.77-docs` | 验证 V2.77 completed checklist 覆盖 `skills-copilot.validation-workbench`、PID `34909`、`docs/ui-artifacts/v2.77-validation-workbench/completed.png`、canonical blocker explanations、unlocked Computer Use evidence，以及 no provider/write/apply/script/credential/cloud/telemetry safety gates。 |
+| `pnpm verify:v2.78-docs` | 验证 V2.78 protocol / validation gate parity completed closeout：包含 Service protocol drift、CI/local gate parity、V2.46-V2.64 history governance、command results 和 no protocol/product-scope expansion boundary。 |
 
 ### Fixture smoke 说明
 
