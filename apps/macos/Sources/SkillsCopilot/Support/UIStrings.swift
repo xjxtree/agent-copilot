@@ -661,6 +661,52 @@ enum UIStrings {
     static var providerObservabilityAverageDuration: String { text("providerObservability.averageDuration", "Average duration") }
     static var providerObservabilityEstimatedTokens: String { text("providerObservability.estimatedTokens", "Estimated tokens") }
     static var providerObservabilityEstimatedCost: String { text("providerObservability.estimatedCost", "Estimated cost") }
+    static var validationWorkbenchTitle: String { text("validationWorkbench.title", "Validation Workbench") }
+    static var validationWorkbenchBoundary: String { text("validationWorkbench.boundary", "Read-only real-local validation guidance for app-window evidence, canonical blockers, and next actions. It cannot launch tools, capture screenshots, write files, mutate agent config, execute scripts, call providers, read credentials, sync cloud data, emit telemetry, or create hidden background jobs.") }
+    static var validationWorkbenchSummaryTitle: String { text("validationWorkbench.summary.title", "Validation summary") }
+    static var validationWorkbenchEvidenceTitle: String { text("validationWorkbench.evidence.title", "Evidence standards") }
+    static var validationWorkbenchBlockersTitle: String { text("validationWorkbench.blockers.title", "Canonical blockers and next actions") }
+    static var validationWorkbenchNoActions: String { text("validationWorkbench.noActions", "No runnable validation action is exposed here. Use this surface as a preflight checklist and blocker reference only.") }
+    static var validationWorkbenchNextAction: String { text("validationWorkbench.nextAction", "Next action") }
+    static var validationWorkbenchStatusBlocked: String { text("validationWorkbench.status.blocked", "Blocker") }
+    static var validationWorkbenchStatusRequired: String { text("validationWorkbench.status.required", "Required") }
+    static var validationWorkbenchStatusSupporting: String { text("validationWorkbench.status.supporting", "Supporting") }
+    static var validationWorkbenchCanonicalBlockers: String { text("validationWorkbench.summary.canonicalBlockers", "Canonical blockers") }
+    static var validationWorkbenchRequiredEvidence: String { text("validationWorkbench.summary.requiredEvidence", "Required UI evidence") }
+    static var validationWorkbenchFixtureSmoke: String { text("validationWorkbench.summary.fixtureSmoke", "Fixture smoke") }
+    static var validationWorkbenchSupportingOnly: String { text("validationWorkbench.summary.supportingOnly", "supporting only") }
+    static var validationWorkbenchRunnableActions: String { text("validationWorkbench.summary.runnableActions", "Runnable actions") }
+    static var validationWorkbenchRealLocalComputerUse: String { text("validationWorkbench.evidence.realLocalComputerUse", "Unlocked real-local Computer Use") }
+    static var validationWorkbenchRealLocalComputerUseDetail: String { text("validationWorkbench.evidence.realLocalComputerUse.detail", "UI closeout requires an unlocked, interactive macOS session where Computer Use can resolve the exact app window and read back the visible surface or a canonical blocker is recorded.") }
+    static var validationWorkbenchAppWindowScreenshot: String { text("validationWorkbench.evidence.appWindowScreenshot", "Full app-window screenshot") }
+    static var validationWorkbenchAppWindowScreenshotDetail: String { text("validationWorkbench.evidence.appWindowScreenshot.detail", "Accepted screenshots must capture only the SkillsCopilot app window and pass black, flat, transparent, invalid-image, and privacy checks.") }
+    static var validationWorkbenchFixtureSupportingTitle: String { text("validationWorkbench.evidence.fixtureSupporting", "Fixture smoke is supporting evidence") }
+    static var validationWorkbenchFixtureSupportingDetail: String { text("validationWorkbench.evidence.fixtureSupporting.detail", "Fixture launch and smoke checks can prove build and service health, but cannot replace unlocked real-local UI operation or final app-window evidence.") }
+    static var validationWorkbenchCanonicalRecord: String { text("validationWorkbench.evidence.canonicalRecord", "Canonical blocker record") }
+    static var validationWorkbenchCanonicalRecordDetail: String { text("validationWorkbench.evidence.canonicalRecord.detail", "When real-local validation is blocked, record the canonical blocker code and raw signal instead of accepting stale, fixture, desktop, black, or ambiguous screenshots.") }
+    static var validationWorkbenchLockedSessionTitle: String { text("validationWorkbench.blocker.lockedSession.title", "Locked session") }
+    static var validationWorkbenchLockedSessionSummary: String { text("validationWorkbench.blocker.lockedSession.summary", "The macOS session is locked or not clearly interactive, so Computer Use and screenshot evidence cannot prove the live UI.") }
+    static var validationWorkbenchLockedSessionAction: String { text("validationWorkbench.blocker.lockedSession.action", "Unlock the session, keep the app visible, then retry real-local Computer Use. If it remains locked, record locked-session.") }
+    static var validationWorkbenchWindowAXTitle: String { text("validationWorkbench.blocker.windowAX.title", "Window not found / no AX window") }
+    static var validationWorkbenchWindowAXSummary: String { text("validationWorkbench.blocker.windowAX.summary", "Computer Use, CG, AX, or activation could not resolve the expected SkillsCopilot main window.") }
+    static var validationWorkbenchWindowAXAction: String { text("validationWorkbench.blocker.windowAX.action", "Relaunch the exact dist/SkillsCopilot.app bundle, verify PID/window identity, and record window-not-found, no-ax-window, or activation-failed when resolution still fails.") }
+    static var validationWorkbenchScreenRecordingTitle: String { text("validationWorkbench.blocker.screenRecording.title", "Screen Recording permission") }
+    static var validationWorkbenchScreenRecordingSummary: String { text("validationWorkbench.blocker.screenRecording.summary", "The capture or automation layer lacks macOS Screen Recording authorization, so visual evidence is not trustworthy.") }
+    static var validationWorkbenchScreenRecordingAction: String { text("validationWorkbench.blocker.screenRecording.action", "Grant Screen Recording permission to the relevant terminal or Codex helper, then retry; otherwise record screen-recording-permission.") }
+    static var validationWorkbenchBundleTitle: String { text("validationWorkbench.blocker.bundle.title", "Stale or duplicate bundle") }
+    static var validationWorkbenchBundleSummary: String { text("validationWorkbench.blocker.bundle.summary", "The running app may be older than the source build, launched from a different path, or ambiguous because duplicate same-bundle processes/windows exist.") }
+    static var validationWorkbenchBundleAction: String { text("validationWorkbench.blocker.bundle.action", "Rebuild, launch only the exact workspace dist/SkillsCopilot.app, confirm the PID and bundle path, and record stale-bundle or window-not-found for unresolved ambiguity.") }
+    static var validationWorkbenchCaptureTitle: String { text("validationWorkbench.blocker.capture.title", "Invalid screenshot evidence") }
+    static var validationWorkbenchCaptureSummary: String { text("validationWorkbench.blocker.capture.summary", "The screenshot is black, near-flat, mostly transparent, invalid, too small, or otherwise unusable for UI closeout.") }
+    static var validationWorkbenchCaptureAction: String { text("validationWorkbench.blocker.capture.action", "Reject the capture, keep only app-window evidence, and record the matching capture blocker instead of counting the screenshot as validation.") }
+    static var validationWorkbenchToolLayerTitle: String { text("validationWorkbench.blocker.toolLayer.title", "Computer Use tool-layer failure") }
+    static var validationWorkbenchToolLayerSummary: String { text("validationWorkbench.blocker.toolLayer.summary", "Computer Use timed out, returned remoteConnection, or produced an unknown tool-layer failure before reliable UI read-back.") }
+    static var validationWorkbenchToolLayerAction: String { text("validationWorkbench.blocker.toolLayer.action", "Classify the raw tool output, record computer-use-timeout, remote-connection, or tool-layer-unknown, and retry only after the session/window is interactive.") }
+
+    static func validationWorkbenchSectionBlockers(_ count: Int) -> String {
+        format("validationWorkbench.section.blockers", "%d blockers", count)
+    }
+
     static var taskCockpitTitle: String { text("taskCockpit.title", "Task-first Cockpit") }
     static var taskCockpitBoundary: String { text("taskCockpit.boundary", "User-triggered, deterministic, read-only task cockpit from local readiness, routing, session-review, provider-observability, remediation, gap, blocker, and evidence metadata. It cannot send provider requests, write skill files, mutate agent config, create snapshots, change triage, execute scripts, read credentials, persist raw prompts/responses/traces, sync cloud data, or emit telemetry.") }
     static var taskCockpitAction: String { text("taskCockpit.action.build", "Build Cockpit") }

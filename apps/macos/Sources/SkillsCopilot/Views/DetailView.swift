@@ -3,6 +3,7 @@ import SwiftUI
 
 enum DetailSection: String, CaseIterable, Identifiable {
     case taskCockpit
+    case validationWorkbench
     case overview
     case skillMap
     case cleanup
@@ -20,13 +21,15 @@ enum DetailSection: String, CaseIterable, Identifiable {
     }
 
     static var primaryWorkCases: [DetailSection] {
-        [.taskCockpit, .skillMap, .guidedCleanup, .observability, .analysis]
+        [.taskCockpit, .validationWorkbench, .skillMap, .guidedCleanup, .observability, .analysis]
     }
 
     var title: String {
         switch self {
         case .taskCockpit:
             return UIStrings.taskCockpitTitle
+        case .validationWorkbench:
+            return UIStrings.validationWorkbenchTitle
         case .overview:
             return UIStrings.overview
         case .skillMap:
@@ -52,6 +55,8 @@ enum DetailSection: String, CaseIterable, Identifiable {
         switch self {
         case .taskCockpit:
             return "rectangle.grid.2x2"
+        case .validationWorkbench:
+            return "checklist"
         case .overview:
             return "stethoscope"
         case .skillMap:
@@ -77,6 +82,8 @@ enum DetailSection: String, CaseIterable, Identifiable {
         switch self {
         case .taskCockpit:
             return UIStrings.text("detail.section.taskCockpit.summary", "Start from the current task and review readiness, routes, agents, skills, session context, provider context, gaps, blockers, and evidence in one read-only cockpit.")
+        case .validationWorkbench:
+            return UIStrings.text("detail.section.validationWorkbench.summary", "Inspect real-local validation evidence standards, canonical blockers, and next-action guidance before UI closeout.")
         case .overview:
             return UIStrings.text("detail.section.overview.summary", "Inspect the selected skill metadata, permissions, provenance, and raw catalog details.")
         case .skillMap:
@@ -133,6 +140,10 @@ struct DetailView: View {
                             store.cancelTaskCockpitBuild()
                         }
                     )
+                } else if store.selectedDetailSection == .validationWorkbench {
+                    DetailSectionSwitcher(selection: $store.selectedDetailSection)
+
+                    ValidationWorkbenchPanel()
                 } else if store.selectedDetailSection == .guidedCleanup {
                     DetailSectionSwitcher(selection: $store.selectedDetailSection)
 
@@ -194,7 +205,7 @@ struct DetailView: View {
                     DetailSectionSwitcher(selection: $store.selectedDetailSection)
 
                     switch store.selectedDetailSection {
-                    case .taskCockpit, .guidedCleanup, .observability:
+                    case .taskCockpit, .validationWorkbench, .guidedCleanup, .observability:
                         EmptyView()
                     case .overview:
                         VStack(alignment: .leading, spacing: 16) {

@@ -13,6 +13,10 @@ enum AppAccessibilityID {
     static let taskCockpitRetryButton = "skills-copilot.task-cockpit.retry"
     static let taskCockpitStageProgress = "skills-copilot.task-cockpit.stage-progress"
     static let taskCockpitResult = "skills-copilot.task-cockpit.result"
+    static let validationWorkbench = "skills-copilot.validation-workbench"
+    static let validationWorkbenchSummary = "skills-copilot.validation-workbench.summary"
+    static let validationWorkbenchEvidence = "skills-copilot.validation-workbench.evidence-standards"
+    static let validationWorkbenchBlockerRow = "skills-copilot.validation-workbench.blocker-row"
 }
 
 enum MainWindowCoordinator {

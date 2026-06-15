@@ -17,11 +17,12 @@ struct SkillListModelTests {
     private func detailWorkbenchSectionsExposeDiagnostics() throws {
         try expectEqual(
             DetailSection.visibleCases,
-            [.taskCockpit, .overview, .skillMap, .cleanup, .guidedCleanup, .observability, .findings, .conflicts, .history, .analysis],
+            [.taskCockpit, .validationWorkbench, .overview, .skillMap, .cleanup, .guidedCleanup, .observability, .findings, .conflicts, .history, .analysis],
             "Skill detail should expose the full diagnostic workbench section order."
         )
-        try expectEqual(DetailSection.primaryWorkCases, [.taskCockpit, .skillMap, .guidedCleanup, .observability, .analysis], "Primary work surfaces should keep Task Cockpit first.")
+        try expectEqual(DetailSection.primaryWorkCases, [.taskCockpit, .validationWorkbench, .skillMap, .guidedCleanup, .observability, .analysis], "Primary work surfaces should keep Task Cockpit first.")
         try expectEqual(DetailSection.taskCockpit.title, "Task-first Cockpit", "Task Cockpit should be the primary work surface.")
+        try expectEqual(DetailSection.validationWorkbench.title, "Validation Workbench", "Validation Workbench section title")
         try expectEqual(DetailSection.skillMap.title, "Skill Map", "Skill Map section title")
         try expectEqual(DetailSection.guidedCleanup.title, "Guided Cleanup Flow", "Guided Cleanup section title")
         try expectEqual(DetailSection.observability.title, "Provider Observability", "Provider Observability section title")

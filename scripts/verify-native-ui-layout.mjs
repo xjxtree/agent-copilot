@@ -19,6 +19,7 @@ const files = {
   store: await read("apps/macos/Sources/SkillsCopilot/Stores/SkillStore.swift"),
   taskCockpit: await read("apps/macos/Sources/SkillsCopilot/Views/TaskCockpitPanel.swift"),
   taskInput: await read("apps/macos/Sources/SkillsCopilot/Views/TaskInputTextEditor.swift"),
+  validationWorkbench: await read("apps/macos/Sources/SkillsCopilot/Views/ValidationWorkbenchPanel.swift"),
   material: await read("apps/macos/Sources/SkillsCopilot/Views/AdaptiveMaterialSurface.swift"),
   localizable: await read("apps/macos/Sources/SkillsCopilot/Resources/en.lproj/Localizable.strings"),
 };
@@ -73,7 +74,7 @@ const checks = [
   {
     label: "detail sections expose task-first IA summaries",
     text: files.detail,
-    pattern: /static var primaryWorkCases:[\s\S]*?\[\.taskCockpit,\s*\.skillMap,\s*\.guidedCleanup,\s*\.observability,\s*\.analysis\][\s\S]*?UIStrings\.taskCockpitTitle[\s\S]*?UIStrings\.guidedCleanupFlowTitle[\s\S]*?UIStrings\.providerObservabilityTitle/,
+    pattern: /static var primaryWorkCases:[\s\S]*?\[\.taskCockpit,\s*\.validationWorkbench,\s*\.skillMap,\s*\.guidedCleanup,\s*\.observability,\s*\.analysis\][\s\S]*?UIStrings\.taskCockpitTitle[\s\S]*?UIStrings\.validationWorkbenchTitle[\s\S]*?UIStrings\.guidedCleanupFlowTitle[\s\S]*?UIStrings\.providerObservabilityTitle/,
   },
   {
     label: "task cockpit renders before empty detail fallback",
@@ -114,6 +115,11 @@ const checks = [
     label: "task cockpit exposes progressive staged feedback",
     text: files.taskCockpit,
     pattern: /TaskCockpitStageProgressView\([\s\S]*?TaskCockpitProgressSnapshot\([\s\S]*?ForEach\(snapshot\.stageRows\)[\s\S]*?TaskCockpitStageTile\(row:[\s\S]*?accessibilityIdentifier\(AppAccessibilityID\.taskCockpitStageProgress\)/,
+  },
+  {
+    label: "validation workbench uses shared snapshot and stable accessibility identifiers",
+    text: files.validationWorkbench,
+    pattern: /ValidationWorkbenchModel\.canonicalSnapshot[\s\S]*?AppAccessibilityID\.validationWorkbench[\s\S]*?AppAccessibilityID\.validationWorkbenchSummary[\s\S]*?AppAccessibilityID\.validationWorkbenchEvidence[\s\S]*?AppAccessibilityID\.validationWorkbenchBlockerRow/,
   },
   {
     label: "task cockpit task input uses an AX-settable multiline TextField",
