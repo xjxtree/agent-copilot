@@ -12,6 +12,7 @@ struct SkillListModelTests {
         try skillProvenanceClassifiesAgentRootsDeterministically()
         try skillIdentitySummaryAndDedupeExplanationAreStable()
         try privacyPathDisplayRedactsAndCollapsesLocalPaths()
+        try privacyPathDisplayRedactsEmbeddedEvidencePaths()
     }
 
     private func detailWorkbenchSectionsExposeDiagnostics() throws {
@@ -247,6 +248,20 @@ struct SkillListModelTests {
 
         let revealed = DisplayText.privacyPath(rawPath, privacyModeEnabled: true, revealFull: true)
         try expectEqual(revealed, rawPath, "Explicit reveal should show the original path without mutating the model value.")
+    }
+
+    private func privacyPathDisplayRedactsEmbeddedEvidencePaths() throws {
+        let evidence = "session:evidence source=/" + "Users" + "/alice/example-project/.agents/skills/review/SKILL.md"
+        try expectEqual(DisplayText.isLikelyPath(evidence), true, "Evidence strings with embedded local paths should use privacy rendering.")
+
+        let redacted = DisplayText.privacyPath(evidence, privacyModeEnabled: true)
+        try expectFalse(redacted.contains("/" + "Users" + "/alice"), "Embedded evidence paths should redact local macOS user paths.")
+        try expectFalse(!redacted.contains("$HOME"), "Embedded evidence paths should preserve useful redacted home context.")
+
+        let tempEvidence = "capture=/" + "private" + "/" + "var" + "/folders/ab/cd/ef/T/completed.png"
+        let redactedTemp = DisplayText.privacyPath(tempEvidence, privacyModeEnabled: true)
+        try expectFalse(redactedTemp.contains("/" + "private" + "/var/folders"), "Private temp evidence paths should redact as a single temp placeholder.")
+        try expectFalse(!redactedTemp.contains("<temp>/T/completed.png"), "Private temp evidence paths should retain useful screenshot filename context.")
     }
 
     private func skillIdentitySummaryAndDedupeExplanationAreStable() throws {

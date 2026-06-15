@@ -57,11 +57,7 @@ struct RoutingInlineList: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(values.prefix(3), id: \.self) { value in
-                    Label(value, systemImage: systemImage)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .textSelection(.enabled)
+                    PrivacyEvidenceLabel(value: value, systemImage: systemImage, font: .caption, lineLimit: 2)
                 }
             }
         }

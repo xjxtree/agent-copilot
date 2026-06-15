@@ -43,7 +43,7 @@ const requiredSnippets = [
   "No raw prompt, raw response, raw trace, secret, or unredacted local path persistence.",
   "No cloud sync.",
   "No telemetry.",
-  "V2.74-V2.79 remain planned follow-ups",
+  "V2.74-V2.79 have since completed; V2.80 remains planned",
 ];
 
 for (const snippet of requiredSnippets) {

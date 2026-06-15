@@ -346,10 +346,7 @@ private struct TaskCockpitStageTile: View {
                     .foregroundStyle(stateForegroundStyle(row.state))
                     .lineLimit(1)
                 if !row.detail.isEmpty {
-                    Text(row.detail)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                    PrivacyEvidenceText(value: row.detail, font: .caption2, lineLimit: 2)
                 }
             }
             Spacer(minLength: 4)
@@ -624,11 +621,7 @@ private struct TaskCockpitCandidateList: View {
                             }
 
                             if !row.summary.isEmpty {
-                                Text(row.summary)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(3)
-                                    .textSelection(.enabled)
+                                PrivacyEvidenceText(value: row.summary, font: .caption, lineLimit: 3)
                             }
                             RoutingInlineList(title: UIStrings.crossAgentReadinessReasons, empty: UIStrings.crossAgentReadinessNoReasons, values: row.reasons, systemImage: "text.bubble")
                             RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: row.evidenceRefs, systemImage: "checklist")
@@ -690,16 +683,13 @@ private struct TaskCockpitContextList: View {
                                 Text(severity)
                             }
                             if let source = row.source, !source.isEmpty {
-                                Text(source)
+                                PrivacyEvidenceText(value: source, font: .caption2, lineLimit: 1)
                             }
                         }
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         if !row.detail.isEmpty {
-                            Text(row.detail)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
+                            PrivacyEvidenceText(value: row.detail, font: .caption, lineLimit: nil)
                         }
                         RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: row.evidenceRefs, systemImage: "checklist")
                         RoutingInlineList(title: UIStrings.knowledgeSafetyFlags, empty: UIStrings.taskBenchmarkNoSafetyFlags, values: row.safetyFlags, systemImage: "checkmark.shield")
@@ -734,15 +724,12 @@ private struct TaskCockpitEvidenceList: View {
                                 Text(DisplayText.agent(agent))
                             }
                             if let source = item.source, !source.isEmpty {
-                                Text(source)
+                                PrivacyEvidenceText(value: source, font: .caption2, lineLimit: 1)
                             }
                         }
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                        Text(item.detail)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
+                        PrivacyEvidenceText(value: item.detail, font: .caption, lineLimit: nil)
                     }
                 }
             }

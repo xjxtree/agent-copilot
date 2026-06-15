@@ -123,7 +123,7 @@ const requiredReferenceChecks = [
   [readme, "README.md", "docs/v2.75-verification-checklist.md"],
   [readme, "README.md", "docs/ui-artifacts/v2.75-task-input-resilience/completed.png"],
   [readme, "README.md", "pnpm verify:v2.75-docs"],
-  [readme, "README.md", "V2.79-V2.83 remain planned"],
+  [readme, "README.md", "V2.80-V2.83 remain planned"],
   [readme, "README.md", "AX-settable"],
   [readme, "README.md", "PID `43079`"],
   [developmentTasks, "docs/development-tasks.md", "v2.75-verification-checklist.md"],

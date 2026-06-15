@@ -49,6 +49,41 @@ struct PrivacyPathText: View {
     }
 }
 
+struct PrivacyEvidenceText: View {
+    let value: String
+    var font: Font = .caption
+    var lineLimit: Int? = 2
+
+    var body: some View {
+        if DisplayText.isLikelyPath(value) {
+            PrivacyPathText(path: value, font: font, lineLimit: lineLimit ?? 2)
+        } else {
+            Text(value)
+                .font(font)
+                .foregroundStyle(.secondary)
+                .lineLimit(lineLimit)
+                .textSelection(.enabled)
+        }
+    }
+}
+
+struct PrivacyEvidenceLabel: View {
+    let value: String
+    let systemImage: String
+    var font: Font = .caption
+    var lineLimit: Int? = 2
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Image(systemName: systemImage)
+                .font(font)
+                .foregroundStyle(.secondary)
+                .frame(width: 13, alignment: .center)
+            PrivacyEvidenceText(value: value, font: font, lineLimit: lineLimit)
+        }
+    }
+}
+
 struct PrivacyPathLabel: View {
     let path: String
     let systemImage: String

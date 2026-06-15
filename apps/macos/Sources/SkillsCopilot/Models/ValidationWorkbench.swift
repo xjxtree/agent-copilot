@@ -31,34 +31,34 @@ enum ValidationWorkbenchSection: String, CaseIterable, Hashable, Identifiable {
     var title: String {
         switch self {
         case .sessionWindow:
-            return "Session / Window"
+            return UIStrings.validationWorkbenchSectionSessionWindowTitle
         case .permissions:
-            return "Permissions"
+            return UIStrings.validationWorkbenchSectionPermissionsTitle
         case .bundleFreshness:
-            return "Bundle freshness"
+            return UIStrings.validationWorkbenchSectionBundleFreshnessTitle
         case .screenshotQuality:
-            return "Screenshot quality"
+            return UIStrings.validationWorkbenchSectionScreenshotQualityTitle
         case .computerUseToolLayer:
-            return "Computer Use / tool layer"
+            return UIStrings.validationWorkbenchSectionComputerUseToolLayerTitle
         case .evidenceStandards:
-            return "Evidence standards"
+            return UIStrings.validationWorkbenchSectionEvidenceStandardsTitle
         }
     }
 
     var explanation: String {
         switch self {
         case .sessionWindow:
-            return "Confirms the interactive macOS session, app activation, visible window, and AX window identity before accepting UI evidence."
+            return UIStrings.validationWorkbenchSectionSessionWindowExplanation
         case .permissions:
-            return "Confirms screenshot capture is authorized before app-window evidence is accepted."
+            return UIStrings.validationWorkbenchSectionPermissionsExplanation
         case .bundleFreshness:
-            return "Confirms the launched app is the current workspace bundle and not an older same-bundle process."
+            return UIStrings.validationWorkbenchSectionBundleFreshnessExplanation
         case .screenshotQuality:
-            return "Rejects unreadable screenshots, including black, flat, transparent, or structurally invalid captures."
+            return UIStrings.validationWorkbenchSectionScreenshotQualityExplanation
         case .computerUseToolLayer:
-            return "Records Computer Use, remote connection, timeout, and unknown tool-layer failures as blockers."
+            return UIStrings.validationWorkbenchSectionComputerUseToolLayerExplanation
         case .evidenceStandards:
-            return "Keeps fixture smoke evidence separate from unlocked real-local Computer Use and app-window screenshot evidence."
+            return UIStrings.validationWorkbenchSectionEvidenceStandardsExplanation
         }
     }
 }
@@ -193,11 +193,11 @@ struct ValidationWorkbenchSnapshot: Hashable {
 }
 
 enum ValidationWorkbenchModel {
-    static let readOnlySafetyNote = "Read-only guidance only; it does not call providers, write files, execute scripts, read credentials, sync cloud data, emit telemetry, or start background jobs."
+    static var readOnlySafetyNote: String { UIStrings.validationWorkbenchReadOnlySafetyNote }
 
-    static let requiredRealLocalEvidence = "Unlocked real-local Computer Use against the current app bundle plus an app-window screenshot that is nonblack, nonflat, nontransparent, and visually inspected."
+    static var requiredRealLocalEvidence: String { UIStrings.validationWorkbenchRequiredRealLocalEvidence }
 
-    static let fixtureSmokeLimitation = "Fixture smoke may prove build/service health, but it cannot replace blocked real-local Computer Use or app-window screenshot evidence."
+    static var fixtureSmokeLimitation: String { UIStrings.validationWorkbenchFixtureSmokeLimitation }
 
     static var canonicalSnapshot: ValidationWorkbenchSnapshot {
         let rows = canonicalRows + evidenceStandardRows
@@ -221,7 +221,7 @@ enum ValidationWorkbenchModel {
             requiredEvidence: [requiredRealLocalEvidence],
             fixtureSmokeIsSubstitute: false,
             unlockedRealLocalComputerUseRequired: true,
-            summaryText: "Real-local validation remains pending until unlocked Computer Use can target the current app window and produce acceptable app-window screenshot evidence. Fixture smoke is supporting evidence only.",
+            summaryText: UIStrings.validationWorkbenchSummaryText,
             safety: ValidationWorkbenchSafety()
         )
         return ValidationWorkbenchSnapshot(summary: summary, sections: sections)
@@ -238,9 +238,9 @@ enum ValidationWorkbenchModel {
                 section: .evidenceStandards,
                 severity: .blocker,
                 status: .required,
-                title: "Unlocked real-local Computer Use is required",
+                title: UIStrings.validationWorkbenchEvidenceRequiredTitle,
                 explanation: fixtureSmokeLimitation,
-                nextAction: "Run the real app in an unlocked interactive macOS session, target the current bundle/window, exercise the relevant UI, and capture app-window evidence.",
+                nextAction: UIStrings.validationWorkbenchEvidenceRequiredAction,
                 evidenceRequirement: requiredRealLocalEvidence
             )
         ]
@@ -252,118 +252,118 @@ enum ValidationWorkbenchModel {
             return blockerRow(
                 code,
                 section: .sessionWindow,
-                title: "macOS session is locked",
-                explanation: "Window capture and Computer Use evidence are invalid while the interactive session is locked.",
-                nextAction: "Unlock the macOS session and rerun Computer Use and app-window capture.",
-                evidenceRequirement: "Record locked-session while blocked; completion still requires unlocked real-local Computer Use evidence."
+                title: UIStrings.validationWorkbenchLockedSessionTitle,
+                explanation: UIStrings.validationWorkbenchLockedSessionSummary,
+                nextAction: UIStrings.validationWorkbenchLockedSessionAction,
+                evidenceRequirement: UIStrings.validationWorkbenchLockedSessionEvidence
             )
         case .windowNotFound:
             return blockerRow(
                 code,
                 section: .sessionWindow,
-                title: "Target app window was not found",
-                explanation: "CG window lookup could not find one visible SkillsCopilot window for the expected bundle path and PID, or multiple same-bundle windows made targeting ambiguous.",
-                nextAction: "Relaunch the exact workspace bundle, close duplicate same-bundle windows, and retry exact PID/window targeting.",
-                evidenceRequirement: "A resolved current-bundle PID, visible main window, and app-window screenshot are required."
+                title: UIStrings.validationWorkbenchWindowNotFoundTitle,
+                explanation: UIStrings.validationWorkbenchWindowNotFoundSummary,
+                nextAction: UIStrings.validationWorkbenchWindowNotFoundAction,
+                evidenceRequirement: UIStrings.validationWorkbenchWindowNotFoundEvidence
             )
         case .noAXWindow:
             return blockerRow(
                 code,
                 section: .sessionWindow,
-                title: "Accessibility window was not resolved",
-                explanation: "The app may have a CG window, but AX did not expose a usable app window for interaction.",
-                nextAction: "Confirm Accessibility permission, activate the exact app process, and retry AX/Computer Use window discovery.",
-                evidenceRequirement: "A matching AX window for the targeted app process is required before UI interaction evidence is accepted."
+                title: UIStrings.validationWorkbenchNoAXWindowTitle,
+                explanation: UIStrings.validationWorkbenchNoAXWindowSummary,
+                nextAction: UIStrings.validationWorkbenchNoAXWindowAction,
+                evidenceRequirement: UIStrings.validationWorkbenchNoAXWindowEvidence
             )
         case .computerUseTimeout:
             return blockerRow(
                 code,
                 section: .computerUseToolLayer,
-                title: "Computer Use timed out",
-                explanation: "Computer Use did not return usable app state or interaction evidence before its timeout.",
-                nextAction: "Retry after confirming the session is unlocked, the app is active, and the target window is visible.",
-                evidenceRequirement: "A completed Computer Use interaction against the real local app is required; timeout is only a blocker record."
+                title: UIStrings.validationWorkbenchComputerUseTimeoutTitle,
+                explanation: UIStrings.validationWorkbenchComputerUseTimeoutSummary,
+                nextAction: UIStrings.validationWorkbenchComputerUseTimeoutAction,
+                evidenceRequirement: UIStrings.validationWorkbenchComputerUseTimeoutEvidence
             )
         case .remoteConnection:
             return blockerRow(
                 code,
                 section: .computerUseToolLayer,
-                title: "Remote connection blocked UI automation",
-                explanation: "Computer Use reported a remote connection condition that prevents trusted local app-window evidence.",
-                nextAction: "Switch to a local interactive macOS session and rerun validation.",
-                evidenceRequirement: "Validation evidence must come from the local app window, not a blocked remote-control state."
+                title: UIStrings.validationWorkbenchRemoteConnectionTitle,
+                explanation: UIStrings.validationWorkbenchRemoteConnectionSummary,
+                nextAction: UIStrings.validationWorkbenchRemoteConnectionAction,
+                evidenceRequirement: UIStrings.validationWorkbenchRemoteConnectionEvidence
             )
         case .activationFailed:
             return blockerRow(
                 code,
                 section: .sessionWindow,
-                title: "App activation failed",
-                explanation: "The target process could not be activated before UI inspection or interaction.",
-                nextAction: "Relaunch the exact app bundle, ensure it is foregroundable, and retry activation/window targeting.",
-                evidenceRequirement: "The active app process must match the current bundle before interaction evidence is accepted."
+                title: UIStrings.validationWorkbenchActivationFailedTitle,
+                explanation: UIStrings.validationWorkbenchActivationFailedSummary,
+                nextAction: UIStrings.validationWorkbenchActivationFailedAction,
+                evidenceRequirement: UIStrings.validationWorkbenchActivationFailedEvidence
             )
         case .blackCapture:
             return blockerRow(
                 code,
                 section: .screenshotQuality,
-                title: "Screenshot is black",
-                explanation: "A black or near-black image cannot prove visible UI state.",
-                nextAction: "Fix session, permission, or capture targeting issues and retake the app-window screenshot.",
-                evidenceRequirement: "Accepted screenshots must show readable app UI and pass black-image rejection."
+                title: UIStrings.validationWorkbenchBlackCaptureTitle,
+                explanation: UIStrings.validationWorkbenchBlackCaptureSummary,
+                nextAction: UIStrings.validationWorkbenchBlackCaptureAction,
+                evidenceRequirement: UIStrings.validationWorkbenchBlackCaptureEvidence
             )
         case .flatCapture:
             return blockerRow(
                 code,
                 section: .screenshotQuality,
-                title: "Screenshot has near-zero visual variance",
-                explanation: "A flat or near-single-color capture cannot prove UI layout or interaction state.",
-                nextAction: "Retake the app-window screenshot after confirming the window is visible and capture targets the app content.",
-                evidenceRequirement: "Accepted screenshots must be nonflat and visually inspectable."
+                title: UIStrings.validationWorkbenchFlatCaptureTitle,
+                explanation: UIStrings.validationWorkbenchFlatCaptureSummary,
+                nextAction: UIStrings.validationWorkbenchFlatCaptureAction,
+                evidenceRequirement: UIStrings.validationWorkbenchFlatCaptureEvidence
             )
         case .transparentCapture:
             return blockerRow(
                 code,
                 section: .screenshotQuality,
-                title: "Screenshot is mostly transparent",
-                explanation: "A transparent capture is not usable app-window evidence.",
-                nextAction: "Retry capture with a visible app window and valid Screen Recording permissions.",
-                evidenceRequirement: "Accepted screenshots must contain opaque app UI content."
+                title: UIStrings.validationWorkbenchTransparentCaptureTitle,
+                explanation: UIStrings.validationWorkbenchTransparentCaptureSummary,
+                nextAction: UIStrings.validationWorkbenchTransparentCaptureAction,
+                evidenceRequirement: UIStrings.validationWorkbenchTransparentCaptureEvidence
             )
         case .invalidCapture:
             return blockerRow(
                 code,
                 section: .screenshotQuality,
-                title: "Screenshot artifact is invalid",
-                explanation: "The screenshot file is missing, too small, structurally invalid, or otherwise unreadable.",
-                nextAction: "Regenerate the screenshot artifact and verify it before using it as evidence.",
-                evidenceRequirement: "Accepted screenshot artifacts must be valid images with app-window dimensions."
+                title: UIStrings.validationWorkbenchInvalidCaptureTitle,
+                explanation: UIStrings.validationWorkbenchInvalidCaptureSummary,
+                nextAction: UIStrings.validationWorkbenchInvalidCaptureAction,
+                evidenceRequirement: UIStrings.validationWorkbenchInvalidCaptureEvidence
             )
         case .screenRecordingPermission:
             return blockerRow(
                 code,
                 section: .permissions,
-                title: "Screen Recording permission is missing",
-                explanation: "macOS did not authorize the capture helper to create app-window image evidence.",
-                nextAction: "Grant Screen Recording permission to the relevant terminal/runtime app, restart it if needed, and rerun capture.",
-                evidenceRequirement: "A permission-valid capture that shows the app window is required."
+                title: UIStrings.validationWorkbenchScreenRecordingTitle,
+                explanation: UIStrings.validationWorkbenchScreenRecordingSummary,
+                nextAction: UIStrings.validationWorkbenchScreenRecordingAction,
+                evidenceRequirement: UIStrings.validationWorkbenchScreenRecordingEvidence
             )
         case .staleBundle:
             return blockerRow(
                 code,
                 section: .bundleFreshness,
-                title: "Running app bundle is stale",
-                explanation: "The visible app is not the freshly built workspace bundle or is older than the source inputs.",
-                nextAction: "Rebuild, stop stale same-bundle processes, launch the exact dist/SkillsCopilot.app path, and retry validation.",
-                evidenceRequirement: "Evidence must identify the current workspace bundle path and matching process/window."
+                title: UIStrings.validationWorkbenchStaleBundleTitle,
+                explanation: UIStrings.validationWorkbenchStaleBundleSummary,
+                nextAction: UIStrings.validationWorkbenchStaleBundleAction,
+                evidenceRequirement: UIStrings.validationWorkbenchStaleBundleEvidence
             )
         case .toolLayerUnknown:
             return blockerRow(
                 code,
                 section: .computerUseToolLayer,
-                title: "Unknown tool-layer failure",
-                explanation: "The validation tool returned an unclassified failure, so the app cannot treat the run as successful.",
-                nextAction: "Capture the raw failure text, classify it if possible, and rerun with a known blocker or successful evidence path.",
-                evidenceRequirement: "Unknown tool-layer failures must be recorded as blockers until a concrete successful real-local run is available."
+                title: UIStrings.validationWorkbenchToolLayerUnknownTitle,
+                explanation: UIStrings.validationWorkbenchToolLayerUnknownSummary,
+                nextAction: UIStrings.validationWorkbenchToolLayerUnknownAction,
+                evidenceRequirement: UIStrings.validationWorkbenchToolLayerUnknownEvidence
             )
         }
     }

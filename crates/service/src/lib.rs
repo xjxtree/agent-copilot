@@ -32199,7 +32199,7 @@ mod tests {
                 "id": profile_id,
                 "display_name": "Mock OpenAI Stale",
                 "provider_type": "openai-compatible",
-                "base_url": "http://localhost:8317/v1",
+                "base_url": "https://api.fixture.invalid/v1",
                 "model": "mock-model",
                 "enabled": true,
                 "single_request_token_limit": 4096,

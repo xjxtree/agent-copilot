@@ -241,6 +241,8 @@ enum DisplayText {
                 redacted = token
             } else if redacted.hasPrefix(absolutePrefix + "/") {
                 redacted = token + String(redacted.dropFirst(absolutePrefix.count))
+            } else if redacted.contains(absolutePrefix + "/") {
+                redacted = redacted.replacingOccurrences(of: absolutePrefix, with: token)
             }
         }
 
@@ -254,12 +256,12 @@ enum DisplayText {
             options: .regularExpression
         )
         redacted = redacted.replacingOccurrences(
-            of: varFoldersPattern,
+            of: privateVarFoldersPattern,
             with: "<temp>",
             options: .regularExpression
         )
         redacted = redacted.replacingOccurrences(
-            of: privateVarFoldersPattern,
+            of: varFoldersPattern,
             with: "<temp>",
             options: .regularExpression
         )
@@ -278,12 +280,23 @@ enum DisplayText {
 
     static func isLikelyPath(_ value: String) -> Bool {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let macHomeMarker = "/" + "Users" + "/"
+        let varFoldersMarker = "/" + "var" + "/folders/"
+        let privateVarFoldersMarker = "/" + "private" + varFoldersMarker
         return trimmed.hasPrefix("/")
             || trimmed.hasPrefix("~/")
             || trimmed.hasPrefix("$HOME/")
             || trimmed.hasPrefix("<project-root>")
             || trimmed.hasPrefix("<project-cwd>")
             || trimmed.hasPrefix("<app-data-dir>")
+            || trimmed.contains(macHomeMarker)
+            || trimmed.contains(varFoldersMarker)
+            || trimmed.contains(privateVarFoldersMarker)
+            || trimmed.contains("$HOME/")
+            || trimmed.contains("~/")
+            || trimmed.contains("<project-root>")
+            || trimmed.contains("<project-cwd>")
+            || trimmed.contains("<app-data-dir>")
             || trimmed.contains("/SKILL.md")
             || trimmed.contains("\\")
     }

@@ -1764,14 +1764,9 @@ private struct SkillQualityEvidenceList: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Label(item.title, systemImage: "checklist")
                             .font(.callout)
-                        Text(item.detail)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
+                        PrivacyEvidenceText(value: item.detail, font: .caption, lineLimit: nil)
                         if let source = item.source, !source.isEmpty {
-                            Text(source)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+                            PrivacyEvidenceText(value: source, font: .caption2, lineLimit: 1)
                         }
                     }
                 }
@@ -2164,14 +2159,9 @@ private struct TaskReadinessEvidenceList: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Label(item.title, systemImage: "checklist")
                             .font(.callout)
-                        Text(item.detail)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
+                        PrivacyEvidenceText(value: item.detail, font: .caption, lineLimit: nil)
                         if let source = item.source, !source.isEmpty {
-                            Text(source)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+                            PrivacyEvidenceText(value: source, font: .caption2, lineLimit: 1)
                         }
                     }
                 }
@@ -2404,14 +2394,9 @@ private struct RoutingEvidenceList: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Label(item.title, systemImage: "checklist")
                             .font(.callout)
-                        Text(item.detail)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
+                        PrivacyEvidenceText(value: item.detail, font: .caption, lineLimit: nil)
                         if let source = item.source, !source.isEmpty {
-                            Text(source)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+                            PrivacyEvidenceText(value: source, font: .caption2, lineLimit: 1)
                         }
                     }
                 }
@@ -2757,21 +2742,14 @@ private struct CrossAgentReadinessGapList: View {
                                 Text(DisplayText.agent(agent))
                             }
                             if let source = gap.source, !source.isEmpty {
-                                Text(source)
+                                PrivacyEvidenceText(value: source, font: .caption2, lineLimit: 1)
                             }
                         }
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                        Text(gap.detail)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
+                        PrivacyEvidenceText(value: gap.detail, font: .caption, lineLimit: nil)
                         if !gap.evidenceRefs.isEmpty {
-                            Text(gap.evidenceRefs.joined(separator: ", "))
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                                .textSelection(.enabled)
+                            PrivacyEvidenceText(value: gap.evidenceRefs.joined(separator: ", "), font: .caption2, lineLimit: 2)
                         }
                     }
                 }
@@ -2802,15 +2780,12 @@ private struct CrossAgentReadinessEvidenceList: View {
                                 Text(DisplayText.agent(agent))
                             }
                             if let source = item.source, !source.isEmpty {
-                                Text(source)
+                                PrivacyEvidenceText(value: source, font: .caption2, lineLimit: 1)
                             }
                         }
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                        Text(item.detail)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
+                        PrivacyEvidenceText(value: item.detail, font: .caption, lineLimit: nil)
                     }
                 }
             }
@@ -3127,10 +3102,7 @@ private struct RoutingAccuracyGapList: View {
                                     .foregroundStyle(.secondary)
                             }
                         }
-                        Text(gap.detail)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
+                        PrivacyEvidenceText(value: gap.detail, font: .caption, lineLimit: nil)
                         if let severity = gap.severity, !severity.isEmpty {
                             Text(severity)
                                 .font(.caption2.bold())
@@ -3173,21 +3145,12 @@ private struct RoutingAccuracyEvidenceList: View {
                         }
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                        Text(item.detail)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
+                        PrivacyEvidenceText(value: item.detail, font: .caption, lineLimit: nil)
                         if let source = item.source, !source.isEmpty {
-                            Text(source)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+                            PrivacyEvidenceText(value: source, font: .caption2, lineLimit: 1)
                         }
                         if !item.evidenceRefs.isEmpty {
-                            Text(item.evidenceRefs.joined(separator: ", "))
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                                .textSelection(.enabled)
+                            PrivacyEvidenceText(value: item.evidenceRefs.joined(separator: ", "), font: .caption2, lineLimit: 2)
                         }
                     }
                 }
@@ -3407,10 +3370,7 @@ private struct StaleDriftCandidateList: View {
                                 MetadataRow(label: UIStrings.routingAccuracyAvgConfidence, value: row.confidenceLabel)
                             }
 
-                            Text(row.summary)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
+                            PrivacyEvidenceText(value: row.summary, font: .caption, lineLimit: nil)
 
                             if let current = row.currentSignal, !current.isEmpty {
                                 Label(current, systemImage: "waveform.path.ecg")
@@ -3475,16 +3435,9 @@ private struct StaleDriftImpactList: View {
                         }
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                        Text(row.detail)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
+                        PrivacyEvidenceText(value: row.detail, font: .caption, lineLimit: nil)
                         if !row.evidenceRefs.isEmpty {
-                            Text(row.evidenceRefs.joined(separator: ", "))
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                                .textSelection(.enabled)
+                            PrivacyEvidenceText(value: row.evidenceRefs.joined(separator: ", "), font: .caption2, lineLimit: 2)
                         }
                     }
                 }
@@ -3721,10 +3674,7 @@ private struct SimilarSkillGroupCard: View {
             }
 
             if !group.summary.isEmpty {
-                Text(group.summary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
+                PrivacyEvidenceText(value: group.summary, font: .caption, lineLimit: nil)
             }
 
             Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
@@ -4380,10 +4330,7 @@ private struct WorkspaceReadinessChecklistList: View {
                                 }
                             }
                             if !row.summary.isEmpty {
-                                Text(row.summary)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .textSelection(.enabled)
+                                PrivacyEvidenceText(value: row.summary, font: .caption, lineLimit: nil)
                             }
                             RoutingInlineList(title: UIStrings.workspaceReadinessRequired, empty: UIStrings.knowledgeNoRows, values: row.requiredSkills, systemImage: "target")
                             CapabilitySkillList(skills: row.matchedSkills)
@@ -5718,10 +5665,7 @@ private struct RemediationBatchReviewGroupCard: View {
             }
 
             if !group.summary.isEmpty {
-                Text(group.summary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
+                PrivacyEvidenceText(value: group.summary, font: .caption, lineLimit: nil)
             }
 
             RoutingInlineList(title: UIStrings.remediationBatchReviewSafeNextSteps, empty: UIStrings.remediationBatchReviewSafeNextStepFallback, values: group.safeNextStepLabels, systemImage: "arrow.right.circle")
@@ -6785,10 +6729,7 @@ private struct SkillLifecycleTimelineRowItem: View {
             }
 
             if !row.summary.isEmpty {
-                Text(row.summary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
+                PrivacyEvidenceText(value: row.summary, font: .caption, lineLimit: nil)
             }
 
             RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: row.evidenceRefs, systemImage: "checklist")
@@ -7098,7 +7039,7 @@ private struct GuidedCleanupStepCard: View {
                 MetadataRow(label: UIStrings.cleanupFilterPriority, value: step.priority)
                 MetadataRow(label: UIStrings.guidedCleanupFlowAppLocalOnly, value: step.appLocalRecordOnly ? UIStrings.stateEnabled : UIStrings.llmSkillAnalysisEnabledUnsafe)
                 if let order = step.order {
-                    MetadataRow(label: UIStrings.text("guidedCleanup.order", "Order"), value: "\(order)")
+                    MetadataRow(label: UIStrings.guidedCleanupFlowOrder, value: "\(order)")
                 }
                 if let reviewArea = step.reviewArea, !reviewArea.isEmpty {
                     MetadataRow(label: UIStrings.remediationBatchReviewReviewArea, value: reviewArea)
@@ -7119,10 +7060,7 @@ private struct GuidedCleanupStepCard: View {
                     .textSelection(.enabled)
             }
             if !step.detail.isEmpty {
-                Text(step.detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
+                PrivacyEvidenceText(value: step.detail, font: .caption, lineLimit: nil)
             }
 
             Label(step.actionLabel, systemImage: "arrow.right.circle")
@@ -7176,10 +7114,7 @@ private struct GuidedCleanupIssueGroupList: View {
                                 MetadataRow(label: UIStrings.providerObservabilityCalls, value: "\(group.count)")
                             }
                             if !group.summary.isEmpty {
-                                Text(group.summary)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .textSelection(.enabled)
+                                PrivacyEvidenceText(value: group.summary, font: .caption, lineLimit: nil)
                             }
                             RoutingInlineList(title: UIStrings.guidedCleanupFlowIssueGroups, empty: UIStrings.guidedCleanupFlowNoIssueGroups, values: group.issueRefs, systemImage: "exclamationmark.triangle")
                             RoutingInlineList(title: UIStrings.guidedCleanupFlowSafeActions, empty: UIStrings.guidedCleanupFlowNoSafeActions, values: group.safeNextActionIDs, systemImage: "arrow.right.circle")
@@ -7226,20 +7161,17 @@ private struct GuidedCleanupSafeActionList: View {
                                     MetadataRow(label: UIStrings.remediationBatchReviewReviewArea, value: reviewArea)
                                 }
                                 if let entryMethod = action.entryMethod, !entryMethod.isEmpty {
-                                    MetadataRow(label: UIStrings.text("guidedCleanup.safeAction.entryMethod", "Entry method"), value: entryMethod)
+                                    MetadataRow(label: UIStrings.guidedCleanupSafeActionEntryMethod, value: entryMethod)
                                 }
-                                MetadataRow(label: UIStrings.text("guidedCleanup.safeAction.previewRequired", "Preview required"), value: action.requiresPreview ? UIStrings.stateEnabled : UIStrings.stateDisabled)
-                                MetadataRow(label: UIStrings.text("guidedCleanup.safeAction.confirmationRequired", "Confirmation required"), value: action.requiresConfirmation ? UIStrings.stateEnabled : UIStrings.stateDisabled)
+                                MetadataRow(label: UIStrings.guidedCleanupSafeActionPreviewRequired, value: action.requiresPreview ? UIStrings.stateEnabled : UIStrings.stateDisabled)
+                                MetadataRow(label: UIStrings.guidedCleanupSafeActionConfirmationRequired, value: action.requiresConfirmation ? UIStrings.stateEnabled : UIStrings.stateDisabled)
                                 MetadataRow(label: UIStrings.llmPromptCopyOnly, value: action.copyOnly ? UIStrings.stateEnabled : UIStrings.stateDisabled)
                                 MetadataRow(label: UIStrings.guidedCleanupFlowExistingSafeEntry, value: action.requiresExistingSafeEntry ? UIStrings.stateEnabled : UIStrings.stateDisabled)
                                 MetadataRow(label: UIStrings.guidedCleanupFlowAppLocalOnly, value: action.appLocalOnly ? UIStrings.stateEnabled : UIStrings.llmSkillAnalysisEnabledUnsafe)
                                 MetadataRow(label: UIStrings.guidedCleanupFlowCanApplyFix, value: action.canApplyFix ? UIStrings.llmSkillAnalysisEnabledUnsafe : UIStrings.stateDisabled)
                             }
                             if !action.description.isEmpty {
-                                Text(action.description)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .textSelection(.enabled)
+                                PrivacyEvidenceText(value: action.description, font: .caption, lineLimit: nil)
                             }
                             GuidedCleanupSafeLinkButton(link: action.deepLink) {
                                 onOpenSafeLink(action.deepLink, nil)
@@ -7268,11 +7200,11 @@ private struct GuidedCleanupSafeLinkButton: View {
                 Button {
                     onOpen()
                 } label: {
-                    Label(link.label.isEmpty ? UIStrings.text("guidedCleanup.safeLink.open", "Open safe entry") : link.label, systemImage: "arrowshape.turn.up.right")
+                    Label(link.label.isEmpty ? UIStrings.guidedCleanupSafeLinkOpen : link.label, systemImage: "arrowshape.turn.up.right")
                 }
                 .buttonStyle(.bordered)
                 .disabled(link.canApply)
-                .help(link.canApply ? UIStrings.text("guidedCleanup.safeLink.applyBlocked", "Guided cleanup links cannot apply changes.") : UIStrings.text("guidedCleanup.safeLink.help", "Open an existing safe preview or read-only review entry."))
+                .help(link.canApply ? UIStrings.guidedCleanupSafeLinkApplyBlocked : UIStrings.guidedCleanupSafeLinkHelp)
 
                 Label(UIStrings.guidedCleanupFlowPreviewOnly, systemImage: "eye")
                     .font(.caption2.bold())
@@ -7290,10 +7222,10 @@ private struct GuidedCleanupSafeLinkButton: View {
             }
 
             Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
-                MetadataRow(label: UIStrings.text("guidedCleanup.safeLink.target", "Safe link target"), value: link.target)
-                MetadataRow(label: UIStrings.text("guidedCleanup.safeLink.trigger", "Safe link trigger"), value: link.trigger)
+                MetadataRow(label: UIStrings.guidedCleanupSafeLinkTarget, value: link.target)
+                MetadataRow(label: UIStrings.guidedCleanupSafeLinkTrigger, value: link.trigger)
                 if let method = link.method, !method.isEmpty {
-                    MetadataRow(label: UIStrings.text("guidedCleanup.safeAction.entryMethod", "Entry method"), value: method)
+                    MetadataRow(label: UIStrings.guidedCleanupSafeActionEntryMethod, value: method)
                 }
                 if let detailSection = link.detailSection, !detailSection.isEmpty {
                     MetadataRow(label: UIStrings.detailSection, value: detailSection)
@@ -7485,7 +7417,7 @@ private struct ProviderObservabilityResultView: View {
                 MetadataRow(label: UIStrings.providerObservabilityMetadataRedacted, value: result.metadataRedacted ? UIStrings.llmEnabled : UIStrings.llmSkillAnalysisEnabledUnsafe)
                 MetadataRow(label: UIStrings.providerObservabilityAverageDuration, value: durationLabel(result.summary.averageDurationMS))
                 if let windowDays = result.filters.windowDays {
-                    MetadataRow(label: UIStrings.text("routingAccuracy.window", "Window"), value: "\(windowDays)d")
+                    MetadataRow(label: UIStrings.routingAccuracyWindow, value: "\(windowDays)d")
                 }
                 if let limit = result.filters.limit {
                     MetadataRow(label: UIStrings.text("filter.limit", "Limit"), value: "\(limit)")
@@ -7585,7 +7517,7 @@ private struct ProviderObservabilityDimensionList: View {
                                 MetadataRow(label: UIStrings.providerObservabilityEstimatedCost, value: costLabel(row.estimatedCostUSD))
                                 MetadataRow(label: UIStrings.providerObservabilityAverageDuration, value: durationLabel(row.averageDurationMS))
                             }
-                            RoutingInlineList(title: UIStrings.text("notes", "Notes"), empty: UIStrings.providerObservabilityNoRows, values: row.notes, systemImage: "info.circle")
+                            RoutingInlineList(title: UIStrings.providerObservabilityNotes, empty: UIStrings.providerObservabilityNoRows, values: row.notes, systemImage: "info.circle")
                             RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: row.evidenceRefs, systemImage: "checklist")
                         }
                         .padding(10)
@@ -7639,10 +7571,7 @@ private struct ProviderObservabilityCallList: View {
                                 .textSelection(.enabled)
                         }
                         if !row.detail.isEmpty {
-                            Text(row.detail)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
+                            PrivacyEvidenceText(value: row.detail, font: .caption, lineLimit: nil)
                         }
                         RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: row.evidenceRefs, systemImage: "checklist")
                         RoutingInlineList(title: UIStrings.knowledgeSafetyFlags, empty: UIStrings.taskBenchmarkNoSafetyFlags, values: row.safetyFlags, systemImage: "checkmark.shield")
@@ -7707,10 +7636,7 @@ private struct ProviderObservabilityIssueList: View {
                             }
                         }
                         if !row.detail.isEmpty {
-                            Text(row.detail)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
+                            PrivacyEvidenceText(value: row.detail, font: .caption, lineLimit: nil)
                         }
                         RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: row.evidenceRefs, systemImage: "checklist")
                     }
@@ -7753,14 +7679,11 @@ private struct ProviderObservabilityHintList: View {
                                 MetadataRow(label: UIStrings.text("value", "Value"), value: value)
                             }
                             if let threshold = row.threshold, !threshold.isEmpty {
-                                MetadataRow(label: UIStrings.text("providerObservability.threshold", "Threshold"), value: threshold)
+                                MetadataRow(label: UIStrings.providerObservabilityThreshold, value: threshold)
                             }
                         }
                         if !row.detail.isEmpty {
-                            Text(row.detail)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
+                            PrivacyEvidenceText(value: row.detail, font: .caption, lineLimit: nil)
                         }
                         if let recommendation = row.recommendation, !recommendation.isEmpty {
                             Label(recommendation, systemImage: "arrow.right.circle")
@@ -7796,13 +7719,10 @@ private struct ProviderObservabilityEvidenceList: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Label(item.title, systemImage: "checklist")
                             .font(.callout)
-                        Text(item.detail)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
+                        PrivacyEvidenceText(value: item.detail, font: .caption, lineLimit: nil)
                         HStack(spacing: 8) {
                             if let source = item.source, !source.isEmpty {
-                                Text(source)
+                                PrivacyEvidenceText(value: source, font: .caption2, lineLimit: 1)
                             }
                             if let agent = item.agent, !agent.isEmpty {
                                 Text(DisplayText.agent(agent))
@@ -8026,10 +7946,7 @@ private struct LocalSkillMapNodeList: View {
                             }
 
                             if !node.summary.isEmpty {
-                                Text(node.summary)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .textSelection(.enabled)
+                                PrivacyEvidenceText(value: node.summary, font: .caption, lineLimit: nil)
                             }
 
                             Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
@@ -8102,7 +8019,7 @@ private struct LocalSkillMapEdgeList: View {
                                     MetadataRow(label: UIStrings.localSkillMapStrength, value: RoutingAccuracySummary.confidenceLabel(strength))
                                 }
                                 if let direction = edge.direction, !direction.isEmpty {
-                                    MetadataRow(label: UIStrings.text("localSkillMap.direction", "Direction"), value: direction)
+                                    MetadataRow(label: UIStrings.localSkillMapDirection, value: direction)
                                 }
                             }
 
@@ -8152,10 +8069,7 @@ private struct LocalSkillMapClusterList: View {
                             }
 
                             if !cluster.summary.isEmpty {
-                                Text(cluster.summary)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .textSelection(.enabled)
+                                PrivacyEvidenceText(value: cluster.summary, font: .caption, lineLimit: nil)
                             }
 
                             KnowledgeTokenFlow(title: UIStrings.localSkillMapNodeIDs, values: cluster.nodeIDs)
@@ -8197,10 +8111,7 @@ private struct LocalSkillMapIssueList: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Label(row.title, systemImage: systemImage)
                             .font(.callout)
-                        Text(row.detail)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
+                        PrivacyEvidenceText(value: row.detail, font: .caption, lineLimit: nil)
                         Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 3) {
                             if let severity = row.severity, !severity.isEmpty {
                                 MetadataRow(label: UIStrings.findingSeverityFilter, value: severity)
@@ -9134,11 +9045,7 @@ private struct AgentSessionSkillReviewRecordView: View {
             }
 
             if !record.summary.isEmpty {
-                Text(record.summary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(compact ? 3 : nil)
-                    .textSelection(.enabled)
+                PrivacyEvidenceText(value: record.summary, font: .caption, lineLimit: compact ? 3 : nil)
             }
 
             AgentSessionSkillRefList(title: UIStrings.agentSessionReviewDetectedSkills, skills: record.detectedSkills)
@@ -9255,11 +9162,7 @@ private struct AgentSessionInterferenceList: View {
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
-                        Text(item.detail)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(compact ? 2 : nil)
-                            .textSelection(.enabled)
+                        PrivacyEvidenceText(value: item.detail, font: .caption, lineLimit: compact ? 2 : nil)
                         RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: item.evidenceRefs, systemImage: "checklist")
                     }
                     .padding(compact ? 0 : 8)

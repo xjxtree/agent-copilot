@@ -946,7 +946,7 @@ struct LLMModelTests {
                 "status": "failed",
                 "provider_type": "openai-compatible",
                 "model": "deepseek-v4-flash",
-                "destination_host": "localhost:8317",
+                "destination_host": "llm.example.com",
                 "redaction_status": "redacted-preview-confirmed-required",
                 "raw_prompt_persisted": false,
                 "raw_response_persisted": false,
