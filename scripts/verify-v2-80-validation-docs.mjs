@@ -126,7 +126,7 @@ const requiredReadmeSnippets = [
   "docs/ui-artifacts/v2.80-detail-density/completed.png",
   "V2.80 验证清单（completed）",
   "pnpm verify:v2.80-docs",
-  "V2.83 continued module splitting remains planned",
+  "V2.83 continued module splitting completed",
   "No service method, provider default call, write/apply path, hidden task state, scanner/catalog fact mutation, script execution, credential read, raw prompt/response/trace persistence, cloud sync, telemetry, or public distribution",
 ];
 
@@ -162,7 +162,7 @@ const requiredRoadmapSnippets = [
   "V2.80 Detail navigation and visual density polish completed",
   "PID `82571`",
   "docs/ui-artifacts/v2.80-detail-density/completed.png",
-  "V2.83 remains planned",
+  "V2.83 continued module splitting completed",
 ];
 
 for (const snippet of requiredRoadmapSnippets) {
@@ -175,7 +175,7 @@ const requiredRunbookSnippets = [
   "Detail navigation and visual density polish",
   "PID `82571`",
   "docs/ui-artifacts/v2.80-detail-density/completed.png",
-  "V2.73-V2.82 docs verifiers",
+  "V2.73-V2.83 docs verifiers",
 ];
 
 for (const snippet of requiredRunbookSnippets) {

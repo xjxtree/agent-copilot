@@ -113,7 +113,7 @@ const requiredReferenceChecks = [
   [readme, "README.md", "V2.74 验证清单（completed）"],
   [readme, "README.md", "docs/v2.74-verification-checklist.md"],
   [readme, "README.md", "pnpm verify:v2.74-docs"],
-  [readme, "README.md", "V2.83 continued module splitting remains planned"],
+  [readme, "README.md", "V2.83 continued module splitting completed"],
   [developmentTasks, "docs/development-tasks.md", "v2.74-verification-checklist.md"],
   [developmentTasks, "docs/development-tasks.md", "V2.74 Verification Checklist（completed）"],
   [developmentTasks, "docs/development-tasks.md", "V2.80 Verification Checklist（completed）"],

@@ -126,7 +126,7 @@ const requiredReadmeSnippets = [
   "No fresh Computer Use screenshot is required because V2.81 does not change user-visible native UI.",
   "V2.81 验证清单（completed）",
   "pnpm verify:v2.81-docs",
-  "V2.83 continued module splitting remains planned",
+  "V2.83 continued module splitting completed",
   "no daemon/socket redesign by default, service protocol method/payload changes, provider default calls, write/apply paths, hidden task state, scanner/catalog fact mutation, script execution, credential reads, raw prompt/response/trace persistence, cloud sync, telemetry, public distribution, signing/notarization/DMG/ZIP",
 ];
 
@@ -135,7 +135,7 @@ for (const snippet of requiredReadmeSnippets) {
 }
 
 const requiredAgentsSnippets = [
-  "Current phase: **V2.82 test isolation and core model test floor completed**",
+  "Current phase: **V2.83 continued module splitting completed**",
   "2026-06-15 V2.81 validation",
   "StdioServiceProcessRunner",
   "Task Cockpit cancel/timeout cancels the active service task",
@@ -149,8 +149,8 @@ for (const snippet of requiredAgentsSnippets) {
 }
 
 const requiredDevelopmentSnippets = [
-  "Status: V2.82 test isolation/core model test floor is complete.",
-  "V2.1 through V2.82 are the synchronized completed baseline",
+  "Status: V2.83 continued module splitting is complete.",
+  "V2.1 through V2.83 are the synchronized completed baseline",
   "V2.81 closeout evidence lives in [`v2.81-verification-checklist.md`](./v2.81-verification-checklist.md)",
   "focused Swift cancellation and force-kill tests",
   "no-new-UI screenshot decision",
@@ -163,7 +163,7 @@ for (const snippet of requiredDevelopmentSnippets) {
 
 const requiredRoadmapSnippets = [
   "V2.81 Swift stdio sidecar cancellation cleanup completed",
-  "V2.83 remains planned",
+  "V2.83 continued module splitting completed",
   "Completed: added cancellation/timeout cleanup around short-lived stdio sidecar calls",
   "V2.81 closeout evidence is tracked in [`v2.81-verification-checklist.md`](./v2.81-verification-checklist.md)",
   "no fresh Computer Use screenshot required because no user-visible UI changed",
@@ -174,7 +174,7 @@ for (const snippet of requiredRoadmapSnippets) {
 }
 
 const requiredRunbookSnippets = [
-  "V2.73-V2.82 docs verifiers",
+  "V2.73-V2.83 docs verifiers",
   "`pnpm verify:v2.81-docs`",
   "V2.81 completed verifier",
   "Swift stdio sidecar cancellation cleanup closeout",

@@ -55,7 +55,7 @@ const requiredChecklistSnippets = [
   "pnpm check:privacy                                   # passed",
   "Final status decision: completed.",
   "Real-local UI evidence: not required because V2.78 changed protocol docs",
-  "V2.82 has since completed after V2.78 closeout, V2.83 remains planned",
+  "V2.82 and V2.83 have since completed after V2.78 closeout",
   "No protocol method rename.",
   "No protocol payload expansion.",
   "No provider default calls",

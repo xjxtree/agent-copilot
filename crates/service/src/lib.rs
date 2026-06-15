@@ -37,6 +37,7 @@ use thiserror::Error;
 
 mod cleanup_queue;
 mod project_context;
+mod protocol;
 mod provider;
 
 use cleanup_queue::cleanup_queue_response;
@@ -48,6 +49,10 @@ use project_context::{
     set_project_context, stored_active_adapter_paths, validate_project_context_for_response,
     ProjectContext, ProjectContextParams, ProjectContextState, ProjectContextSummary,
 };
+pub use protocol::{
+    ServiceErrorRecord, ServiceRequest, ServiceResponse, DEFAULT_BUNDLE_ID,
+    SERVICE_PROTOCOL_VERSION, SUPPORTED_METHODS,
+};
 use provider::{
     default_monthly_budget_usd, default_token_limit, delete_provider_profile,
     estimate_prompt_cost_usd, list_provider_profiles, provider_call_metadata_path,
@@ -57,8 +62,6 @@ use provider::{
     TestProviderConnectionParams,
 };
 
-const DEFAULT_BUNDLE_ID: &str = "dev.skills-copilot.native";
-const SERVICE_PROTOCOL_VERSION: u32 = 1;
 const TASK_READINESS_MAX_CANDIDATE_SCAN: usize = 160;
 const TASK_READINESS_MIN_CANDIDATE_SCAN: usize = 48;
 const TASK_READINESS_CANDIDATE_SCAN_MULTIPLIER: usize = 12;
@@ -66,120 +69,6 @@ const TASK_AGGREGATION_TIMEOUT_MS: u64 = 2_000;
 const TASK_COCKPIT_TIMEOUT_MS: u64 = 1_500;
 const REMEDIATION_AGGREGATION_TIMEOUT_MS: u64 = 2_500;
 const REMEDIATION_MAX_DETAIL_SCAN: usize = 240;
-const SUPPORTED_METHODS: &[&str] = &[
-    "app.version",
-    "app.stateSnapshot",
-    "service.status",
-    "adapter.listCapabilities",
-    "adapter.listDiagnostics",
-    "evidence.piWritableHarness",
-    "analysis.scoreSkillQuality",
-    "analysis.detectStaleDrift",
-    "knowledge.search",
-    "knowledge.groupSimilarSkills",
-    "knowledge.buildCapabilityTaxonomy",
-    "knowledge.buildLocalSkillMap",
-    "workspace.checkReadiness",
-    "remediation.plan",
-    "remediation.previewDrafts",
-    "remediation.previewImpact",
-    "remediation.batchReview",
-    "remediation.listHistory",
-    "remediation.recordHistory",
-    "remediation.deleteHistory",
-    "task.checkReadiness",
-    "task.rankSkillRoutes",
-    "task.compareAgentReadiness",
-    "task.buildCockpit",
-    "task.listBenchmarks",
-    "task.saveBenchmark",
-    "task.deleteBenchmark",
-    "task.evaluateBenchmarks",
-    "task.saveRoutingBaseline",
-    "task.detectRoutingRegression",
-    "routing.accuracyDashboard",
-    "skill.lifecycleTimeline",
-    "session.reviewAgentSkillUse",
-    "session.listSkillReviews",
-    "session.deleteSkillReview",
-    "trace.importLocal",
-    "trace.listImports",
-    "trace.deleteImport",
-    "llm.status",
-    "llm.listProviderProfiles",
-    "llm.saveProviderProfile",
-    "llm.deleteProviderProfile",
-    "llm.testProviderConnection",
-    "llm.previewPrompt",
-    "llm.confirmPromptAndSend",
-    "llm.listPromptRuns",
-    "llm.providerObservability",
-    "llm.prepareAction",
-    "llm.prepareSkillAnalysis",
-    "cleanup.listQueue",
-    "cleanup.planGuidedFlow",
-    "cleanup.recordGuidedStep",
-    "comparison.listCrossAgent",
-    "report.exportLocal",
-    "rules.listTuning",
-    "rules.setSeverityOverride",
-    "rules.clearSeverityOverride",
-    "rules.setSuppression",
-    "rules.clearSuppression",
-    "batch.previewSkillToggles",
-    "batch.applySkillToggles",
-    "script.previewExecution",
-    "script.execute",
-    "project.getContext",
-    "project.setContext",
-    "project.clearContext",
-    "project.validateContext",
-    "catalog.listSkills",
-    "catalog.getSkill",
-    "catalog.analysis",
-    "catalog.listFindings",
-    "catalog.listFindingTriage",
-    "catalog.setFindingTriage",
-    "catalog.clearFindingTriage",
-    "catalog.listConflicts",
-    "catalog.importSkill",
-    "catalog.scanClaude",
-    "catalog.scanAll",
-    "skill.exportBundle",
-    "skill.install",
-    "skill.listEvents",
-    "config.toggleSkill",
-    "config.readClaudeSettings",
-    "config.saveClaudeSettings",
-    "snapshot.list",
-    "snapshot.listAgentConfig",
-    "snapshot.previewRollback",
-    "snapshot.rollback",
-];
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct ServiceRequest {
-    pub id: Option<String>,
-    pub method: String,
-    #[serde(default)]
-    pub params: Value,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServiceResponse {
-    pub id: Option<String>,
-    pub ok: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub result: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<ServiceErrorRecord>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServiceErrorRecord {
-    pub code: String,
-    pub message: String,
-}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ServiceStatus {

@@ -10,6 +10,7 @@ const files = {
   app: await read("apps/macos/Sources/SkillsCopilot/App/SkillsCopilotApp.swift"),
   content: await read("apps/macos/Sources/SkillsCopilot/Views/ContentView.swift"),
   detail: await read("apps/macos/Sources/SkillsCopilot/Views/DetailView.swift"),
+  detailOverview: await read("apps/macos/Sources/SkillsCopilot/Views/DetailOverviewSection.swift"),
   detailPrimitives: await read("apps/macos/Sources/SkillsCopilot/Views/DetailPresentationPrimitives.swift"),
   formatter: await read("apps/macos/Sources/SkillsCopilot/Support/Formatters.swift"),
   guidedCleanupModel: await read("apps/macos/Sources/SkillsCopilot/Models/GuidedCleanupFlow.swift"),
@@ -27,13 +28,15 @@ const files = {
   serviceProtocol: await read("docs/service-protocol.md"),
   serviceStatusFixture: await read("fixtures/service-protocol/service.status.response.json"),
   serviceRust: await read("crates/service/src/lib.rs"),
+  serviceRustProtocol: await read("crates/service/src/protocol.rs"),
 };
-files.detailSurface = [files.detail, files.detailPrimitives, files.taskCockpit].join("\n");
+files.detailSurface = [files.detail, files.detailOverview, files.detailPrimitives, files.taskCockpit].join("\n");
 files.serviceIPC = [files.serviceClient, files.serviceProcessRunner].join("\n");
+files.serviceRustSurface = [files.serviceRust, files.serviceRustProtocol].join("\n");
 
 const runServiceBody = extractFunctionBody(files.serviceClient, "runService");
 const serviceRequestBody = extractServiceRequestBody(files.serviceClient);
-const supportedMethods = parseSupportedMethods(files.serviceRust);
+const supportedMethods = parseSupportedMethods(files.serviceRustSurface);
 const statusFixtureMethods = parseStatusFixtureMethods(files.serviceStatusFixture);
 const forbiddenProtocolMethods = supportedMethods.filter((method) => /^(ipc|sidecar|daemon|process|socket)\./.test(method));
 
@@ -80,7 +83,7 @@ const checks = [
   },
   {
     label: "detail sections use bounded menu picker",
-    text: files.detail,
+    text: files.detailSurface,
     pattern: /\.pickerStyle\(\.menu\)[\s\S]*?\.labelsHidden\(\)[\s\S]*?\.frame\(width:\s*240,\s*alignment:\s*\.leading\)/,
   },
   {
@@ -95,7 +98,7 @@ const checks = [
   },
   {
     label: "detail sections expose task-first IA summaries",
-    text: files.detail,
+    text: files.detailSurface,
     pattern: /static var primaryWorkCases:[\s\S]*?\[\.taskCockpit,\s*\.validationWorkbench,\s*\.skillMap,\s*\.guidedCleanup,\s*\.observability,\s*\.analysis\][\s\S]*?UIStrings\.taskCockpitTitle[\s\S]*?UIStrings\.validationWorkbenchTitle[\s\S]*?UIStrings\.guidedCleanupFlowTitle[\s\S]*?UIStrings\.providerObservabilityTitle/,
   },
   {

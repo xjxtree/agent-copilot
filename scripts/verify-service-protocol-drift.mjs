@@ -94,14 +94,14 @@ function parseDocumentedMethods(markdown) {
   return uniqueSorted(methods);
 }
 
-function parseSupportedMethods(rustSource) {
+function parseSupportedMethods(rustSource, label) {
   const block = rustSource.match(/const\s+SUPPORTED_METHODS\s*:\s*&\s*\[\s*&str\s*\]\s*=\s*&\s*\[([\s\S]*?)\];/);
   if (!block) {
-    fail("crates/service/src/lib.rs SUPPORTED_METHODS block was not parseable");
+    fail(`${label} SUPPORTED_METHODS block was not parseable`);
   }
   const methods = collectMethodLiterals(block[1]);
   if (methods.length === 0) {
-    fail("crates/service/src/lib.rs SUPPORTED_METHODS block had no parseable methods");
+    fail(`${label} SUPPORTED_METHODS block had no parseable methods`);
   }
   return methods;
 }
@@ -232,12 +232,14 @@ function formatList(values) {
 
 const docsPath = join(repoRoot, "docs", "service-protocol.md");
 const rustPath = join(repoRoot, "crates", "service", "src", "lib.rs");
+const protocolPath = join(repoRoot, "crates", "service", "src", "protocol.rs");
 const fixturesDir = join(repoRoot, "fixtures", "service-protocol");
 const statusFixturePath = join(fixturesDir, "service.status.response.json");
 
 const documentedMethods = parseDocumentedMethods(readRequired(docsPath));
 const rustSource = readRequired(rustPath);
-const supportedMethods = parseSupportedMethods(rustSource);
+const protocolSource = readRequired(protocolPath);
+const supportedMethods = parseSupportedMethods(protocolSource, "crates/service/src/protocol.rs");
 const dispatchMethods = parseDispatchMethods(rustSource);
 const fixtureMethods = parseFixtureMethods(fixturesDir);
 const statusFixtureMethods = parseStatusFixtureMethods(statusFixturePath);
