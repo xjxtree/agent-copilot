@@ -4,15 +4,17 @@
 
 ## 当前状态
 
-**当前阶段**：V2.80 Detail navigation and visual density polish 已完成。详情页切换主要 Work/detail surface 时会回到稳定顶部锚点，长 evidence/safety 列表使用 counted/collapsible、截图安全的密集展示。V2.80 不引入 service method、provider 默认调用、write/apply path、hidden task state、scanner/catalog fact mutation、script execution、credential read、raw prompt/response/trace persistence、cloud sync、telemetry 或 public distribution。
+**当前阶段**：V2.81 Swift service IPC cancellation cleanup completed. V2.81 keeps the existing short-lived stdio sidecar shape while adding cancellation cleanup, bounded stubborn-process termination, and Task Cockpit service-task cancellation propagation without changing protocol or user-visible UI semantics.
 
-**V2.78 validation**：multi-agent V2.78 gate parity implementation completed; `pnpm verify:service-protocol-drift`, `pnpm verify:v2.78-docs`, `pnpm verify:gate-parity`, focused service protocol tests, Swift tests, `pnpm check:macos`, `pnpm check:privacy`, and `git diff --check` passed. V2.81-V2.83 remain planned after V2.80 closeout.
+**V2.78 validation**：multi-agent V2.78 gate parity implementation completed; `pnpm verify:service-protocol-drift`, `pnpm verify:v2.78-docs`, `pnpm verify:gate-parity`, focused service protocol tests, Swift tests, `pnpm check:macos`, `pnpm check:privacy`, and `git diff --check` passed. V2.81 is now completed; V2.82-V2.83 remain planned after V2.81 closeout.
 
 **V2.79 validation**：multi-agent V2.79 implementation completed; `pnpm verify:v2.79-docs`, `pnpm verify:gate-parity`, `pnpm verify:macos-ui-layout`, `swift test --package-path apps/macos`, `pnpm check:macos`, `pnpm check:privacy`, screenshot artifact verification, and `git diff --check` passed. Unlocked Computer Use targeted `dist/SkillsCopilot.app`, resolved PID `68064` and `skills-copilot.main-window`, verified localized Work surfaces and `skills-copilot.validation-workbench`, then captured app-window evidence at [`docs/ui-artifacts/v2.79-privacy-localization/completed.png`](./docs/ui-artifacts/v2.79-privacy-localization/completed.png). Generalized capture first failed closed with `stale-bundle` because an older same-name checkout window was visible; exact PID capture succeeded. No credential reads, network behavior change, scanner/catalog fact mutation, provider/write/script/cloud/telemetry expansion was added.
 
 **V2.80 validation**：multi-agent V2.80 implementation completed; `swift test --package-path apps/macos`, `pnpm verify:macos-ui-layout`, `pnpm verify:v2.80-docs`, `pnpm verify:gate-parity`, `pnpm check:macos`, `pnpm check:privacy`, screenshot artifact verification, and `git diff --check` passed. Unlocked Computer Use targeted `dist/SkillsCopilot.app`, resolved PID `82571` and `skills-copilot.main-window`, scrolled a real-catalog `复查` detail surface to the mid-panel quality area, switched to `验证工作台`, verified `skills-copilot.validation-workbench` returned to the top of the Detail surface, and captured app-window evidence at [`docs/ui-artifacts/v2.80-detail-density/completed.png`](./docs/ui-artifacts/v2.80-detail-density/completed.png). No service method, provider default call, write/apply path, hidden task state, scanner/catalog fact mutation, script execution, credential read, raw prompt/response/trace persistence, cloud sync, telemetry, or public distribution was added.
 
-**下一版本线**：V2.81 Swift service IPC cancellation cleanup；V2.82 provider-test env isolation + core model tests；V2.83 continued module splitting。2026-06-15 Minimax-m3 / GLM-5.1 review findings are assigned into V2.81-V2.83 after V2.80 closeout.
+**V2.81 validation**：multi-agent V2.81 implementation completed; Swift `ServiceClient` delegates stdio sidecar execution to a cancellable runner, Task Cockpit cancel/timeout now cancels the active service task, and focused Swift tests cover normal cancellation plus TERM-ignoring sidecar force-kill cleanup. `swift test --package-path apps/macos`, `pnpm verify:macos-ui-layout`, `pnpm verify:service-protocol-drift`, `pnpm verify:v2.81-docs`, `pnpm verify:gate-parity`, `pnpm check:macos`, `pnpm check:privacy`, and `git diff --check` passed. No fresh Computer Use screenshot is required because V2.81 does not change user-visible native UI. Boundary preserved: no daemon/socket redesign by default, service protocol method/payload changes, provider default calls, write/apply paths, hidden task state, scanner/catalog fact mutation, script execution, credential reads, raw prompt/response/trace persistence, cloud sync, telemetry, public distribution, signing/notarization/DMG/ZIP.
+
+**下一版本线**：V2.82 provider-test env isolation + core model tests and V2.83 continued module splitting remain planned。2026-06-15 Minimax-m3 / GLM-5.1 review findings assigned into V2.81 are complete; remaining findings stay assigned to V2.82-V2.83 after V2.81 closeout.
 
 **近期主线**：V2.68-V2.72 的 post-V2.67 consolidation 已收口。事实层仍由本地 scanner/rules/catalog 提供；当前重点是保持 task cockpit、guided cleanup、screenshot-safe evidence、module boundaries、safe links 和 hardened validation 稳定。短期不做全平台 UI 适配、正式签名 release、notarization、DMG/ZIP 或 public distribution。OpenClaw/Hermes writable/install 与 Pi install 仍保持 blocked；Pi production toggle 仅限 V2.37 evidence-backed guarded native scope，不自动开放兼容根写入。
 
@@ -102,7 +104,7 @@
 | V2.78 | Protocol / validation gate parity | 已完成：同步 service protocol 方法文档与 88 个 `SUPPORTED_METHODS`，补 docs drift verifier、CI/local gate parity、V2.46-V2.64 verification-history governance，且无 protocol/product-scope expansion |
 | V2.79 | Privacy fixture and evidence-surface localization sweep | 已完成：替换 local host-port fixture，扩展隐私扫描，并统一 Guided Cleanup、Skill Map、Review、Cockpit、Provider Observability、Validation Workbench 等证据面板的路径脱敏/折叠/reveal 与中文本地化；`pnpm verify:v2.79-docs` 验证完成态 closeout |
 | V2.80 | Detail navigation and visual density polish | 已完成：详情页切换重置到稳定 top anchor，dense evidence/safety 列表 counted/collapsible，`pnpm verify:v2.80-docs` 与 unlocked real-local evidence 已收口 |
-| V2.81 | Swift service IPC cancellation cleanup | 规划：为短生命周期 stdio sidecar 调用增加取消/超时/子进程清理，不默认引入 daemon/socket |
+| V2.81 | Swift service IPC cancellation cleanup | 已完成：短生命周期 stdio sidecar 增加取消清理、TERM 后 SIGKILL 升级、pipe handle cleanup 与 Task Cockpit service-task cancellation；不默认引入 daemon/socket，不改 service protocol |
 | V2.82 | Test isolation and core model test floor | 规划：隔离 provider env mutation 测试，并补 core model serde/stability 测试 |
 | V2.83 | Continued module splitting | 规划：继续按既有 domain 拆分大型 Rust/Swift service、view、store、test 文件，不改变产品语义 |
 
@@ -160,6 +162,7 @@
 | V2.78 验证清单（completed） | [`docs/v2.78-verification-checklist.md`](./docs/v2.78-verification-checklist.md) |
 | V2.79 验证清单（completed） | [`docs/v2.79-verification-checklist.md`](./docs/v2.79-verification-checklist.md) |
 | V2.80 验证清单（completed） | [`docs/v2.80-verification-checklist.md`](./docs/v2.80-verification-checklist.md) |
+| V2.81 验证清单（completed） | [`docs/v2.81-verification-checklist.md`](./docs/v2.81-verification-checklist.md) |
 | MVP 施工图 | [`docs/mvp-implementation-plan.md`](./docs/mvp-implementation-plan.md) |
 | 路线图 | [`docs/roadmap.md`](./docs/roadmap.md) |
 
@@ -227,7 +230,7 @@ pnpm verify:v2.80-docs
 | `pnpm verify:macos-ui-layout` | 静态检查原生 macOS shell 的关键布局约束。 |
 | `pnpm verify:screenshot-artifacts` | 验证 `docs/ui-artifacts/**/*.png` 可读、非黑屏/非单色，并扫描二进制字符串中的明显路径或 token；仍需人工视觉复核。 |
 | `pnpm verify:service-protocol-drift` | Service protocol drift verifier：检查 `SUPPORTED_METHODS`、`handle_result` dispatch、`docs/service-protocol.md` method table、`service.status.supported_methods` fixture 与 request/response fixture cases 一致。 |
-| `pnpm verify:gate-parity` | Gate parity lane：把 protocol drift、V2.73-V2.80 docs verifiers、validation blocker verifier 和 screenshot artifact verifier 串成 CI/local 共享的 deterministic gate。 |
+| `pnpm verify:gate-parity` | Gate parity lane：把 protocol drift、V2.73-V2.81 docs verifiers、validation blocker verifier 和 screenshot artifact verifier 串成 CI/local 共享的 deterministic gate。 |
 | `pnpm verify:v2.73-docs` | 验证 V2.73 completed checklist 覆盖 Cockpit bounded loading、timeout/fallback/cancel/retry、unlocked real-local Computer Use、截图证据、命令记录和 safety-boundary gates。 |
 | `pnpm verify:v2.74-docs` | 验证 V2.74 completed checklist 覆盖 exact workspace bundle/PID targeting、duplicate same-bundle detection、canonical blocker handling、unlocked real-local Computer Use evidence、截图证据和 no signing/notarization/distribution scope。 |
 | `pnpm verify:v2.75-docs` | 验证 V2.75 completed checklist 覆盖 AX-settable task input、Chinese text、paste/automation text、multiline tasks、leading/trailing whitespace、emoji、explicit submit、focus/result stability、real-local Computer Use evidence、截图证据和 no raw prompt persistence/cloud/provider/write/execute/credential/telemetry scope。 |
@@ -236,6 +239,7 @@ pnpm verify:v2.80-docs
 | `pnpm verify:v2.78-docs` | 验证 V2.78 protocol / validation gate parity completed closeout：包含 Service protocol drift、CI/local gate parity、V2.46-V2.64 history governance、command results 和 no protocol/product-scope expansion boundary。 |
 | `pnpm verify:v2.79-docs` | 验证 V2.79 completed checklist 覆盖 privacy fixture hardening、evidence-surface localization sweep、PID `68064` real-local Computer Use、截图证据、`stale-bundle` fail-closed 记录，以及 no credential reads, network behavior change, scanner/catalog fact mutation, provider/write/script/cloud/telemetry expansion。 |
 | `pnpm verify:v2.80-docs` | 验证 V2.80 completed checklist 覆盖 Detail navigation and visual density polish、PID `82571` real-local Computer Use、截图证据、dense disclosure/readability checks，以及 no service method/provider/write/hidden-state/scanner/script/credential/raw-persistence/cloud/telemetry/public-distribution expansion。 |
+| `pnpm verify:v2.81-docs` | 验证 V2.81 completed closeout 覆盖 Swift stdio sidecar cancellation cleanup、focused cancellation/force-kill tests、shared gate evidence、no fresh UI screenshot required decision，以及 no daemon/socket redesign by default, service protocol method/payload changes, provider default calls, write/apply paths, hidden task state, scanner/catalog fact mutation, script execution, credential reads, raw prompt/response/trace persistence, cloud sync, telemetry, public distribution, signing/notarization/DMG/ZIP。 |
 
 ### Fixture smoke 说明
 

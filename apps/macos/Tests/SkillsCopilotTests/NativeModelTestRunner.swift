@@ -81,6 +81,9 @@ public func runNativeModelTests() {
         try MainWindowModelTests().run()
         try SkillListModelTests().run()
         try runAsyncTest {
+            try await ServiceClientProcessTests().run()
+        }
+        try runAsyncTest {
             try await SkillStoreTests().run()
         }
         fputs("SkillsCopilotTests: native list/store model checks passed\n", stderr)

@@ -14,6 +14,8 @@ const files = {
   formatter: await read("apps/macos/Sources/SkillsCopilot/Support/Formatters.swift"),
   guidedCleanupModel: await read("apps/macos/Sources/SkillsCopilot/Models/GuidedCleanupFlow.swift"),
   privacyPath: await read("apps/macos/Sources/SkillsCopilot/Views/PrivacyPathView.swift"),
+  serviceClient: await read("apps/macos/Sources/SkillsCopilot/Services/ServiceClient.swift"),
+  serviceProcessRunner: await read("apps/macos/Sources/SkillsCopilot/Services/ServiceProcessRunner.swift"),
   settings: await read("apps/macos/Sources/SkillsCopilot/Views/SettingsView.swift"),
   sidebar: await read("apps/macos/Sources/SkillsCopilot/Views/SidebarView.swift"),
   store: await read("apps/macos/Sources/SkillsCopilot/Stores/SkillStore.swift"),
@@ -22,8 +24,18 @@ const files = {
   validationWorkbench: await read("apps/macos/Sources/SkillsCopilot/Views/ValidationWorkbenchPanel.swift"),
   material: await read("apps/macos/Sources/SkillsCopilot/Views/AdaptiveMaterialSurface.swift"),
   localizable: await read("apps/macos/Sources/SkillsCopilot/Resources/en.lproj/Localizable.strings"),
+  serviceProtocol: await read("docs/service-protocol.md"),
+  serviceStatusFixture: await read("fixtures/service-protocol/service.status.response.json"),
+  serviceRust: await read("crates/service/src/lib.rs"),
 };
 files.detailSurface = [files.detail, files.detailPrimitives, files.taskCockpit].join("\n");
+files.serviceIPC = [files.serviceClient, files.serviceProcessRunner].join("\n");
+
+const runServiceBody = extractFunctionBody(files.serviceClient, "runService");
+const serviceRequestBody = extractServiceRequestBody(files.serviceClient);
+const supportedMethods = parseSupportedMethods(files.serviceRust);
+const statusFixtureMethods = parseStatusFixtureMethods(files.serviceStatusFixture);
+const forbiddenProtocolMethods = supportedMethods.filter((method) => /^(ipc|sidecar|daemon|process|socket)\./.test(method));
 
 const checks = [
   {
@@ -332,6 +344,67 @@ const detailEvidenceLists = [
   "ProviderObservabilityEvidenceList",
 ];
 
+const nativeIPCCleanupChecks = [
+  {
+    label: "V2.81 ServiceClient keeps short-lived stdio Process IPC shape",
+    passed: /Process\(\)/.test(files.serviceIPC)
+      && /\.standardInput\s*=\s*stdin/.test(files.serviceIPC)
+      && /\.standardOutput\s*=\s*stdout/.test(files.serviceIPC)
+      && /\.standardError\s*=\s*stderr/.test(files.serviceIPC),
+  },
+  {
+    label: "V2.81 ServiceClient wraps runService with task cancellation cleanup",
+    passed: /processRunner\.run\(executableURL:\s*resolveServiceURL\(\),\s*input:\s*input\)/.test(runServiceBody)
+      && /withTaskCancellationHandler/.test(files.serviceProcessRunner),
+  },
+  {
+    label: "V2.81 ServiceClient terminates and reaps the child process on cancel or timeout",
+    passed: /terminate\s*\(/.test(files.serviceProcessRunner)
+      && /waitUntilExit\s*\(/.test(files.serviceProcessRunner)
+      && /(onCancel|Task\.isCancelled|Cancellation|cancel|timeout|timedOut|forceTerminate)/i.test(files.serviceProcessRunner),
+  },
+  {
+    label: "V2.81 ServiceClient closes stdin, stdout, and stderr handles during IPC cleanup",
+    passed: countMatches(files.serviceIPC, /fileHandleForWriting[\s\S]{0,180}\.(?:close|closeFile)\s*\(/g) >= 1
+      && /stdinWriter\?\.(?:close|closeFile)\s*\(/.test(files.serviceProcessRunner)
+      && /stdoutReader\?\.(?:close|closeFile)\s*\(/.test(files.serviceProcessRunner)
+      && /stderrReader\?\.(?:close|closeFile)\s*\(/.test(files.serviceProcessRunner),
+  },
+  {
+    label: "V2.81 ServiceClient clears pipe readability handlers or closes read handles",
+    passed: /readabilityHandler\s*=\s*nil/.test(files.serviceIPC)
+      || (/stdoutReader\?\.(?:close|closeFile)\s*\(/.test(files.serviceProcessRunner)
+        && /stderrReader\?\.(?:close|closeFile)\s*\(/.test(files.serviceProcessRunner)),
+  },
+  {
+    label: "V2.81 ServiceClient protects continuations from stale or duplicate completion",
+    passed: /(resumeOnce|finishOnce|completeOnce|didResume|hasResumed|isCompleted|completed|finished|cleanedUp|stale)/i.test(files.serviceIPC)
+      && /(NSLock|DispatchQueue|ManagedAtomic|lock\s*\(|actor\b)/.test(files.serviceIPC)
+      && /(if\s+cleanedUp|guard\s+!.*cleanedUp|markCancelled|Task\.checkCancellation)/s.test(files.serviceProcessRunner),
+  },
+  {
+    label: "V2.81 ServiceClient does not introduce a daemon, socket, XPC, or network redesign",
+    passed: !/(^|\n)\s*import\s+Network\b|NWListener|NWConnection|NSXPCConnection|URLSessionWebSocketTask|SocketPort|UnixDomainSocket|\bdaemon\b|\blaunchd\b/.test(files.serviceIPC),
+  },
+  {
+    label: "V2.81 ServiceRequest IPC payload remains id, method, and params only",
+    passed: /let\s+id:\s*String/.test(serviceRequestBody)
+      && /let\s+method:\s*String/.test(serviceRequestBody)
+      && /let\s+params:\s*Params/.test(serviceRequestBody)
+      && !/(cancel|timeout|pid|socket|daemon|token)/i.test(serviceRequestBody),
+  },
+  {
+    label: "V2.81 protocol method surface remains the V2.78 88-method contract",
+    passed: supportedMethods.length === 88
+      && statusFixtureMethods.length === 88
+      && /current count is 88 methods/.test(files.serviceProtocol),
+  },
+  {
+    label: "V2.81 protocol surface has no IPC control, daemon, process, or socket methods",
+    passed: forbiddenProtocolMethods.length === 0,
+  },
+];
+
 const customChecks = [
   {
     label: "V2.80 detail evidence lists are row-capped and use privacy rendering",
@@ -342,6 +415,7 @@ const customChecks = [
         && body.includes("PrivacyEvidenceText(value: source");
     }),
   },
+  ...nativeIPCCleanupChecks,
 ];
 
 const failures = [
@@ -387,4 +461,73 @@ function extractStructBody(text, structName) {
   }
 
   return "";
+}
+
+function extractFunctionBody(text, functionName) {
+  const match = new RegExp(`func\\s+${escapeRegex(functionName)}\\b`).exec(text);
+  if (!match) {
+    return "";
+  }
+  return extractBalancedBody(text, match.index);
+}
+
+function extractServiceRequestBody(text) {
+  const marker = "struct ServiceRequest";
+  const start = text.indexOf(marker);
+  if (start === -1) {
+    return "";
+  }
+  return extractBalancedBody(text, start);
+}
+
+function extractBalancedBody(text, start) {
+  const openBrace = text.indexOf("{", start);
+  if (openBrace === -1) {
+    return "";
+  }
+
+  let depth = 0;
+  for (let index = openBrace; index < text.length; index += 1) {
+    const char = text[index];
+    if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return text.slice(openBrace + 1, index);
+      }
+    }
+  }
+
+  return "";
+}
+
+function parseSupportedMethods(rustSource) {
+  const block = rustSource.match(/const\s+SUPPORTED_METHODS\s*:\s*&\s*\[\s*&str\s*\]\s*=\s*&\s*\[([\s\S]*?)\];/);
+  if (!block) {
+    return [];
+  }
+  return uniqueSorted([...block[1].matchAll(/"([a-z]+\.[A-Za-z][A-Za-z0-9]*)"/g)].map((match) => match[1]));
+}
+
+function parseStatusFixtureMethods(text) {
+  try {
+    const fixture = JSON.parse(text);
+    const methods = fixture?.result?.supported_methods;
+    return Array.isArray(methods) ? uniqueSorted(methods.filter((method) => typeof method === "string")) : [];
+  } catch {
+    return [];
+  }
+}
+
+function uniqueSorted(values) {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
+}
+
+function countMatches(text, pattern) {
+  return [...text.matchAll(pattern)].length;
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

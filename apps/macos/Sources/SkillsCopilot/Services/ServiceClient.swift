@@ -1075,6 +1075,12 @@ final class ServiceClient {
         }
     }
 
+    private let processRunner: ServiceProcessRunning
+
+    init(processRunner: ServiceProcessRunning = StdioServiceProcessRunner()) {
+        self.processRunner = processRunner
+    }
+
     func status() async throws -> ServiceStatus {
         try await call(method: "service.status", params: EmptyParams())
     }
@@ -2469,31 +2475,7 @@ final class ServiceClient {
     }
 
     private func runService(input: Data) async throws -> Data {
-        try await Task.detached(priority: .userInitiated) {
-            let process = Process()
-            process.executableURL = try self.resolveServiceURL()
-
-            let stdin = Pipe()
-            let stdout = Pipe()
-            let stderr = Pipe()
-            process.standardInput = stdin
-            process.standardOutput = stdout
-            process.standardError = stderr
-
-            try process.run()
-            stdin.fileHandleForWriting.write(input)
-            try stdin.fileHandleForWriting.close()
-
-            let output = stdout.fileHandleForReading.readDataToEndOfFile()
-            let errorOutput = stderr.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-
-            if process.terminationStatus != 0 {
-                let message = String(data: errorOutput, encoding: .utf8) ?? ""
-                throw ClientError.processFailed(process.terminationStatus, message)
-            }
-            return output
-        }.value
+        try await processRunner.run(executableURL: resolveServiceURL(), input: input)
     }
 
     private func resolveServiceURL() throws -> URL {

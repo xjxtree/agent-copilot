@@ -240,6 +240,7 @@ final class SkillStore: ObservableObject {
     private var agentConfigSnapshotLoadGeneration = 0
     private var taskCockpitOperationID: UUID?
     private var taskCockpitTimeoutTask: Task<Void, Never>?
+    private var taskCockpitServiceTask: Task<TaskCockpitResult, Error>?
     private let taskCockpitTimeoutSeconds: TimeInterval
 
     init(service: ServiceClient, taskCockpitTimeoutSeconds: TimeInterval = 15) {
@@ -1706,11 +1707,13 @@ final class SkillStore: ObservableObject {
         scheduleTaskCockpitTimeout(operationID: operationID, taskText: taskText)
 
         let agent = agentFilter == .all ? nil : agentFilter.rawValue
-        do {
-            let result = try await service.buildTaskCockpit(
+        let project = activeProjectContext
+        let selectedSkill = selectedSkill
+        let serviceTask = Task {
+            try await service.buildTaskCockpit(
                 taskText: taskText,
                 agent: agent,
-                project: activeProjectContext,
+                project: project,
                 selectedSkill: selectedSkill,
                 limit: 8,
                 includeSessionReview: true,
@@ -1718,6 +1721,11 @@ final class SkillStore: ObservableObject {
                 includeRemediationContext: true,
                 includeEvidence: true
             )
+        }
+        taskCockpitServiceTask = serviceTask
+
+        do {
+            let result = try await serviceTask.value
             guard isCurrentTaskCockpitOperation(operationID) else { return }
             taskCockpitResult = result
             if let diagnosticReason = result.recoveryDiagnosticReason {
@@ -1755,6 +1763,8 @@ final class SkillStore: ObservableObject {
         let message = UIStrings.taskCockpitCancelled
         taskCockpitTimeoutTask?.cancel()
         taskCockpitTimeoutTask = nil
+        taskCockpitServiceTask?.cancel()
+        taskCockpitServiceTask = nil
         taskCockpitOperationID = nil
         isBuildingTaskCockpit = false
         if publishFallbackResult {
@@ -2800,6 +2810,8 @@ final class SkillStore: ObservableObject {
         let message = UIStrings.taskCockpitTimedOut(timeoutSeconds)
         taskCockpitOperationID = nil
         taskCockpitTimeoutTask = nil
+        taskCockpitServiceTask?.cancel()
+        taskCockpitServiceTask = nil
         isBuildingTaskCockpit = false
         taskCockpitResult = .unavailable(taskText: taskText, reason: message)
         taskCockpitOperationState = taskCockpitOperationState.finished(
@@ -2812,6 +2824,7 @@ final class SkillStore: ObservableObject {
         guard isCurrentTaskCockpitOperation(operationID) else { return }
         taskCockpitTimeoutTask?.cancel()
         taskCockpitTimeoutTask = nil
+        taskCockpitServiceTask = nil
         taskCockpitOperationID = nil
         isBuildingTaskCockpit = false
         taskCockpitOperationState = taskCockpitOperationState.finished(
