@@ -33,6 +33,8 @@ const files = {
   settings: await read("apps/macos/Sources/SkillsCopilot/Views/SettingsView.swift"),
   sidebar: await read("apps/macos/Sources/SkillsCopilot/Views/SidebarView.swift"),
   store: await read("apps/macos/Sources/SkillsCopilot/Stores/SkillStore.swift"),
+  storeNavigation: await read("apps/macos/Sources/SkillsCopilot/Stores/SkillStoreNavigationActions.swift"),
+  storeWorkflow: await read("apps/macos/Sources/SkillsCopilot/Stores/SkillStoreWorkflowSelectors.swift"),
   taskCockpit: await read("apps/macos/Sources/SkillsCopilot/Views/TaskCockpitPanel.swift"),
   taskInput: await read("apps/macos/Sources/SkillsCopilot/Views/TaskInputTextEditor.swift"),
   validationWorkbench: await read("apps/macos/Sources/SkillsCopilot/Views/ValidationWorkbenchPanel.swift"),
@@ -65,6 +67,11 @@ files.serviceIPC = [
   files.serviceClient,
   files.serviceClientTransport,
   files.serviceProcessRunner,
+].join("\n");
+files.storeSurface = [
+  files.store,
+  files.storeNavigation,
+  files.storeWorkflow,
 ].join("\n");
 files.serviceRustSurface = [files.serviceRust, files.serviceRustProtocol].join("\n");
 
@@ -147,12 +154,12 @@ const checks = [
   },
   {
     label: "guided cleanup safe links route through the store",
-    text: files.store,
+    text: files.storeSurface,
     pattern: /func openGuidedCleanupSafeLink\([\s\S]*?guard !link\.canApply[\s\S]*?case "selectDetailSection",\s*"openSafeBatchPreviewPanel":[\s\S]*?return[\s\S]*?case "previewRemediationDrafts":[\s\S]*?await previewRemediationDrafts\(\)/,
   },
   {
     label: "guided cleanup safe batch links do not apply changes directly",
-    text: files.store,
+    text: files.storeSurface,
     pattern: /case "selectDetailSection",\s*"openSafeBatchPreviewPanel":\s*return/,
   },
   {

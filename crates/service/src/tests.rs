@@ -10,6 +10,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+mod benchmarks;
 mod dispatch_fixtures;
 mod llm_provider;
 mod protocol_fixtures;

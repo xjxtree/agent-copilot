@@ -53,6 +53,11 @@ Risk/security notes:
 - CI now includes `cargo audit` and Rust API docs; `verify:gate-parity`
   includes `.mjs` syntax verification, Rust doc generation, module-size,
   and benchmark trend verification.
+- V2.73-V2.86 docs verification now uses one consolidated
+  `verify-version-validation-docs.mjs` implementation behind the existing
+  per-version pnpm aliases.
+- Dedicated benchmark commands now cover task readiness, routing confidence,
+  and knowledge search, with measured baselines in `docs/benchmark-trends.md`.
 
 Validation posture:
 
@@ -62,8 +67,11 @@ Validation posture:
 - DetailView section splitting was already below the target size and remains
   covered by existing split view files.
 - `crates/commands/src/lib.rs` is below the default 5k module-size gate with no
-  legacy exception; `ServiceClient` RPC methods are split into domain extension
-  files behind the existing shared decode/error path.
+  legacy exception; catalog query/refresh/mapping logic is split out of
+  `crates/catalog/src/lib.rs`; `ServiceClient` RPC methods are split into domain
+  extension files behind the existing shared decode/error path; and `SkillStore`
+  read-only selectors/navigation actions are split without widening state write
+  access.
 
 ### V2.86 - 2026-06-16
 

@@ -1126,7 +1126,7 @@ V2.78 records completed protocol/docs/gate parity requirements without changing 
 - Dispatch coverage: `supported_methods_have_dispatch_coverage` remains the focused test for ensuring every supported method has dispatch behavior.
 - Fixture coverage: `service_protocol_fixtures_decode` and the shared fixtures under `fixtures/service-protocol` remain the protocol shape regression gate.
 - Docs drift: `pnpm verify:service-protocol-drift` should compare protocol docs against `SUPPORTED_METHODS` and should not count JSON shapes, environment variable names, table result examples, or adapter status values as methods.
-- Gate parity: local and CI-equivalent checks include Rust fmt/test/clippy, focused service protocol tests, Swift tests, validation blocker verification, screenshot artifact verification, V2.73-V2.86 docs verifiers, `pnpm verify:module-size`, `pnpm verify:gate-parity`, privacy scan, `pnpm check:macos`, and `git diff --check`.
+- Gate parity: local and CI-equivalent checks include Rust fmt/test/clippy, focused service protocol tests, Swift tests, validation blocker verification, screenshot artifact verification, the consolidated V2.73-V2.86 docs verifier, `pnpm verify:module-size`, `pnpm verify:gate-parity`, privacy scan, `pnpm check:macos`, and `git diff --check`.
 - V2.46-V2.64 history: preserve the historical command evidence and explicit Computer Use/window/tool-layer blockers as recorded. Do not backfill screenshots, PIDs, or successful command claims for evidence that was not actually captured.
 - Safety boundary: no method rename, no payload expansion, no protocol version bump, no provider default call, no write/apply/script/credential/cloud/telemetry behavior, and no weakening of real-local validation standards.
 
@@ -1177,7 +1177,7 @@ V2.86 is a refactor-only helper/test split and validation-gate hardening slice. 
 
 Helper code now lives in include files such as `crates/service/src/service_support_helpers.rs`, `crates/service/src/service_knowledge_helpers.rs`, `crates/service/src/service_remediation_helpers.rs`, `crates/service/src/service_task_helpers.rs`, `crates/service/src/service_observability_helpers.rs`, `crates/service/src/service_llm_prompt_helpers.rs`, and `crates/service/src/service_guided_cleanup_helpers.rs`. Rust service tests now live in `crates/service/src/tests.rs` plus focused chunks under `crates/service/src/tests/`.
 
-`pnpm verify:module-size` checks the split service files, helper files, `crates/service/src/tests/` chunks, and Swift Detail files against the <= 5000-line target. The module-size gate is part of `pnpm verify:gate-parity` together with V2.84-V2.86 docs verifiers.
+`pnpm verify:module-size` checks the split service files, helper files, `crates/service/src/tests/` chunks, and Swift Detail files against the <= 5000-line target. The module-size gate is part of `pnpm verify:gate-parity` together with the consolidated V2 docs gates.
 
 No protocol version bump, new UI surface, provider default calls, write/apply paths, hidden task state, scanner/catalog fact mutation, script execution, credential reads, raw prompt/response/trace persistence, cloud sync, telemetry, public distribution, signing, notarization, DMG, or ZIP work was added.
 
