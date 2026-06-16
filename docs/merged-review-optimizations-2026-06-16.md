@@ -31,13 +31,13 @@ Status:
 已完成：
 
 - P0 五项均已落地：module-size gate 扩展、catalog refresh 事务、LLM draft output 强 redaction、Swift stdio timeout/error 测试、script audit path containment。
-- P1 结构项已推进：service helper/test `include!` 改真实模块，`commands` 拆出 `script_execution.rs`，catalog schema/migration 拆到 `schema.rs`，adapter 共享 helper 拆到 `shared.rs`，Swift `ServiceClient` transport 与 `SkillStore` derived state 拆文件。
-- P2 门禁项已推进：新增 `verify:js-syntax`，CI 新增 `cargo audit` job，文档边界写入 `development-tasks` / `CHANGELOG` / runbook。
+- P1 结构项已推进：service helper/test `include!` 改真实模块，`commands` 拆出 `analysis.rs` / `script_execution.rs` / `tests.rs` 并降到 `< 5k`，catalog schema/migration 拆到 `schema.rs`，adapter 共享 helper 拆到 `shared.rs`，Swift `ServiceClient` transport 与 RPC domain extension 拆文件，`SkillStore` derived state 拆文件。
+- P2 门禁项已推进：新增 `verify:js-syntax`、`verify:rust-docs`、`verify:benchmark-trends`，CI 新增 `cargo audit` 与 Rust API docs job，文档边界写入 `development-tasks` / `CHANGELOG` / runbook。
 
 继续跟踪：
 
-- `crates/commands/src/lib.rs` 仍有 shrinking legacy budget，需继续分域拆到 `< 5k` 行。
-- `SkillStore.swift`、`ServiceClient.swift`、catalog query/refresh/mapping、老版本 docs verifier、benchmark 趋势记录、公有 API doc gate 继续作为近期任务管理，不再另开重复 review 文档。
+- `SkillStore.swift` 继续作为状态 facade/domain-store 后续任务管理；当前未为形式拆分放宽 `@Published private(set)` 写权限。
+- catalog query/refresh/mapping、老版本 docs verifier 合并、task readiness/routing/knowledge search benchmark 专项脚本继续作为近期任务管理，不再另开重复 review 文档。
 
 ## P0：应优先修复
 
@@ -45,7 +45,7 @@ Status:
 
 结论：**有效。**
 
-当前 `scripts/verify-module-size.mjs` 主要通过硬编码文件和少量目录做检查，未覆盖多个已经明显超大的关键文件。例如：
+原始问题中，`scripts/verify-module-size.mjs` 主要通过硬编码文件和少量目录做检查，未覆盖多个已经明显超大的关键文件。例如：
 
 - `crates/commands/src/lib.rs` 约 10k 行。
 - `crates/catalog/src/lib.rs` 约 2.7k 行。
@@ -58,6 +58,8 @@ Status:
 - 覆盖 `crates/*/src/**/*.rs`、`apps/macos/Sources/**/*.swift`、`scripts/**/*.mjs`。
 - 对当前遗留大文件设置递减阈值，而不是永久豁免。
 - 将 Rust/Swift/脚本三类阈值分开，避免用同一标准套所有文件。
+
+Closeout：`verify:module-size` 现已目录遍历 `crates`、`apps/macos/Sources`、`apps/macos/Tests`、`scripts`，默认预算为 `.rs/.swift/.mjs <= 5000`，且不再保留 `commands` legacy 例外。
 
 ### 2. Catalog refresh 操作缺少事务保护
 
@@ -135,6 +137,8 @@ Status:
 - 保持 public API 兼容，先搬迁实现再调整接口。
 - 为拆分后的模块设置 module-size gate，避免重新堆回单文件。
 
+Closeout：`crates/commands/src/lib.rs` 已拆出 `analysis.rs`、`script_execution.rs`、`tests.rs`，当前主文件低于 5k 行，并由 `verify:module-size` 默认规则强制。
+
 ### 3. `SkillStore.swift` 需要从 god-object 拆为域 store
 
 结论：**有效。**
@@ -158,6 +162,8 @@ Status:
 - 拆出 request builder、response envelope、process runner、domain client extension。
 - 按 service 方法域组织调用，不改变协议 payload。
 - 保留统一 decode/error mapping 层，避免每个 domain 重复处理错误。
+
+Closeout：`ServiceClientTransport.swift` 保留统一 request/envelope/decode/error path；RPC methods 已拆到 `ServiceClientCatalogConfigRPC.swift`、`ServiceClientKnowledgeRPC.swift`、`ServiceClientLLMRPC.swift`、`ServiceClientRemediationRPC.swift`、`ServiceClientSessionRPC.swift`、`ServiceClientTaskRPC.swift`。
 
 ### 5. `crates/catalog/src/lib.rs` 需要拆分 schema/query/mutation/migration
 
@@ -283,6 +289,8 @@ Rust crate 中公开 API 的 doc comment 覆盖偏低。当前项目主要是 ap
 - 在 CI 或本地 gate 中增加 `cargo doc --no-deps`，先作为健康检查。
 - 不追求文档覆盖率数字，优先补协议、catalog、adapter、command write guard 等稳定边界。
 
+Closeout：新增 `verify:rust-docs` 执行 `cargo doc --workspace --no-deps`，并接入 `verify:gate-parity` 与 GitHub Actions Rust job。缺失 doc comment 仍按稳定边界逐步补强，不以覆盖率数字作为当前 release gate。
+
 ### 5. Benchmark 与性能治理需要从“脚本存在”升级为“趋势记录”
 
 结论：**部分有效。**
@@ -294,6 +302,8 @@ Rust crate 中公开 API 的 doc comment 覆盖偏低。当前项目主要是 ap
 - 保留现有 benchmark scripts。
 - 为关键场景记录基准输出：large catalog scan、task readiness、routing、knowledge search、macOS list model。
 - 对 clone/string 优化先做 profile，不把全局 `clone()` 数量当成直接问题。
+
+Closeout：新增 `docs/benchmark-trends.md` 与 `verify:benchmark-trends`。已记录 `pnpm benchmark:10k` 和 `pnpm benchmark:macos-list-model` 的 2026-06-16 本机基线；task readiness、routing、knowledge search 保留为需要先补 reproducible fixture benchmark 的后续专项。
 
 ### 6. JS verifier/smoke 脚本可增加 lint 或类型约束
 
@@ -307,6 +317,8 @@ Rust crate 中公开 API 的 doc comment 覆盖偏低。当前项目主要是 ap
 - 对通用 helper 使用 JSDoc typedef，避免引入过重 TypeScript 迁移。
 - 优先保护 validation blocker、privacy、gate parity、native UI verifier 等高价值脚本。
 
+Closeout：`verify:js-syntax` 已覆盖所有 `.mjs`，并接入 `verify:gate-parity`。
+
 ### 7. Dependency review 应周期化
 
 结论：**合理。**
@@ -318,6 +330,8 @@ Rust crate 中公开 API 的 doc comment 覆盖偏低。当前项目主要是 ap
 - CI 加 `cargo audit`。
 - 周期性跑 unused dependency 检查。
 - 对新增依赖要求在 PR/任务说明中解释用途和替代方案。
+
+Closeout：CI 已新增 `cargo audit` job；unused dependency 检查仍保留为周期性维护项，不作为当前强制 gate。
 
 ## 未纳入任务池的点
 

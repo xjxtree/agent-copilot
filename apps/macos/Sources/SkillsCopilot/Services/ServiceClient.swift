@@ -43,14 +43,14 @@ struct AppStateSnapshot: Codable, Hashable {
     }
 }
 
-private struct EmptyParams: Encodable {}
+struct EmptyParams: Encodable {}
 
-private struct CleanupListQueueParams: Encodable {
+struct CleanupListQueueParams: Encodable {
     let agent: String?
     let limit: Int?
 }
 
-private struct CrossAgentComparisonParams: Encodable {
+struct CrossAgentComparisonParams: Encodable {
     let agent: String?
     let instanceId: String?
     let limit: Int?
@@ -62,7 +62,7 @@ private struct CrossAgentComparisonParams: Encodable {
     }
 }
 
-private struct LocalReportExportParams: Encodable {
+struct LocalReportExportParams: Encodable {
     let formats: [LocalReportFormat]
     let agent: String?
     let instanceId: String?
@@ -78,7 +78,7 @@ private struct LocalReportExportParams: Encodable {
     }
 }
 
-private struct GetSkillParams: Encodable {
+struct GetSkillParams: Encodable {
     let instanceId: String
 
     enum CodingKeys: String, CodingKey {
@@ -86,7 +86,7 @@ private struct GetSkillParams: Encodable {
     }
 }
 
-private struct ToggleSkillParams: Encodable {
+struct ToggleSkillParams: Encodable {
     let instanceId: String
     let on: Bool
 
@@ -96,7 +96,7 @@ private struct ToggleSkillParams: Encodable {
     }
 }
 
-private struct BatchToggleParams: Encodable {
+struct BatchToggleParams: Encodable {
     let instanceIDs: [String]
     let targetEnabled: Bool
     let action: String
@@ -112,7 +112,7 @@ private struct BatchToggleParams: Encodable {
     }
 }
 
-private struct ToolInstallPreviewParams: Encodable {
+struct ToolInstallPreviewParams: Encodable {
     let instanceId: String
     let targetAgent: String
     let targetScope: String
@@ -126,7 +126,7 @@ private struct ToolInstallPreviewParams: Encodable {
     }
 }
 
-private struct PrepareSkillAnalysisParams: Encodable {
+struct PrepareSkillAnalysisParams: Encodable {
     let instanceIDs: [String]
     let analysisKind: LLMSkillAnalysisKind
 
@@ -136,7 +136,7 @@ private struct PrepareSkillAnalysisParams: Encodable {
     }
 }
 
-private struct ScoreSkillQualityParams: Encodable {
+struct ScoreSkillQualityParams: Encodable {
     let instanceId: String
     let definitionId: String
     let agent: String
@@ -148,7 +148,7 @@ private struct ScoreSkillQualityParams: Encodable {
     }
 }
 
-private struct TaskReadinessParams: Encodable {
+struct TaskReadinessParams: Encodable {
     let task: String
     let agent: String?
     let candidateInstanceIDs: [String]?
@@ -160,7 +160,7 @@ private struct TaskReadinessParams: Encodable {
     }
 }
 
-private struct TaskRoutingConfidenceParams: Encodable {
+struct TaskRoutingConfidenceParams: Encodable {
     let task: String
     let agent: String?
     let candidateInstanceIDs: [String]?
@@ -174,7 +174,7 @@ private struct TaskRoutingConfidenceParams: Encodable {
     }
 }
 
-private struct CrossAgentReadinessParams: Encodable {
+struct CrossAgentReadinessParams: Encodable {
     let task: String
     let agents: [String]?
     let limitPerAgent: Int?
@@ -190,7 +190,7 @@ private struct CrossAgentReadinessParams: Encodable {
     }
 }
 
-private struct TaskCockpitParams: Encodable {
+struct TaskCockpitParams: Encodable {
     let task: String
     let agent: String?
     let projectRoot: String?
@@ -228,7 +228,7 @@ private struct TaskCockpitParams: Encodable {
     }
 }
 
-private struct TaskBenchmarkListParams: Encodable {
+struct TaskBenchmarkListParams: Encodable {
     let limit: Int?
 
     enum CodingKeys: String, CodingKey {
@@ -236,7 +236,7 @@ private struct TaskBenchmarkListParams: Encodable {
     }
 }
 
-private struct TaskBenchmarkSaveParams: Encodable {
+struct TaskBenchmarkSaveParams: Encodable {
     let task: String
     let title: String?
     let expectedSkillRefs: [String]
@@ -256,7 +256,7 @@ private struct TaskBenchmarkSaveParams: Encodable {
     }
 }
 
-private struct TaskBenchmarkEvaluateParams: Encodable {
+struct TaskBenchmarkEvaluateParams: Encodable {
     let benchmarkIDs: [String]?
     let limit: Int?
 
@@ -266,7 +266,7 @@ private struct TaskBenchmarkEvaluateParams: Encodable {
     }
 }
 
-private struct RoutingRegressionParams: Encodable {
+struct RoutingRegressionParams: Encodable {
     let benchmarkIDs: [String]?
     let limit: Int?
 
@@ -276,7 +276,7 @@ private struct RoutingRegressionParams: Encodable {
     }
 }
 
-private struct RoutingAccuracyDashboardParams: Encodable {
+struct RoutingAccuracyDashboardParams: Encodable {
     let agent: String?
     let windowDays: Int?
     let limit: Int?
@@ -292,7 +292,7 @@ private struct RoutingAccuracyDashboardParams: Encodable {
     }
 }
 
-private struct StaleDriftDetectionParams: Encodable {
+struct StaleDriftDetectionParams: Encodable {
     let agent: String?
     let limit: Int?
     let includeReadinessImpact: Bool
@@ -304,7 +304,7 @@ private struct StaleDriftDetectionParams: Encodable {
     }
 }
 
-private struct KnowledgeSearchParams: Encodable {
+struct KnowledgeSearchParams: Encodable {
     let query: String
     let agent: String?
     let limit: Int?
@@ -316,7 +316,7 @@ private struct KnowledgeSearchParams: Encodable {
     }
 }
 
-private struct LocalSkillMapParams: Encodable {
+struct LocalSkillMapParams: Encodable {
     let agent: String?
     let projectRoot: String?
     let currentCWD: String?
@@ -346,7 +346,7 @@ private struct LocalSkillMapParams: Encodable {
     }
 }
 
-private struct SkillLifecycleTimelineParams: Encodable {
+struct SkillLifecycleTimelineParams: Encodable {
     let agent: String?
     let projectRoot: String?
     let currentCWD: String?
@@ -380,7 +380,7 @@ private struct SkillLifecycleTimelineParams: Encodable {
     }
 }
 
-private struct SimilarSkillGroupingParams: Encodable {
+struct SimilarSkillGroupingParams: Encodable {
     let agent: String?
     let limit: Int?
     let minScore: Double?
@@ -394,7 +394,7 @@ private struct SimilarSkillGroupingParams: Encodable {
     }
 }
 
-private struct CapabilityTaxonomyParams: Encodable {
+struct CapabilityTaxonomyParams: Encodable {
     let agent: String?
     let limit: Int?
     let includeSingleSkillDomains: Bool
@@ -406,7 +406,7 @@ private struct CapabilityTaxonomyParams: Encodable {
     }
 }
 
-private struct WorkspaceReadinessParams: Encodable {
+struct WorkspaceReadinessParams: Encodable {
     let task: String?
     let agent: String?
     let projectRoot: String?
@@ -428,7 +428,7 @@ private struct WorkspaceReadinessParams: Encodable {
     }
 }
 
-private struct RemediationPlanParams: Encodable {
+struct RemediationPlanParams: Encodable {
     let task: String?
     let agent: String?
     let projectRoot: String?
@@ -448,7 +448,7 @@ private struct RemediationPlanParams: Encodable {
     }
 }
 
-private struct RemediationPreviewDraftsParams: Encodable {
+struct RemediationPreviewDraftsParams: Encodable {
     let task: String?
     let agent: String?
     let projectRoot: String?
@@ -470,7 +470,7 @@ private struct RemediationPreviewDraftsParams: Encodable {
     }
 }
 
-private struct RemediationImpactPreviewParams: Encodable {
+struct RemediationImpactPreviewParams: Encodable {
     let task: String?
     let agent: String?
     let projectRoot: String?
@@ -510,7 +510,7 @@ private struct RemediationImpactPreviewParams: Encodable {
     }
 }
 
-private struct RemediationBatchReviewParams: Encodable {
+struct RemediationBatchReviewParams: Encodable {
     let task: String?
     let agent: String?
     let projectRoot: String?
@@ -550,7 +550,7 @@ private struct RemediationBatchReviewParams: Encodable {
     }
 }
 
-private struct RemediationHistoryListParams: Encodable {
+struct RemediationHistoryListParams: Encodable {
     let task: String?
     let agent: String?
     let projectRoot: String?
@@ -576,7 +576,7 @@ private struct RemediationHistoryListParams: Encodable {
     }
 }
 
-private struct RemediationHistoryRecordParams: Encodable {
+struct RemediationHistoryRecordParams: Encodable {
     let task: String?
     let agent: String?
     let projectRoot: String?
@@ -614,7 +614,7 @@ private struct RemediationHistoryRecordParams: Encodable {
     }
 }
 
-private struct GuidedCleanupFlowParams: Encodable {
+struct GuidedCleanupFlowParams: Encodable {
     let task: String?
     let agent: String?
     let projectRoot: String?
@@ -652,7 +652,7 @@ private struct GuidedCleanupFlowParams: Encodable {
     }
 }
 
-private struct GuidedCleanupRecordStepParams: Encodable {
+struct GuidedCleanupRecordStepParams: Encodable {
     let task: String?
     let agent: String?
     let projectRoot: String?
@@ -692,7 +692,7 @@ private struct GuidedCleanupRecordStepParams: Encodable {
     }
 }
 
-private struct TaskBenchmarkDeleteParams: Encodable {
+struct TaskBenchmarkDeleteParams: Encodable {
     let benchmarkId: String
 
     enum CodingKeys: String, CodingKey {
@@ -700,7 +700,7 @@ private struct TaskBenchmarkDeleteParams: Encodable {
     }
 }
 
-private struct AgentTraceImportParams: Encodable {
+struct AgentTraceImportParams: Encodable {
     let traceText: String
     let title: String?
     let task: String?
@@ -718,11 +718,11 @@ private struct AgentTraceImportParams: Encodable {
     }
 }
 
-private struct AgentTraceListParams: Encodable {
+struct AgentTraceListParams: Encodable {
     let limit: Int?
 }
 
-private struct AgentTraceDeleteParams: Encodable {
+struct AgentTraceDeleteParams: Encodable {
     let importID: String
 
     enum CodingKeys: String, CodingKey {
@@ -730,7 +730,7 @@ private struct AgentTraceDeleteParams: Encodable {
     }
 }
 
-private struct AgentSessionSkillReviewParams: Encodable {
+struct AgentSessionSkillReviewParams: Encodable {
     let transcriptText: String
     let task: String?
     let expectedSkillNames: [String]
@@ -760,7 +760,7 @@ private struct AgentSessionSkillReviewParams: Encodable {
     }
 }
 
-private struct AgentSessionSkillReviewListParams: Encodable {
+struct AgentSessionSkillReviewListParams: Encodable {
     let task: String?
     let agent: String?
     let selectedSkillID: String?
@@ -786,7 +786,7 @@ private struct AgentSessionSkillReviewListParams: Encodable {
     }
 }
 
-private struct AgentSessionSkillReviewDeleteParams: Encodable {
+struct AgentSessionSkillReviewDeleteParams: Encodable {
     let reviewID: String
 
     enum CodingKeys: String, CodingKey {
@@ -794,7 +794,7 @@ private struct AgentSessionSkillReviewDeleteParams: Encodable {
     }
 }
 
-private struct PrepareLLMActionParams: Encodable {
+struct PrepareLLMActionParams: Encodable {
     let action: LLMAction
     let instanceId: String
     let definitionId: String
@@ -808,7 +808,7 @@ private struct PrepareLLMActionParams: Encodable {
     }
 }
 
-private struct PreviewLLMPromptParams: Encodable {
+struct PreviewLLMPromptParams: Encodable {
     let action: String
     let requestKind: String
     let analysisKind: LLMSkillAnalysisKind?
@@ -838,7 +838,7 @@ private struct PreviewLLMPromptParams: Encodable {
     }
 }
 
-private struct ConfirmLLMPromptParams: Encodable {
+struct ConfirmLLMPromptParams: Encodable {
     let previewID: String
     let confirmationID: String
     let request: PreviewLLMPromptParams
@@ -852,7 +852,7 @@ private struct ConfirmLLMPromptParams: Encodable {
     }
 }
 
-private struct ListLLMPromptRunsParams: Encodable {
+struct ListLLMPromptRunsParams: Encodable {
     let instanceId: String?
     let action: String?
     let requestKind: String?
@@ -866,7 +866,7 @@ private struct ListLLMPromptRunsParams: Encodable {
     }
 }
 
-private struct ProviderObservabilityParams: Encodable {
+struct ProviderObservabilityParams: Encodable {
     let windowDays: Int
     let limit: Int
     let includeHistory: Bool
@@ -886,7 +886,7 @@ private struct ProviderObservabilityParams: Encodable {
     }
 }
 
-private struct ScriptExecutionParams: Encodable {
+struct ScriptExecutionParams: Encodable {
     let instanceId: String
     let definitionId: String
     let agent: String
@@ -898,7 +898,7 @@ private struct ScriptExecutionParams: Encodable {
     }
 }
 
-private struct SnapshotParams: Encodable {
+struct SnapshotParams: Encodable {
     let snapshotId: String
 
     enum CodingKeys: String, CodingKey {
@@ -906,12 +906,12 @@ private struct SnapshotParams: Encodable {
     }
 }
 
-private struct ListAgentConfigSnapshotsParams: Encodable {
+struct ListAgentConfigSnapshotsParams: Encodable {
     let agent: String
     let scope: String?
 }
 
-private struct ListSkillEventsParams: Encodable {
+struct ListSkillEventsParams: Encodable {
     let instanceId: String
     let limit: Int?
 
@@ -921,7 +921,7 @@ private struct ListSkillEventsParams: Encodable {
     }
 }
 
-private struct SetFindingTriageParams: Encodable {
+struct SetFindingTriageParams: Encodable {
     let triageKey: String
     let status: String
     let note: String?
@@ -933,7 +933,7 @@ private struct SetFindingTriageParams: Encodable {
     }
 }
 
-private struct ClearFindingTriageParams: Encodable {
+struct ClearFindingTriageParams: Encodable {
     let triageKey: String
 
     enum CodingKeys: String, CodingKey {
@@ -941,7 +941,7 @@ private struct ClearFindingTriageParams: Encodable {
     }
 }
 
-private struct SetRuleSeverityOverrideParams: Encodable {
+struct SetRuleSeverityOverrideParams: Encodable {
     let ruleId: String
     let severity: String
 
@@ -951,7 +951,7 @@ private struct SetRuleSeverityOverrideParams: Encodable {
     }
 }
 
-private struct ClearRuleSeverityOverrideParams: Encodable {
+struct ClearRuleSeverityOverrideParams: Encodable {
     let ruleId: String
 
     enum CodingKeys: String, CodingKey {
@@ -959,7 +959,7 @@ private struct ClearRuleSeverityOverrideParams: Encodable {
     }
 }
 
-private struct SetRuleSuppressionParams: Encodable {
+struct SetRuleSuppressionParams: Encodable {
     let ruleId: String
     let scope: String
     let findingGroupId: String?
@@ -975,7 +975,7 @@ private struct SetRuleSuppressionParams: Encodable {
     }
 }
 
-private struct ClearRuleSuppressionParams: Encodable {
+struct ClearRuleSuppressionParams: Encodable {
     let ruleId: String
     let scope: String
     let findingGroupId: String?
@@ -987,11 +987,11 @@ private struct ClearRuleSuppressionParams: Encodable {
     }
 }
 
-private struct SaveClaudeSettingsParams: Encodable {
+struct SaveClaudeSettingsParams: Encodable {
     let content: String
 }
 
-private struct SaveAIProviderProfileParams: Encodable {
+struct SaveAIProviderProfileParams: Encodable {
     let id: String
     let displayName: String
     let providerType: String
@@ -1017,7 +1017,7 @@ private struct SaveAIProviderProfileParams: Encodable {
     }
 }
 
-private struct TestAIProviderConnectionParams: Encodable {
+struct TestAIProviderConnectionParams: Encodable {
     let profileID: String
     let confirmationID: String
     let timeoutMS: Int
@@ -1029,7 +1029,7 @@ private struct TestAIProviderConnectionParams: Encodable {
     }
 }
 
-private struct ProjectContextParams: Encodable {
+struct ProjectContextParams: Encodable {
     let rootPath: String
     let currentCWD: String?
     let name: String?
@@ -1134,1313 +1134,5 @@ final class ServiceClient {
         try await call(method: "catalog.listSkills", params: EmptyParams())
     }
 
-    func llmStatus() async throws -> LLMStatus {
-        do {
-            return try await call(method: "llm.status", params: EmptyParams())
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .disabledFallback()
-        }
-    }
-
-    func aiProviderStatus() async throws -> AIProviderStatus {
-        do {
-            return try await call(method: "llm.listProviderProfiles", params: EmptyParams())
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func saveAIProviderSettings(draft: AIProviderSettingsDraft) async throws -> AIProviderStatus {
-        let params = SaveAIProviderProfileParams(
-            id: draft.kind.rawValue,
-            displayName: draft.kind.title,
-            providerType: draft.kind.rawValue,
-            baseURL: draft.trimmedEndpoint,
-            model: draft.trimmedModel,
-            enabled: true,
-            apiVersion: draft.trimmedAPIVersion,
-            apiKey: draft.trimmedAPIKey,
-            singleRequestTokenLimit: draft.parsedSingleRequestTokenLimit,
-            monthlyBudgetUSD: draft.parsedMonthlyBudgetUSD
-        )
-        do {
-            let _: AIProviderSaveResult = try await call(method: "llm.saveProviderProfile", params: params)
-            return try await aiProviderStatus()
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func testAIProviderConnection(draft: AIProviderSettingsDraft) async throws -> AIProviderTestResult {
-        let params = TestAIProviderConnectionParams(
-            profileID: draft.kind.rawValue,
-            confirmationID: "settings-test-\(UUID().uuidString)",
-            timeoutMS: 4_000
-        )
-        do {
-            return try await call(method: "llm.testProviderConnection", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func prepareLLMAction(action: LLMAction, skill: SkillRecord) async throws -> LLMPrepareResult {
-        do {
-            return try await call(
-                method: "llm.prepareAction",
-                params: PrepareLLMActionParams(
-                    action: action,
-                    instanceId: skill.id,
-                    definitionId: skill.definitionId,
-                    agent: skill.agent
-                )
-            )
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .disabledFallback(action: action)
-        }
-    }
-
-    func prepareSkillAnalysis(instanceIDs: [String], kind: LLMSkillAnalysisKind) async throws -> LLMSkillAnalysisPrepareResult {
-        do {
-            return try await call(
-                method: "llm.prepareSkillAnalysis",
-                params: PrepareSkillAnalysisParams(instanceIDs: instanceIDs, analysisKind: kind)
-            )
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable(kind: kind)
-        }
-    }
-
-    func scoreSkillQuality(skill: SkillRecord) async throws -> SkillQualityScoreResult {
-        let params = ScoreSkillQualityParams(
-            instanceId: skill.id,
-            definitionId: skill.definitionId,
-            agent: skill.agent
-        )
-        do {
-            return try await call(method: "analysis.scoreSkillQuality", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable(skillID: skill.id)
-        }
-    }
-
-    func checkTaskReadiness(taskText: String, skill: SkillRecord) async throws -> TaskReadinessResult {
-        let params = TaskReadinessParams(
-            task: taskText,
-            agent: skill.agent,
-            candidateInstanceIDs: [skill.id]
-        )
-        do {
-            return try await call(method: "task.checkReadiness", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable(taskText: taskText)
-        }
-    }
-
-    func rankSkillRoutes(taskText: String, skill: SkillRecord, limit: Int = 6) async throws -> SkillRoutingConfidenceResult {
-        let params = TaskRoutingConfidenceParams(
-            task: taskText,
-            agent: skill.agent,
-            candidateInstanceIDs: [skill.id],
-            limit: limit
-        )
-        do {
-            return try await call(method: "task.rankSkillRoutes", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable(taskText: taskText)
-        }
-    }
-
-    func compareAgentReadiness(
-        taskText: String,
-        agents: [String]? = nil,
-        limitPerAgent: Int = 3,
-        includeRoutingAccuracy: Bool = true,
-        includeBenchmarks: Bool = true
-    ) async throws -> CrossAgentReadinessResult {
-        let params = CrossAgentReadinessParams(
-            task: taskText,
-            agents: agents,
-            limitPerAgent: limitPerAgent,
-            includeRoutingAccuracy: includeRoutingAccuracy,
-            includeBenchmarks: includeBenchmarks
-        )
-        do {
-            return try await call(method: "task.compareAgentReadiness", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable(taskText: taskText)
-        }
-    }
-
-    func buildTaskCockpit(
-        taskText: String,
-        agent: String? = nil,
-        project: ProjectContext? = nil,
-        selectedSkill: SkillRecord? = nil,
-        limit: Int? = 8,
-        includeSessionReview: Bool = true,
-        includeProviderObservability: Bool = true,
-        includeRemediationContext: Bool = true,
-        includeEvidence: Bool = true
-    ) async throws -> TaskCockpitResult {
-        let params = TaskCockpitParams(
-            task: taskText,
-            agent: agent,
-            projectRoot: project?.rootPath,
-            currentCWD: project?.currentCWD,
-            workspace: project?.name,
-            selectedSkillID: selectedSkill?.id,
-            selectedSkillName: selectedSkill?.name,
-            selectedSkillAgent: selectedSkill?.agent,
-            selectedSkillPath: selectedSkill?.displayPath.isEmpty == false ? selectedSkill?.displayPath : selectedSkill?.path,
-            candidateInstanceIDs: selectedSkill.map { [$0.id] },
-            limit: limit,
-            includeSessionReview: includeSessionReview,
-            includeProviderObservability: includeProviderObservability,
-            includeRemediationContext: includeRemediationContext,
-            includeEvidence: includeEvidence
-        )
-        do {
-            return try await call(method: "task.buildCockpit", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable(taskText: taskText)
-        }
-    }
-
-    func listTaskBenchmarks(skill: SkillRecord?) async throws -> TaskBenchmarkListResult {
-        let params = TaskBenchmarkListParams(limit: nil)
-        do {
-            return try await call(method: "task.listBenchmarks", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func saveTaskBenchmark(taskText: String, skill: SkillRecord) async throws -> TaskBenchmarkSaveResult {
-        let params = TaskBenchmarkSaveParams(
-            task: taskText,
-            title: nil,
-            expectedSkillRefs: [skill.id, skill.definitionId],
-            expectedSkillNames: [skill.name],
-            acceptableAgents: [skill.agent],
-            acceptableScopes: [skill.scope],
-            successCriteria: [UIStrings.taskBenchmarkSuccessCriterion]
-        )
-        do {
-            return try await call(method: "task.saveBenchmark", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func evaluateTaskBenchmarks(skill: SkillRecord?, benchmarkIDs: [String]? = nil, limit: Int = 6) async throws -> TaskBenchmarkEvaluationResult {
-        let params = TaskBenchmarkEvaluateParams(
-            benchmarkIDs: benchmarkIDs,
-            limit: limit
-        )
-        do {
-            return try await call(method: "task.evaluateBenchmarks", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func saveRoutingBaseline(skill: SkillRecord?, benchmarkIDs: [String]? = nil, limit: Int = 20) async throws -> RoutingRegressionBaselineResult {
-        let params = RoutingRegressionParams(
-            benchmarkIDs: benchmarkIDs,
-            limit: limit
-        )
-        do {
-            return try await call(method: "task.saveRoutingBaseline", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func detectRoutingRegression(skill: SkillRecord?, benchmarkIDs: [String]? = nil, limit: Int = 20) async throws -> RoutingRegressionDetectionResult {
-        let params = RoutingRegressionParams(
-            benchmarkIDs: benchmarkIDs,
-            limit: limit
-        )
-        do {
-            return try await call(method: "task.detectRoutingRegression", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func routingAccuracyDashboard(
-        agent: String? = nil,
-        windowDays: Int? = 30,
-        limit: Int? = 20,
-        includeHistory: Bool = true,
-        includeRecentEvidence: Bool = true
-    ) async throws -> RoutingAccuracyDashboard {
-        let params = RoutingAccuracyDashboardParams(
-            agent: agent,
-            windowDays: windowDays,
-            limit: limit,
-            includeHistory: includeHistory,
-            includeRecentEvidence: includeRecentEvidence
-        )
-        do {
-            return try await call(method: "routing.accuracyDashboard", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func detectStaleDrift(
-        agent: String? = nil,
-        limit: Int? = 40,
-        includeReadinessImpact: Bool = true
-    ) async throws -> StaleDriftDetectionResult {
-        let params = StaleDriftDetectionParams(
-            agent: agent,
-            limit: limit,
-            includeReadinessImpact: includeReadinessImpact
-        )
-        do {
-            return try await call(method: "analysis.detectStaleDrift", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func searchKnowledge(query: String, agent: String? = nil, limit: Int? = 20) async throws -> KnowledgeSearchResult {
-        let params = KnowledgeSearchParams(query: query, agent: agent, limit: limit)
-        do {
-            return try await call(method: "knowledge.search", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func buildLocalSkillMap(
-        agent: String? = nil,
-        project: ProjectContext? = nil,
-        selectedSkill: SkillRecord? = nil,
-        limit: Int? = 30,
-        includeEdges: Bool = true,
-        includeClusters: Bool = true,
-        includeEvidence: Bool = true
-    ) async throws -> LocalSkillMapResult {
-        let params = LocalSkillMapParams(
-            agent: agent,
-            projectRoot: project?.rootPath,
-            currentCWD: project?.currentCWD,
-            workspace: project?.name,
-            selectedSkillID: selectedSkill?.id,
-            selectedSkillName: selectedSkill?.name,
-            selectedSkillAgent: selectedSkill?.agent,
-            selectedSkillPath: selectedSkill?.displayPath.isEmpty == false ? selectedSkill?.displayPath : selectedSkill?.path,
-            limit: limit,
-            includeEdges: includeEdges,
-            includeClusters: includeClusters,
-            includeEvidence: includeEvidence
-        )
-        do {
-            return try await call(method: "knowledge.buildLocalSkillMap", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func loadSkillLifecycleTimeline(
-        agent: String? = nil,
-        project: ProjectContext? = nil,
-        selectedSkill: SkillRecord? = nil,
-        limit: Int? = 20,
-        includeSkillRows: Bool = true,
-        includeAgentRows: Bool = true,
-        includeEvidence: Bool = true,
-        includeSafetyFlags: Bool = true
-    ) async throws -> SkillLifecycleTimelineResult {
-        let params = SkillLifecycleTimelineParams(
-            agent: agent,
-            projectRoot: project?.rootPath,
-            currentCWD: project?.currentCWD,
-            workspace: project?.name,
-            selectedSkillID: selectedSkill?.id,
-            selectedSkillName: selectedSkill?.name,
-            selectedSkillAgent: selectedSkill?.agent,
-            selectedSkillPath: selectedSkill?.displayPath.isEmpty == false ? selectedSkill?.displayPath : selectedSkill?.path,
-            candidateInstanceIDs: selectedSkill.map { [$0.id] },
-            limit: limit,
-            includeSkillRows: includeSkillRows,
-            includeAgentRows: includeAgentRows,
-            includeEvidence: includeEvidence,
-            includeSafetyFlags: includeSafetyFlags
-        )
-        do {
-            return try await call(method: "skill.lifecycleTimeline", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func groupSimilarSkills(
-        agent: String? = nil,
-        limit: Int? = 20,
-        minScore: Double? = 0.62,
-        includeSingletons: Bool = false
-    ) async throws -> SimilarSkillGroupingResult {
-        let params = SimilarSkillGroupingParams(
-            agent: agent,
-            limit: limit,
-            minScore: minScore,
-            includeSingletons: includeSingletons
-        )
-        do {
-            return try await call(method: "knowledge.groupSimilarSkills", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func buildCapabilityTaxonomy(
-        agent: String? = nil,
-        limit: Int? = 20,
-        includeSingleSkillDomains: Bool = true
-    ) async throws -> CapabilityTaxonomyResult {
-        let params = CapabilityTaxonomyParams(
-            agent: agent,
-            limit: limit,
-            includeSingleSkillDomains: includeSingleSkillDomains
-        )
-        do {
-            return try await call(method: "knowledge.buildCapabilityTaxonomy", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func checkWorkspaceReadiness(
-        taskText: String? = nil,
-        agent: String? = nil,
-        project: ProjectContext? = nil,
-        limit: Int? = 40,
-        includeChecklist: Bool = true,
-        includeCapabilities: Bool = true
-    ) async throws -> WorkspaceReadinessResult {
-        let normalizedTask = taskText?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let params = WorkspaceReadinessParams(
-            task: normalizedTask?.isEmpty == true ? nil : normalizedTask,
-            agent: agent,
-            projectRoot: project?.rootPath,
-            currentCWD: project?.currentCWD,
-            workspace: project?.name,
-            limit: limit,
-            includeChecklist: includeChecklist,
-            includeCapabilities: includeCapabilities
-        )
-        do {
-            return try await call(method: "workspace.checkReadiness", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func planRemediation(
-        taskText: String? = nil,
-        agent: String? = nil,
-        project: ProjectContext? = nil,
-        limit: Int? = 20,
-        includeGuidanceOnly: Bool = true
-    ) async throws -> RemediationPlanResult {
-        let normalizedTask = taskText?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let params = RemediationPlanParams(
-            task: normalizedTask?.isEmpty == true ? nil : normalizedTask,
-            agent: agent,
-            projectRoot: project?.rootPath,
-            currentCWD: project?.currentCWD,
-            workspace: project?.name,
-            limit: limit,
-            includeGuidanceOnly: includeGuidanceOnly
-        )
-        do {
-            return try await call(method: "remediation.plan", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func previewRemediationDrafts(
-        taskText: String? = nil,
-        agent: String? = nil,
-        project: ProjectContext? = nil,
-        limit: Int? = 20,
-        draftTypes: [String] = ["frontmatter", "description", "permissions", "dependency", "policy"],
-        includeBlocked: Bool = true
-    ) async throws -> RemediationPreviewDraftsResult {
-        let normalizedTask = taskText?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let params = RemediationPreviewDraftsParams(
-            task: normalizedTask?.isEmpty == true ? nil : normalizedTask,
-            agent: agent,
-            projectRoot: project?.rootPath,
-            currentCWD: project?.currentCWD,
-            workspace: project?.name,
-            limit: limit,
-            draftTypes: draftTypes,
-            includeBlocked: includeBlocked
-        )
-        do {
-            return try await call(method: "remediation.previewDrafts", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func previewRemediationImpact(
-        taskText: String? = nil,
-        agent: String? = nil,
-        project: ProjectContext? = nil,
-        selectedSkill: SkillRecord? = nil,
-        action: String = "review",
-        limit: Int? = 20,
-        includeTaskImpacts: Bool = true,
-        includeAgentImpacts: Bool = true,
-        includeSkillImpacts: Bool = true,
-        includeRiskDeltas: Bool = true,
-        includeSnapshotRollback: Bool = true,
-        includeBlocked: Bool = true
-    ) async throws -> RemediationImpactPreviewResult {
-        let normalizedTask = taskText?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedAction = action.trimmingCharacters(in: .whitespacesAndNewlines)
-        let params = RemediationImpactPreviewParams(
-            task: normalizedTask?.isEmpty == true ? nil : normalizedTask,
-            agent: agent,
-            projectRoot: project?.rootPath,
-            currentCWD: project?.currentCWD,
-            workspace: project?.name,
-            selectedSkillID: selectedSkill?.id,
-            selectedSkillName: selectedSkill?.name,
-            selectedSkillAgent: selectedSkill?.agent,
-            selectedSkillPath: selectedSkill?.displayPath.isEmpty == false ? selectedSkill?.displayPath : selectedSkill?.path,
-            action: normalizedAction.isEmpty ? "review" : normalizedAction,
-            limit: limit,
-            includeTaskImpacts: includeTaskImpacts,
-            includeAgentImpacts: includeAgentImpacts,
-            includeSkillImpacts: includeSkillImpacts,
-            includeRiskDeltas: includeRiskDeltas,
-            includeSnapshotRollback: includeSnapshotRollback,
-            includeBlocked: includeBlocked
-        )
-        do {
-            return try await call(method: "remediation.previewImpact", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func batchReviewRemediation(
-        taskText: String? = nil,
-        agent: String? = nil,
-        project: ProjectContext? = nil,
-        selectedSkill: SkillRecord? = nil,
-        limit: Int? = 30,
-        options: RemediationBatchReviewOptions = RemediationBatchReviewOptions()
-    ) async throws -> RemediationBatchReviewResult {
-        let normalizedTask = taskText?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let params = RemediationBatchReviewParams(
-            task: normalizedTask?.isEmpty == true ? nil : normalizedTask,
-            agent: agent,
-            projectRoot: project?.rootPath,
-            currentCWD: project?.currentCWD,
-            workspace: project?.name,
-            selectedSkillID: selectedSkill?.id,
-            selectedSkillName: selectedSkill?.name,
-            selectedSkillAgent: selectedSkill?.agent,
-            selectedSkillPath: selectedSkill?.displayPath.isEmpty == false ? selectedSkill?.displayPath : selectedSkill?.path,
-            limit: limit,
-            reviewDimensions: options.dimensions,
-            includeTask: options.includeTask,
-            includeRisk: options.includeRisk,
-            includeRule: options.includeRule,
-            includeAgent: options.includeAgent,
-            includeWorkspace: options.includeWorkspace,
-            includeBlocked: options.includeBlocked
-        )
-        do {
-            return try await call(method: "remediation.batchReview", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func listRemediationHistory(
-        taskText: String? = nil,
-        agent: String? = nil,
-        project: ProjectContext? = nil,
-        selectedSkill: SkillRecord? = nil,
-        limit: Int? = 30
-    ) async throws -> RemediationHistoryResult {
-        let normalizedTask = taskText?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let params = RemediationHistoryListParams(
-            task: normalizedTask?.isEmpty == true ? nil : normalizedTask,
-            agent: agent,
-            projectRoot: project?.rootPath,
-            currentCWD: project?.currentCWD,
-            workspace: project?.name,
-            selectedSkillID: selectedSkill?.id,
-            selectedSkillName: selectedSkill?.name,
-            selectedSkillAgent: selectedSkill?.agent,
-            selectedSkillPath: selectedSkill?.displayPath.isEmpty == false ? selectedSkill?.displayPath : selectedSkill?.path,
-            limit: limit
-        )
-        do {
-            return try await call(method: "remediation.listHistory", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func recordRemediationHistory(
-        taskText: String? = nil,
-        agent: String? = nil,
-        project: ProjectContext? = nil,
-        selectedSkill: SkillRecord? = nil,
-        decision: String = "reviewed",
-        status: String = "recorded",
-        sourceMethod: String = "analysis.remediationHistory.ui",
-        reviewArea: String = "Remediation History",
-        note: String = UIStrings.remediationHistoryRecordDefaultNote,
-        evidenceRefs: [String] = [],
-        safetyFlags: [String] = ["local audit only", "no write", "provider not sent"]
-    ) async throws -> RemediationHistoryRecordResult {
-        let normalizedTask = taskText?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let params = RemediationHistoryRecordParams(
-            task: normalizedTask?.isEmpty == true ? nil : normalizedTask,
-            agent: agent,
-            projectRoot: project?.rootPath,
-            currentCWD: project?.currentCWD,
-            workspace: project?.name,
-            selectedSkillID: selectedSkill?.id,
-            selectedSkillName: selectedSkill?.name,
-            selectedSkillAgent: selectedSkill?.agent,
-            selectedSkillPath: selectedSkill?.displayPath.isEmpty == false ? selectedSkill?.displayPath : selectedSkill?.path,
-            decision: decision,
-            status: status,
-            sourceMethod: sourceMethod,
-            reviewArea: reviewArea,
-            note: note,
-            evidenceRefs: evidenceRefs,
-            safetyFlags: safetyFlags
-        )
-        do {
-            return try await call(method: "remediation.recordHistory", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func planGuidedCleanupFlow(
-        taskText: String? = nil,
-        agent: String? = nil,
-        project: ProjectContext? = nil,
-        selectedSkill: SkillRecord? = nil,
-        limit: Int? = 12,
-        includeIssueGroups: Bool = true,
-        includeSafeNextActions: Bool = true,
-        includeRecordedSteps: Bool = true,
-        includeEvidence: Bool = true,
-        includeSafetyFlags: Bool = true
-    ) async throws -> GuidedCleanupFlowResult {
-        let normalizedTask = taskText?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let params = GuidedCleanupFlowParams(
-            task: normalizedTask?.isEmpty == true ? nil : normalizedTask,
-            agent: agent,
-            projectRoot: project?.rootPath,
-            currentCWD: project?.currentCWD,
-            workspace: project?.name,
-            selectedSkillID: selectedSkill?.id,
-            selectedSkillName: selectedSkill?.name,
-            selectedSkillAgent: selectedSkill?.agent,
-            selectedSkillPath: selectedSkill?.displayPath.isEmpty == false ? selectedSkill?.displayPath : selectedSkill?.path,
-            limit: limit,
-            includeIssueGroups: includeIssueGroups,
-            includeSafeNextActions: includeSafeNextActions,
-            includeRecordedSteps: includeRecordedSteps,
-            includeEvidence: includeEvidence,
-            includeSafetyFlags: includeSafetyFlags
-        )
-        do {
-            return try await call(method: "cleanup.planGuidedFlow", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func recordGuidedCleanupStep(
-        taskText: String? = nil,
-        agent: String? = nil,
-        project: ProjectContext? = nil,
-        selectedSkill: SkillRecord? = nil,
-        step: GuidedCleanupFlowStep,
-        sourceMethod: String = "analysis.guidedCleanupFlow.ui",
-        note: String = UIStrings.guidedCleanupFlowRecordDefaultNote,
-        evidenceRefs: [String] = [],
-        safetyFlags: [String] = ["app-local metadata only", "no write", "provider not sent"]
-    ) async throws -> GuidedCleanupRecordStepResult {
-        let normalizedTask = taskText?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let params = GuidedCleanupRecordStepParams(
-            task: normalizedTask?.isEmpty == true ? nil : normalizedTask,
-            agent: agent,
-            projectRoot: project?.rootPath,
-            currentCWD: project?.currentCWD,
-            workspace: project?.name,
-            selectedSkillID: selectedSkill?.id,
-            selectedSkillName: selectedSkill?.name,
-            selectedSkillAgent: selectedSkill?.agent,
-            selectedSkillPath: selectedSkill?.displayPath.isEmpty == false ? selectedSkill?.displayPath : selectedSkill?.path,
-            stepID: step.id,
-            stepTitle: step.title,
-            stepKind: step.kind,
-            actionLabel: step.actionLabel,
-            sourceMethod: sourceMethod,
-            note: note,
-            evidenceRefs: evidenceRefs,
-            safetyFlags: safetyFlags
-        )
-        do {
-            return try await call(method: "cleanup.recordGuidedStep", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func deleteTaskBenchmark(benchmarkID: String) async throws -> TaskBenchmarkDeleteResult {
-        do {
-            return try await call(method: "task.deleteBenchmark", params: TaskBenchmarkDeleteParams(benchmarkId: benchmarkID))
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func importLocalTrace(
-        traceText: String,
-        title: String?,
-        taskText: String?,
-        expectedSkillNames: [String],
-        skill: SkillRecord?
-    ) async throws -> AgentTraceImportResult {
-        let params = AgentTraceImportParams(
-            traceText: traceText,
-            title: title,
-            task: taskText,
-            expectedSkillNames: expectedSkillNames,
-            candidateInstanceIDs: skill.map { [$0.id] },
-            agent: skill?.agent
-        )
-        do {
-            return try await call(method: "trace.importLocal", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func listTraceImports(limit: Int = 20) async throws -> AgentTraceImportListResult {
-        do {
-            return try await call(method: "trace.listImports", params: AgentTraceListParams(limit: limit))
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func deleteTraceImport(importID: String) async throws -> AgentTraceImportDeleteResult {
-        do {
-            return try await call(method: "trace.deleteImport", params: AgentTraceDeleteParams(importID: importID))
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func reviewAgentSessionSkillUse(
-        transcriptText: String,
-        taskText: String?,
-        expectedSkillNames: [String],
-        skill: SkillRecord?,
-        project: ProjectContext?
-    ) async throws -> AgentSessionSkillReviewResult {
-        let normalizedTask = taskText?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let params = AgentSessionSkillReviewParams(
-            transcriptText: transcriptText,
-            task: normalizedTask?.isEmpty == true ? nil : normalizedTask,
-            expectedSkillNames: expectedSkillNames,
-            candidateInstanceIDs: skill.map { [$0.id] },
-            agent: skill?.agent,
-            selectedSkillID: skill?.id,
-            selectedSkillName: skill?.name,
-            selectedSkillAgent: skill?.agent,
-            selectedSkillPath: skill?.displayPath.isEmpty == false ? skill?.displayPath : skill?.path,
-            projectRoot: project?.rootPath,
-            currentCWD: project?.currentCWD,
-            workspace: project?.name
-        )
-        do {
-            return try await call(method: "session.reviewAgentSkillUse", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func listAgentSessionSkillReviews(
-        taskText: String? = nil,
-        agent: String? = nil,
-        skill: SkillRecord? = nil,
-        project: ProjectContext? = nil,
-        limit: Int? = 20
-    ) async throws -> AgentSessionSkillReviewListResult {
-        let normalizedTask = taskText?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let params = AgentSessionSkillReviewListParams(
-            task: normalizedTask?.isEmpty == true ? nil : normalizedTask,
-            agent: agent ?? skill?.agent,
-            selectedSkillID: skill?.id,
-            selectedSkillName: skill?.name,
-            selectedSkillAgent: skill?.agent,
-            selectedSkillPath: skill?.displayPath.isEmpty == false ? skill?.displayPath : skill?.path,
-            projectRoot: project?.rootPath,
-            currentCWD: project?.currentCWD,
-            workspace: project?.name,
-            limit: limit
-        )
-        do {
-            return try await call(method: "session.listSkillReviews", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func deleteAgentSessionSkillReview(reviewID: String) async throws -> AgentSessionSkillReviewDeleteResult {
-        do {
-            return try await call(
-                method: "session.deleteSkillReview",
-                params: AgentSessionSkillReviewDeleteParams(reviewID: reviewID)
-            )
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func previewPromptForLLMAction(action: LLMAction, skill: SkillRecord) async throws -> LLMPromptPreview {
-        let params = PreviewLLMPromptParams(
-            action: action.rawValue,
-            requestKind: "action",
-            analysisKind: nil,
-            scope: "selected",
-            instanceIDs: nil,
-            instanceId: skill.id,
-            definitionId: skill.definitionId,
-            agent: skill.agent,
-            taskText: nil,
-            userIntent: nil,
-            candidateInstanceIDs: nil
-        )
-        do {
-            return try await call(method: "llm.previewPrompt", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable(reason: UIStrings.llmSkillAnalysisUnavailable)
-        }
-    }
-
-    func previewPromptForSkillAnalysis(
-        instanceIDs: [String],
-        kind: LLMSkillAnalysisKind,
-        scope: LLMSkillAnalysisRequestScope
-    ) async throws -> LLMPromptPreview {
-        let params = PreviewLLMPromptParams(
-            action: "skill_analysis",
-            requestKind: "skill_analysis",
-            analysisKind: kind,
-            scope: scope.key,
-            instanceIDs: instanceIDs,
-            instanceId: nil,
-            definitionId: nil,
-            agent: nil,
-            taskText: nil,
-            userIntent: nil,
-            candidateInstanceIDs: nil
-        )
-        do {
-            return try await call(method: "llm.previewPrompt", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable(reason: UIStrings.llmSkillAnalysisUnavailable)
-        }
-    }
-
-    func previewPromptForSkillQuality(skill: SkillRecord) async throws -> LLMPromptPreview {
-        let params = PreviewLLMPromptParams(
-            action: "quality_score",
-            requestKind: "quality_score",
-            analysisKind: nil,
-            scope: "selected",
-            instanceIDs: [skill.id],
-            instanceId: skill.id,
-            definitionId: skill.definitionId,
-            agent: skill.agent,
-            taskText: nil,
-            userIntent: nil,
-            candidateInstanceIDs: nil
-        )
-        do {
-            return try await call(method: "llm.previewPrompt", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable(reason: UIStrings.skillQualityPromptUnavailable)
-        }
-    }
-
-    func previewPromptForTaskReadiness(taskText: String, skill: SkillRecord) async throws -> LLMPromptPreview {
-        let params = PreviewLLMPromptParams(
-            action: "task_readiness",
-            requestKind: "task_readiness",
-            analysisKind: nil,
-            scope: "selected",
-            instanceIDs: [skill.id],
-            instanceId: skill.id,
-            definitionId: skill.definitionId,
-            agent: skill.agent,
-            taskText: taskText,
-            userIntent: taskText,
-            candidateInstanceIDs: [skill.id]
-        )
-        do {
-            return try await call(method: "llm.previewPrompt", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable(reason: UIStrings.taskReadinessPromptUnavailable)
-        }
-    }
-
-    func previewPromptForRoutingConfidence(taskText: String, skill: SkillRecord) async throws -> LLMPromptPreview {
-        let params = PreviewLLMPromptParams(
-            action: "routing_confidence",
-            requestKind: "routing_confidence",
-            analysisKind: nil,
-            scope: "selected",
-            instanceIDs: [skill.id],
-            instanceId: skill.id,
-            definitionId: skill.definitionId,
-            agent: skill.agent,
-            taskText: taskText,
-            userIntent: taskText,
-            candidateInstanceIDs: [skill.id]
-        )
-        do {
-            return try await call(method: "llm.previewPrompt", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable(reason: UIStrings.routingConfidencePromptUnavailable)
-        }
-    }
-
-    func confirmPromptAndSendForLLMAction(previewID: String, action: LLMAction, skill: SkillRecord) async throws -> LLMPromptSendResult {
-        let request = PreviewLLMPromptParams(
-            action: action.rawValue,
-            requestKind: "action",
-            analysisKind: nil,
-            scope: "selected",
-            instanceIDs: nil,
-            instanceId: skill.id,
-            definitionId: skill.definitionId,
-            agent: skill.agent,
-            taskText: nil,
-            userIntent: nil,
-            candidateInstanceIDs: nil
-        )
-        return try await confirmPromptAndSend(previewID: previewID, request: request)
-    }
-
-    func confirmPromptAndSendForSkillAnalysis(
-        previewID: String,
-        instanceIDs: [String],
-        kind: LLMSkillAnalysisKind,
-        scope: LLMSkillAnalysisRequestScope
-    ) async throws -> LLMPromptSendResult {
-        let request = PreviewLLMPromptParams(
-            action: "skill_analysis",
-            requestKind: "skill_analysis",
-            analysisKind: kind,
-            scope: scope.key,
-            instanceIDs: instanceIDs,
-            instanceId: nil,
-            definitionId: nil,
-            agent: nil,
-            taskText: nil,
-            userIntent: nil,
-            candidateInstanceIDs: nil
-        )
-        return try await confirmPromptAndSend(previewID: previewID, request: request)
-    }
-
-    func confirmPromptAndSendForSkillQuality(previewID: String, skill: SkillRecord) async throws -> LLMPromptSendResult {
-        let request = PreviewLLMPromptParams(
-            action: "quality_score",
-            requestKind: "quality_score",
-            analysisKind: nil,
-            scope: "selected",
-            instanceIDs: [skill.id],
-            instanceId: skill.id,
-            definitionId: skill.definitionId,
-            agent: skill.agent,
-            taskText: nil,
-            userIntent: nil,
-            candidateInstanceIDs: nil
-        )
-        return try await confirmPromptAndSend(previewID: previewID, request: request)
-    }
-
-    func confirmPromptAndSendForTaskReadiness(previewID: String, taskText: String, skill: SkillRecord) async throws -> LLMPromptSendResult {
-        let request = PreviewLLMPromptParams(
-            action: "task_readiness",
-            requestKind: "task_readiness",
-            analysisKind: nil,
-            scope: "selected",
-            instanceIDs: [skill.id],
-            instanceId: skill.id,
-            definitionId: skill.definitionId,
-            agent: skill.agent,
-            taskText: taskText,
-            userIntent: taskText,
-            candidateInstanceIDs: [skill.id]
-        )
-        return try await confirmPromptAndSend(previewID: previewID, request: request)
-    }
-
-    func confirmPromptAndSendForRoutingConfidence(previewID: String, taskText: String, skill: SkillRecord) async throws -> LLMPromptSendResult {
-        let request = PreviewLLMPromptParams(
-            action: "routing_confidence",
-            requestKind: "routing_confidence",
-            analysisKind: nil,
-            scope: "selected",
-            instanceIDs: [skill.id],
-            instanceId: skill.id,
-            definitionId: skill.definitionId,
-            agent: skill.agent,
-            taskText: taskText,
-            userIntent: taskText,
-            candidateInstanceIDs: [skill.id]
-        )
-        return try await confirmPromptAndSend(previewID: previewID, request: request)
-    }
-
-    func listLLMPromptRuns(skill: SkillRecord? = nil, limit: Int = 80) async throws -> LLMPromptRunListResult {
-        let params = ListLLMPromptRunsParams(
-            instanceId: skill?.id,
-            action: nil,
-            requestKind: nil,
-            limit: limit
-        )
-        do {
-            return try await call(method: "llm.listPromptRuns", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    func providerObservability(
-        windowDays: Int = 30,
-        limit: Int = 30,
-        includeHistory: Bool = true,
-        includeBudgetHints: Bool = true,
-        includeRetentionRecommendations: Bool = true,
-        includeEvidence: Bool = true
-    ) async throws -> ProviderObservabilityResult {
-        let params = ProviderObservabilityParams(
-            windowDays: windowDays,
-            limit: limit,
-            includeHistory: includeHistory,
-            includeBudgetHints: includeBudgetHints,
-            includeRetentionRecommendations: includeRetentionRecommendations,
-            includeEvidence: includeEvidence
-        )
-        do {
-            return try await call(method: "llm.providerObservability", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable()
-        }
-    }
-
-    private func confirmPromptAndSend(previewID: String, request: PreviewLLMPromptParams) async throws -> LLMPromptSendResult {
-        let params = ConfirmLLMPromptParams(
-            previewID: previewID,
-            confirmationID: "prompt-confirm-\(UUID().uuidString)",
-            request: request,
-            timeoutMS: 600_000
-        )
-        do {
-            return try await call(method: "llm.confirmPromptAndSend", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable(previewID: previewID, reason: UIStrings.llmSkillAnalysisUnavailable)
-        }
-    }
-
-    func previewScriptExecution(skill: SkillRecord) async throws -> ScriptExecutionPreview {
-        do {
-            return try await call(
-                method: "script.previewExecution",
-                params: ScriptExecutionParams(
-                    instanceId: skill.id,
-                    definitionId: skill.definitionId,
-                    agent: skill.agent
-                )
-            )
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable(skill: skill)
-        }
-    }
-
-    func scriptExecutionAuditStatus(skill: SkillRecord) async throws -> ScriptExecutionPreview {
-        do {
-            return try await call(
-                method: "script.auditStatus",
-                params: ScriptExecutionParams(
-                    instanceId: skill.id,
-                    definitionId: skill.definitionId,
-                    agent: skill.agent
-                )
-            )
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .unavailable(skill: skill)
-        }
-    }
-
-    func scanAll() async throws -> ScanResult {
-        try await call(method: "catalog.scanAll", params: EmptyParams())
-    }
-
-    func scanClaude() async throws -> ScanResult {
-        try await call(method: "catalog.scanClaude", params: EmptyParams())
-    }
-
-    func getProjectContext() async throws -> ProjectContextState {
-        do {
-            return try await call(method: "project.getContext", params: EmptyParams())
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return ProjectContextState(active: nil, recent: [])
-        }
-    }
-
-    func setProjectContext(rootPath: String, currentCWD: String?, name: String?) async throws -> ProjectContextState {
-        try await call(
-            method: "project.setContext",
-            params: ProjectContextParams(rootPath: rootPath, currentCWD: currentCWD, name: name)
-        )
-    }
-
-    func clearProjectContext() async throws -> ProjectContextState {
-        try await call(method: "project.clearContext", params: EmptyParams())
-    }
-
-    func validateProjectContext(rootPath: String, currentCWD: String?, name: String?) async throws -> ProjectContext {
-        try await call(
-            method: "project.validateContext",
-            params: ProjectContextParams(rootPath: rootPath, currentCWD: currentCWD, name: name)
-        )
-    }
-
-    func getSkill(instanceID: String) async throws -> SkillDetailRecord {
-        try await call(
-            method: "catalog.getSkill",
-            params: GetSkillParams(instanceId: instanceID)
-        )
-    }
-
-    func listFindings() async throws -> [RuleFindingRecord] {
-        try await call(method: "catalog.listFindings", params: EmptyParams())
-    }
-
-    func listFindingTriage() async throws -> [FindingTriageRecord] {
-        try await call(method: "catalog.listFindingTriage", params: EmptyParams())
-    }
-
-    func setFindingTriage(triageKey: String, status: FindingTriageStatus, note: String? = nil) async throws -> FindingTriageRecord {
-        try await call(
-            method: "catalog.setFindingTriage",
-            params: SetFindingTriageParams(triageKey: triageKey, status: status.rawValue, note: note)
-        )
-    }
-
-    func clearFindingTriage(triageKey: String) async throws -> Bool {
-        try await call(
-            method: "catalog.clearFindingTriage",
-            params: ClearFindingTriageParams(triageKey: triageKey)
-        )
-    }
-
-    func listRuleTuning() async throws -> [RuleTuningRecord] {
-        do {
-            let list: RuleTuningList = try await call(method: "rules.listTuning", params: EmptyParams())
-            return list.records
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return []
-        }
-    }
-
-    func setSeverityOverride(ruleId: String, severity: String) async throws -> RuleTuningRecord? {
-        let result: RuleTuningMutationResult = try await call(
-            method: "rules.setSeverityOverride",
-            params: SetRuleSeverityOverrideParams(ruleId: ruleId, severity: severity)
-        )
-        return result.record
-    }
-
-    func clearSeverityOverride(ruleId: String) async throws -> RuleTuningRecord? {
-        let result: RuleTuningMutationResult = try await call(
-            method: "rules.clearSeverityOverride",
-            params: ClearRuleSeverityOverrideParams(ruleId: ruleId)
-        )
-        return result.record
-    }
-
-    func setSuppression(ruleId: String, scope: RuleTuningScope, findingGroupId: String?, note: String? = nil) async throws -> RuleTuningRecord? {
-        let result: RuleTuningMutationResult = try await call(
-            method: "rules.setSuppression",
-            params: SetRuleSuppressionParams(
-                ruleId: ruleId,
-                scope: scope.rawValue,
-                findingGroupId: scope == .findingGroup ? findingGroupId : nil,
-                suppressed: true,
-                note: note
-            )
-        )
-        return result.record
-    }
-
-    func clearSuppression(ruleId: String, scope: RuleTuningScope, findingGroupId: String?) async throws -> RuleTuningRecord? {
-        let result: RuleTuningMutationResult = try await call(
-            method: "rules.clearSuppression",
-            params: ClearRuleSuppressionParams(
-                ruleId: ruleId,
-                scope: scope.rawValue,
-                findingGroupId: scope == .findingGroup ? findingGroupId : nil
-            )
-        )
-        return result.record
-    }
-
-    func listConflicts() async throws -> [ConflictGroupRecord] {
-        try await call(method: "catalog.listConflicts", params: EmptyParams())
-    }
-
-    func listSnapshots() async throws -> [ConfigSnapshotRecord] {
-        try await call(method: "snapshot.list", params: EmptyParams())
-    }
-
-    func listAgentConfigSnapshots(agent: String, scope: String? = nil) async throws -> [ConfigSnapshotRecord] {
-        try await call(
-            method: "snapshot.listAgentConfig",
-            params: ListAgentConfigSnapshotsParams(agent: agent, scope: scope)
-        )
-    }
-
-    func listSkillEvents(instanceID: String, limit: Int? = nil) async throws -> [SkillEventRecord] {
-        try await call(
-            method: "skill.listEvents",
-            params: ListSkillEventsParams(instanceId: instanceID, limit: limit)
-        )
-    }
-
-    func toggleSkill(instanceID: String, on: Bool) async throws -> SkillRecord {
-        try await call(
-            method: "config.toggleSkill",
-            params: ToggleSkillParams(instanceId: instanceID, on: on)
-        )
-    }
-
-    func previewBatchSkillToggles(instanceIDs: [String], on: Bool) async throws -> BatchTogglePreview {
-        let params = BatchToggleParams(
-            instanceIDs: instanceIDs,
-            targetEnabled: on,
-            action: BatchToggleAction.from(targetEnabled: on).rawValue,
-            previewToken: nil,
-            confirmed: false
-        )
-        do {
-            return try await call(method: "batch.previewSkillToggles", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return try await call(method: "batch.previewToggle", params: params)
-        }
-    }
-
-    func applyBatchSkillToggles(preview: BatchTogglePreview) async throws -> BatchToggleApplyResult {
-        let params = BatchToggleParams(
-            instanceIDs: preview.affectedSkills.map(\.instanceID),
-            targetEnabled: preview.targetEnabled,
-            action: preview.action.rawValue,
-            previewToken: preview.id,
-            confirmed: true
-        )
-        do {
-            return try await call(method: "batch.applySkillToggles", params: params)
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return try await call(method: "batch.applyToggle", params: params)
-        }
-    }
-
-    func previewToolInstall(skill: SkillRecord, target: ToolInstallTarget) async throws -> ToolGlobalInstallPreview {
-        try await installToolSkill(skill: skill, target: target, confirmed: false)
-    }
-
-    func confirmToolInstall(skill: SkillRecord, target: ToolInstallTarget) async throws -> ToolGlobalInstallPreview {
-        try await installToolSkill(skill: skill, target: target, confirmed: true)
-    }
-
-    private func installToolSkill(skill: SkillRecord, target: ToolInstallTarget, confirmed: Bool) async throws -> ToolGlobalInstallPreview {
-        do {
-            return try await call(
-                method: "skill.install",
-                params: ToolInstallPreviewParams(
-                    instanceId: skill.id,
-                    targetAgent: target.rawValue,
-                    targetScope: "agent-global",
-                    confirmed: confirmed
-                )
-            )
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            if confirmed {
-                throw ClientError.service(error)
-            }
-            return try await legacyPreviewToolInstall(skill: skill, target: target)
-        }
-    }
-
-    private func legacyPreviewToolInstall(skill: SkillRecord, target: ToolInstallTarget) async throws -> ToolGlobalInstallPreview {
-        do {
-            return try await call(
-                method: "tool.previewInstall",
-                params: ToolInstallPreviewParams(
-                    instanceId: skill.id,
-                    targetAgent: target.rawValue,
-                    targetScope: "agent-global",
-                    confirmed: false
-                )
-            )
-        } catch ClientError.service(let error) where error.code == "unknown_method" {
-            return .localPreview(skill: skill, target: target)
-        }
-    }
-
-    func readClaudeSettings() async throws -> ConfigDocumentRecord {
-        try await call(method: "config.readClaudeSettings", params: EmptyParams())
-    }
-
-    func saveClaudeSettings(content: String) async throws -> ConfigDocumentRecord {
-        try await call(
-            method: "config.saveClaudeSettings",
-            params: SaveClaudeSettingsParams(content: content)
-        )
-    }
-
-    func previewSnapshotRollback(snapshotID: String) async throws -> SnapshotRollbackPreviewRecord {
-        try await call(
-            method: "snapshot.previewRollback",
-            params: SnapshotParams(snapshotId: snapshotID)
-        )
-    }
-
-    func rollbackSnapshot(snapshotID: String) async throws -> Int {
-        try await call(
-            method: "snapshot.rollback",
-            params: SnapshotParams(snapshotId: snapshotID)
-        )
-    }
 
 }

@@ -18,17 +18,6 @@ const defaultBudgets = new Map([
   [".mjs", 5_000],
 ]);
 
-const legacyBudgets = new Map([
-  [
-    "crates/commands/src/lib.rs",
-    {
-      maxLines: 10_100,
-      targetLines: 5_000,
-      reason: "legacy command surface pending continued domain split",
-    },
-  ],
-]);
-
 const ignoredDirs = new Set([
   ".build",
   ".git",
@@ -39,7 +28,6 @@ const ignoredDirs = new Set([
 
 const files = scanRoots.flatMap(filesInTree).sort();
 const failures = [];
-const legacyHits = [];
 
 for (const relativePath of files) {
   const ext = extname(relativePath);
@@ -47,25 +35,9 @@ for (const relativePath of files) {
   if (!defaultMax) {
     continue;
   }
-  const budget = legacyBudgets.get(relativePath);
-  const maxLines = budget?.maxLines ?? defaultMax;
   const lineCount = readFileSync(join(repoRoot, relativePath), "utf8").split(/\r?\n/).length - 1;
-  if (lineCount > maxLines) {
-    failures.push(
-      `${relativePath}: ${lineCount} lines exceeds ${maxLines}` +
-        (budget ? ` legacy budget (${budget.reason})` : ""),
-    );
-  }
-  if (budget) {
-    legacyHits.push(
-      `${relativePath}: ${lineCount}/${budget.maxLines} lines; target <= ${budget.targetLines} (${budget.reason})`,
-    );
-  }
-}
-
-for (const relativePath of legacyBudgets.keys()) {
-  if (!files.includes(relativePath)) {
-    failures.push(`${relativePath}: legacy budget points at a missing file`);
+  if (lineCount > defaultMax) {
+    failures.push(`${relativePath}: ${lineCount} lines exceeds ${defaultMax}`);
   }
 }
 
@@ -80,12 +52,6 @@ if (failures.length > 0) {
 console.log(
   `module-size verification passed: ${files.length} files scanned; default budgets ${formatDefaultBudgets()}`,
 );
-if (legacyHits.length > 0) {
-  console.log("legacy module-size budgets:");
-  for (const hit of legacyHits) {
-    console.log(`  - ${hit}`);
-  }
-}
 
 function filesInTree(relativeDir) {
   const dir = join(repoRoot, relativeDir);

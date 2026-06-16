@@ -84,9 +84,12 @@ for (const snippet of [
   "[\".rs\", 5_000]",
   "[\".swift\", 5_000]",
   "[\".mjs\", 5_000]",
-  "legacyBudgets",
 ]) {
   requireText(moduleSizeVerifier, "scripts/verify-module-size.mjs", snippet);
+}
+
+if (moduleSizeVerifier.includes("legacyBudgets")) {
+  fail("scripts/verify-module-size.mjs must not retain legacy module-size budgets");
 }
 
 console.log("V2.86 validation docs verification passed");

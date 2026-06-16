@@ -59,15 +59,18 @@ Completed fixes:
   and Swift stdio service calls have timeout/decode/error-path coverage.
 - P1 structure:
   Rust service helpers/tests now use real modules instead of `include!`,
-  `commands` split out `script_execution.rs`, catalog schema/migration logic
+  `commands` split out `analysis.rs`, `script_execution.rs`, and `tests.rs`
+  with `lib.rs` below the 5k-line default gate, catalog schema/migration logic
   moved to `schema.rs`, adapter YAML/name/path helper duplication moved into
   `crates/adapters/src/shared.rs`, `ServiceClient` transport/decode moved into
-  `ServiceClientTransport.swift`, and `SkillStore` read-only derived state
-  moved into `SkillStoreDerivedState.swift`.
+  `ServiceClientTransport.swift`, RPC methods moved into domain extension files,
+  and `SkillStore` read-only derived state moved into `SkillStoreDerivedState.swift`.
 - Gates:
-  `verify:module-size` now scans Rust, Swift, and `.mjs` trees with a shrinking
-  legacy budget for `crates/commands/src/lib.rs`; `verify:js-syntax` checks all
-  `.mjs` verifier/smoke scripts; GitHub Actions includes `cargo audit`.
+  `verify:module-size` now scans Rust, Swift, and `.mjs` trees with no legacy
+  module-size budget; `verify:js-syntax` checks all `.mjs` verifier/smoke scripts;
+  `verify:rust-docs` builds Rust public API docs; `verify:benchmark-trends`
+  protects the benchmark trend ledger; GitHub Actions includes `cargo audit`
+  and Rust API docs.
 - Documentation cleanup:
   the merged review report is the retained source, and the two original
   review files were removed after consolidation.
@@ -76,13 +79,11 @@ Near-term implementation tasks:
 
 | Priority | Task | Boundary |
 | --- | --- | --- |
-| P1 | Continue `crates/commands/src/lib.rs` domain split until the legacy budget can be removed | Preserve public command API and existing write/audit safety tests |
 | P1 | Split `SkillStore.swift` into facade plus domain stores for catalog, task cockpit, knowledge, remediation, provider, and validation state | Do not widen write access casually; keep SwiftUI injection stable |
-| P1 | Continue `ServiceClient.swift` RPC-domain extension split after transport extraction | Keep one shared decode/error mapping path |
 | P1 | Continue catalog split into queries, refresh mutations, mapping, and migrations | Preserve SQLite schema and transaction semantics |
 | P2 | Consolidate older per-version docs verifiers when their checks become generic | Keep machine-enforced gates; do not delete evidence history |
-| P2 | Add benchmark trend recording for large catalog, routing, readiness, knowledge search, and native list model | Use measured baselines; do not treat clone/string counts as proof |
-| P2 | Consider `cargo doc --no-deps` once public API comments are sufficient | Do not block routine refactors on doc coverage percentage |
+| P2 | Add dedicated benchmark scripts for task readiness, routing, and knowledge search | Use measured reproducible fixtures; do not treat clone/string counts as proof |
+| P2 | Continue public API doc comments on stable command/catalog/adapter boundaries | `cargo doc --workspace --no-deps` is now a health gate; do not chase coverage percentage |
 
 ## User-centered Optimization Direction
 

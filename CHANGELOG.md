@@ -50,8 +50,9 @@ Risk/security notes:
   secret detection before storage.
 - Blocked script-execution audit writes are confined to the app audit root.
 - Swift stdio service calls have bounded timeout/decode/error coverage.
-- CI now includes `cargo audit`; `verify:gate-parity` includes `.mjs` syntax
-  verification.
+- CI now includes `cargo audit` and Rust API docs; `verify:gate-parity`
+  includes `.mjs` syntax verification, Rust doc generation, module-size,
+  and benchmark trend verification.
 
 Validation posture:
 
@@ -60,8 +61,9 @@ Validation posture:
   DMG, or ZIP work.
 - DetailView section splitting was already below the target size and remains
   covered by existing split view files.
-- The remaining `commands` legacy size budget is shrinking and tracked in
-  `docs/development-tasks.md`.
+- `crates/commands/src/lib.rs` is below the default 5k module-size gate with no
+  legacy exception; `ServiceClient` RPC methods are split into domain extension
+  files behind the existing shared decode/error path.
 
 ### V2.86 - 2026-06-16
 

@@ -64,6 +64,9 @@ jobs:
       - name: Clippy workspace
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+      - name: Build Rust API docs
+        run: cargo doc --workspace --no-deps
+
   rust-audit:
     name: Rust dependency audit
     runs-on: ubuntu-latest

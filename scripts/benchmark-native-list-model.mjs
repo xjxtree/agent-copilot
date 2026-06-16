@@ -21,6 +21,7 @@ try {
     "-O",
     join(repoRoot, "apps/macos/Sources/SkillsCopilot/Models/SkillRecord.swift"),
     join(repoRoot, "apps/macos/Sources/SkillsCopilot/Models/FindingTriageState.swift"),
+    join(repoRoot, "apps/macos/Sources/SkillsCopilot/Models/ScriptExecutionPreview.swift"),
     join(repoRoot, "apps/macos/Sources/SkillsCopilot/Support/UIStrings.swift"),
     join(repoRoot, "apps/macos/Sources/SkillsCopilot/Support/Formatters.swift"),
     join(repoRoot, "apps/macos/Sources/SkillsCopilot/Stores/FindingExplainabilityModel.swift"),
