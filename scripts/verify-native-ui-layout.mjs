@@ -12,6 +12,18 @@ const files = {
   detail: await read("apps/macos/Sources/SkillsCopilot/Views/DetailView.swift"),
   detailOverview: await read("apps/macos/Sources/SkillsCopilot/Views/DetailOverviewSection.swift"),
   detailPrimitives: await read("apps/macos/Sources/SkillsCopilot/Views/DetailPresentationPrimitives.swift"),
+  detailReviewCore: await read("apps/macos/Sources/SkillsCopilot/Views/DetailReviewCoreSection.swift"),
+  detailReviewKnowledge: await read("apps/macos/Sources/SkillsCopilot/Views/DetailReviewKnowledgePanels.swift"),
+  detailRemediation: await read("apps/macos/Sources/SkillsCopilot/Views/DetailRemediationPanels.swift"),
+  detailKnowledgeSkillMap: await read("apps/macos/Sources/SkillsCopilot/Views/DetailKnowledgeSkillMapPanels.swift"),
+  detailGuidedCleanup: await read("apps/macos/Sources/SkillsCopilot/Views/DetailGuidedCleanupFlowPanel.swift"),
+  detailProviderObservability: await read("apps/macos/Sources/SkillsCopilot/Views/DetailProviderObservabilityPanel.swift"),
+  detailLocalSkillMap: await read("apps/macos/Sources/SkillsCopilot/Views/DetailLocalSkillMapViews.swift"),
+  detailTaskBenchmark: await read("apps/macos/Sources/SkillsCopilot/Views/DetailTaskBenchmarkSection.swift"),
+  detailAgentSession: await read("apps/macos/Sources/SkillsCopilot/Views/DetailAgentSessionSection.swift"),
+  detailLLM: await read("apps/macos/Sources/SkillsCopilot/Views/DetailLLMSection.swift"),
+  detailHeaderOverview: await read("apps/macos/Sources/SkillsCopilot/Views/DetailHeaderOverviewSection.swift"),
+  detailFindingsHistory: await read("apps/macos/Sources/SkillsCopilot/Views/DetailFindingsHistorySection.swift"),
   formatter: await read("apps/macos/Sources/SkillsCopilot/Support/Formatters.swift"),
   guidedCleanupModel: await read("apps/macos/Sources/SkillsCopilot/Models/GuidedCleanupFlow.swift"),
   privacyPath: await read("apps/macos/Sources/SkillsCopilot/Views/PrivacyPathView.swift"),
@@ -30,7 +42,24 @@ const files = {
   serviceRust: await read("crates/service/src/lib.rs"),
   serviceRustProtocol: await read("crates/service/src/protocol.rs"),
 };
-files.detailSurface = [files.detail, files.detailOverview, files.detailPrimitives, files.taskCockpit].join("\n");
+files.detailSurface = [
+  files.detail,
+  files.detailOverview,
+  files.detailPrimitives,
+  files.detailReviewCore,
+  files.detailReviewKnowledge,
+  files.detailRemediation,
+  files.detailKnowledgeSkillMap,
+  files.detailGuidedCleanup,
+  files.detailProviderObservability,
+  files.detailLocalSkillMap,
+  files.detailTaskBenchmark,
+  files.detailAgentSession,
+  files.detailLLM,
+  files.detailHeaderOverview,
+  files.detailFindingsHistory,
+  files.taskCockpit,
+].join("\n");
 files.serviceIPC = [files.serviceClient, files.serviceProcessRunner].join("\n");
 files.serviceRustSurface = [files.serviceRust, files.serviceRustProtocol].join("\n");
 
@@ -88,12 +117,12 @@ const checks = [
   },
   {
     label: "V2.80 detail navigation has a stable scroll-to-top anchor",
-    text: files.detail,
+    text: files.detailSurface,
     pattern: /private static let topAnchorID = "skills-copilot\.detail\.top"[\s\S]*?ScrollViewReader\s*{\s*proxy\s+in[\s\S]*?\.id\(Self\.topAnchorID\)/,
   },
   {
     label: "V2.80 detail navigation scrolls to top when the selected section changes",
-    text: files.detail,
+    text: files.detailSurface,
     pattern: /\.onChange\(of:\s*store\.selectedDetailSection\)[\s\S]*?proxy\.scrollTo\(Self\.topAnchorID,\s*anchor:\s*\.top\)/,
   },
   {
@@ -103,12 +132,12 @@ const checks = [
   },
   {
     label: "task cockpit renders before empty detail fallback",
-    text: files.detail,
+    text: files.detailSurface,
     pattern: /if store\.selectedDetailSection == \.taskCockpit[\s\S]*?TaskCockpitPanel\([\s\S]*?else if let skill[\s\S]*?EmptyDetailView\(\)/,
   },
   {
     label: "guided cleanup renders safe-link buttons",
-    text: files.detail,
+    text: files.detailSurface,
     pattern: /GuidedCleanupSafeLinkButton\(link:\s*step\.safeActionDeepLink\)[\s\S]*?GuidedCleanupSafeLinkButton\(link:\s*action\.deepLink\)/,
   },
   {
@@ -128,7 +157,7 @@ const checks = [
   },
   {
     label: "analysis section mounts remediation safe entry panels",
-    text: files.detail,
+    text: files.detailSurface,
     pattern: /TaskRoutingAssessmentPanel\([\s\S]*?RemediationPlanPanel\([\s\S]*?RemediationPreviewDraftsPanel\([\s\S]*?RemediationImpactPreviewPanel\([\s\S]*?RemediationBatchReviewPanel\([\s\S]*?RemediationHistoryPanel\([\s\S]*?AgentSessionSkillReviewPanel\(/,
   },
   {
@@ -188,37 +217,37 @@ const checks = [
   },
   {
     label: "findings expose severity filter",
-    text: files.detail,
+    text: files.detailSurface,
     pattern: /Picker\(UIStrings\.findingSeverityFilter,\s*selection:\s*\$severityFilter\)/,
   },
   {
     label: "findings expose rule filter",
-    text: files.detail,
+    text: files.detailSurface,
     pattern: /Picker\(UIStrings\.findingRuleFilter,\s*selection:\s*\$ruleFilter\)/,
   },
   {
     label: "findings render severity groups",
-    text: files.detail,
+    text: files.detailSurface,
     pattern: /FindingSeverityHeader\(group:\s*group\)/,
   },
   {
     label: "findings render remediation guidance",
-    text: files.detail,
+    text: files.detailSurface,
     pattern: /Label\(UIStrings\.findingRemediation,\s*systemImage:\s*"wrench\.and\.screwdriver"\)/,
   },
   {
     label: "detail renders permissions without safety verdicts",
-    text: files.detail,
+    text: files.detailSurface,
     pattern: /PermissionSummaryCard\(summary:\s*PermissionDisplayModel\.summary\(for:\s*detail\.permissions\)\)/,
   },
   {
     label: "snapshot preview sheet has bounded width",
-    text: files.detail,
+    text: files.detailSurface,
     pattern: /\.frame\(width:\s*980,\s*height:\s*680\)/,
   },
   {
     label: "snapshot preview panes are scrollable for long content",
-    text: files.detail,
+    text: files.detailSurface,
     pattern: /ScrollView\(\[\.vertical,\s*\.horizontal\]\)/,
   },
   {
@@ -243,7 +272,7 @@ const checks = [
   },
   {
     label: "detail uses privacy path rows for high-risk paths",
-    text: files.detail,
+    text: files.detailSurface,
     pattern: /PrivacyPathRow\(label:\s*UIStrings\.source,\s*path:\s*skill\.displayPath\)[\s\S]*?PrivacyPathRow\(label:\s*UIStrings\.source,\s*path:\s*preview\.sourcePath\)/,
   },
   {
@@ -258,17 +287,17 @@ const checks = [
   },
   {
     label: "LLM assist exposes all explicit actions",
-    text: files.detail,
+    text: files.detailSurface,
     pattern: /ForEach\(LLMAction\.allCases\)/,
   },
   {
     label: "LLM assist buttons are gated by prepare state only",
-    text: files.detail,
+    text: files.detailSurface,
     pattern: /\.disabled\(isPreparing\(action\)\)/,
   },
   {
     label: "LLM assist renders read-only review previews",
-    text: files.detail,
+    text: files.detailSurface,
     pattern: /LLMReviewPreviewView\(preview:\s*reviewPreview\)/,
   },
   {
@@ -278,17 +307,17 @@ const checks = [
   },
   {
     label: "LLM draft frontmatter warns about confirmation and copy",
-    text: files.detail,
+    text: files.detailSurface,
     pattern: /UIStrings\.llmDraftCopyRequired/,
   },
   {
     label: "tool-global preview uses read-only install affordance",
-    text: files.detail,
+    text: files.detailSurface,
     pattern: /ToolGlobalPreviewCard\(skill:\s*skill\)/,
   },
   {
     label: "tool-global install confirmation uses verified write copy",
-    text: files.detail,
+    text: files.detailSurface,
     pattern: /store\.confirmToolInstall\(skill:\s*skill,\s*target:\s*preview\.target\)/,
   },
   {
@@ -412,7 +441,7 @@ const customChecks = [
   {
     label: "V2.80 detail evidence lists are row-capped and use privacy rendering",
     passed: detailEvidenceLists.every((name) => {
-      const body = extractStructBody(files.detail, name);
+      const body = extractStructBody(files.detailSurface, name);
       return (body.includes("ForEach(evidence.prefix(") || body.includes("DenseDisclosureList(evidence, visibleLimit:"))
         && body.includes("PrivacyEvidenceText(value: item.detail")
         && body.includes("PrivacyEvidenceText(value: source");

@@ -1,0 +1,3461 @@
+    use super::*;
+    use serde::de::DeserializeOwned;
+    use skills_copilot_catalog::{ConflictGroupDraft, RuleFindingDraft, SkillDefinitionDraft};
+    use skills_copilot_core::{
+        AgentId, NetworkAccess, PermissionRequest, SkillInstance, SkillState,
+    };
+    use std::{
+        ffi::{OsStr, OsString},
+        sync::{Mutex, MutexGuard},
+    };
+
+    static ENV_MUTATION_LOCK: Mutex<()> = Mutex::new(());
+
+    struct EnvVarGuard {
+        key: OsString,
+        previous: Option<OsString>,
+        _lock: MutexGuard<'static, ()>,
+    }
+
+    impl EnvVarGuard {
+        fn set(key: impl AsRef<OsStr>, value: impl AsRef<OsStr>) -> Self {
+            let key = key.as_ref().to_os_string();
+            let lock = ENV_MUTATION_LOCK
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let previous = env::var_os(&key);
+            std::env::set_var(&key, value.as_ref());
+            Self {
+                key,
+                previous,
+                _lock: lock,
+            }
+        }
+
+        fn remove_current(&self) {
+            std::env::remove_var(&self.key);
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            if let Some(previous) = self.previous.as_ref() {
+                std::env::set_var(&self.key, previous);
+            } else {
+                std::env::remove_var(&self.key);
+            }
+        }
+    }
+
+    #[test]
+    fn status_request_returns_supported_methods() {
+        let host = ServiceHost {
+            app_data_dir: PathBuf::from("/tmp/skills-copilot-test"),
+            adapter_ctx: AdapterContext {
+                user_home: PathBuf::from("/tmp/home"),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        let response = host.handle(ServiceRequest {
+            id: Some("1".to_string()),
+            method: "service.status".to_string(),
+            params: Value::Null,
+        });
+
+        assert!(response.ok);
+        let result = response.result.expect("status result");
+        assert_eq!(
+            result.get("protocol_version").and_then(Value::as_u64),
+            Some(u64::from(SERVICE_PROTOCOL_VERSION))
+        );
+        let methods = result
+            .get("supported_methods")
+            .and_then(Value::as_array)
+            .expect("methods");
+        assert!(methods.contains(&Value::String("app.version".to_string())));
+        assert!(methods.contains(&Value::String("app.stateSnapshot".to_string())));
+        assert!(methods.contains(&Value::String("adapter.listDiagnostics".to_string())));
+        assert!(methods.contains(&Value::String("analysis.scoreSkillQuality".to_string())));
+        assert!(methods.contains(&Value::String("analysis.detectStaleDrift".to_string())));
+        assert!(methods.contains(&Value::String("knowledge.search".to_string())));
+        assert!(methods.contains(&Value::String("knowledge.groupSimilarSkills".to_string())));
+        assert!(methods.contains(&Value::String(
+            "knowledge.buildCapabilityTaxonomy".to_string()
+        )));
+        assert!(methods.contains(&Value::String("workspace.checkReadiness".to_string())));
+        assert!(methods.contains(&Value::String("remediation.plan".to_string())));
+        assert!(methods.contains(&Value::String("remediation.previewDrafts".to_string())));
+        assert!(methods.contains(&Value::String("remediation.previewImpact".to_string())));
+        assert!(methods.contains(&Value::String("remediation.batchReview".to_string())));
+        assert!(methods.contains(&Value::String("remediation.listHistory".to_string())));
+        assert!(methods.contains(&Value::String("remediation.recordHistory".to_string())));
+        assert!(methods.contains(&Value::String("remediation.deleteHistory".to_string())));
+        assert!(methods.contains(&Value::String("task.checkReadiness".to_string())));
+        assert!(methods.contains(&Value::String("task.rankSkillRoutes".to_string())));
+        assert!(methods.contains(&Value::String("task.compareAgentReadiness".to_string())));
+        assert!(methods.contains(&Value::String("task.buildCockpit".to_string())));
+        assert!(methods.contains(&Value::String("task.listBenchmarks".to_string())));
+        assert!(methods.contains(&Value::String("task.saveBenchmark".to_string())));
+        assert!(methods.contains(&Value::String("task.deleteBenchmark".to_string())));
+        assert!(methods.contains(&Value::String("task.evaluateBenchmarks".to_string())));
+        assert!(methods.contains(&Value::String("task.saveRoutingBaseline".to_string())));
+        assert!(methods.contains(&Value::String("task.detectRoutingRegression".to_string())));
+        assert!(methods.contains(&Value::String("routing.accuracyDashboard".to_string())));
+        assert!(methods.contains(&Value::String("session.reviewAgentSkillUse".to_string())));
+        assert!(methods.contains(&Value::String("session.listSkillReviews".to_string())));
+        assert!(methods.contains(&Value::String("session.deleteSkillReview".to_string())));
+        assert!(methods.contains(&Value::String("trace.importLocal".to_string())));
+        assert!(methods.contains(&Value::String("trace.listImports".to_string())));
+        assert!(methods.contains(&Value::String("trace.deleteImport".to_string())));
+        assert!(methods.contains(&Value::String("llm.status".to_string())));
+        assert!(methods.contains(&Value::String("llm.listProviderProfiles".to_string())));
+        assert!(methods.contains(&Value::String("llm.saveProviderProfile".to_string())));
+        assert!(methods.contains(&Value::String("llm.deleteProviderProfile".to_string())));
+        assert!(methods.contains(&Value::String("llm.testProviderConnection".to_string())));
+        assert!(methods.contains(&Value::String("llm.previewPrompt".to_string())));
+        assert!(methods.contains(&Value::String("llm.confirmPromptAndSend".to_string())));
+        assert!(methods.contains(&Value::String("llm.listPromptRuns".to_string())));
+        assert!(methods.contains(&Value::String("llm.providerObservability".to_string())));
+        assert!(methods.contains(&Value::String("llm.prepareAction".to_string())));
+        assert!(methods.contains(&Value::String("llm.prepareSkillAnalysis".to_string())));
+        assert!(methods.contains(&Value::String("cleanup.listQueue".to_string())));
+        assert!(methods.contains(&Value::String("cleanup.planGuidedFlow".to_string())));
+        assert!(methods.contains(&Value::String("cleanup.recordGuidedStep".to_string())));
+        assert!(methods.contains(&Value::String("comparison.listCrossAgent".to_string())));
+        assert!(methods.contains(&Value::String("rules.listTuning".to_string())));
+        assert!(methods.contains(&Value::String("rules.setSeverityOverride".to_string())));
+        assert!(methods.contains(&Value::String("rules.clearSeverityOverride".to_string())));
+        assert!(methods.contains(&Value::String("rules.setSuppression".to_string())));
+        assert!(methods.contains(&Value::String("rules.clearSuppression".to_string())));
+        assert!(methods.contains(&Value::String("script.previewExecution".to_string())));
+        assert!(methods.contains(&Value::String("script.execute".to_string())));
+        assert!(methods.contains(&Value::String("project.getContext".to_string())));
+        assert!(methods.contains(&Value::String("project.setContext".to_string())));
+        assert!(methods.contains(&Value::String("project.clearContext".to_string())));
+        assert!(methods.contains(&Value::String("project.validateContext".to_string())));
+        assert!(methods.contains(&Value::String("catalog.listSkills".to_string())));
+        assert!(methods.contains(&Value::String("catalog.getSkill".to_string())));
+        assert!(methods.contains(&Value::String("catalog.analysis".to_string())));
+        assert!(methods.contains(&Value::String("catalog.scanAll".to_string())));
+        assert!(methods.contains(&Value::String("skill.exportBundle".to_string())));
+        assert!(methods.contains(&Value::String("skill.install".to_string())));
+        assert!(methods.contains(&Value::String("config.toggleSkill".to_string())));
+        assert!(methods.contains(&Value::String("config.readClaudeSettings".to_string())));
+        assert!(methods.contains(&Value::String("config.saveClaudeSettings".to_string())));
+        assert!(methods.contains(&Value::String("snapshot.list".to_string())));
+        assert!(methods.contains(&Value::String("snapshot.rollback".to_string())));
+        let diagnostics = result
+            .get("adapter_diagnostics")
+            .and_then(Value::as_array)
+            .expect("adapter diagnostics");
+        assert!(diagnostics.iter().any(|diagnostic| {
+            diagnostic.get("agent").and_then(Value::as_str) == Some("hermes")
+                && diagnostic
+                    .pointer("/access/writable_status")
+                    .and_then(Value::as_str)
+                    == Some("blocked")
+        }));
+        let project_context = result
+            .get("project_context")
+            .and_then(Value::as_object)
+            .expect("project context summary");
+        assert_eq!(
+            project_context.get("source").and_then(Value::as_str),
+            Some("none")
+        );
+        let llm = result.get("llm").and_then(Value::as_object).expect("llm");
+        assert_eq!(llm.get("enabled").and_then(Value::as_bool), Some(false));
+        assert_eq!(llm.get("configured").and_then(Value::as_bool), Some(false));
+        assert_eq!(
+            llm.get("credential_persistence_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        let script_execution = result
+            .get("script_execution")
+            .and_then(Value::as_object)
+            .expect("script execution status");
+        assert_eq!(
+            script_execution.get("enabled").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            script_execution
+                .get("llm_initiation_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn list_agent_config_snapshots_returns_selected_agent_timeline_only() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "skills-copilot-service-timeline-{}",
+            std::process::id()
+        ));
+        let app_data_dir = temp_root.join("app-data");
+        fs::create_dir_all(&app_data_dir).expect("create app data");
+        let host = test_host(app_data_dir);
+        let catalog = Catalog::open(&host.catalog_path()).expect("open catalog");
+        catalog.init().expect("init catalog");
+
+        for (id, agent, scope, target, content, created_at_ms) in [
+            (
+                "snap-claude",
+                "claude-code",
+                "agent-global",
+                "/tmp/home/.claude/settings.json",
+                "{}\n",
+                10,
+            ),
+            (
+                "snap-codex-new",
+                "codex",
+                "agent-global",
+                "/tmp/home/.codex/config.toml",
+                "disable_response_storage = true\n",
+                30,
+            ),
+            (
+                "snap-codex-old",
+                "codex",
+                "agent-project",
+                "/tmp/project/.codex/config.toml",
+                "approval_policy = \"never\"\n",
+                20,
+            ),
+            (
+                "snap-opencode",
+                "opencode",
+                "agent-global",
+                "/tmp/home/.config/opencode/opencode.json",
+                "{}\n",
+                40,
+            ),
+        ] {
+            catalog
+                .create_config_snapshot(skills_copilot_catalog::ConfigSnapshotDraft {
+                    id,
+                    agent,
+                    scope,
+                    target,
+                    content,
+                    reason: "pre-toggle",
+                    created_at_ms,
+                })
+                .expect("create snapshot");
+        }
+
+        let response = host.handle(ServiceRequest {
+            id: Some("timeline".to_string()),
+            method: "snapshot.listAgentConfig".to_string(),
+            params: json!({ "agent": "codex" }),
+        });
+
+        assert!(response.ok);
+        let result = response.result.expect("timeline result");
+        let snapshots: Vec<WireConfigSnapshotRecord> =
+            serde_json::from_value(result).expect("decode snapshots");
+        assert_eq!(
+            snapshots
+                .iter()
+                .map(|snapshot| snapshot.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["snap-codex-new", "snap-codex-old"]
+        );
+        assert!(snapshots.iter().all(|snapshot| snapshot.agent == "codex"));
+
+        let scoped_response = host.handle(ServiceRequest {
+            id: Some("timeline-scope".to_string()),
+            method: "snapshot.listAgentConfig".to_string(),
+            params: json!({ "agent": "codex", "scope": "agent-project" }),
+        });
+        assert!(scoped_response.ok);
+        let scoped_result = scoped_response.result.expect("scoped timeline result");
+        let scoped_snapshots: Vec<WireConfigSnapshotRecord> =
+            serde_json::from_value(scoped_result).expect("decode scoped snapshots");
+        assert_eq!(scoped_snapshots.len(), 1);
+        assert_eq!(scoped_snapshots[0].id, "snap-codex-old");
+        assert_eq!(scoped_snapshots[0].scope, "agent-project");
+
+        let _ = fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn catalog_analysis_returns_empty_read_only_summary() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-analysis-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("analysis".to_string()),
+            method: "catalog.analysis".to_string(),
+            params: Value::Null,
+        });
+
+        assert!(response.ok);
+        let result = response.result.expect("analysis result");
+        assert_eq!(
+            result
+                .pointer("/summary/total_groups")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/affected_skill_count")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            result.get("groups").and_then(Value::as_array).map(Vec::len),
+            Some(0)
+        );
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn cleanup_queue_orders_counts_and_filters_read_only_items() {
+        let unique = unique_suffix();
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-cleanup-queue-test-{}-{unique}",
+            std::process::id()
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_cleanup_queue_fixture(&host);
+
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("cleanup".to_string()),
+            method: "cleanup.listQueue".to_string(),
+            params: json!({}),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("cleanup result");
+        assert_eq!(
+            result
+                .pointer("/summary/read_only")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/writes_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        let items = result
+            .get("items")
+            .and_then(Value::as_array)
+            .expect("queue items");
+        assert!(
+            items.len() >= 5,
+            "expected aggregate queue items: {items:?}"
+        );
+        assert_eq!(
+            items
+                .iter()
+                .map(|item| item.get("kind").and_then(Value::as_str).unwrap())
+                .take(4)
+                .collect::<Vec<_>>(),
+            vec!["integrity", "conflict", "finding", "finding"]
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/counts_by_kind/integrity")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/counts_by_kind/conflict")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert!(result
+            .pointer("/summary/counts_by_kind/analysis")
+            .and_then(Value::as_u64)
+            .is_some_and(|count| count >= 1));
+        assert!(
+            items
+                .iter()
+                .all(|item| item.get("read_only").and_then(Value::as_bool) == Some(true)),
+            "all queue items should be read-only"
+        );
+        assert!(
+            items
+                .iter()
+                .all(|item| item.get("writes_allowed").and_then(Value::as_bool) == Some(false)),
+            "queue must expose no write affordance"
+        );
+        assert!(
+            !items.iter().any(
+                |item| item.get("source_id").and_then(Value::as_str) == Some("ignored-finding")
+            ),
+            "ignored triage findings should not be queued"
+        );
+
+        let filtered = host.handle(ServiceRequest {
+            id: Some("cleanup-filtered".to_string()),
+            method: "cleanup.listQueue".to_string(),
+            params: json!({ "agent": "codex", "limit": 2 }),
+        });
+        assert!(filtered.ok, "{:?}", filtered.error);
+        let filtered_result = filtered.result.expect("filtered cleanup");
+        let filtered_items = filtered_result
+            .get("items")
+            .and_then(Value::as_array)
+            .expect("filtered items");
+        assert_eq!(filtered_items.len(), 2);
+        assert!(filtered_items.iter().all(|item| {
+            item.get("agent")
+                .and_then(Value::as_str)
+                .is_none_or(|agent| agent == "codex")
+        }));
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn comparison_list_cross_agent_returns_read_only_payload() {
+        let unique = unique_suffix();
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-comparison-test-{}-{unique}",
+            std::process::id()
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_cleanup_queue_fixture(&host);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("comparison".to_string()),
+            method: "comparison.listCrossAgent".to_string(),
+            params: json!({
+                "selected_instance_id": "codex-alpha",
+                "agent": "codex",
+                "query": "shared",
+                "limit": 5
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("comparison result");
+        assert_eq!(result.get("read_only").and_then(Value::as_bool), Some(true));
+        assert_eq!(
+            result.get("writes_allowed").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("provider_request_sent").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/selected_instance_id")
+                .and_then(Value::as_str),
+            Some("codex-alpha")
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/returned_groups")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            result
+                .pointer("/groups/0/canonical_name")
+                .and_then(Value::as_str),
+            Some("shared-fixture")
+        );
+        assert!(result
+            .pointer("/groups/0/risk_summary/finding_count")
+            .and_then(Value::as_u64)
+            .is_some_and(|count| count >= 1));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn comparison_list_cross_agent_missing_catalog_is_read_only_empty() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-comparison-empty-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("comparison-empty".to_string()),
+            method: "comparison.listCrossAgent".to_string(),
+            params: Value::Null,
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("comparison empty result");
+        assert_eq!(
+            result
+                .pointer("/summary/returned_groups")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(result.get("read_only").and_then(Value::as_bool), Some(true));
+        assert_eq!(
+            result.get("writes_allowed").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert!(
+            !app_data_dir.exists(),
+            "comparison.listCrossAgent must not initialize app data when there is no catalog"
+        );
+    }
+
+    #[test]
+    fn cleanup_queue_missing_catalog_returns_empty_without_creating_app_data() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-cleanup-empty-test-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("cleanup-empty".to_string()),
+            method: "cleanup.listQueue".to_string(),
+            params: Value::Null,
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("cleanup result");
+        assert_eq!(
+            result
+                .pointer("/summary/total_count")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            result.get("items").and_then(Value::as_array).map(Vec::len),
+            Some(0)
+        );
+        assert!(
+            !app_data_dir.exists(),
+            "cleanup.listQueue must not initialize app data when there is no catalog"
+        );
+    }
+
+    #[test]
+    fn guided_cleanup_plan_guided_flow_combines_local_evidence_read_only() {
+        let unique = unique_suffix();
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-guided-cleanup-plan-test-{}-{unique}",
+            std::process::id()
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-guided-cleanup-plan-home-{}-{unique}",
+            std::process::id()
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_cleanup_queue_fixture(&host);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("guided-cleanup-plan".to_string()),
+            method: "cleanup.planGuidedFlow".to_string(),
+            params: json!({
+                "task_text": "Review the shared fixture skill and local cleanup posture",
+                "agent": "codex",
+                "selected_skill_id": "codex-alpha",
+                "workspace": "Fixture Workspace",
+                "limit": 8,
+                "include_recorded_steps": false
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("guided cleanup plan");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("local-v2.67")
+        );
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result.pointer("/filters/agent").and_then(Value::as_str),
+            Some("codex")
+        );
+        assert!(result
+            .get("flow_steps")
+            .and_then(Value::as_array)
+            .is_some_and(|steps| !steps.is_empty()));
+        assert!(result
+            .get("issue_groups")
+            .and_then(Value::as_array)
+            .is_some_and(|groups| !groups.is_empty()));
+        assert!(result
+            .get("safe_next_actions")
+            .and_then(Value::as_array)
+            .is_some_and(|actions| actions
+                .iter()
+                .any(|action| action.get("entry_method").and_then(Value::as_str)
+                    == Some("cleanup.recordGuidedStep"))));
+        assert!(result
+            .get("safe_next_actions")
+            .and_then(Value::as_array)
+            .is_some_and(|actions| actions
+                .iter()
+                .any(|action| action.get("entry_method").and_then(Value::as_str)
+                    == Some("batch.previewSkillToggles"))));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/action")
+                .and_then(Value::as_str),
+            Some("guided_cleanup_flow")
+        );
+        assert_eq!(
+            result
+                .pointer("/prompt_request/request/action")
+                .and_then(Value::as_str),
+            Some("guided_cleanup_flow")
+        );
+        assert_guided_cleanup_safety(&result);
+        assert!(result
+            .get("flow_steps")
+            .and_then(Value::as_array)
+            .expect("flow steps")
+            .iter()
+            .all(|step| step
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool)
+                == Some(false)));
+        let forbidden_deep_link_methods = [
+            "batch.applySkillToggles",
+            "config.toggleSkill",
+            "script.execute",
+            "llm.confirmPromptAndSend",
+        ];
+        for step in result
+            .get("flow_steps")
+            .and_then(Value::as_array)
+            .expect("flow steps")
+        {
+            let link = step
+                .get("safe_action_deep_link")
+                .expect("flow step safe action deep link");
+            assert_eq!(link.get("can_apply").and_then(Value::as_bool), Some(false));
+            assert_eq!(
+                link.pointer("/safety_flags/provider_request_sent")
+                    .and_then(Value::as_bool),
+                Some(false)
+            );
+            let method = link
+                .get("method")
+                .and_then(Value::as_str)
+                .expect("deep link method");
+            assert!(
+                !forbidden_deep_link_methods.contains(&method),
+                "guided cleanup deep link method must not target unsafe path: {method}"
+            );
+        }
+        for action in result
+            .get("safe_next_actions")
+            .and_then(Value::as_array)
+            .expect("safe next actions")
+        {
+            let link = action.get("deep_link").expect("safe action deep link");
+            assert_eq!(link.get("can_apply").and_then(Value::as_bool), Some(false));
+            assert_eq!(
+                link.pointer("/safety_flags/provider_request_sent")
+                    .and_then(Value::as_bool),
+                Some(false)
+            );
+            let method = link
+                .get("method")
+                .and_then(Value::as_str)
+                .expect("deep link method");
+            assert!(
+                !forbidden_deep_link_methods.contains(&method),
+                "guided cleanup safe action deep link method must not target unsafe path: {method}"
+            );
+        }
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.guided_cleanup_steps_path().exists());
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn guided_cleanup_plan_guided_flow_missing_catalog_is_safe_empty() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-guided-cleanup-empty-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("guided-cleanup-empty".to_string()),
+            method: "cleanup.planGuidedFlow".to_string(),
+            params: json!({
+                "task": "Review cleanup posture",
+                "selected_skill_id": "missing-skill",
+                "limit": 4
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("guided cleanup empty");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("local-v2.67")
+        );
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/returned_step_count")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert!(result
+            .get("flow_steps")
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_guided_cleanup_safety(&result);
+        assert!(
+            !app_data_dir.exists(),
+            "missing-catalog guided cleanup plan must not initialize app data"
+        );
+    }
+
+    #[test]
+    fn guided_cleanup_record_guided_step_persists_redacted_app_local_metadata_only() {
+        let unique = unique_suffix();
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-guided-cleanup-record-test-{}-{unique}",
+            std::process::id()
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-guided-cleanup-record-home-{}-{unique}",
+            std::process::id()
+        ));
+        let project_root = app_data_dir.join("project-root");
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: Some(project_root.clone()),
+                project_cwd: Some(project_root.clone()),
+                extra_roots: Vec::new(),
+            },
+        };
+        let raw_secret = "guided-cleanup-secret-value";
+        let key_label = ["API", "_", "KEY"].join("");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("guided-cleanup-record".to_string()),
+            method: "cleanup.recordGuidedStep".to_string(),
+            params: json!({
+                "id": "guided-cleanup-redaction",
+                "flow_step_id": format!("guided-step:{}", project_root.join("SKILL.md").display()),
+                "title": format!("Record guided review at {}", user_home.join(".codex/config.toml").display()),
+                "decision": "Needs follow-up",
+                "status": "Recorded",
+                "note": format!("Do not store {key_label}={raw_secret}"),
+                "task": format!("Review local cleanup path {}", project_root.display()),
+                "agent": "codex",
+                "instance_id": "codex-alpha",
+                "definition_id": "shared-fixture",
+                "skill_name": "shared-fixture-skill",
+                "source_refs": [format!("cleanup:{}", project_root.join("SKILL.md").display())],
+                "evidence_refs": [format!("path:{}", user_home.join(".codex/config.toml").display())]
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("guided cleanup record result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("local-v2.67")
+        );
+        assert_eq!(
+            result.pointer("/record/id").and_then(Value::as_str),
+            Some("guided-cleanup-redaction")
+        );
+        assert_eq!(
+            result.pointer("/record/decision").and_then(Value::as_str),
+            Some("needs-follow-up")
+        );
+        assert_eq!(
+            result.pointer("/record/status").and_then(Value::as_str),
+            Some("recorded")
+        );
+        assert_eq!(
+            result.get("app_local_only").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result.get("provider_request_sent").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("skill_files_mutated").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("agent_config_mutated").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("snapshot_created").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("rollback_performed").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("triage_mutated").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("script_executed").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("credential_accessed").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_guided_cleanup_safety(&result);
+
+        assert!(host.guided_cleanup_steps_path().exists());
+        let persisted =
+            fs::read_to_string(host.guided_cleanup_steps_path()).expect("read guided cleanup file");
+        assert!(persisted.contains("$HOME"));
+        assert!(persisted.contains("<project-root>"));
+        assert!(persisted.contains("<redacted>"));
+        assert!(!persisted.contains(raw_secret));
+        assert!(!persisted.contains(&key_label));
+        assert!(!persisted.contains(&user_home.to_string_lossy().to_string()));
+        assert!(!persisted.contains(&project_root.to_string_lossy().to_string()));
+        assert!(!host.catalog_path().exists());
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn guided_cleanup_record_guided_step_rejects_empty_step_without_writing() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-guided-cleanup-record-empty-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("guided-cleanup-record-empty".to_string()),
+            method: "cleanup.recordGuidedStep".to_string(),
+            params: json!({
+                "flow_step_id": "   ",
+                "decision": "recorded"
+            }),
+        });
+
+        assert!(!response.ok);
+        let error = response.error.expect("empty guided cleanup record error");
+        assert_eq!(error.code, "invalid_request");
+        assert!(error.message.contains("flow_step_id"));
+        assert!(!host.guided_cleanup_steps_path().exists());
+        assert!(!host.catalog_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    }
+
+    #[test]
+    fn guided_cleanup_service_protocol_fixtures_decode_new_methods() {
+        let fixtures_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join("fixtures/service-protocol");
+        for method in ["cleanup.planGuidedFlow", "cleanup.recordGuidedStep"] {
+            let request_path = fixtures_dir.join(format!("{method}.request.json"));
+            let response_path = fixtures_dir.join(format!("{method}.response.json"));
+            let request_content =
+                fs::read_to_string(&request_path).expect("read guided cleanup request fixture");
+            let request: ServiceRequest =
+                serde_json::from_str(&request_content).expect("decode guided cleanup request");
+            assert_eq!(request.method, method);
+            let response_content =
+                fs::read_to_string(&response_path).expect("read guided cleanup response fixture");
+            let response: ServiceResponse =
+                serde_json::from_str(&response_content).expect("decode guided cleanup response");
+            assert!(response.ok, "{method} response fixture should be ok");
+            let result = response.result.expect("guided cleanup fixture result");
+            decode_response_fixture(method, &result, &response_path);
+        }
+    }
+
+    #[test]
+    fn llm_status_defaults_disabled_without_creating_files() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-llm-status-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-llm-home-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+
+        let response = host.handle(ServiceRequest {
+            id: Some("llm-status".to_string()),
+            method: "llm.status".to_string(),
+            params: Value::Null,
+        });
+
+        assert!(response.ok);
+        let result = response.result.expect("llm status");
+        assert_eq!(result.get("enabled").and_then(Value::as_bool), Some(false));
+        assert_eq!(
+            result.get("configured").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert!(result.get("provider").is_some_and(Value::is_null));
+        assert!(result.get("model").is_some_and(Value::is_null));
+        assert_eq!(
+            result.get("credentials_storage").and_then(Value::as_str),
+            Some("none")
+        );
+        assert_eq!(
+            result
+                .get("credential_persistence_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("provider_profile_count").and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            result
+                .get("raw_prompt_persistence_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .get("raw_response_persistence_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert!(
+            !app_data_dir.exists(),
+            "llm.status must not initialize app data"
+        );
+        assert!(
+            !user_home.exists(),
+            "llm.status must not create credential or config roots"
+        );
+    }
+
+    #[test]
+    fn llm_provider_profile_save_persists_metadata_without_secret_file() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-provider-profile-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("provider-save".to_string()),
+            method: "llm.saveProviderProfile".to_string(),
+            params: json!({
+                "id": "fixture-openai",
+                "display_name": "Fixture OpenAI",
+                "provider_type": "openai-compatible",
+                "base_url": "https://example.invalid/v1",
+                "model": "fixture-model",
+                "enabled": true,
+                "single_request_token_limit": 4096,
+                "monthly_budget_usd": 3.5
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("provider save result");
+        assert_eq!(
+            result.pointer("/profile/id").and_then(Value::as_str),
+            Some("fixture-openai")
+        );
+        assert_eq!(
+            result
+                .pointer("/profile/provider_type")
+                .and_then(Value::as_str),
+            Some("openai-compatible")
+        );
+        assert_eq!(
+            result
+                .pointer("/credential_status/secret_available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("raw_secret_returned").and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let profiles_path = provider_profiles_path(&app_data_dir);
+        let profile_content = fs::read_to_string(&profiles_path).expect("profile metadata");
+        assert!(profile_content.contains("fixture-openai"));
+        assert!(!profile_content.contains("api_key"));
+        assert!(!app_data_dir.join("llm-credentials.json").exists());
+        assert!(!app_data_dir.join("llm.yaml").exists());
+
+        let list = host.handle(ServiceRequest {
+            id: Some("provider-list".to_string()),
+            method: "llm.listProviderProfiles".to_string(),
+            params: Value::Null,
+        });
+        assert!(list.ok, "{:?}", list.error);
+        let list_result = list.result.expect("provider list");
+        assert_eq!(
+            list_result
+                .pointer("/profiles/0/id")
+                .and_then(Value::as_str),
+            Some("fixture-openai")
+        );
+        assert_eq!(
+            list_result
+                .get("raw_secrets_returned")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let status = host.handle(ServiceRequest {
+            id: Some("provider-status".to_string()),
+            method: "llm.status".to_string(),
+            params: Value::Null,
+        });
+        assert!(status.ok);
+        let status_result = status.result.expect("status");
+        assert_eq!(
+            status_result.get("configured").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            status_result
+                .get("provider_profile_count")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            status_result
+                .get("credentials_storage")
+                .and_then(Value::as_str),
+            Some("keychain")
+        );
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn llm_test_provider_connection_blocks_without_key_and_writes_metadata_only() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-provider-test-call-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+        let save = host.handle(ServiceRequest {
+            id: Some("provider-save".to_string()),
+            method: "llm.saveProviderProfile".to_string(),
+            params: json!({
+                "id": "fixture-claude",
+                "display_name": "Fixture Claude",
+                "provider_type": "claude-compatible",
+                "base_url": "https://example.invalid",
+                "model": "fixture-claude-model",
+                "enabled": true,
+                "api_version": "2023-06-01",
+                "single_request_token_limit": 4096,
+                "monthly_budget_usd": 2.0
+            }),
+        });
+        assert!(save.ok, "{:?}", save.error);
+
+        let test = host.handle(ServiceRequest {
+            id: Some("provider-test".to_string()),
+            method: "llm.testProviderConnection".to_string(),
+            params: json!({
+                "profile_id": "fixture-claude",
+                "confirmation_id": "confirm-fixture-test",
+                "timeout_ms": 250
+            }),
+        });
+
+        assert!(test.ok, "{:?}", test.error);
+        let result = test.result.expect("test connection");
+        assert_eq!(
+            result.get("status").and_then(Value::as_str),
+            Some("blocked")
+        );
+        assert_eq!(
+            result.get("provider_request_sent").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("credential_accessed").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("raw_prompt_persisted").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .get("raw_response_persisted")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("raw_secret_returned").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.pointer("/audit/action_type").and_then(Value::as_str),
+            Some("test_connection")
+        );
+        assert_eq!(
+            result
+                .pointer("/audit/destination_host")
+                .and_then(Value::as_str),
+            Some("example.invalid")
+        );
+        assert_eq!(
+            result
+                .pointer("/audit/raw_prompt_persisted")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/audit/raw_response_persisted")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let audit_path = provider_call_metadata_path(&app_data_dir);
+        let audit_content = fs::read_to_string(&audit_path).expect("provider metadata");
+        assert!(audit_content.contains("\"action_type\":\"test_connection\""));
+        assert!(audit_content.contains("\"destination_host\":\"example.invalid\""));
+        assert!(!audit_content.contains("connection test"));
+        assert!(!audit_content.contains("api_key"));
+        assert!(!host.script_execution_audit_path().exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn llm_test_provider_connection_uses_preserved_key_after_blank_save() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-provider-preserve-key-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let (base_url, server) = spawn_mock_openai_server();
+        let host = test_host(app_data_dir.clone());
+        let profile_id = format!("mock-openai-preserve-{}", unique_suffix());
+        let secret_env = provider_test_secret_env_name(&profile_id);
+        let _secret_env_guard = EnvVarGuard::set(&secret_env, "test-secret-key");
+
+        let save = host.handle(ServiceRequest {
+            id: Some("provider-save".to_string()),
+            method: "llm.saveProviderProfile".to_string(),
+            params: json!({
+                "id": profile_id,
+                "display_name": "Mock OpenAI Preserve",
+                "provider_type": "openai-compatible",
+                "base_url": base_url,
+                "model": "mock-model",
+                "enabled": true,
+                "single_request_token_limit": 4096,
+                "monthly_budget_usd": 10.0
+            }),
+        });
+        assert!(save.ok, "{:?}", save.error);
+        assert_eq!(
+            save.result
+                .as_ref()
+                .and_then(|result| result.pointer("/profile/credential_status/secret_available"))
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+
+        let blank_resave = host.handle(ServiceRequest {
+            id: Some("provider-resave".to_string()),
+            method: "llm.saveProviderProfile".to_string(),
+            params: json!({
+                "id": profile_id,
+                "display_name": "Mock OpenAI Preserve",
+                "provider_type": "openai-compatible",
+                "base_url": base_url,
+                "model": "mock-model-updated",
+                "enabled": true,
+                "single_request_token_limit": 4096,
+                "monthly_budget_usd": 10.0
+            }),
+        });
+        assert!(blank_resave.ok, "{:?}", blank_resave.error);
+        assert_eq!(
+            blank_resave
+                .result
+                .as_ref()
+                .and_then(|result| result.pointer("/profile/credential_status/secret_available"))
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+
+        let test = host.handle(ServiceRequest {
+            id: Some("provider-test".to_string()),
+            method: "llm.testProviderConnection".to_string(),
+            params: json!({
+                "profile_id": profile_id,
+                "confirmation_id": "confirm-preserved-key",
+                "timeout_ms": 2_000
+            }),
+        });
+
+        assert!(test.ok, "{:?}", test.error);
+        let result = test.result.expect("test connection");
+        assert_eq!(
+            result.get("status").and_then(Value::as_str),
+            Some("succeeded")
+        );
+        assert_eq!(
+            result.get("provider_request_sent").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result.get("credential_accessed").and_then(Value::as_bool),
+            Some(true)
+        );
+
+        let request_text = server.join().expect("mock server thread");
+        assert!(request_text
+            .to_lowercase()
+            .contains("authorization: bearer test-secret-key"));
+        let audit_content =
+            fs::read_to_string(provider_call_metadata_path(&app_data_dir)).expect("audit content");
+        assert!(audit_content.contains("\"status\":\"succeeded\""));
+        assert!(!audit_content.contains("test-secret-key"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn llm_test_provider_connection_downgrades_stale_credential_metadata() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-provider-stale-key-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+        let profile_id = format!("mock-openai-stale-{}", unique_suffix());
+        let secret_env = provider_test_secret_env_name(&profile_id);
+        let secret_env_guard = EnvVarGuard::set(&secret_env, "test-secret-key");
+
+        let save = host.handle(ServiceRequest {
+            id: Some("provider-save".to_string()),
+            method: "llm.saveProviderProfile".to_string(),
+            params: json!({
+                "id": profile_id,
+                "display_name": "Mock OpenAI Stale",
+                "provider_type": "openai-compatible",
+                "base_url": "https://api.fixture.invalid/v1",
+                "model": "mock-model",
+                "enabled": true,
+                "single_request_token_limit": 4096,
+                "monthly_budget_usd": 10.0
+            }),
+        });
+        assert!(save.ok, "{:?}", save.error);
+        secret_env_guard.remove_current();
+
+        let test = host.handle(ServiceRequest {
+            id: Some("provider-test".to_string()),
+            method: "llm.testProviderConnection".to_string(),
+            params: json!({
+                "profile_id": profile_id,
+                "confirmation_id": "confirm-stale-key",
+                "timeout_ms": 250
+            }),
+        });
+        assert!(test.ok, "{:?}", test.error);
+        let result = test.result.expect("test connection");
+        assert_eq!(
+            result.get("status").and_then(Value::as_str),
+            Some("blocked")
+        );
+        assert_eq!(
+            result.pointer("/audit/error_code").and_then(Value::as_str),
+            Some("credential_unavailable")
+        );
+
+        let list = host.handle(ServiceRequest {
+            id: Some("provider-list".to_string()),
+            method: "llm.listProviderProfiles".to_string(),
+            params: Value::Null,
+        });
+        assert!(list.ok, "{:?}", list.error);
+        assert_eq!(
+            list.result
+                .as_ref()
+                .and_then(|result| result.pointer("/profiles/0/credential_status/secret_available"))
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            list.result
+                .as_ref()
+                .and_then(
+                    |result| result.pointer("/profiles/0/credential_reference/secret_persisted")
+                )
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn script_preview_returns_disabled_scope_without_writing_audit() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-script-preview-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("script-preview".to_string()),
+            method: "script.previewExecution".to_string(),
+            params: json!({
+                "command": ["python3", "scripts/build.py"],
+                "cwd": "fixture-project",
+                "env": {
+                    "API_TOKEN": "fixture-redacted-value"
+                },
+                "network": "full",
+                "files": ["./src/**"],
+                "skill_instance_id": "skill-fixture",
+                "initiated_by": "user"
+            }),
+        });
+
+        assert!(response.ok);
+        let result = response.result.expect("preview result");
+        assert_eq!(
+            result.get("execution_allowed").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result.get("initiator_allowed").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/confirmation/required")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result.pointer("/env/value_policy").and_then(Value::as_str),
+            Some("values-redacted")
+        );
+        let serialized = serde_json::to_string(&result).expect("serialize result");
+        assert!(!serialized.contains("fixture-redacted-value"));
+        assert!(
+            !host.script_execution_audit_path().exists(),
+            "preview must not write audit records"
+        );
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn script_execute_requires_per_request_confirmation() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-script-confirm-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("script-execute-unconfirmed".to_string()),
+            method: "script.execute".to_string(),
+            params: json!({
+                "command": ["sh", "-c", "touch should-not-run"],
+                "confirmed": false
+            }),
+        });
+
+        assert!(!response.ok);
+        let error = response.error.expect("confirmation error");
+        assert_eq!(error.code, "confirmation_required");
+        assert!(
+            !host.script_execution_audit_path().exists(),
+            "unconfirmed execute must not write an audit record"
+        );
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn script_execute_confirmed_writes_blocked_audit_without_spawning() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-script-audit-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("script-execute-confirmed".to_string()),
+            method: "script.execute".to_string(),
+            params: json!({
+                "command": ["sh", "-c", "touch spawned-marker"],
+                "confirmed": true
+            }),
+        });
+
+        assert!(response.ok);
+        let result = response.result.expect("attempt result");
+        assert_eq!(
+            result.get("status").and_then(Value::as_str),
+            Some("blocked")
+        );
+        assert_eq!(
+            result.get("outcome").and_then(Value::as_str),
+            Some("execution_disabled")
+        );
+        assert_eq!(
+            result.get("spawned_process").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/preview/execution_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        let audit_path = host.script_execution_audit_path();
+        let audit_content = fs::read_to_string(&audit_path).expect("read audit");
+        assert!(audit_content.contains("\"status\":\"blocked\""));
+        assert!(!app_data_dir.join("spawned-marker").exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn script_execute_confirmed_llm_initiator_is_audited_as_blocked() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-script-llm-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("script-execute-llm".to_string()),
+            method: "script.execute".to_string(),
+            params: json!({
+                "command": ["python3", "-c", "print('blocked')"],
+                "confirmed": true,
+                "initiated_by": "llm"
+            }),
+        });
+
+        assert!(response.ok);
+        let result = response.result.expect("attempt result");
+        assert_eq!(
+            result.get("outcome").and_then(Value::as_str),
+            Some("llm_initiator_not_allowed")
+        );
+        assert_eq!(
+            result
+                .pointer("/preview/initiator_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        let audit_content =
+            fs::read_to_string(host.script_execution_audit_path()).expect("read audit");
+        assert!(audit_content.contains("llm_initiator_not_allowed"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn llm_prepare_action_never_allows_direct_write_or_leaks_skill_content() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-llm-prepare-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+        let skill_path = app_data_dir.join("secret-project-path").join("SKILL.md");
+        seed_catalog_with_llm_skill(&host, &skill_path);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("llm-prepare".to_string()),
+            method: "llm.prepareAction".to_string(),
+            params: json!({
+                "kind": "analyze",
+                "skill_instance_id": "llm-skill-id",
+                "user_intent": "summarize local risk"
+            }),
+        });
+
+        assert!(response.ok);
+        let result = response.result.expect("prepare action");
+        assert_eq!(
+            result.get("action").and_then(Value::as_str),
+            Some("analyze")
+        );
+        assert_eq!(result.get("allowed").and_then(Value::as_bool), Some(false));
+        assert_eq!(
+            result.get("requires_confirmation").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result.get("write_back_allowed").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .get("draft_requires_user_copy")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert!(result
+            .get("estimated_total_tokens")
+            .and_then(Value::as_u64)
+            .is_some_and(|tokens| tokens > 0));
+        assert!(result
+            .get("prompt_scope")
+            .and_then(Value::as_array)
+            .expect("prompt scope")
+            .contains(&Value::String("selected skill body".to_string())));
+        let review = result
+            .get("review_preview")
+            .and_then(Value::as_object)
+            .expect("review preview");
+        assert_eq!(
+            review.get("provider_request_sent").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            review
+                .get("write_actions_available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            review
+                .get("execution_actions_available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/review_preview/redaction/skill_body_returned")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/review_preview/redaction/paths_returned")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/review_preview/redaction/credentials_returned")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/review_preview/risk/level")
+                .and_then(Value::as_str),
+            Some("high")
+        );
+        assert!(review
+            .get("finding_explanations")
+            .and_then(Value::as_array)
+            .is_some_and(|findings| !findings.is_empty()));
+
+        let serialized = serde_json::to_string(&result).expect("serialize result");
+        assert!(!serialized.contains("OPENAI_API_KEY=<redacted>"));
+        assert!(!serialized.contains("Analyze local skill posture"));
+        assert!(!serialized.contains(&skill_path.to_string_lossy().to_string()));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }
+
+    #[test]
+    fn llm_prepare_missing_skill_returns_stable_error_without_creating_catalog() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-llm-missing-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("llm-missing".to_string()),
+            method: "llm.prepareAction".to_string(),
+            params: json!({
+                "kind": "draft_frontmatter",
+                "skill_instance_id": "missing-skill"
+            }),
+        });
+
+        assert!(!response.ok);
+        let error = response.error.expect("missing skill error");
+        assert_eq!(error.code, "skill_not_found");
+        assert!(error.message.contains("missing-skill"));
+        assert!(
+            !app_data_dir.exists(),
+            "missing LLM skill lookup must not create catalog or app data"
+        );
+    }
+
+    #[test]
+    fn llm_prepare_action_does_not_create_credentials_config_or_catalog_writes() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-llm-no-write-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-llm-no-write-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_llm_skill(&host, &app_data_dir.join("fixture-skill").join("SKILL.md"));
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("llm-no-write".to_string()),
+            method: "llm.prepareAction".to_string(),
+            params: json!({
+                "kind": "draft_frontmatter",
+                "skill_instance_id": "llm-skill-id",
+                "user_intent": "draft safer metadata"
+            }),
+        });
+
+        assert!(response.ok);
+        assert_eq!(
+            response
+                .result
+                .as_ref()
+                .and_then(|result| result.get("write_back_allowed"))
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        let after_records = after_catalog.list_skill_records().expect("records after");
+        let after_snapshots = after_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots after");
+        assert_eq!(after_records, before_records);
+        assert_eq!(after_snapshots, before_snapshots);
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+        assert!(!app_data_dir.join("llm-credentials.json").exists());
+        assert!(!app_data_dir.join("llm-config.json").exists());
+        let serialized = serde_json::to_string(&response.result).expect("serialize response");
+        assert!(!serialized.contains("OPENAI_API_KEY=<redacted>"));
+        assert!(!serialized.contains("Analyze local skill posture"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn llm_prepare_skill_analysis_is_read_only_and_reports_missing_selection() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-llm-skill-analysis-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-llm-skill-analysis-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_llm_skill(&host, &app_data_dir.join("fixture-skill").join("SKILL.md"));
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("llm-skill-analysis".to_string()),
+            method: "llm.prepareSkillAnalysis".to_string(),
+            params: json!({
+                "instance_ids": ["llm-skill-id", "missing-skill-id"],
+                "analysis_kind": "risk"
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("skill analysis prepare result");
+        assert_eq!(result.get("enabled").and_then(Value::as_bool), Some(false));
+        assert_eq!(
+            result.get("analysis_kind").and_then(Value::as_str),
+            Some("risk")
+        );
+        assert_eq!(
+            result.get("selected_skill_count").and_then(Value::as_u64),
+            Some(2)
+        );
+        assert_eq!(
+            result.get("included_skill_count").and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            result.get("excluded_missing_count").and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/write_back_enabled")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/script_execution_enabled")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/credential_storage_enabled")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/confirmation_required")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/included_skills/0/name")
+                .and_then(Value::as_str),
+            Some("llm-fixture")
+        );
+        assert!(result
+            .get("estimated_total_tokens")
+            .and_then(Value::as_u64)
+            .is_some_and(|tokens| tokens > 0));
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+        assert!(!app_data_dir.join("llm-credentials.json").exists());
+        assert!(!app_data_dir.join("llm-config.json").exists());
+        let serialized = serde_json::to_string(&result).expect("serialize result");
+        assert!(!serialized.contains("OPENAI_API_KEY=<redacted>"));
+        assert!(!serialized.contains("Analyze local skill posture"));
+        assert!(!serialized.contains("fixture-skill"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn analysis_score_skill_quality_returns_local_read_only_score() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-quality-score-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-quality-score-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        let skill_path = app_data_dir.join("fixture-skill").join("SKILL.md");
+        seed_catalog_with_llm_skill(&host, &skill_path);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("quality-score".to_string()),
+            method: "analysis.scoreSkillQuality".to_string(),
+            params: json!({ "instance_id": "llm-skill-id" }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("quality score result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("deterministic-service")
+        );
+        assert!(result
+            .get("score")
+            .and_then(Value::as_u64)
+            .is_some_and(|score| score <= 100));
+        assert_eq!(
+            result
+                .pointer("/safety_flags/read_only")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/write_back_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/script_execution_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/config_mutation_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/snapshot_created")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/triage_mutation_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/prompt_request/action")
+                .and_then(Value::as_str),
+            Some("quality_score")
+        );
+        assert_eq!(
+            result
+                .pointer("/prompt_request/request/action")
+                .and_then(Value::as_str),
+            Some("quality_score")
+        );
+        assert!(result
+            .get("components")
+            .and_then(Value::as_array)
+            .is_some_and(|components| components.len() == 5));
+        assert!(result
+            .get("evidence_references")
+            .and_then(Value::as_array)
+            .is_some_and(|evidence| !evidence.is_empty()));
+        assert!(result
+            .get("suggested_improvements")
+            .and_then(Value::as_array)
+            .is_some_and(|suggestions| !suggestions.is_empty()));
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let serialized = serde_json::to_string(&result).expect("serialize quality result");
+        assert!(!serialized.contains("OPENAI_API_KEY=<redacted>"));
+        assert!(!serialized.contains("Analyze local skill posture"));
+        assert!(!serialized.contains("fixture-redacted-value"));
+        assert!(!serialized.contains(&skill_path.to_string_lossy().to_string()));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn analysis_score_skill_quality_missing_skill_does_not_create_catalog() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-quality-score-missing-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("quality-score-missing".to_string()),
+            method: "analysis.scoreSkillQuality".to_string(),
+            params: json!({ "instance_id": "missing-skill-id" }),
+        });
+
+        assert!(!response.ok);
+        let error = response.error.expect("missing quality score error");
+        assert_eq!(error.code, "skill_not_found");
+        assert!(error.message.contains("missing-skill-id"));
+        assert!(
+            !app_data_dir.exists(),
+            "quality scoring must not initialize app data when there is no catalog"
+        );
+    }
+
+    #[test]
+    fn analysis_detect_stale_drift_missing_catalog_returns_safe_empty_result() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-stale-drift-missing-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("stale-drift-missing".to_string()),
+            method: "analysis.detectStaleDrift".to_string(),
+            params: json!({ "agent": "claude-code" }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("missing catalog stale drift result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("deterministic-service")
+        );
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/returned_row_count")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert!(result
+            .get("stale_drift_rows")
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_agent_readiness_safety(&result);
+        assert!(
+            !host.catalog_path().exists(),
+            "missing-catalog stale/drift detection must not initialize catalog.sqlite"
+        );
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    }
+
+    #[test]
+    fn analysis_detect_stale_drift_rejects_invalid_threshold_without_writes() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-stale-drift-invalid-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("stale-drift-invalid".to_string()),
+            method: "analysis.detectStaleDrift".to_string(),
+            params: json!({ "stale_days": 0 }),
+        });
+
+        assert!(!response.ok);
+        let error = response.error.expect("invalid stale drift error");
+        assert_eq!(error.code, "invalid_request");
+        assert!(error.message.contains("stale_days"));
+        assert!(
+            !app_data_dir.exists(),
+            "invalid stale/drift request must not initialize app data"
+        );
+    }
+
+    #[test]
+    fn analysis_detect_stale_drift_returns_local_read_only_rows() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-stale-drift-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-stale-drift-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_stale_drift_fixture(&host);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("stale-drift".to_string()),
+            method: "analysis.detectStaleDrift".to_string(),
+            params: json!({
+                "agent": "claude-code",
+                "candidate_instance_ids": ["stale-drift-alpha"],
+                "limit": 4,
+                "thresholds": { "stale_days": 30 }
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("stale drift result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("deterministic-service")
+        );
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/returned_row_count")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            result
+                .pointer("/stale_drift_rows/0/instance_id")
+                .and_then(Value::as_str),
+            Some("stale-drift-alpha")
+        );
+        assert_eq!(
+            result
+                .pointer("/stale_drift_rows/0/drift_signals/fingerprint_drift")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/stale_drift_rows/0/drift_signals/stale_by_mtime")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert!(result
+            .pointer("/stale_drift_rows/0/stale_drift_score")
+            .and_then(Value::as_u64)
+            .is_some_and(|score| score > 0 && score <= 100));
+        assert!(result
+            .get("readiness_impact_rows")
+            .and_then(Value::as_array)
+            .is_some_and(|rows| !rows.is_empty()));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/action")
+                .and_then(Value::as_str),
+            Some("stale_drift_detection")
+        );
+        assert_eq!(
+            result
+                .pointer("/prompt_request/request/action")
+                .and_then(Value::as_str),
+            Some("stale_drift_detection")
+        );
+        assert_agent_readiness_safety(&result);
+        assert_eq!(
+            result
+                .pointer("/stale_drift_rows/0/safety_flags/read_only")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let serialized = serde_json::to_string(&result).expect("serialize stale drift result");
+        assert!(!serialized.contains("OPENAI_API_KEY=<redacted>"));
+        assert!(!serialized.contains("fixture-redacted-value"));
+        assert!(!serialized.contains("skills-copilot-stale-drift"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn knowledge_search_lists_local_catalog_rows() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-knowledge-list-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-knowledge-list-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_knowledge_fixture(&host);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("knowledge-list".to_string()),
+            method: "knowledge.search".to_string(),
+            params: json!({ "limit": 10 }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("knowledge search result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("deterministic-service")
+        );
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/indexed_skill_count")
+                .and_then(Value::as_u64),
+            Some(2)
+        );
+        assert!(result
+            .get("rows")
+            .and_then(Value::as_array)
+            .is_some_and(|rows| rows.len() == 2));
+        assert!(result
+            .pointer("/rows/0/keywords")
+            .and_then(Value::as_array)
+            .is_some_and(|keywords| !keywords.is_empty()));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/action")
+                .and_then(Value::as_str),
+            Some("knowledge_search")
+        );
+        assert_agent_readiness_safety(&result);
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn knowledge_search_matches_query_and_filters() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-knowledge-query-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-knowledge-query-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_knowledge_fixture(&host);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("knowledge-query".to_string()),
+            method: "knowledge.search".to_string(),
+            params: json!({
+                "query": "release readiness audit",
+                "agent": "claude-code",
+                "tool": "Read",
+                "risk": "high",
+                "enabled": true,
+                "limit": 5
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("knowledge query result");
+        assert_eq!(
+            result.pointer("/filters/query").and_then(Value::as_str),
+            Some("release readiness audit")
+        );
+        assert_eq!(
+            result
+                .pointer("/filters/normalized_terms")
+                .and_then(Value::as_array)
+                .map(Vec::len),
+            Some(3)
+        );
+        assert_eq!(
+            result
+                .pointer("/rows/0/instance_id")
+                .and_then(Value::as_str),
+            Some("knowledge-release")
+        );
+        assert!(result
+            .pointer("/rows/0/matched_fields")
+            .and_then(Value::as_array)
+            .is_some_and(|fields| fields
+                .iter()
+                .any(|field| field.as_str() == Some("description"))));
+        assert!(result
+            .pointer("/rows/0/tools")
+            .and_then(Value::as_array)
+            .is_some_and(|tools| tools.iter().any(|tool| tool.as_str() == Some("Read"))));
+        assert!(result
+            .pointer("/rows/0/quality_context/score")
+            .and_then(Value::as_u64)
+            .is_some());
+        assert!(result
+            .pointer("/rows/0/readiness_context/score")
+            .and_then(Value::as_u64)
+            .is_some());
+        assert!(result
+            .pointer("/rows/0/stale_drift_context/score")
+            .and_then(Value::as_u64)
+            .is_some());
+        assert_eq!(
+            result
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_agent_readiness_safety(&result);
+
+        let serialized = serde_json::to_string(&result).expect("serialize knowledge result");
+        assert!(!serialized.contains(&app_data_dir.to_string_lossy().to_string()));
+        assert!(!serialized.contains(&user_home.to_string_lossy().to_string()));
+        assert!(!serialized.contains("fixture-redacted-value"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn knowledge_search_missing_catalog_returns_safe_empty_result() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-knowledge-missing-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("knowledge-missing".to_string()),
+            method: "knowledge.search".to_string(),
+            params: json!({ "query": "release readiness" }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("missing catalog knowledge result");
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/returned_row_count")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert!(result
+            .get("rows")
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_agent_readiness_safety(&result);
+        assert!(
+            !host.catalog_path().exists(),
+            "missing-catalog knowledge search must not initialize catalog.sqlite"
+        );
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    }
+
+    #[test]
+    fn knowledge_search_rejects_invalid_limit_without_writes() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-knowledge-invalid-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("knowledge-invalid".to_string()),
+            method: "knowledge.search".to_string(),
+            params: json!({ "limit": 0 }),
+        });
+
+        assert!(!response.ok);
+        let error = response.error.expect("invalid knowledge error");
+        assert_eq!(error.code, "invalid_request");
+        assert!(error.message.contains("limit"));
+        assert!(
+            !app_data_dir.exists(),
+            "invalid knowledge request must not initialize app data"
+        );
+    }
+
+    #[test]
+    fn knowledge_search_preserves_provider_and_write_boundaries() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-knowledge-safety-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-knowledge-safety-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_knowledge_fixture(&host);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("knowledge-safety".to_string()),
+            method: "knowledge.search".to_string(),
+            params: json!({ "query": "release readiness", "limit": 5 }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("knowledge safety result");
+        assert_agent_readiness_safety(&result);
+        assert_eq!(
+            result
+                .pointer("/rows/0/safety_flags/read_only")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn knowledge_group_similar_skills_returns_duplicate_and_confusable_groups() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-similar-group-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-similar-group-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_similar_grouping_fixture(&host);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("similar-group".to_string()),
+            method: "knowledge.groupSimilarSkills".to_string(),
+            params: json!({ "limit": 10, "min_score": 40 }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("similar grouping result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("deterministic-service")
+        );
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/candidate_skill_count")
+                .and_then(Value::as_u64),
+            Some(4)
+        );
+        let groups = result
+            .get("groups")
+            .and_then(Value::as_array)
+            .expect("groups");
+        assert!(groups.iter().any(|group| {
+            group.get("group_type").and_then(Value::as_str) == Some("duplicate")
+                && group
+                    .get("members")
+                    .and_then(Value::as_array)
+                    .is_some_and(|members| members.len() >= 2)
+        }));
+        assert!(groups.iter().any(|group| {
+            group
+                .get("routing_ambiguity")
+                .and_then(Value::as_str)
+                .is_some_and(|value| value == "medium" || value == "high")
+        }));
+        assert!(groups.iter().all(|group| {
+            group
+                .get("why_grouped")
+                .and_then(Value::as_array)
+                .is_some_and(|why| !why.is_empty())
+        }));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/action")
+                .and_then(Value::as_str),
+            Some("similar_skill_grouping")
+        );
+        assert_eq!(
+            result
+                .pointer("/prompt_request/request/action")
+                .and_then(Value::as_str),
+            Some("similar_skill_grouping")
+        );
+        assert_agent_readiness_safety(&result);
+        for group in groups {
+            assert_eq!(
+                group
+                    .pointer("/safety_flags/read_only")
+                    .and_then(Value::as_bool),
+                Some(true)
+            );
+        }
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn knowledge_group_similar_skills_applies_filters_limit_and_singletons() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-similar-filter-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-similar-filter-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_similar_grouping_fixture(&host);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("similar-filter".to_string()),
+            method: "knowledge.groupSimilarSkills".to_string(),
+            params: json!({
+                "agent": "codex",
+                "candidate_instance_ids": ["similar-codex-a", "similar-unrelated"],
+                "include_singletons": true,
+                "limit": 1,
+                "min_score": 90
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("similar filter result");
+        assert_eq!(
+            result.pointer("/filters/agent").and_then(Value::as_str),
+            Some("codex")
+        );
+        assert_eq!(
+            result
+                .pointer("/filters/include_singletons")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/matched_group_count")
+                .and_then(Value::as_u64),
+            Some(2)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/returned_group_count")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            result.get("groups").and_then(Value::as_array).map(Vec::len),
+            Some(1)
+        );
+        assert!(result
+            .pointer("/groups/0/members")
+            .and_then(Value::as_array)
+            .is_some_and(|members| members.len() == 1));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn knowledge_group_similar_skills_missing_catalog_returns_safe_empty_result() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-similar-missing-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("similar-missing".to_string()),
+            method: "knowledge.groupSimilarSkills".to_string(),
+            params: json!({ "agent": "codex" }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("missing catalog similar result");
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/returned_group_count")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert!(result
+            .get("groups")
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_agent_readiness_safety(&result);
+        assert!(
+            !host.catalog_path().exists(),
+            "missing-catalog grouping must not initialize catalog.sqlite"
+        );
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    }
+
+    #[test]
+    fn knowledge_group_similar_skills_rejects_invalid_limit_without_writes() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-similar-invalid-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("similar-invalid".to_string()),
+            method: "knowledge.groupSimilarSkills".to_string(),
+            params: json!({ "limit": 0 }),
+        });
+
+        assert!(!response.ok);
+        let error = response.error.expect("invalid similar grouping error");
+        assert_eq!(error.code, "invalid_request");
+        assert!(error.message.contains("limit"));
+        assert!(
+            !app_data_dir.exists(),
+            "invalid grouping request must not initialize app data"
+        );
+    }
+
+    #[test]
+    fn knowledge_group_similar_skills_preserves_provider_and_write_boundaries() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-similar-safety-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-similar-safety-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_similar_grouping_fixture(&host);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("similar-safety".to_string()),
+            method: "knowledge.groupSimilarSkills".to_string(),
+            params: json!({ "limit": 10 }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("similar safety result");
+        assert_agent_readiness_safety(&result);
+        assert_eq!(
+            result
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/write_back_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let serialized = serde_json::to_string(&result).expect("serialize similar result");
+        assert!(!serialized.contains(&app_data_dir.to_string_lossy().to_string()));
+        assert!(!serialized.contains(&user_home.to_string_lossy().to_string()));
+        assert!(!serialized.contains("fixture-redacted-value"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn knowledge_build_capability_taxonomy_returns_domains_and_coverage() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-taxonomy-domain-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-taxonomy-domain-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_similar_grouping_fixture(&host);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("taxonomy-domain".to_string()),
+            method: "knowledge.buildCapabilityTaxonomy".to_string(),
+            params: json!({ "include_single_skill_domains": true, "limit": 10 }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("capability taxonomy result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("deterministic-service")
+        );
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/candidate_skill_count")
+                .and_then(Value::as_u64),
+            Some(4)
+        );
+        assert!(result
+            .get("domains")
+            .and_then(Value::as_array)
+            .is_some_and(|domains| domains.len() >= 2));
+        assert!(result
+            .get("coverage_rows")
+            .and_then(Value::as_array)
+            .is_some_and(|rows| !rows.is_empty()));
+        let domains = result
+            .get("domains")
+            .and_then(Value::as_array)
+            .expect("domains");
+        assert!(domains.iter().any(|domain| {
+            domain.get("domain_key").and_then(Value::as_str) == Some("release-validation")
+                && domain
+                    .get("representative_skills")
+                    .and_then(Value::as_array)
+                    .is_some_and(|skills| skills.len() >= 2)
+        }));
+        assert!(domains.iter().any(|domain| {
+            domain
+                .get("duplicate_or_redundant_count")
+                .and_then(Value::as_u64)
+                .is_some_and(|count| count > 0)
+        }));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/action")
+                .and_then(Value::as_str),
+            Some("capability_taxonomy")
+        );
+        assert_eq!(
+            result
+                .pointer("/prompt_request/request/action")
+                .and_then(Value::as_str),
+            Some("capability_taxonomy")
+        );
+        assert_agent_readiness_safety(&result);
+        for domain in domains {
+            assert_eq!(
+                domain
+                    .pointer("/safety_flags/read_only")
+                    .and_then(Value::as_bool),
+                Some(true)
+            );
+        }
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn knowledge_build_capability_taxonomy_missing_catalog_returns_safe_empty_result() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-taxonomy-missing-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("taxonomy-missing".to_string()),
+            method: "knowledge.buildCapabilityTaxonomy".to_string(),
+            params: json!({ "agent": "codex" }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("missing catalog taxonomy result");
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/returned_domain_count")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert!(result
+            .get("domains")
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_agent_readiness_safety(&result);
+        assert!(
+            !host.catalog_path().exists(),
+            "missing-catalog taxonomy must not initialize catalog.sqlite"
+        );
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    }
+
+    #[test]
+    fn knowledge_build_capability_taxonomy_preserves_provider_and_write_boundaries() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-taxonomy-safety-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-taxonomy-safety-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_similar_grouping_fixture(&host);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("taxonomy-safety".to_string()),
+            method: "knowledge.buildCapabilityTaxonomy".to_string(),
+            params: json!({ "include_single_skill_domains": true, "limit": 10 }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("taxonomy safety result");
+        assert_agent_readiness_safety(&result);
+        assert_eq!(
+            result
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/write_back_allowed")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let serialized = serde_json::to_string(&result).expect("serialize taxonomy result");
+        assert!(!serialized.contains(&app_data_dir.to_string_lossy().to_string()));
+        assert!(!serialized.contains(&user_home.to_string_lossy().to_string()));
+        assert!(!serialized.contains("fixture-redacted-value"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn knowledge_build_local_skill_map_missing_catalog_returns_safe_empty_result() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-local-map-missing-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+
+        let response = host.handle(ServiceRequest {
+            id: Some("local-map-missing".to_string()),
+            method: "knowledge.buildLocalSkillMap".to_string(),
+            params: json!({ "task": "release readiness map" }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("missing catalog local map result");
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/returned_node_count")
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert!(result
+            .get("nodes")
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty));
+        assert!(result
+            .get("edges")
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty));
+        assert_eq!(
+            result
+                .pointer("/prompt_request/available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_agent_readiness_safety(&result);
+        assert!(
+            !host.catalog_path().exists(),
+            "missing-catalog local map must not initialize catalog.sqlite"
+        );
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    }
+
+    #[test]
+    fn knowledge_build_local_skill_map_returns_deterministic_graph() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-local-map-graph-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-local-map-graph-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_similar_grouping_fixture(&host);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("local-map-graph".to_string()),
+            method: "knowledge.buildLocalSkillMap".to_string(),
+            params: json!({
+                "task": "release readiness privacy evidence",
+                "limit": 10,
+                "node_limit": 80,
+                "edge_limit": 160,
+                "cluster_limit": 20,
+                "include_task_context": true
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("local map result");
+        assert_eq!(
+            result.get("generated_by").and_then(Value::as_str),
+            Some("deterministic-service")
+        );
+        assert_eq!(
+            result.get("catalog_available").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            result
+                .pointer("/summary/candidate_skill_count")
+                .and_then(Value::as_u64),
+            Some(3)
+        );
+        assert_eq!(
+            result
+                .pointer("/prompt_request/action")
+                .and_then(Value::as_str),
+            Some("local_skill_map")
+        );
+        assert_eq!(
+            result
+                .pointer("/prompt_request/request/action")
+                .and_then(Value::as_str),
+            Some("local_skill_map")
+        );
+        let nodes = result
+            .get("nodes")
+            .and_then(Value::as_array)
+            .expect("nodes");
+        let edges = result
+            .get("edges")
+            .and_then(Value::as_array)
+            .expect("edges");
+        assert!(nodes.iter().any(|node| {
+            node.get("node_type").and_then(Value::as_str) == Some("skill")
+                && node.get("id").and_then(Value::as_str) == Some("skill:similar-claude-a")
+        }));
+        assert!(nodes
+            .iter()
+            .any(|node| node.get("node_type").and_then(Value::as_str) == Some("capability")));
+        assert!(nodes
+            .iter()
+            .any(|node| node.get("node_type").and_then(Value::as_str) == Some("similar_group")));
+        assert!(nodes
+            .iter()
+            .any(|node| node.get("node_type").and_then(Value::as_str) == Some("risk")));
+        assert!(nodes
+            .iter()
+            .any(|node| node.get("node_type").and_then(Value::as_str) == Some("task_coverage")));
+        assert!(edges
+            .iter()
+            .any(|edge| edge.get("edge_type").and_then(Value::as_str) == Some("skill_capability")));
+        assert!(edges.iter().any(|edge| {
+            edge.get("edge_type").and_then(Value::as_str) == Some("similar_group_member")
+        }));
+        assert!(edges.iter().any(|edge| {
+            edge.get("edge_type").and_then(Value::as_str) == Some("task_readiness")
+        }));
+        assert!(result
+            .get("clusters")
+            .and_then(Value::as_array)
+            .is_some_and(|clusters| !clusters.is_empty()));
+        assert!(result
+            .get("domains")
+            .and_then(Value::as_array)
+            .is_some_and(|domains| !domains.is_empty()));
+        assert_agent_readiness_safety(&result);
+
+        let second = host.handle(ServiceRequest {
+            id: Some("local-map-graph-second".to_string()),
+            method: "knowledge.buildLocalSkillMap".to_string(),
+            params: json!({
+                "task": "release readiness privacy evidence",
+                "limit": 10,
+                "node_limit": 80,
+                "edge_limit": 160,
+                "cluster_limit": 20,
+                "include_task_context": true
+            }),
+        });
+        assert!(second.ok, "{:?}", second.error);
+        assert_eq!(
+            serde_json::to_string(&result).expect("serialize first local map"),
+            serde_json::to_string(&second.result.expect("second local map"))
+                .expect("serialize second local map")
+        );
+
+        let serialized = serde_json::to_string(&result).expect("serialize local map result");
+        assert!(!serialized.contains(&app_data_dir.to_string_lossy().to_string()));
+        assert!(!serialized.contains(&user_home.to_string_lossy().to_string()));
+        assert!(!serialized.contains("fixture-redacted-value"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn knowledge_build_local_skill_map_preserves_provider_and_write_boundaries() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-local-map-safety-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let user_home = env::temp_dir().join(format!(
+            "skills-copilot-local-map-safety-home-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = ServiceHost {
+            app_data_dir: app_data_dir.clone(),
+            adapter_ctx: AdapterContext {
+                user_home: user_home.clone(),
+                project_root: None,
+                project_cwd: None,
+                extra_roots: Vec::new(),
+            },
+        };
+        seed_catalog_with_similar_grouping_fixture(&host);
+        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+        let before_records = before_catalog.list_skill_records().expect("records before");
+        let before_findings = before_catalog
+            .list_rule_findings()
+            .expect("findings before");
+        let before_snapshots = before_catalog
+            .list_all_config_snapshots()
+            .expect("snapshots before");
+
+        let response = host.handle(ServiceRequest {
+            id: Some("local-map-safety".to_string()),
+            method: "knowledge.buildLocalSkillMap".to_string(),
+            params: json!({
+                "task": "release readiness token=fixture-redacted-value",
+                "limit": 10,
+                "node_limit": 64,
+                "edge_limit": 128,
+                "cluster_limit": 16,
+                "include_task_context": true
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let result = response.result.expect("local map safety result");
+        assert_agent_readiness_safety(&result);
+        assert_eq!(
+            result
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            result
+                .pointer("/safety_flags/write_actions_available")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert!(result
+            .get("nodes")
+            .and_then(Value::as_array)
+            .expect("nodes")
+            .iter()
+            .all(|node| node
+                .pointer("/safety_flags/read_only")
+                .and_then(Value::as_bool)
+                == Some(true)));
+        assert!(result
+            .get("edges")
+            .and_then(Value::as_array)
+            .expect("edges")
+            .iter()
+            .all(|edge| edge
+                .pointer("/safety_flags/provider_request_sent")
+                .and_then(Value::as_bool)
+                == Some(false)));
+
+        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+        assert_eq!(
+            after_catalog.list_skill_records().expect("records after"),
+            before_records
+        );
+        assert_eq!(
+            after_catalog.list_rule_findings().expect("findings after"),
+            before_findings
+        );
+        assert_eq!(
+            after_catalog
+                .list_all_config_snapshots()
+                .expect("snapshots after"),
+            before_snapshots
+        );
+        assert!(!host.script_execution_audit_path().exists());
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+        assert!(!user_home.join(".claude/settings.json").exists());
+        assert!(!user_home.join(".codex/config.toml").exists());
+
+        let serialized = serde_json::to_string(&result).expect("serialize local map result");
+        assert!(!serialized.contains(&app_data_dir.to_string_lossy().to_string()));
+        assert!(!serialized.contains(&user_home.to_string_lossy().to_string()));
+        assert!(!serialized.contains("fixture-redacted-value"));
+
+        let _ = fs::remove_dir_all(app_data_dir);
+        let _ = fs::remove_dir_all(user_home);
+    }
+
+    #[test]
+    fn local_skill_map_prompt_preview_is_redacted_and_preview_only() {
+        let app_data_dir = env::temp_dir().join(format!(
+            "skills-copilot-local-map-prompt-test-{}-{}",
+            std::process::id(),
+            unique_suffix(),
+        ));
+        let host = test_host(app_data_dir.clone());
+        seed_catalog_with_similar_grouping_fixture(&host);
+
+        let response = host.handle(ServiceRequest {
+            id: Some("local-map-preview".to_string()),
+            method: "llm.previewPrompt".to_string(),
+            params: json!({
+                "action": "local_skill_map",
+                "user_intent": "Explain map for release readiness with secret-token=fixture-redacted-value",
+                "instance_ids": ["similar-claude-a", "similar-codex-a"]
+            }),
+        });
+
+        assert!(response.ok, "{:?}", response.error);
+        let preview: WireLlmPreviewPromptResult =
+            serde_json::from_value(response.result.expect("preview result"))
+                .expect("decode local map prompt preview");
+        assert_eq!(preview.action, "local_skill_map");
+        assert!(preview.prompt_preview.contains("Local Skill Map evidence"));
+        assert!(!preview.prompt_preview.contains("fixture-redacted-value"));
+        assert!(!preview.provider_request_sent);
+        assert!(!preview.write_back_allowed);
+        assert!(preview.draft_requires_user_copy);
+        assert!(!preview.raw_prompt_persisted);
+        assert!(!preview.raw_response_persisted);
+        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+        let _ = fs::remove_dir_all(app_data_dir);
+    }

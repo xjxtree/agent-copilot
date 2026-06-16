@@ -118,7 +118,7 @@ for (const snippet of [
 
 const requiredPackageSnippets = [
   '"verify:v2.82-docs": "node scripts/verify-v2-82-validation-docs.mjs"',
-  "pnpm verify:v2.81-docs && pnpm verify:v2.82-docs && pnpm verify:v2.83-docs && pnpm verify:validation-blockers",
+  "pnpm verify:v2.81-docs && pnpm verify:v2.82-docs && pnpm verify:v2.83-docs && pnpm verify:v2.84-docs",
 ];
 
 for (const snippet of requiredPackageSnippets) {
@@ -135,7 +135,7 @@ const requiredReadmeSnippets = [
   "no fresh Computer Use screenshot is required because V2.82 has no user-visible native UI or service-protocol behavior change.",
   "V2.82 验证清单（completed）",
   "pnpm verify:v2.82-docs",
-  "V2.83 continued module splitting completed",
+  "V2.86 Rust helper/test split and module-size gate closeout completed",
   boundaryText,
 ];
 
@@ -144,7 +144,7 @@ for (const snippet of requiredReadmeSnippets) {
 }
 
 const requiredAgentsSnippets = [
-  "Current phase: **V2.83 continued module splitting completed**",
+  "Current phase: **V2.86 Rust helper/test split and module-size gate closeout completed**",
   "2026-06-15 V2.82 validation",
   "serialized RAII cleanup in `crates/service/src/lib.rs`",
   "`crates/core/src/model.rs` locks `AgentId` / `Scope` wire strings",
@@ -160,14 +160,14 @@ for (const snippet of requiredAgentsSnippets) {
 }
 
 const requiredDevelopmentSnippets = [
-  "Status: V2.83 continued module splitting is complete.",
-  "V2.1 through V2.83 are the synchronized completed baseline",
+  "Status: V2.86 Rust helper/test split and module-size gate closeout is complete.",
+  "V2.1 through V2.86 are the synchronized completed baseline",
   "V2.82 closeout evidence lives in [`v2.82-verification-checklist.md`](./v2.82-verification-checklist.md)",
   "completed provider-test environment isolation",
   "no-new-UI screenshot decision",
   "current `locked-session` blocker",
   "V2.82 | P1 | Test isolation and core model test floor | Completed",
-  "V2.83 continued module splitting completed",
+  "V2.86 Rust helper/test split completed",
   boundaryText,
 ];
 
@@ -176,9 +176,9 @@ for (const snippet of requiredDevelopmentSnippets) {
 }
 
 const requiredRoadmapSnippets = [
-  "当前阶段：**V2.83 continued module splitting completed**",
+  "当前阶段：**V2.86 Rust helper/test split and module-size gate closeout completed**",
   "V2.82 test isolation and core model test floor completed",
-  "V2.83 continued module splitting completed",
+  "V2.86 Rust helper/test split and module-size gate closeout completed",
   "V2.82 closeout evidence is tracked in [`v2.82-verification-checklist.md`](./v2.82-verification-checklist.md)",
   "completed provider env mutation RAII isolation",
   "current canonical `locked-session` blocker",
@@ -190,7 +190,7 @@ for (const snippet of requiredRoadmapSnippets) {
 }
 
 const requiredRunbookSnippets = [
-  "V2.73-V2.83 docs verifiers",
+  "V2.73-V2.86 docs verifiers",
   "`pnpm verify:v2.82-docs`",
   "V2.82 completed verifier",
   "test isolation and core model test floor closeout",

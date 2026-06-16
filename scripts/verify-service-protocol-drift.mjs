@@ -231,13 +231,21 @@ function formatList(values) {
 }
 
 const docsPath = join(repoRoot, "docs", "service-protocol.md");
-const rustPath = join(repoRoot, "crates", "service", "src", "lib.rs");
+const serviceSrcDir = join(repoRoot, "crates", "service", "src");
 const protocolPath = join(repoRoot, "crates", "service", "src", "protocol.rs");
 const fixturesDir = join(repoRoot, "fixtures", "service-protocol");
 const statusFixturePath = join(fixturesDir, "service.status.response.json");
 
 const documentedMethods = parseDocumentedMethods(readRequired(docsPath));
-const rustSource = readRequired(rustPath);
+const rustSource = [
+  "lib.rs",
+  "service_host.rs",
+  "service_cleanup.rs",
+  "service_knowledge.rs",
+  "service_llm.rs",
+  "service_remediation.rs",
+  "service_task.rs",
+].map((file) => readRequired(join(serviceSrcDir, file))).join("\n");
 const protocolSource = readRequired(protocolPath);
 const supportedMethods = parseSupportedMethods(protocolSource, "crates/service/src/protocol.rs");
 const dispatchMethods = parseDispatchMethods(rustSource);

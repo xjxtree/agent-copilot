@@ -116,7 +116,7 @@ for (const snippet of [
 
 const requiredPackageSnippets = [
   '"verify:v2.83-docs": "node scripts/verify-v2-83-validation-docs.mjs"',
-  "pnpm verify:v2.82-docs && pnpm verify:v2.83-docs && pnpm verify:validation-blockers",
+  "pnpm verify:v2.82-docs && pnpm verify:v2.83-docs && pnpm verify:v2.84-docs",
 ];
 
 for (const snippet of requiredPackageSnippets) {
@@ -124,7 +124,8 @@ for (const snippet of requiredPackageSnippets) {
 }
 
 const requiredReadmeSnippets = [
-  "V2.83 continued module splitting completed",
+  "V2.83 validation",
+  "Continued module splitting",
   "V2.83 validation",
   "multi-agent V2.83 implementation completed",
   "`crates/service/src/protocol.rs`",
@@ -133,8 +134,8 @@ const requiredReadmeSnippets = [
   "no fresh Computer Use screenshot is required because V2.83 has no user-visible native UI or service-protocol behavior change.",
   "V2.83 验证清单（completed）",
   "pnpm verify:v2.83-docs",
-  "V2.1-V2.83",
-  "V2.41-V2.83",
+  "V2.1-V2.86",
+  "V2.41-V2.86",
   boundaryText,
 ];
 
@@ -143,7 +144,7 @@ for (const snippet of requiredReadmeSnippets) {
 }
 
 const requiredAgentsSnippets = [
-  "Current phase: **V2.83 continued module splitting completed**",
+  "Current phase: **V2.86 Rust helper/test split and module-size gate closeout completed**",
   "2026-06-15 V2.83 validation",
   "`crates/service/src/protocol.rs`",
   "`DetailOverviewSection.swift`",
@@ -158,12 +159,12 @@ for (const snippet of requiredAgentsSnippets) {
 }
 
 const requiredDevelopmentSnippets = [
-  "Status: V2.83 continued module splitting is complete.",
-  "V2.1 through V2.83 are the synchronized completed baseline",
+  "Status: V2.86 Rust helper/test split and module-size gate closeout is complete.",
+  "V2.1 through V2.86 are the synchronized completed baseline",
   "V2.83 closeout evidence lives in [`v2.83-verification-checklist.md`](./v2.83-verification-checklist.md)",
   "V2.83 | P2 | Continued module splitting | Completed",
   "P2 | V2.83 Continued module splitting | Completed",
-  "V2.78-V2.83 are completed",
+  "V2.78-V2.86 are completed",
   boundaryText,
 ];
 
@@ -172,7 +173,7 @@ for (const snippet of requiredDevelopmentSnippets) {
 }
 
 const requiredRoadmapSnippets = [
-  "当前阶段：**V2.83 continued module splitting completed**",
+  "当前阶段：**V2.86 Rust helper/test split and module-size gate closeout completed**",
   "V2.83 continued module splitting completed",
   "V2.83 closeout evidence is tracked in [`v2.83-verification-checklist.md`](./v2.83-verification-checklist.md)",
   "Completed: split Rust protocol DTOs/constants",
@@ -185,7 +186,7 @@ for (const snippet of requiredRoadmapSnippets) {
 }
 
 const requiredRunbookSnippets = [
-  "V2.73-V2.83 docs verifiers",
+  "V2.73-V2.86 docs verifiers",
   "`pnpm verify:v2.83-docs`",
   "V2.83 completed verifier",
   "continued module splitting closeout",
@@ -213,7 +214,8 @@ for (const snippet of requiredServiceProtocolSnippets) {
 for (const snippet of [
   "DetailOverviewSection.swift",
   "crates/service/src/protocol.rs",
-  "files.detailSurface = [files.detail, files.detailOverview",
+  "files.detailSurface = [",
+  "files.detailOverview",
   "files.serviceRustSurface = [files.serviceRust, files.serviceRustProtocol]",
 ]) {
   requireText(nativeLayoutVerifier, "scripts/verify-native-ui-layout.mjs", snippet);
