@@ -1,5 +1,9 @@
 use std::path::{Path, PathBuf};
 
+use crate::shared::{
+    optional_frontmatter_string, required_frontmatter_string, split_yaml_frontmatter,
+    stable_path_id,
+};
 use skills_copilot_core::{
     AdapterContext, AdapterError, AdapterRoot, AgentAdapter, AgentId, PermissionRequest,
     RootSource, Scope, SkillInstance, SkillState,
@@ -55,7 +59,7 @@ impl AgentAdapter for HermesAdapter {
         };
 
         Ok(SkillInstance {
-            id: stable_path_id(path),
+            id: stable_path_id("hermes", path),
             agent: AgentId::Hermes,
             scope: Scope::AgentGlobal,
             project_root: None,
@@ -190,12 +194,12 @@ fn parse_skill_content(content: &str) -> Result<ParsedSkill, String> {
         .strip_prefix("---\n")
         .or_else(|| content.strip_prefix("---\r\n"))
         .ok_or_else(|| "missing YAML frontmatter".to_string())?;
-    let (frontmatter_raw, body) = split_frontmatter(rest)?;
+    let (frontmatter_raw, body) = split_yaml_frontmatter(rest)?;
     let frontmatter: serde_yaml::Value =
         serde_yaml::from_str(frontmatter_raw).map_err(|err| err.to_string())?;
-    let name = required_string(&frontmatter, "name")?;
-    let description = required_string(&frontmatter, "description")?;
-    let version = optional_string(&frontmatter, "version");
+    let name = required_frontmatter_string(&frontmatter, "name", "Hermes")?;
+    let description = required_frontmatter_string(&frontmatter, "description", "Hermes")?;
+    let version = optional_frontmatter_string(&frontmatter, "version");
 
     Ok(ParsedSkill {
         frontmatter_raw: frontmatter_raw.to_string(),
@@ -206,46 +210,12 @@ fn parse_skill_content(content: &str) -> Result<ParsedSkill, String> {
     })
 }
 
-fn split_frontmatter(rest: &str) -> Result<(&str, String), String> {
-    if let Some((frontmatter, body)) = rest.split_once("\n---\n") {
-        return Ok((frontmatter, body.to_string()));
-    }
-    if let Some((frontmatter, body)) = rest.split_once("\n---\r\n") {
-        return Ok((frontmatter, body.to_string()));
-    }
-    if let Some(frontmatter) = rest.strip_suffix("\n---") {
-        return Ok((frontmatter, String::new()));
-    }
-    if let Some(frontmatter) = rest.strip_suffix("\r\n---") {
-        return Ok((frontmatter, String::new()));
-    }
-    Err("unterminated YAML frontmatter".to_string())
-}
-
-fn required_string(frontmatter: &serde_yaml::Value, key: &str) -> Result<String, String> {
-    optional_string(frontmatter, key)
-        .ok_or_else(|| format!("missing required Hermes frontmatter field `{key}`"))
-}
-
-fn optional_string(frontmatter: &serde_yaml::Value, key: &str) -> Option<String> {
-    frontmatter
-        .get(key)
-        .and_then(serde_yaml::Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToString::to_string)
-}
-
 fn containing_dir_name(path: &Path) -> String {
     path.parent()
         .and_then(Path::file_name)
         .and_then(|name| name.to_str())
         .unwrap_or("unknown")
         .to_string()
-}
-
-fn stable_path_id(path: &Path) -> String {
-    format!("hermes:{}", path.display())
 }
 
 #[cfg(test)]

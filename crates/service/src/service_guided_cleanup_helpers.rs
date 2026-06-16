@@ -1,8 +1,10 @@
-fn supported_methods() -> Vec<&'static str> {
+use super::*;
+
+pub(crate) fn supported_methods() -> Vec<&'static str> {
     SUPPORTED_METHODS.to_vec()
 }
 
-fn generated_benchmark_id(title: &str, task: &str) -> String {
+pub(crate) fn generated_benchmark_id(title: &str, task: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(title.as_bytes());
     hasher.update(b"\0");
@@ -11,14 +13,14 @@ fn generated_benchmark_id(title: &str, task: &str) -> String {
     format!("bench-{}", hex_prefix(&digest, 12))
 }
 
-fn sanitize_benchmark_id(id: &str) -> String {
+pub(crate) fn sanitize_benchmark_id(id: &str) -> String {
     id.chars()
         .filter(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
         .take(96)
         .collect()
 }
 
-fn normalize_string_list(values: Vec<String>) -> Vec<String> {
+pub(crate) fn normalize_string_list(values: Vec<String>) -> Vec<String> {
     let mut normalized = values
         .into_iter()
         .map(|value| value.trim().to_string())
@@ -29,7 +31,7 @@ fn normalize_string_list(values: Vec<String>) -> Vec<String> {
     normalized
 }
 
-fn hex_prefix(bytes: &[u8], chars: usize) -> String {
+pub(crate) fn hex_prefix(bytes: &[u8], chars: usize) -> String {
     bytes
         .iter()
         .flat_map(|byte| {
@@ -41,7 +43,7 @@ fn hex_prefix(bytes: &[u8], chars: usize) -> String {
         .collect()
 }
 
-fn sanitize_harness_label(label: &str) -> String {
+pub(crate) fn sanitize_harness_label(label: &str) -> String {
     label
         .chars()
         .filter(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
@@ -66,11 +68,11 @@ pub(crate) fn severity_rank_for_queue(severity: &str) -> u8 {
     }
 }
 
-fn guided_cleanup_safety_flags() -> GuidedCleanupSafetyFlags {
+pub(crate) fn guided_cleanup_safety_flags() -> GuidedCleanupSafetyFlags {
     remediation_history_safety_flags()
 }
 
-fn guided_cleanup_filters(
+pub(crate) fn guided_cleanup_filters(
     params: &GuidedCleanupPlanParams,
     adapter_ctx: &AdapterContext,
     roots: &[(String, &'static str)],
@@ -132,7 +134,7 @@ fn guided_cleanup_filters(
     }
 }
 
-fn guided_cleanup_candidate_ids(
+pub(crate) fn guided_cleanup_candidate_ids(
     params: &GuidedCleanupPlanParams,
     filters: &GuidedCleanupFlowFilters,
     visible_by_id: &BTreeMap<&str, &SkillRecord>,
@@ -166,7 +168,7 @@ fn guided_cleanup_candidate_ids(
     ids
 }
 
-fn empty_guided_cleanup_flow_result(
+pub(crate) fn empty_guided_cleanup_flow_result(
     filters: GuidedCleanupFlowFilters,
     catalog_available: bool,
     recorded_steps: Vec<GuidedCleanupStepRecord>,
@@ -218,7 +220,9 @@ fn empty_guided_cleanup_flow_result(
     }
 }
 
-fn guided_cleanup_step_from_batch_item(item: &RemediationBatchReviewItem) -> GuidedCleanupFlowStep {
+pub(crate) fn guided_cleanup_step_from_batch_item(
+    item: &RemediationBatchReviewItem,
+) -> GuidedCleanupFlowStep {
     let source_method = guided_cleanup_source_method(item.source);
     let (instance_id, definition_id, skill_name) = item
         .affected_skill
@@ -278,7 +282,7 @@ fn guided_cleanup_step_from_batch_item(item: &RemediationBatchReviewItem) -> Gui
     }
 }
 
-fn guided_cleanup_step_from_next_label(
+pub(crate) fn guided_cleanup_step_from_next_label(
     label: &str,
     task: &Option<String>,
 ) -> GuidedCleanupFlowStep {
@@ -325,7 +329,9 @@ fn guided_cleanup_step_from_next_label(
     }
 }
 
-fn guided_cleanup_step_from_lifecycle(row: &SkillLifecycleTimelineRow) -> GuidedCleanupFlowStep {
+pub(crate) fn guided_cleanup_step_from_lifecycle(
+    row: &SkillLifecycleTimelineRow,
+) -> GuidedCleanupFlowStep {
     let id = format!("guided:lifecycle:{}", row.id);
     let instance_ids = row.instance_id.iter().cloned().collect::<Vec<_>>();
     GuidedCleanupFlowStep {
@@ -367,7 +373,7 @@ fn guided_cleanup_step_from_lifecycle(row: &SkillLifecycleTimelineRow) -> Guided
     }
 }
 
-fn guided_cleanup_step_from_cockpit(
+pub(crate) fn guided_cleanup_step_from_cockpit(
     next: &TaskCockpitRemediationNextStep,
 ) -> GuidedCleanupFlowStep {
     let id = format!("guided:cockpit:{}", next.id);
@@ -405,7 +411,7 @@ fn guided_cleanup_step_from_cockpit(
     }
 }
 
-fn guided_cleanup_step_blockers(blockers: &[String]) -> Vec<String> {
+pub(crate) fn guided_cleanup_step_blockers(blockers: &[String]) -> Vec<String> {
     let mut notes = blockers.to_vec();
     notes.push(
         "This guided cleanup step does not write files, mutate config, change triage, create snapshots, execute scripts, or send provider requests."
@@ -415,7 +421,7 @@ fn guided_cleanup_step_blockers(blockers: &[String]) -> Vec<String> {
     notes
 }
 
-fn guided_cleanup_source_method(source: &str) -> &'static str {
+pub(crate) fn guided_cleanup_source_method(source: &str) -> &'static str {
     match source {
         "cleanup_queue" => "cleanup.listQueue",
         "remediation_plan" => "remediation.plan",
@@ -425,7 +431,7 @@ fn guided_cleanup_source_method(source: &str) -> &'static str {
     }
 }
 
-fn guided_cleanup_step_type(source: &str) -> &'static str {
+pub(crate) fn guided_cleanup_step_type(source: &str) -> &'static str {
     match source {
         "cleanup_queue" => "queue_review",
         "remediation_plan" => "plan_review",
@@ -435,7 +441,7 @@ fn guided_cleanup_step_type(source: &str) -> &'static str {
     }
 }
 
-fn guided_cleanup_step_phase(source: &str) -> &'static str {
+pub(crate) fn guided_cleanup_step_phase(source: &str) -> &'static str {
     match source {
         "fix_preview_draft" => "draft_preview",
         "impact_preview" => "impact_preview",
@@ -444,7 +450,7 @@ fn guided_cleanup_step_phase(source: &str) -> &'static str {
     }
 }
 
-fn guided_cleanup_risk_for_severity(severity: Option<&str>) -> &'static str {
+pub(crate) fn guided_cleanup_risk_for_severity(severity: Option<&str>) -> &'static str {
     match severity.unwrap_or("info") {
         "critical" | "error" | "high" | "failed" | "miss" | "wrong_pick" => "high",
         "warning" | "warn" | "medium" | "ambiguous" => "medium",
@@ -452,7 +458,7 @@ fn guided_cleanup_risk_for_severity(severity: Option<&str>) -> &'static str {
     }
 }
 
-fn guided_cleanup_side_effect_flags() -> Vec<&'static str> {
+pub(crate) fn guided_cleanup_side_effect_flags() -> Vec<&'static str> {
     vec![
         "provider_request_sent=false",
         "write_back_allowed=false",
@@ -469,7 +475,11 @@ fn guided_cleanup_side_effect_flags() -> Vec<&'static str> {
     ]
 }
 
-fn stable_guided_cleanup_step_id(kind: &str, label: &str, evidence_refs: &[String]) -> String {
+pub(crate) fn stable_guided_cleanup_step_id(
+    kind: &str,
+    label: &str,
+    evidence_refs: &[String],
+) -> String {
     let mut hasher = Sha256::new();
     hasher.update(kind.as_bytes());
     hasher.update(b"\0");
@@ -483,7 +493,7 @@ fn stable_guided_cleanup_step_id(kind: &str, label: &str, evidence_refs: &[Strin
     format!("guided-step-{}", hex_prefix(&digest, 12))
 }
 
-fn guided_cleanup_sort_steps(steps: &mut Vec<GuidedCleanupFlowStep>, limit: usize) {
+pub(crate) fn guided_cleanup_sort_steps(steps: &mut Vec<GuidedCleanupFlowStep>, limit: usize) {
     let mut by_id = BTreeMap::<String, GuidedCleanupFlowStep>::new();
     for step in steps.drain(..) {
         by_id.entry(step.id.clone()).or_insert(step);
@@ -505,7 +515,7 @@ fn guided_cleanup_sort_steps(steps: &mut Vec<GuidedCleanupFlowStep>, limit: usiz
     }
 }
 
-fn guided_cleanup_phase_rank(phase: &str) -> u8 {
+pub(crate) fn guided_cleanup_phase_rank(phase: &str) -> u8 {
     match phase {
         "inspect" => 0,
         "plan" => 1,
@@ -517,7 +527,7 @@ fn guided_cleanup_phase_rank(phase: &str) -> u8 {
     }
 }
 
-fn guided_cleanup_issue_groups(
+pub(crate) fn guided_cleanup_issue_groups(
     steps: &[GuidedCleanupFlowStep],
     limit: usize,
 ) -> Vec<GuidedCleanupIssueGroup> {
@@ -585,7 +595,7 @@ fn guided_cleanup_issue_groups(
     groups
 }
 
-fn guided_cleanup_group_rank(group_type: &str) -> u8 {
+pub(crate) fn guided_cleanup_group_rank(group_type: &str) -> u8 {
     match group_type {
         "risk" => 0,
         "phase" => 1,
@@ -594,7 +604,7 @@ fn guided_cleanup_group_rank(group_type: &str) -> u8 {
     }
 }
 
-fn guided_cleanup_safe_next_actions(
+pub(crate) fn guided_cleanup_safe_next_actions(
     steps: &[GuidedCleanupFlowStep],
 ) -> Vec<GuidedCleanupSafeNextAction> {
     let mut by_method = BTreeMap::<&'static str, Vec<&GuidedCleanupFlowStep>>::new();
@@ -686,7 +696,7 @@ fn guided_cleanup_safe_next_actions(
     actions
 }
 
-fn guided_cleanup_safe_next_action_for_method(
+pub(crate) fn guided_cleanup_safe_next_action_for_method(
     method: &'static str,
     rows: &[&GuidedCleanupFlowStep],
 ) -> GuidedCleanupSafeNextAction {
@@ -764,7 +774,7 @@ fn guided_cleanup_safe_next_action_for_method(
     }
 }
 
-fn guided_cleanup_deep_link_for_method(
+pub(crate) fn guided_cleanup_deep_link_for_method(
     method: &'static str,
     label: &str,
     related_step_ids: Vec<String>,
@@ -872,7 +882,7 @@ fn guided_cleanup_deep_link_for_method(
     }
 }
 
-fn guided_cleanup_summary(
+pub(crate) fn guided_cleanup_summary(
     total_step_count: usize,
     steps: &[GuidedCleanupFlowStep],
     issue_group_count: usize,
@@ -905,7 +915,7 @@ fn guided_cleanup_summary(
     }
 }
 
-fn guided_cleanup_record_matches(
+pub(crate) fn guided_cleanup_record_matches(
     filters: &GuidedCleanupFlowFilters,
     record: &GuidedCleanupStepRecord,
 ) -> bool {
@@ -957,7 +967,7 @@ fn guided_cleanup_record_matches(
     true
 }
 
-fn guided_cleanup_record_sort(
+pub(crate) fn guided_cleanup_record_sort(
     left: &GuidedCleanupStepRecord,
     right: &GuidedCleanupStepRecord,
 ) -> std::cmp::Ordering {
@@ -969,7 +979,7 @@ fn guided_cleanup_record_sort(
         .then_with(|| left.id.cmp(&right.id))
 }
 
-fn generated_guided_cleanup_record_id(
+pub(crate) fn generated_guided_cleanup_record_id(
     flow_step_id: &str,
     decision: &str,
     recorded_at: i64,
@@ -984,11 +994,11 @@ fn generated_guided_cleanup_record_id(
     format!("guided-cleanup-{}", hex_prefix(&digest, 12))
 }
 
-fn sanitize_guided_cleanup_record_id(id: &str) -> String {
+pub(crate) fn sanitize_guided_cleanup_record_id(id: &str) -> String {
     sanitize_remediation_history_id(id)
 }
 
-fn parse_agent_param(agent: &str) -> Result<AgentId, ServiceError> {
+pub(crate) fn parse_agent_param(agent: &str) -> Result<AgentId, ServiceError> {
     match agent {
         "claude-code" => Ok(AgentId::ClaudeCode),
         "codex" => Ok(AgentId::Codex),
@@ -999,7 +1009,7 @@ fn parse_agent_param(agent: &str) -> Result<AgentId, ServiceError> {
     }
 }
 
-fn parse_scope_param(scope: &str) -> Result<Scope, ServiceError> {
+pub(crate) fn parse_scope_param(scope: &str) -> Result<Scope, ServiceError> {
     match scope {
         "agent-global" => Ok(Scope::AgentGlobal),
         "agent-project" => Ok(Scope::AgentProject),

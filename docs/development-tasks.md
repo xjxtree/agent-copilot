@@ -46,6 +46,44 @@
   V2.41-V2.45 and V2.65-V2.72 checklist sections are historical evidence
   snapshots; V2.73+ uses the modern gate-backed closeout template.
 
+## 2026-06-16 Review Remediation Closeout
+
+Source: [`merged-review-optimizations-2026-06-16.md`](./merged-review-optimizations-2026-06-16.md).
+
+Completed fixes:
+
+- P0 data/privacy/safety:
+  catalog refresh paths now run inside SQLite transactions, LLM persisted
+  `draft_output` uses the strong prompt redactor plus high-entropy token
+  detection, script-execution audit writes are confined to the app audit root,
+  and Swift stdio service calls have timeout/decode/error-path coverage.
+- P1 structure:
+  Rust service helpers/tests now use real modules instead of `include!`,
+  `commands` split out `script_execution.rs`, catalog schema/migration logic
+  moved to `schema.rs`, adapter YAML/name/path helper duplication moved into
+  `crates/adapters/src/shared.rs`, `ServiceClient` transport/decode moved into
+  `ServiceClientTransport.swift`, and `SkillStore` read-only derived state
+  moved into `SkillStoreDerivedState.swift`.
+- Gates:
+  `verify:module-size` now scans Rust, Swift, and `.mjs` trees with a shrinking
+  legacy budget for `crates/commands/src/lib.rs`; `verify:js-syntax` checks all
+  `.mjs` verifier/smoke scripts; GitHub Actions includes `cargo audit`.
+- Documentation cleanup:
+  the merged review report is the retained source, and the two original
+  review files were removed after consolidation.
+
+Near-term implementation tasks:
+
+| Priority | Task | Boundary |
+| --- | --- | --- |
+| P1 | Continue `crates/commands/src/lib.rs` domain split until the legacy budget can be removed | Preserve public command API and existing write/audit safety tests |
+| P1 | Split `SkillStore.swift` into facade plus domain stores for catalog, task cockpit, knowledge, remediation, provider, and validation state | Do not widen write access casually; keep SwiftUI injection stable |
+| P1 | Continue `ServiceClient.swift` RPC-domain extension split after transport extraction | Keep one shared decode/error mapping path |
+| P1 | Continue catalog split into queries, refresh mutations, mapping, and migrations | Preserve SQLite schema and transaction semantics |
+| P2 | Consolidate older per-version docs verifiers when their checks become generic | Keep machine-enforced gates; do not delete evidence history |
+| P2 | Add benchmark trend recording for large catalog, routing, readiness, knowledge search, and native list model | Use measured baselines; do not treat clone/string counts as proof |
+| P2 | Consider `cargo doc --no-deps` once public API comments are sufficient | Do not block routine refactors on doc coverage percentage |
+
 ## User-centered Optimization Direction
 
 Current app optimization should stay anchored in concrete skill user jobs rather than broad governance artifacts:

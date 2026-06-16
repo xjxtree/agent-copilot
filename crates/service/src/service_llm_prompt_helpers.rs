@@ -1,4 +1,6 @@
-fn llm_prompt_run_record_sort(
+use super::*;
+
+pub(crate) fn llm_prompt_run_record_sort(
     left: &LlmPromptRunRecord,
     right: &LlmPromptRunRecord,
 ) -> std::cmp::Ordering {
@@ -10,7 +12,7 @@ fn llm_prompt_run_record_sort(
         .then_with(|| left.id.cmp(&right.id))
 }
 
-fn generated_llm_prompt_run_id(
+pub(crate) fn generated_llm_prompt_run_id(
     preview_id: &str,
     confirmation_id: &str,
     completed_at: i64,
@@ -25,14 +27,18 @@ fn generated_llm_prompt_run_id(
     format!("prompt-run-{}", hex_prefix(&digest, 12))
 }
 
-fn trace_content_hash(content: &str) -> String {
+pub(crate) fn trace_content_hash(content: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(content.as_bytes());
     let digest = hasher.finalize();
     hex_prefix(&digest, 16)
 }
 
-fn generated_trace_import_id(title: &str, content_hash: &str, imported_at: i64) -> String {
+pub(crate) fn generated_trace_import_id(
+    title: &str,
+    content_hash: &str,
+    imported_at: i64,
+) -> String {
     let mut hasher = Sha256::new();
     hasher.update(title.as_bytes());
     hasher.update(b"\0");
@@ -43,7 +49,11 @@ fn generated_trace_import_id(title: &str, content_hash: &str, imported_at: i64) 
     format!("trace-import-{}", hex_prefix(&digest, 12))
 }
 
-fn generated_agent_session_review_id(title: &str, content_hash: &str, reviewed_at: i64) -> String {
+pub(crate) fn generated_agent_session_review_id(
+    title: &str,
+    content_hash: &str,
+    reviewed_at: i64,
+) -> String {
     let mut hasher = Sha256::new();
     hasher.update(title.as_bytes());
     hasher.update(b"\0");
@@ -54,21 +64,21 @@ fn generated_agent_session_review_id(title: &str, content_hash: &str, reviewed_a
     format!("agent-session-review-{}", hex_prefix(&digest, 12))
 }
 
-fn sanitize_trace_import_id(id: &str) -> String {
+pub(crate) fn sanitize_trace_import_id(id: &str) -> String {
     id.chars()
         .filter(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
         .take(96)
         .collect()
 }
 
-fn sanitize_agent_session_review_id(id: &str) -> String {
+pub(crate) fn sanitize_agent_session_review_id(id: &str) -> String {
     id.chars()
         .filter(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
         .take(96)
         .collect()
 }
 
-fn agent_session_review_record_sort(
+pub(crate) fn agent_session_review_record_sort(
     left: &AgentSessionSkillReviewRecord,
     right: &AgentSessionSkillReviewRecord,
 ) -> std::cmp::Ordering {
@@ -79,7 +89,7 @@ fn agent_session_review_record_sort(
         .then_with(|| left.id.cmp(&right.id))
 }
 
-fn single_referenced_trace_agent(imports: &[TraceImportRecord]) -> Option<String> {
+pub(crate) fn single_referenced_trace_agent(imports: &[TraceImportRecord]) -> Option<String> {
     let mut agents = imports
         .iter()
         .filter_map(|import| import.agent.as_deref())
@@ -95,7 +105,7 @@ fn single_referenced_trace_agent(imports: &[TraceImportRecord]) -> Option<String
     }
 }
 
-fn agent_session_expected_skill_signals(
+pub(crate) fn agent_session_expected_skill_signals(
     expected_skill_refs: &[String],
     expected_skill_names: &[String],
     detected: &[TraceDetectedSkill],
@@ -137,7 +147,7 @@ fn agent_session_expected_skill_signals(
     signals
 }
 
-fn agent_session_review_summary(
+pub(crate) fn agent_session_review_summary(
     outcome: &str,
     detected_count: usize,
     expected_signal_count: usize,
@@ -149,7 +159,11 @@ fn agent_session_review_summary(
     )
 }
 
-fn generated_remediation_history_id(title: &str, decision: &str, recorded_at: i64) -> String {
+pub(crate) fn generated_remediation_history_id(
+    title: &str,
+    decision: &str,
+    recorded_at: i64,
+) -> String {
     let mut hasher = Sha256::new();
     hasher.update(title.as_bytes());
     hasher.update(b"\0");
@@ -160,14 +174,14 @@ fn generated_remediation_history_id(title: &str, decision: &str, recorded_at: i6
     format!("rem-history-{}", hex_prefix(&digest, 12))
 }
 
-fn sanitize_remediation_history_id(id: &str) -> String {
+pub(crate) fn sanitize_remediation_history_id(id: &str) -> String {
     id.chars()
         .filter(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
         .take(96)
         .collect()
 }
 
-fn normalize_history_token(value: &str) -> String {
+pub(crate) fn normalize_history_token(value: &str) -> String {
     let token = redact_for_llm_preview(value)
         .trim()
         .to_lowercase()
@@ -193,7 +207,7 @@ fn normalize_history_token(value: &str) -> String {
         .collect()
 }
 
-fn redact_history_string_list(
+pub(crate) fn redact_history_string_list(
     values: Vec<String>,
     redactor: &mut PromptRedactor<'_>,
     max_chars: usize,
@@ -210,7 +224,7 @@ fn redact_history_string_list(
     normalized
 }
 
-fn redact_normalized_string_list(
+pub(crate) fn redact_normalized_string_list(
     values: Vec<String>,
     roots: &[(String, &'static str)],
 ) -> Vec<String> {
@@ -223,7 +237,7 @@ fn redact_normalized_string_list(
     )
 }
 
-fn truncate_chars(value: &str, max_chars: usize) -> String {
+pub(crate) fn truncate_chars(value: &str, max_chars: usize) -> String {
     let mut truncated = value.chars().take(max_chars).collect::<String>();
     if value.chars().count() > max_chars {
         truncated.push_str("...");
@@ -231,7 +245,7 @@ fn truncate_chars(value: &str, max_chars: usize) -> String {
     truncated
 }
 
-fn trace_outcome_reasons(
+pub(crate) fn trace_outcome_reasons(
     outcome: &str,
     detected_count: usize,
     matching_expected: usize,
@@ -286,7 +300,7 @@ fn trace_outcome_reasons(
     reasons
 }
 
-fn task_benchmark_evaluation_item(
+pub(crate) fn task_benchmark_evaluation_item(
     benchmark: &TaskBenchmarkRecord,
     ranking: SkillRouteRankingResult,
 ) -> TaskBenchmarkEvaluationItem {
@@ -334,7 +348,7 @@ fn task_benchmark_evaluation_item(
     }
 }
 
-fn task_benchmark_match_status(
+pub(crate) fn task_benchmark_match_status(
     benchmark: &TaskBenchmarkRecord,
     top_route: Option<&SkillRouteCandidate>,
 ) -> (&'static str, Vec<String>) {
@@ -434,7 +448,9 @@ fn task_benchmark_match_status(
     )
 }
 
-fn task_benchmark_route_summary(candidate: &SkillRouteCandidate) -> TaskBenchmarkRouteSummary {
+pub(crate) fn task_benchmark_route_summary(
+    candidate: &SkillRouteCandidate,
+) -> TaskBenchmarkRouteSummary {
     TaskBenchmarkRouteSummary {
         instance_id: candidate.instance_id.clone(),
         definition_id: candidate.definition_id.clone(),
@@ -448,7 +464,7 @@ fn task_benchmark_route_summary(candidate: &SkillRouteCandidate) -> TaskBenchmar
     }
 }
 
-fn task_benchmark_score(route_confidence_score: u8, expected_match_status: &str) -> u8 {
+pub(crate) fn task_benchmark_score(route_confidence_score: u8, expected_match_status: &str) -> u8 {
     match expected_match_status {
         "expected_match" => route_confidence_score,
         "acceptable_match" => route_confidence_score.saturating_sub(8),
@@ -458,7 +474,7 @@ fn task_benchmark_score(route_confidence_score: u8, expected_match_status: &str)
     }
 }
 
-fn task_benchmark_band(score: u8) -> &'static str {
+pub(crate) fn task_benchmark_band(score: u8) -> &'static str {
     match score {
         80..=100 => "pass",
         60..=79 => "mostly_pass",
@@ -468,7 +484,7 @@ fn task_benchmark_band(score: u8) -> &'static str {
     }
 }
 
-fn task_benchmark_summary(
+pub(crate) fn task_benchmark_summary(
     results: &[TaskBenchmarkEvaluationItem],
     catalog_available: bool,
 ) -> String {
@@ -500,7 +516,7 @@ fn task_benchmark_summary(
     )
 }
 
-fn task_benchmark_blocker_notes(
+pub(crate) fn task_benchmark_blocker_notes(
     results: &[TaskBenchmarkEvaluationItem],
     catalog_available: bool,
 ) -> Vec<String> {
@@ -530,7 +546,7 @@ fn task_benchmark_blocker_notes(
     notes
 }
 
-fn task_benchmark_prompt_request(
+pub(crate) fn task_benchmark_prompt_request(
     results: &[TaskBenchmarkEvaluationItem],
 ) -> TaskBenchmarkPromptRequest {
     let first = results.iter().find(|result| result.top_route.is_some());
@@ -570,7 +586,7 @@ fn task_benchmark_prompt_request(
     }
 }
 
-fn routing_regression_baseline_from_evaluation(
+pub(crate) fn routing_regression_baseline_from_evaluation(
     evaluation: TaskBenchmarkEvaluationResult,
 ) -> RoutingRegressionBaseline {
     RoutingRegressionBaseline {
@@ -588,7 +604,7 @@ fn routing_regression_baseline_from_evaluation(
     }
 }
 
-fn routing_regression_baseline_item(
+pub(crate) fn routing_regression_baseline_item(
     item: &TaskBenchmarkEvaluationItem,
 ) -> RoutingRegressionBaselineItem {
     RoutingRegressionBaselineItem {
@@ -612,7 +628,7 @@ fn routing_regression_baseline_item(
     }
 }
 
-fn routing_regression_route_snapshot(
+pub(crate) fn routing_regression_route_snapshot(
     route: &TaskBenchmarkRouteSummary,
 ) -> RoutingRegressionRouteSnapshot {
     RoutingRegressionRouteSnapshot {
@@ -628,7 +644,7 @@ fn routing_regression_route_snapshot(
     }
 }
 
-fn routing_regression_compare(
+pub(crate) fn routing_regression_compare(
     baseline: &RoutingRegressionBaseline,
     current: &TaskBenchmarkEvaluationResult,
     score_drop_threshold: u8,
@@ -675,7 +691,7 @@ fn routing_regression_compare(
     items
 }
 
-fn routing_regression_compare_item(
+pub(crate) fn routing_regression_compare_item(
     baseline: Option<&RoutingRegressionBaselineItem>,
     current: Option<&TaskBenchmarkEvaluationItem>,
     score_drop_threshold: u8,
@@ -808,7 +824,7 @@ fn routing_regression_compare_item(
     }
 }
 
-fn routing_regression_baseline_fields(
+pub(crate) fn routing_regression_baseline_fields(
     item: &RoutingRegressionBaselineItem,
 ) -> RoutingRegressionComparisonFields {
     RoutingRegressionComparisonFields {
@@ -827,7 +843,7 @@ fn routing_regression_baseline_fields(
     }
 }
 
-fn routing_regression_current_fields(
+pub(crate) fn routing_regression_current_fields(
     item: &TaskBenchmarkEvaluationItem,
 ) -> RoutingRegressionComparisonFields {
     RoutingRegressionComparisonFields {
@@ -849,7 +865,7 @@ fn routing_regression_current_fields(
     }
 }
 
-fn routing_match_rank(status: &str) -> u8 {
+pub(crate) fn routing_match_rank(status: &str) -> u8 {
     match status {
         "expected_match" => 4,
         "acceptable_match" => 3,
@@ -860,7 +876,7 @@ fn routing_match_rank(status: &str) -> u8 {
     }
 }
 
-fn routing_route_change_reason(
+pub(crate) fn routing_route_change_reason(
     baseline: Option<&RoutingRegressionRouteSnapshot>,
     current: Option<&RoutingRegressionRouteSnapshot>,
 ) -> String {
@@ -886,7 +902,7 @@ fn routing_route_change_reason(
     }
 }
 
-fn routing_regression_status(
+pub(crate) fn routing_regression_status(
     regression_count: usize,
     missing_benchmark_count: usize,
     catalog_available: bool,
@@ -903,7 +919,7 @@ fn routing_regression_status(
     "no_regressions"
 }
 
-fn routing_regression_summary(
+pub(crate) fn routing_regression_summary(
     regression_count: usize,
     missing_benchmark_count: usize,
     compared_count: usize,
@@ -927,7 +943,9 @@ fn routing_regression_summary(
     )
 }
 
-fn skill_route_ranking_from_readiness(readiness: TaskReadinessResult) -> SkillRouteRankingResult {
+pub(crate) fn skill_route_ranking_from_readiness(
+    readiness: TaskReadinessResult,
+) -> SkillRouteRankingResult {
     let aggregation = aggregation_with_completed_stage(readiness.aggregation.clone(), "routing");
     let top_score = readiness
         .candidate_skills
@@ -1031,7 +1049,7 @@ fn skill_route_ranking_from_readiness(readiness: TaskReadinessResult) -> SkillRo
     }
 }
 
-fn route_confidence_score(
+pub(crate) fn route_confidence_score(
     candidate: &TaskReadinessCandidate,
     index: usize,
     top_score: u8,
@@ -1070,7 +1088,7 @@ fn route_confidence_score(
     score.clamp(0, 100) as u8
 }
 
-fn routing_confidence_band(score: u8) -> &'static str {
+pub(crate) fn routing_confidence_band(score: u8) -> &'static str {
     match score {
         80..=100 => "high",
         60..=79 => "medium",
@@ -1080,7 +1098,7 @@ fn routing_confidence_band(score: u8) -> &'static str {
     }
 }
 
-fn route_confidence_rationale(
+pub(crate) fn route_confidence_rationale(
     candidate: &TaskReadinessCandidate,
     index: usize,
     confidence_score: u8,
@@ -1115,7 +1133,7 @@ fn route_confidence_rationale(
     rationale
 }
 
-fn route_candidate_ambiguity_warnings(
+pub(crate) fn route_candidate_ambiguity_warnings(
     candidate: &TaskReadinessCandidate,
     index: usize,
     top_score: u8,
@@ -1150,7 +1168,7 @@ fn route_candidate_ambiguity_warnings(
     warnings
 }
 
-fn route_candidate_wrong_pick_risks(
+pub(crate) fn route_candidate_wrong_pick_risks(
     candidate: &TaskReadinessCandidate,
     index: usize,
     next_score: Option<u8>,
@@ -1180,7 +1198,7 @@ fn route_candidate_wrong_pick_risks(
     risks
 }
 
-fn route_candidate_miss_risks(candidate: &TaskReadinessCandidate) -> Vec<String> {
+pub(crate) fn route_candidate_miss_risks(candidate: &TaskReadinessCandidate) -> Vec<String> {
     let mut risks = candidate.missing_gap_notes.clone();
     if !candidate.enabled {
         risks.push("Disabled state means this skill may be missed by runtime routing.".to_string());
@@ -1194,7 +1212,7 @@ fn route_candidate_miss_risks(candidate: &TaskReadinessCandidate) -> Vec<String>
     risks
 }
 
-fn routing_overall_confidence_score(candidates: &[SkillRouteCandidate]) -> u8 {
+pub(crate) fn routing_overall_confidence_score(candidates: &[SkillRouteCandidate]) -> u8 {
     let Some(best) = candidates.first() else {
         return 0;
     };
@@ -1208,7 +1226,7 @@ fn routing_overall_confidence_score(candidates: &[SkillRouteCandidate]) -> u8 {
         .min(100) as u8
 }
 
-fn routing_ambiguity_warnings(candidates: &[SkillRouteCandidate]) -> Vec<String> {
+pub(crate) fn routing_ambiguity_warnings(candidates: &[SkillRouteCandidate]) -> Vec<String> {
     let mut warnings = candidates
         .iter()
         .flat_map(|candidate| candidate.ambiguity_warnings.iter().cloned())
@@ -1229,7 +1247,7 @@ fn routing_ambiguity_warnings(candidates: &[SkillRouteCandidate]) -> Vec<String>
     warnings
 }
 
-fn routing_wrong_pick_risks(candidates: &[SkillRouteCandidate]) -> Vec<String> {
+pub(crate) fn routing_wrong_pick_risks(candidates: &[SkillRouteCandidate]) -> Vec<String> {
     let mut risks = candidates
         .iter()
         .flat_map(|candidate| candidate.likely_wrong_pick_risks.iter().cloned())
@@ -1246,7 +1264,7 @@ fn routing_wrong_pick_risks(candidates: &[SkillRouteCandidate]) -> Vec<String> {
     risks
 }
 
-fn routing_miss_risks(
+pub(crate) fn routing_miss_risks(
     candidates: &[SkillRouteCandidate],
     readiness: &TaskReadinessResult,
 ) -> Vec<String> {
@@ -1272,7 +1290,7 @@ fn routing_miss_risks(
     risks
 }
 
-fn routing_confidence_summary(
+pub(crate) fn routing_confidence_summary(
     score: u8,
     band: &'static str,
     candidates: &[SkillRouteCandidate],
@@ -1299,7 +1317,7 @@ fn routing_confidence_summary(
     }
 }
 
-fn push_task_readiness_evidence(
+pub(crate) fn push_task_readiness_evidence(
     evidence: &mut Vec<TaskReadinessEvidenceReference>,
     source_type: &'static str,
     source_id: &str,
@@ -1319,7 +1337,7 @@ fn push_task_readiness_evidence(
     id
 }
 
-fn quality_metadata_component(
+pub(crate) fn quality_metadata_component(
     skill: &SkillDetailRecord,
 ) -> (u8, String, Vec<SkillQualitySuggestion>) {
     let mut score = 25i16;
@@ -1380,7 +1398,7 @@ fn quality_metadata_component(
     (score.clamp(0, 25) as u8, summary, suggestions)
 }
 
-fn quality_permission_component(
+pub(crate) fn quality_permission_component(
     skill: &SkillDetailRecord,
 ) -> (u8, String, Vec<String>, Vec<SkillQualitySuggestion>) {
     let mut score = 20i16;
@@ -1448,7 +1466,7 @@ fn quality_permission_component(
     (score.clamp(0, 20) as u8, summary, risks, suggestions)
 }
 
-fn quality_risk_component(
+pub(crate) fn quality_risk_component(
     skill: &SkillDetailRecord,
     findings: &[RuleFindingRecord],
 ) -> (u8, String, Vec<String>, Vec<SkillQualitySuggestion>) {
@@ -1508,7 +1526,7 @@ fn quality_risk_component(
     (score, summary, risks, suggestions)
 }
 
-fn quality_conflict_component(
+pub(crate) fn quality_conflict_component(
     conflicts: &[ConflictGroupRecord],
     analysis_groups: &[CrossAgentAnalysisGroup],
 ) -> (u8, String, Vec<SkillQualitySuggestion>) {
@@ -1546,7 +1564,7 @@ fn quality_conflict_component(
     (score, summary, suggestions)
 }
 
-fn quality_adapter_component(
+pub(crate) fn quality_adapter_component(
     skill: &SkillDetailRecord,
     diagnostic: Option<&AdapterDiagnosticsRecord>,
 ) -> (u8, String, Vec<SkillQualitySuggestion>) {
@@ -1603,7 +1621,7 @@ fn quality_adapter_component(
     (score.clamp(0, 15) as u8, summary, suggestions)
 }
 
-fn quality_grade_and_band(score: u8) -> (&'static str, &'static str) {
+pub(crate) fn quality_grade_and_band(score: u8) -> (&'static str, &'static str) {
     match score {
         90..=100 => ("A", "excellent"),
         75..=89 => ("B", "good"),
@@ -1613,7 +1631,7 @@ fn quality_grade_and_band(score: u8) -> (&'static str, &'static str) {
     }
 }
 
-fn quality_priority_for_severity(severity: &str) -> &'static str {
+pub(crate) fn quality_priority_for_severity(severity: &str) -> &'static str {
     match severity {
         "critical" | "error" => "high",
         "warning" | "warn" => "medium",
@@ -1621,7 +1639,7 @@ fn quality_priority_for_severity(severity: &str) -> &'static str {
     }
 }
 
-fn push_quality_evidence(
+pub(crate) fn push_quality_evidence(
     evidence: &mut Vec<SkillQualityEvidenceReference>,
     source_type: &'static str,
     source_id: &str,
@@ -1641,7 +1659,7 @@ fn push_quality_evidence(
     id
 }
 
-fn quality_refs_or_skill(refs: &[String], skill_ref: &str) -> Vec<String> {
+pub(crate) fn quality_refs_or_skill(refs: &[String], skill_ref: &str) -> Vec<String> {
     if refs.is_empty() {
         vec![skill_ref.to_string()]
     } else {
@@ -1649,7 +1667,7 @@ fn quality_refs_or_skill(refs: &[String], skill_ref: &str) -> Vec<String> {
     }
 }
 
-fn dedupe_quality_suggestions(suggestions: &mut Vec<SkillQualitySuggestion>) {
+pub(crate) fn dedupe_quality_suggestions(suggestions: &mut Vec<SkillQualitySuggestion>) {
     let mut seen = BTreeMap::new();
     suggestions.retain(|suggestion| {
         let key = format!("{}\x1f{}", suggestion.title, suggestion.detail);
@@ -1662,7 +1680,7 @@ fn dedupe_quality_suggestions(suggestions: &mut Vec<SkillQualitySuggestion>) {
     });
 }
 
-fn render_quality_score_prompt_section(
+pub(crate) fn render_quality_score_prompt_section(
     score: &SkillQualityScoreResult,
     redactor: &mut PromptRedactor<'_>,
 ) -> String {
@@ -1723,7 +1741,7 @@ fn render_quality_score_prompt_section(
     )
 }
 
-fn render_stale_drift_prompt_section(
+pub(crate) fn render_stale_drift_prompt_section(
     detection: &StaleDriftDetectionResult,
     redactor: &mut PromptRedactor<'_>,
 ) -> String {
@@ -1829,7 +1847,7 @@ fn render_stale_drift_prompt_section(
     )
 }
 
-fn render_knowledge_search_prompt_section(
+pub(crate) fn render_knowledge_search_prompt_section(
     result: &KnowledgeSearchResult,
     redactor: &mut PromptRedactor<'_>,
 ) -> String {
@@ -1929,7 +1947,7 @@ fn render_knowledge_search_prompt_section(
     )
 }
 
-fn render_similar_skill_grouping_prompt_section(
+pub(crate) fn render_similar_skill_grouping_prompt_section(
     result: &SimilarSkillGroupingResult,
     redactor: &mut PromptRedactor<'_>,
 ) -> String {
@@ -2046,7 +2064,7 @@ fn render_similar_skill_grouping_prompt_section(
     )
 }
 
-fn render_capability_taxonomy_prompt_section(
+pub(crate) fn render_capability_taxonomy_prompt_section(
     result: &CapabilityTaxonomyResult,
     redactor: &mut PromptRedactor<'_>,
 ) -> String {
@@ -2177,7 +2195,7 @@ fn render_capability_taxonomy_prompt_section(
     )
 }
 
-fn render_local_skill_map_prompt_section(
+pub(crate) fn render_local_skill_map_prompt_section(
     result: &LocalSkillMapResult,
     redactor: &mut PromptRedactor<'_>,
 ) -> String {
@@ -2353,7 +2371,7 @@ fn render_local_skill_map_prompt_section(
     )
 }
 
-fn render_task_readiness_prompt_section(
+pub(crate) fn render_task_readiness_prompt_section(
     readiness: &TaskReadinessResult,
     redactor: &mut PromptRedactor<'_>,
 ) -> String {
@@ -2429,7 +2447,7 @@ fn render_task_readiness_prompt_section(
     )
 }
 
-fn render_workspace_readiness_prompt_section(
+pub(crate) fn render_workspace_readiness_prompt_section(
     result: &WorkspaceReadinessResult,
     redactor: &mut PromptRedactor<'_>,
 ) -> String {
@@ -2567,7 +2585,7 @@ fn render_workspace_readiness_prompt_section(
     )
 }
 
-fn render_remediation_plan_prompt_section(
+pub(crate) fn render_remediation_plan_prompt_section(
     result: &RemediationPlanResult,
     redactor: &mut PromptRedactor<'_>,
 ) -> String {
@@ -2686,7 +2704,7 @@ fn render_remediation_plan_prompt_section(
     )
 }
 
-fn render_remediation_preview_drafts_prompt_section(
+pub(crate) fn render_remediation_preview_drafts_prompt_section(
     result: &RemediationPreviewDraftsResult,
     redactor: &mut PromptRedactor<'_>,
 ) -> String {
@@ -2782,7 +2800,7 @@ fn render_remediation_preview_drafts_prompt_section(
     )
 }
 
-fn render_remediation_preview_impact_prompt_section(
+pub(crate) fn render_remediation_preview_impact_prompt_section(
     result: &RemediationPreviewImpactResult,
     redactor: &mut PromptRedactor<'_>,
 ) -> String {
@@ -2910,7 +2928,7 @@ fn render_remediation_preview_impact_prompt_section(
     )
 }
 
-fn render_remediation_batch_review_prompt_section(
+pub(crate) fn render_remediation_batch_review_prompt_section(
     result: &RemediationBatchReviewResult,
     redactor: &mut PromptRedactor<'_>,
 ) -> String {
@@ -3043,7 +3061,7 @@ fn render_remediation_batch_review_prompt_section(
     )
 }
 
-fn render_guided_cleanup_flow_prompt_section(
+pub(crate) fn render_guided_cleanup_flow_prompt_section(
     result: &GuidedCleanupFlowResult,
     redactor: &mut PromptRedactor<'_>,
 ) -> String {
@@ -3186,7 +3204,7 @@ fn render_guided_cleanup_flow_prompt_section(
     )
 }
 
-fn render_routing_confidence_prompt_section(
+pub(crate) fn render_routing_confidence_prompt_section(
     ranking: &SkillRouteRankingResult,
     redactor: &mut PromptRedactor<'_>,
 ) -> String {
@@ -3279,7 +3297,7 @@ fn render_routing_confidence_prompt_section(
     )
 }
 
-fn render_skill_lifecycle_timeline_prompt_section(
+pub(crate) fn render_skill_lifecycle_timeline_prompt_section(
     timeline: &SkillLifecycleTimelineResult,
     redactor: &mut PromptRedactor<'_>,
 ) -> String {
@@ -3399,7 +3417,7 @@ fn render_skill_lifecycle_timeline_prompt_section(
     )
 }
 
-fn render_task_cockpit_prompt_section(
+pub(crate) fn render_task_cockpit_prompt_section(
     cockpit: &TaskCockpitResult,
     redactor: &mut PromptRedactor<'_>,
 ) -> String {
@@ -3569,7 +3587,7 @@ fn render_task_cockpit_prompt_section(
     )
 }
 
-fn llm_skill_analysis_safety_flags() -> LlmSkillAnalysisSafetyFlags {
+pub(crate) fn llm_skill_analysis_safety_flags() -> LlmSkillAnalysisSafetyFlags {
     LlmSkillAnalysisSafetyFlags {
         write_back_enabled: false,
         script_execution_enabled: false,
@@ -3578,7 +3596,7 @@ fn llm_skill_analysis_safety_flags() -> LlmSkillAnalysisSafetyFlags {
     }
 }
 
-fn skill_analysis_prompt_draft(
+pub(crate) fn skill_analysis_prompt_draft(
     analysis_kind: LlmSkillAnalysisKind,
     selected_skill_count: usize,
     included_skills: &[LlmSkillAnalysisIncludedSkill],
@@ -3591,7 +3609,7 @@ fn skill_analysis_prompt_draft(
     )
 }
 
-fn skill_analysis_summary_draft(
+pub(crate) fn skill_analysis_summary_draft(
     analysis_kind: LlmSkillAnalysisKind,
     selected_skill_count: usize,
     included_skills: &[LlmSkillAnalysisIncludedSkill],
@@ -3608,7 +3626,9 @@ fn skill_analysis_summary_draft(
     )
 }
 
-fn skill_analysis_included_summary(included_skills: &[LlmSkillAnalysisIncludedSkill]) -> String {
+pub(crate) fn skill_analysis_included_summary(
+    included_skills: &[LlmSkillAnalysisIncludedSkill],
+) -> String {
     if included_skills.is_empty() {
         return "none".to_string();
     }
@@ -3627,7 +3647,7 @@ fn skill_analysis_included_summary(included_skills: &[LlmSkillAnalysisIncludedSk
         .join("; ")
 }
 
-fn redact_for_llm_preview(value: &str) -> String {
+pub(crate) fn redact_for_llm_preview(value: &str) -> String {
     let mut redacted = value
         .split_whitespace()
         .map(|token| {

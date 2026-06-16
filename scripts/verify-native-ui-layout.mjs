@@ -28,6 +28,7 @@ const files = {
   guidedCleanupModel: await read("apps/macos/Sources/SkillsCopilot/Models/GuidedCleanupFlow.swift"),
   privacyPath: await read("apps/macos/Sources/SkillsCopilot/Views/PrivacyPathView.swift"),
   serviceClient: await read("apps/macos/Sources/SkillsCopilot/Services/ServiceClient.swift"),
+  serviceClientTransport: await read("apps/macos/Sources/SkillsCopilot/Services/ServiceClientTransport.swift"),
   serviceProcessRunner: await read("apps/macos/Sources/SkillsCopilot/Services/ServiceProcessRunner.swift"),
   settings: await read("apps/macos/Sources/SkillsCopilot/Views/SettingsView.swift"),
   sidebar: await read("apps/macos/Sources/SkillsCopilot/Views/SidebarView.swift"),
@@ -60,11 +61,15 @@ files.detailSurface = [
   files.detailFindingsHistory,
   files.taskCockpit,
 ].join("\n");
-files.serviceIPC = [files.serviceClient, files.serviceProcessRunner].join("\n");
+files.serviceIPC = [
+  files.serviceClient,
+  files.serviceClientTransport,
+  files.serviceProcessRunner,
+].join("\n");
 files.serviceRustSurface = [files.serviceRust, files.serviceRustProtocol].join("\n");
 
-const runServiceBody = extractFunctionBody(files.serviceClient, "runService");
-const serviceRequestBody = extractServiceRequestBody(files.serviceClient);
+const runServiceBody = extractFunctionBody(files.serviceIPC, "runService");
+const serviceRequestBody = extractServiceRequestBody(files.serviceIPC);
 const supportedMethods = parseSupportedMethods(files.serviceRustSurface);
 const statusFixtureMethods = parseStatusFixtureMethods(files.serviceStatusFixture);
 const forbiddenProtocolMethods = supportedMethods.filter((method) => /^(ipc|sidecar|daemon|process|socket)\./.test(method));

@@ -1,5 +1,8 @@
 use std::path::{Path, PathBuf};
 
+use crate::shared::{
+    required_frontmatter_string, split_yaml_frontmatter, stable_path_id, validate_kebab_skill_name,
+};
 use skills_copilot_core::{
     AdapterContext, AdapterError, AdapterRoot, AgentAdapter, AgentConfigAdapter,
     AgentConfigDocument, AgentId, PermissionRequest, RootSource, Scope, SkillInstance, SkillState,
@@ -59,7 +62,7 @@ impl AgentAdapter for PiAdapter {
         };
 
         Ok(SkillInstance {
-            id: stable_path_id(path),
+            id: stable_path_id("pi", path),
             agent: AgentId::Pi,
             scope: Scope::AgentProject,
             project_root: None,
@@ -120,12 +123,12 @@ fn parse_skill_content(content: &str) -> Result<ParsedSkill, String> {
         .strip_prefix("---\n")
         .or_else(|| content.strip_prefix("---\r\n"))
         .ok_or_else(|| "missing YAML frontmatter".to_string())?;
-    let (frontmatter_raw, body) = split_frontmatter(rest)?;
+    let (frontmatter_raw, body) = split_yaml_frontmatter(rest)?;
     let frontmatter: serde_yaml::Value =
         serde_yaml::from_str(frontmatter_raw).map_err(|err| err.to_string())?;
-    let name = required_string(&frontmatter, "name")?;
-    validate_skill_name(&name)?;
-    let description = required_string(&frontmatter, "description")?;
+    let name = required_frontmatter_string(&frontmatter, "name", "Pi")?;
+    validate_kebab_skill_name(&name, "Pi")?;
+    let description = required_frontmatter_string(&frontmatter, "description", "Pi")?;
 
     Ok(ParsedSkill {
         frontmatter_raw: frontmatter_raw.to_string(),
@@ -133,54 +136,6 @@ fn parse_skill_content(content: &str) -> Result<ParsedSkill, String> {
         name,
         description,
     })
-}
-
-fn split_frontmatter(rest: &str) -> Result<(&str, String), String> {
-    if let Some((frontmatter, body)) = rest.split_once("\n---\n") {
-        return Ok((frontmatter, body.to_string()));
-    }
-    if let Some((frontmatter, body)) = rest.split_once("\n---\r\n") {
-        return Ok((frontmatter, body.to_string()));
-    }
-    if let Some(frontmatter) = rest.strip_suffix("\n---") {
-        return Ok((frontmatter, String::new()));
-    }
-    if let Some(frontmatter) = rest.strip_suffix("\r\n---") {
-        return Ok((frontmatter, String::new()));
-    }
-    Err("unterminated YAML frontmatter".to_string())
-}
-
-fn required_string(frontmatter: &serde_yaml::Value, key: &str) -> Result<String, String> {
-    let value = frontmatter
-        .get(key)
-        .and_then(serde_yaml::Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| format!("missing required Pi frontmatter field `{key}`"))?;
-    Ok(value.to_string())
-}
-
-fn validate_skill_name(name: &str) -> Result<(), String> {
-    if name.is_empty() || name.len() > 64 {
-        return Err(format!(
-            "invalid Pi skill name `{name}`: must be 1-64 characters"
-        ));
-    }
-    if name.starts_with('-') || name.ends_with('-') || name.contains("--") {
-        return Err(format!(
-            "invalid Pi skill name `{name}`: use single hyphen separators with no leading or trailing hyphen"
-        ));
-    }
-    if !name
-        .bytes()
-        .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
-    {
-        return Err(format!(
-            "invalid Pi skill name `{name}`: use lowercase alphanumeric characters and hyphens only"
-        ));
-    }
-    Ok(())
 }
 
 fn pi_project_skill_roots(project_root: &Path, project_cwd: Option<&Path>) -> Vec<AdapterRoot> {
@@ -220,10 +175,6 @@ fn fallback_skill_name(path: &Path) -> String {
         .and_then(|name| name.to_str())
         .unwrap_or("unknown")
         .to_string()
-}
-
-fn stable_path_id(path: &Path) -> String {
-    format!("pi:{}", path.display())
 }
 
 fn patch_pi_config(

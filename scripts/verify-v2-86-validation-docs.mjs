@@ -76,10 +76,15 @@ for (const [text, label] of [
 }
 
 for (const snippet of [
-  "service_support_helpers.rs",
-  "service_knowledge_helpers.rs",
-  "crates/service/src/tests",
-  "maxLines = 5000",
+  "const scanRoots = [",
+  "\"crates\"",
+  "\"apps/macos/Sources\"",
+  "\"apps/macos/Tests\"",
+  "\"scripts\"",
+  "[\".rs\", 5_000]",
+  "[\".swift\", 5_000]",
+  "[\".mjs\", 5_000]",
+  "legacyBudgets",
 ]) {
   requireText(moduleSizeVerifier, "scripts/verify-module-size.mjs", snippet);
 }

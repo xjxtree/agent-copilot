@@ -1,4 +1,6 @@
-fn scan_all_label(agent_reports: &[AgentCatalogScanReport]) -> String {
+use super::*;
+
+pub(crate) fn scan_all_label(agent_reports: &[AgentCatalogScanReport]) -> String {
     let labels: Vec<&str> = agent_reports
         .iter()
         .map(|report| report.display_name)
@@ -6,7 +8,7 @@ fn scan_all_label(agent_reports: &[AgentCatalogScanReport]) -> String {
     display_label_list(&labels).unwrap_or_else(|| "supported agents".to_string())
 }
 
-fn display_label_list(labels: &[&str]) -> Option<String> {
+pub(crate) fn display_label_list(labels: &[&str]) -> Option<String> {
     match labels {
         [] => None,
         [one] => Some((*one).to_string()),
@@ -20,7 +22,7 @@ fn display_label_list(labels: &[&str]) -> Option<String> {
     }
 }
 
-fn skipped_roots_detail(roots_skipped: &[String]) -> String {
+pub(crate) fn skipped_roots_detail(roots_skipped: &[String]) -> String {
     if roots_skipped.is_empty() {
         return String::new();
     }
@@ -68,7 +70,7 @@ pub fn handle_request_json(input: &str) -> String {
     })
 }
 
-fn default_app_data_dir(user_home: &Path) -> PathBuf {
+pub(crate) fn default_app_data_dir(user_home: &Path) -> PathBuf {
     if cfg!(target_os = "macos") {
         user_home
             .join("Library")
@@ -79,7 +81,7 @@ fn default_app_data_dir(user_home: &Path) -> PathBuf {
     }
 }
 
-fn infer_project_root(cwd: &Path) -> PathBuf {
+pub(crate) fn infer_project_root(cwd: &Path) -> PathBuf {
     let mut current = Some(cwd);
     while let Some(dir) = current {
         if dir.join(".git").exists() {
@@ -90,7 +92,7 @@ fn infer_project_root(cwd: &Path) -> PathBuf {
     cwd.to_path_buf()
 }
 
-fn extra_claude_roots_from_env() -> Vec<AdapterRoot> {
+pub(crate) fn extra_claude_roots_from_env() -> Vec<AdapterRoot> {
     let Some(raw) = env::var_os("SKILLS_COPILOT_CLAUDE_EXTRA_ROOTS") else {
         return Vec::new();
     };
@@ -103,11 +105,13 @@ fn extra_claude_roots_from_env() -> Vec<AdapterRoot> {
         .collect()
 }
 
-fn display_path(path: &Path) -> String {
+pub(crate) fn display_path(path: &Path) -> String {
     path.to_string_lossy().to_string()
 }
 
-fn report_export_formats(mut formats: Vec<ReportExportFormat>) -> Vec<ReportExportFormat> {
+pub(crate) fn report_export_formats(
+    mut formats: Vec<ReportExportFormat>,
+) -> Vec<ReportExportFormat> {
     if formats.is_empty() {
         formats = vec![ReportExportFormat::Json, ReportExportFormat::Markdown];
     }
@@ -125,7 +129,7 @@ fn report_export_formats(mut formats: Vec<ReportExportFormat>) -> Vec<ReportExpo
         .collect()
 }
 
-fn report_export_redaction() -> ReportExportRedaction {
+pub(crate) fn report_export_redaction() -> ReportExportRedaction {
     ReportExportRedaction {
         enabled: true,
         placeholders: vec!["$HOME", "<project-root>", "<project-cwd>", "<app-data-dir>"],
@@ -134,7 +138,7 @@ fn report_export_redaction() -> ReportExportRedaction {
     }
 }
 
-fn report_export_summary(
+pub(crate) fn report_export_summary(
     skills: &Value,
     findings: &Value,
     triage: &Value,
@@ -177,7 +181,7 @@ fn report_export_summary(
     }
 }
 
-fn empty_health_summary_json() -> Value {
+pub(crate) fn empty_health_summary_json() -> Value {
     json!({
         "total_count": 0,
         "enabled_count": 0,
@@ -210,7 +214,7 @@ fn empty_health_summary_json() -> Value {
     })
 }
 
-fn empty_cross_agent_analysis_json() -> Value {
+pub(crate) fn empty_cross_agent_analysis_json() -> Value {
     json!({
         "summary": {
             "total_groups": 0,
@@ -226,7 +230,7 @@ fn empty_cross_agent_analysis_json() -> Value {
     })
 }
 
-fn redact_report_value(value: &mut Value, roots: &[(String, &'static str)]) {
+pub(crate) fn redact_report_value(value: &mut Value, roots: &[(String, &'static str)]) {
     match value {
         Value::String(text) => {
             *text = redact_string(text, roots);
@@ -245,11 +249,11 @@ fn redact_report_value(value: &mut Value, roots: &[(String, &'static str)]) {
     }
 }
 
-fn redact_path_string(path: &Path, roots: &[(String, &'static str)]) -> String {
+pub(crate) fn redact_path_string(path: &Path, roots: &[(String, &'static str)]) -> String {
     redact_string(&path.to_string_lossy(), roots)
 }
 
-fn redact_string(value: &str, roots: &[(String, &'static str)]) -> String {
+pub(crate) fn redact_string(value: &str, roots: &[(String, &'static str)]) -> String {
     let mut redacted = value.to_string();
     for (root, placeholder) in roots {
         if !root.is_empty() {
@@ -259,7 +263,7 @@ fn redact_string(value: &str, roots: &[(String, &'static str)]) -> String {
     redacted
 }
 
-fn render_report_markdown(report: &Value) -> String {
+pub(crate) fn render_report_markdown(report: &Value) -> String {
     let summary = report.get("summary").unwrap_or(&Value::Null);
     let safety = report.get("safety").unwrap_or(&Value::Null);
     let health = report.get("health").unwrap_or(&Value::Null);
@@ -332,21 +336,21 @@ fn render_report_markdown(report: &Value) -> String {
     markdown
 }
 
-fn report_string(value: &Value, pointer: &str) -> String {
+pub(crate) fn report_string(value: &Value, pointer: &str) -> String {
     value
         .pointer(pointer)
         .map(value_to_markdown_string)
         .unwrap_or_else(|| "n/a".to_string())
 }
 
-fn json_field_string(value: &Value, field: &str) -> String {
+pub(crate) fn json_field_string(value: &Value, field: &str) -> String {
     value
         .get(field)
         .map(value_to_markdown_string)
         .unwrap_or_else(|| "n/a".to_string())
 }
 
-fn value_to_markdown_string(value: &Value) -> String {
+pub(crate) fn value_to_markdown_string(value: &Value) -> String {
     match value {
         Value::String(text) => text.clone(),
         Value::Number(number) => number.to_string(),
@@ -357,7 +361,7 @@ fn value_to_markdown_string(value: &Value) -> String {
     }
 }
 
-fn is_pi_plain_markdown_catalog_noise(skill: &SkillRecord) -> bool {
+pub(crate) fn is_pi_plain_markdown_catalog_noise(skill: &SkillRecord) -> bool {
     skill.agent == AgentId::Pi.as_str()
         && skill
             .path
@@ -367,7 +371,7 @@ fn is_pi_plain_markdown_catalog_noise(skill: &SkillRecord) -> bool {
         && skill.path.file_name().and_then(|name| name.to_str()) != Some("SKILL.md")
 }
 
-fn is_pi_plain_markdown_instance_noise(skill: &SkillInstance) -> bool {
+pub(crate) fn is_pi_plain_markdown_instance_noise(skill: &SkillInstance) -> bool {
     skill.agent == AgentId::Pi
         && skill
             .path
@@ -377,37 +381,37 @@ fn is_pi_plain_markdown_instance_noise(skill: &SkillInstance) -> bool {
         && skill.path.file_name().and_then(|name| name.to_str()) != Some("SKILL.md")
 }
 
-fn unix_timestamp_millis() -> i64 {
+pub(crate) fn unix_timestamp_millis() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|duration| i64::try_from(duration.as_millis()).unwrap_or(i64::MAX))
         .unwrap_or(0)
 }
 
-fn estimate_tokens(parts: &[&str]) -> u32 {
+pub(crate) fn estimate_tokens(parts: &[&str]) -> u32 {
     let chars = parts.iter().map(|part| part.chars().count()).sum::<usize>();
     let estimated = chars.div_ceil(4).saturating_add(120);
     u32::try_from(estimated).unwrap_or(u32::MAX)
 }
 
 #[derive(Debug, Clone)]
-struct BuiltLlmPrompt {
-    prompt_preview: String,
-    prompt_scope: Vec<String>,
-    included_fields: Vec<String>,
-    excluded_fields: Vec<String>,
-    redaction: LlmPromptRedactionSummary,
-    estimated_output_tokens: u32,
+pub(crate) struct BuiltLlmPrompt {
+    pub(crate) prompt_preview: String,
+    pub(crate) prompt_scope: Vec<String>,
+    pub(crate) included_fields: Vec<String>,
+    pub(crate) excluded_fields: Vec<String>,
+    pub(crate) redaction: LlmPromptRedactionSummary,
+    pub(crate) estimated_output_tokens: u32,
 }
 
-struct PromptRedactor<'a> {
+pub(crate) struct PromptRedactor<'a> {
     roots: &'a [(String, &'static str)],
     redacted_value_count: usize,
     redacted_fields: BTreeMap<String, ()>,
 }
 
 impl<'a> PromptRedactor<'a> {
-    fn new(roots: &'a [(String, &'static str)]) -> Self {
+    pub(crate) fn new(roots: &'a [(String, &'static str)]) -> Self {
         Self {
             roots,
             redacted_value_count: 0,
@@ -415,7 +419,7 @@ impl<'a> PromptRedactor<'a> {
         }
     }
 
-    fn redact(&mut self, value: &str) -> String {
+    pub(crate) fn redact(&mut self, value: &str) -> String {
         let (path_redacted, path_count) = redact_with_count(value, self.roots);
         if path_count > 0 {
             self.redacted_value_count += path_count;
@@ -448,6 +452,9 @@ impl<'a> PromptRedactor<'a> {
                 } else if lower.starts_with("http://") || lower.starts_with("https://") {
                     token_count += 1;
                     "<redacted-url>"
+                } else if looks_like_high_entropy_secret(trimmed) {
+                    token_count += 1;
+                    "<redacted-secret>"
                 } else {
                     token
                 }
@@ -462,7 +469,7 @@ impl<'a> PromptRedactor<'a> {
         redacted
     }
 
-    fn summary(self) -> LlmPromptRedactionSummary {
+    pub(crate) fn summary(self) -> LlmPromptRedactionSummary {
         LlmPromptRedactionSummary {
             status: "redacted-preview-confirmed-required".to_string(),
             redacted_value_count: self.redacted_value_count,
@@ -482,7 +489,36 @@ impl<'a> PromptRedactor<'a> {
     }
 }
 
-fn redact_with_count(value: &str, roots: &[(String, &'static str)]) -> (String, usize) {
+pub(crate) fn looks_like_high_entropy_secret(value: &str) -> bool {
+    let token = value.trim_matches(|ch: char| {
+        matches!(
+            ch,
+            '"' | '\'' | ',' | ';' | ')' | '(' | '[' | ']' | '{' | '}' | ':' | '.'
+        )
+    });
+    let len = token.chars().count();
+    if len < 32 || token.contains('/') || token.contains('\\') {
+        return false;
+    }
+    let allowed = token
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '=' | '+'));
+    if !allowed {
+        return false;
+    }
+    let has_upper = token.chars().any(|ch| ch.is_ascii_uppercase());
+    let has_lower = token.chars().any(|ch| ch.is_ascii_lowercase());
+    let has_digit = token.chars().any(|ch| ch.is_ascii_digit());
+    let has_symbol = token.chars().any(|ch| matches!(ch, '-' | '_' | '=' | '+'));
+    let class_count = [has_upper, has_lower, has_digit, has_symbol]
+        .into_iter()
+        .filter(|flag| *flag)
+        .count();
+    let unique_count = token.chars().collect::<BTreeSet<_>>().len();
+    class_count >= 3 && unique_count >= 16
+}
+
+pub(crate) fn redact_with_count(value: &str, roots: &[(String, &'static str)]) -> (String, usize) {
     let mut redacted = value.to_string();
     let mut count = 0usize;
     for (root, placeholder) in roots {
@@ -494,7 +530,7 @@ fn redact_with_count(value: &str, roots: &[(String, &'static str)]) -> (String, 
     (redacted, count)
 }
 
-fn llm_preview_id(
+pub(crate) fn llm_preview_id(
     params: &LlmPreviewPromptParams,
     profile: Option<&ProviderProfileRecord>,
     prompt_preview: &str,
@@ -528,7 +564,7 @@ fn llm_preview_id(
     format!("prompt-preview-{digest:x}")
 }
 
-fn llm_prompt_action_type(params: &LlmPreviewPromptParams) -> String {
+pub(crate) fn llm_prompt_action_type(params: &LlmPreviewPromptParams) -> String {
     match params.action {
         LlmPromptActionKind::SkillAnalysis => format!(
             "skill_analysis:{}",
@@ -541,7 +577,7 @@ fn llm_prompt_action_type(params: &LlmPreviewPromptParams) -> String {
     }
 }
 
-fn inferred_llm_prompt_scope(params: &LlmPreviewPromptParams) -> Option<String> {
+pub(crate) fn inferred_llm_prompt_scope(params: &LlmPreviewPromptParams) -> Option<String> {
     if params.instance_ids.len() > 1 {
         Some("visible".to_string())
     } else if params.skill_instance_id.is_some() || params.instance_ids.len() == 1 {
@@ -551,7 +587,7 @@ fn inferred_llm_prompt_scope(params: &LlmPreviewPromptParams) -> Option<String> 
     }
 }
 
-fn destination_host_for_url(base_url: &str) -> String {
+pub(crate) fn destination_host_for_url(base_url: &str) -> String {
     let without_scheme = base_url
         .strip_prefix("https://")
         .or_else(|| base_url.strip_prefix("http://"))
@@ -563,7 +599,7 @@ fn destination_host_for_url(base_url: &str) -> String {
         .to_string()
 }
 
-fn llm_review_risk(
+pub(crate) fn llm_review_risk(
     findings: &[RuleFindingRecord],
     frontmatter_raw: &str,
     body: &str,
@@ -616,7 +652,7 @@ fn llm_review_risk(
     }
 }
 
-fn severity_rank(severity: &str) -> u8 {
+pub(crate) fn severity_rank(severity: &str) -> u8 {
     match severity {
         "critical" => 5,
         "error" => 4,
@@ -626,7 +662,7 @@ fn severity_rank(severity: &str) -> u8 {
     }
 }
 
-fn llm_review_redaction() -> LlmReviewRedaction {
+pub(crate) fn llm_review_redaction() -> LlmReviewRedaction {
     LlmReviewRedaction {
         skill_body_returned: false,
         paths_returned: false,

@@ -43,7 +43,7 @@ After development and test verification:
 
 - Update the completed UI screenshot for every changed high-level view.
 - Completed screenshots must capture the complete app window only. Full-desktop screenshots are forbidden.
-- For macOS artifacts, use `script/capture_app_window.sh` where possible. It performs a window-id capture for the target app window. If a region capture is unavoidable, crop strictly to the app window bounds and verify no desktop, wallpaper, menu bar, Dock, or unrelated window is visible.
+- For macOS artifacts, use `script/capture_app_window.sh` where possible. It performs a window-id capture for the target app window through `screencapture -l`. If a region capture is unavoidable, crop strictly to the app window bounds and verify no desktop, wallpaper, menu bar, Dock, or unrelated window is visible.
 - Keep screenshot privacy mode enabled for shareable evidence. Visible local paths should use screenshot-safe placeholders/collapse by default, with full reveal treated as a local debugging action.
 - Run `pnpm verify:screenshot-artifacts` before accepting updated PNG evidence; it rejects unreadable, near-black, transparent, or near-flat screenshots. It does not replace visual review.
 - Update `verification.md` with the app build, date, tested flows, and known gaps.

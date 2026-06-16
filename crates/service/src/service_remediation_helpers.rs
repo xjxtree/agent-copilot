@@ -1,20 +1,22 @@
-fn remediation_plan_safety_flags() -> RemediationPlanSafetyFlags {
+use super::*;
+
+pub(crate) fn remediation_plan_safety_flags() -> RemediationPlanSafetyFlags {
     agent_readiness_safety_flags()
 }
 
-fn remediation_preview_drafts_safety_flags() -> RemediationPreviewDraftsSafetyFlags {
+pub(crate) fn remediation_preview_drafts_safety_flags() -> RemediationPreviewDraftsSafetyFlags {
     agent_readiness_safety_flags()
 }
 
-fn remediation_preview_impact_safety_flags() -> RemediationPreviewImpactSafetyFlags {
+pub(crate) fn remediation_preview_impact_safety_flags() -> RemediationPreviewImpactSafetyFlags {
     agent_readiness_safety_flags()
 }
 
-fn remediation_batch_review_safety_flags() -> RemediationBatchReviewSafetyFlags {
+pub(crate) fn remediation_batch_review_safety_flags() -> RemediationBatchReviewSafetyFlags {
     agent_readiness_safety_flags()
 }
 
-fn remediation_plan_filters(
+pub(crate) fn remediation_plan_filters(
     params: &RemediationPlanParams,
     redaction_roots: &[(String, &'static str)],
 ) -> RemediationPlanFilters {
@@ -64,7 +66,7 @@ fn remediation_plan_filters(
     }
 }
 
-fn normalize_remediation_focus(focus: &str) -> Option<String> {
+pub(crate) fn normalize_remediation_focus(focus: &str) -> Option<String> {
     let normalized = focus.trim().to_ascii_lowercase().replace(['_', ' '], "-");
     let canonical = match normalized.as_str() {
         "" => return None,
@@ -79,7 +81,7 @@ fn normalize_remediation_focus(focus: &str) -> Option<String> {
     Some(canonical.to_string())
 }
 
-fn empty_remediation_plan_result(
+pub(crate) fn empty_remediation_plan_result(
     filters: RemediationPlanFilters,
     catalog_available: bool,
 ) -> RemediationPlanResult {
@@ -143,27 +145,26 @@ fn empty_remediation_plan_result(
         safety_flags: remediation_plan_safety_flags(),
     }
 }
-
-struct RemediationItemInput {
-    category: &'static str,
-    priority_score: u8,
-    severity: &'static str,
-    title: String,
-    summary: String,
-    detail: String,
-    affected_agent: Option<String>,
-    affected_skill: Option<RemediationAffectedSkill>,
-    affected_capability: Option<String>,
-    affected_task: Option<String>,
-    affected_instance_ids: Vec<String>,
-    suggested_safe_next_action: String,
-    prerequisites: Vec<String>,
-    blockers: Vec<String>,
-    deferred: bool,
-    evidence_refs: Vec<String>,
+pub(crate) struct RemediationItemInput {
+    pub(crate) category: &'static str,
+    pub(crate) priority_score: u8,
+    pub(crate) severity: &'static str,
+    pub(crate) title: String,
+    pub(crate) summary: String,
+    pub(crate) detail: String,
+    pub(crate) affected_agent: Option<String>,
+    pub(crate) affected_skill: Option<RemediationAffectedSkill>,
+    pub(crate) affected_capability: Option<String>,
+    pub(crate) affected_task: Option<String>,
+    pub(crate) affected_instance_ids: Vec<String>,
+    pub(crate) suggested_safe_next_action: String,
+    pub(crate) prerequisites: Vec<String>,
+    pub(crate) blockers: Vec<String>,
+    pub(crate) deferred: bool,
+    pub(crate) evidence_refs: Vec<String>,
 }
 
-fn remediation_item(input: RemediationItemInput) -> RemediationPlanItem {
+pub(crate) fn remediation_item(input: RemediationItemInput) -> RemediationPlanItem {
     let mut affected_instance_ids = input
         .affected_instance_ids
         .into_iter()
@@ -201,7 +202,7 @@ fn remediation_item(input: RemediationItemInput) -> RemediationPlanItem {
     }
 }
 
-fn remediation_insert_evidence(
+pub(crate) fn remediation_insert_evidence(
     evidence_by_id: &mut BTreeMap<String, TaskReadinessEvidenceReference>,
     source_type: &'static str,
     source_id: &str,
@@ -223,7 +224,7 @@ fn remediation_insert_evidence(
     id
 }
 
-fn remediation_affected_skill(skill: &SkillDetailRecord) -> RemediationAffectedSkill {
+pub(crate) fn remediation_affected_skill(skill: &SkillDetailRecord) -> RemediationAffectedSkill {
     RemediationAffectedSkill {
         instance_id: skill.id.clone(),
         definition_id: skill.definition_id.clone(),
@@ -235,7 +236,7 @@ fn remediation_affected_skill(skill: &SkillDetailRecord) -> RemediationAffectedS
     }
 }
 
-fn remediation_related_instances_for_finding(
+pub(crate) fn remediation_related_instances_for_finding(
     finding: &RuleFindingRecord,
     visible_skill_ids: &BTreeSet<&str>,
 ) -> Vec<String> {
@@ -247,7 +248,7 @@ fn remediation_related_instances_for_finding(
         .collect()
 }
 
-fn remediation_matches_filter(
+pub(crate) fn remediation_matches_filter(
     filters: &RemediationPlanFilters,
     instance_id: Option<&str>,
     affected_instance_ids: &[String],
@@ -268,7 +269,7 @@ fn remediation_matches_filter(
     id_matches
 }
 
-fn remediation_focus_matches(filters: &RemediationPlanFilters, category: &str) -> bool {
+pub(crate) fn remediation_focus_matches(filters: &RemediationPlanFilters, category: &str) -> bool {
     filters.focus_areas.is_empty()
         || filters
             .focus_areas
@@ -276,7 +277,7 @@ fn remediation_focus_matches(filters: &RemediationPlanFilters, category: &str) -
             .any(|focus| focus == category || (focus == "readiness" && category == "gap"))
 }
 
-fn remediation_score_for_severity(severity: &str) -> u8 {
+pub(crate) fn remediation_score_for_severity(severity: &str) -> u8 {
     match severity {
         "critical" => 100,
         "error" => 90,
@@ -286,7 +287,7 @@ fn remediation_score_for_severity(severity: &str) -> u8 {
     }
 }
 
-fn remediation_score_for_priority(priority: &str) -> u8 {
+pub(crate) fn remediation_score_for_priority(priority: &str) -> u8 {
     match priority {
         "high" => 86,
         "medium" => 62,
@@ -295,7 +296,7 @@ fn remediation_score_for_priority(priority: &str) -> u8 {
     }
 }
 
-fn remediation_priority_for_score(score: u8) -> &'static str {
+pub(crate) fn remediation_priority_for_score(score: u8) -> &'static str {
     match score {
         75..=100 => "high",
         45..=74 => "medium",
@@ -303,7 +304,7 @@ fn remediation_priority_for_score(score: u8) -> &'static str {
     }
 }
 
-fn remediation_severity(severity: &str) -> &'static str {
+pub(crate) fn remediation_severity(severity: &str) -> &'static str {
     match severity {
         "critical" => "critical",
         "error" => "error",
@@ -313,7 +314,7 @@ fn remediation_severity(severity: &str) -> &'static str {
     }
 }
 
-fn remediation_blockers_for_finding(finding: &RuleFindingRecord) -> Vec<String> {
+pub(crate) fn remediation_blockers_for_finding(finding: &RuleFindingRecord) -> Vec<String> {
     let mut blockers = Vec::new();
     if matches!(finding.effective_severity.as_str(), "critical" | "error") {
         blockers.push("High-severity local finding requires human review.".to_string());
@@ -330,7 +331,7 @@ fn remediation_blockers_for_finding(finding: &RuleFindingRecord) -> Vec<String> 
     blockers
 }
 
-fn remediation_side_effect_flags() -> Vec<&'static str> {
+pub(crate) fn remediation_side_effect_flags() -> Vec<&'static str> {
     vec![
         "provider_request_sent=false",
         "write_back_allowed=false",
@@ -346,7 +347,7 @@ fn remediation_side_effect_flags() -> Vec<&'static str> {
     ]
 }
 
-fn stable_remediation_item_id(
+pub(crate) fn stable_remediation_item_id(
     category: &str,
     title: &str,
     affected_instance_ids: &[String],
@@ -369,7 +370,7 @@ fn stable_remediation_item_id(
     format!("remediation-{}", hex_prefix(&digest, 12))
 }
 
-fn remediation_sorted_items(
+pub(crate) fn remediation_sorted_items(
     mut items: Vec<RemediationPlanItem>,
     filters: &RemediationPlanFilters,
 ) -> Vec<RemediationPlanItem> {
@@ -393,7 +394,7 @@ fn remediation_sorted_items(
     items
 }
 
-fn remediation_priority_rank(priority: &str) -> u8 {
+pub(crate) fn remediation_priority_rank(priority: &str) -> u8 {
     match priority {
         "high" => 0,
         "medium" => 1,
@@ -402,7 +403,7 @@ fn remediation_priority_rank(priority: &str) -> u8 {
     }
 }
 
-fn remediation_plan_summary(
+pub(crate) fn remediation_plan_summary(
     total_item_count: usize,
     returned_item_count: usize,
     items: &[RemediationPlanItem],
@@ -446,7 +447,9 @@ fn remediation_plan_summary(
     }
 }
 
-fn remediation_priority_rows(items: &[RemediationPlanItem]) -> Vec<RemediationPriorityRow> {
+pub(crate) fn remediation_priority_rows(
+    items: &[RemediationPlanItem],
+) -> Vec<RemediationPriorityRow> {
     let mut rows = Vec::new();
     for priority in ["high", "medium", "low"] {
         let matching = items
@@ -481,7 +484,7 @@ fn remediation_priority_rows(items: &[RemediationPlanItem]) -> Vec<RemediationPr
     rows
 }
 
-fn remediation_preview_drafts_filters(
+pub(crate) fn remediation_preview_drafts_filters(
     params: &RemediationPreviewDraftsParams,
     redaction_roots: &[(String, &'static str)],
 ) -> RemediationPreviewDraftsFilters {
@@ -524,7 +527,7 @@ fn remediation_preview_drafts_filters(
     }
 }
 
-fn normalize_remediation_draft_type(value: &str) -> Option<String> {
+pub(crate) fn normalize_remediation_draft_type(value: &str) -> Option<String> {
     let normalized = value.trim().to_ascii_lowercase().replace(['_', ' '], "-");
     let canonical = match normalized.as_str() {
         "" => return None,
@@ -538,14 +541,14 @@ fn normalize_remediation_draft_type(value: &str) -> Option<String> {
     Some(canonical.to_string())
 }
 
-fn remediation_preview_draft_type_matches(
+pub(crate) fn remediation_preview_draft_type_matches(
     filters: &RemediationPreviewDraftsFilters,
     draft_type: &str,
 ) -> bool {
     filters.draft_types.is_empty() || filters.draft_types.iter().any(|value| value == draft_type)
 }
 
-fn empty_remediation_preview_drafts_result(
+pub(crate) fn empty_remediation_preview_drafts_result(
     filters: RemediationPreviewDraftsFilters,
     catalog_available: bool,
 ) -> RemediationPreviewDraftsResult {
@@ -598,7 +601,7 @@ fn empty_remediation_preview_drafts_result(
     }
 }
 
-fn remediation_preview_impact_filters(
+pub(crate) fn remediation_preview_impact_filters(
     params: &RemediationPreviewImpactParams,
     redaction_roots: &[(String, &'static str)],
 ) -> RemediationPreviewImpactFilters {
@@ -633,7 +636,7 @@ fn remediation_preview_impact_filters(
     }
 }
 
-fn normalized_redacted_ids(values: &[String]) -> Vec<String> {
+pub(crate) fn normalized_redacted_ids(values: &[String]) -> Vec<String> {
     let mut ids = values
         .iter()
         .map(|value| redact_for_llm_preview(value.trim()))
@@ -644,7 +647,7 @@ fn normalized_redacted_ids(values: &[String]) -> Vec<String> {
     ids
 }
 
-fn normalize_remediation_impact_action(action: Option<&str>) -> String {
+pub(crate) fn normalize_remediation_impact_action(action: Option<&str>) -> String {
     match action
         .unwrap_or("review")
         .trim()
@@ -661,7 +664,7 @@ fn normalize_remediation_impact_action(action: Option<&str>) -> String {
     .to_string()
 }
 
-fn empty_remediation_preview_impact_result(
+pub(crate) fn empty_remediation_preview_impact_result(
     filters: RemediationPreviewImpactFilters,
     catalog_available: bool,
 ) -> RemediationPreviewImpactResult {
@@ -717,7 +720,7 @@ fn empty_remediation_preview_impact_result(
     }
 }
 
-fn remediation_batch_review_filters(
+pub(crate) fn remediation_batch_review_filters(
     params: &RemediationBatchReviewParams,
     redaction_roots: &[(String, &'static str)],
 ) -> RemediationBatchReviewFilters {
@@ -787,7 +790,7 @@ fn remediation_batch_review_filters(
     }
 }
 
-fn normalize_batch_review_group_by(value: &str) -> Option<String> {
+pub(crate) fn normalize_batch_review_group_by(value: &str) -> Option<String> {
     let normalized = value.trim().to_ascii_lowercase().replace(['_', ' '], "-");
     let canonical = match normalized.as_str() {
         "" => return None,
@@ -802,7 +805,7 @@ fn normalize_batch_review_group_by(value: &str) -> Option<String> {
     Some(canonical.to_string())
 }
 
-fn empty_remediation_batch_review_result(
+pub(crate) fn empty_remediation_batch_review_result(
     filters: RemediationBatchReviewFilters,
     catalog_available: bool,
 ) -> RemediationBatchReviewResult {
@@ -862,7 +865,7 @@ fn empty_remediation_batch_review_result(
     }
 }
 
-fn remediation_batch_review_item_from_plan(
+pub(crate) fn remediation_batch_review_item_from_plan(
     item: &RemediationPlanItem,
     filters: &RemediationBatchReviewFilters,
     detail_by_id: &BTreeMap<&str, &SkillDetailRecord>,
@@ -910,7 +913,7 @@ fn remediation_batch_review_item_from_plan(
     }
 }
 
-fn remediation_batch_review_item_from_draft(
+pub(crate) fn remediation_batch_review_item_from_draft(
     item: &RemediationDraftItem,
     filters: &RemediationBatchReviewFilters,
 ) -> RemediationBatchReviewItem {
@@ -948,7 +951,7 @@ fn remediation_batch_review_item_from_draft(
     }
 }
 
-fn remediation_rule_id_from_plan_item(item: &RemediationPlanItem) -> Option<String> {
+pub(crate) fn remediation_rule_id_from_plan_item(item: &RemediationPlanItem) -> Option<String> {
     item.title
         .split('`')
         .nth(1)
@@ -961,7 +964,7 @@ fn remediation_rule_id_from_plan_item(item: &RemediationPlanItem) -> Option<Stri
         })
 }
 
-fn remediation_batch_review_item_from_impact(
+pub(crate) fn remediation_batch_review_item_from_impact(
     row: &RemediationImpactRow,
     filters: &RemediationBatchReviewFilters,
 ) -> RemediationBatchReviewItem {
@@ -999,7 +1002,7 @@ fn remediation_batch_review_item_from_impact(
     }
 }
 
-fn remediation_batch_review_item_from_cleanup(
+pub(crate) fn remediation_batch_review_item_from_cleanup(
     item: &CleanupQueueItem,
     filters: &RemediationBatchReviewFilters,
     detail_by_id: &BTreeMap<&str, &SkillDetailRecord>,
@@ -1040,7 +1043,7 @@ fn remediation_batch_review_item_from_cleanup(
     }
 }
 
-fn remediation_risk_for_confidence(confidence: u8) -> &'static str {
+pub(crate) fn remediation_risk_for_confidence(confidence: u8) -> &'static str {
     match confidence {
         75..=100 => "low",
         50..=74 => "medium",
@@ -1048,7 +1051,7 @@ fn remediation_risk_for_confidence(confidence: u8) -> &'static str {
     }
 }
 
-fn remediation_severity_for_confidence(confidence: u8) -> &'static str {
+pub(crate) fn remediation_severity_for_confidence(confidence: u8) -> &'static str {
     match confidence {
         75..=100 => "info",
         50..=74 => "warning",
@@ -1056,7 +1059,7 @@ fn remediation_severity_for_confidence(confidence: u8) -> &'static str {
     }
 }
 
-fn remediation_batch_review_item_matches(
+pub(crate) fn remediation_batch_review_item_matches(
     filters: &RemediationBatchReviewFilters,
     item: &RemediationBatchReviewItem,
 ) -> bool {
@@ -1098,7 +1101,7 @@ fn remediation_batch_review_item_matches(
     true
 }
 
-fn remediation_sorted_batch_review_items(
+pub(crate) fn remediation_sorted_batch_review_items(
     mut items: Vec<RemediationBatchReviewItem>,
     limit: usize,
 ) -> Vec<RemediationBatchReviewItem> {
@@ -1120,7 +1123,7 @@ fn remediation_sorted_batch_review_items(
     items
 }
 
-fn remediation_batch_risk_rank(risk: &str) -> u8 {
+pub(crate) fn remediation_batch_risk_rank(risk: &str) -> u8 {
     match risk {
         "high" => 0,
         "medium" => 1,
@@ -1129,7 +1132,7 @@ fn remediation_batch_risk_rank(risk: &str) -> u8 {
     }
 }
 
-fn remediation_batch_review_groups(
+pub(crate) fn remediation_batch_review_groups(
     filters: &RemediationBatchReviewFilters,
     items: &[RemediationBatchReviewItem],
 ) -> Vec<RemediationBatchReviewGroup> {
@@ -1211,7 +1214,7 @@ fn remediation_batch_review_groups(
     groups
 }
 
-fn remediation_batch_group_rank(group_type: &str) -> u8 {
+pub(crate) fn remediation_batch_group_rank(group_type: &str) -> u8 {
     match group_type {
         "risk" => 0,
         "rule" => 1,
@@ -1223,7 +1226,11 @@ fn remediation_batch_group_rank(group_type: &str) -> u8 {
     }
 }
 
-fn stable_batch_review_group_id(group_type: &str, label: &str, evidence_refs: &[String]) -> String {
+pub(crate) fn stable_batch_review_group_id(
+    group_type: &str,
+    label: &str,
+    evidence_refs: &[String],
+) -> String {
     let mut hasher = Sha256::new();
     hasher.update(group_type.as_bytes());
     hasher.update(b"\0");
@@ -1237,7 +1244,9 @@ fn stable_batch_review_group_id(group_type: &str, label: &str, evidence_refs: &[
     format!("batch-group-{}", hex_prefix(&digest, 12))
 }
 
-fn remediation_batch_review_next_steps(items: &[RemediationBatchReviewItem]) -> Vec<String> {
+pub(crate) fn remediation_batch_review_next_steps(
+    items: &[RemediationBatchReviewItem],
+) -> Vec<String> {
     items
         .iter()
         .map(|item| item.recommended_next_step_label.clone())
@@ -1247,7 +1256,7 @@ fn remediation_batch_review_next_steps(items: &[RemediationBatchReviewItem]) -> 
         .collect()
 }
 
-fn remediation_batch_review_summary(
+pub(crate) fn remediation_batch_review_summary(
     total_item_count: usize,
     items: &[RemediationBatchReviewItem],
     groups: &[RemediationBatchReviewGroup],
@@ -1290,7 +1299,7 @@ fn remediation_batch_review_summary(
     }
 }
 
-fn remediation_impact_direction_for_action(action: &str) -> &'static str {
+pub(crate) fn remediation_impact_direction_for_action(action: &str) -> &'static str {
     match action {
         "enable" | "remediate" | "edit" => "improve",
         "disable" => "reduce",
@@ -1298,7 +1307,7 @@ fn remediation_impact_direction_for_action(action: &str) -> &'static str {
     }
 }
 
-fn remediation_impact_direction_for_skill(
+pub(crate) fn remediation_impact_direction_for_skill(
     action: &str,
     detail: &SkillDetailRecord,
 ) -> &'static str {
@@ -1312,7 +1321,10 @@ fn remediation_impact_direction_for_skill(
     }
 }
 
-fn remediation_estimated_enabled_after(action: &str, detail: &SkillDetailRecord) -> bool {
+pub(crate) fn remediation_estimated_enabled_after(
+    action: &str,
+    detail: &SkillDetailRecord,
+) -> bool {
     match action {
         "enable" => true,
         "disable" => false,
@@ -1320,7 +1332,10 @@ fn remediation_estimated_enabled_after(action: &str, detail: &SkillDetailRecord)
     }
 }
 
-fn remediation_skill_impact_notes(action: &str, detail: &SkillDetailRecord) -> Vec<String> {
+pub(crate) fn remediation_skill_impact_notes(
+    action: &str,
+    detail: &SkillDetailRecord,
+) -> Vec<String> {
     let mut notes = Vec::new();
     match action {
         "enable" if detail.enabled => notes.push("Skill is already enabled; enable impact is neutral.".to_string()),
@@ -1338,7 +1353,7 @@ fn remediation_skill_impact_notes(action: &str, detail: &SkillDetailRecord) -> V
     notes
 }
 
-fn remediation_risk_band(severity: &str) -> &'static str {
+pub(crate) fn remediation_risk_band(severity: &str) -> &'static str {
     match severity {
         "critical" | "error" => "high",
         "warning" | "warn" => "medium",
@@ -1346,7 +1361,7 @@ fn remediation_risk_band(severity: &str) -> &'static str {
     }
 }
 
-fn remediation_expected_risk_after(action: &str, severity: &str) -> &'static str {
+pub(crate) fn remediation_expected_risk_after(action: &str, severity: &str) -> &'static str {
     match action {
         "edit" | "remediate" => match remediation_risk_band(severity) {
             "high" => "medium",
@@ -1358,7 +1373,7 @@ fn remediation_expected_risk_after(action: &str, severity: &str) -> &'static str
     }
 }
 
-fn remediation_snapshot_rollback_rows(
+pub(crate) fn remediation_snapshot_rollback_rows(
     filters: &RemediationPreviewImpactFilters,
     details: &[SkillDetailRecord],
     diagnostics: &[AdapterDiagnosticsRecord],
@@ -1415,7 +1430,7 @@ fn remediation_snapshot_rollback_rows(
         .collect()
 }
 
-fn remediation_agent_impact_rows(
+pub(crate) fn remediation_agent_impact_rows(
     filters: &RemediationPreviewImpactFilters,
     skill_rows: &[RemediationSkillImpactRow],
     diagnostics: &[AdapterDiagnosticsRecord],
@@ -1466,7 +1481,7 @@ fn remediation_agent_impact_rows(
         .collect()
 }
 
-fn remediation_task_impact_rows(
+pub(crate) fn remediation_task_impact_rows(
     filters: &RemediationPreviewImpactFilters,
     readiness: Option<&TaskReadinessResult>,
     routing: Option<&SkillRouteRankingResult>,
@@ -1516,7 +1531,7 @@ fn remediation_task_impact_rows(
     }]
 }
 
-fn remediation_estimated_score_after(action: &str, score: u8) -> u8 {
+pub(crate) fn remediation_estimated_score_after(action: &str, score: u8) -> u8 {
     match action {
         "enable" | "edit" | "remediate" => score.saturating_add(8).min(100),
         "disable" => score.saturating_sub(12),
@@ -1524,7 +1539,7 @@ fn remediation_estimated_score_after(action: &str, score: u8) -> u8 {
     }
 }
 
-fn remediation_top_level_impact_rows(
+pub(crate) fn remediation_top_level_impact_rows(
     filters: &RemediationPreviewImpactFilters,
     skill_rows: &[RemediationSkillImpactRow],
     agent_rows: &[RemediationAgentImpactRow],
@@ -1617,7 +1632,7 @@ fn remediation_top_level_impact_rows(
     rows
 }
 
-struct RemediationImpactRowInput<'a> {
+pub(crate) struct RemediationImpactRowInput<'a> {
     area: &'static str,
     rank: usize,
     title: &'static str,
@@ -1629,7 +1644,7 @@ struct RemediationImpactRowInput<'a> {
     blockers: Vec<String>,
 }
 
-fn remediation_impact_row(input: RemediationImpactRowInput<'_>) -> RemediationImpactRow {
+pub(crate) fn remediation_impact_row(input: RemediationImpactRowInput<'_>) -> RemediationImpactRow {
     let RemediationImpactRowInput {
         area,
         rank,
@@ -1667,7 +1682,7 @@ fn remediation_impact_row(input: RemediationImpactRowInput<'_>) -> RemediationIm
     }
 }
 
-fn remediation_preview_impact_summary(
+pub(crate) fn remediation_preview_impact_summary(
     impact_rows: &[RemediationImpactRow],
     task_rows: &[RemediationTaskImpactRow],
     agent_rows: &[RemediationAgentImpactRow],
@@ -1704,7 +1719,7 @@ fn remediation_preview_impact_summary(
     }
 }
 
-fn remediation_draft_type_for_rule(rule_id: &str) -> Option<&'static str> {
+pub(crate) fn remediation_draft_type_for_rule(rule_id: &str) -> Option<&'static str> {
     let normalized = rule_id.to_ascii_lowercase();
     if normalized.starts_with("frontmatter.")
         || normalized == "name.canonical-case"
@@ -1722,7 +1737,7 @@ fn remediation_draft_type_for_rule(rule_id: &str) -> Option<&'static str> {
     }
 }
 
-fn remediation_draft_item_for_finding(
+pub(crate) fn remediation_draft_item_for_finding(
     skill: &SkillDetailRecord,
     finding: &RuleFindingRecord,
     draft_type: &'static str,
@@ -1824,19 +1839,20 @@ fn remediation_draft_item_for_finding(
         safety_flags: remediation_preview_drafts_safety_flags(),
     }
 }
-
-struct RemediationPolicyDraftInput<'a> {
-    title: String,
-    draft_type: &'static str,
-    skill: Option<&'a SkillDetailRecord>,
-    finding_id: Option<String>,
-    rule_id: Option<String>,
-    proposed_text: String,
-    rationale: String,
-    evidence_refs: Vec<String>,
+pub(crate) struct RemediationPolicyDraftInput<'a> {
+    pub(crate) title: String,
+    pub(crate) draft_type: &'static str,
+    pub(crate) skill: Option<&'a SkillDetailRecord>,
+    pub(crate) finding_id: Option<String>,
+    pub(crate) rule_id: Option<String>,
+    pub(crate) proposed_text: String,
+    pub(crate) rationale: String,
+    pub(crate) evidence_refs: Vec<String>,
 }
 
-fn remediation_policy_draft_item(input: RemediationPolicyDraftInput<'_>) -> RemediationDraftItem {
+pub(crate) fn remediation_policy_draft_item(
+    input: RemediationPolicyDraftInput<'_>,
+) -> RemediationDraftItem {
     let current_text = input
         .skill
         .map(|skill| redacted_snippet(&skill.frontmatter_raw, 700));
@@ -1883,7 +1899,7 @@ fn remediation_policy_draft_item(input: RemediationPolicyDraftInput<'_>) -> Reme
     }
 }
 
-fn remediation_policy_draft_item_from_plan(
+pub(crate) fn remediation_policy_draft_item_from_plan(
     plan_item: &RemediationPlanItem,
 ) -> RemediationDraftItem {
     let proposed_text = format!(
@@ -1931,7 +1947,7 @@ fn remediation_policy_draft_item_from_plan(
     }
 }
 
-fn remediation_frontmatter_draft(skill: &SkillDetailRecord) -> String {
+pub(crate) fn remediation_frontmatter_draft(skill: &SkillDetailRecord) -> String {
     let mut lines = vec![
         format!("name: {}", redact_for_llm_preview(&skill.name)),
         format!("description: {}", remediation_description_draft_text(skill)),
@@ -1946,7 +1962,10 @@ fn remediation_frontmatter_draft(skill: &SkillDetailRecord) -> String {
     lines.join("\n")
 }
 
-fn remediation_description_draft(skill: &SkillDetailRecord, finding: &RuleFindingRecord) -> String {
+pub(crate) fn remediation_description_draft(
+    skill: &SkillDetailRecord,
+    finding: &RuleFindingRecord,
+) -> String {
     let base = remediation_description_draft_text(skill);
     let finding_hint = finding
         .suggestion
@@ -1961,7 +1980,7 @@ fn remediation_description_draft(skill: &SkillDetailRecord, finding: &RuleFindin
     }
 }
 
-fn remediation_description_draft_text(skill: &SkillDetailRecord) -> String {
+pub(crate) fn remediation_description_draft_text(skill: &SkillDetailRecord) -> String {
     let name = redact_for_llm_preview(&skill.name).replace('-', " ");
     let body_hint = first_non_empty_line(&skill.body)
         .map(redact_for_llm_preview)
@@ -1974,7 +1993,10 @@ fn remediation_description_draft_text(skill: &SkillDetailRecord) -> String {
     text
 }
 
-fn remediation_permissions_draft(skill: &SkillDetailRecord, finding: &RuleFindingRecord) -> String {
+pub(crate) fn remediation_permissions_draft(
+    skill: &SkillDetailRecord,
+    finding: &RuleFindingRecord,
+) -> String {
     let mut lines = Vec::new();
     let tools = remediation_permission_tools(skill);
     if tools.is_empty() {
@@ -1992,7 +2014,10 @@ fn remediation_permissions_draft(skill: &SkillDetailRecord, finding: &RuleFindin
     lines.join("\n")
 }
 
-fn remediation_dependency_draft(skill: &SkillDetailRecord, finding: &RuleFindingRecord) -> String {
+pub(crate) fn remediation_dependency_draft(
+    skill: &SkillDetailRecord,
+    finding: &RuleFindingRecord,
+) -> String {
     format!(
         "Dependency review for `{}`: {} If the dependency is intentional, document the exact local requirement and review path; otherwise remove the stale dependency reference.",
         redact_for_llm_preview(&skill.name),
@@ -2004,7 +2029,7 @@ fn remediation_dependency_draft(skill: &SkillDetailRecord, finding: &RuleFinding
     )
 }
 
-fn remediation_permission_tools(skill: &SkillDetailRecord) -> Vec<String> {
+pub(crate) fn remediation_permission_tools(skill: &SkillDetailRecord) -> Vec<String> {
     skill
         .permissions
         .get("tools")
@@ -2020,11 +2045,11 @@ fn remediation_permission_tools(skill: &SkillDetailRecord) -> Vec<String> {
         .collect()
 }
 
-fn first_non_empty_line(value: &str) -> Option<&str> {
+pub(crate) fn first_non_empty_line(value: &str) -> Option<&str> {
     value.lines().map(str::trim).find(|line| !line.is_empty())
 }
 
-fn redacted_snippet(value: &str, max_len: usize) -> String {
+pub(crate) fn redacted_snippet(value: &str, max_len: usize) -> String {
     let mut snippet = redact_for_llm_preview(value.trim());
     if snippet.len() > max_len {
         snippet.truncate(max_len.saturating_sub(3));
@@ -2033,14 +2058,14 @@ fn redacted_snippet(value: &str, max_len: usize) -> String {
     snippet
 }
 
-fn redacted_string_vec(values: &[String]) -> Vec<String> {
+pub(crate) fn redacted_string_vec(values: &[String]) -> Vec<String> {
     values
         .iter()
         .map(|value| redact_for_llm_preview(value))
         .collect()
 }
 
-fn remediation_patch_like_snippet(
+pub(crate) fn remediation_patch_like_snippet(
     draft_type: &str,
     current_text: Option<&str>,
     proposed_text: &str,
@@ -2061,7 +2086,7 @@ fn remediation_patch_like_snippet(
     lines.join("\n")
 }
 
-fn remediation_draft_confidence(finding: &RuleFindingRecord) -> u8 {
+pub(crate) fn remediation_draft_confidence(finding: &RuleFindingRecord) -> u8 {
     match finding.effective_severity.as_str() {
         "critical" | "error" => 82,
         "warning" | "warn" => 68,
@@ -2070,7 +2095,7 @@ fn remediation_draft_confidence(finding: &RuleFindingRecord) -> u8 {
     }
 }
 
-fn remediation_draft_confidence_band(confidence: u8) -> &'static str {
+pub(crate) fn remediation_draft_confidence_band(confidence: u8) -> &'static str {
     match confidence {
         75..=100 => "high",
         50..=74 => "medium",
@@ -2078,7 +2103,7 @@ fn remediation_draft_confidence_band(confidence: u8) -> &'static str {
     }
 }
 
-fn stable_remediation_draft_id(
+pub(crate) fn stable_remediation_draft_id(
     draft_type: &str,
     skill_id: &str,
     finding_id: Option<&str>,
@@ -2103,7 +2128,7 @@ fn stable_remediation_draft_id(
     format!("draft-{}", hex_prefix(&digest, 12))
 }
 
-fn remediation_sorted_draft_items(
+pub(crate) fn remediation_sorted_draft_items(
     mut items: Vec<RemediationDraftItem>,
     filters: &RemediationPreviewDraftsFilters,
 ) -> Vec<RemediationDraftItem> {
@@ -2121,7 +2146,7 @@ fn remediation_sorted_draft_items(
     items
 }
 
-fn remediation_draft_type_rank(draft_type: &str) -> u8 {
+pub(crate) fn remediation_draft_type_rank(draft_type: &str) -> u8 {
     match draft_type {
         "frontmatter" => 0,
         "description" => 1,
@@ -2132,7 +2157,7 @@ fn remediation_draft_type_rank(draft_type: &str) -> u8 {
     }
 }
 
-fn remediation_preview_drafts_summary(
+pub(crate) fn remediation_preview_drafts_summary(
     total_draft_count: usize,
     returned_draft_count: usize,
     items: &[RemediationDraftItem],

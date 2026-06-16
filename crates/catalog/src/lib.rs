@@ -12,11 +12,7 @@ use skills_copilot_core::{
 };
 use thiserror::Error;
 
-pub const INITIAL_SCHEMA: &str = include_str!("migrations/0001_initial.sql");
-pub const MIGRATION_0002: &str = include_str!("migrations/0002_add_display_path.sql");
-pub const MIGRATION_0003: &str = include_str!("migrations/0003_add_rule_findings.sql");
-pub const MIGRATION_0004: &str = include_str!("migrations/0004_add_finding_triage.sql");
-pub const MIGRATION_0005: &str = include_str!("migrations/0005_add_rule_tuning.sql");
+mod schema;
 
 #[derive(Debug)]
 pub struct Catalog {
@@ -168,49 +164,29 @@ impl Catalog {
     }
 
     pub fn init(&self) -> Result<(), CatalogError> {
-        self.conn.execute_batch(INITIAL_SCHEMA)?;
-        // Migration 0002 is not idempotent (ALTER TABLE ADD COLUMN fails if
-        // the column already exists). Ignore the "duplicate column" error so
-        // init() is safe to call on every startup.
-        match self.conn.execute_batch(MIGRATION_0002) {
-            Ok(()) => {}
-            Err(rusqlite::Error::SqliteFailure(_, ref msg))
-                if msg.as_ref().is_some_and(|m| m.contains("duplicate column")) => {}
-            Err(e) => return Err(CatalogError::Sqlite(e)),
-        }
-        self.conn.execute_batch(MIGRATION_0003)?;
-        self.ensure_rule_finding_triage_columns()?;
-        self.conn.execute_batch(MIGRATION_0004)?;
-        self.conn.execute_batch(MIGRATION_0005)?;
+        schema::init_schema(&self.conn)?;
         self.canonicalize_legacy_paths()?;
         Ok(())
     }
 
-    fn ensure_rule_finding_triage_columns(&self) -> Result<(), CatalogError> {
-        if !self.table_has_column("rule_finding", "triage_key")? {
-            self.conn.execute(
-                "ALTER TABLE rule_finding ADD COLUMN triage_key TEXT NOT NULL DEFAULT ''",
-                [],
-            )?;
-        }
-        if !self.table_has_column("rule_finding", "triage_context")? {
-            self.conn.execute(
-                "ALTER TABLE rule_finding ADD COLUMN triage_context TEXT NOT NULL DEFAULT ''",
-                [],
-            )?;
-        }
-        Ok(())
-    }
-
-    fn table_has_column(&self, table: &str, column: &str) -> Result<bool, CatalogError> {
-        let mut stmt = self.conn.prepare(&format!("PRAGMA table_info({table})"))?;
-        let rows = stmt.query_map([], |row| row.get::<_, String>(1))?;
-        for row in rows {
-            if row? == column {
-                return Ok(true);
+    fn run_refresh_transaction<F>(&self, operation: F) -> Result<(), CatalogError>
+    where
+        F: FnOnce() -> Result<(), CatalogError>,
+    {
+        self.conn.execute_batch("BEGIN IMMEDIATE TRANSACTION")?;
+        match operation() {
+            Ok(()) => match self.conn.execute_batch("COMMIT") {
+                Ok(()) => Ok(()),
+                Err(error) => {
+                    let _ = self.conn.execute_batch("ROLLBACK");
+                    Err(CatalogError::Sqlite(error))
+                }
+            },
+            Err(error) => {
+                let _ = self.conn.execute_batch("ROLLBACK");
+                Err(error)
             }
         }
-        Ok(false)
     }
 
     /// Migrate records whose `path` was stored as a display path (pre-refactor)
@@ -690,31 +666,33 @@ impl Catalog {
     }
 
     pub fn refresh_rule_findings(&self, findings: &[RuleFindingDraft]) -> Result<(), CatalogError> {
-        self.conn.execute("DELETE FROM rule_finding", [])?;
-        for finding in findings {
-            let triage_context = self.finding_triage_context(finding)?;
-            let triage_key = finding_triage_key(finding, &triage_context);
-            self.conn.execute(
-                "INSERT INTO rule_finding (
-                    id, triage_key, triage_context, instance_id, definition_id,
-                    rule_id, severity, message, suggestion, created_at
-                 )
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-                params![
-                    finding.id,
-                    triage_key,
-                    triage_context,
-                    finding.instance_id.as_deref(),
-                    finding.definition_id.as_deref(),
-                    finding.rule_id,
-                    finding.severity,
-                    finding.message,
-                    finding.suggestion.as_deref(),
-                    finding.created_at,
-                ],
-            )?;
-        }
-        Ok(())
+        self.run_refresh_transaction(|| {
+            self.conn.execute("DELETE FROM rule_finding", [])?;
+            for finding in findings {
+                let triage_context = self.finding_triage_context(finding)?;
+                let triage_key = finding_triage_key(finding, &triage_context);
+                self.conn.execute(
+                    "INSERT INTO rule_finding (
+                        id, triage_key, triage_context, instance_id, definition_id,
+                        rule_id, severity, message, suggestion, created_at
+                     )
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                    params![
+                        finding.id,
+                        triage_key,
+                        triage_context,
+                        finding.instance_id.as_deref(),
+                        finding.definition_id.as_deref(),
+                        finding.rule_id,
+                        finding.severity,
+                        finding.message,
+                        finding.suggestion.as_deref(),
+                        finding.created_at,
+                    ],
+                )?;
+            }
+            Ok(())
+        })
     }
 
     pub fn list_rule_findings(&self) -> Result<Vec<RuleFindingRecord>, CatalogError> {
@@ -1176,48 +1154,50 @@ impl Catalog {
         definitions: &[SkillDefinitionDraft],
         conflicts: &[ConflictGroupDraft],
     ) -> Result<(), CatalogError> {
-        self.conn.execute("DELETE FROM conflict_group_member", [])?;
-        self.conn.execute("DELETE FROM conflict_group", [])?;
-        self.conn.execute("DELETE FROM skill_definition", [])?;
+        self.run_refresh_transaction(|| {
+            self.conn.execute("DELETE FROM conflict_group_member", [])?;
+            self.conn.execute("DELETE FROM conflict_group", [])?;
+            self.conn.execute("DELETE FROM skill_definition", [])?;
 
-        for definition in definitions {
-            self.conn.execute(
-                "INSERT INTO skill_definition (
-                    id, canonical_name, description, active_instance,
-                    has_multiple_instances, has_conflict
-                 )
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                params![
-                    definition.id,
-                    definition.canonical_name,
-                    definition.description,
-                    definition.active_instance.as_deref(),
-                    i64::from(definition.has_multiple_instances),
-                    i64::from(definition.has_conflict),
-                ],
-            )?;
-        }
-
-        for conflict in conflicts {
-            self.conn.execute(
-                "INSERT INTO conflict_group (id, definition_id, reason, winner_id)
-                 VALUES (?1, ?2, ?3, ?4)",
-                params![
-                    conflict.id,
-                    conflict.definition_id,
-                    conflict.reason,
-                    conflict.winner_id.as_deref(),
-                ],
-            )?;
-            for instance_id in &conflict.instance_ids {
+            for definition in definitions {
                 self.conn.execute(
-                    "INSERT INTO conflict_group_member (group_id, instance_id)
-                     VALUES (?1, ?2)",
-                    params![conflict.id, instance_id],
+                    "INSERT INTO skill_definition (
+                        id, canonical_name, description, active_instance,
+                        has_multiple_instances, has_conflict
+                     )
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    params![
+                        definition.id,
+                        definition.canonical_name,
+                        definition.description,
+                        definition.active_instance.as_deref(),
+                        i64::from(definition.has_multiple_instances),
+                        i64::from(definition.has_conflict),
+                    ],
                 )?;
             }
-        }
-        Ok(())
+
+            for conflict in conflicts {
+                self.conn.execute(
+                    "INSERT INTO conflict_group (id, definition_id, reason, winner_id)
+                     VALUES (?1, ?2, ?3, ?4)",
+                    params![
+                        conflict.id,
+                        conflict.definition_id,
+                        conflict.reason,
+                        conflict.winner_id.as_deref(),
+                    ],
+                )?;
+                for instance_id in &conflict.instance_ids {
+                    self.conn.execute(
+                        "INSERT INTO conflict_group_member (group_id, instance_id)
+                         VALUES (?1, ?2)",
+                        params![conflict.id, instance_id],
+                    )?;
+                }
+            }
+            Ok(())
+        })
     }
 
     pub fn list_conflict_groups(&self) -> Result<Vec<ConflictGroupRecord>, CatalogError> {
@@ -2337,6 +2317,86 @@ mod tests {
         let conflicts = catalog.list_conflict_groups().expect("conflicts list");
         assert_eq!(conflicts.len(), 1);
         assert_eq!(conflicts[0].instance_ids.len(), 2);
+    }
+
+    #[test]
+    fn refresh_rule_findings_rolls_back_on_insert_failure() {
+        let catalog = Catalog::in_memory().expect("catalog opens");
+        catalog.init().expect("schema initializes");
+
+        let original = RuleFindingDraft {
+            id: "finding-original".to_string(),
+            instance_id: Some("inst-1".to_string()),
+            definition_id: Some("def-1".to_string()),
+            rule_id: "name.collision".to_string(),
+            severity: "info".to_string(),
+            message: "original finding".to_string(),
+            suggestion: Some("keep original".to_string()),
+            created_at: 42,
+        };
+        catalog
+            .refresh_rule_findings(std::slice::from_ref(&original))
+            .expect("seed finding");
+
+        let duplicate = RuleFindingDraft {
+            id: "finding-duplicate".to_string(),
+            message: "replacement finding".to_string(),
+            ..original
+        };
+        let result = catalog.refresh_rule_findings(&[duplicate.clone(), duplicate]);
+        assert!(result.is_err(), "duplicate IDs should fail the refresh");
+
+        let findings = catalog
+            .list_rule_findings()
+            .expect("findings list after failed refresh");
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].id, "finding-original");
+        assert_eq!(findings[0].message, "original finding");
+    }
+
+    #[test]
+    fn refresh_definitions_and_conflicts_rolls_back_on_insert_failure() {
+        let catalog = Catalog::in_memory().expect("catalog opens");
+        catalog.init().expect("schema initializes");
+
+        catalog
+            .refresh_definitions_and_conflicts(
+                &[SkillDefinitionDraft {
+                    id: "def-original".to_string(),
+                    canonical_name: "original".to_string(),
+                    description: "original definition".to_string(),
+                    active_instance: Some("inst-1".to_string()),
+                    has_multiple_instances: true,
+                    has_conflict: true,
+                }],
+                &[ConflictGroupDraft {
+                    id: "conflict-original".to_string(),
+                    definition_id: "def-original".to_string(),
+                    reason: "name-collision".to_string(),
+                    winner_id: None,
+                    instance_ids: vec!["inst-1".to_string(), "inst-2".to_string()],
+                }],
+            )
+            .expect("seed definitions");
+
+        let duplicate = SkillDefinitionDraft {
+            id: "def-duplicate".to_string(),
+            canonical_name: "duplicate".to_string(),
+            description: "duplicate definition".to_string(),
+            active_instance: None,
+            has_multiple_instances: false,
+            has_conflict: false,
+        };
+        let result =
+            catalog.refresh_definitions_and_conflicts(&[duplicate.clone(), duplicate], &[]);
+        assert!(result.is_err(), "duplicate IDs should fail the refresh");
+
+        let conflicts = catalog
+            .list_conflict_groups()
+            .expect("conflicts list after failed refresh");
+        assert_eq!(conflicts.len(), 1);
+        assert_eq!(conflicts[0].id, "conflict-original");
+        assert_eq!(conflicts[0].instance_ids, vec!["inst-1", "inst-2"]);
     }
 
     #[test]

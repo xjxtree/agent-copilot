@@ -30,6 +30,10 @@ use thiserror::Error;
 #[cfg(test)]
 use skills_copilot_core::SkillScript;
 
+mod script_execution;
+
+pub use script_execution::*;
+
 pub fn app_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
@@ -1044,294 +1048,6 @@ pub fn get_skill(catalog: &Catalog, instance_id: &str) -> Result<SkillDetailReco
     catalog
         .get_skill_detail(instance_id)?
         .ok_or_else(|| CommandError::InstanceNotFound(instance_id.to_string()))
-}
-
-pub const SCRIPT_EXECUTION_DISABLED_REASON: &str =
-    "Script execution is disabled by default; the service will not spawn a process.";
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ScriptExecutionInitiator {
-    User,
-    Llm,
-}
-
-impl ScriptExecutionInitiator {
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::User => "user",
-            Self::Llm => "llm",
-        }
-    }
-}
-
-fn default_script_execution_initiator() -> ScriptExecutionInitiator {
-    ScriptExecutionInitiator::User
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct ScriptExecutionRequest {
-    pub command: Vec<String>,
-    #[serde(default)]
-    pub cwd: Option<PathBuf>,
-    #[serde(default)]
-    pub env: BTreeMap<String, String>,
-    #[serde(default)]
-    pub network: Option<String>,
-    #[serde(default)]
-    pub files: Vec<String>,
-    #[serde(default)]
-    pub skill_instance_id: Option<String>,
-    #[serde(default = "default_script_execution_initiator")]
-    pub initiated_by: ScriptExecutionInitiator,
-    #[serde(default)]
-    pub confirmed: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ScriptExecutionPreviewRecord {
-    pub skill_instance_id: Option<String>,
-    pub initiated_by: String,
-    pub initiator_allowed: bool,
-    pub cwd: ScriptExecutionCwdScope,
-    pub env: ScriptExecutionEnvScope,
-    pub network: ScriptExecutionNetworkScope,
-    pub files: ScriptExecutionFilesScope,
-    pub command_preview: ScriptExecutionCommandPreview,
-    pub risks: Vec<String>,
-    pub confirmation: ScriptExecutionConfirmation,
-    pub execution_allowed: bool,
-    pub disabled_reason: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ScriptExecutionCwdScope {
-    pub requested: Option<String>,
-    pub effective: String,
-    pub source: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ScriptExecutionEnvScope {
-    pub inherit_parent: bool,
-    pub provided_keys: Vec<String>,
-    pub redacted_keys: Vec<String>,
-    pub value_policy: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ScriptExecutionNetworkScope {
-    pub requested: String,
-    pub allowed: bool,
-    pub reason: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ScriptExecutionFilesScope {
-    pub requested: Vec<String>,
-    pub read_allowed: bool,
-    pub write_allowed: bool,
-    pub allowed_roots: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ScriptExecutionCommandPreview {
-    pub argv: Vec<String>,
-    pub display: String,
-    pub shell: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ScriptExecutionConfirmation {
-    pub required: bool,
-    pub confirmed: bool,
-    pub fields: Vec<String>,
-    pub message: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ScriptExecutionAttemptRecord {
-    pub id: String,
-    pub created_at: i64,
-    pub status: String,
-    pub outcome: String,
-    pub reason: String,
-    pub spawned_process: bool,
-    pub audit_path: String,
-    pub preview: ScriptExecutionPreviewRecord,
-}
-
-pub fn preview_script_execution(
-    ctx: &AdapterContext,
-    request: &ScriptExecutionRequest,
-) -> Result<ScriptExecutionPreviewRecord, CommandError> {
-    if request.command.is_empty() {
-        return Err(CommandError::InvalidScriptExecutionRequest(
-            "script execution preview requires a non-empty command argv".to_string(),
-        ));
-    }
-
-    let (effective_cwd, cwd_source) = effective_script_cwd(ctx, request.cwd.as_deref());
-    let provided_keys: Vec<String> = request.env.keys().cloned().collect();
-    let requested_network = request
-        .network
-        .as_deref()
-        .filter(|network| !network.trim().is_empty())
-        .unwrap_or("none")
-        .to_string();
-    let initiator_allowed = request.initiated_by != ScriptExecutionInitiator::Llm;
-    let mut risks = vec![SCRIPT_EXECUTION_DISABLED_REASON.to_string()];
-    if !initiator_allowed {
-        risks.push("LLM-initiated script execution is rejected by the service.".to_string());
-    }
-    if requested_network != "none" {
-        risks.push(
-            "Network access was requested but is unavailable while execution is disabled."
-                .to_string(),
-        );
-    }
-    if !request.files.is_empty() {
-        risks.push("File access was requested but no read or write roots are granted.".to_string());
-    }
-    if !provided_keys.is_empty() {
-        risks.push("Environment values are accepted only for preview and audit metadata; values are redacted.".to_string());
-    }
-
-    Ok(ScriptExecutionPreviewRecord {
-        skill_instance_id: request.skill_instance_id.clone(),
-        initiated_by: request.initiated_by.as_str().to_string(),
-        initiator_allowed,
-        cwd: ScriptExecutionCwdScope {
-            requested: request
-                .cwd
-                .as_ref()
-                .map(|path| path.to_string_lossy().to_string()),
-            effective: effective_cwd.to_string_lossy().to_string(),
-            source: cwd_source.to_string(),
-        },
-        env: ScriptExecutionEnvScope {
-            inherit_parent: false,
-            redacted_keys: provided_keys.clone(),
-            provided_keys,
-            value_policy: "values-redacted".to_string(),
-        },
-        network: ScriptExecutionNetworkScope {
-            requested: requested_network,
-            allowed: false,
-            reason: "Network access is not granted because script execution is disabled."
-                .to_string(),
-        },
-        files: ScriptExecutionFilesScope {
-            requested: request.files.clone(),
-            read_allowed: false,
-            write_allowed: false,
-            allowed_roots: Vec::new(),
-        },
-        command_preview: ScriptExecutionCommandPreview {
-            argv: request.command.clone(),
-            display: display_argv(&request.command),
-            shell: None,
-        },
-        risks,
-        confirmation: ScriptExecutionConfirmation {
-            required: true,
-            confirmed: request.confirmed,
-            fields: vec![
-                "command_preview".to_string(),
-                "cwd".to_string(),
-                "env.provided_keys".to_string(),
-                "network".to_string(),
-                "files".to_string(),
-                "initiated_by".to_string(),
-            ],
-            message: "Per-request user confirmation is required before any execution attempt."
-                .to_string(),
-        },
-        execution_allowed: false,
-        disabled_reason: SCRIPT_EXECUTION_DISABLED_REASON.to_string(),
-    })
-}
-
-pub fn record_blocked_script_execution(
-    ctx: &AdapterContext,
-    audit_path: &Path,
-    request: &ScriptExecutionRequest,
-) -> Result<ScriptExecutionAttemptRecord, CommandError> {
-    let preview = preview_script_execution(ctx, request)?;
-    let created_at = current_time_ms();
-    let outcome = if request.initiated_by == ScriptExecutionInitiator::Llm {
-        "llm_initiator_not_allowed"
-    } else {
-        "execution_disabled"
-    };
-    let reason = if request.initiated_by == ScriptExecutionInitiator::Llm {
-        "LLM-initiated execution is not allowed; no process was spawned."
-    } else {
-        SCRIPT_EXECUTION_DISABLED_REASON
-    };
-    let record = ScriptExecutionAttemptRecord {
-        id: format!("script-exec-{created_at}"),
-        created_at,
-        status: "blocked".to_string(),
-        outcome: outcome.to_string(),
-        reason: reason.to_string(),
-        spawned_process: false,
-        audit_path: audit_path.to_string_lossy().to_string(),
-        preview,
-    };
-    if let Some(parent) = audit_path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let mut audit_file = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(audit_path)?;
-    let line = serde_json::to_string(&record)?;
-    writeln!(audit_file, "{line}")?;
-    Ok(record)
-}
-
-fn effective_script_cwd(ctx: &AdapterContext, requested: Option<&Path>) -> (PathBuf, &'static str) {
-    if let Some(path) = requested {
-        if path.is_absolute() {
-            return (path.to_path_buf(), "request");
-        }
-        let base = ctx
-            .project_cwd
-            .as_deref()
-            .or(ctx.project_root.as_deref())
-            .map(Path::to_path_buf)
-            .or_else(|| env::current_dir().ok())
-            .unwrap_or_else(|| PathBuf::from("."));
-        return (base.join(path), "request-relative");
-    }
-    if let Some(path) = &ctx.project_cwd {
-        return (path.clone(), "project_cwd");
-    }
-    if let Some(path) = &ctx.project_root {
-        return (path.clone(), "project_root");
-    }
-    (
-        env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-        "process_cwd",
-    )
-}
-
-fn display_argv(argv: &[String]) -> String {
-    argv.iter()
-        .map(|part| {
-            if part.is_empty()
-                || part
-                    .chars()
-                    .any(|ch| ch.is_whitespace() || matches!(ch, '\'' | '"' | '\\' | '$' | '`'))
-            {
-                format!("'{}'", part.replace('\'', "'\\''"))
-            } else {
-                part.clone()
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
 }
 
 pub fn list_findings(catalog: &Catalog) -> Result<Vec<RuleFindingRecord>, CommandError> {
@@ -6476,7 +6192,8 @@ mod tests {
             project_cwd: Some(root.join("project")),
             extra_roots: Vec::new(),
         };
-        let audit_path = root.join("app-data/audit/script-execution.jsonl");
+        let audit_root = root.join("app-data/audit");
+        let audit_path = audit_root.join("script-execution.jsonl");
         let skill_dir = root.join("project/skills/demo");
         std::fs::create_dir_all(&skill_dir).expect("create skill dir");
         let skill_path = skill_dir.join("SKILL.md");
@@ -6497,8 +6214,8 @@ mod tests {
             confirmed: true,
         };
 
-        let record =
-            record_blocked_script_execution(&ctx, &audit_path, &request).expect("blocked record");
+        let record = record_blocked_script_execution(&ctx, &audit_root, &audit_path, &request)
+            .expect("blocked record");
 
         assert_eq!(record.status, "blocked");
         assert_eq!(record.outcome, "llm_initiator_not_allowed");
@@ -6511,6 +6228,44 @@ mod tests {
         );
         let audit_content = std::fs::read_to_string(&audit_path).expect("read audit");
         assert!(audit_content.contains("llm_initiator_not_allowed"));
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn blocked_script_execution_rejects_audit_path_outside_root() {
+        let root = temp_test_dir("script-audit-outside");
+        let ctx = AdapterContext {
+            user_home: root.join("home"),
+            project_root: Some(root.join("project")),
+            project_cwd: Some(root.join("project")),
+            extra_roots: Vec::new(),
+        };
+        let audit_root = root.join("app-data/audit");
+        let outside_audit_path = root.join("project/script-execution.jsonl");
+        let request = ScriptExecutionRequest {
+            command: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "touch marker".to_string(),
+            ],
+            cwd: None,
+            env: std::collections::BTreeMap::new(),
+            network: None,
+            files: Vec::new(),
+            skill_instance_id: None,
+            initiated_by: ScriptExecutionInitiator::User,
+            confirmed: true,
+        };
+
+        let result =
+            record_blocked_script_execution(&ctx, &audit_root, &outside_audit_path, &request);
+
+        assert!(result.is_err(), "outside audit path should be rejected");
+        assert!(
+            !outside_audit_path.exists(),
+            "rejected audit path must not be created"
+        );
 
         let _ = std::fs::remove_dir_all(root);
     }

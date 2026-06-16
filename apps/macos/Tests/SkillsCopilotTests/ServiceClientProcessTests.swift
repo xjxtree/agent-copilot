@@ -6,6 +6,11 @@ struct ServiceClientProcessTests {
     func run() async throws {
         try await cancelledCallTerminatesSidecarProcess()
         try await cancelledCallForceKillsTermIgnoringSidecarProcess()
+        try await hangingCallTimesOutAndTerminatesSidecarProcess()
+        try await malformedOutputMapsToInvalidOutput()
+        try await emptyOutputMapsToInvalidOutput()
+        try await truncatedOutputMapsToInvalidOutput()
+        try await stderrOnlyFailureMapsToProcessFailed()
     }
 
     private func cancelledCallTerminatesSidecarProcess() async throws {
@@ -58,6 +63,87 @@ struct ServiceClientProcessTests {
         try expectContains(fake.calls(), "\"method\":\"service.status\"", "Force-kill test should launch the expected service method.")
     }
 
+    private func hangingCallTimesOutAndTerminatesSidecarProcess() async throws {
+        let fake = try CancellableServiceScript()
+        defer { fake.cleanup() }
+        fake.activate()
+
+        let call = Task {
+            try await ServiceClient(
+                processRunner: StdioServiceProcessRunner(timeoutNanoseconds: 1_000_000_000)
+            ).status()
+        }
+
+        let pid = try await fake.waitForPID()
+        do {
+            _ = try await call.value
+            throw NativeModelTestFailure(description: "Hanging service call should time out.")
+        } catch ServiceClient.ClientError.processTimedOut {
+            // Expected: the runner maps a sidecar that never closes stdout to a bounded timeout.
+        }
+
+        try await waitUntil("Timed-out sidecar process should be reaped.", timeout: 4) {
+            !processExists(pid)
+        }
+        try expectContains(fake.calls(), "\"method\":\"service.status\"", "Timeout test should launch the expected service method.")
+    }
+
+    private func malformedOutputMapsToInvalidOutput() async throws {
+        let fake = try StaticServiceScript(mode: "malformed")
+        defer { fake.cleanup() }
+        fake.activate()
+
+        do {
+            _ = try await ServiceClient().status()
+            throw NativeModelTestFailure(description: "Malformed service output should fail.")
+        } catch ServiceClient.ClientError.invalidOutput(let output) {
+            try expectContains(output, "decode failed", "Malformed output should include decode context.")
+            try expectContains(output, "not-json", "Malformed output should include a raw output snippet.")
+        }
+    }
+
+    private func emptyOutputMapsToInvalidOutput() async throws {
+        let fake = try StaticServiceScript(mode: "empty")
+        defer { fake.cleanup() }
+        fake.activate()
+
+        do {
+            _ = try await ServiceClient().status()
+            throw NativeModelTestFailure(description: "Empty service output should fail.")
+        } catch ServiceClient.ClientError.invalidOutput(let output) {
+            try expectContains(output, "decode failed", "Empty output should include decode context.")
+        }
+    }
+
+    private func truncatedOutputMapsToInvalidOutput() async throws {
+        let fake = try StaticServiceScript(mode: "truncated")
+        defer { fake.cleanup() }
+        fake.activate()
+
+        do {
+            _ = try await ServiceClient().status()
+            throw NativeModelTestFailure(description: "Truncated service output should fail.")
+        } catch ServiceClient.ClientError.invalidOutput(let output) {
+            try expectContains(output, "decode failed", "Truncated output should include decode context.")
+            try expectContains(output, "\"result\":", "Truncated output should include a raw output snippet.")
+        }
+    }
+
+
+    private func stderrOnlyFailureMapsToProcessFailed() async throws {
+        let fake = try StaticServiceScript(mode: "failure")
+        defer { fake.cleanup() }
+        fake.activate()
+
+        do {
+            _ = try await ServiceClient().status()
+            throw NativeModelTestFailure(description: "Nonzero service exit should fail.")
+        } catch ServiceClient.ClientError.processFailed(let status, let stderr) {
+            try expectEqual(status, 7, "Process failure should preserve exit status.")
+            try expectContains(stderr, "sidecar failed", "Process failure should preserve stderr.")
+        }
+    }
+
     private func waitUntil(_ label: String, timeout: TimeInterval = 2, predicate: () -> Bool) async throws {
         let deadline = Date().addingTimeInterval(timeout)
         while !predicate() {
@@ -73,6 +159,64 @@ struct ServiceClientProcessTests {
             return true
         }
         return errno == EPERM
+    }
+}
+
+private final class StaticServiceScript {
+    private let directory: URL
+    private let executableURL: URL
+    private let mode: String
+
+    init(mode: String) throws {
+        self.mode = mode
+        directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("skills-copilot-static-service-\(UUID().uuidString)", isDirectory: true)
+        executableURL = directory.appendingPathComponent("fake-static-service.sh")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try script.write(to: executableURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: Int16(0o755))],
+            ofItemAtPath: executableURL.path
+        )
+    }
+
+    func activate() {
+        setenv("SKILLS_COPILOT_SERVICE_PATH", executableURL.path, 1)
+        setenv("SKILLS_COPILOT_STATIC_SERVICE_MODE", mode, 1)
+    }
+
+    func cleanup() {
+        unsetenv("SKILLS_COPILOT_SERVICE_PATH")
+        unsetenv("SKILLS_COPILOT_STATIC_SERVICE_MODE")
+        try? FileManager.default.removeItem(at: directory)
+    }
+
+    private var script: String {
+        """
+        #!/bin/sh
+        cat >/dev/null
+        case "${SKILLS_COPILOT_STATIC_SERVICE_MODE:-malformed}" in
+          malformed)
+            printf 'not-json'
+            exit 0
+            ;;
+          empty)
+            exit 0
+            ;;
+          failure)
+            printf 'sidecar failed' >&2
+            exit 7
+            ;;
+          truncated)
+            printf '{"id":"test","ok":true,"result":'
+            exit 0
+            ;;
+          *)
+            printf 'not-json'
+            exit 0
+            ;;
+        esac
+        """
     }
 }
 

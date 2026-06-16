@@ -1,10 +1,16 @@
 #!/usr/bin/env node
 
+import { readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   classifyValidationBlocker,
   formatValidationBlocker,
   validationBlockerCodes,
 } from "./validation-blockers.mjs";
+
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(scriptDir, "..");
 
 const cases = [
   ["locked-session: macOS session is locked", "locked-session"],
@@ -38,6 +44,16 @@ for (const code of validationBlockerCodes) {
     console.error(`validation blocker formatter changed canonical prefix for ${code}`);
     process.exit(1);
   }
+}
+
+const captureScript = readFileSync(join(repoRoot, "script", "capture_app_window.sh"), "utf8");
+if (captureScript.includes("CGWindowListCreateImage")) {
+  console.error("capture helper must not use deprecated CGWindowListCreateImage for window screenshots");
+  process.exit(1);
+}
+if (!captureScript.includes("/usr/sbin/screencapture") || !captureScript.includes("\"-l\"")) {
+  console.error("capture helper must use screencapture -l for window screenshots");
+  process.exit(1);
 }
 
 console.log(`validation blocker verification passed: ${cases.length} cases, ${validationBlockerCodes.length} codes`);

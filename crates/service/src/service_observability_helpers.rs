@@ -1,4 +1,6 @@
-fn routing_accuracy_safety_flags() -> RoutingAccuracySafetyFlags {
+use super::*;
+
+pub(crate) fn routing_accuracy_safety_flags() -> RoutingAccuracySafetyFlags {
     RoutingAccuracySafetyFlags {
         read_only: true,
         app_local_only: true,
@@ -22,7 +24,7 @@ fn routing_accuracy_safety_flags() -> RoutingAccuracySafetyFlags {
     }
 }
 
-fn routing_accuracy_normalize_outcome(outcome: &str) -> &'static str {
+pub(crate) fn routing_accuracy_normalize_outcome(outcome: &str) -> &'static str {
     match outcome {
         "hit" => "hit",
         "miss" => "miss",
@@ -32,7 +34,7 @@ fn routing_accuracy_normalize_outcome(outcome: &str) -> &'static str {
     }
 }
 
-fn routing_accuracy_increment_summary(
+pub(crate) fn routing_accuracy_increment_summary(
     summary: &mut RoutingAccuracyDashboardSummary,
     outcome: &'static str,
 ) {
@@ -45,7 +47,7 @@ fn routing_accuracy_increment_summary(
     }
 }
 
-fn routing_accuracy_increment_counts(
+pub(crate) fn routing_accuracy_increment_counts(
     counts: &mut RoutingAccuracyOutcomeCounts,
     outcome: &'static str,
 ) {
@@ -58,21 +60,24 @@ fn routing_accuracy_increment_counts(
     }
 }
 
-fn routing_accuracy_rate(numerator: usize, denominator: usize) -> f64 {
+pub(crate) fn routing_accuracy_rate(numerator: usize, denominator: usize) -> f64 {
     if denominator == 0 {
         return 0.0;
     }
     ((numerator as f64 / denominator as f64) * 10_000.0).round() / 10_000.0
 }
 
-fn routing_accuracy_agent_matches(candidate: &str, agent_filter: &Option<String>) -> bool {
+pub(crate) fn routing_accuracy_agent_matches(
+    candidate: &str,
+    agent_filter: &Option<String>,
+) -> bool {
     match agent_filter.as_deref() {
         Some(filter) => candidate.eq_ignore_ascii_case(filter),
         None => true,
     }
 }
 
-fn routing_accuracy_agent_matches_import(
+pub(crate) fn routing_accuracy_agent_matches_import(
     agent_filter: &Option<String>,
     import: &TraceImportRecord,
 ) -> bool {
@@ -88,7 +93,7 @@ fn routing_accuracy_agent_matches_import(
         || agent_filter.is_none()
 }
 
-fn routing_accuracy_agent_matches_benchmark(
+pub(crate) fn routing_accuracy_agent_matches_benchmark(
     agent_filter: &Option<String>,
     item: &TaskBenchmarkEvaluationItem,
 ) -> bool {
@@ -98,7 +103,7 @@ fn routing_accuracy_agent_matches_benchmark(
         || agent_filter.is_none()
 }
 
-fn routing_accuracy_agent_matches_regression(
+pub(crate) fn routing_accuracy_agent_matches_regression(
     agent_filter: &Option<String>,
     item: &RoutingRegressionItem,
 ) -> bool {
@@ -108,7 +113,7 @@ fn routing_accuracy_agent_matches_regression(
         || agent_filter.is_none()
 }
 
-fn routing_accuracy_trace_agent(import: &TraceImportRecord) -> String {
+pub(crate) fn routing_accuracy_trace_agent(import: &TraceImportRecord) -> String {
     import
         .agent
         .clone()
@@ -122,14 +127,14 @@ fn routing_accuracy_trace_agent(import: &TraceImportRecord) -> String {
         .unwrap_or_else(|| "unknown".to_string())
 }
 
-fn routing_accuracy_benchmark_agent(item: &TaskBenchmarkEvaluationItem) -> String {
+pub(crate) fn routing_accuracy_benchmark_agent(item: &TaskBenchmarkEvaluationItem) -> String {
     item.top_route
         .as_ref()
         .map(|route| route.agent.clone())
         .unwrap_or_else(|| "unknown".to_string())
 }
 
-fn routing_accuracy_regression_agent(item: &RoutingRegressionItem) -> Option<String> {
+pub(crate) fn routing_accuracy_regression_agent(item: &RoutingRegressionItem) -> Option<String> {
     item.current
         .as_ref()
         .and_then(|current| current.top_route.as_ref())
@@ -142,7 +147,7 @@ fn routing_accuracy_regression_agent(item: &RoutingRegressionItem) -> Option<Str
         })
 }
 
-fn routing_accuracy_trace_detail(import: &TraceImportRecord) -> String {
+pub(crate) fn routing_accuracy_trace_detail(import: &TraceImportRecord) -> String {
     let detected = import.analysis.detected_skills.len();
     if let Some(task) = &import.task {
         format!(
@@ -157,7 +162,9 @@ fn routing_accuracy_trace_detail(import: &TraceImportRecord) -> String {
     }
 }
 
-fn routing_accuracy_benchmark_severity(item: &TaskBenchmarkEvaluationItem) -> &'static str {
+pub(crate) fn routing_accuracy_benchmark_severity(
+    item: &TaskBenchmarkEvaluationItem,
+) -> &'static str {
     match item.expected_match_status {
         "blocked_no_route" | "mismatch" => "high",
         "acceptable_match" | "no_expectation" => "medium",
@@ -167,7 +174,9 @@ fn routing_accuracy_benchmark_severity(item: &TaskBenchmarkEvaluationItem) -> &'
     }
 }
 
-fn routing_accuracy_benchmark_issue_detail(item: &TaskBenchmarkEvaluationItem) -> String {
+pub(crate) fn routing_accuracy_benchmark_issue_detail(
+    item: &TaskBenchmarkEvaluationItem,
+) -> String {
     let mut parts = vec![format!(
         "Benchmark status {} with score {}/100.",
         item.expected_match_status, item.score
@@ -177,7 +186,7 @@ fn routing_accuracy_benchmark_issue_detail(item: &TaskBenchmarkEvaluationItem) -
     parts.join(" ")
 }
 
-fn routing_accuracy_regression_detail(item: &RoutingRegressionItem) -> String {
+pub(crate) fn routing_accuracy_regression_detail(item: &RoutingRegressionItem) -> String {
     let mut parts = Vec::new();
     if let Some(delta) = item.score_delta {
         parts.push(format!("score delta {delta}"));
@@ -192,7 +201,7 @@ fn routing_accuracy_regression_detail(item: &RoutingRegressionItem) -> String {
     }
 }
 
-fn routing_accuracy_summary_text(
+pub(crate) fn routing_accuracy_summary_text(
     summary: &RoutingAccuracyDashboardSummary,
     catalog_available: bool,
 ) -> String {
@@ -211,7 +220,7 @@ fn routing_accuracy_summary_text(
     )
 }
 
-fn routing_accuracy_severity_rank(severity: &str) -> u8 {
+pub(crate) fn routing_accuracy_severity_rank(severity: &str) -> u8 {
     match severity {
         "critical" => 0,
         "high" => 1,
@@ -221,7 +230,7 @@ fn routing_accuracy_severity_rank(severity: &str) -> u8 {
     }
 }
 
-fn routing_accuracy_prompt_request(
+pub(crate) fn routing_accuracy_prompt_request(
     imports: &[TraceImportRecord],
     benchmark_results: &[TaskBenchmarkEvaluationItem],
 ) -> RoutingAccuracyPromptRequest {
@@ -278,7 +287,7 @@ fn routing_accuracy_prompt_request(
     }
 }
 
-fn trace_import_redaction_summary_from(
+pub(crate) fn trace_import_redaction_summary_from(
     summary: LlmPromptRedactionSummary,
 ) -> TraceImportRedactionSummary {
     TraceImportRedactionSummary {
@@ -297,7 +306,7 @@ fn trace_import_redaction_summary_from(
     }
 }
 
-fn trace_import_redaction_summary_default() -> TraceImportRedactionSummary {
+pub(crate) fn trace_import_redaction_summary_default() -> TraceImportRedactionSummary {
     TraceImportRedactionSummary {
         status: "redacted-local-only".to_string(),
         redacted_value_count: 0,
@@ -317,7 +326,7 @@ fn trace_import_redaction_summary_default() -> TraceImportRedactionSummary {
     }
 }
 
-fn llm_prompt_run_redaction_summary_from(
+pub(crate) fn llm_prompt_run_redaction_summary_from(
     preview_summary: LlmPromptRedactionSummary,
     request_summary: LlmPromptRedactionSummary,
 ) -> LlmPromptRunRedactionSummary {
@@ -348,7 +357,7 @@ fn llm_prompt_run_redaction_summary_from(
     }
 }
 
-fn llm_prompt_run_safety_flags(
+pub(crate) fn llm_prompt_run_safety_flags(
     provider_request_sent: bool,
     credential_accessed: bool,
 ) -> LlmPromptRunSafetyFlags {
@@ -375,7 +384,7 @@ fn llm_prompt_run_safety_flags(
     }
 }
 
-fn llm_provider_observability_safety_flags() -> LlmProviderObservabilitySafetyFlags {
+pub(crate) fn llm_provider_observability_safety_flags() -> LlmProviderObservabilitySafetyFlags {
     LlmProviderObservabilitySafetyFlags {
         read_only: true,
         app_local_only: true,
@@ -402,7 +411,7 @@ fn llm_provider_observability_safety_flags() -> LlmProviderObservabilitySafetyFl
 }
 
 #[derive(Debug, Default)]
-struct ProviderObservabilityFilters {
+pub(crate) struct ProviderObservabilityFilters {
     profile_id: Option<String>,
     provider: Option<String>,
     model: Option<String>,
@@ -411,7 +420,7 @@ struct ProviderObservabilityFilters {
 }
 
 impl ProviderObservabilityFilters {
-    fn from_params(params: &LlmProviderObservabilityParams) -> Self {
+    pub(crate) fn from_params(params: &LlmProviderObservabilityParams) -> Self {
         Self {
             profile_id: normalized_observability_filter(params.profile_id.as_deref()),
             provider: normalized_observability_filter(params.provider.as_deref()),
@@ -421,7 +430,7 @@ impl ProviderObservabilityFilters {
         }
     }
 
-    fn matches_prompt_run(&self, run: &LlmPromptRunRecord) -> bool {
+    pub(crate) fn matches_prompt_run(&self, run: &LlmPromptRunRecord) -> bool {
         self.profile_id
             .as_deref()
             .is_none_or(|filter| run.profile_id.eq_ignore_ascii_case(filter))
@@ -447,7 +456,7 @@ impl ProviderObservabilityFilters {
             })
     }
 
-    fn matches_provider_call(&self, metadata: &ProviderCallMetadata) -> bool {
+    pub(crate) fn matches_provider_call(&self, metadata: &ProviderCallMetadata) -> bool {
         self.profile_id
             .as_deref()
             .is_none_or(|filter| metadata.profile_id.eq_ignore_ascii_case(filter))
@@ -469,7 +478,7 @@ impl ProviderObservabilityFilters {
                 .is_none_or(|filter| metadata.action_type.eq_ignore_ascii_case(filter))
     }
 
-    fn matches_profile(&self, profile: &ProviderProfileRecord) -> bool {
+    pub(crate) fn matches_profile(&self, profile: &ProviderProfileRecord) -> bool {
         self.profile_id
             .as_deref()
             .is_none_or(|filter| profile.id.eq_ignore_ascii_case(filter))
@@ -485,7 +494,7 @@ impl ProviderObservabilityFilters {
 }
 
 #[derive(Debug, Default)]
-struct ProviderObservabilityGroupAccumulator {
+pub(crate) struct ProviderObservabilityGroupAccumulator {
     provider: String,
     model: String,
     destination_host: String,
@@ -502,14 +511,14 @@ struct ProviderObservabilityGroupAccumulator {
     evidence_refs: BTreeSet<String>,
 }
 
-fn normalized_observability_filter(value: Option<&str>) -> Option<String> {
+pub(crate) fn normalized_observability_filter(value: Option<&str>) -> Option<String> {
     value
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(|value| value.to_ascii_lowercase())
 }
 
-fn provider_observability_call_row(
+pub(crate) fn provider_observability_call_row(
     metadata: &ProviderCallMetadata,
     index: usize,
     redaction_roots: &[(String, &'static str)],
@@ -558,7 +567,7 @@ fn provider_observability_call_row(
     }
 }
 
-fn provider_observability_history_row(
+pub(crate) fn provider_observability_history_row(
     run: &LlmPromptRunRecord,
     index: usize,
     redaction_roots: &[(String, &'static str)],
@@ -635,7 +644,7 @@ fn provider_observability_history_row(
     }
 }
 
-fn provider_observability_grouping_rows(
+pub(crate) fn provider_observability_grouping_rows(
     history_rows: &[LlmProviderObservabilityHistoryRow],
     call_rows: &[LlmProviderObservabilityCallRow],
     limit: usize,
@@ -757,7 +766,7 @@ fn provider_observability_grouping_rows(
     rows
 }
 
-fn provider_observability_budget_usage_hints(
+pub(crate) fn provider_observability_budget_usage_hints(
     profiles: &[ProviderProfileRecord],
     prompt_runs: &[&LlmPromptRunRecord],
     call_metadata: &[&ProviderCallMetadata],
@@ -870,7 +879,7 @@ fn provider_observability_budget_usage_hints(
     rows
 }
 
-fn provider_observability_status_rows(
+pub(crate) fn provider_observability_status_rows(
     mut status_rows: Vec<LlmProviderObservabilityStatusRow>,
     prompt_runs: &[&LlmPromptRunRecord],
     call_metadata: &[&ProviderCallMetadata],
@@ -910,7 +919,7 @@ fn provider_observability_status_rows(
     status_rows
 }
 
-fn provider_observability_summary(
+pub(crate) fn provider_observability_summary(
     total_prompt_run_count: usize,
     total_call_metadata_count: usize,
     history_rows: &[LlmProviderObservabilityHistoryRow],
@@ -1019,7 +1028,7 @@ fn provider_observability_summary(
     }
 }
 
-fn provider_observability_gap_notes(
+pub(crate) fn provider_observability_gap_notes(
     provider_profile_count: usize,
     prompt_run_count: usize,
     call_metadata_count: usize,
@@ -1038,7 +1047,7 @@ fn provider_observability_gap_notes(
     notes
 }
 
-fn provider_observability_blocker_notes(
+pub(crate) fn provider_observability_blocker_notes(
     status_rows: &[LlmProviderObservabilityStatusRow],
 ) -> Vec<String> {
     status_rows
@@ -1050,7 +1059,7 @@ fn provider_observability_blocker_notes(
         .collect()
 }
 
-fn provider_observability_retention_recommendations(
+pub(crate) fn provider_observability_retention_recommendations(
     prompt_run_count: usize,
     call_metadata_count: usize,
 ) -> Vec<LlmProviderObservabilityRetentionRecommendationRow> {
@@ -1084,7 +1093,7 @@ fn provider_observability_retention_recommendations(
     ]
 }
 
-fn provider_observability_evidence_references(
+pub(crate) fn provider_observability_evidence_references(
     history_rows: &[LlmProviderObservabilityHistoryRow],
     call_rows: &[LlmProviderObservabilityCallRow],
     grouping_rows: &[LlmProviderObservabilityGroupingRow],
@@ -1174,7 +1183,7 @@ fn provider_observability_evidence_references(
     refs.into_values().take(60).collect()
 }
 
-fn provider_observability_status_row(
+pub(crate) fn provider_observability_status_row(
     id_suffix: &str,
     source: &str,
     status: &str,
@@ -1194,7 +1203,7 @@ fn provider_observability_status_row(
     }
 }
 
-fn provider_observability_status_severity(status: &str) -> &'static str {
+pub(crate) fn provider_observability_status_severity(status: &str) -> &'static str {
     if observability_status_failed(status) || matches!(status, "read_error" | "parse_error") {
         "warning"
     } else {
@@ -1202,7 +1211,7 @@ fn provider_observability_status_severity(status: &str) -> &'static str {
     }
 }
 
-fn provider_observability_severity_rank(severity: &str) -> u8 {
+pub(crate) fn provider_observability_severity_rank(severity: &str) -> u8 {
     match severity {
         "critical" => 0,
         "warning" | "warn" => 1,
@@ -1211,21 +1220,21 @@ fn provider_observability_severity_rank(severity: &str) -> u8 {
     }
 }
 
-fn observability_status_succeeded(status: &str) -> bool {
+pub(crate) fn observability_status_succeeded(status: &str) -> bool {
     matches!(
         status.to_ascii_lowercase().as_str(),
         "succeeded" | "success" | "ok" | "loaded"
     )
 }
 
-fn observability_status_failed(status: &str) -> bool {
+pub(crate) fn observability_status_failed(status: &str) -> bool {
     matches!(
         status.to_ascii_lowercase().as_str(),
         "failed" | "error" | "blocked" | "timeout" | "network_error"
     )
 }
 
-fn observability_redact(
+pub(crate) fn observability_redact(
     value: &str,
     redaction_roots: &[(String, &'static str)],
     max_chars: usize,
@@ -1234,7 +1243,7 @@ fn observability_redact(
     truncate_chars(&redactor.redact(value), max_chars)
 }
 
-fn provider_observability_row_id(prefix: &str, parts: &[&str]) -> String {
+pub(crate) fn provider_observability_row_id(prefix: &str, parts: &[&str]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(prefix.as_bytes());
     for part in parts {

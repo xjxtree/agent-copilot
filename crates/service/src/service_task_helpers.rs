@@ -1,4 +1,6 @@
-fn task_readiness_safety_flags() -> TaskReadinessSafetyFlags {
+use super::*;
+
+pub(crate) fn task_readiness_safety_flags() -> TaskReadinessSafetyFlags {
     TaskReadinessSafetyFlags {
         read_only: true,
         provider_request_sent: false,
@@ -15,21 +17,21 @@ fn task_readiness_safety_flags() -> TaskReadinessSafetyFlags {
 }
 
 #[derive(Debug, Clone)]
-struct SkillLifecycleSkillMeta {
-    instance_id: String,
-    definition_id: String,
-    skill_name: String,
-    agent: String,
-    scope: String,
-    enabled: bool,
-    state: String,
-    first_seen: i64,
-    last_seen: i64,
-    mtime: i64,
+pub(crate) struct SkillLifecycleSkillMeta {
+    pub(crate) instance_id: String,
+    pub(crate) definition_id: String,
+    pub(crate) skill_name: String,
+    pub(crate) agent: String,
+    pub(crate) scope: String,
+    pub(crate) enabled: bool,
+    pub(crate) state: String,
+    pub(crate) first_seen: i64,
+    pub(crate) last_seen: i64,
+    pub(crate) mtime: i64,
 }
 
 #[derive(Debug, Clone, Default)]
-struct SkillLifecycleAggregateCounts {
+pub(crate) struct SkillLifecycleAggregateCounts {
     event_count: usize,
     finding_event_count: usize,
     drift_event_count: usize,
@@ -40,15 +42,15 @@ struct SkillLifecycleAggregateCounts {
     latest_event_at: Option<i64>,
 }
 
-fn default_true() -> bool {
+pub(crate) fn default_true() -> bool {
     true
 }
 
-fn skill_lifecycle_timeline_safety_flags() -> SkillLifecycleTimelineSafetyFlags {
+pub(crate) fn skill_lifecycle_timeline_safety_flags() -> SkillLifecycleTimelineSafetyFlags {
     agent_readiness_safety_flags()
 }
 
-fn skill_lifecycle_filters(
+pub(crate) fn skill_lifecycle_filters(
     params: &SkillLifecycleTimelineParams,
     adapter_ctx: &AdapterContext,
     roots: &[(String, &'static str)],
@@ -99,7 +101,7 @@ fn skill_lifecycle_filters(
     }
 }
 
-fn skill_lifecycle_filter_text(
+pub(crate) fn skill_lifecycle_filter_text(
     value: Option<&str>,
     roots: &[(String, &'static str)],
     max_chars: usize,
@@ -109,7 +111,7 @@ fn skill_lifecycle_filter_text(
     Some(truncate_chars(&redactor.redact(value), max_chars))
 }
 
-fn skill_lifecycle_filter_token(
+pub(crate) fn skill_lifecycle_filter_token(
     value: Option<&str>,
     roots: &[(String, &'static str)],
     max_chars: usize,
@@ -117,7 +119,7 @@ fn skill_lifecycle_filter_token(
     skill_lifecycle_filter_text(value, roots, max_chars)
 }
 
-fn skill_lifecycle_filter_path_text(
+pub(crate) fn skill_lifecycle_filter_path_text(
     value: &str,
     roots: &[(String, &'static str)],
     max_chars: usize,
@@ -130,7 +132,7 @@ fn skill_lifecycle_filter_path_text(
     }
 }
 
-fn skill_lifecycle_meta_from_instance(skill: SkillInstance) -> SkillLifecycleSkillMeta {
+pub(crate) fn skill_lifecycle_meta_from_instance(skill: SkillInstance) -> SkillLifecycleSkillMeta {
     SkillLifecycleSkillMeta {
         instance_id: skill.id,
         definition_id: skill.definition_id,
@@ -145,7 +147,7 @@ fn skill_lifecycle_meta_from_instance(skill: SkillInstance) -> SkillLifecycleSki
     }
 }
 
-fn empty_skill_lifecycle_timeline_result(
+pub(crate) fn empty_skill_lifecycle_timeline_result(
     filters: SkillLifecycleTimelineFilters,
     catalog_available: bool,
 ) -> SkillLifecycleTimelineResult {
@@ -193,7 +195,7 @@ fn empty_skill_lifecycle_timeline_result(
     }
 }
 
-fn skill_lifecycle_has_skill_filter(filters: &SkillLifecycleTimelineFilters) -> bool {
+pub(crate) fn skill_lifecycle_has_skill_filter(filters: &SkillLifecycleTimelineFilters) -> bool {
     filters.agent.is_some()
         || filters.selected_skill_id.is_some()
         || filters.selected_skill_name.is_some()
@@ -201,7 +203,7 @@ fn skill_lifecycle_has_skill_filter(filters: &SkillLifecycleTimelineFilters) -> 
         || filters.definition_id.is_some()
 }
 
-fn skill_lifecycle_visible_ids(
+pub(crate) fn skill_lifecycle_visible_ids(
     filters: &SkillLifecycleTimelineFilters,
     skills: &[SkillLifecycleSkillMeta],
 ) -> BTreeSet<String> {
@@ -212,7 +214,7 @@ fn skill_lifecycle_visible_ids(
         .collect()
 }
 
-fn skill_lifecycle_skill_matches(
+pub(crate) fn skill_lifecycle_skill_matches(
     filters: &SkillLifecycleTimelineFilters,
     skill: &SkillLifecycleSkillMeta,
 ) -> bool {
@@ -236,11 +238,11 @@ fn skill_lifecycle_skill_matches(
     true
 }
 
-fn skill_lifecycle_optional_eq(filter: Option<&str>, value: &str) -> bool {
+pub(crate) fn skill_lifecycle_optional_eq(filter: Option<&str>, value: &str) -> bool {
     filter.is_none_or(|filter| value.eq_ignore_ascii_case(filter))
 }
 
-fn skill_lifecycle_relation_matches(
+pub(crate) fn skill_lifecycle_relation_matches(
     filters: &SkillLifecycleTimelineFilters,
     instance_id: Option<&str>,
     definition_id: Option<&str>,
@@ -302,7 +304,7 @@ fn skill_lifecycle_relation_matches(
     }
 }
 
-fn skill_lifecycle_related_ids(
+pub(crate) fn skill_lifecycle_related_ids(
     instance_id: Option<&str>,
     definition_id: Option<&str>,
     skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
@@ -324,7 +326,10 @@ fn skill_lifecycle_related_ids(
     related
 }
 
-fn skill_lifecycle_text_contains_filter(value: Option<&str>, filter: Option<&str>) -> bool {
+pub(crate) fn skill_lifecycle_text_contains_filter(
+    value: Option<&str>,
+    filter: Option<&str>,
+) -> bool {
     match filter {
         Some(filter) => value
             .map(|value| {
@@ -337,7 +342,7 @@ fn skill_lifecycle_text_contains_filter(value: Option<&str>, filter: Option<&str
     }
 }
 
-fn skill_lifecycle_finding_matches(
+pub(crate) fn skill_lifecycle_finding_matches(
     filters: &SkillLifecycleTimelineFilters,
     finding: &RuleFindingRecord,
     skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
@@ -363,7 +368,7 @@ fn skill_lifecycle_finding_matches(
     )
 }
 
-fn skill_lifecycle_finding_skill<'a>(
+pub(crate) fn skill_lifecycle_finding_skill<'a>(
     finding: &RuleFindingRecord,
     skill_by_id: &'a BTreeMap<String, SkillLifecycleSkillMeta>,
 ) -> Option<&'a SkillLifecycleSkillMeta> {
@@ -380,7 +385,7 @@ fn skill_lifecycle_finding_skill<'a>(
         })
 }
 
-fn skill_lifecycle_conflict_matches(
+pub(crate) fn skill_lifecycle_conflict_matches(
     filters: &SkillLifecycleTimelineFilters,
     conflict: &ConflictGroupRecord,
     skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
@@ -402,7 +407,7 @@ fn skill_lifecycle_conflict_matches(
         )
 }
 
-fn skill_lifecycle_conflict_skill<'a>(
+pub(crate) fn skill_lifecycle_conflict_skill<'a>(
     conflict: &ConflictGroupRecord,
     skill_by_id: &'a BTreeMap<String, SkillLifecycleSkillMeta>,
     visible_ids: &BTreeSet<String>,
@@ -426,7 +431,7 @@ fn skill_lifecycle_conflict_skill<'a>(
         })
 }
 
-fn skill_lifecycle_analysis_matches(
+pub(crate) fn skill_lifecycle_analysis_matches(
     filters: &SkillLifecycleTimelineFilters,
     group: &CrossAgentAnalysisGroup,
     skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
@@ -479,7 +484,7 @@ fn skill_lifecycle_analysis_matches(
         && visible_match
 }
 
-fn skill_lifecycle_analysis_skill<'a>(
+pub(crate) fn skill_lifecycle_analysis_skill<'a>(
     group: &CrossAgentAnalysisGroup,
     skill_by_id: &'a BTreeMap<String, SkillLifecycleSkillMeta>,
     visible_ids: &BTreeSet<String>,
@@ -492,7 +497,7 @@ fn skill_lifecycle_analysis_skill<'a>(
         .or_else(|| group.instance_ids.iter().find_map(|id| skill_by_id.get(id)))
 }
 
-fn skill_lifecycle_stale_row_matches(
+pub(crate) fn skill_lifecycle_stale_row_matches(
     filters: &SkillLifecycleTimelineFilters,
     row: &StaleDriftRow,
     skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
@@ -509,7 +514,7 @@ fn skill_lifecycle_stale_row_matches(
     )
 }
 
-fn skill_lifecycle_remediation_history_matches(
+pub(crate) fn skill_lifecycle_remediation_history_matches(
     filters: &SkillLifecycleTimelineFilters,
     record: &RemediationHistoryRecord,
     skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
@@ -555,7 +560,7 @@ fn skill_lifecycle_remediation_history_matches(
     )
 }
 
-fn skill_lifecycle_prompt_run_matches(
+pub(crate) fn skill_lifecycle_prompt_run_matches(
     filters: &SkillLifecycleTimelineFilters,
     run: &LlmPromptRunRecord,
     skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
@@ -581,7 +586,7 @@ fn skill_lifecycle_prompt_run_matches(
     )
 }
 
-fn skill_lifecycle_session_review_matches(
+pub(crate) fn skill_lifecycle_session_review_matches(
     filters: &SkillLifecycleTimelineFilters,
     review: &AgentSessionSkillReviewRecord,
     skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
@@ -637,7 +642,7 @@ fn skill_lifecycle_session_review_matches(
     detected_match || expected_match
 }
 
-fn skill_lifecycle_strings_match_filters<'a>(
+pub(crate) fn skill_lifecycle_strings_match_filters<'a>(
     filters: &SkillLifecycleTimelineFilters,
     values: impl Iterator<Item = &'a String>,
     skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
@@ -676,7 +681,7 @@ fn skill_lifecycle_strings_match_filters<'a>(
     true
 }
 
-fn skill_lifecycle_related_instance_for_strings<'a>(
+pub(crate) fn skill_lifecycle_related_instance_for_strings<'a>(
     values: impl Iterator<Item = &'a String>,
     skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
 ) -> Option<String> {
@@ -694,7 +699,7 @@ fn skill_lifecycle_related_instance_for_strings<'a>(
     })
 }
 
-fn skill_lifecycle_skill_seen_row(
+pub(crate) fn skill_lifecycle_skill_seen_row(
     skill: &SkillLifecycleSkillMeta,
     evidence_id: &str,
 ) -> SkillLifecycleTimelineRow {
@@ -727,7 +732,7 @@ fn skill_lifecycle_skill_seen_row(
     }
 }
 
-fn skill_lifecycle_skill_observed_row(
+pub(crate) fn skill_lifecycle_skill_observed_row(
     skill: &SkillLifecycleSkillMeta,
     evidence_id: &str,
 ) -> SkillLifecycleTimelineRow {
@@ -757,7 +762,7 @@ fn skill_lifecycle_skill_observed_row(
     }
 }
 
-fn skill_lifecycle_finding_row(
+pub(crate) fn skill_lifecycle_finding_row(
     finding: &RuleFindingRecord,
     skill: Option<&SkillLifecycleSkillMeta>,
     evidence_id: &str,
@@ -793,7 +798,7 @@ fn skill_lifecycle_finding_row(
     }
 }
 
-fn skill_lifecycle_finding_triage_row(
+pub(crate) fn skill_lifecycle_finding_triage_row(
     finding: &RuleFindingRecord,
     skill: Option<&SkillLifecycleSkillMeta>,
     updated_at: i64,
@@ -835,7 +840,7 @@ fn skill_lifecycle_finding_triage_row(
     }
 }
 
-fn skill_lifecycle_conflict_row(
+pub(crate) fn skill_lifecycle_conflict_row(
     conflict: &ConflictGroupRecord,
     skill: Option<&SkillLifecycleSkillMeta>,
     evidence_id: &str,
@@ -870,7 +875,7 @@ fn skill_lifecycle_conflict_row(
     }
 }
 
-fn skill_lifecycle_analysis_row(
+pub(crate) fn skill_lifecycle_analysis_row(
     group: &CrossAgentAnalysisGroup,
     skill: Option<&SkillLifecycleSkillMeta>,
     evidence_id: &str,
@@ -900,7 +905,7 @@ fn skill_lifecycle_analysis_row(
     }
 }
 
-fn skill_lifecycle_stale_drift_row(row: &StaleDriftRow) -> SkillLifecycleTimelineRow {
+pub(crate) fn skill_lifecycle_stale_drift_row(row: &StaleDriftRow) -> SkillLifecycleTimelineRow {
     SkillLifecycleTimelineRow {
         id: format!("lifecycle:stale-drift:{}", row.instance_id),
         occurred_at: None,
@@ -931,7 +936,7 @@ fn skill_lifecycle_stale_drift_row(row: &StaleDriftRow) -> SkillLifecycleTimelin
     }
 }
 
-fn skill_lifecycle_remediation_history_row(
+pub(crate) fn skill_lifecycle_remediation_history_row(
     record: &RemediationHistoryRecord,
     skill: Option<&SkillLifecycleSkillMeta>,
     evidence_id: &str,
@@ -963,7 +968,7 @@ fn skill_lifecycle_remediation_history_row(
     }
 }
 
-fn skill_lifecycle_prompt_run_row(
+pub(crate) fn skill_lifecycle_prompt_run_row(
     run: &LlmPromptRunRecord,
     skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
     evidence_id: &str,
@@ -1006,7 +1011,7 @@ fn skill_lifecycle_prompt_run_row(
     }
 }
 
-fn skill_lifecycle_session_review_row(
+pub(crate) fn skill_lifecycle_session_review_row(
     review: &AgentSessionSkillReviewRecord,
     skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
     evidence_id: &str,
@@ -1038,7 +1043,7 @@ fn skill_lifecycle_session_review_row(
     }
 }
 
-fn skill_lifecycle_row_sort(
+pub(crate) fn skill_lifecycle_row_sort(
     left: &SkillLifecycleTimelineRow,
     right: &SkillLifecycleTimelineRow,
 ) -> std::cmp::Ordering {
@@ -1051,7 +1056,7 @@ fn skill_lifecycle_row_sort(
         .then_with(|| left.id.cmp(&right.id))
 }
 
-fn skill_lifecycle_count_row(
+pub(crate) fn skill_lifecycle_count_row(
     counts: &mut SkillLifecycleAggregateCounts,
     row: &SkillLifecycleTimelineRow,
 ) {
@@ -1080,7 +1085,7 @@ fn skill_lifecycle_count_row(
     }
 }
 
-fn skill_lifecycle_skill_rows(
+pub(crate) fn skill_lifecycle_skill_rows(
     rows: &[SkillLifecycleTimelineRow],
     skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
 ) -> Vec<SkillLifecycleSkillRow> {
@@ -1135,7 +1140,7 @@ fn skill_lifecycle_skill_rows(
     skill_rows
 }
 
-fn skill_lifecycle_agent_rows(
+pub(crate) fn skill_lifecycle_agent_rows(
     rows: &[SkillLifecycleTimelineRow],
     skill_by_id: &BTreeMap<String, SkillLifecycleSkillMeta>,
 ) -> Vec<SkillLifecycleAgentRow> {
@@ -1191,7 +1196,7 @@ fn skill_lifecycle_agent_rows(
         .collect()
 }
 
-fn skill_lifecycle_summary(
+pub(crate) fn skill_lifecycle_summary(
     rows: &[SkillLifecycleTimelineRow],
     skill_rows: &[SkillLifecycleSkillRow],
     agent_rows: &[SkillLifecycleAgentRow],
@@ -1237,7 +1242,7 @@ fn skill_lifecycle_summary(
     }
 }
 
-fn task_cockpit_safety_flags() -> TaskCockpitSafetyFlags {
+pub(crate) fn task_cockpit_safety_flags() -> TaskCockpitSafetyFlags {
     AgentReadinessSafetyFlags {
         read_only: true,
         app_local_only: true,
@@ -1261,39 +1266,40 @@ fn task_cockpit_safety_flags() -> TaskCockpitSafetyFlags {
     }
 }
 
-fn task_cockpit_budget_reached(started_at: Instant, budget: Duration) -> bool {
+pub(crate) fn task_cockpit_budget_reached(started_at: Instant, budget: Duration) -> bool {
     started_at.elapsed() >= budget
 }
 
-fn task_cockpit_elapsed_ms(started_at: Instant) -> u64 {
+pub(crate) fn task_cockpit_elapsed_ms(started_at: Instant) -> u64 {
     started_at.elapsed().as_millis().min(u128::from(u64::MAX)) as u64
 }
 
-fn push_unique_stage(stages: &mut Vec<&'static str>, stage: &'static str) {
+pub(crate) fn push_unique_stage(stages: &mut Vec<&'static str>, stage: &'static str) {
     if !stages.contains(&stage) {
         stages.push(stage);
     }
 }
 
-fn normalize_aggregation_stages(stages: &mut Vec<&'static str>) {
+pub(crate) fn normalize_aggregation_stages(stages: &mut Vec<&'static str>) {
     let mut seen = BTreeSet::new();
     stages.retain(|stage| seen.insert(*stage));
 }
-
-struct AggregationRuntimeInput {
-    started_at: Instant,
-    timeout_ms: u64,
-    limit: usize,
-    scanned_count: usize,
-    total_count: usize,
-    completed_stages: Vec<&'static str>,
-    skipped_stages: Vec<&'static str>,
-    blocker_codes: Vec<&'static str>,
-    fallback_used: bool,
-    notes: Vec<String>,
+pub(crate) struct AggregationRuntimeInput {
+    pub(crate) started_at: Instant,
+    pub(crate) timeout_ms: u64,
+    pub(crate) limit: usize,
+    pub(crate) scanned_count: usize,
+    pub(crate) total_count: usize,
+    pub(crate) completed_stages: Vec<&'static str>,
+    pub(crate) skipped_stages: Vec<&'static str>,
+    pub(crate) blocker_codes: Vec<&'static str>,
+    pub(crate) fallback_used: bool,
+    pub(crate) notes: Vec<String>,
 }
 
-fn aggregation_runtime_metadata(input: AggregationRuntimeInput) -> AggregationRuntimeMetadata {
+pub(crate) fn aggregation_runtime_metadata(
+    input: AggregationRuntimeInput,
+) -> AggregationRuntimeMetadata {
     let AggregationRuntimeInput {
         started_at,
         timeout_ms,
@@ -1332,7 +1338,7 @@ fn aggregation_runtime_metadata(input: AggregationRuntimeInput) -> AggregationRu
     }
 }
 
-fn empty_aggregation_runtime(
+pub(crate) fn empty_aggregation_runtime(
     timeout_ms: u64,
     limit: usize,
     completed_stage: &'static str,
@@ -1355,23 +1361,22 @@ fn empty_aggregation_runtime(
     }
 }
 
-fn aggregation_with_completed_stage(
+pub(crate) fn aggregation_with_completed_stage(
     mut aggregation: AggregationRuntimeMetadata,
     stage: &'static str,
 ) -> AggregationRuntimeMetadata {
     push_unique_stage(&mut aggregation.completed_stages, stage);
     aggregation
 }
-
-struct TaskCockpitSummaryCounts {
-    session_review_count: usize,
-    provider_observability_row_count: usize,
-    remediation_next_step_count: usize,
-    gap_count: usize,
-    blocker_count: usize,
+pub(crate) struct TaskCockpitSummaryCounts {
+    pub(crate) session_review_count: usize,
+    pub(crate) provider_observability_row_count: usize,
+    pub(crate) remediation_next_step_count: usize,
+    pub(crate) gap_count: usize,
+    pub(crate) blocker_count: usize,
 }
 
-fn task_cockpit_summary(
+pub(crate) fn task_cockpit_summary(
     readiness: &TaskReadinessResult,
     ranking: &SkillRouteRankingResult,
     comparison: &AgentReadinessComparisonResult,
@@ -1418,7 +1423,7 @@ fn task_cockpit_summary(
     }
 }
 
-fn task_cockpit_sections(
+pub(crate) fn task_cockpit_sections(
     readiness: &TaskReadinessResult,
     ranking: &SkillRouteRankingResult,
     comparison: &AgentReadinessComparisonResult,
@@ -1558,7 +1563,9 @@ fn task_cockpit_sections(
     ]
 }
 
-fn task_cockpit_agent_route_row(row: &AgentReadinessComparisonRow) -> TaskCockpitAgentRouteRow {
+pub(crate) fn task_cockpit_agent_route_row(
+    row: &AgentReadinessComparisonRow,
+) -> TaskCockpitAgentRouteRow {
     TaskCockpitAgentRouteRow {
         rank: row.rank,
         agent: row.agent.clone(),
@@ -1579,7 +1586,7 @@ fn task_cockpit_agent_route_row(row: &AgentReadinessComparisonRow) -> TaskCockpi
     }
 }
 
-fn task_cockpit_skill_candidate_row(
+pub(crate) fn task_cockpit_skill_candidate_row(
     candidate: &SkillRouteCandidate,
     readiness: Option<&TaskReadinessCandidate>,
 ) -> TaskCockpitSkillCandidateRow {
@@ -1608,7 +1615,7 @@ fn task_cockpit_skill_candidate_row(
     }
 }
 
-fn task_cockpit_readiness_rows(
+pub(crate) fn task_cockpit_readiness_rows(
     readiness: &TaskReadinessResult,
     ranking: &SkillRouteRankingResult,
     comparison: &AgentReadinessComparisonResult,
@@ -1658,7 +1665,7 @@ fn task_cockpit_readiness_rows(
     rows
 }
 
-fn task_cockpit_session_review_row(
+pub(crate) fn task_cockpit_session_review_row(
     review: &AgentSessionSkillReviewRecord,
 ) -> TaskCockpitSessionReviewRow {
     TaskCockpitSessionReviewRow {
@@ -1675,7 +1682,7 @@ fn task_cockpit_session_review_row(
     }
 }
 
-fn task_cockpit_provider_observability_rows(
+pub(crate) fn task_cockpit_provider_observability_rows(
     observability: &LlmProviderObservabilityResult,
     limit: usize,
 ) -> Vec<TaskCockpitProviderObservabilityRow> {
@@ -1740,7 +1747,7 @@ fn task_cockpit_provider_observability_rows(
     rows
 }
 
-fn task_cockpit_remediation_next_steps(
+pub(crate) fn task_cockpit_remediation_next_steps(
     plan: Option<&RemediationPlanResult>,
     batch: Option<&RemediationBatchReviewResult>,
     limit: usize,
@@ -1787,7 +1794,7 @@ fn task_cockpit_remediation_next_steps(
     steps
 }
 
-fn provider_observability_evidence_as_task_refs(
+pub(crate) fn provider_observability_evidence_as_task_refs(
     evidence: &[LlmProviderObservabilityEvidenceReference],
 ) -> Vec<TaskReadinessEvidenceReference> {
     evidence
@@ -1803,7 +1810,7 @@ fn provider_observability_evidence_as_task_refs(
         .collect()
 }
 
-fn empty_task_readiness_result(
+pub(crate) fn empty_task_readiness_result(
     task: String,
     filters: TaskReadinessFilters,
     catalog_available: bool,
@@ -1853,7 +1860,7 @@ fn empty_task_readiness_result(
     }
 }
 
-fn task_readiness_terms(task: &str) -> Vec<String> {
+pub(crate) fn task_readiness_terms(task: &str) -> Vec<String> {
     let mut seen = BTreeMap::new();
     task.split(|ch: char| !ch.is_ascii_alphanumeric())
         .map(str::trim)
@@ -1886,7 +1893,7 @@ fn task_readiness_terms(task: &str) -> Vec<String> {
         .collect()
 }
 
-fn task_readiness_candidate_scan_limit(limit: usize, requested_count: usize) -> usize {
+pub(crate) fn task_readiness_candidate_scan_limit(limit: usize, requested_count: usize) -> usize {
     if requested_count > 0 {
         return requested_count
             .max(limit)
@@ -1900,7 +1907,7 @@ fn task_readiness_candidate_scan_limit(limit: usize, requested_count: usize) -> 
         )
 }
 
-fn task_readiness_record_affinity(skill: &SkillRecord, task_terms: &[String]) -> u16 {
+pub(crate) fn task_readiness_record_affinity(skill: &SkillRecord, task_terms: &[String]) -> u16 {
     let searchable = format!(
         "{} {} {} {} {}",
         skill.id, skill.definition_id, skill.name, skill.agent, skill.scope
@@ -1920,7 +1927,7 @@ fn task_readiness_record_affinity(skill: &SkillRecord, task_terms: &[String]) ->
     score
 }
 
-fn task_readiness_findings_by_instance(
+pub(crate) fn task_readiness_findings_by_instance(
     findings: &[RuleFindingRecord],
 ) -> BTreeMap<String, Vec<RuleFindingRecord>> {
     let mut by_instance = BTreeMap::<String, Vec<RuleFindingRecord>>::new();
@@ -1935,7 +1942,7 @@ fn task_readiness_findings_by_instance(
     by_instance
 }
 
-fn task_readiness_findings_by_definition(
+pub(crate) fn task_readiness_findings_by_definition(
     findings: &[RuleFindingRecord],
 ) -> BTreeMap<String, Vec<RuleFindingRecord>> {
     let mut by_definition = BTreeMap::<String, Vec<RuleFindingRecord>>::new();
@@ -1950,7 +1957,7 @@ fn task_readiness_findings_by_definition(
     by_definition
 }
 
-fn task_readiness_conflicts_by_instance(
+pub(crate) fn task_readiness_conflicts_by_instance(
     conflicts: &[ConflictGroupRecord],
 ) -> BTreeMap<String, Vec<ConflictGroupRecord>> {
     let mut by_instance = BTreeMap::<String, Vec<ConflictGroupRecord>>::new();
@@ -1965,7 +1972,7 @@ fn task_readiness_conflicts_by_instance(
     by_instance
 }
 
-fn task_readiness_conflicts_by_definition(
+pub(crate) fn task_readiness_conflicts_by_definition(
     conflicts: &[ConflictGroupRecord],
 ) -> BTreeMap<String, Vec<ConflictGroupRecord>> {
     let mut by_definition = BTreeMap::<String, Vec<ConflictGroupRecord>>::new();
@@ -1978,7 +1985,7 @@ fn task_readiness_conflicts_by_definition(
     by_definition
 }
 
-fn task_readiness_analysis_by_instance(
+pub(crate) fn task_readiness_analysis_by_instance(
     groups: &[CrossAgentAnalysisGroup],
 ) -> BTreeMap<String, Vec<CrossAgentAnalysisGroup>> {
     let mut by_instance = BTreeMap::<String, Vec<CrossAgentAnalysisGroup>>::new();
@@ -1993,7 +2000,7 @@ fn task_readiness_analysis_by_instance(
     by_instance
 }
 
-fn task_readiness_related_findings(
+pub(crate) fn task_readiness_related_findings(
     detail: &SkillDetailRecord,
     by_instance: &BTreeMap<String, Vec<RuleFindingRecord>>,
     by_definition: &BTreeMap<String, Vec<RuleFindingRecord>>,
@@ -2014,7 +2021,7 @@ fn task_readiness_related_findings(
         .collect()
 }
 
-fn task_readiness_related_conflicts(
+pub(crate) fn task_readiness_related_conflicts(
     detail: &SkillDetailRecord,
     by_instance: &BTreeMap<String, Vec<ConflictGroupRecord>>,
     by_definition: &BTreeMap<String, Vec<ConflictGroupRecord>>,
@@ -2035,14 +2042,14 @@ fn task_readiness_related_conflicts(
         .collect()
 }
 
-fn task_readiness_related_analysis(
+pub(crate) fn task_readiness_related_analysis(
     detail: &SkillDetailRecord,
     by_instance: &BTreeMap<String, Vec<CrossAgentAnalysisGroup>>,
 ) -> Vec<CrossAgentAnalysisGroup> {
     by_instance.get(&detail.id).cloned().unwrap_or_default()
 }
 
-fn task_readiness_quality_signal(
+pub(crate) fn task_readiness_quality_signal(
     skill: &SkillDetailRecord,
     findings: &[RuleFindingRecord],
     conflicts: &[ConflictGroupRecord],
@@ -2068,22 +2075,21 @@ fn task_readiness_quality_signal(
     let (_, band) = quality_grade_and_band(score);
     TaskReadinessQualitySignal { score, band }
 }
-
-struct TaskReadinessCandidateSignals<'a> {
-    findings: &'a [RuleFindingRecord],
-    conflicts: &'a [ConflictGroupRecord],
-    analysis_groups: &'a [CrossAgentAnalysisGroup],
-    diagnostic: Option<&'a AdapterDiagnosticsRecord>,
-    quality: Option<&'a TaskReadinessQualitySignal>,
+pub(crate) struct TaskReadinessCandidateSignals<'a> {
+    pub(crate) findings: &'a [RuleFindingRecord],
+    pub(crate) conflicts: &'a [ConflictGroupRecord],
+    pub(crate) analysis_groups: &'a [CrossAgentAnalysisGroup],
+    pub(crate) diagnostic: Option<&'a AdapterDiagnosticsRecord>,
+    pub(crate) quality: Option<&'a TaskReadinessQualitySignal>,
 }
 
 #[derive(Debug, Clone)]
-struct TaskReadinessQualitySignal {
+pub(crate) struct TaskReadinessQualitySignal {
     score: u8,
     band: &'static str,
 }
 
-fn task_readiness_candidate(
+pub(crate) fn task_readiness_candidate(
     task_terms: &[String],
     skill: &SkillDetailRecord,
     signals: TaskReadinessCandidateSignals<'_>,
@@ -2331,7 +2337,7 @@ fn task_readiness_candidate(
     }
 }
 
-fn task_readiness_risk_level(
+pub(crate) fn task_readiness_risk_level(
     findings: &[RuleFindingRecord],
     conflicts: &[ConflictGroupRecord],
     analysis_groups: &[CrossAgentAnalysisGroup],
@@ -2357,7 +2363,7 @@ fn task_readiness_risk_level(
     "low"
 }
 
-fn task_readiness_risk_summary(
+pub(crate) fn task_readiness_risk_summary(
     risk_level: &'static str,
     findings: &[RuleFindingRecord],
     conflicts: &[ConflictGroupRecord],
@@ -2374,7 +2380,7 @@ fn task_readiness_risk_summary(
     )
 }
 
-fn task_readiness_risk_deduction(
+pub(crate) fn task_readiness_risk_deduction(
     findings: &[RuleFindingRecord],
     conflicts: &[ConflictGroupRecord],
     analysis_groups: &[CrossAgentAnalysisGroup],
@@ -2401,7 +2407,7 @@ fn task_readiness_risk_deduction(
     deduction
 }
 
-fn task_readiness_overall_score(candidates: &[TaskReadinessCandidate]) -> u8 {
+pub(crate) fn task_readiness_overall_score(candidates: &[TaskReadinessCandidate]) -> u8 {
     let Some(best) = candidates.first() else {
         return 0;
     };
@@ -2412,7 +2418,7 @@ fn task_readiness_overall_score(candidates: &[TaskReadinessCandidate]) -> u8 {
     ((u16::from(best.score) * 3 + u16::from(secondary)) / 4).min(100) as u8
 }
 
-fn task_readiness_band(score: u8) -> &'static str {
+pub(crate) fn task_readiness_band(score: u8) -> &'static str {
     match score {
         80..=100 => "ready",
         60..=79 => "mostly_ready",
@@ -2422,7 +2428,7 @@ fn task_readiness_band(score: u8) -> &'static str {
     }
 }
 
-fn task_readiness_summary(
+pub(crate) fn task_readiness_summary(
     score: u8,
     band: &'static str,
     candidates: &[TaskReadinessCandidate],
@@ -2447,7 +2453,7 @@ fn task_readiness_summary(
     }
 }
 
-fn task_readiness_blocker_notes(candidates: &[TaskReadinessCandidate]) -> Vec<String> {
+pub(crate) fn task_readiness_blocker_notes(candidates: &[TaskReadinessCandidate]) -> Vec<String> {
     let mut notes = candidates
         .iter()
         .flat_map(|candidate| candidate.blocker_risk_notes.iter().cloned())
@@ -2464,7 +2470,7 @@ fn task_readiness_blocker_notes(candidates: &[TaskReadinessCandidate]) -> Vec<St
     notes
 }
 
-fn routing_confidence_safety_flags() -> RoutingConfidenceSafetyFlags {
+pub(crate) fn routing_confidence_safety_flags() -> RoutingConfidenceSafetyFlags {
     RoutingConfidenceSafetyFlags {
         read_only: true,
         provider_request_sent: false,
@@ -2480,7 +2486,7 @@ fn routing_confidence_safety_flags() -> RoutingConfidenceSafetyFlags {
     }
 }
 
-fn agent_readiness_safety_flags() -> AgentReadinessSafetyFlags {
+pub(crate) fn agent_readiness_safety_flags() -> AgentReadinessSafetyFlags {
     AgentReadinessSafetyFlags {
         read_only: true,
         app_local_only: true,
@@ -2504,7 +2510,7 @@ fn agent_readiness_safety_flags() -> AgentReadinessSafetyFlags {
     }
 }
 
-fn empty_agent_readiness_comparison(
+pub(crate) fn empty_agent_readiness_comparison(
     task: String,
     filters: AgentReadinessComparisonFilters,
     catalog_available: bool,
@@ -2562,7 +2568,7 @@ fn empty_agent_readiness_comparison(
     }
 }
 
-fn normalize_agent_filter_list(agents: Vec<String>) -> Vec<String> {
+pub(crate) fn normalize_agent_filter_list(agents: Vec<String>) -> Vec<String> {
     let mut normalized = agents
         .into_iter()
         .filter_map(|agent| normalize_agent_label(&agent))
@@ -2573,7 +2579,7 @@ fn normalize_agent_filter_list(agents: Vec<String>) -> Vec<String> {
     normalized
 }
 
-fn normalize_agent_label(agent: &str) -> Option<String> {
+pub(crate) fn normalize_agent_label(agent: &str) -> Option<String> {
     let normalized = agent.trim().to_ascii_lowercase().replace(['_', ' '], "-");
     let canonical = match normalized.as_str() {
         "" => return None,
@@ -2588,7 +2594,7 @@ fn normalize_agent_label(agent: &str) -> Option<String> {
     Some(canonical.to_string())
 }
 
-fn agent_readiness_agents_for_comparison(
+pub(crate) fn agent_readiness_agents_for_comparison(
     skills: &[SkillRecord],
     adapter_ctx: &AdapterContext,
     requested_agents: &[String],
@@ -2614,7 +2620,7 @@ fn agent_readiness_agents_for_comparison(
     agents
 }
 
-fn agent_readiness_agent_order(agent: &str) -> usize {
+pub(crate) fn agent_readiness_agent_order(agent: &str) -> usize {
     match agent {
         "claude-code" => 0,
         "codex" => 1,
@@ -2626,7 +2632,7 @@ fn agent_readiness_agent_order(agent: &str) -> usize {
     }
 }
 
-fn agent_readiness_display_name(agent: &str) -> String {
+pub(crate) fn agent_readiness_display_name(agent: &str) -> String {
     match agent {
         "claude-code" => "Claude Code",
         "codex" => "Codex",
@@ -2639,7 +2645,7 @@ fn agent_readiness_display_name(agent: &str) -> String {
     .to_string()
 }
 
-fn agent_readiness_row_from_results(
+pub(crate) fn agent_readiness_row_from_results(
     agent: &str,
     readiness: &TaskReadinessResult,
     ranking: &SkillRouteRankingResult,
@@ -2731,7 +2737,7 @@ fn agent_readiness_row_from_results(
     }
 }
 
-fn agent_readiness_comparison_score(
+pub(crate) fn agent_readiness_comparison_score(
     readiness_score: u8,
     routing_confidence_score: u8,
     accuracy_context: Option<&AgentReadinessAccuracyContext>,
@@ -2756,7 +2762,7 @@ fn agent_readiness_comparison_score(
     score.clamp(0, 100) as u8
 }
 
-fn agent_readiness_gap_issue_rows(
+pub(crate) fn agent_readiness_gap_issue_rows(
     row: &AgentReadinessComparisonRow,
 ) -> Vec<AgentReadinessGapIssueRow> {
     let mut issues = Vec::new();
@@ -2831,7 +2837,7 @@ fn agent_readiness_gap_issue_rows(
     issues
 }
 
-fn agent_readiness_recommendation(
+pub(crate) fn agent_readiness_recommendation(
     row: &AgentReadinessComparisonRow,
 ) -> AgentReadinessRecommendation {
     AgentReadinessRecommendation {
@@ -2862,7 +2868,7 @@ fn agent_readiness_recommendation(
     }
 }
 
-fn agent_readiness_summary(
+pub(crate) fn agent_readiness_summary(
     rows: &[AgentReadinessComparisonRow],
     gap_issue_rows: &[AgentReadinessGapIssueRow],
     recommended_agent: &Option<AgentReadinessRecommendation>,
@@ -2909,7 +2915,7 @@ fn agent_readiness_summary(
     }
 }
 
-fn agent_readiness_accuracy_context(
+pub(crate) fn agent_readiness_accuracy_context(
     dashboard: RoutingAccuracyDashboardResult,
 ) -> BTreeMap<String, AgentReadinessAccuracyContext> {
     dashboard
@@ -2932,7 +2938,7 @@ fn agent_readiness_accuracy_context(
         .collect()
 }
 
-fn agent_readiness_benchmark_context(
+pub(crate) fn agent_readiness_benchmark_context(
     evaluation: TaskBenchmarkEvaluationResult,
 ) -> BTreeMap<String, AgentReadinessBenchmarkContext> {
     let mut by_agent: BTreeMap<String, AgentReadinessBenchmarkContext> = BTreeMap::new();
@@ -2961,7 +2967,7 @@ fn agent_readiness_benchmark_context(
     by_agent
 }
 
-fn task_benchmark_safety_flags() -> TaskBenchmarkSafetyFlags {
+pub(crate) fn task_benchmark_safety_flags() -> TaskBenchmarkSafetyFlags {
     TaskBenchmarkSafetyFlags {
         read_only: true,
         provider_request_sent: false,
@@ -2977,7 +2983,7 @@ fn task_benchmark_safety_flags() -> TaskBenchmarkSafetyFlags {
     }
 }
 
-fn trace_import_safety_flags() -> TraceImportSafetyFlags {
+pub(crate) fn trace_import_safety_flags() -> TraceImportSafetyFlags {
     TraceImportSafetyFlags {
         read_only: true,
         app_local_only: true,
@@ -2999,7 +3005,7 @@ fn trace_import_safety_flags() -> TraceImportSafetyFlags {
     }
 }
 
-fn agent_session_review_safety_flags() -> AgentSessionSkillReviewSafetyFlags {
+pub(crate) fn agent_session_review_safety_flags() -> AgentSessionSkillReviewSafetyFlags {
     AgentSessionSkillReviewSafetyFlags {
         read_only: true,
         app_local_only: true,
@@ -3023,7 +3029,8 @@ fn agent_session_review_safety_flags() -> AgentSessionSkillReviewSafetyFlags {
     }
 }
 
-fn agent_session_review_redaction_summary_default() -> AgentSessionSkillReviewRedactionSummary {
+pub(crate) fn agent_session_review_redaction_summary_default(
+) -> AgentSessionSkillReviewRedactionSummary {
     AgentSessionSkillReviewRedactionSummary {
         status: "redacted-local-only".to_string(),
         redacted_value_count: 0,
@@ -3043,7 +3050,7 @@ fn agent_session_review_redaction_summary_default() -> AgentSessionSkillReviewRe
     }
 }
 
-fn agent_session_review_redaction_summary_from(
+pub(crate) fn agent_session_review_redaction_summary_from(
     summary: LlmPromptRedactionSummary,
 ) -> AgentSessionSkillReviewRedactionSummary {
     AgentSessionSkillReviewRedactionSummary {
@@ -3062,7 +3069,7 @@ fn agent_session_review_redaction_summary_from(
     }
 }
 
-fn remediation_history_safety_flags() -> RemediationHistorySafetyFlags {
+pub(crate) fn remediation_history_safety_flags() -> RemediationHistorySafetyFlags {
     RemediationHistorySafetyFlags {
         read_only: true,
         app_local_only: true,
@@ -3087,7 +3094,8 @@ fn remediation_history_safety_flags() -> RemediationHistorySafetyFlags {
     }
 }
 
-fn remediation_history_redaction_summary_default() -> RemediationHistoryRedactionSummary {
+pub(crate) fn remediation_history_redaction_summary_default() -> RemediationHistoryRedactionSummary
+{
     RemediationHistoryRedactionSummary {
         status: "redacted-local-only".to_string(),
         redacted_value_count: 0,
@@ -3107,7 +3115,7 @@ fn remediation_history_redaction_summary_default() -> RemediationHistoryRedactio
     }
 }
 
-fn remediation_history_redaction_summary_from(
+pub(crate) fn remediation_history_redaction_summary_from(
     summary: LlmPromptRedactionSummary,
 ) -> RemediationHistoryRedactionSummary {
     RemediationHistoryRedactionSummary {
@@ -3126,7 +3134,7 @@ fn remediation_history_redaction_summary_from(
     }
 }
 
-fn remediation_history_record_sort(
+pub(crate) fn remediation_history_record_sort(
     left: &RemediationHistoryRecord,
     right: &RemediationHistoryRecord,
 ) -> std::cmp::Ordering {
@@ -3138,7 +3146,7 @@ fn remediation_history_record_sort(
         .then_with(|| left.id.cmp(&right.id))
 }
 
-fn remediation_history_matches(
+pub(crate) fn remediation_history_matches(
     filters: &RemediationHistoryFilters,
     record: &RemediationHistoryRecord,
 ) -> bool {
@@ -3175,7 +3183,7 @@ fn remediation_history_matches(
     true
 }
 
-fn remediation_history_summary(
+pub(crate) fn remediation_history_summary(
     total_count: usize,
     records: &[RemediationHistoryRecord],
 ) -> RemediationHistorySummary {
@@ -3225,7 +3233,7 @@ fn remediation_history_summary(
     summary
 }
 
-fn remediation_history_recurrence_rows(
+pub(crate) fn remediation_history_recurrence_rows(
     records: &[RemediationHistoryRecord],
 ) -> Vec<RemediationHistoryRecurrenceRow> {
     let mut grouped: BTreeMap<String, Vec<&RemediationHistoryRecord>> = BTreeMap::new();
@@ -3282,23 +3290,23 @@ fn remediation_history_recurrence_rows(
 }
 
 #[derive(Debug, Clone, Default)]
-struct RoutingAccuracyAgentAggregate {
-    outcomes: RoutingAccuracyOutcomeCounts,
-    benchmark_count: usize,
-    benchmark_matched_count: usize,
-    benchmark_gap_count: usize,
-    regression_count: usize,
-    recent_evidence_count: usize,
-    notes: Vec<String>,
+pub(crate) struct RoutingAccuracyAgentAggregate {
+    pub(crate) outcomes: RoutingAccuracyOutcomeCounts,
+    pub(crate) benchmark_count: usize,
+    pub(crate) benchmark_matched_count: usize,
+    pub(crate) benchmark_gap_count: usize,
+    pub(crate) regression_count: usize,
+    pub(crate) recent_evidence_count: usize,
+    pub(crate) notes: Vec<String>,
 }
 
 impl RoutingAccuracyAgentAggregate {
-    fn record_trace(&mut self, outcome: &'static str) {
+    pub(crate) fn record_trace(&mut self, outcome: &'static str) {
         routing_accuracy_increment_counts(&mut self.outcomes, outcome);
         self.recent_evidence_count += 1;
     }
 
-    fn into_row(mut self, agent: String) -> RoutingAccuracyAgentRow {
+    pub(crate) fn into_row(mut self, agent: String) -> RoutingAccuracyAgentRow {
         let known = self.outcomes.hit
             + self.outcomes.miss
             + self.outcomes.wrong_pick

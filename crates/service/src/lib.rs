@@ -40,11 +40,18 @@ mod project_context;
 mod protocol;
 mod provider;
 mod service_cleanup;
+mod service_guided_cleanup_helpers;
 mod service_host;
 mod service_knowledge;
+mod service_knowledge_helpers;
 mod service_llm;
+mod service_llm_prompt_helpers;
+mod service_observability_helpers;
 mod service_remediation;
+mod service_remediation_helpers;
+mod service_support_helpers;
 mod service_task;
+mod service_task_helpers;
 
 use cleanup_queue::cleanup_queue_response;
 pub use cleanup_queue::{
@@ -67,6 +74,14 @@ use provider::{
     ProviderProfileRecord, SaveProviderProfileParams, SendProviderPromptParams,
     TestProviderConnectionParams,
 };
+pub(crate) use service_guided_cleanup_helpers::*;
+pub(crate) use service_knowledge_helpers::*;
+pub(crate) use service_llm_prompt_helpers::*;
+pub(crate) use service_observability_helpers::*;
+pub(crate) use service_remediation_helpers::*;
+pub use service_support_helpers::handle_request_json;
+pub(crate) use service_support_helpers::*;
+pub(crate) use service_task_helpers::*;
 
 const TASK_READINESS_MAX_CANDIDATE_SCAN: usize = 160;
 const TASK_READINESS_MIN_CANDIDATE_SCAN: usize = 48;
@@ -4349,14 +4364,6 @@ pub struct ServiceHost {
     pub app_data_dir: PathBuf,
     pub adapter_ctx: AdapterContext,
 }
-
-include!("service_support_helpers.rs");
-include!("service_knowledge_helpers.rs");
-include!("service_remediation_helpers.rs");
-include!("service_task_helpers.rs");
-include!("service_observability_helpers.rs");
-include!("service_llm_prompt_helpers.rs");
-include!("service_guided_cleanup_helpers.rs");
 
 #[cfg(test)]
 mod tests;

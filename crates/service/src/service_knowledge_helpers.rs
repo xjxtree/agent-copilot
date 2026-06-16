@@ -1,4 +1,6 @@
-fn skill_quality_safety_flags() -> SkillQualitySafetyFlags {
+use super::*;
+
+pub(crate) fn skill_quality_safety_flags() -> SkillQualitySafetyFlags {
     SkillQualitySafetyFlags {
         read_only: true,
         provider_request_sent: false,
@@ -14,11 +16,11 @@ fn skill_quality_safety_flags() -> SkillQualitySafetyFlags {
     }
 }
 
-fn stale_drift_safety_flags() -> StaleDriftSafetyFlags {
+pub(crate) fn stale_drift_safety_flags() -> StaleDriftSafetyFlags {
     agent_readiness_safety_flags()
 }
 
-fn empty_stale_drift_result(
+pub(crate) fn empty_stale_drift_result(
     filters: StaleDriftFilters,
     catalog_available: bool,
 ) -> StaleDriftDetectionResult {
@@ -72,17 +74,16 @@ fn empty_stale_drift_result(
         safety_flags: stale_drift_safety_flags(),
     }
 }
-
-struct StaleDriftRowSignals<'a> {
-    findings: &'a [RuleFindingRecord],
-    conflicts: &'a [ConflictGroupRecord],
-    analysis_groups: &'a [CrossAgentAnalysisGroup],
-    diagnostic: Option<&'a AdapterDiagnosticsRecord>,
-    stale_days: u32,
-    now_ms: i64,
+pub(crate) struct StaleDriftRowSignals<'a> {
+    pub(crate) findings: &'a [RuleFindingRecord],
+    pub(crate) conflicts: &'a [ConflictGroupRecord],
+    pub(crate) analysis_groups: &'a [CrossAgentAnalysisGroup],
+    pub(crate) diagnostic: Option<&'a AdapterDiagnosticsRecord>,
+    pub(crate) stale_days: u32,
+    pub(crate) now_ms: i64,
 }
 
-fn stale_drift_row(
+pub(crate) fn stale_drift_row(
     skill: &SkillInstance,
     signals: StaleDriftRowSignals<'_>,
     evidence: &mut Vec<TaskReadinessEvidenceReference>,
@@ -304,14 +305,14 @@ fn stale_drift_row(
     }
 }
 
-fn stale_drift_modified_age_days(mtime: i64, now_ms: i64) -> Option<i64> {
+pub(crate) fn stale_drift_modified_age_days(mtime: i64, now_ms: i64) -> Option<i64> {
     if mtime <= 0 || now_ms <= 0 || mtime > now_ms {
         return None;
     }
     Some((now_ms - mtime) / 86_400_000)
 }
 
-fn stale_drift_score(signals: &StaleDriftSignals, skill: &SkillInstance) -> u8 {
+pub(crate) fn stale_drift_score(signals: &StaleDriftSignals, skill: &SkillInstance) -> u8 {
     let mut score = 0i16;
     if signals.fingerprint_drift {
         score += 35;
@@ -339,7 +340,7 @@ fn stale_drift_score(signals: &StaleDriftSignals, skill: &SkillInstance) -> u8 {
     score.clamp(0, 100) as u8
 }
 
-fn stale_drift_band(score: u8) -> &'static str {
+pub(crate) fn stale_drift_band(score: u8) -> &'static str {
     match score {
         80..=100 => "high",
         45..=79 => "medium",
@@ -348,7 +349,7 @@ fn stale_drift_band(score: u8) -> &'static str {
     }
 }
 
-fn stale_drift_readiness_impact(
+pub(crate) fn stale_drift_readiness_impact(
     score: u8,
     signals: &StaleDriftSignals,
     skill: &SkillInstance,
@@ -387,7 +388,9 @@ fn stale_drift_readiness_impact(
     })
 }
 
-fn stale_drift_readiness_impact_row(row: &StaleDriftRow) -> Option<StaleDriftReadinessImpactRow> {
+pub(crate) fn stale_drift_readiness_impact_row(
+    row: &StaleDriftRow,
+) -> Option<StaleDriftReadinessImpactRow> {
     row.readiness_impact
         .as_ref()
         .map(|impact| StaleDriftReadinessImpactRow {
@@ -401,7 +404,10 @@ fn stale_drift_readiness_impact_row(row: &StaleDriftRow) -> Option<StaleDriftRea
         })
 }
 
-fn stale_drift_summary(scanned_skill_count: usize, rows: &[StaleDriftRow]) -> StaleDriftSummary {
+pub(crate) fn stale_drift_summary(
+    scanned_skill_count: usize,
+    rows: &[StaleDriftRow],
+) -> StaleDriftSummary {
     let stale_count = rows
         .iter()
         .filter(|row| row.drift_signals.stale_by_mtime)
@@ -450,7 +456,7 @@ fn stale_drift_summary(scanned_skill_count: usize, rows: &[StaleDriftRow]) -> St
     }
 }
 
-fn stale_drift_blocker_notes(rows: &[StaleDriftRow]) -> Vec<String> {
+pub(crate) fn stale_drift_blocker_notes(rows: &[StaleDriftRow]) -> Vec<String> {
     let mut notes = Vec::new();
     if rows.iter().any(|row| row.drift_signals.fingerprint_drift) {
         notes.push(
@@ -473,11 +479,11 @@ fn stale_drift_blocker_notes(rows: &[StaleDriftRow]) -> Vec<String> {
     notes
 }
 
-fn knowledge_search_safety_flags() -> KnowledgeSearchSafetyFlags {
+pub(crate) fn knowledge_search_safety_flags() -> KnowledgeSearchSafetyFlags {
     agent_readiness_safety_flags()
 }
 
-fn knowledge_search_filters(params: &KnowledgeSearchParams) -> KnowledgeSearchFilters {
+pub(crate) fn knowledge_search_filters(params: &KnowledgeSearchParams) -> KnowledgeSearchFilters {
     let query = params
         .query
         .as_deref()
@@ -529,11 +535,11 @@ fn knowledge_search_filters(params: &KnowledgeSearchParams) -> KnowledgeSearchFi
     }
 }
 
-fn normalize_filter_value(value: &str) -> String {
+pub(crate) fn normalize_filter_value(value: &str) -> String {
     value.trim().to_ascii_lowercase().replace(['_', ' '], "-")
 }
 
-fn empty_knowledge_search_result(
+pub(crate) fn empty_knowledge_search_result(
     filters: KnowledgeSearchFilters,
     catalog_available: bool,
 ) -> KnowledgeSearchResult {
@@ -583,21 +589,20 @@ fn empty_knowledge_search_result(
         safety_flags: knowledge_search_safety_flags(),
     }
 }
-
-struct KnowledgeSearchRowSignals<'a> {
-    query_terms: &'a [String],
-    filters: &'a KnowledgeSearchFilters,
-    findings: &'a [RuleFindingRecord],
-    conflicts: &'a [ConflictGroupRecord],
-    analysis_groups: &'a [CrossAgentAnalysisGroup],
-    diagnostic: Option<&'a AdapterDiagnosticsRecord>,
-    quality: Option<&'a SkillQualityScoreResult>,
-    readiness: Option<&'a TaskReadinessCandidate>,
-    stale: Option<&'a StaleDriftRow>,
-    redaction_roots: &'a [(String, &'static str)],
+pub(crate) struct KnowledgeSearchRowSignals<'a> {
+    pub(crate) query_terms: &'a [String],
+    pub(crate) filters: &'a KnowledgeSearchFilters,
+    pub(crate) findings: &'a [RuleFindingRecord],
+    pub(crate) conflicts: &'a [ConflictGroupRecord],
+    pub(crate) analysis_groups: &'a [CrossAgentAnalysisGroup],
+    pub(crate) diagnostic: Option<&'a AdapterDiagnosticsRecord>,
+    pub(crate) quality: Option<&'a SkillQualityScoreResult>,
+    pub(crate) readiness: Option<&'a TaskReadinessCandidate>,
+    pub(crate) stale: Option<&'a StaleDriftRow>,
+    pub(crate) redaction_roots: &'a [(String, &'static str)],
 }
 
-fn knowledge_search_row(
+pub(crate) fn knowledge_search_row(
     skill: &SkillDetailRecord,
     signals: KnowledgeSearchRowSignals<'_>,
     evidence: &mut Vec<TaskReadinessEvidenceReference>,
@@ -868,7 +873,7 @@ fn knowledge_search_row(
     })
 }
 
-fn knowledge_related_findings(
+pub(crate) fn knowledge_related_findings(
     findings: &[RuleFindingRecord],
     skill: &SkillDetailRecord,
 ) -> Vec<RuleFindingRecord> {
@@ -882,7 +887,7 @@ fn knowledge_related_findings(
         .collect()
 }
 
-fn knowledge_related_conflicts(
+pub(crate) fn knowledge_related_conflicts(
     conflicts: &[ConflictGroupRecord],
     skill: &SkillDetailRecord,
 ) -> Vec<ConflictGroupRecord> {
@@ -899,7 +904,7 @@ fn knowledge_related_conflicts(
         .collect()
 }
 
-fn knowledge_related_analysis(
+pub(crate) fn knowledge_related_analysis(
     groups: &[CrossAgentAnalysisGroup],
     skill: &SkillDetailRecord,
 ) -> Vec<CrossAgentAnalysisGroup> {
@@ -915,7 +920,7 @@ fn knowledge_related_analysis(
         .collect()
 }
 
-fn knowledge_tools(permissions: &Value) -> Vec<String> {
+pub(crate) fn knowledge_tools(permissions: &Value) -> Vec<String> {
     let normalized = permissions.get("normalized").unwrap_or(permissions);
     let mut tools = normalized
         .get("tools")
@@ -932,7 +937,7 @@ fn knowledge_tools(permissions: &Value) -> Vec<String> {
     tools
 }
 
-fn knowledge_keywords(
+pub(crate) fn knowledge_keywords(
     skill: &SkillDetailRecord,
     tools: &[String],
     findings: &[RuleFindingRecord],
@@ -957,7 +962,7 @@ fn knowledge_keywords(
     terms.into_iter().take(30).collect()
 }
 
-fn knowledge_match_terms(
+pub(crate) fn knowledge_match_terms(
     skill: &SkillDetailRecord,
     tools: &[String],
     keywords: &[String],
@@ -993,7 +998,7 @@ fn knowledge_match_terms(
     )
 }
 
-fn knowledge_optional_snippet(value: &str, query_terms: &[String]) -> Option<String> {
+pub(crate) fn knowledge_optional_snippet(value: &str, query_terms: &[String]) -> Option<String> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
         None
@@ -1002,7 +1007,7 @@ fn knowledge_optional_snippet(value: &str, query_terms: &[String]) -> Option<Str
     }
 }
 
-fn knowledge_snippet(value: &str, query_terms: &[String]) -> String {
+pub(crate) fn knowledge_snippet(value: &str, query_terms: &[String]) -> String {
     let compact = value.split_whitespace().collect::<Vec<_>>().join(" ");
     let start = query_terms
         .iter()
@@ -1020,7 +1025,7 @@ fn knowledge_snippet(value: &str, query_terms: &[String]) -> String {
     redact_for_llm_preview(&snippet)
 }
 
-fn knowledge_capability_tags(
+pub(crate) fn knowledge_capability_tags(
     skill: &SkillDetailRecord,
     diagnostic: Option<&AdapterDiagnosticsRecord>,
 ) -> Vec<String> {
@@ -1039,7 +1044,7 @@ fn knowledge_capability_tags(
     tags.into_iter().collect()
 }
 
-fn knowledge_risk_tags(
+pub(crate) fn knowledge_risk_tags(
     risk_level: &'static str,
     findings: &[RuleFindingRecord],
     stale: Option<&StaleDriftRow>,
@@ -1065,7 +1070,7 @@ fn knowledge_risk_tags(
     tags.into_iter().collect()
 }
 
-fn knowledge_root_provenance(skill: &SkillDetailRecord) -> String {
+pub(crate) fn knowledge_root_provenance(skill: &SkillDetailRecord) -> String {
     if skill.scope == Scope::AgentProject.as_str() {
         "project-scope catalog evidence".to_string()
     } else if skill.scope == Scope::ToolGlobal.as_str() {
@@ -1075,7 +1080,7 @@ fn knowledge_root_provenance(skill: &SkillDetailRecord) -> String {
     }
 }
 
-fn knowledge_row_rank_score(row: &KnowledgeSearchRow) -> i16 {
+pub(crate) fn knowledge_row_rank_score(row: &KnowledgeSearchRow) -> i16 {
     let mut score = 0i16;
     score += (row.matched_fields.len() as i16 * 12).min(48);
     if let Some(readiness) = &row.readiness_context {
@@ -1096,7 +1101,7 @@ fn knowledge_row_rank_score(row: &KnowledgeSearchRow) -> i16 {
     score
 }
 
-fn knowledge_search_facets(rows: &[KnowledgeSearchRow]) -> KnowledgeSearchFacets {
+pub(crate) fn knowledge_search_facets(rows: &[KnowledgeSearchRow]) -> KnowledgeSearchFacets {
     let mut facets = KnowledgeSearchFacets::default();
     for row in rows {
         *facets.agents.entry(row.agent.clone()).or_insert(0) += 1;
@@ -1128,7 +1133,7 @@ fn knowledge_search_facets(rows: &[KnowledgeSearchRow]) -> KnowledgeSearchFacets
     facets
 }
 
-fn knowledge_search_blocker_notes(rows: &[KnowledgeSearchRow]) -> Vec<String> {
+pub(crate) fn knowledge_search_blocker_notes(rows: &[KnowledgeSearchRow]) -> Vec<String> {
     let mut notes = Vec::new();
     if rows.iter().any(|row| !row.enabled || row.state != "loaded") {
         notes.push(
@@ -1165,7 +1170,7 @@ fn knowledge_search_blocker_notes(rows: &[KnowledgeSearchRow]) -> Vec<String> {
     notes
 }
 
-fn knowledge_search_summary(
+pub(crate) fn knowledge_search_summary(
     indexed_skill_count: usize,
     matched_row_count: usize,
     rows: &[KnowledgeSearchRow],
@@ -1212,11 +1217,11 @@ fn knowledge_search_summary(
     }
 }
 
-fn similar_skill_grouping_safety_flags() -> SimilarSkillGroupingSafetyFlags {
+pub(crate) fn similar_skill_grouping_safety_flags() -> SimilarSkillGroupingSafetyFlags {
     agent_readiness_safety_flags()
 }
 
-fn similar_skill_grouping_filters(
+pub(crate) fn similar_skill_grouping_filters(
     params: &SimilarSkillGroupingParams,
 ) -> SimilarSkillGroupingFilters {
     let mut candidate_instance_ids = params
@@ -1242,7 +1247,7 @@ fn similar_skill_grouping_filters(
     }
 }
 
-fn empty_similar_skill_grouping_result(
+pub(crate) fn empty_similar_skill_grouping_result(
     filters: SimilarSkillGroupingFilters,
     catalog_available: bool,
 ) -> SimilarSkillGroupingResult {
@@ -1294,19 +1299,18 @@ fn empty_similar_skill_grouping_result(
         safety_flags: similar_skill_grouping_safety_flags(),
     }
 }
-
-struct SimilarSkillCandidateSignals<'a> {
-    findings: &'a [RuleFindingRecord],
-    conflicts: &'a [ConflictGroupRecord],
-    analysis_groups: &'a [CrossAgentAnalysisGroup],
-    diagnostic: Option<&'a AdapterDiagnosticsRecord>,
-    quality: Option<&'a SkillQualityScoreResult>,
-    stale: Option<&'a StaleDriftRow>,
-    redaction_roots: &'a [(String, &'static str)],
+pub(crate) struct SimilarSkillCandidateSignals<'a> {
+    pub(crate) findings: &'a [RuleFindingRecord],
+    pub(crate) conflicts: &'a [ConflictGroupRecord],
+    pub(crate) analysis_groups: &'a [CrossAgentAnalysisGroup],
+    pub(crate) diagnostic: Option<&'a AdapterDiagnosticsRecord>,
+    pub(crate) quality: Option<&'a SkillQualityScoreResult>,
+    pub(crate) stale: Option<&'a StaleDriftRow>,
+    pub(crate) redaction_roots: &'a [(String, &'static str)],
 }
 
 #[derive(Debug, Clone)]
-struct SimilarSkillCandidate {
+pub(crate) struct SimilarSkillCandidate {
     detail: SkillDetailRecord,
     member: SimilarSkillMember,
     canonical_key: String,
@@ -1319,7 +1323,7 @@ struct SimilarSkillCandidate {
 }
 
 #[derive(Debug, Clone)]
-struct SimilarSkillPair {
+pub(crate) struct SimilarSkillPair {
     left: usize,
     right: usize,
     score: u8,
@@ -1336,7 +1340,7 @@ struct SimilarSkillPair {
     shared_source_signals: Vec<String>,
 }
 
-fn similar_skill_candidate(
+pub(crate) fn similar_skill_candidate(
     skill: &SkillDetailRecord,
     signals: SimilarSkillCandidateSignals<'_>,
     evidence: &mut Vec<TaskReadinessEvidenceReference>,
@@ -1526,7 +1530,7 @@ fn similar_skill_candidate(
     }
 }
 
-fn similar_skill_groups_from_candidates(
+pub(crate) fn similar_skill_groups_from_candidates(
     candidates: Vec<SimilarSkillCandidate>,
     min_score: u8,
     evidence: &mut Vec<TaskReadinessEvidenceReference>,
@@ -1589,7 +1593,7 @@ fn similar_skill_groups_from_candidates(
     groups
 }
 
-fn similar_skill_pair(
+pub(crate) fn similar_skill_pair(
     left: &SimilarSkillCandidate,
     right: &SimilarSkillCandidate,
     left_index: usize,
@@ -1742,7 +1746,7 @@ fn similar_skill_pair(
     }
 }
 
-fn similar_skill_group_from_component(
+pub(crate) fn similar_skill_group_from_component(
     candidates: &[SimilarSkillCandidate],
     component: &[usize],
     pairs: &[SimilarSkillPair],
@@ -1872,7 +1876,7 @@ fn similar_skill_group_from_component(
     }
 }
 
-fn similar_skill_member_reasons(
+pub(crate) fn similar_skill_member_reasons(
     component: &[usize],
     pairs: &[SimilarSkillPair],
 ) -> BTreeMap<usize, Vec<String>> {
@@ -1900,7 +1904,7 @@ fn similar_skill_member_reasons(
         .collect()
 }
 
-fn similar_skill_grouping_blocker_notes(groups: &[SimilarSkillGroup]) -> Vec<String> {
+pub(crate) fn similar_skill_grouping_blocker_notes(groups: &[SimilarSkillGroup]) -> Vec<String> {
     let mut notes = Vec::new();
     if groups.iter().any(|group| group.routing_ambiguity == "high") {
         notes.push(
@@ -1943,7 +1947,7 @@ fn similar_skill_grouping_blocker_notes(groups: &[SimilarSkillGroup]) -> Vec<Str
     notes
 }
 
-fn similar_skill_grouping_summary(
+pub(crate) fn similar_skill_grouping_summary(
     indexed_skill_count: usize,
     candidate_skill_count: usize,
     matched_group_count: usize,
@@ -1992,11 +1996,13 @@ fn similar_skill_grouping_summary(
     }
 }
 
-fn capability_taxonomy_safety_flags() -> CapabilityTaxonomySafetyFlags {
+pub(crate) fn capability_taxonomy_safety_flags() -> CapabilityTaxonomySafetyFlags {
     agent_readiness_safety_flags()
 }
 
-fn capability_taxonomy_filters(params: &CapabilityTaxonomyParams) -> CapabilityTaxonomyFilters {
+pub(crate) fn capability_taxonomy_filters(
+    params: &CapabilityTaxonomyParams,
+) -> CapabilityTaxonomyFilters {
     let mut candidate_instance_ids = params
         .candidate_instance_ids
         .iter()
@@ -2018,7 +2024,7 @@ fn capability_taxonomy_filters(params: &CapabilityTaxonomyParams) -> CapabilityT
     }
 }
 
-fn empty_capability_taxonomy_result(
+pub(crate) fn empty_capability_taxonomy_result(
     filters: CapabilityTaxonomyFilters,
     catalog_available: bool,
 ) -> CapabilityTaxonomyResult {
@@ -2075,7 +2081,7 @@ fn empty_capability_taxonomy_result(
 }
 
 #[derive(Debug, Clone)]
-struct CapabilityTaxonomyCandidate {
+pub(crate) struct CapabilityTaxonomyCandidate {
     detail: SkillDetailRecord,
     domain_key: String,
     domain_name: String,
@@ -2090,13 +2096,13 @@ struct CapabilityTaxonomyCandidate {
 }
 
 #[derive(Debug, Clone)]
-struct CapabilitySimilaritySignal {
+pub(crate) struct CapabilitySimilaritySignal {
     group_id: String,
     coverage_redundancy: &'static str,
     routing_ambiguity: &'static str,
 }
 
-fn capability_similarity_by_member(
+pub(crate) fn capability_similarity_by_member(
     groups: &[SimilarSkillGroup],
 ) -> BTreeMap<String, Vec<CapabilitySimilaritySignal>> {
     let mut by_member: BTreeMap<String, Vec<CapabilitySimilaritySignal>> = BTreeMap::new();
@@ -2115,7 +2121,7 @@ fn capability_similarity_by_member(
     by_member
 }
 
-fn capability_taxonomy_candidate(
+pub(crate) fn capability_taxonomy_candidate(
     candidate: SimilarSkillCandidate,
     similar_by_member: &BTreeMap<String, Vec<CapabilitySimilaritySignal>>,
     redaction_roots: &[(String, &'static str)],
@@ -2191,7 +2197,9 @@ fn capability_taxonomy_candidate(
     }
 }
 
-fn capability_domain_for_candidate(candidate: &SimilarSkillCandidate) -> (String, String) {
+pub(crate) fn capability_domain_for_candidate(
+    candidate: &SimilarSkillCandidate,
+) -> (String, String) {
     let searchable = format!(
         "{} {} {} {} {} {} {}",
         candidate.detail.name,
@@ -2302,11 +2310,11 @@ fn capability_domain_for_candidate(candidate: &SimilarSkillCandidate) -> (String
     (key.to_string(), name.to_string())
 }
 
-fn contains_any(value: &str, needles: &[&str]) -> bool {
+pub(crate) fn contains_any(value: &str, needles: &[&str]) -> bool {
     needles.iter().any(|needle| value.contains(needle))
 }
 
-fn capability_workspace_label(
+pub(crate) fn capability_workspace_label(
     skill: &SkillDetailRecord,
     redaction_roots: &[(String, &'static str)],
 ) -> String {
@@ -2323,7 +2331,7 @@ fn capability_workspace_label(
     }
 }
 
-fn capability_domains_from_candidates(
+pub(crate) fn capability_domains_from_candidates(
     candidates: Vec<CapabilityTaxonomyCandidate>,
     include_single_skill_domains: bool,
     evidence: &mut Vec<TaskReadinessEvidenceReference>,
@@ -2356,7 +2364,7 @@ fn capability_domains_from_candidates(
         .collect()
 }
 
-fn capability_domain_from_candidates(
+pub(crate) fn capability_domain_from_candidates(
     candidates: Vec<CapabilityTaxonomyCandidate>,
     evidence: &mut Vec<TaskReadinessEvidenceReference>,
 ) -> CapabilityDomainRow {
@@ -2488,7 +2496,7 @@ fn capability_domain_from_candidates(
     }
 }
 
-fn capability_coverage_score(
+pub(crate) fn capability_coverage_score(
     skill_count: usize,
     enabled_count: usize,
     agent_count: usize,
@@ -2506,7 +2514,7 @@ fn capability_coverage_score(
     score.clamp(0, 100) as u8
 }
 
-fn capability_coverage_level(score: u8) -> &'static str {
+pub(crate) fn capability_coverage_level(score: u8) -> &'static str {
     match score {
         80..=100 => "broad",
         55..=79 => "moderate",
@@ -2515,7 +2523,7 @@ fn capability_coverage_level(score: u8) -> &'static str {
     }
 }
 
-fn capability_domain_gap_notes(
+pub(crate) fn capability_domain_gap_notes(
     domain_name: &str,
     skill_count: usize,
     enabled_count: usize,
@@ -2550,7 +2558,7 @@ fn capability_domain_gap_notes(
     notes
 }
 
-fn capability_domain_blocker_notes(
+pub(crate) fn capability_domain_blocker_notes(
     domain_name: &str,
     candidates: &[CapabilityTaxonomyCandidate],
     duplicate_or_redundant_count: usize,
@@ -2581,7 +2589,9 @@ fn capability_domain_blocker_notes(
     notes
 }
 
-fn capability_coverage_rows(domains: &[CapabilityDomainRow]) -> Vec<CapabilityCoverageRow> {
+pub(crate) fn capability_coverage_rows(
+    domains: &[CapabilityDomainRow],
+) -> Vec<CapabilityCoverageRow> {
     domains
         .iter()
         .map(|domain| CapabilityCoverageRow {
@@ -2610,7 +2620,7 @@ fn capability_coverage_rows(domains: &[CapabilityDomainRow]) -> Vec<CapabilityCo
         .collect()
 }
 
-fn capability_taxonomy_blocker_notes(domains: &[CapabilityDomainRow]) -> Vec<String> {
+pub(crate) fn capability_taxonomy_blocker_notes(domains: &[CapabilityDomainRow]) -> Vec<String> {
     let mut notes = Vec::new();
     if domains
         .iter()
@@ -2645,7 +2655,7 @@ fn capability_taxonomy_blocker_notes(domains: &[CapabilityDomainRow]) -> Vec<Str
     notes
 }
 
-fn capability_taxonomy_summary(
+pub(crate) fn capability_taxonomy_summary(
     indexed_skill_count: usize,
     candidate_skill_count: usize,
     domain_count: usize,
@@ -2700,18 +2710,18 @@ fn capability_taxonomy_summary(
     }
 }
 
-fn stable_capability_domain_id(domain_key: &str) -> String {
+pub(crate) fn stable_capability_domain_id(domain_key: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(domain_key.as_bytes());
     let digest = hasher.finalize();
     format!("cap-domain-{}", hex_prefix(&digest, 12))
 }
 
-fn normalize_similarity_key(value: &str) -> String {
+pub(crate) fn normalize_similarity_key(value: &str) -> String {
     task_readiness_terms(value).join("-")
 }
 
-fn sorted_intersection(left: &[String], right: &[String], limit: usize) -> Vec<String> {
+pub(crate) fn sorted_intersection(left: &[String], right: &[String], limit: usize) -> Vec<String> {
     let right = right.iter().collect::<BTreeSet<_>>();
     left.iter()
         .filter(|value| right.contains(value))
@@ -2722,7 +2732,7 @@ fn sorted_intersection(left: &[String], right: &[String], limit: usize) -> Vec<S
         .collect()
 }
 
-fn union_pair_values<'a>(
+pub(crate) fn union_pair_values<'a>(
     pairs: &'a [SimilarSkillPair],
     values: impl Fn(&'a SimilarSkillPair) -> &'a Vec<String>,
 ) -> Vec<String> {
@@ -2736,7 +2746,7 @@ fn union_pair_values<'a>(
         .collect()
 }
 
-fn max_band<'a>(bands: impl Iterator<Item = &'a str>) -> Option<&'static str> {
+pub(crate) fn max_band<'a>(bands: impl Iterator<Item = &'a str>) -> Option<&'static str> {
     let mut max = None;
     let mut score = 0u8;
     for band in bands {
@@ -2757,7 +2767,7 @@ fn max_band<'a>(bands: impl Iterator<Item = &'a str>) -> Option<&'static str> {
     max
 }
 
-fn stable_similar_group_id(member_ids: &[String]) -> String {
+pub(crate) fn stable_similar_group_id(member_ids: &[String]) -> String {
     let mut sorted = member_ids.to_vec();
     sorted.sort();
     let mut hasher = Sha256::new();
@@ -2769,11 +2779,11 @@ fn stable_similar_group_id(member_ids: &[String]) -> String {
     format!("similar-group-{:x}", digest)[..26].to_string()
 }
 
-fn local_skill_map_safety_flags() -> LocalSkillMapSafetyFlags {
+pub(crate) fn local_skill_map_safety_flags() -> LocalSkillMapSafetyFlags {
     agent_readiness_safety_flags()
 }
 
-fn local_skill_map_filters(
+pub(crate) fn local_skill_map_filters(
     params: &LocalSkillMapParams,
     redaction_roots: &[(String, &'static str)],
 ) -> LocalSkillMapFilters {
@@ -2815,7 +2825,7 @@ fn local_skill_map_filters(
     }
 }
 
-fn empty_local_skill_map_result(
+pub(crate) fn empty_local_skill_map_result(
     filters: LocalSkillMapFilters,
     catalog_available: bool,
 ) -> LocalSkillMapResult {
@@ -2880,7 +2890,10 @@ fn empty_local_skill_map_result(
     }
 }
 
-fn local_skill_map_skill_node(row: &KnowledgeSearchRow, risk_level: &str) -> LocalSkillMapNode {
+pub(crate) fn local_skill_map_skill_node(
+    row: &KnowledgeSearchRow,
+    risk_level: &str,
+) -> LocalSkillMapNode {
     let mut tags = row
         .capability_tags
         .iter()
@@ -2919,7 +2932,7 @@ fn local_skill_map_skill_node(row: &KnowledgeSearchRow, risk_level: &str) -> Loc
     }
 }
 
-fn local_skill_map_agent_node(agent: &str) -> LocalSkillMapNode {
+pub(crate) fn local_skill_map_agent_node(agent: &str) -> LocalSkillMapNode {
     LocalSkillMapNode {
         id: local_skill_map_agent_node_id(agent),
         node_type: "agent".to_string(),
@@ -2939,7 +2952,7 @@ fn local_skill_map_agent_node(agent: &str) -> LocalSkillMapNode {
     }
 }
 
-fn local_skill_map_source_node(source: &KnowledgeSearchSource) -> LocalSkillMapNode {
+pub(crate) fn local_skill_map_source_node(source: &KnowledgeSearchSource) -> LocalSkillMapNode {
     LocalSkillMapNode {
         id: local_skill_map_source_node_id(source),
         node_type: "source".to_string(),
@@ -2963,7 +2976,7 @@ fn local_skill_map_source_node(source: &KnowledgeSearchSource) -> LocalSkillMapN
     }
 }
 
-fn local_skill_map_risk_node(risk_level: &str) -> LocalSkillMapNode {
+pub(crate) fn local_skill_map_risk_node(risk_level: &str) -> LocalSkillMapNode {
     LocalSkillMapNode {
         id: local_skill_map_risk_node_id(risk_level),
         node_type: "risk".to_string(),
@@ -2983,7 +2996,7 @@ fn local_skill_map_risk_node(risk_level: &str) -> LocalSkillMapNode {
     }
 }
 
-fn local_skill_map_edge(
+pub(crate) fn local_skill_map_edge(
     edge_type: &str,
     source: &str,
     target: &str,
@@ -3005,7 +3018,7 @@ fn local_skill_map_edge(
     }
 }
 
-fn upsert_local_skill_map_node(
+pub(crate) fn upsert_local_skill_map_node(
     nodes: &mut BTreeMap<String, LocalSkillMapNode>,
     mut node: LocalSkillMapNode,
 ) {
@@ -3027,7 +3040,7 @@ fn upsert_local_skill_map_node(
         .or_insert(node);
 }
 
-fn upsert_local_skill_map_edge(
+pub(crate) fn upsert_local_skill_map_edge(
     edges: &mut BTreeMap<String, LocalSkillMapEdge>,
     mut edge: LocalSkillMapEdge,
 ) {
@@ -3049,7 +3062,7 @@ fn upsert_local_skill_map_edge(
         .or_insert(edge);
 }
 
-fn extend_evidence_references(
+pub(crate) fn extend_evidence_references(
     evidence: &mut Vec<TaskReadinessEvidenceReference>,
     references: Vec<TaskReadinessEvidenceReference>,
 ) {
@@ -3057,7 +3070,7 @@ fn extend_evidence_references(
     dedupe_evidence_references(evidence);
 }
 
-fn dedupe_evidence_references(evidence: &mut Vec<TaskReadinessEvidenceReference>) {
+pub(crate) fn dedupe_evidence_references(evidence: &mut Vec<TaskReadinessEvidenceReference>) {
     let mut by_id = BTreeMap::<String, TaskReadinessEvidenceReference>::new();
     for item in evidence.drain(..) {
         by_id.entry(item.id.clone()).or_insert(item);
@@ -3065,13 +3078,13 @@ fn dedupe_evidence_references(evidence: &mut Vec<TaskReadinessEvidenceReference>
     evidence.extend(by_id.into_values());
 }
 
-fn normalize_note_list(notes: &mut Vec<String>) {
+pub(crate) fn normalize_note_list(notes: &mut Vec<String>) {
     notes.retain(|note| !note.trim().is_empty());
     notes.sort();
     notes.dedup();
 }
 
-fn stable_slug(value: &str) -> String {
+pub(crate) fn stable_slug(value: &str) -> String {
     let mut slug = value
         .chars()
         .map(|ch| {
@@ -3088,7 +3101,7 @@ fn stable_slug(value: &str) -> String {
     slug.trim_matches('-').chars().take(64).collect()
 }
 
-fn local_skill_map_skill_weight(row: &KnowledgeSearchRow, risk_level: &str) -> u8 {
+pub(crate) fn local_skill_map_skill_weight(row: &KnowledgeSearchRow, risk_level: &str) -> u8 {
     let mut weight = 35i16;
     if row.enabled {
         weight += 15;
@@ -3107,7 +3120,7 @@ fn local_skill_map_skill_weight(row: &KnowledgeSearchRow, risk_level: &str) -> u
     weight.clamp(1, 100) as u8
 }
 
-fn local_skill_map_risk_level(risk_tags: &[String]) -> String {
+pub(crate) fn local_skill_map_risk_level(risk_tags: &[String]) -> String {
     if risk_tags.iter().any(|tag| tag == "risk-blocked") {
         "blocked".to_string()
     } else if risk_tags.iter().any(|tag| tag == "risk-high") {
@@ -3119,7 +3132,7 @@ fn local_skill_map_risk_level(risk_tags: &[String]) -> String {
     }
 }
 
-fn local_skill_map_risk_weight(risk_level: &str) -> u8 {
+pub(crate) fn local_skill_map_risk_weight(risk_level: &str) -> u8 {
     match risk_level {
         "blocked" => 100,
         "high" => 90,
@@ -3128,7 +3141,7 @@ fn local_skill_map_risk_weight(risk_level: &str) -> u8 {
     }
 }
 
-fn local_skill_map_severity_weight(severity: &str) -> u8 {
+pub(crate) fn local_skill_map_severity_weight(severity: &str) -> u8 {
     match normalize_filter_value(severity).as_str() {
         "error" | "critical" | "high" => 90,
         "warning" | "warn" | "medium" => 70,
@@ -3137,7 +3150,7 @@ fn local_skill_map_severity_weight(severity: &str) -> u8 {
     }
 }
 
-fn local_skill_map_node_sort(
+pub(crate) fn local_skill_map_node_sort(
     left: &LocalSkillMapNode,
     right: &LocalSkillMapNode,
 ) -> std::cmp::Ordering {
@@ -3148,7 +3161,7 @@ fn local_skill_map_node_sort(
         .then_with(|| left.id.cmp(&right.id))
 }
 
-fn local_skill_map_edge_sort(
+pub(crate) fn local_skill_map_edge_sort(
     left: &LocalSkillMapEdge,
     right: &LocalSkillMapEdge,
 ) -> std::cmp::Ordering {
@@ -3160,7 +3173,7 @@ fn local_skill_map_edge_sort(
         .then_with(|| left.id.cmp(&right.id))
 }
 
-fn local_skill_map_cluster_sort(
+pub(crate) fn local_skill_map_cluster_sort(
     left: &LocalSkillMapCluster,
     right: &LocalSkillMapCluster,
 ) -> std::cmp::Ordering {
@@ -3171,7 +3184,7 @@ fn local_skill_map_cluster_sort(
         .then_with(|| left.id.cmp(&right.id))
 }
 
-fn local_skill_map_node_type_order(node_type: &str) -> u8 {
+pub(crate) fn local_skill_map_node_type_order(node_type: &str) -> u8 {
     match node_type {
         "task_coverage" => 0,
         "skill" => 1,
@@ -3186,7 +3199,7 @@ fn local_skill_map_node_type_order(node_type: &str) -> u8 {
     }
 }
 
-fn local_skill_map_edge_type_order(edge_type: &str) -> u8 {
+pub(crate) fn local_skill_map_edge_type_order(edge_type: &str) -> u8 {
     match edge_type {
         "task_route_candidate" => 0,
         "task_readiness" => 1,
@@ -3201,7 +3214,7 @@ fn local_skill_map_edge_type_order(edge_type: &str) -> u8 {
     }
 }
 
-fn local_skill_map_cluster_type_order(cluster_type: &str) -> u8 {
+pub(crate) fn local_skill_map_cluster_type_order(cluster_type: &str) -> u8 {
     match cluster_type {
         "capability_domain" => 0,
         "similar_group" => 1,
@@ -3210,7 +3223,7 @@ fn local_skill_map_cluster_type_order(cluster_type: &str) -> u8 {
     }
 }
 
-fn local_skill_map_risk_notes(
+pub(crate) fn local_skill_map_risk_notes(
     nodes: &[LocalSkillMapNode],
     edges: &[LocalSkillMapEdge],
     readiness: Option<&TaskReadinessResult>,
@@ -3255,7 +3268,7 @@ fn local_skill_map_risk_notes(
     notes
 }
 
-fn local_skill_map_summary(
+pub(crate) fn local_skill_map_summary(
     indexed_skill_count: usize,
     candidate_skill_count: usize,
     cluster_count: usize,
@@ -3322,15 +3335,15 @@ fn local_skill_map_summary(
     }
 }
 
-fn local_skill_map_skill_node_id(instance_id: &str) -> String {
+pub(crate) fn local_skill_map_skill_node_id(instance_id: &str) -> String {
     format!("skill:{}", redact_for_llm_preview(instance_id))
 }
 
-fn local_skill_map_agent_node_id(agent: &str) -> String {
+pub(crate) fn local_skill_map_agent_node_id(agent: &str) -> String {
     format!("agent:{}", redact_for_llm_preview(agent))
 }
 
-fn local_skill_map_source_node_id(source: &KnowledgeSearchSource) -> String {
+pub(crate) fn local_skill_map_source_node_id(source: &KnowledgeSearchSource) -> String {
     stable_local_skill_map_node_id(
         "source",
         &[
@@ -3341,27 +3354,27 @@ fn local_skill_map_source_node_id(source: &KnowledgeSearchSource) -> String {
     )
 }
 
-fn local_skill_map_risk_node_id(risk_level: &str) -> String {
+pub(crate) fn local_skill_map_risk_node_id(risk_level: &str) -> String {
     format!("risk:{risk_level}")
 }
 
-fn local_skill_map_capability_node_id(domain_id: &str) -> String {
+pub(crate) fn local_skill_map_capability_node_id(domain_id: &str) -> String {
     format!("capability:{}", redact_for_llm_preview(domain_id))
 }
 
-fn local_skill_map_similar_group_node_id(group_id: &str) -> String {
+pub(crate) fn local_skill_map_similar_group_node_id(group_id: &str) -> String {
     format!("similar_group:{}", redact_for_llm_preview(group_id))
 }
 
-fn local_skill_map_conflict_node_id(conflict_id: &str) -> String {
+pub(crate) fn local_skill_map_conflict_node_id(conflict_id: &str) -> String {
     format!("conflict:{}", redact_for_llm_preview(conflict_id))
 }
 
-fn local_skill_map_analysis_node_id(analysis_id: &str) -> String {
+pub(crate) fn local_skill_map_analysis_node_id(analysis_id: &str) -> String {
     format!("analysis:{}", redact_for_llm_preview(analysis_id))
 }
 
-fn stable_local_skill_map_node_id(prefix: &str, parts: &[&str]) -> String {
+pub(crate) fn stable_local_skill_map_node_id(prefix: &str, parts: &[&str]) -> String {
     let mut hasher = Sha256::new();
     for part in parts {
         hasher.update(part.as_bytes());
@@ -3371,15 +3384,19 @@ fn stable_local_skill_map_node_id(prefix: &str, parts: &[&str]) -> String {
     format!("{prefix}:{}", hex_prefix(&digest, 16))
 }
 
-fn stable_local_skill_map_edge_id(edge_type: &str, source: &str, target: &str) -> String {
+pub(crate) fn stable_local_skill_map_edge_id(
+    edge_type: &str,
+    source: &str,
+    target: &str,
+) -> String {
     stable_local_skill_map_node_id("edge", &[edge_type, source, target])
 }
 
-fn workspace_readiness_safety_flags() -> WorkspaceReadinessSafetyFlags {
+pub(crate) fn workspace_readiness_safety_flags() -> WorkspaceReadinessSafetyFlags {
     agent_readiness_safety_flags()
 }
 
-fn workspace_readiness_filters(
+pub(crate) fn workspace_readiness_filters(
     params: &WorkspaceReadinessParams,
     redaction_roots: &[(String, &'static str)],
 ) -> WorkspaceReadinessFilters {
@@ -3420,7 +3437,7 @@ fn workspace_readiness_filters(
     }
 }
 
-fn empty_workspace_readiness_result(
+pub(crate) fn empty_workspace_readiness_result(
     filters: WorkspaceReadinessFilters,
     catalog_available: bool,
 ) -> WorkspaceReadinessResult {
@@ -3500,7 +3517,10 @@ fn empty_workspace_readiness_result(
     }
 }
 
-fn workspace_detail_matches(project_root: Option<&Path>, detail: &SkillDetailRecord) -> bool {
+pub(crate) fn workspace_detail_matches(
+    project_root: Option<&Path>,
+    detail: &SkillDetailRecord,
+) -> bool {
     let Some(project_root) = project_root else {
         return true;
     };
@@ -3509,7 +3529,7 @@ fn workspace_detail_matches(project_root: Option<&Path>, detail: &SkillDetailRec
         || detail.display_path.starts_with(project_root)
 }
 
-fn workspace_status_for_score(score: u8) -> &'static str {
+pub(crate) fn workspace_status_for_score(score: u8) -> &'static str {
     match score {
         80..=100 => "ready",
         45..=79 => "partial",
@@ -3517,7 +3537,7 @@ fn workspace_status_for_score(score: u8) -> &'static str {
     }
 }
 
-fn workspace_status_counts<'a>(
+pub(crate) fn workspace_status_counts<'a>(
     statuses: impl IntoIterator<Item = &'a str>,
 ) -> (usize, usize, usize) {
     let mut ready = 0usize;
@@ -3533,7 +3553,7 @@ fn workspace_status_counts<'a>(
     (ready, partial, blocked)
 }
 
-fn workspace_capability_rows(
+pub(crate) fn workspace_capability_rows(
     expected_capabilities: &[String],
     taxonomy: &CapabilityTaxonomyResult,
 ) -> Vec<WorkspaceReadinessCapabilityRow> {
@@ -3619,7 +3639,7 @@ fn workspace_capability_rows(
     rows
 }
 
-fn capability_key(value: &str) -> String {
+pub(crate) fn capability_key(value: &str) -> String {
     value
         .to_ascii_lowercase()
         .chars()
@@ -3632,7 +3652,7 @@ fn capability_key(value: &str) -> String {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn workspace_checklist_rows(
+pub(crate) fn workspace_checklist_rows(
     filters: &WorkspaceReadinessFilters,
     visible_details: &[SkillDetailRecord],
     findings: &[RuleFindingRecord],
@@ -3833,7 +3853,7 @@ fn workspace_checklist_rows(
     rows
 }
 
-fn workspace_status_rank(status: &str) -> u8 {
+pub(crate) fn workspace_status_rank(status: &str) -> u8 {
     match status {
         "blocked" => 0,
         "partial" => 1,
@@ -3842,7 +3862,7 @@ fn workspace_status_rank(status: &str) -> u8 {
     }
 }
 
-fn workspace_agent_rows_from_comparison(
+pub(crate) fn workspace_agent_rows_from_comparison(
     comparison: &AgentReadinessComparisonResult,
     visible_details: &[SkillDetailRecord],
     diagnostics: &[AdapterDiagnosticsRecord],
@@ -3897,7 +3917,7 @@ fn workspace_agent_rows_from_comparison(
         .collect()
 }
 
-fn workspace_agent_rows_from_catalog(
+pub(crate) fn workspace_agent_rows_from_catalog(
     visible_details: &[SkillDetailRecord],
     diagnostics: &[AdapterDiagnosticsRecord],
     agent_filter: Option<&str>,
@@ -3988,19 +4008,18 @@ fn workspace_agent_rows_from_catalog(
         })
         .collect()
 }
-
-struct WorkspaceReadinessSummaryInput<'a> {
-    project_root: Option<&'a Path>,
-    visible_details: &'a [SkillDetailRecord],
-    taxonomy: &'a CapabilityTaxonomyResult,
-    readiness_rows: &'a [WorkspaceReadinessChecklistRow],
-    agent_rows: &'a [WorkspaceReadinessAgentRow],
-    capability_rows: &'a [WorkspaceReadinessCapabilityRow],
-    gap_notes: &'a [String],
-    blocker_notes: &'a [String],
+pub(crate) struct WorkspaceReadinessSummaryInput<'a> {
+    pub(crate) project_root: Option<&'a Path>,
+    pub(crate) visible_details: &'a [SkillDetailRecord],
+    pub(crate) taxonomy: &'a CapabilityTaxonomyResult,
+    pub(crate) readiness_rows: &'a [WorkspaceReadinessChecklistRow],
+    pub(crate) agent_rows: &'a [WorkspaceReadinessAgentRow],
+    pub(crate) capability_rows: &'a [WorkspaceReadinessCapabilityRow],
+    pub(crate) gap_notes: &'a [String],
+    pub(crate) blocker_notes: &'a [String],
 }
 
-fn workspace_readiness_summary(
+pub(crate) fn workspace_readiness_summary(
     input: WorkspaceReadinessSummaryInput<'_>,
 ) -> WorkspaceReadinessSummary {
     let agent_count = input

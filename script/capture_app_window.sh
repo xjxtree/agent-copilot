@@ -39,7 +39,6 @@ import AppKit
 import CoreGraphics
 import Foundation
 import ImageIO
-import UniformTypeIdentifiers
 
 let args = Array(CommandLine.arguments.dropFirst())
 let owner = args.indices.contains(0) && !args[0].isEmpty ? args[0] : "SkillsCopilot"
@@ -150,6 +149,45 @@ func validateImage(_ image: CGImage, expectedWidth: Double, expectedHeight: Doub
     return true
 }
 
+func captureWindowWithScreencapture(windowId: UInt32, outputPath: String) -> Bool {
+    let captureTool = "/usr/sbin/screencapture"
+    guard FileManager.default.isExecutableFile(atPath: captureTool) else {
+        fputs("tool-layer-unknown: screencapture is not executable at \(captureTool).\n", stderr)
+        exit(2)
+    }
+
+    try? FileManager.default.removeItem(atPath: outputPath)
+
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: captureTool)
+    process.arguments = ["-l", String(windowId), "-o", "-x", outputPath]
+    let stderrPipe = Pipe()
+    process.standardError = stderrPipe
+
+    do {
+        try process.run()
+    } catch {
+        fputs("tool-layer-unknown: unable to launch screencapture: \(error).\n", stderr)
+        exit(2)
+    }
+    process.waitUntilExit()
+
+    let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+    let stderrText = String(data: stderrData, encoding: .utf8)?
+        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    guard process.terminationStatus == 0 else {
+        let detail = stderrText.isEmpty ? "" : ": \(stderrText)"
+        fputs("screen-recording-permission: screencapture -l failed for window \(windowId) with status \(process.terminationStatus)\(detail).\n", stderr)
+        return false
+    }
+
+    guard FileManager.default.fileExists(atPath: outputPath) else {
+        fputs("invalid-capture: screencapture did not create output: \(outputPath)\n", stderr)
+        return false
+    }
+    return true
+}
+
 let candidates: [WindowCandidate] = windows.compactMap { window in
     guard let layer = window[kCGWindowLayer as String] as? Int, layer == 0 else { return nil }
     guard let id = window[kCGWindowNumber as String] as? UInt32 else { return nil }
@@ -226,36 +264,22 @@ if !staleWindows.isEmpty && targetPid == nil && targetWindowId == nil {
 }
 
 let target = matches[0]
-guard let image = CGWindowListCreateImage(
-    .null,
-    .optionIncludingWindow,
-    CGWindowID(target.id),
-    [.boundsIgnoreFraming, .bestResolution]
-) else {
-    fputs("screen-recording-permission: unable to create image for \(owner) window \(target.id).\n", stderr)
+
+guard captureWindowWithScreencapture(windowId: target.id, outputPath: outputPath) else {
     exit(3)
+}
+
+let url = URL(fileURLWithPath: outputPath) as CFURL
+guard let source = CGImageSourceCreateWithURL(url, nil),
+      let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+    fputs("invalid-capture: unable to read captured image: \(outputPath)\n", stderr)
+    exit(4)
 }
 
 guard validateImage(image, expectedWidth: target.width, expectedHeight: target.height) else {
     exit(7)
 }
-
-let url = URL(fileURLWithPath: outputPath) as CFURL
-guard let destination = CGImageDestinationCreateWithURL(
-    url,
-    UTType.png.identifier as CFString,
-    1,
-    nil
-) else {
-    fputs("invalid-capture: unable to create image destination: \(outputPath)\n", stderr)
-    exit(4)
-}
-CGImageDestinationAddImage(destination, image, nil)
-guard CGImageDestinationFinalize(destination) else {
-    fputs("invalid-capture: unable to finalize image: \(outputPath)\n", stderr)
-    exit(5)
-}
-print("Captured \(owner) window \(target.id) pid \(target.pid) (\(Int(target.width))x\(Int(target.height))) -> \(outputPath)")
+print("Captured \(owner) window \(target.id) pid \(target.pid) via screencapture -l (\(Int(target.width))x\(Int(target.height))) -> \(outputPath)")
 exit(0)
 ' "$APP_OWNER" "$OUTPUT_ABS" "$TARGET_PID" "$TARGET_BUNDLE_PATH" "$TARGET_WINDOW_ID"
 

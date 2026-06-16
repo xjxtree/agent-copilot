@@ -1,233 +1,235 @@
-    #[test]
-    fn llm_preview_prompt_accepts_task_readiness_action_with_redaction() {
-        let app_data_dir = env::temp_dir().join(format!(
-            "skills-copilot-readiness-preview-test-{}-{}",
-            std::process::id(),
-            unique_suffix(),
-        ));
-        let host = test_host(app_data_dir.clone());
-        let skill_path = app_data_dir.join("fixture-skill").join("SKILL.md");
-        seed_catalog_with_llm_skill(&host, &skill_path);
+use super::dispatch_fixtures::*;
+use super::*;
 
-        let response = host.handle(ServiceRequest {
-            id: Some("readiness-preview".to_string()),
-            method: "llm.previewPrompt".to_string(),
-            params: json!({
-                "action": "task_readiness",
-                "instance_ids": ["llm-skill-id"],
-                "user_intent": "Analyze local skill posture with token=fixture-redacted-value"
-            }),
-        });
+#[test]
+fn llm_preview_prompt_accepts_task_readiness_action_with_redaction() {
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-readiness-preview-test-{}-{}",
+        std::process::id(),
+        unique_suffix(),
+    ));
+    let host = test_host(app_data_dir.clone());
+    let skill_path = app_data_dir.join("fixture-skill").join("SKILL.md");
+    seed_catalog_with_llm_skill(&host, &skill_path);
 
-        assert!(response.ok, "{:?}", response.error);
-        let result = response.result.expect("task readiness preview result");
-        assert_eq!(
-            result.get("action").and_then(Value::as_str),
-            Some("task_readiness")
-        );
-        assert_eq!(
-            result.get("provider_request_sent").and_then(Value::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            result.get("write_back_allowed").and_then(Value::as_bool),
-            Some(false)
-        );
-        assert!(result
-            .get("requires_confirmation")
-            .and_then(Value::as_bool)
-            .unwrap_or(false));
-        let serialized = serde_json::to_string(&result).expect("serialize readiness preview");
-        assert!(serialized.contains("Task readiness evidence"));
-        assert!(serialized.contains("<redacted>"));
-        assert!(!serialized.contains("fixture-redacted-value"));
-        assert!(!serialized.contains("OPENAI_API_KEY"));
-        assert!(!serialized.contains(&skill_path.to_string_lossy().to_string()));
-        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    let response = host.handle(ServiceRequest {
+        id: Some("readiness-preview".to_string()),
+        method: "llm.previewPrompt".to_string(),
+        params: json!({
+            "action": "task_readiness",
+            "instance_ids": ["llm-skill-id"],
+            "user_intent": "Analyze local skill posture with token=fixture-redacted-value"
+        }),
+    });
 
-        let _ = fs::remove_dir_all(app_data_dir);
-    }
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("task readiness preview result");
+    assert_eq!(
+        result.get("action").and_then(Value::as_str),
+        Some("task_readiness")
+    );
+    assert_eq!(
+        result.get("provider_request_sent").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result.get("write_back_allowed").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert!(result
+        .get("requires_confirmation")
+        .and_then(Value::as_bool)
+        .unwrap_or(false));
+    let serialized = serde_json::to_string(&result).expect("serialize readiness preview");
+    assert!(serialized.contains("Task readiness evidence"));
+    assert!(serialized.contains("<redacted>"));
+    assert!(!serialized.contains("fixture-redacted-value"));
+    assert!(!serialized.contains("OPENAI_API_KEY"));
+    assert!(!serialized.contains(&skill_path.to_string_lossy().to_string()));
+    assert!(!provider_call_metadata_path(&app_data_dir).exists());
 
-    #[test]
-    fn llm_preview_prompt_accepts_routing_confidence_action_with_redaction() {
-        let app_data_dir = env::temp_dir().join(format!(
-            "skills-copilot-routing-preview-test-{}-{}",
-            std::process::id(),
-            unique_suffix(),
-        ));
-        let host = test_host(app_data_dir.clone());
-        let skill_path = app_data_dir.join("fixture-skill").join("SKILL.md");
-        seed_catalog_with_llm_skill(&host, &skill_path);
+    let _ = fs::remove_dir_all(app_data_dir);
+}
 
-        let response = host.handle(ServiceRequest {
-            id: Some("routing-preview".to_string()),
-            method: "llm.previewPrompt".to_string(),
-            params: json!({
-                "action": "routing_confidence",
-                "instance_ids": ["llm-skill-id"],
-                "user_intent": "Analyze local skill posture with token=fixture-redacted-value"
-            }),
-        });
+#[test]
+fn llm_preview_prompt_accepts_routing_confidence_action_with_redaction() {
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-routing-preview-test-{}-{}",
+        std::process::id(),
+        unique_suffix(),
+    ));
+    let host = test_host(app_data_dir.clone());
+    let skill_path = app_data_dir.join("fixture-skill").join("SKILL.md");
+    seed_catalog_with_llm_skill(&host, &skill_path);
 
-        assert!(response.ok, "{:?}", response.error);
-        let result = response.result.expect("routing confidence preview result");
-        assert_eq!(
-            result.get("action").and_then(Value::as_str),
-            Some("routing_confidence")
-        );
-        assert_eq!(
-            result.get("provider_request_sent").and_then(Value::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            result.get("write_back_allowed").and_then(Value::as_bool),
-            Some(false)
-        );
-        assert!(result
-            .get("requires_confirmation")
-            .and_then(Value::as_bool)
-            .unwrap_or(false));
-        let serialized =
-            serde_json::to_string(&result).expect("serialize routing confidence preview");
-        assert!(serialized.contains("Routing confidence evidence"));
-        assert!(serialized.contains("<redacted>"));
-        assert!(!serialized.contains("fixture-redacted-value"));
-        assert!(!serialized.contains("OPENAI_API_KEY"));
-        assert!(!serialized.contains(&skill_path.to_string_lossy().to_string()));
-        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    let response = host.handle(ServiceRequest {
+        id: Some("routing-preview".to_string()),
+        method: "llm.previewPrompt".to_string(),
+        params: json!({
+            "action": "routing_confidence",
+            "instance_ids": ["llm-skill-id"],
+            "user_intent": "Analyze local skill posture with token=fixture-redacted-value"
+        }),
+    });
 
-        let _ = fs::remove_dir_all(app_data_dir);
-    }
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("routing confidence preview result");
+    assert_eq!(
+        result.get("action").and_then(Value::as_str),
+        Some("routing_confidence")
+    );
+    assert_eq!(
+        result.get("provider_request_sent").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result.get("write_back_allowed").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert!(result
+        .get("requires_confirmation")
+        .and_then(Value::as_bool)
+        .unwrap_or(false));
+    let serialized = serde_json::to_string(&result).expect("serialize routing confidence preview");
+    assert!(serialized.contains("Routing confidence evidence"));
+    assert!(serialized.contains("<redacted>"));
+    assert!(!serialized.contains("fixture-redacted-value"));
+    assert!(!serialized.contains("OPENAI_API_KEY"));
+    assert!(!serialized.contains(&skill_path.to_string_lossy().to_string()));
+    assert!(!provider_call_metadata_path(&app_data_dir).exists());
 
-    #[test]
-    fn llm_preview_prompt_accepts_stale_drift_action_with_redaction() {
-        let app_data_dir = env::temp_dir().join(format!(
-            "skills-copilot-stale-drift-preview-test-{}-{}",
-            std::process::id(),
-            unique_suffix(),
-        ));
-        let host = test_host(app_data_dir.clone());
-        seed_catalog_with_stale_drift_fixture(&host);
+    let _ = fs::remove_dir_all(app_data_dir);
+}
 
-        let response = host.handle(ServiceRequest {
-            id: Some("stale-drift-preview".to_string()),
-            method: "llm.previewPrompt".to_string(),
-            params: json!({
-                "action": "stale_drift_detection",
-                "instance_ids": ["stale-drift-alpha"],
-                "user_intent": "explain stale drift without leaking token=fixture-redacted-value"
-            }),
-        });
+#[test]
+fn llm_preview_prompt_accepts_stale_drift_action_with_redaction() {
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-stale-drift-preview-test-{}-{}",
+        std::process::id(),
+        unique_suffix(),
+    ));
+    let host = test_host(app_data_dir.clone());
+    seed_catalog_with_stale_drift_fixture(&host);
 
-        assert!(response.ok, "{:?}", response.error);
-        let result = response.result.expect("stale drift preview result");
-        assert_eq!(
-            result.get("action").and_then(Value::as_str),
-            Some("stale_drift_detection")
-        );
-        assert_eq!(
-            result.get("provider_request_sent").and_then(Value::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            result.get("write_back_allowed").and_then(Value::as_bool),
-            Some(false)
-        );
-        assert!(result
-            .get("requires_confirmation")
-            .and_then(Value::as_bool)
-            .unwrap_or(false));
-        let serialized = serde_json::to_string(&result).expect("serialize stale drift preview");
-        assert!(serialized.contains("Stale/drift detection evidence"));
-        assert!(serialized.contains("<redacted>"));
-        assert!(!serialized.contains("fixture-redacted-value"));
-        assert!(!serialized.contains("OPENAI_API_KEY"));
-        assert!(!serialized.contains("skills-copilot-stale-drift"));
-        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    let response = host.handle(ServiceRequest {
+        id: Some("stale-drift-preview".to_string()),
+        method: "llm.previewPrompt".to_string(),
+        params: json!({
+            "action": "stale_drift_detection",
+            "instance_ids": ["stale-drift-alpha"],
+            "user_intent": "explain stale drift without leaking token=fixture-redacted-value"
+        }),
+    });
 
-        let _ = fs::remove_dir_all(app_data_dir);
-    }
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("stale drift preview result");
+    assert_eq!(
+        result.get("action").and_then(Value::as_str),
+        Some("stale_drift_detection")
+    );
+    assert_eq!(
+        result.get("provider_request_sent").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result.get("write_back_allowed").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert!(result
+        .get("requires_confirmation")
+        .and_then(Value::as_bool)
+        .unwrap_or(false));
+    let serialized = serde_json::to_string(&result).expect("serialize stale drift preview");
+    assert!(serialized.contains("Stale/drift detection evidence"));
+    assert!(serialized.contains("<redacted>"));
+    assert!(!serialized.contains("fixture-redacted-value"));
+    assert!(!serialized.contains("OPENAI_API_KEY"));
+    assert!(!serialized.contains("skills-copilot-stale-drift"));
+    assert!(!provider_call_metadata_path(&app_data_dir).exists());
 
-    #[test]
-    fn llm_preview_prompt_accepts_quality_score_action_without_sending_provider_request() {
-        let app_data_dir = env::temp_dir().join(format!(
-            "skills-copilot-quality-score-preview-test-{}-{}",
-            std::process::id(),
-            unique_suffix(),
-        ));
-        let host = test_host(app_data_dir.clone());
-        let skill_path = app_data_dir.join("fixture-skill").join("SKILL.md");
-        seed_catalog_with_llm_skill(&host, &skill_path);
+    let _ = fs::remove_dir_all(app_data_dir);
+}
 
-        let response = host.handle(ServiceRequest {
-            id: Some("quality-score-preview".to_string()),
-            method: "llm.previewPrompt".to_string(),
-            params: json!({
-                "action": "quality_score",
-                "app_language": "zh-Hans",
-                "skill_instance_id": "llm-skill-id",
-                "user_intent": "explain quality without leaking token=fixture-redacted-value"
-            }),
-        });
+#[test]
+fn llm_preview_prompt_accepts_quality_score_action_without_sending_provider_request() {
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-quality-score-preview-test-{}-{}",
+        std::process::id(),
+        unique_suffix(),
+    ));
+    let host = test_host(app_data_dir.clone());
+    let skill_path = app_data_dir.join("fixture-skill").join("SKILL.md");
+    seed_catalog_with_llm_skill(&host, &skill_path);
 
-        assert!(response.ok, "{:?}", response.error);
-        let result = response.result.expect("quality score preview result");
-        assert_eq!(
-            result.get("action").and_then(Value::as_str),
-            Some("quality_score")
-        );
-        assert_eq!(
-            result.get("provider_request_sent").and_then(Value::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            result.get("write_back_allowed").and_then(Value::as_bool),
-            Some(false)
-        );
-        assert!(result
-            .get("requires_confirmation")
-            .and_then(Value::as_bool)
-            .unwrap_or(false));
-        let serialized = serde_json::to_string(&result).expect("serialize quality preview");
-        assert!(serialized.contains("Quality score evidence"));
-        assert!(serialized.contains("Output language: Simplified Chinese (zh-Hans)"));
-        assert!(serialized.contains("Write all prose"));
-        assert!(serialized.contains("<redacted>"));
-        assert!(!serialized.contains("fixture-redacted-value"));
-        assert!(!serialized.contains("OPENAI_API_KEY"));
-        assert!(!serialized.contains(&skill_path.to_string_lossy().to_string()));
-        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    let response = host.handle(ServiceRequest {
+        id: Some("quality-score-preview".to_string()),
+        method: "llm.previewPrompt".to_string(),
+        params: json!({
+            "action": "quality_score",
+            "app_language": "zh-Hans",
+            "skill_instance_id": "llm-skill-id",
+            "user_intent": "explain quality without leaking token=fixture-redacted-value"
+        }),
+    });
 
-        let _ = fs::remove_dir_all(app_data_dir);
-    }
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("quality score preview result");
+    assert_eq!(
+        result.get("action").and_then(Value::as_str),
+        Some("quality_score")
+    );
+    assert_eq!(
+        result.get("provider_request_sent").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result.get("write_back_allowed").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert!(result
+        .get("requires_confirmation")
+        .and_then(Value::as_bool)
+        .unwrap_or(false));
+    let serialized = serde_json::to_string(&result).expect("serialize quality preview");
+    assert!(serialized.contains("Quality score evidence"));
+    assert!(serialized.contains("Output language: Simplified Chinese (zh-Hans)"));
+    assert!(serialized.contains("Write all prose"));
+    assert!(serialized.contains("<redacted>"));
+    assert!(!serialized.contains("fixture-redacted-value"));
+    assert!(!serialized.contains("OPENAI_API_KEY"));
+    assert!(!serialized.contains(&skill_path.to_string_lossy().to_string()));
+    assert!(!provider_call_metadata_path(&app_data_dir).exists());
 
-    #[test]
-    fn llm_preview_prompt_returns_redacted_confirmation_payload() {
-        let app_data_dir = env::temp_dir().join(format!(
-            "skills-copilot-llm-preview-test-{}-{}",
-            std::process::id(),
-            unique_suffix(),
-        ));
-        let host = test_host(app_data_dir.clone());
-        let skill_path = app_data_dir.join("secret-project-path").join("SKILL.md");
-        seed_catalog_with_llm_skill(&host, &skill_path);
-        let save = host.handle(ServiceRequest {
-            id: Some("provider-save".to_string()),
-            method: "llm.saveProviderProfile".to_string(),
-            params: json!({
-                "id": "fixture-openai",
-                "display_name": "Fixture OpenAI",
-                "provider_type": "openai-compatible",
-                "base_url": "https://example.invalid/v1",
-                "model": "fixture-model",
-                "enabled": true,
-                "single_request_token_limit": 4096,
-                "monthly_budget_usd": 3.5
-            }),
-        });
-        assert!(save.ok, "{:?}", save.error);
+    let _ = fs::remove_dir_all(app_data_dir);
+}
 
-        let response = host.handle(ServiceRequest {
+#[test]
+fn llm_preview_prompt_returns_redacted_confirmation_payload() {
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-llm-preview-test-{}-{}",
+        std::process::id(),
+        unique_suffix(),
+    ));
+    let host = test_host(app_data_dir.clone());
+    let skill_path = app_data_dir.join("secret-project-path").join("SKILL.md");
+    seed_catalog_with_llm_skill(&host, &skill_path);
+    let save = host.handle(ServiceRequest {
+        id: Some("provider-save".to_string()),
+        method: "llm.saveProviderProfile".to_string(),
+        params: json!({
+            "id": "fixture-openai",
+            "display_name": "Fixture OpenAI",
+            "provider_type": "openai-compatible",
+            "base_url": "https://example.invalid/v1",
+            "model": "fixture-model",
+            "enabled": true,
+            "single_request_token_limit": 4096,
+            "monthly_budget_usd": 3.5
+        }),
+    });
+    assert!(save.ok, "{:?}", save.error);
+
+    let response = host.handle(ServiceRequest {
             id: Some("preview".to_string()),
             method: "llm.previewPrompt".to_string(),
             params: json!({
@@ -238,1969 +240,2071 @@
             }),
         });
 
-        assert!(response.ok, "{:?}", response.error);
-        let result = response.result.expect("preview result");
-        assert_eq!(result.get("status").and_then(Value::as_str), Some("ready"));
-        assert_eq!(result.get("allowed").and_then(Value::as_bool), Some(true));
-        assert_eq!(
-            result.get("requires_confirmation").and_then(Value::as_bool),
-            Some(true)
-        );
-        assert_eq!(
-            result.get("provider_request_sent").and_then(Value::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            result.get("write_back_allowed").and_then(Value::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            result
-                .get("draft_requires_user_copy")
-                .and_then(Value::as_bool),
-            Some(true)
-        );
-        assert!(result
-            .get("preview_id")
-            .and_then(Value::as_str)
-            .is_some_and(|id| id.starts_with("prompt-preview-")));
-        assert_eq!(
-            result
-                .pointer("/redaction/raw_prompt_persisted")
-                .and_then(Value::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            result
-                .pointer("/redaction/raw_secret_returned")
-                .and_then(Value::as_bool),
-            Some(false)
-        );
-        assert!(result
-            .pointer("/redaction/redacted_value_count")
-            .and_then(Value::as_u64)
-            .is_some_and(|count| count > 0));
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("preview result");
+    assert_eq!(result.get("status").and_then(Value::as_str), Some("ready"));
+    assert_eq!(result.get("allowed").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        result.get("requires_confirmation").and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        result.get("provider_request_sent").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result.get("write_back_allowed").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result
+            .get("draft_requires_user_copy")
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert!(result
+        .get("preview_id")
+        .and_then(Value::as_str)
+        .is_some_and(|id| id.starts_with("prompt-preview-")));
+    assert_eq!(
+        result
+            .pointer("/redaction/raw_prompt_persisted")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result
+            .pointer("/redaction/raw_secret_returned")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert!(result
+        .pointer("/redaction/redacted_value_count")
+        .and_then(Value::as_u64)
+        .is_some_and(|count| count > 0));
 
-        let serialized = serde_json::to_string(&result).expect("serialize preview");
-        assert!(serialized.contains("<redacted>"));
-        assert!(!serialized.contains("OPENAI_API_KEY"));
-        assert!(!serialized.contains("fixture-redacted-value"));
-        assert!(!serialized.contains(&skill_path.to_string_lossy().to_string()));
-        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    let serialized = serde_json::to_string(&result).expect("serialize preview");
+    assert!(serialized.contains("<redacted>"));
+    assert!(!serialized.contains("OPENAI_API_KEY"));
+    assert!(!serialized.contains("fixture-redacted-value"));
+    assert!(!serialized.contains(&skill_path.to_string_lossy().to_string()));
+    assert!(!provider_call_metadata_path(&app_data_dir).exists());
 
-        let _ = fs::remove_dir_all(app_data_dir);
-    }
+    let _ = fs::remove_dir_all(app_data_dir);
+}
 
-    #[test]
-    fn llm_confirm_prompt_rejects_mismatched_preview_without_metadata() {
-        let app_data_dir = env::temp_dir().join(format!(
-            "skills-copilot-llm-preview-mismatch-test-{}-{}",
-            std::process::id(),
-            unique_suffix(),
-        ));
-        let host = test_host(app_data_dir.clone());
-        seed_catalog_with_llm_skill(&host, &app_data_dir.join("fixture-skill").join("SKILL.md"));
-        let save = host.handle(ServiceRequest {
-            id: Some("provider-save".to_string()),
-            method: "llm.saveProviderProfile".to_string(),
-            params: json!({
-                "id": "fixture-openai",
-                "display_name": "Fixture OpenAI",
-                "provider_type": "openai-compatible",
-                "base_url": "https://example.invalid/v1",
-                "model": "fixture-model",
-                "enabled": true
-            }),
-        });
-        assert!(save.ok, "{:?}", save.error);
+#[test]
+fn llm_confirm_prompt_rejects_mismatched_preview_without_metadata() {
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-llm-preview-mismatch-test-{}-{}",
+        std::process::id(),
+        unique_suffix(),
+    ));
+    let host = test_host(app_data_dir.clone());
+    seed_catalog_with_llm_skill(&host, &app_data_dir.join("fixture-skill").join("SKILL.md"));
+    let save = host.handle(ServiceRequest {
+        id: Some("provider-save".to_string()),
+        method: "llm.saveProviderProfile".to_string(),
+        params: json!({
+            "id": "fixture-openai",
+            "display_name": "Fixture OpenAI",
+            "provider_type": "openai-compatible",
+            "base_url": "https://example.invalid/v1",
+            "model": "fixture-model",
+            "enabled": true
+        }),
+    });
+    assert!(save.ok, "{:?}", save.error);
 
-        let response = host.handle(ServiceRequest {
-            id: Some("confirm".to_string()),
-            method: "llm.confirmPromptAndSend".to_string(),
-            params: json!({
-                "preview_id": "prompt-preview-stale",
-                "confirmation_id": "confirm-preview",
-                "request": {
-                    "action": "analyze",
-                    "skill_instance_id": "llm-skill-id"
+    let response = host.handle(ServiceRequest {
+        id: Some("confirm".to_string()),
+        method: "llm.confirmPromptAndSend".to_string(),
+        params: json!({
+            "preview_id": "prompt-preview-stale",
+            "confirmation_id": "confirm-preview",
+            "request": {
+                "action": "analyze",
+                "skill_instance_id": "llm-skill-id"
+            }
+        }),
+    });
+
+    assert!(!response.ok);
+    let error = response.error.expect("mismatch error");
+    assert_eq!(error.code, "invalid_request");
+    assert!(error.message.contains("preview_id"));
+    assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+    let _ = fs::remove_dir_all(app_data_dir);
+}
+
+#[test]
+fn llm_confirm_prompt_blocks_without_credential_and_writes_metadata_only() {
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-llm-confirm-blocked-test-{}-{}",
+        std::process::id(),
+        unique_suffix(),
+    ));
+    let host = test_host(app_data_dir.clone());
+    let save = host.handle(ServiceRequest {
+        id: Some("provider-save".to_string()),
+        method: "llm.saveProviderProfile".to_string(),
+        params: json!({
+            "id": "fixture-openai",
+            "display_name": "Fixture OpenAI",
+            "provider_type": "openai-compatible",
+            "base_url": "https://example.invalid/v1",
+            "model": "fixture-model",
+            "enabled": true
+        }),
+    });
+    assert!(save.ok, "{:?}", save.error);
+    let request = json!({
+        "action": "recommend",
+        "user_intent": "review token=fixture-redacted-value"
+    });
+    let preview = host.handle(ServiceRequest {
+        id: Some("preview".to_string()),
+        method: "llm.previewPrompt".to_string(),
+        params: request.clone(),
+    });
+    assert!(preview.ok, "{:?}", preview.error);
+    let preview_id = preview
+        .result
+        .as_ref()
+        .and_then(|result| result.get("preview_id"))
+        .and_then(Value::as_str)
+        .expect("preview id")
+        .to_string();
+
+    let confirm = host.handle(ServiceRequest {
+        id: Some("confirm".to_string()),
+        method: "llm.confirmPromptAndSend".to_string(),
+        params: json!({
+            "preview_id": preview_id,
+            "confirmation_id": "confirm-without-credential",
+            "request": request,
+            "timeout_ms": 250
+        }),
+    });
+
+    assert!(confirm.ok, "{:?}", confirm.error);
+    let result = confirm.result.expect("confirm result");
+    assert_eq!(
+        result.get("status").and_then(Value::as_str),
+        Some("blocked")
+    );
+    assert_eq!(
+        result.get("provider_request_sent").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result.get("credential_accessed").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result.pointer("/audit/error_code").and_then(Value::as_str),
+        Some("credential_unavailable")
+    );
+    assert_eq!(
+        result
+            .pointer("/audit/provider_request_sent")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+
+    let audit_content =
+        fs::read_to_string(provider_call_metadata_path(&app_data_dir)).expect("audit content");
+    assert!(audit_content.contains("\"action_type\":\"recommend\""));
+    assert!(audit_content.contains("\"status\":\"blocked\""));
+    assert!(!audit_content.contains("fixture-redacted-value"));
+    assert!(!audit_content.contains("review token"));
+    assert!(!audit_content.contains("api_key"));
+
+    let _ = fs::remove_dir_all(app_data_dir);
+}
+
+#[test]
+fn llm_confirm_prompt_sends_redacted_prompt_to_mock_provider_and_audits_metadata_only() {
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-llm-confirm-test-{}-{}",
+        std::process::id(),
+        unique_suffix(),
+    ));
+    let (base_url, server) = spawn_mock_openai_server();
+    let host = test_host(app_data_dir.clone());
+    let skill_path = app_data_dir.join("fixture-skill").join("SKILL.md");
+    seed_catalog_with_llm_skill(&host, &skill_path);
+    let save = host.handle(ServiceRequest {
+        id: Some("provider-save".to_string()),
+        method: "llm.saveProviderProfile".to_string(),
+        params: json!({
+            "id": "mock-openai",
+            "display_name": "Mock OpenAI",
+            "provider_type": "openai-compatible",
+            "base_url": base_url,
+            "model": "mock-model",
+            "enabled": true,
+            "single_request_token_limit": 4096,
+            "monthly_budget_usd": 10.0
+        }),
+    });
+    assert!(save.ok, "{:?}", save.error);
+    let _secret_env_guard = EnvVarGuard::set(
+        "SKILLS_COPILOT_TEST_SECRET_PROVIDER_MOCK_OPENAI",
+        "test-secret-key",
+    );
+
+    let request = json!({
+        "action": "analyze",
+        "skill_instance_id": "llm-skill-id",
+        "user_intent": "summarize risk without exposing token=fixture-redacted-value"
+    });
+    let preview = host.handle(ServiceRequest {
+        id: Some("preview".to_string()),
+        method: "llm.previewPrompt".to_string(),
+        params: request.clone(),
+    });
+    assert!(preview.ok, "{:?}", preview.error);
+    let preview_result = preview.result.expect("preview result");
+    let preview_id = preview_result
+        .get("preview_id")
+        .and_then(Value::as_str)
+        .expect("preview id")
+        .to_string();
+
+    let confirm = host.handle(ServiceRequest {
+        id: Some("confirm".to_string()),
+        method: "llm.confirmPromptAndSend".to_string(),
+        params: json!({
+            "preview_id": preview_id,
+            "confirmation_id": "confirm-mock-provider",
+            "request": request,
+            "timeout_ms": 2_000
+        }),
+    });
+
+    assert!(confirm.ok, "{:?}", confirm.error);
+    let result = confirm.result.expect("confirm result");
+    assert_eq!(
+        result.get("status").and_then(Value::as_str),
+        Some("succeeded")
+    );
+    assert_eq!(
+        result.get("provider_request_sent").and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        result.get("credential_accessed").and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        result.get("draft_output").and_then(Value::as_str),
+        Some("Draft-only review from mock provider.")
+    );
+    assert_eq!(
+        result.get("write_back_allowed").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result
+            .get("script_execution_allowed")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result.get("raw_prompt_persisted").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result
+            .get("raw_response_persisted")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result.pointer("/audit/action_type").and_then(Value::as_str),
+        Some("analyze")
+    );
+    assert_eq!(
+        result
+            .pointer("/audit/confirmation_id")
+            .and_then(Value::as_str),
+        Some("confirm-mock-provider")
+    );
+
+    let request_text = server.join().expect("mock server thread");
+    assert!(request_text
+        .to_lowercase()
+        .contains("authorization: bearer test-secret-key"));
+    assert!(request_text.contains("<redacted>"));
+    assert!(!request_text.contains("OPENAI_API_KEY"));
+    assert!(!request_text.contains("fixture-redacted-value"));
+    assert!(!request_text.contains(&skill_path.to_string_lossy().to_string()));
+
+    let audit_content =
+        fs::read_to_string(provider_call_metadata_path(&app_data_dir)).expect("audit content");
+    assert!(audit_content.contains("\"action_type\":\"analyze\""));
+    assert!(audit_content.contains("\"status\":\"succeeded\""));
+    assert!(audit_content.contains("\"provider_request_sent\":true"));
+    assert!(!audit_content.contains("Draft-only review from mock provider."));
+    assert!(!audit_content.contains("OPENAI_API_KEY"));
+    assert!(!audit_content.contains("test-secret-key"));
+
+    let list_runs = host.handle(ServiceRequest {
+        id: Some("runs".to_string()),
+        method: "llm.listPromptRuns".to_string(),
+        params: json!({ "instance_id": "llm-skill-id" }),
+    });
+    assert!(list_runs.ok, "{:?}", list_runs.error);
+    let runs = list_runs.result.expect("prompt runs");
+    assert_eq!(runs.get("count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        runs.pointer("/runs/0/status").and_then(Value::as_str),
+        Some("succeeded")
+    );
+    assert_eq!(
+        runs.pointer("/runs/0/draft_output").and_then(Value::as_str),
+        Some("Draft-only review from mock provider.")
+    );
+    assert_eq!(
+        runs.pointer("/runs/0/raw_prompt_persisted")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        runs.pointer("/runs/0/raw_response_persisted")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        runs.pointer("/runs/0/safety_flags/write_back_allowed")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+
+    let prompt_run_content =
+        fs::read_to_string(host.llm_prompt_runs_path()).expect("prompt run content");
+    assert!(prompt_run_content.contains("Draft-only review from mock provider."));
+    assert!(prompt_run_content.contains("\"request_kind\": \"analyze\""));
+    assert!(!prompt_run_content.contains("test-secret-key"));
+    assert!(!prompt_run_content.contains("fixture-redacted-value"));
+    assert!(!prompt_run_content.contains(&skill_path.to_string_lossy().to_string()));
+    assert!(!prompt_run_content.contains("\"choices\""));
+
+    let _ = fs::remove_dir_all(app_data_dir);
+}
+
+#[test]
+fn llm_confirm_prompt_redacts_persisted_draft_output() {
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-llm-draft-redaction-test-{}-{}",
+        std::process::id(),
+        unique_suffix(),
+    ));
+    let local_path = app_data_dir
+        .join("fixture-project")
+        .join("private")
+        .join("SKILL.md")
+        .to_string_lossy()
+        .to_string();
+    let high_entropy_secret = "AbCDefGhIjKlMnOpQrStUvWxYz1234567890__++";
+    let provider_draft =
+        format!("Draft cites {local_path} and opaque value {high_entropy_secret}.");
+    let (base_url, server) = spawn_mock_openai_server_with_content(provider_draft.clone());
+    let host = test_host(app_data_dir.clone());
+    let skill_path = app_data_dir.join("fixture-skill").join("SKILL.md");
+    seed_catalog_with_llm_skill(&host, &skill_path);
+
+    let save = host.handle(ServiceRequest {
+        id: Some("provider-save".to_string()),
+        method: "llm.saveProviderProfile".to_string(),
+        params: json!({
+            "id": "mock-openai-draft-redaction",
+            "display_name": "Mock OpenAI Draft Redaction",
+            "provider_type": "openai-compatible",
+            "base_url": base_url,
+            "model": "mock-model",
+            "enabled": true,
+            "single_request_token_limit": 4096,
+            "monthly_budget_usd": 10.0
+        }),
+    });
+    assert!(save.ok, "{:?}", save.error);
+    let _secret_env_guard = EnvVarGuard::set(
+        "SKILLS_COPILOT_TEST_SECRET_PROVIDER_MOCK_OPENAI_DRAFT_REDACTION",
+        "test-secret-key",
+    );
+
+    let request = json!({
+        "action": "analyze",
+        "skill_instance_id": "llm-skill-id",
+        "user_intent": "summarize draft redaction posture"
+    });
+    let preview = host.handle(ServiceRequest {
+        id: Some("preview".to_string()),
+        method: "llm.previewPrompt".to_string(),
+        params: request.clone(),
+    });
+    assert!(preview.ok, "{:?}", preview.error);
+    let preview_id = preview
+        .result
+        .expect("preview result")
+        .get("preview_id")
+        .and_then(Value::as_str)
+        .expect("preview id")
+        .to_string();
+
+    let confirm = host.handle(ServiceRequest {
+        id: Some("confirm".to_string()),
+        method: "llm.confirmPromptAndSend".to_string(),
+        params: json!({
+            "preview_id": preview_id,
+            "confirmation_id": "confirm-draft-redaction",
+            "request": request,
+            "timeout_ms": 2_000
+        }),
+    });
+    assert!(confirm.ok, "{:?}", confirm.error);
+    let result = confirm.result.expect("confirm result");
+    assert_eq!(
+        result.get("draft_output").and_then(Value::as_str),
+        Some(provider_draft.as_str()),
+        "copy-only provider output remains available in the immediate result"
+    );
+    let _request_text = server.join().expect("mock server thread");
+
+    let list_runs = host.handle(ServiceRequest {
+        id: Some("runs".to_string()),
+        method: "llm.listPromptRuns".to_string(),
+        params: json!({ "instance_id": "llm-skill-id" }),
+    });
+    assert!(list_runs.ok, "{:?}", list_runs.error);
+    let runs = list_runs.result.expect("prompt runs");
+    let persisted_draft = runs
+        .pointer("/runs/0/draft_output")
+        .and_then(Value::as_str)
+        .expect("persisted draft");
+    assert!(!persisted_draft.contains(&local_path));
+    assert!(!persisted_draft.contains(high_entropy_secret));
+    assert!(persisted_draft.contains("<app-data-dir>"));
+    assert!(persisted_draft.contains("<redacted-secret>"));
+
+    let prompt_run_content =
+        fs::read_to_string(host.llm_prompt_runs_path()).expect("prompt run content");
+    assert!(!prompt_run_content.contains(&local_path));
+    assert!(!prompt_run_content.contains(high_entropy_secret));
+    assert!(prompt_run_content.contains("<app-data-dir>"));
+    assert!(prompt_run_content.contains("<redacted-secret>"));
+
+    let _ = fs::remove_dir_all(app_data_dir);
+}
+
+#[test]
+fn llm_provider_observability_missing_files_returns_safe_empty_ready() {
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-provider-observability-empty-{}-{}",
+        std::process::id(),
+        unique_suffix(),
+    ));
+    let host = test_host(app_data_dir.clone());
+
+    let response = host.handle(ServiceRequest {
+        id: Some("provider-observability".to_string()),
+        method: "llm.providerObservability".to_string(),
+        params: Value::Null,
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("provider observability result");
+    assert_eq!(
+        result.get("generated_by").and_then(Value::as_str),
+        Some("local-v2.64")
+    );
+    assert_eq!(result.get("status").and_then(Value::as_str), Some("ready"));
+    assert_eq!(
+        result
+            .pointer("/summary/total_prompt_run_count")
+            .and_then(Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        result
+            .pointer("/summary/total_call_metadata_count")
+            .and_then(Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        result
+            .pointer("/call_rows")
+            .and_then(Value::as_array)
+            .map(Vec::len),
+        Some(0)
+    );
+    assert_eq!(
+        result
+            .pointer("/history_rows")
+            .and_then(Value::as_array)
+            .map(Vec::len),
+        Some(0)
+    );
+    assert_eq!(
+        result
+            .pointer("/safety_flags/provider_request_sent")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result
+            .pointer("/safety_flags/credential_accessed")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result
+            .pointer("/safety_flags/skill_files_mutated")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result
+            .pointer("/safety_flags/agent_config_mutated")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result
+            .pointer("/safety_flags/snapshot_created")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result
+            .pointer("/safety_flags/triage_mutation_allowed")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result
+            .pointer("/safety_flags/script_execution_allowed")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result
+            .pointer("/safety_flags/cloud_sync_performed")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result
+            .pointer("/safety_flags/telemetry_emitted")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert!(
+        !app_data_dir.exists(),
+        "provider observability must not initialize app data for absent files"
+    );
+
+    let _ = fs::remove_dir_all(app_data_dir);
+}
+
+#[test]
+fn llm_provider_observability_aggregates_seeded_metadata_and_preserves_privacy_boundary() {
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-provider-observability-seeded-{}-{}",
+        std::process::id(),
+        unique_suffix(),
+    ));
+    let host = test_host(app_data_dir.clone());
+    fs::create_dir_all(app_data_dir.join("llm")).expect("create llm app data");
+    let raw_secret = "fixture-redacted-value";
+    let local_path = app_data_dir
+        .join("fixture-project")
+        .join("SKILL.md")
+        .to_string_lossy()
+        .to_string();
+
+    let run = LlmPromptRunRecord {
+        id: "prompt-run-fixture".to_string(),
+        preview_id: "preview-fixture".to_string(),
+        confirmation_id: "confirm-fixture".to_string(),
+        action: "analyze".to_string(),
+        request_kind: "analyze".to_string(),
+        analysis_kind: None,
+        scope: Some("selected".to_string()),
+        instance_id: Some("fixture-skill".to_string()),
+        instance_ids: vec!["fixture-skill".to_string()],
+        definition_id: Some("fixture-definition".to_string()),
+        agent: Some("codex".to_string()),
+        task: Some(format!("Review token={raw_secret} at {local_path}")),
+        profile_id: "fixture-openai".to_string(),
+        provider: "openai-compatible".to_string(),
+        model: "fixture-model".to_string(),
+        destination_host: "api.fixture.invalid".to_string(),
+        status: "succeeded".to_string(),
+        error_code: None,
+        error_message: None,
+        duration_ms: 42,
+        estimated_input_tokens: 120,
+        estimated_output_tokens: 40,
+        estimated_total_tokens: 160,
+        estimated_cost_usd: 0.02,
+        draft_output: Some(format!("Draft with {raw_secret} and {local_path}")),
+        draft_requires_user_copy: true,
+        provider_request_sent: true,
+        credential_accessed: true,
+        raw_secret_returned: false,
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+        redaction_summary: LlmPromptRunRedactionSummary {
+            status: "redacted-local-only".to_string(),
+            redacted_value_count: 2,
+            redacted_fields: vec!["local paths".to_string()],
+            placeholders: vec![
+                "$HOME".to_string(),
+                "<app-data-dir>".to_string(),
+                "<redacted>".to_string(),
+            ],
+            raw_prompt_persisted: false,
+            raw_response_persisted: false,
+            raw_trace_persisted: false,
+            raw_secret_returned: false,
+        },
+        created_at: 2_000,
+        completed_at: 2_100,
+        safety_flags: llm_prompt_run_safety_flags(true, true),
+    };
+    host.save_llm_prompt_runs(&[run])
+        .expect("save seeded prompt run");
+
+    let metadata = ProviderCallMetadata {
+        timestamp: 2_200,
+        action_type: "analyze".to_string(),
+        profile_id: "fixture-openai".to_string(),
+        provider_type: provider::ProviderType::OpenAiCompatible,
+        model: "fixture-model".to_string(),
+        destination_host: "api.fixture.invalid".to_string(),
+        status: "failed".to_string(),
+        error_code: Some("network_error".to_string()),
+        error_message: Some(format!(
+            "Authorization: Bearer {raw_secret}; path={local_path}"
+        )),
+        duration_ms: 7,
+        estimated_input_tokens: 20,
+        estimated_output_tokens: 10,
+        estimated_cost_usd: 0.03,
+        confirmation_id: "confirm-fixture".to_string(),
+        redaction_status: "metadata-only-no-raw-prompt-or-response".to_string(),
+        provider_request_sent: true,
+        credential_accessed: true,
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+    };
+    let metadata_line = serde_json::to_string(&metadata).expect("serialize metadata");
+    fs::write(
+        provider_call_metadata_path(&app_data_dir),
+        format!("{metadata_line}\n"),
+    )
+    .expect("write provider metadata");
+
+    fs::write(
+        provider_profiles_path(&app_data_dir),
+        serde_json::to_string_pretty(&json!({
+            "version": 1,
+            "default_profile_id": "fixture-openai",
+            "profiles": [
+                {
+                    "id": "fixture-openai",
+                    "display_name": "Fixture OpenAI",
+                    "provider_type": "openai-compatible",
+                    "base_url": "https://api.fixture.invalid/v1",
+                    "model": "fixture-model",
+                    "enabled": true,
+                    "api_version": null,
+                    "organization": null,
+                    "single_request_token_limit": 4096,
+                    "monthly_budget_usd": 1.0,
+                    "credential_reference": {
+                        "storage": "keychain",
+                        "service": "dev.skills-copilot.native.llm",
+                        "account": "provider:fixture-openai",
+                        "secret_persisted": false
+                    },
+                    "credential_status": {
+                        "state": "missing",
+                        "reason": "seeded fixture metadata only",
+                        "secret_available": false,
+                        "fallback_available": false
+                    },
+                    "created_at": 1,
+                    "updated_at": 1
                 }
-            }),
-        });
+            ]
+        }))
+        .expect("serialize provider profiles"),
+    )
+    .expect("write provider profiles");
 
-        assert!(!response.ok);
-        let error = response.error.expect("mismatch error");
-        assert_eq!(error.code, "invalid_request");
-        assert!(error.message.contains("preview_id"));
-        assert!(!provider_call_metadata_path(&app_data_dir).exists());
+    let response = host.handle(ServiceRequest {
+        id: Some("provider-observability".to_string()),
+        method: "llm.providerObservability".to_string(),
+        params: json!({ "limit": 10 }),
+    });
 
-        let _ = fs::remove_dir_all(app_data_dir);
-    }
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("provider observability result");
+    assert_eq!(
+        result
+            .pointer("/summary/total_prompt_run_count")
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        result
+            .pointer("/summary/total_call_metadata_count")
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        result
+            .pointer("/summary/provider_profile_count")
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        result
+            .pointer("/summary/succeeded_count")
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        result
+            .pointer("/summary/failed_count")
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        result
+            .pointer("/history_rows/0/draft_output_available")
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert!(
+        result.pointer("/history_rows/0/draft_output").is_none(),
+        "observability must not return provider draft text"
+    );
+    assert_eq!(
+        result
+            .pointer("/history_rows/0/recorded_provider_request_sent")
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        result
+            .pointer("/call_rows/0/recorded_credential_accessed")
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        result
+            .pointer("/budget_usage_hints/0/budget_state")
+            .and_then(Value::as_str),
+        Some("within_configured_budget_hint")
+    );
+    assert_eq!(
+        result
+            .pointer("/safety_flags/provider_request_sent")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result
+            .pointer("/safety_flags/credential_accessed")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
 
-    #[test]
-    fn llm_confirm_prompt_blocks_without_credential_and_writes_metadata_only() {
-        let app_data_dir = env::temp_dir().join(format!(
-            "skills-copilot-llm-confirm-blocked-test-{}-{}",
-            std::process::id(),
-            unique_suffix(),
-        ));
-        let host = test_host(app_data_dir.clone());
-        let save = host.handle(ServiceRequest {
-            id: Some("provider-save".to_string()),
-            method: "llm.saveProviderProfile".to_string(),
-            params: json!({
-                "id": "fixture-openai",
-                "display_name": "Fixture OpenAI",
-                "provider_type": "openai-compatible",
-                "base_url": "https://example.invalid/v1",
-                "model": "fixture-model",
-                "enabled": true
-            }),
-        });
-        assert!(save.ok, "{:?}", save.error);
-        let request = json!({
-            "action": "recommend",
-            "user_intent": "review token=fixture-redacted-value"
-        });
-        let preview = host.handle(ServiceRequest {
-            id: Some("preview".to_string()),
-            method: "llm.previewPrompt".to_string(),
-            params: request.clone(),
-        });
-        assert!(preview.ok, "{:?}", preview.error);
-        let preview_id = preview
+    let serialized = serde_json::to_string(&result).expect("serialize result");
+    assert!(!serialized.contains(raw_secret));
+    assert!(!serialized.contains(&local_path));
+    assert!(!serialized.contains("Draft with"));
+    assert!(!serialized.contains("Bearer"));
+    assert!(!serialized.contains("\"api_key\""));
+    assert!(!serialized.contains("\"credential_reference\""));
+    assert!(serialized.contains("<redacted>"));
+    assert!(serialized.contains("<app-data-dir>"));
+
+    let _ = fs::remove_dir_all(app_data_dir);
+}
+
+#[test]
+fn app_version_returns_version_and_protocol() {
+    let host = ServiceHost {
+        app_data_dir: PathBuf::from("/tmp/skills-copilot-test"),
+        adapter_ctx: AdapterContext {
+            user_home: PathBuf::from("/tmp/home"),
+            project_root: None,
+            project_cwd: None,
+            extra_roots: Vec::new(),
+        },
+    };
+    let response = host.handle(ServiceRequest {
+        id: Some("version".to_string()),
+        method: "app.version".to_string(),
+        params: Value::Null,
+    });
+
+    assert!(response.ok);
+    let result = response.result.expect("version result");
+    assert_eq!(
+        result.get("protocol_version").and_then(Value::as_u64),
+        Some(u64::from(SERVICE_PROTOCOL_VERSION))
+    );
+    assert_eq!(
+        result.get("version").and_then(Value::as_str),
+        Some(skills_copilot_commands::app_version())
+    );
+}
+
+#[test]
+fn rules_tuning_methods_store_app_local_state_and_affect_findings() {
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-rule-tuning-service-test-{}-{}",
+        std::process::id(),
+        unique_suffix(),
+    ));
+    let host = test_host(app_data_dir.clone());
+    fs::create_dir_all(&host.app_data_dir).expect("create app data");
+    let catalog = Catalog::open(&host.catalog_path()).expect("open catalog");
+    catalog.init().expect("init catalog");
+    let skill_path = app_data_dir.join("skills/review/SKILL.md");
+    let instance = SkillInstance {
+        id: "rule-tuning-skill-id".to_string(),
+        agent: AgentId::Codex,
+        scope: Scope::AgentGlobal,
+        project_root: None,
+        path: skill_path.clone(),
+        display_path: skill_path,
+        definition_id: "rule-tuning-definition-id".to_string(),
+        name: "rule-tuning-fixture".to_string(),
+        display_name: "rule-tuning-fixture".to_string(),
+        description: "Rule tuning fixture.".to_string(),
+        version: None,
+        state: SkillState::Loaded,
+        enabled: true,
+        frontmatter_raw: "name: rule-tuning-fixture\ndescription: Rule tuning fixture\n"
+            .to_string(),
+        body: "Fixture body.".to_string(),
+        scripts: Vec::new(),
+        permissions: PermissionRequest::default(),
+        fingerprint: "rule-tuning-fingerprint".to_string(),
+        mtime: 1,
+        first_seen: 1,
+        last_seen: 1,
+    };
+    catalog
+        .upsert_skill_instance(&instance)
+        .expect("upsert skill");
+    catalog
+        .refresh_rule_findings(&[RuleFindingDraft {
+            id: "rule-tuning-finding-id".to_string(),
+            instance_id: Some(instance.id.clone()),
+            definition_id: Some(instance.definition_id.clone()),
+            rule_id: "body.too-long".to_string(),
+            severity: "warn".to_string(),
+            message: "Skill body is longer than the local review threshold.".to_string(),
+            suggestion: Some("Move long reference material into references/.".to_string()),
+            created_at: 1,
+        }])
+        .expect("seed finding");
+    drop(catalog);
+
+    let override_response = host.handle(ServiceRequest {
+        id: Some("set-override".to_string()),
+        method: "rules.setSeverityOverride".to_string(),
+        params: json!({
+            "rule_id": "body.too-long",
+            "agent": "codex",
+            "severity": "info"
+        }),
+    });
+    assert!(override_response.ok);
+
+    let suppression_response = host.handle(ServiceRequest {
+        id: Some("set-suppression".to_string()),
+        method: "rules.setSuppression".to_string(),
+        params: json!({
+            "rule_id": "body.too-long",
+            "agent": "codex",
+            "reason": "Accepted locally after review.",
+            "note": "V2.32 app-local suppression."
+        }),
+    });
+    assert!(suppression_response.ok);
+
+    let findings_response = host.handle(ServiceRequest {
+        id: Some("list-findings".to_string()),
+        method: "catalog.listFindings".to_string(),
+        params: Value::Null,
+    });
+    assert!(findings_response.ok);
+    let findings = findings_response
+        .result
+        .expect("findings result")
+        .as_array()
+        .expect("findings array")
+        .clone();
+    let finding = findings.first().expect("finding exists");
+    assert_eq!(
+        finding.get("effective_severity").and_then(Value::as_str),
+        Some("info")
+    );
+    assert_eq!(
+        finding.get("suppressed").and_then(Value::as_bool),
+        Some(true)
+    );
+
+    let queue_response = host.handle(ServiceRequest {
+        id: Some("cleanup".to_string()),
+        method: "cleanup.listQueue".to_string(),
+        params: Value::Null,
+    });
+    assert!(queue_response.ok);
+    assert_eq!(
+        queue_response
             .result
             .as_ref()
-            .and_then(|result| result.get("preview_id"))
-            .and_then(Value::as_str)
-            .expect("preview id")
-            .to_string();
+            .and_then(|value| value.pointer("/summary/total_count"))
+            .and_then(Value::as_u64),
+        Some(0)
+    );
 
-        let confirm = host.handle(ServiceRequest {
-            id: Some("confirm".to_string()),
-            method: "llm.confirmPromptAndSend".to_string(),
-            params: json!({
-                "preview_id": preview_id,
-                "confirmation_id": "confirm-without-credential",
-                "request": request,
-                "timeout_ms": 250
-            }),
-        });
+    let clear_suppression_response = host.handle(ServiceRequest {
+        id: Some("clear-suppression".to_string()),
+        method: "rules.clearSuppression".to_string(),
+        params: json!({
+            "rule_id": "body.too-long",
+            "agent": "codex"
+        }),
+    });
+    assert!(clear_suppression_response.ok);
+    let clear_override_response = host.handle(ServiceRequest {
+        id: Some("clear-override".to_string()),
+        method: "rules.clearSeverityOverride".to_string(),
+        params: json!({
+            "rule_id": "body.too-long",
+            "agent": "codex"
+        }),
+    });
+    assert!(clear_override_response.ok);
 
-        assert!(confirm.ok, "{:?}", confirm.error);
-        let result = confirm.result.expect("confirm result");
-        assert_eq!(
-            result.get("status").and_then(Value::as_str),
-            Some("blocked")
-        );
-        assert_eq!(
-            result.get("provider_request_sent").and_then(Value::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            result.get("credential_accessed").and_then(Value::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            result.pointer("/audit/error_code").and_then(Value::as_str),
-            Some("credential_unavailable")
-        );
-        assert_eq!(
-            result
-                .pointer("/audit/provider_request_sent")
-                .and_then(Value::as_bool),
-            Some(false)
-        );
-
-        let audit_content =
-            fs::read_to_string(provider_call_metadata_path(&app_data_dir)).expect("audit content");
-        assert!(audit_content.contains("\"action_type\":\"recommend\""));
-        assert!(audit_content.contains("\"status\":\"blocked\""));
-        assert!(!audit_content.contains("fixture-redacted-value"));
-        assert!(!audit_content.contains("review token"));
-        assert!(!audit_content.contains("api_key"));
-
-        let _ = fs::remove_dir_all(app_data_dir);
-    }
-
-    #[test]
-    fn llm_confirm_prompt_sends_redacted_prompt_to_mock_provider_and_audits_metadata_only() {
-        let app_data_dir = env::temp_dir().join(format!(
-            "skills-copilot-llm-confirm-test-{}-{}",
-            std::process::id(),
-            unique_suffix(),
-        ));
-        let (base_url, server) = spawn_mock_openai_server();
-        let host = test_host(app_data_dir.clone());
-        let skill_path = app_data_dir.join("fixture-skill").join("SKILL.md");
-        seed_catalog_with_llm_skill(&host, &skill_path);
-        let save = host.handle(ServiceRequest {
-            id: Some("provider-save".to_string()),
-            method: "llm.saveProviderProfile".to_string(),
-            params: json!({
-                "id": "mock-openai",
-                "display_name": "Mock OpenAI",
-                "provider_type": "openai-compatible",
-                "base_url": base_url,
-                "model": "mock-model",
-                "enabled": true,
-                "single_request_token_limit": 4096,
-                "monthly_budget_usd": 10.0
-            }),
-        });
-        assert!(save.ok, "{:?}", save.error);
-        let _secret_env_guard = EnvVarGuard::set(
-            "SKILLS_COPILOT_TEST_SECRET_PROVIDER_MOCK_OPENAI",
-            "test-secret-key",
-        );
-
-        let request = json!({
-            "action": "analyze",
-            "skill_instance_id": "llm-skill-id",
-            "user_intent": "summarize risk without exposing token=fixture-redacted-value"
-        });
-        let preview = host.handle(ServiceRequest {
-            id: Some("preview".to_string()),
-            method: "llm.previewPrompt".to_string(),
-            params: request.clone(),
-        });
-        assert!(preview.ok, "{:?}", preview.error);
-        let preview_result = preview.result.expect("preview result");
-        let preview_id = preview_result
-            .get("preview_id")
-            .and_then(Value::as_str)
-            .expect("preview id")
-            .to_string();
-
-        let confirm = host.handle(ServiceRequest {
-            id: Some("confirm".to_string()),
-            method: "llm.confirmPromptAndSend".to_string(),
-            params: json!({
-                "preview_id": preview_id,
-                "confirmation_id": "confirm-mock-provider",
-                "request": request,
-                "timeout_ms": 2_000
-            }),
-        });
-
-        assert!(confirm.ok, "{:?}", confirm.error);
-        let result = confirm.result.expect("confirm result");
-        assert_eq!(
-            result.get("status").and_then(Value::as_str),
-            Some("succeeded")
-        );
-        assert_eq!(
-            result.get("provider_request_sent").and_then(Value::as_bool),
-            Some(true)
-        );
-        assert_eq!(
-            result.get("credential_accessed").and_then(Value::as_bool),
-            Some(true)
-        );
-        assert_eq!(
-            result.get("draft_output").and_then(Value::as_str),
-            Some("Draft-only review from mock provider.")
-        );
-        assert_eq!(
-            result.get("write_back_allowed").and_then(Value::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            result
-                .get("script_execution_allowed")
-                .and_then(Value::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            result.get("raw_prompt_persisted").and_then(Value::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            result
-                .get("raw_response_persisted")
-                .and_then(Value::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            result.pointer("/audit/action_type").and_then(Value::as_str),
-            Some("analyze")
-        );
-        assert_eq!(
-            result
-                .pointer("/audit/confirmation_id")
-                .and_then(Value::as_str),
-            Some("confirm-mock-provider")
-        );
-
-        let request_text = server.join().expect("mock server thread");
-        assert!(request_text
-            .to_lowercase()
-            .contains("authorization: bearer test-secret-key"));
-        assert!(request_text.contains("<redacted>"));
-        assert!(!request_text.contains("OPENAI_API_KEY"));
-        assert!(!request_text.contains("fixture-redacted-value"));
-        assert!(!request_text.contains(&skill_path.to_string_lossy().to_string()));
-
-        let audit_content =
-            fs::read_to_string(provider_call_metadata_path(&app_data_dir)).expect("audit content");
-        assert!(audit_content.contains("\"action_type\":\"analyze\""));
-        assert!(audit_content.contains("\"status\":\"succeeded\""));
-        assert!(audit_content.contains("\"provider_request_sent\":true"));
-        assert!(!audit_content.contains("Draft-only review from mock provider."));
-        assert!(!audit_content.contains("OPENAI_API_KEY"));
-        assert!(!audit_content.contains("test-secret-key"));
-
-        let list_runs = host.handle(ServiceRequest {
-            id: Some("runs".to_string()),
-            method: "llm.listPromptRuns".to_string(),
-            params: json!({ "instance_id": "llm-skill-id" }),
-        });
-        assert!(list_runs.ok, "{:?}", list_runs.error);
-        let runs = list_runs.result.expect("prompt runs");
-        assert_eq!(runs.get("count").and_then(Value::as_u64), Some(1));
-        assert_eq!(
-            runs.pointer("/runs/0/status").and_then(Value::as_str),
-            Some("succeeded")
-        );
-        assert_eq!(
-            runs.pointer("/runs/0/draft_output").and_then(Value::as_str),
-            Some("Draft-only review from mock provider.")
-        );
-        assert_eq!(
-            runs.pointer("/runs/0/raw_prompt_persisted")
-                .and_then(Value::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            runs.pointer("/runs/0/raw_response_persisted")
-                .and_then(Value::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            runs.pointer("/runs/0/safety_flags/write_back_allowed")
-                .and_then(Value::as_bool),
-            Some(false)
-        );
-
-        let prompt_run_content =
-            fs::read_to_string(host.llm_prompt_runs_path()).expect("prompt run content");
-        assert!(prompt_run_content.contains("Draft-only review from mock provider."));
-        assert!(prompt_run_content.contains("\"request_kind\": \"analyze\""));
-        assert!(!prompt_run_content.contains("test-secret-key"));
-        assert!(!prompt_run_content.contains("fixture-redacted-value"));
-        assert!(!prompt_run_content.contains(&skill_path.to_string_lossy().to_string()));
-        assert!(!prompt_run_content.contains("\"choices\""));
-
-        let _ = fs::remove_dir_all(app_data_dir);
-    }
-
-    #[test]
-    fn llm_provider_observability_missing_files_returns_safe_empty_ready() {
-        let app_data_dir = env::temp_dir().join(format!(
-            "skills-copilot-provider-observability-empty-{}-{}",
-            std::process::id(),
-            unique_suffix(),
-        ));
-        let host = test_host(app_data_dir.clone());
-
-        let response = host.handle(ServiceRequest {
-            id: Some("provider-observability".to_string()),
-            method: "llm.providerObservability".to_string(),
-            params: Value::Null,
-        });
-
-        assert!(response.ok, "{:?}", response.error);
-        let result = response.result.expect("provider observability result");
-        assert_eq!(
-            result.get("generated_by").and_then(Value::as_str),
-            Some("local-v2.64")
-        );
-        assert_eq!(result.get("status").and_then(Value::as_str), Some("ready"));
-        assert_eq!(
-            result
-                .pointer("/summary/total_prompt_run_count")
-                .and_then(Value::as_u64),
-            Some(0)
-        );
-        assert_eq!(
-            result
-                .pointer("/summary/total_call_metadata_count")
-                .and_then(Value::as_u64),
-            Some(0)
-        );
-        assert_eq!(
-            result
-                .pointer("/call_rows")
-                .and_then(Value::as_array)
-                .map(Vec::len),
-            Some(0)
-        );
-        assert_eq!(
-            result
-                .pointer("/history_rows")
-                .and_then(Value::as_array)
-                .map(Vec::len),
-            Some(0)
-        );
-        assert_eq!(
-            result
-                .pointer("/safety_flags/provider_request_sent")
-                .and_then(Value::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            result
-                .pointer("/safety_flags/credential_accessed")
-                .and_then(Value::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            result
-                .pointer("/safety_flags/skill_files_mutated")
-                .and_then(Value::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            result
-                .pointer("/safety_flags/agent_config_mutated")
-                .and_then(Value::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            result
-                .pointer("/safety_flags/snapshot_created")
-                .and_then(Value::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            result
-                .pointer("/safety_flags/triage_mutation_allowed")
-                .and_then(Value::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            result
-                .pointer("/safety_flags/script_execution_allowed")
-                .and_then(Value::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            result
-                .pointer("/safety_flags/cloud_sync_performed")
-                .and_then(Value::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            result
-                .pointer("/safety_flags/telemetry_emitted")
-                .and_then(Value::as_bool),
-            Some(false)
-        );
-        assert!(
-            !app_data_dir.exists(),
-            "provider observability must not initialize app data for absent files"
-        );
-
-        let _ = fs::remove_dir_all(app_data_dir);
-    }
-
-    #[test]
-    fn llm_provider_observability_aggregates_seeded_metadata_and_preserves_privacy_boundary() {
-        let app_data_dir = env::temp_dir().join(format!(
-            "skills-copilot-provider-observability-seeded-{}-{}",
-            std::process::id(),
-            unique_suffix(),
-        ));
-        let host = test_host(app_data_dir.clone());
-        fs::create_dir_all(app_data_dir.join("llm")).expect("create llm app data");
-        let raw_secret = "fixture-redacted-value";
-        let local_path = app_data_dir
-            .join("fixture-project")
-            .join("SKILL.md")
-            .to_string_lossy()
-            .to_string();
-
-        let run = LlmPromptRunRecord {
-            id: "prompt-run-fixture".to_string(),
-            preview_id: "preview-fixture".to_string(),
-            confirmation_id: "confirm-fixture".to_string(),
-            action: "analyze".to_string(),
-            request_kind: "analyze".to_string(),
-            analysis_kind: None,
-            scope: Some("selected".to_string()),
-            instance_id: Some("fixture-skill".to_string()),
-            instance_ids: vec!["fixture-skill".to_string()],
-            definition_id: Some("fixture-definition".to_string()),
-            agent: Some("codex".to_string()),
-            task: Some(format!("Review token={raw_secret} at {local_path}")),
-            profile_id: "fixture-openai".to_string(),
-            provider: "openai-compatible".to_string(),
-            model: "fixture-model".to_string(),
-            destination_host: "api.fixture.invalid".to_string(),
-            status: "succeeded".to_string(),
-            error_code: None,
-            error_message: None,
-            duration_ms: 42,
-            estimated_input_tokens: 120,
-            estimated_output_tokens: 40,
-            estimated_total_tokens: 160,
-            estimated_cost_usd: 0.02,
-            draft_output: Some(format!("Draft with {raw_secret} and {local_path}")),
-            draft_requires_user_copy: true,
-            provider_request_sent: true,
-            credential_accessed: true,
-            raw_secret_returned: false,
-            raw_prompt_persisted: false,
-            raw_response_persisted: false,
-            redaction_summary: LlmPromptRunRedactionSummary {
-                status: "redacted-local-only".to_string(),
-                redacted_value_count: 2,
-                redacted_fields: vec!["local paths".to_string()],
-                placeholders: vec![
-                    "$HOME".to_string(),
-                    "<app-data-dir>".to_string(),
-                    "<redacted>".to_string(),
-                ],
-                raw_prompt_persisted: false,
-                raw_response_persisted: false,
-                raw_trace_persisted: false,
-                raw_secret_returned: false,
-            },
-            created_at: 2_000,
-            completed_at: 2_100,
-            safety_flags: llm_prompt_run_safety_flags(true, true),
-        };
-        host.save_llm_prompt_runs(&[run])
-            .expect("save seeded prompt run");
-
-        let metadata = ProviderCallMetadata {
-            timestamp: 2_200,
-            action_type: "analyze".to_string(),
-            profile_id: "fixture-openai".to_string(),
-            provider_type: provider::ProviderType::OpenAiCompatible,
-            model: "fixture-model".to_string(),
-            destination_host: "api.fixture.invalid".to_string(),
-            status: "failed".to_string(),
-            error_code: Some("network_error".to_string()),
-            error_message: Some(format!(
-                "Authorization: Bearer {raw_secret}; path={local_path}"
-            )),
-            duration_ms: 7,
-            estimated_input_tokens: 20,
-            estimated_output_tokens: 10,
-            estimated_cost_usd: 0.03,
-            confirmation_id: "confirm-fixture".to_string(),
-            redaction_status: "metadata-only-no-raw-prompt-or-response".to_string(),
-            provider_request_sent: true,
-            credential_accessed: true,
-            raw_prompt_persisted: false,
-            raw_response_persisted: false,
-        };
-        let metadata_line = serde_json::to_string(&metadata).expect("serialize metadata");
-        fs::write(
-            provider_call_metadata_path(&app_data_dir),
-            format!("{metadata_line}\n"),
-        )
-        .expect("write provider metadata");
-
-        fs::write(
-            provider_profiles_path(&app_data_dir),
-            serde_json::to_string_pretty(&json!({
-                "version": 1,
-                "default_profile_id": "fixture-openai",
-                "profiles": [
-                    {
-                        "id": "fixture-openai",
-                        "display_name": "Fixture OpenAI",
-                        "provider_type": "openai-compatible",
-                        "base_url": "https://api.fixture.invalid/v1",
-                        "model": "fixture-model",
-                        "enabled": true,
-                        "api_version": null,
-                        "organization": null,
-                        "single_request_token_limit": 4096,
-                        "monthly_budget_usd": 1.0,
-                        "credential_reference": {
-                            "storage": "keychain",
-                            "service": "dev.skills-copilot.native.llm",
-                            "account": "provider:fixture-openai",
-                            "secret_persisted": false
-                        },
-                        "credential_status": {
-                            "state": "missing",
-                            "reason": "seeded fixture metadata only",
-                            "secret_available": false,
-                            "fallback_available": false
-                        },
-                        "created_at": 1,
-                        "updated_at": 1
-                    }
-                ]
-            }))
-            .expect("serialize provider profiles"),
-        )
-        .expect("write provider profiles");
-
-        let response = host.handle(ServiceRequest {
-            id: Some("provider-observability".to_string()),
-            method: "llm.providerObservability".to_string(),
-            params: json!({ "limit": 10 }),
-        });
-
-        assert!(response.ok, "{:?}", response.error);
-        let result = response.result.expect("provider observability result");
-        assert_eq!(
-            result
-                .pointer("/summary/total_prompt_run_count")
-                .and_then(Value::as_u64),
-            Some(1)
-        );
-        assert_eq!(
-            result
-                .pointer("/summary/total_call_metadata_count")
-                .and_then(Value::as_u64),
-            Some(1)
-        );
-        assert_eq!(
-            result
-                .pointer("/summary/provider_profile_count")
-                .and_then(Value::as_u64),
-            Some(1)
-        );
-        assert_eq!(
-            result
-                .pointer("/summary/succeeded_count")
-                .and_then(Value::as_u64),
-            Some(1)
-        );
-        assert_eq!(
-            result
-                .pointer("/summary/failed_count")
-                .and_then(Value::as_u64),
-            Some(1)
-        );
-        assert_eq!(
-            result
-                .pointer("/history_rows/0/draft_output_available")
-                .and_then(Value::as_bool),
-            Some(true)
-        );
-        assert!(
-            result.pointer("/history_rows/0/draft_output").is_none(),
-            "observability must not return provider draft text"
-        );
-        assert_eq!(
-            result
-                .pointer("/history_rows/0/recorded_provider_request_sent")
-                .and_then(Value::as_bool),
-            Some(true)
-        );
-        assert_eq!(
-            result
-                .pointer("/call_rows/0/recorded_credential_accessed")
-                .and_then(Value::as_bool),
-            Some(true)
-        );
-        assert_eq!(
-            result
-                .pointer("/budget_usage_hints/0/budget_state")
-                .and_then(Value::as_str),
-            Some("within_configured_budget_hint")
-        );
-        assert_eq!(
-            result
-                .pointer("/safety_flags/provider_request_sent")
-                .and_then(Value::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            result
-                .pointer("/safety_flags/credential_accessed")
-                .and_then(Value::as_bool),
-            Some(false)
-        );
-
-        let serialized = serde_json::to_string(&result).expect("serialize result");
-        assert!(!serialized.contains(raw_secret));
-        assert!(!serialized.contains(&local_path));
-        assert!(!serialized.contains("Draft with"));
-        assert!(!serialized.contains("Bearer"));
-        assert!(!serialized.contains("\"api_key\""));
-        assert!(!serialized.contains("\"credential_reference\""));
-        assert!(serialized.contains("<redacted>"));
-        assert!(serialized.contains("<app-data-dir>"));
-
-        let _ = fs::remove_dir_all(app_data_dir);
-    }
-
-    #[test]
-    fn app_version_returns_version_and_protocol() {
-        let host = ServiceHost {
-            app_data_dir: PathBuf::from("/tmp/skills-copilot-test"),
-            adapter_ctx: AdapterContext {
-                user_home: PathBuf::from("/tmp/home"),
-                project_root: None,
-                project_cwd: None,
-                extra_roots: Vec::new(),
-            },
-        };
-        let response = host.handle(ServiceRequest {
-            id: Some("version".to_string()),
-            method: "app.version".to_string(),
-            params: Value::Null,
-        });
-
-        assert!(response.ok);
-        let result = response.result.expect("version result");
-        assert_eq!(
-            result.get("protocol_version").and_then(Value::as_u64),
-            Some(u64::from(SERVICE_PROTOCOL_VERSION))
-        );
-        assert_eq!(
-            result.get("version").and_then(Value::as_str),
-            Some(skills_copilot_commands::app_version())
-        );
-    }
-
-    #[test]
-    fn rules_tuning_methods_store_app_local_state_and_affect_findings() {
-        let app_data_dir = env::temp_dir().join(format!(
-            "skills-copilot-rule-tuning-service-test-{}-{}",
-            std::process::id(),
-            unique_suffix(),
-        ));
-        let host = test_host(app_data_dir.clone());
-        fs::create_dir_all(&host.app_data_dir).expect("create app data");
-        let catalog = Catalog::open(&host.catalog_path()).expect("open catalog");
-        catalog.init().expect("init catalog");
-        let skill_path = app_data_dir.join("skills/review/SKILL.md");
-        let instance = SkillInstance {
-            id: "rule-tuning-skill-id".to_string(),
-            agent: AgentId::Codex,
-            scope: Scope::AgentGlobal,
-            project_root: None,
-            path: skill_path.clone(),
-            display_path: skill_path,
-            definition_id: "rule-tuning-definition-id".to_string(),
-            name: "rule-tuning-fixture".to_string(),
-            display_name: "rule-tuning-fixture".to_string(),
-            description: "Rule tuning fixture.".to_string(),
-            version: None,
-            state: SkillState::Loaded,
-            enabled: true,
-            frontmatter_raw: "name: rule-tuning-fixture\ndescription: Rule tuning fixture\n"
-                .to_string(),
-            body: "Fixture body.".to_string(),
-            scripts: Vec::new(),
-            permissions: PermissionRequest::default(),
-            fingerprint: "rule-tuning-fingerprint".to_string(),
-            mtime: 1,
-            first_seen: 1,
-            last_seen: 1,
-        };
-        catalog
-            .upsert_skill_instance(&instance)
-            .expect("upsert skill");
-        catalog
-            .refresh_rule_findings(&[RuleFindingDraft {
-                id: "rule-tuning-finding-id".to_string(),
-                instance_id: Some(instance.id.clone()),
-                definition_id: Some(instance.definition_id.clone()),
-                rule_id: "body.too-long".to_string(),
-                severity: "warn".to_string(),
-                message: "Skill body is longer than the local review threshold.".to_string(),
-                suggestion: Some("Move long reference material into references/.".to_string()),
-                created_at: 1,
-            }])
-            .expect("seed finding");
-        drop(catalog);
-
-        let override_response = host.handle(ServiceRequest {
-            id: Some("set-override".to_string()),
-            method: "rules.setSeverityOverride".to_string(),
-            params: json!({
-                "rule_id": "body.too-long",
-                "agent": "codex",
-                "severity": "info"
-            }),
-        });
-        assert!(override_response.ok);
-
-        let suppression_response = host.handle(ServiceRequest {
-            id: Some("set-suppression".to_string()),
-            method: "rules.setSuppression".to_string(),
-            params: json!({
-                "rule_id": "body.too-long",
-                "agent": "codex",
-                "reason": "Accepted locally after review.",
-                "note": "V2.32 app-local suppression."
-            }),
-        });
-        assert!(suppression_response.ok);
-
-        let findings_response = host.handle(ServiceRequest {
-            id: Some("list-findings".to_string()),
-            method: "catalog.listFindings".to_string(),
-            params: Value::Null,
-        });
-        assert!(findings_response.ok);
-        let findings = findings_response
+    let tuning_response = host.handle(ServiceRequest {
+        id: Some("list-tuning".to_string()),
+        method: "rules.listTuning".to_string(),
+        params: Value::Null,
+    });
+    assert!(tuning_response.ok);
+    assert_eq!(
+        tuning_response
             .result
-            .expect("findings result")
-            .as_array()
-            .expect("findings array")
-            .clone();
-        let finding = findings.first().expect("finding exists");
-        assert_eq!(
-            finding.get("effective_severity").and_then(Value::as_str),
-            Some("info")
-        );
-        assert_eq!(
-            finding.get("suppressed").and_then(Value::as_bool),
-            Some(true)
-        );
+            .and_then(|value| value.as_array().cloned())
+            .map(|rows| rows.len()),
+        Some(0)
+    );
 
-        let queue_response = host.handle(ServiceRequest {
-            id: Some("cleanup".to_string()),
-            method: "cleanup.listQueue".to_string(),
-            params: Value::Null,
-        });
-        assert!(queue_response.ok);
-        assert_eq!(
-            queue_response
-                .result
-                .as_ref()
-                .and_then(|value| value.pointer("/summary/total_count"))
-                .and_then(Value::as_u64),
-            Some(0)
-        );
+    let _ = fs::remove_dir_all(app_data_dir);
+}
 
-        let clear_suppression_response = host.handle(ServiceRequest {
-            id: Some("clear-suppression".to_string()),
-            method: "rules.clearSuppression".to_string(),
-            params: json!({
-                "rule_id": "body.too-long",
-                "agent": "codex"
-            }),
-        });
-        assert!(clear_suppression_response.ok);
-        let clear_override_response = host.handle(ServiceRequest {
-            id: Some("clear-override".to_string()),
-            method: "rules.clearSeverityOverride".to_string(),
-            params: json!({
-                "rule_id": "body.too-long",
-                "agent": "codex"
-            }),
-        });
-        assert!(clear_override_response.ok);
-
-        let tuning_response = host.handle(ServiceRequest {
-            id: Some("list-tuning".to_string()),
-            method: "rules.listTuning".to_string(),
-            params: Value::Null,
-        });
-        assert!(tuning_response.ok);
-        assert_eq!(
-            tuning_response
-                .result
-                .and_then(|value| value.as_array().cloned())
-                .map(|rows| rows.len()),
-            Some(0)
-        );
-
-        let _ = fs::remove_dir_all(app_data_dir);
-    }
-
-    #[test]
-    fn app_state_snapshot_returns_current_catalog_state() {
-        let unique = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("system clock")
-            .as_nanos();
-        let host = ServiceHost {
-            app_data_dir: env::temp_dir().join(format!(
-                "skills-copilot-state-snapshot-test-{}-{unique}",
-                std::process::id(),
-            )),
-            adapter_ctx: AdapterContext {
-                user_home: PathBuf::from("/tmp/home"),
-                project_root: None,
-                project_cwd: None,
-                extra_roots: Vec::new(),
-            },
-        };
-        let response = host.handle(ServiceRequest {
-            id: Some("snapshot".to_string()),
-            method: "app.stateSnapshot".to_string(),
-            params: Value::Null,
-        });
-
-        assert!(response.ok);
-        let result = response.result.expect("snapshot result");
-        assert!(result.get("status").is_some());
-        assert_eq!(
-            result.get("skills").and_then(Value::as_array).map(Vec::len),
-            Some(0)
-        );
-        assert_eq!(
-            result
-                .get("findings")
-                .and_then(Value::as_array)
-                .map(Vec::len),
-            Some(0)
-        );
-        assert_eq!(
-            result
-                .get("conflicts")
-                .and_then(Value::as_array)
-                .map(Vec::len),
-            Some(0)
-        );
-        assert_eq!(
-            result
-                .get("snapshots")
-                .and_then(Value::as_array)
-                .map(Vec::len),
-            Some(0)
-        );
-
-        let _ = fs::remove_dir_all(&host.app_data_dir);
-    }
-
-    #[test]
-    fn finding_triage_service_writes_only_app_local_catalog() {
-        let unique = unique_suffix();
-        let app_data_dir = env::temp_dir().join(format!(
-            "skills-copilot-triage-service-test-{}-{unique}",
-            std::process::id()
-        ));
-        let user_home = env::temp_dir().join(format!(
-            "skills-copilot-triage-home-test-{}-{unique}",
-            std::process::id()
-        ));
-        let settings_path = user_home.join(".claude/settings.json");
-        fs::create_dir_all(settings_path.parent().expect("settings parent"))
-            .expect("create settings parent");
-        fs::write(&settings_path, "{\"skillOverrides\":{\"keep\":\"on\"}}\n")
-            .expect("write settings");
-        let host = ServiceHost {
-            app_data_dir: app_data_dir.clone(),
-            adapter_ctx: AdapterContext {
-                user_home: user_home.clone(),
-                project_root: None,
-                project_cwd: None,
-                extra_roots: Vec::new(),
-            },
-        };
-        fs::create_dir_all(&host.app_data_dir).expect("create app data");
-        let catalog = Catalog::open(&host.catalog_path()).expect("open catalog");
-        catalog.init().expect("init catalog");
-        catalog
-            .refresh_rule_findings(&[RuleFindingDraft {
-                id: "triage-finding-id".to_string(),
-                instance_id: Some("triage-skill-id".to_string()),
-                definition_id: Some("triage-definition-id".to_string()),
-                rule_id: "body.too-long".to_string(),
-                severity: "warn".to_string(),
-                message: "Skill body is longer than the local review threshold.".to_string(),
-                suggestion: Some("Split long reference material into references/.".to_string()),
-                created_at: 1,
-            }])
-            .expect("seed finding");
-        let triage_key = catalog
-            .list_rule_findings()
-            .expect("list findings")
-            .pop()
-            .expect("finding exists")
-            .triage_key;
-
-        let response = host.handle(ServiceRequest {
-            id: Some("set-triage".to_string()),
-            method: "catalog.setFindingTriage".to_string(),
-            params: json!({
-                "triage_key": triage_key,
-                "status": "ignored",
-                "note": "not actionable locally"
-            }),
-        });
-
-        assert!(
-            response.ok,
-            "triage set should succeed: {:?}",
-            response.error
-        );
-        assert_eq!(
-            fs::read_to_string(&settings_path).expect("read settings"),
-            "{\"skillOverrides\":{\"keep\":\"on\"}}\n",
-            "finding triage must not write agent config"
-        );
-        let catalog = Catalog::open(&host.catalog_path()).expect("reopen catalog");
-        catalog.init().expect("re-init catalog");
-        assert_eq!(
-            catalog
-                .list_all_config_snapshots()
-                .expect("snapshots")
-                .len(),
-            0,
-            "finding triage must not create agent config snapshots"
-        );
-        let finding = catalog
-            .list_rule_findings()
-            .expect("findings")
-            .pop()
-            .expect("finding exists");
-        assert_eq!(finding.triage_status, "ignored");
-        assert_eq!(
-            finding.triage_note.as_deref(),
-            Some("not actionable locally")
-        );
-
-        let _ = fs::remove_dir_all(app_data_dir);
-        let _ = fs::remove_dir_all(user_home);
-    }
-
-    #[test]
-    fn unknown_method_returns_stable_error_code() {
-        let host = ServiceHost {
-            app_data_dir: PathBuf::from("/tmp/skills-copilot-test"),
-            adapter_ctx: AdapterContext {
-                user_home: PathBuf::from("/tmp/home"),
-                project_root: None,
-                project_cwd: None,
-                extra_roots: Vec::new(),
-            },
-        };
-        let response = host.handle(ServiceRequest {
-            id: Some("2".to_string()),
-            method: "missing.method".to_string(),
-            params: Value::Null,
-        });
-
-        assert!(!response.ok);
-        assert_eq!(
-            response.error.expect("error").code,
-            "unknown_method".to_string()
-        );
-    }
-
-    #[test]
-    fn get_skill_requires_instance_id_param() {
-        let host = ServiceHost {
-            app_data_dir: PathBuf::from("/tmp/skills-copilot-test"),
-            adapter_ctx: AdapterContext {
-                user_home: PathBuf::from("/tmp/home"),
-                project_root: None,
-                project_cwd: None,
-                extra_roots: Vec::new(),
-            },
-        };
-        let response = host.handle(ServiceRequest {
-            id: Some("3".to_string()),
-            method: "catalog.getSkill".to_string(),
-            params: json!({}),
-        });
-
-        assert!(!response.ok);
-        assert_eq!(response.error.expect("error").code, "json_error");
-    }
-
-    #[test]
-    fn toggle_requires_on_param() {
-        let host = ServiceHost {
-            app_data_dir: PathBuf::from("/tmp/skills-copilot-test"),
-            adapter_ctx: AdapterContext {
-                user_home: PathBuf::from("/tmp/home"),
-                project_root: None,
-                project_cwd: None,
-                extra_roots: Vec::new(),
-            },
-        };
-        let response = host.handle(ServiceRequest {
-            id: Some("4".to_string()),
-            method: "config.toggleSkill".to_string(),
-            params: json!({"instance_id": "x"}),
-        });
-
-        assert!(!response.ok);
-        assert_eq!(response.error.expect("error").code, "json_error");
-    }
-
-    #[test]
-    fn save_settings_requires_content_param() {
-        let host = ServiceHost {
-            app_data_dir: PathBuf::from("/tmp/skills-copilot-test"),
-            adapter_ctx: AdapterContext {
-                user_home: PathBuf::from("/tmp/home"),
-                project_root: None,
-                project_cwd: None,
-                extra_roots: Vec::new(),
-            },
-        };
-        let response = host.handle(ServiceRequest {
-            id: Some("5".to_string()),
-            method: "config.saveClaudeSettings".to_string(),
-            params: json!({}),
-        });
-
-        assert!(!response.ok);
-        assert_eq!(response.error.expect("error").code, "json_error");
-    }
-
-    #[test]
-    fn project_context_set_get_and_clear_persist_state() {
-        let unique = unique_suffix();
-        let app_data_dir = env::temp_dir().join(format!(
-            "skills-copilot-project-context-test-{}-{unique}",
+#[test]
+fn app_state_snapshot_returns_current_catalog_state() {
+    let unique = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system clock")
+        .as_nanos();
+    let host = ServiceHost {
+        app_data_dir: env::temp_dir().join(format!(
+            "skills-copilot-state-snapshot-test-{}-{unique}",
             std::process::id(),
-        ));
-        let root = app_data_dir.join("project");
-        let nested = root.join("nested");
-        fs::create_dir_all(&nested).expect("create project dirs");
-        let host = test_host(app_data_dir.clone());
+        )),
+        adapter_ctx: AdapterContext {
+            user_home: PathBuf::from("/tmp/home"),
+            project_root: None,
+            project_cwd: None,
+            extra_roots: Vec::new(),
+        },
+    };
+    let response = host.handle(ServiceRequest {
+        id: Some("snapshot".to_string()),
+        method: "app.stateSnapshot".to_string(),
+        params: Value::Null,
+    });
 
-        let set_response = host.handle(ServiceRequest {
-            id: Some("set-context".to_string()),
-            method: "project.setContext".to_string(),
-            params: json!({
-                "root_path": root,
-                "current_cwd": nested,
-                "name": "Fixture Project"
-            }),
-        });
-        assert!(set_response.ok);
-        let set_result = set_response.result.expect("set result");
-        assert_eq!(
-            set_result.pointer("/active/name").and_then(Value::as_str),
-            Some("Fixture Project")
-        );
-        assert_eq!(
-            set_result
-                .pointer("/active/is_active")
-                .and_then(Value::as_bool),
-            Some(true)
-        );
-        assert_eq!(
-            set_result
-                .get("recent")
-                .and_then(Value::as_array)
-                .map(Vec::len),
-            Some(1)
-        );
-        assert!(app_data_dir.join("project-context.json").exists());
-
-        let get_response = host.handle(ServiceRequest {
-            id: Some("get-context".to_string()),
-            method: "project.getContext".to_string(),
-            params: Value::Null,
-        });
-        assert!(get_response.ok);
-        assert_eq!(
-            get_response
-                .result
-                .as_ref()
-                .and_then(|result| result.pointer("/active/name"))
-                .and_then(Value::as_str),
-            Some("Fixture Project")
-        );
-
-        let clear_response = host.handle(ServiceRequest {
-            id: Some("clear-context".to_string()),
-            method: "project.clearContext".to_string(),
-            params: Value::Null,
-        });
-        assert!(clear_response.ok);
-        let clear_result = clear_response.result.expect("clear result");
-        assert!(clear_result.get("active").is_some_and(Value::is_null));
-        assert_eq!(
-            clear_result
-                .pointer("/recent/0/is_active")
-                .and_then(Value::as_bool),
-            Some(false)
-        );
-
-        let _ = fs::remove_dir_all(app_data_dir);
-    }
-
-    #[test]
-    fn project_validate_context_reports_validation_error_without_persisting() {
-        let host = test_host(env::temp_dir().join(format!(
-            "skills-copilot-project-validate-test-{}-{}",
-            std::process::id(),
-            unique_suffix()
-        )));
-
-        let response = host.handle(ServiceRequest {
-            id: Some("validate-context".to_string()),
-            method: "project.validateContext".to_string(),
-            params: json!({
-                "root_path": "/tmp/skills-copilot-missing-project-root-for-validation"
-            }),
-        });
-
-        assert!(response.ok);
-        let result = response.result.expect("validate result");
-        assert!(result
-            .get("validation_error")
-            .and_then(Value::as_str)
-            .is_some_and(|message| message.contains("root_path")));
-        assert!(!host.app_data_dir.join("project-context.json").exists());
-
-        let _ = fs::remove_dir_all(host.app_data_dir);
-    }
-
-    #[test]
-    fn project_set_context_rejects_cwd_outside_root() {
-        let unique = unique_suffix();
-        let app_data_dir = env::temp_dir().join(format!(
-            "skills-copilot-project-reject-test-{}-{unique}",
-            std::process::id(),
-        ));
-        let root = app_data_dir.join("project");
-        let outside = app_data_dir.join("outside");
-        fs::create_dir_all(&root).expect("create root");
-        fs::create_dir_all(&outside).expect("create outside");
-        let host = test_host(app_data_dir.clone());
-
-        let response = host.handle(ServiceRequest {
-            id: Some("set-invalid-context".to_string()),
-            method: "project.setContext".to_string(),
-            params: json!({
-                "root_path": root,
-                "current_cwd": outside
-            }),
-        });
-
-        assert!(!response.ok);
-        assert_eq!(
-            response.error.expect("error").code,
-            "invalid_request".to_string()
-        );
-        assert!(!app_data_dir.join("project-context.json").exists());
-
-        let _ = fs::remove_dir_all(app_data_dir);
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn project_set_context_rejects_symlink_escape_cwd() {
-        let unique = unique_suffix();
-        let app_data_dir = env::temp_dir().join(format!(
-            "skills-copilot-project-symlink-test-{}-{unique}",
-            std::process::id(),
-        ));
-        let root = app_data_dir.join("project");
-        let outside = app_data_dir.join("outside");
-        let link = root.join("link-outside");
-        fs::create_dir_all(&root).expect("create root");
-        fs::create_dir_all(&outside).expect("create outside");
-        std::os::unix::fs::symlink(&outside, &link).expect("create symlink");
-        let host = test_host(app_data_dir.clone());
-
-        let response = host.handle(ServiceRequest {
-            id: Some("set-symlink-context".to_string()),
-            method: "project.setContext".to_string(),
-            params: json!({
-                "root_path": root,
-                "current_cwd": link
-            }),
-        });
-
-        assert!(!response.ok);
-        assert_eq!(
-            response.error.expect("error").code,
-            "invalid_request".to_string()
-        );
-
-        let _ = fs::remove_dir_all(app_data_dir);
-    }
-
-    #[test]
-    fn scan_claude_returns_refresh_activity() {
-        let unique = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("system clock")
-            .as_nanos();
-        let fixture_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .join("fixtures/claude-code/personal");
-        let host = ServiceHost {
-            app_data_dir: env::temp_dir().join(format!(
-                "skills-copilot-scan-activity-test-{}-{unique}",
-                std::process::id(),
-            )),
-            adapter_ctx: AdapterContext {
-                user_home: PathBuf::from("/tmp/home"),
-                project_root: None,
-                project_cwd: None,
-                extra_roots: vec![AdapterRoot {
-                    scope: Scope::AgentGlobal,
-                    path: fixture_root,
-                    source: RootSource::Extra,
-                }],
-            },
-        };
-        let response = host.handle(ServiceRequest {
-            id: Some("scan".to_string()),
-            method: "catalog.scanClaude".to_string(),
-            params: Value::Null,
-        });
-
-        assert!(response.ok);
-        let result = response.result.expect("scan result");
-        assert_eq!(result.get("scanned_count").and_then(Value::as_u64), Some(1));
-        let activity = result
-            .get("activity")
-            .and_then(Value::as_object)
-            .expect("activity");
-        assert_eq!(
-            activity.get("status").and_then(Value::as_str),
-            Some("completed")
-        );
-        assert_eq!(activity.get("skill_count").and_then(Value::as_u64), Some(1));
-        assert!(activity
-            .get("log_entries")
+    assert!(response.ok);
+    let result = response.result.expect("snapshot result");
+    assert!(result.get("status").is_some());
+    assert_eq!(
+        result.get("skills").and_then(Value::as_array).map(Vec::len),
+        Some(0)
+    );
+    assert_eq!(
+        result
+            .get("findings")
             .and_then(Value::as_array)
-            .is_some_and(|entries| !entries.is_empty()));
+            .map(Vec::len),
+        Some(0)
+    );
+    assert_eq!(
+        result
+            .get("conflicts")
+            .and_then(Value::as_array)
+            .map(Vec::len),
+        Some(0)
+    );
+    assert_eq!(
+        result
+            .get("snapshots")
+            .and_then(Value::as_array)
+            .map(Vec::len),
+        Some(0)
+    );
 
-        let _ = fs::remove_dir_all(&host.app_data_dir);
-    }
+    let _ = fs::remove_dir_all(&host.app_data_dir);
+}
 
-    #[test]
-    fn import_skill_imports_local_directory_to_tool_global_staging_only() {
-        let unique = unique_suffix();
-        let app_data_dir = env::temp_dir().join(format!(
-            "skills-copilot-service-import-test-{}-{unique}",
+#[test]
+fn finding_triage_service_writes_only_app_local_catalog() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-triage-service-test-{}-{unique}",
+        std::process::id()
+    ));
+    let user_home = env::temp_dir().join(format!(
+        "skills-copilot-triage-home-test-{}-{unique}",
+        std::process::id()
+    ));
+    let settings_path = user_home.join(".claude/settings.json");
+    fs::create_dir_all(settings_path.parent().expect("settings parent"))
+        .expect("create settings parent");
+    fs::write(&settings_path, "{\"skillOverrides\":{\"keep\":\"on\"}}\n").expect("write settings");
+    let host = ServiceHost {
+        app_data_dir: app_data_dir.clone(),
+        adapter_ctx: AdapterContext {
+            user_home: user_home.clone(),
+            project_root: None,
+            project_cwd: None,
+            extra_roots: Vec::new(),
+        },
+    };
+    fs::create_dir_all(&host.app_data_dir).expect("create app data");
+    let catalog = Catalog::open(&host.catalog_path()).expect("open catalog");
+    catalog.init().expect("init catalog");
+    catalog
+        .refresh_rule_findings(&[RuleFindingDraft {
+            id: "triage-finding-id".to_string(),
+            instance_id: Some("triage-skill-id".to_string()),
+            definition_id: Some("triage-definition-id".to_string()),
+            rule_id: "body.too-long".to_string(),
+            severity: "warn".to_string(),
+            message: "Skill body is longer than the local review threshold.".to_string(),
+            suggestion: Some("Split long reference material into references/.".to_string()),
+            created_at: 1,
+        }])
+        .expect("seed finding");
+    let triage_key = catalog
+        .list_rule_findings()
+        .expect("list findings")
+        .pop()
+        .expect("finding exists")
+        .triage_key;
+
+    let response = host.handle(ServiceRequest {
+        id: Some("set-triage".to_string()),
+        method: "catalog.setFindingTriage".to_string(),
+        params: json!({
+            "triage_key": triage_key,
+            "status": "ignored",
+            "note": "not actionable locally"
+        }),
+    });
+
+    assert!(
+        response.ok,
+        "triage set should succeed: {:?}",
+        response.error
+    );
+    assert_eq!(
+        fs::read_to_string(&settings_path).expect("read settings"),
+        "{\"skillOverrides\":{\"keep\":\"on\"}}\n",
+        "finding triage must not write agent config"
+    );
+    let catalog = Catalog::open(&host.catalog_path()).expect("reopen catalog");
+    catalog.init().expect("re-init catalog");
+    assert_eq!(
+        catalog
+            .list_all_config_snapshots()
+            .expect("snapshots")
+            .len(),
+        0,
+        "finding triage must not create agent config snapshots"
+    );
+    let finding = catalog
+        .list_rule_findings()
+        .expect("findings")
+        .pop()
+        .expect("finding exists");
+    assert_eq!(finding.triage_status, "ignored");
+    assert_eq!(
+        finding.triage_note.as_deref(),
+        Some("not actionable locally")
+    );
+
+    let _ = fs::remove_dir_all(app_data_dir);
+    let _ = fs::remove_dir_all(user_home);
+}
+
+#[test]
+fn unknown_method_returns_stable_error_code() {
+    let host = ServiceHost {
+        app_data_dir: PathBuf::from("/tmp/skills-copilot-test"),
+        adapter_ctx: AdapterContext {
+            user_home: PathBuf::from("/tmp/home"),
+            project_root: None,
+            project_cwd: None,
+            extra_roots: Vec::new(),
+        },
+    };
+    let response = host.handle(ServiceRequest {
+        id: Some("2".to_string()),
+        method: "missing.method".to_string(),
+        params: Value::Null,
+    });
+
+    assert!(!response.ok);
+    assert_eq!(
+        response.error.expect("error").code,
+        "unknown_method".to_string()
+    );
+}
+
+#[test]
+fn get_skill_requires_instance_id_param() {
+    let host = ServiceHost {
+        app_data_dir: PathBuf::from("/tmp/skills-copilot-test"),
+        adapter_ctx: AdapterContext {
+            user_home: PathBuf::from("/tmp/home"),
+            project_root: None,
+            project_cwd: None,
+            extra_roots: Vec::new(),
+        },
+    };
+    let response = host.handle(ServiceRequest {
+        id: Some("3".to_string()),
+        method: "catalog.getSkill".to_string(),
+        params: json!({}),
+    });
+
+    assert!(!response.ok);
+    assert_eq!(response.error.expect("error").code, "json_error");
+}
+
+#[test]
+fn toggle_requires_on_param() {
+    let host = ServiceHost {
+        app_data_dir: PathBuf::from("/tmp/skills-copilot-test"),
+        adapter_ctx: AdapterContext {
+            user_home: PathBuf::from("/tmp/home"),
+            project_root: None,
+            project_cwd: None,
+            extra_roots: Vec::new(),
+        },
+    };
+    let response = host.handle(ServiceRequest {
+        id: Some("4".to_string()),
+        method: "config.toggleSkill".to_string(),
+        params: json!({"instance_id": "x"}),
+    });
+
+    assert!(!response.ok);
+    assert_eq!(response.error.expect("error").code, "json_error");
+}
+
+#[test]
+fn save_settings_requires_content_param() {
+    let host = ServiceHost {
+        app_data_dir: PathBuf::from("/tmp/skills-copilot-test"),
+        adapter_ctx: AdapterContext {
+            user_home: PathBuf::from("/tmp/home"),
+            project_root: None,
+            project_cwd: None,
+            extra_roots: Vec::new(),
+        },
+    };
+    let response = host.handle(ServiceRequest {
+        id: Some("5".to_string()),
+        method: "config.saveClaudeSettings".to_string(),
+        params: json!({}),
+    });
+
+    assert!(!response.ok);
+    assert_eq!(response.error.expect("error").code, "json_error");
+}
+
+#[test]
+fn project_context_set_get_and_clear_persist_state() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-project-context-test-{}-{unique}",
+        std::process::id(),
+    ));
+    let root = app_data_dir.join("project");
+    let nested = root.join("nested");
+    fs::create_dir_all(&nested).expect("create project dirs");
+    let host = test_host(app_data_dir.clone());
+
+    let set_response = host.handle(ServiceRequest {
+        id: Some("set-context".to_string()),
+        method: "project.setContext".to_string(),
+        params: json!({
+            "root_path": root,
+            "current_cwd": nested,
+            "name": "Fixture Project"
+        }),
+    });
+    assert!(set_response.ok);
+    let set_result = set_response.result.expect("set result");
+    assert_eq!(
+        set_result.pointer("/active/name").and_then(Value::as_str),
+        Some("Fixture Project")
+    );
+    assert_eq!(
+        set_result
+            .pointer("/active/is_active")
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        set_result
+            .get("recent")
+            .and_then(Value::as_array)
+            .map(Vec::len),
+        Some(1)
+    );
+    assert!(app_data_dir.join("project-context.json").exists());
+
+    let get_response = host.handle(ServiceRequest {
+        id: Some("get-context".to_string()),
+        method: "project.getContext".to_string(),
+        params: Value::Null,
+    });
+    assert!(get_response.ok);
+    assert_eq!(
+        get_response
+            .result
+            .as_ref()
+            .and_then(|result| result.pointer("/active/name"))
+            .and_then(Value::as_str),
+        Some("Fixture Project")
+    );
+
+    let clear_response = host.handle(ServiceRequest {
+        id: Some("clear-context".to_string()),
+        method: "project.clearContext".to_string(),
+        params: Value::Null,
+    });
+    assert!(clear_response.ok);
+    let clear_result = clear_response.result.expect("clear result");
+    assert!(clear_result.get("active").is_some_and(Value::is_null));
+    assert_eq!(
+        clear_result
+            .pointer("/recent/0/is_active")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+
+    let _ = fs::remove_dir_all(app_data_dir);
+}
+
+#[test]
+fn project_validate_context_reports_validation_error_without_persisting() {
+    let host = test_host(env::temp_dir().join(format!(
+        "skills-copilot-project-validate-test-{}-{}",
+        std::process::id(),
+        unique_suffix()
+    )));
+
+    let response = host.handle(ServiceRequest {
+        id: Some("validate-context".to_string()),
+        method: "project.validateContext".to_string(),
+        params: json!({
+            "root_path": "/tmp/skills-copilot-missing-project-root-for-validation"
+        }),
+    });
+
+    assert!(response.ok);
+    let result = response.result.expect("validate result");
+    assert!(result
+        .get("validation_error")
+        .and_then(Value::as_str)
+        .is_some_and(|message| message.contains("root_path")));
+    assert!(!host.app_data_dir.join("project-context.json").exists());
+
+    let _ = fs::remove_dir_all(host.app_data_dir);
+}
+
+#[test]
+fn project_set_context_rejects_cwd_outside_root() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-project-reject-test-{}-{unique}",
+        std::process::id(),
+    ));
+    let root = app_data_dir.join("project");
+    let outside = app_data_dir.join("outside");
+    fs::create_dir_all(&root).expect("create root");
+    fs::create_dir_all(&outside).expect("create outside");
+    let host = test_host(app_data_dir.clone());
+
+    let response = host.handle(ServiceRequest {
+        id: Some("set-invalid-context".to_string()),
+        method: "project.setContext".to_string(),
+        params: json!({
+            "root_path": root,
+            "current_cwd": outside
+        }),
+    });
+
+    assert!(!response.ok);
+    assert_eq!(
+        response.error.expect("error").code,
+        "invalid_request".to_string()
+    );
+    assert!(!app_data_dir.join("project-context.json").exists());
+
+    let _ = fs::remove_dir_all(app_data_dir);
+}
+
+#[cfg(unix)]
+#[test]
+fn project_set_context_rejects_symlink_escape_cwd() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-project-symlink-test-{}-{unique}",
+        std::process::id(),
+    ));
+    let root = app_data_dir.join("project");
+    let outside = app_data_dir.join("outside");
+    let link = root.join("link-outside");
+    fs::create_dir_all(&root).expect("create root");
+    fs::create_dir_all(&outside).expect("create outside");
+    std::os::unix::fs::symlink(&outside, &link).expect("create symlink");
+    let host = test_host(app_data_dir.clone());
+
+    let response = host.handle(ServiceRequest {
+        id: Some("set-symlink-context".to_string()),
+        method: "project.setContext".to_string(),
+        params: json!({
+            "root_path": root,
+            "current_cwd": link
+        }),
+    });
+
+    assert!(!response.ok);
+    assert_eq!(
+        response.error.expect("error").code,
+        "invalid_request".to_string()
+    );
+
+    let _ = fs::remove_dir_all(app_data_dir);
+}
+
+#[test]
+fn scan_claude_returns_refresh_activity() {
+    let unique = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system clock")
+        .as_nanos();
+    let fixture_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("fixtures/claude-code/personal");
+    let host = ServiceHost {
+        app_data_dir: env::temp_dir().join(format!(
+            "skills-copilot-scan-activity-test-{}-{unique}",
             std::process::id(),
-        ));
-        let user_home = env::temp_dir().join(format!(
-            "skills-copilot-service-import-home-{}-{unique}",
-            std::process::id(),
-        ));
-        let source = app_data_dir.join("external-source").join("service-import");
-        std::fs::create_dir_all(&source).expect("create source");
-        std::fs::create_dir_all(user_home.join(".claude")).expect("create claude dir");
-        let settings_path = user_home.join(".claude/settings.json");
-        std::fs::write(&settings_path, "{\"skillOverrides\":{\"keep\":\"off\"}}\n")
-            .expect("write settings");
-        std::fs::write(
+        )),
+        adapter_ctx: AdapterContext {
+            user_home: PathBuf::from("/tmp/home"),
+            project_root: None,
+            project_cwd: None,
+            extra_roots: vec![AdapterRoot {
+                scope: Scope::AgentGlobal,
+                path: fixture_root,
+                source: RootSource::Extra,
+            }],
+        },
+    };
+    let response = host.handle(ServiceRequest {
+        id: Some("scan".to_string()),
+        method: "catalog.scanClaude".to_string(),
+        params: Value::Null,
+    });
+
+    assert!(response.ok);
+    let result = response.result.expect("scan result");
+    assert_eq!(result.get("scanned_count").and_then(Value::as_u64), Some(1));
+    let activity = result
+        .get("activity")
+        .and_then(Value::as_object)
+        .expect("activity");
+    assert_eq!(
+        activity.get("status").and_then(Value::as_str),
+        Some("completed")
+    );
+    assert_eq!(activity.get("skill_count").and_then(Value::as_u64), Some(1));
+    assert!(activity
+        .get("log_entries")
+        .and_then(Value::as_array)
+        .is_some_and(|entries| !entries.is_empty()));
+
+    let _ = fs::remove_dir_all(&host.app_data_dir);
+}
+
+#[test]
+fn import_skill_imports_local_directory_to_tool_global_staging_only() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-service-import-test-{}-{unique}",
+        std::process::id(),
+    ));
+    let user_home = env::temp_dir().join(format!(
+        "skills-copilot-service-import-home-{}-{unique}",
+        std::process::id(),
+    ));
+    let source = app_data_dir.join("external-source").join("service-import");
+    std::fs::create_dir_all(&source).expect("create source");
+    std::fs::create_dir_all(user_home.join(".claude")).expect("create claude dir");
+    let settings_path = user_home.join(".claude/settings.json");
+    std::fs::write(&settings_path, "{\"skillOverrides\":{\"keep\":\"off\"}}\n")
+        .expect("write settings");
+    std::fs::write(
             source.join("SKILL.md"),
             "---\nname: Service Import\ndescription: Service import fixture\ntools:\n  - bash\n---\nRun `curl https://example.test/input.json`.\n",
         )
         .expect("write skill");
-        let host = ServiceHost {
-            app_data_dir: app_data_dir.clone(),
-            adapter_ctx: AdapterContext {
-                user_home: user_home.clone(),
-                project_root: None,
-                project_cwd: None,
-                extra_roots: Vec::new(),
-            },
-        };
+    let host = ServiceHost {
+        app_data_dir: app_data_dir.clone(),
+        adapter_ctx: AdapterContext {
+            user_home: user_home.clone(),
+            project_root: None,
+            project_cwd: None,
+            extra_roots: Vec::new(),
+        },
+    };
 
-        let response = host.handle(ServiceRequest {
-            id: Some("import-local".to_string()),
-            method: "catalog.importSkill".to_string(),
-            params: json!({ "source_path": source }),
-        });
+    let response = host.handle(ServiceRequest {
+        id: Some("import-local".to_string()),
+        method: "catalog.importSkill".to_string(),
+        params: json!({ "source_path": source }),
+    });
 
-        assert!(response.ok, "{:?}", response.error);
-        let result = response.result.expect("import result");
-        assert_eq!(
-            result.pointer("/imported/agent").and_then(Value::as_str),
-            Some("tool-global")
-        );
-        assert_eq!(
-            result.pointer("/imported/scope").and_then(Value::as_str),
-            Some("tool-global")
-        );
-        let staging_path = result
-            .get("staging_path")
-            .and_then(Value::as_str)
-            .expect("staging path");
-        assert!(PathBuf::from(staging_path).starts_with(
-            host.tool_global_staging_root()
-                .join("skills")
-                .canonicalize()
-                .expect("canonical staging skills root")
-        ));
-        assert!(PathBuf::from(staging_path).exists());
-        assert_eq!(
-            std::fs::read_to_string(&settings_path).expect("read settings"),
-            "{\"skillOverrides\":{\"keep\":\"off\"}}\n"
-        );
-        assert!(
-            !user_home.join(".codex/config.toml").exists(),
-            "tool-global import must not create agent config"
-        );
-        assert_eq!(
-            result
-                .pointer("/audit/read_only_preview")
-                .and_then(Value::as_bool),
-            Some(true)
-        );
-        assert!(
-            result
-                .get("findings")
-                .and_then(Value::as_array)
-                .is_some_and(|findings| !findings.is_empty()),
-            "import should return audit findings"
-        );
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("import result");
+    assert_eq!(
+        result.pointer("/imported/agent").and_then(Value::as_str),
+        Some("tool-global")
+    );
+    assert_eq!(
+        result.pointer("/imported/scope").and_then(Value::as_str),
+        Some("tool-global")
+    );
+    let staging_path = result
+        .get("staging_path")
+        .and_then(Value::as_str)
+        .expect("staging path");
+    assert!(PathBuf::from(staging_path).starts_with(
+        host.tool_global_staging_root()
+            .join("skills")
+            .canonicalize()
+            .expect("canonical staging skills root")
+    ));
+    assert!(PathBuf::from(staging_path).exists());
+    assert_eq!(
+        std::fs::read_to_string(&settings_path).expect("read settings"),
+        "{\"skillOverrides\":{\"keep\":\"off\"}}\n"
+    );
+    assert!(
+        !user_home.join(".codex/config.toml").exists(),
+        "tool-global import must not create agent config"
+    );
+    assert_eq!(
+        result
+            .pointer("/audit/read_only_preview")
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert!(
+        result
+            .get("findings")
+            .and_then(Value::as_array)
+            .is_some_and(|findings| !findings.is_empty()),
+        "import should return audit findings"
+    );
 
-        let _ = fs::remove_dir_all(app_data_dir);
-        let _ = fs::remove_dir_all(user_home);
-    }
+    let _ = fs::remove_dir_all(app_data_dir);
+    let _ = fs::remove_dir_all(user_home);
+}
 
-    #[test]
-    fn import_skill_rejects_github_url_without_network_clone() {
-        let app_data_dir = env::temp_dir().join(format!(
-            "skills-copilot-service-import-github-test-{}-{}",
+#[test]
+fn import_skill_rejects_github_url_without_network_clone() {
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-service-import-github-test-{}-{}",
+        std::process::id(),
+        unique_suffix(),
+    ));
+    let host = test_host(app_data_dir.clone());
+
+    let response = host.handle(ServiceRequest {
+        id: Some("import-github".to_string()),
+        method: "catalog.importSkill".to_string(),
+        params: json!({ "github_url": "https://github.com/example/skill.git" }),
+    });
+
+    assert!(!response.ok);
+    let error = response.error.expect("github unsupported error");
+    assert_eq!(error.code, "command_error");
+    assert!(error.message.contains("explicitly deferred"));
+    assert!(
+        !host.tool_global_staging_root().exists(),
+        "unsupported GitHub import must not initialize staging"
+    );
+
+    let _ = fs::remove_dir_all(app_data_dir);
+}
+
+#[test]
+fn scan_all_returns_multi_agent_refresh_activity() {
+    let unique = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system clock")
+        .as_nanos();
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let host = ServiceHost {
+        app_data_dir: env::temp_dir().join(format!(
+            "skills-copilot-scan-all-activity-test-{}-{unique}",
             std::process::id(),
-            unique_suffix(),
-        ));
-        let host = test_host(app_data_dir.clone());
+        )),
+        adapter_ctx: AdapterContext {
+            user_home: repo_root.join("fixtures/codex/user-home"),
+            project_root: None,
+            project_cwd: None,
+            extra_roots: vec![AdapterRoot {
+                scope: Scope::AgentGlobal,
+                path: repo_root.join("fixtures/claude-code/personal"),
+                source: RootSource::Extra,
+            }],
+        },
+    };
+    let response = host.handle(ServiceRequest {
+        id: Some("scan-all".to_string()),
+        method: "catalog.scanAll".to_string(),
+        params: Value::Null,
+    });
 
-        let response = host.handle(ServiceRequest {
-            id: Some("import-github".to_string()),
-            method: "catalog.importSkill".to_string(),
-            params: json!({ "github_url": "https://github.com/example/skill.git" }),
-        });
-
-        assert!(!response.ok);
-        let error = response.error.expect("github unsupported error");
-        assert_eq!(error.code, "command_error");
-        assert!(error.message.contains("explicitly deferred"));
-        assert!(
-            !host.tool_global_staging_root().exists(),
-            "unsupported GitHub import must not initialize staging"
-        );
-
-        let _ = fs::remove_dir_all(app_data_dir);
-    }
-
-    #[test]
-    fn scan_all_returns_multi_agent_refresh_activity() {
-        let unique = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("system clock")
-            .as_nanos();
-        let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let host = ServiceHost {
-            app_data_dir: env::temp_dir().join(format!(
-                "skills-copilot-scan-all-activity-test-{}-{unique}",
-                std::process::id(),
-            )),
-            adapter_ctx: AdapterContext {
-                user_home: repo_root.join("fixtures/codex/user-home"),
-                project_root: None,
-                project_cwd: None,
-                extra_roots: vec![AdapterRoot {
-                    scope: Scope::AgentGlobal,
-                    path: repo_root.join("fixtures/claude-code/personal"),
-                    source: RootSource::Extra,
-                }],
-            },
-        };
-        let response = host.handle(ServiceRequest {
-            id: Some("scan-all".to_string()),
-            method: "catalog.scanAll".to_string(),
-            params: Value::Null,
-        });
-
-        assert!(response.ok);
-        let result = response.result.expect("scan all result");
-        assert_eq!(result.get("scanned_count").and_then(Value::as_u64), Some(4));
-        let activity = result
-            .get("activity")
-            .and_then(Value::as_object)
-            .expect("activity");
-        assert_eq!(
-            activity.get("operation").and_then(Value::as_str),
-            Some("catalog.scanAll")
-        );
-        let first_message = activity
-            .get("log_entries")
-            .and_then(Value::as_array)
-            .and_then(|entries| entries.first())
-            .and_then(|entry| entry.get("message"))
-            .and_then(Value::as_str)
-            .expect("first log message");
-        assert!(
-            first_message.contains("Claude Code, Codex, opencode, Pi, OpenClaw, and Hermes"),
-            "scanAll activity should name all supported adapters"
-        );
-        let summaries = activity
-            .get("agent_summaries")
-            .and_then(Value::as_array)
-            .expect("agent summaries");
-        assert_eq!(summaries.len(), 6);
-        let hermes = summaries
+    assert!(response.ok);
+    let result = response.result.expect("scan all result");
+    assert_eq!(result.get("scanned_count").and_then(Value::as_u64), Some(4));
+    let activity = result
+        .get("activity")
+        .and_then(Value::as_object)
+        .expect("activity");
+    assert_eq!(
+        activity.get("operation").and_then(Value::as_str),
+        Some("catalog.scanAll")
+    );
+    let first_message = activity
+        .get("log_entries")
+        .and_then(Value::as_array)
+        .and_then(|entries| entries.first())
+        .and_then(|entry| entry.get("message"))
+        .and_then(Value::as_str)
+        .expect("first log message");
+    assert!(
+        first_message.contains("Claude Code, Codex, opencode, Pi, OpenClaw, and Hermes"),
+        "scanAll activity should name all supported adapters"
+    );
+    let summaries = activity
+        .get("agent_summaries")
+        .and_then(Value::as_array)
+        .expect("agent summaries");
+    assert_eq!(summaries.len(), 6);
+    let hermes = summaries
+        .iter()
+        .find(|summary| summary.get("agent").and_then(Value::as_str) == Some("hermes"))
+        .expect("Hermes summary");
+    assert_eq!(
+        hermes.get("writable_status").and_then(Value::as_str),
+        Some("blocked")
+    );
+    assert!(hermes
+        .get("read_only_reason")
+        .and_then(Value::as_str)
+        .is_some_and(|reason| reason.contains("Hermes writable toggle/install remains blocked")));
+    let log_messages: Vec<&str> = activity
+        .get("log_entries")
+        .and_then(Value::as_array)
+        .expect("log entries")
+        .iter()
+        .filter_map(|entry| entry.get("message").and_then(Value::as_str))
+        .collect();
+    assert!(
+        log_messages
             .iter()
-            .find(|summary| summary.get("agent").and_then(Value::as_str) == Some("hermes"))
-            .expect("Hermes summary");
-        assert_eq!(
-            hermes.get("writable_status").and_then(Value::as_str),
-            Some("blocked")
-        );
-        assert!(hermes
-            .get("read_only_reason")
-            .and_then(Value::as_str)
-            .is_some_and(
-                |reason| reason.contains("Hermes writable toggle/install remains blocked")
-            ));
-        let log_messages: Vec<&str> = activity
-            .get("log_entries")
-            .and_then(Value::as_array)
-            .expect("log entries")
+            .any(|message| message.contains("root-error skipped-root path(s):")),
+        "scanAll activity should name skipped roots as root-error/skipped-root"
+    );
+    let claude = summaries
+        .iter()
+        .find(|summary| summary.get("agent").and_then(Value::as_str) == Some("claude-code"))
+        .expect("Claude Code summary");
+    assert_eq!(
+        claude.get("display_label").and_then(Value::as_str),
+        Some("Claude Code")
+    );
+    assert_eq!(claude.get("scanned_count").and_then(Value::as_u64), Some(1));
+    assert!(claude
+        .get("roots_considered")
+        .and_then(Value::as_array)
+        .is_some_and(|roots| roots.len() >= 2));
+    let codex = summaries
+        .iter()
+        .find(|summary| summary.get("agent").and_then(Value::as_str) == Some("codex"))
+        .expect("Codex summary");
+    assert_eq!(
+        codex.get("display_label").and_then(Value::as_str),
+        Some("Codex")
+    );
+    assert_eq!(codex.get("scanned_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(codex.get("catalog_count").and_then(Value::as_u64), Some(1));
+
+    let _ = fs::remove_dir_all(&host.app_data_dir);
+}
+
+#[test]
+fn adapter_list_diagnostics_reports_roots_config_and_blockers() {
+    let unique = unique_suffix();
+    let temp_root = env::temp_dir().join(format!(
+        "skills-copilot-adapter-diagnostics-test-{}-{unique}",
+        std::process::id(),
+    ));
+    let home = temp_root.join("home");
+    let project = temp_root.join("project");
+    fs::create_dir_all(home.join(".pi/agent/skills")).expect("create Pi skills root");
+    fs::create_dir_all(home.join(".codex")).expect("create Codex config parent");
+    fs::write(home.join(".codex/config.toml"), "[skills]\n").expect("write Codex config");
+
+    let host = ServiceHost {
+        app_data_dir: temp_root.join("app-data"),
+        adapter_ctx: AdapterContext {
+            user_home: home,
+            project_root: Some(project),
+            project_cwd: None,
+            extra_roots: Vec::new(),
+        },
+    };
+
+    let response = host.handle(ServiceRequest {
+        id: Some("diagnostics".to_string()),
+        method: "adapter.listDiagnostics".to_string(),
+        params: Value::Null,
+    });
+
+    assert!(response.ok);
+    let diagnostics = response.result.expect("diagnostics result");
+    let records = diagnostics.as_array().expect("diagnostic records");
+    let codex = records
+        .iter()
+        .find(|record| record.get("agent").and_then(Value::as_str) == Some("codex"))
+        .expect("Codex diagnostics");
+    assert_eq!(
+        codex.pointer("/config/status").and_then(Value::as_str),
+        Some("detected")
+    );
+    assert_eq!(
+        codex
+            .pointer("/access/writable_status")
+            .and_then(Value::as_str),
+        Some("verified-user-config")
+    );
+    let pi = records
+        .iter()
+        .find(|record| record.get("agent").and_then(Value::as_str) == Some("pi"))
+        .expect("Pi diagnostics");
+    assert!(pi
+        .get("blockers")
+        .and_then(Value::as_array)
+        .is_some_and(|blockers| blockers
             .iter()
-            .filter_map(|entry| entry.get("message").and_then(Value::as_str))
-            .collect();
-        assert!(
-            log_messages
+            .any(|blocker| { blocker.as_str() == Some("Pi install remains blocked.") })));
+    let hermes = records
+        .iter()
+        .find(|record| record.get("agent").and_then(Value::as_str) == Some("hermes"))
+        .expect("Hermes diagnostics");
+    assert_eq!(
+        hermes.pointer("/config/status").and_then(Value::as_str),
+        Some("blocked")
+    );
+    assert_eq!(
+        hermes
+            .pointer("/access/writable_status")
+            .and_then(Value::as_str),
+        Some("blocked")
+    );
+
+    let _ = fs::remove_dir_all(temp_root);
+}
+
+#[test]
+fn scan_all_label_formats_four_agent_reports() {
+    let reports = vec![
+        AgentCatalogScanReport {
+            agent: AgentId::ClaudeCode,
+            display_name: "Claude Code",
+            scanned_count: 1,
+            roots_considered: vec![PathBuf::from("/tmp/home/.claude/skills")],
+            scanned_roots: vec![PathBuf::from("/tmp/home/.claude/skills")],
+            skipped_roots: Vec::new(),
+        },
+        AgentCatalogScanReport {
+            agent: AgentId::Codex,
+            display_name: "Codex",
+            scanned_count: 1,
+            roots_considered: vec![PathBuf::from("/tmp/home/.agents/skills")],
+            scanned_roots: vec![PathBuf::from("/tmp/home/.agents/skills")],
+            skipped_roots: Vec::new(),
+        },
+        AgentCatalogScanReport {
+            agent: AgentId::Opencode,
+            display_name: "opencode",
+            scanned_count: 1,
+            roots_considered: vec![PathBuf::from("/tmp/home/.config/opencode/skills")],
+            scanned_roots: vec![PathBuf::from("/tmp/home/.config/opencode/skills")],
+            skipped_roots: Vec::new(),
+        },
+        AgentCatalogScanReport {
+            agent: AgentId::Pi,
+            display_name: "Pi",
+            scanned_count: 1,
+            roots_considered: vec![PathBuf::from("/tmp/home/.pi/agent/skills")],
+            scanned_roots: vec![PathBuf::from("/tmp/home/.pi/agent/skills")],
+            skipped_roots: Vec::new(),
+        },
+    ];
+
+    assert_eq!(
+        scan_all_label(&reports),
+        "Claude Code, Codex, opencode, and Pi"
+    );
+}
+
+#[test]
+fn scan_all_uses_stored_project_context_when_env_context_is_absent() {
+    let unique = unique_suffix();
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let host = ServiceHost {
+        app_data_dir: env::temp_dir().join(format!(
+            "skills-copilot-scan-all-stored-project-test-{}-{unique}",
+            std::process::id(),
+        )),
+        adapter_ctx: AdapterContext {
+            user_home: repo_root.join("fixtures/codex/user-home"),
+            project_root: None,
+            project_cwd: None,
+            extra_roots: vec![AdapterRoot {
+                scope: Scope::AgentGlobal,
+                path: repo_root.join("fixtures/claude-code/personal"),
+                source: RootSource::Extra,
+            }],
+        },
+    };
+    let set_response = host.handle(ServiceRequest {
+        id: Some("set-context".to_string()),
+        method: "project.setContext".to_string(),
+        params: json!({
+            "root_path": repo_root.join("fixtures/codex/project"),
+            "current_cwd": repo_root.join("fixtures/codex/project/nested")
+        }),
+    });
+    assert!(set_response.ok);
+
+    let scan_response = host.handle(ServiceRequest {
+        id: Some("scan-all".to_string()),
+        method: "catalog.scanAll".to_string(),
+        params: Value::Null,
+    });
+
+    assert!(scan_response.ok);
+    let result = scan_response.result.expect("scan all result");
+    assert_eq!(result.get("scanned_count").and_then(Value::as_u64), Some(8));
+    let skills = result
+        .get("skills")
+        .and_then(Value::as_array)
+        .expect("scan skills");
+    assert!(
+        skills.iter().any(|skill| {
+            skill.get("agent").and_then(Value::as_str) == Some("codex")
+                && skill.get("name").and_then(Value::as_str) == Some("repo-beta")
+        }),
+        "project context scan should expose the current project skill"
+    );
+    let codex = result
+        .pointer("/activity/agent_summaries")
+        .and_then(Value::as_array)
+        .and_then(|summaries| {
+            summaries
                 .iter()
-                .any(|message| message.contains("root-error skipped-root path(s):")),
-            "scanAll activity should name skipped roots as root-error/skipped-root"
-        );
-        let claude = summaries
-            .iter()
-            .find(|summary| summary.get("agent").and_then(Value::as_str) == Some("claude-code"))
-            .expect("Claude Code summary");
-        assert_eq!(
-            claude.get("display_label").and_then(Value::as_str),
-            Some("Claude Code")
-        );
-        assert_eq!(claude.get("scanned_count").and_then(Value::as_u64), Some(1));
-        assert!(claude
-            .get("roots_considered")
-            .and_then(Value::as_array)
-            .is_some_and(|roots| roots.len() >= 2));
-        let codex = summaries
-            .iter()
-            .find(|summary| summary.get("agent").and_then(Value::as_str) == Some("codex"))
-            .expect("Codex summary");
-        assert_eq!(
-            codex.get("display_label").and_then(Value::as_str),
-            Some("Codex")
-        );
-        assert_eq!(codex.get("scanned_count").and_then(Value::as_u64), Some(1));
-        assert_eq!(codex.get("catalog_count").and_then(Value::as_u64), Some(1));
+                .find(|summary| summary.get("agent").and_then(Value::as_str) == Some("codex"))
+        })
+        .expect("Codex summary");
+    assert_eq!(codex.get("scanned_count").and_then(Value::as_u64), Some(3));
+    assert!(codex
+        .get("roots_considered")
+        .and_then(Value::as_array)
+        .is_some_and(|roots| roots.len() >= 3));
 
-        let _ = fs::remove_dir_all(&host.app_data_dir);
-    }
+    let clear_response = host.handle(ServiceRequest {
+        id: Some("clear-context".to_string()),
+        method: "project.clearContext".to_string(),
+        params: Value::Null,
+    });
+    assert!(clear_response.ok);
 
-    #[test]
-    fn adapter_list_diagnostics_reports_roots_config_and_blockers() {
-        let unique = unique_suffix();
-        let temp_root = env::temp_dir().join(format!(
-            "skills-copilot-adapter-diagnostics-test-{}-{unique}",
-            std::process::id(),
-        ));
-        let home = temp_root.join("home");
-        let project = temp_root.join("project");
-        fs::create_dir_all(home.join(".pi/agent/skills")).expect("create Pi skills root");
-        fs::create_dir_all(home.join(".codex")).expect("create Codex config parent");
-        fs::write(home.join(".codex/config.toml"), "[skills]\n").expect("write Codex config");
+    let cleared_scan_response = host.handle(ServiceRequest {
+        id: Some("scan-all-cleared".to_string()),
+        method: "catalog.scanAll".to_string(),
+        params: Value::Null,
+    });
+    assert!(cleared_scan_response.ok);
+    let cleared = cleared_scan_response.result.expect("cleared scan result");
+    let cleared_skills = cleared
+        .get("skills")
+        .and_then(Value::as_array)
+        .expect("cleared scan skills");
+    assert!(
+        cleared_skills.iter().any(|skill| {
+            skill.get("agent").and_then(Value::as_str) == Some("codex")
+                && skill.get("name").and_then(Value::as_str) == Some("user-alpha")
+        }),
+        "no-project scan should keep user-scope Codex skills visible"
+    );
+    assert!(
+        !cleared_skills.iter().any(|skill| {
+            skill.get("agent").and_then(Value::as_str) == Some("codex")
+                && skill.get("name").and_then(Value::as_str) == Some("repo-beta")
+        }),
+        "no-project scan should hide previously cataloged project skills"
+    );
 
-        let host = ServiceHost {
-            app_data_dir: temp_root.join("app-data"),
-            adapter_ctx: AdapterContext {
-                user_home: home,
-                project_root: Some(project),
-                project_cwd: None,
-                extra_roots: Vec::new(),
-            },
-        };
+    let _ = fs::remove_dir_all(&host.app_data_dir);
+}
 
-        let response = host.handle(ServiceRequest {
-            id: Some("diagnostics".to_string()),
-            method: "adapter.listDiagnostics".to_string(),
-            params: Value::Null,
-        });
+#[test]
+fn skill_export_bundle_exports_staging_skill_through_service() {
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-service-export-test-{}-{}",
+        std::process::id(),
+        unique_suffix(),
+    ));
+    let source_dir = app_data_dir.join("staging/demo");
+    fs::create_dir_all(&source_dir).expect("create source skill");
+    fs::write(
+        source_dir.join("SKILL.md"),
+        "---\nname: service-demo\ndescription: Service export demo\nversion: 2.9.0\n---\nBody.\n",
+    )
+    .expect("write source skill");
+    let output_dir = app_data_dir.join("exports");
+    let host = test_host(app_data_dir.clone());
 
-        assert!(response.ok);
-        let diagnostics = response.result.expect("diagnostics result");
-        let records = diagnostics.as_array().expect("diagnostic records");
-        let codex = records
-            .iter()
-            .find(|record| record.get("agent").and_then(Value::as_str) == Some("codex"))
-            .expect("Codex diagnostics");
-        assert_eq!(
-            codex.pointer("/config/status").and_then(Value::as_str),
-            Some("detected")
-        );
-        assert_eq!(
-            codex
-                .pointer("/access/writable_status")
-                .and_then(Value::as_str),
-            Some("verified-user-config")
-        );
-        let pi = records
-            .iter()
-            .find(|record| record.get("agent").and_then(Value::as_str) == Some("pi"))
-            .expect("Pi diagnostics");
-        assert!(pi
-            .get("blockers")
-            .and_then(Value::as_array)
-            .is_some_and(|blockers| blockers
-                .iter()
-                .any(|blocker| { blocker.as_str() == Some("Pi install remains blocked.") })));
-        let hermes = records
-            .iter()
-            .find(|record| record.get("agent").and_then(Value::as_str) == Some("hermes"))
-            .expect("Hermes diagnostics");
-        assert_eq!(
-            hermes.pointer("/config/status").and_then(Value::as_str),
-            Some("blocked")
-        );
-        assert_eq!(
-            hermes
-                .pointer("/access/writable_status")
-                .and_then(Value::as_str),
-            Some("blocked")
-        );
+    let response = host.handle(ServiceRequest {
+        id: Some("export-service".to_string()),
+        method: "skill.exportBundle".to_string(),
+        params: json!({
+            "source_path": source_dir,
+            "output_dir": output_dir,
+        }),
+    });
 
-        let _ = fs::remove_dir_all(temp_root);
-    }
+    assert!(response.ok);
+    let result = response.result.expect("export result");
+    let export: WireExportedSkillBundle =
+        serde_json::from_value(result).expect("decode export result");
+    assert!(export.manifest_path.exists());
+    assert!(export.bundle_path.join("skill/SKILL.md").exists());
+    assert_eq!(export.metadata.name, "service-demo");
+    assert_eq!(export.metadata.source_scope, "tool-global");
+    let manifest = fs::read_to_string(&export.manifest_path).expect("read manifest");
+    assert!(
+        !manifest.contains(&app_data_dir.to_string_lossy().to_string()),
+        "manifest reproducible fields should not include absolute app-data paths"
+    );
 
-    #[test]
-    fn scan_all_label_formats_four_agent_reports() {
-        let reports = vec![
-            AgentCatalogScanReport {
-                agent: AgentId::ClaudeCode,
-                display_name: "Claude Code",
-                scanned_count: 1,
-                roots_considered: vec![PathBuf::from("/tmp/home/.claude/skills")],
-                scanned_roots: vec![PathBuf::from("/tmp/home/.claude/skills")],
-                skipped_roots: Vec::new(),
-            },
-            AgentCatalogScanReport {
-                agent: AgentId::Codex,
-                display_name: "Codex",
-                scanned_count: 1,
-                roots_considered: vec![PathBuf::from("/tmp/home/.agents/skills")],
-                scanned_roots: vec![PathBuf::from("/tmp/home/.agents/skills")],
-                skipped_roots: Vec::new(),
-            },
-            AgentCatalogScanReport {
-                agent: AgentId::Opencode,
-                display_name: "opencode",
-                scanned_count: 1,
-                roots_considered: vec![PathBuf::from("/tmp/home/.config/opencode/skills")],
-                scanned_roots: vec![PathBuf::from("/tmp/home/.config/opencode/skills")],
-                skipped_roots: Vec::new(),
-            },
-            AgentCatalogScanReport {
-                agent: AgentId::Pi,
-                display_name: "Pi",
-                scanned_count: 1,
-                roots_considered: vec![PathBuf::from("/tmp/home/.pi/agent/skills")],
-                scanned_roots: vec![PathBuf::from("/tmp/home/.pi/agent/skills")],
-                skipped_roots: Vec::new(),
-            },
-        ];
+    let _ = fs::remove_dir_all(app_data_dir);
+}
 
-        assert_eq!(
-            scan_all_label(&reports),
-            "Claude Code, Codex, opencode, and Pi"
-        );
-    }
+#[test]
+fn report_export_local_writes_redacted_reports_and_keeps_catalog_read_only() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-report-export-test-{}-{unique}",
+        std::process::id()
+    ));
+    let user_home = env::temp_dir().join(format!(
+        "skills-copilot-report-home-{}-{unique}",
+        std::process::id()
+    ));
+    let project_root = env::temp_dir().join(format!(
+        "skills-copilot-report-project-{}-{unique}",
+        std::process::id()
+    ));
+    let host = ServiceHost {
+        app_data_dir: app_data_dir.clone(),
+        adapter_ctx: AdapterContext {
+            user_home: user_home.clone(),
+            project_root: Some(project_root.clone()),
+            project_cwd: Some(project_root.join("nested")),
+            extra_roots: Vec::new(),
+        },
+    };
+    seed_catalog_with_cleanup_queue_fixture(&host);
+    seed_catalog_with_llm_skill(&host, &user_home.join(".claude/skills/redacted/SKILL.md"));
+    let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
+    let before_records = before_catalog.list_skill_records().expect("records before");
+    let before_visible_records = host
+        .list_visible_skill_records(&before_catalog)
+        .expect("visible records before");
+    let before_findings = before_catalog
+        .list_rule_findings()
+        .expect("findings before");
+    let before_snapshots = before_catalog
+        .list_all_config_snapshots()
+        .expect("snapshots before");
 
-    #[test]
-    fn scan_all_uses_stored_project_context_when_env_context_is_absent() {
-        let unique = unique_suffix();
-        let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let host = ServiceHost {
-            app_data_dir: env::temp_dir().join(format!(
-                "skills-copilot-scan-all-stored-project-test-{}-{unique}",
-                std::process::id(),
-            )),
-            adapter_ctx: AdapterContext {
-                user_home: repo_root.join("fixtures/codex/user-home"),
-                project_root: None,
-                project_cwd: None,
-                extra_roots: vec![AdapterRoot {
-                    scope: Scope::AgentGlobal,
-                    path: repo_root.join("fixtures/claude-code/personal"),
-                    source: RootSource::Extra,
-                }],
-            },
-        };
-        let set_response = host.handle(ServiceRequest {
-            id: Some("set-context".to_string()),
-            method: "project.setContext".to_string(),
-            params: json!({
-                "root_path": repo_root.join("fixtures/codex/project"),
-                "current_cwd": repo_root.join("fixtures/codex/project/nested")
-            }),
-        });
-        assert!(set_response.ok);
+    let response = host.handle(ServiceRequest {
+        id: Some("report-export".to_string()),
+        method: "report.exportLocal".to_string(),
+        params: json!({ "formats": ["json", "markdown"] }),
+    });
 
-        let scan_response = host.handle(ServiceRequest {
-            id: Some("scan-all".to_string()),
-            method: "catalog.scanAll".to_string(),
-            params: Value::Null,
-        });
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("report export result");
+    let export: WireReportExportLocalResult =
+        serde_json::from_value(result).expect("decode report export");
+    assert!(export.catalog_available);
+    assert!(export.read_only);
+    assert!(!export.writes_allowed);
+    assert!(!export.provider_request_sent);
+    assert!(!export.script_execution_allowed);
+    assert!(!export.credential_accessed);
+    assert_eq!(export.files.len(), 2);
+    assert_eq!(export.summary.skill_count, before_visible_records.len());
+    assert_eq!(export.summary.finding_count, before_findings.len());
+    assert!(export
+        .output_dir
+        .starts_with("<app-data-dir>/report-exports/"));
+    assert!(export
+        .files
+        .iter()
+        .all(|file| file.path.starts_with("<app-data-dir>/report-exports/")));
 
-        assert!(scan_response.ok);
-        let result = scan_response.result.expect("scan all result");
-        assert_eq!(result.get("scanned_count").and_then(Value::as_u64), Some(8));
-        let skills = result
-            .get("skills")
-            .and_then(Value::as_array)
-            .expect("scan skills");
+    let json_path = app_data_dir
+        .join("report-exports")
+        .join(&export.export_id)
+        .join("report.json");
+    let markdown_path = app_data_dir
+        .join("report-exports")
+        .join(&export.export_id)
+        .join("report.md");
+    let json_content = fs::read_to_string(json_path).expect("read json report");
+    let markdown_content = fs::read_to_string(markdown_path).expect("read markdown report");
+    for raw_path in [
+        app_data_dir.to_string_lossy().to_string(),
+        user_home.to_string_lossy().to_string(),
+        project_root.to_string_lossy().to_string(),
+    ] {
         assert!(
-            skills.iter().any(|skill| {
-                skill.get("agent").and_then(Value::as_str) == Some("codex")
-                    && skill.get("name").and_then(Value::as_str) == Some("repo-beta")
-            }),
-            "project context scan should expose the current project skill"
-        );
-        let codex = result
-            .pointer("/activity/agent_summaries")
-            .and_then(Value::as_array)
-            .and_then(|summaries| {
-                summaries
-                    .iter()
-                    .find(|summary| summary.get("agent").and_then(Value::as_str) == Some("codex"))
-            })
-            .expect("Codex summary");
-        assert_eq!(codex.get("scanned_count").and_then(Value::as_u64), Some(3));
-        assert!(codex
-            .get("roots_considered")
-            .and_then(Value::as_array)
-            .is_some_and(|roots| roots.len() >= 3));
-
-        let clear_response = host.handle(ServiceRequest {
-            id: Some("clear-context".to_string()),
-            method: "project.clearContext".to_string(),
-            params: Value::Null,
-        });
-        assert!(clear_response.ok);
-
-        let cleared_scan_response = host.handle(ServiceRequest {
-            id: Some("scan-all-cleared".to_string()),
-            method: "catalog.scanAll".to_string(),
-            params: Value::Null,
-        });
-        assert!(cleared_scan_response.ok);
-        let cleared = cleared_scan_response.result.expect("cleared scan result");
-        let cleared_skills = cleared
-            .get("skills")
-            .and_then(Value::as_array)
-            .expect("cleared scan skills");
-        assert!(
-            cleared_skills.iter().any(|skill| {
-                skill.get("agent").and_then(Value::as_str) == Some("codex")
-                    && skill.get("name").and_then(Value::as_str) == Some("user-alpha")
-            }),
-            "no-project scan should keep user-scope Codex skills visible"
+            !json_content.contains(&raw_path),
+            "json report leaked raw path {raw_path}"
         );
         assert!(
-            !cleared_skills.iter().any(|skill| {
-                skill.get("agent").and_then(Value::as_str) == Some("codex")
-                    && skill.get("name").and_then(Value::as_str) == Some("repo-beta")
-            }),
-            "no-project scan should hide previously cataloged project skills"
+            !markdown_content.contains(&raw_path),
+            "markdown report leaked raw path {raw_path}"
         );
-
-        let _ = fs::remove_dir_all(&host.app_data_dir);
     }
+    assert!(json_content.contains("<app-data-dir>"));
+    assert!(json_content.contains("$HOME"));
+    assert!(json_content.contains("<project-root>"));
+    assert!(markdown_content.contains("Skills Copilot Local Report"));
 
-    #[test]
-    fn skill_export_bundle_exports_staging_skill_through_service() {
-        let app_data_dir = env::temp_dir().join(format!(
-            "skills-copilot-service-export-test-{}-{}",
-            std::process::id(),
-            unique_suffix(),
-        ));
-        let source_dir = app_data_dir.join("staging/demo");
-        fs::create_dir_all(&source_dir).expect("create source skill");
-        fs::write(
-            source_dir.join("SKILL.md"),
-            "---\nname: service-demo\ndescription: Service export demo\nversion: 2.9.0\n---\nBody.\n",
-        )
-        .expect("write source skill");
-        let output_dir = app_data_dir.join("exports");
-        let host = test_host(app_data_dir.clone());
-
-        let response = host.handle(ServiceRequest {
-            id: Some("export-service".to_string()),
-            method: "skill.exportBundle".to_string(),
-            params: json!({
-                "source_path": source_dir,
-                "output_dir": output_dir,
-            }),
-        });
-
-        assert!(response.ok);
-        let result = response.result.expect("export result");
-        let export: WireExportedSkillBundle =
-            serde_json::from_value(result).expect("decode export result");
-        assert!(export.manifest_path.exists());
-        assert!(export.bundle_path.join("skill/SKILL.md").exists());
-        assert_eq!(export.metadata.name, "service-demo");
-        assert_eq!(export.metadata.source_scope, "tool-global");
-        let manifest = fs::read_to_string(&export.manifest_path).expect("read manifest");
-        assert!(
-            !manifest.contains(&app_data_dir.to_string_lossy().to_string()),
-            "manifest reproducible fields should not include absolute app-data paths"
-        );
-
-        let _ = fs::remove_dir_all(app_data_dir);
-    }
-
-    #[test]
-    fn report_export_local_writes_redacted_reports_and_keeps_catalog_read_only() {
-        let unique = unique_suffix();
-        let app_data_dir = env::temp_dir().join(format!(
-            "skills-copilot-report-export-test-{}-{unique}",
-            std::process::id()
-        ));
-        let user_home = env::temp_dir().join(format!(
-            "skills-copilot-report-home-{}-{unique}",
-            std::process::id()
-        ));
-        let project_root = env::temp_dir().join(format!(
-            "skills-copilot-report-project-{}-{unique}",
-            std::process::id()
-        ));
-        let host = ServiceHost {
-            app_data_dir: app_data_dir.clone(),
-            adapter_ctx: AdapterContext {
-                user_home: user_home.clone(),
-                project_root: Some(project_root.clone()),
-                project_cwd: Some(project_root.join("nested")),
-                extra_roots: Vec::new(),
-            },
-        };
-        seed_catalog_with_cleanup_queue_fixture(&host);
-        seed_catalog_with_llm_skill(&host, &user_home.join(".claude/skills/redacted/SKILL.md"));
-        let before_catalog = Catalog::open(&host.catalog_path()).expect("open catalog before");
-        let before_records = before_catalog.list_skill_records().expect("records before");
-        let before_visible_records = host
-            .list_visible_skill_records(&before_catalog)
-            .expect("visible records before");
-        let before_findings = before_catalog
-            .list_rule_findings()
-            .expect("findings before");
-        let before_snapshots = before_catalog
+    let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
+    assert_eq!(
+        after_catalog.list_skill_records().expect("records after"),
+        before_records
+    );
+    assert_eq!(
+        after_catalog.list_rule_findings().expect("findings after"),
+        before_findings
+    );
+    assert_eq!(
+        after_catalog
             .list_all_config_snapshots()
-            .expect("snapshots before");
+            .expect("snapshots after"),
+        before_snapshots
+    );
+    assert!(!host.script_execution_audit_path().exists());
+    assert!(!user_home.join(".codex/config.toml").exists());
+    assert!(!user_home.join(".claude/settings.json").exists());
 
-        let response = host.handle(ServiceRequest {
-            id: Some("report-export".to_string()),
-            method: "report.exportLocal".to_string(),
-            params: json!({ "formats": ["json", "markdown"] }),
-        });
+    let _ = fs::remove_dir_all(app_data_dir);
+    let _ = fs::remove_dir_all(user_home);
+    let _ = fs::remove_dir_all(project_root);
+}
 
-        assert!(response.ok, "{:?}", response.error);
-        let result = response.result.expect("report export result");
-        let export: WireReportExportLocalResult =
-            serde_json::from_value(result).expect("decode report export");
-        assert!(export.catalog_available);
-        assert!(export.read_only);
-        assert!(!export.writes_allowed);
-        assert!(!export.provider_request_sent);
-        assert!(!export.script_execution_allowed);
-        assert!(!export.credential_accessed);
-        assert_eq!(export.files.len(), 2);
-        assert_eq!(export.summary.skill_count, before_visible_records.len());
-        assert_eq!(export.summary.finding_count, before_findings.len());
-        assert!(export
-            .output_dir
-            .starts_with("<app-data-dir>/report-exports/"));
-        assert!(export
-            .files
-            .iter()
-            .all(|file| file.path.starts_with("<app-data-dir>/report-exports/")));
+#[test]
+fn report_export_local_missing_catalog_writes_empty_report_without_catalog_init() {
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-report-empty-test-{}-{}",
+        std::process::id(),
+        unique_suffix()
+    ));
+    let host = test_host(app_data_dir.clone());
 
-        let json_path = app_data_dir
-            .join("report-exports")
-            .join(&export.export_id)
-            .join("report.json");
-        let markdown_path = app_data_dir
-            .join("report-exports")
-            .join(&export.export_id)
-            .join("report.md");
-        let json_content = fs::read_to_string(json_path).expect("read json report");
-        let markdown_content = fs::read_to_string(markdown_path).expect("read markdown report");
-        for raw_path in [
-            app_data_dir.to_string_lossy().to_string(),
-            user_home.to_string_lossy().to_string(),
-            project_root.to_string_lossy().to_string(),
-        ] {
-            assert!(
-                !json_content.contains(&raw_path),
-                "json report leaked raw path {raw_path}"
-            );
-            assert!(
-                !markdown_content.contains(&raw_path),
-                "markdown report leaked raw path {raw_path}"
-            );
-        }
-        assert!(json_content.contains("<app-data-dir>"));
-        assert!(json_content.contains("$HOME"));
-        assert!(json_content.contains("<project-root>"));
-        assert!(markdown_content.contains("Skills Copilot Local Report"));
+    let response = host.handle(ServiceRequest {
+        id: Some("report-empty".to_string()),
+        method: "report.exportLocal".to_string(),
+        params: json!({ "formats": ["json"] }),
+    });
 
-        let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
-        assert_eq!(
-            after_catalog.list_skill_records().expect("records after"),
-            before_records
-        );
-        assert_eq!(
-            after_catalog.list_rule_findings().expect("findings after"),
-            before_findings
-        );
-        assert_eq!(
-            after_catalog
-                .list_all_config_snapshots()
-                .expect("snapshots after"),
-            before_snapshots
-        );
-        assert!(!host.script_execution_audit_path().exists());
-        assert!(!user_home.join(".codex/config.toml").exists());
-        assert!(!user_home.join(".claude/settings.json").exists());
+    assert!(response.ok, "{:?}", response.error);
+    let export: WireReportExportLocalResult =
+        serde_json::from_value(response.result.expect("report result"))
+            .expect("decode report result");
+    assert!(!export.catalog_available);
+    assert_eq!(export.summary.skill_count, 0);
+    assert_eq!(export.summary.finding_count, 0);
+    assert_eq!(export.summary.cleanup_item_count, 0);
+    assert_eq!(export.files.len(), 1);
+    assert!(
+        !host.catalog_path().exists(),
+        "missing-catalog export must not initialize catalog.sqlite"
+    );
+    assert!(!host.script_execution_audit_path().exists());
+    let json_path = app_data_dir
+        .join("report-exports")
+        .join(&export.export_id)
+        .join("report.json");
+    let json_content = fs::read_to_string(json_path).expect("read empty report");
+    assert!(json_content.contains("\"catalog_available\": false"));
+    assert!(json_content.contains("\"writes_allowed\": false"));
 
-        let _ = fs::remove_dir_all(app_data_dir);
-        let _ = fs::remove_dir_all(user_home);
-        let _ = fs::remove_dir_all(project_root);
-    }
-
-    #[test]
-    fn report_export_local_missing_catalog_writes_empty_report_without_catalog_init() {
-        let app_data_dir = env::temp_dir().join(format!(
-            "skills-copilot-report-empty-test-{}-{}",
-            std::process::id(),
-            unique_suffix()
-        ));
-        let host = test_host(app_data_dir.clone());
-
-        let response = host.handle(ServiceRequest {
-            id: Some("report-empty".to_string()),
-            method: "report.exportLocal".to_string(),
-            params: json!({ "formats": ["json"] }),
-        });
-
-        assert!(response.ok, "{:?}", response.error);
-        let export: WireReportExportLocalResult =
-            serde_json::from_value(response.result.expect("report result"))
-                .expect("decode report result");
-        assert!(!export.catalog_available);
-        assert_eq!(export.summary.skill_count, 0);
-        assert_eq!(export.summary.finding_count, 0);
-        assert_eq!(export.summary.cleanup_item_count, 0);
-        assert_eq!(export.files.len(), 1);
-        assert!(
-            !host.catalog_path().exists(),
-            "missing-catalog export must not initialize catalog.sqlite"
-        );
-        assert!(!host.script_execution_audit_path().exists());
-        let json_path = app_data_dir
-            .join("report-exports")
-            .join(&export.export_id)
-            .join("report.json");
-        let json_content = fs::read_to_string(json_path).expect("read empty report");
-        assert!(json_content.contains("\"catalog_available\": false"));
-        assert!(json_content.contains("\"writes_allowed\": false"));
-
-        let _ = fs::remove_dir_all(app_data_dir);
-    }
+    let _ = fs::remove_dir_all(app_data_dir);
+}

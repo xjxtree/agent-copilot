@@ -88,9 +88,9 @@ for (const snippet of [
 }
 
 for (const snippet of [
-  "DetailView.swift",
-  "DetailGuidedCleanupFlowPanel.swift",
-  "maxLines = 5000",
+  "\"apps/macos/Sources\"",
+  "[\".swift\", 5_000]",
+  "filesInTree",
 ]) {
   requireText(moduleSizeVerifier, "scripts/verify-module-size.mjs", snippet);
 }

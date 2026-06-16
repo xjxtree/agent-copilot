@@ -83,6 +83,13 @@ for (const snippet of [
   "service_task.rs",
 ]) {
   requireText(protocolDriftVerifier, "scripts/verify-service-protocol-drift.mjs", snippet);
+}
+
+for (const snippet of [
+  "\"crates\"",
+  "[\".rs\", 5_000]",
+  "filesInTree",
+]) {
   requireText(moduleSizeVerifier, "scripts/verify-module-size.mjs", snippet);
 }
 

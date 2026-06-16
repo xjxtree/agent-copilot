@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use crate::shared::{optional_frontmatter_string, split_yaml_frontmatter, stable_path_id};
 use skills_copilot_core::{
     AdapterContext, AdapterError, AdapterRoot, AgentAdapter, AgentId, PermissionRequest,
     RootSource, Scope, SkillInstance, SkillState,
@@ -76,7 +77,7 @@ impl AgentAdapter for OpenclawAdapter {
         };
 
         Ok(SkillInstance {
-            id: stable_path_id(path),
+            id: stable_path_id("openclaw", path),
             agent: AgentId::Openclaw,
             scope: Scope::AgentProject,
             project_root: None,
@@ -122,12 +123,13 @@ fn parse_skill_content(content: &str, fallback_name: &str) -> Result<ParsedSkill
         .strip_prefix("---\n")
         .or_else(|| content.strip_prefix("---\r\n"))
         .ok_or_else(|| "missing YAML frontmatter".to_string())?;
-    let (frontmatter_raw, body) = split_frontmatter(rest)?;
+    let (frontmatter_raw, body) = split_yaml_frontmatter(rest)?;
     let frontmatter: serde_yaml::Value =
         serde_yaml::from_str(frontmatter_raw).map_err(|err| err.to_string())?;
-    let name = optional_string(&frontmatter, "name").unwrap_or_else(|| fallback_name.to_string());
-    let description = optional_string(&frontmatter, "description").unwrap_or_default();
-    let version = optional_string(&frontmatter, "version");
+    let name = optional_frontmatter_string(&frontmatter, "name")
+        .unwrap_or_else(|| fallback_name.to_string());
+    let description = optional_frontmatter_string(&frontmatter, "description").unwrap_or_default();
+    let version = optional_frontmatter_string(&frontmatter, "version");
 
     Ok(ParsedSkill {
         frontmatter_raw: frontmatter_raw.to_string(),
@@ -136,31 +138,6 @@ fn parse_skill_content(content: &str, fallback_name: &str) -> Result<ParsedSkill
         description,
         version,
     })
-}
-
-fn split_frontmatter(rest: &str) -> Result<(&str, String), String> {
-    if let Some((frontmatter, body)) = rest.split_once("\n---\n") {
-        return Ok((frontmatter, body.to_string()));
-    }
-    if let Some((frontmatter, body)) = rest.split_once("\n---\r\n") {
-        return Ok((frontmatter, body.to_string()));
-    }
-    if let Some(frontmatter) = rest.strip_suffix("\n---") {
-        return Ok((frontmatter, String::new()));
-    }
-    if let Some(frontmatter) = rest.strip_suffix("\r\n---") {
-        return Ok((frontmatter, String::new()));
-    }
-    Err("unterminated YAML frontmatter".to_string())
-}
-
-fn optional_string(frontmatter: &serde_yaml::Value, key: &str) -> Option<String> {
-    frontmatter
-        .get(key)
-        .and_then(serde_yaml::Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToString::to_string)
 }
 
 fn openclaw_selected_workspace_root(ctx: &AdapterContext) -> Option<PathBuf> {
@@ -203,10 +180,6 @@ fn containing_dir_name(path: &Path) -> String {
         .and_then(|name| name.to_str())
         .unwrap_or("unknown")
         .to_string()
-}
-
-fn stable_path_id(path: &Path) -> String {
-    format!("openclaw:{}", path.display())
 }
 
 #[cfg(test)]

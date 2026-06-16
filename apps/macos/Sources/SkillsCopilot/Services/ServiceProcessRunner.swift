@@ -6,17 +6,108 @@ protocol ServiceProcessRunning {
 }
 
 final class StdioServiceProcessRunner: ServiceProcessRunning {
+    private let timeoutNanoseconds: UInt64
+
+    init(timeoutNanoseconds: UInt64 = StdioServiceProcessRunner.configuredTimeoutNanoseconds()) {
+        self.timeoutNanoseconds = timeoutNanoseconds
+    }
+
     func run(executableURL: URL, input: Data) async throws -> Data {
         let invocation = StdioServiceProcessInvocation(executableURL: executableURL, input: input)
-        let task = Task.detached(priority: .userInitiated) {
-            try invocation.run()
-        }
+        let coordinator = StdioServiceProcessRunCoordinator(invocation: invocation)
 
         return try await withTaskCancellationHandler {
-            try await task.value
+            try await withCheckedThrowingContinuation { continuation in
+                coordinator.start(
+                    timeoutNanoseconds: timeoutNanoseconds,
+                    continuation: continuation
+                )
+            }
         } onCancel: {
-            task.cancel()
-            invocation.cancel()
+            coordinator.cancel()
+        }
+    }
+
+    private static func configuredTimeoutNanoseconds() -> UInt64 {
+        let defaultTimeoutMs: UInt64 = 30_000
+        let raw = ProcessInfo.processInfo.environment["SKILLS_COPILOT_SERVICE_TIMEOUT_MS"]
+        let parsedTimeoutMs = raw.flatMap(UInt64.init)
+        let timeoutMs = parsedTimeoutMs.map { max($0, 50) } ?? defaultTimeoutMs
+        return timeoutMs * 1_000_000
+    }
+}
+
+private final class StdioServiceProcessRunCoordinator {
+    private let invocation: StdioServiceProcessInvocation
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Data, Error>?
+    private var operationTask: Task<Void, Never>?
+    private var timeoutTask: Task<Void, Never>?
+    private var completed = false
+
+    init(invocation: StdioServiceProcessInvocation) {
+        self.invocation = invocation
+    }
+
+    func start(
+        timeoutNanoseconds: UInt64,
+        continuation: CheckedContinuation<Data, Error>
+    ) {
+        lock.lock()
+        self.continuation = continuation
+        lock.unlock()
+
+        operationTask = Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            do {
+                let data = try self.invocation.run()
+                self.finish(.success(data))
+            } catch {
+                self.finish(.failure(error))
+            }
+        }
+
+        timeoutTask = Task { [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: timeoutNanoseconds)
+            } catch {
+                return
+            }
+            guard let self else { return }
+            self.invocation.cancel()
+            self.operationTask?.cancel()
+            self.finish(.failure(ServiceClient.ClientError.processTimedOut))
+        }
+    }
+
+    func cancel() {
+        invocation.cancel()
+        operationTask?.cancel()
+        finish(.failure(CancellationError()))
+    }
+
+    private func finish(_ result: Result<Data, Error>) {
+        let continuation: CheckedContinuation<Data, Error>?
+        let timeoutTask: Task<Void, Never>?
+        lock.lock()
+        if completed {
+            continuation = nil
+            timeoutTask = nil
+        } else {
+            completed = true
+            continuation = self.continuation
+            self.continuation = nil
+            timeoutTask = self.timeoutTask
+            self.timeoutTask = nil
+        }
+        lock.unlock()
+
+        timeoutTask?.cancel()
+        switch result {
+        case .success(let data):
+            continuation?.resume(returning: data)
+        case .failure(let error):
+            continuation?.resume(throwing: error)
         }
     }
 }
@@ -62,7 +153,7 @@ private final class StdioServiceProcessInvocation {
         do {
             try process.run()
             try Task.checkCancellation()
-            stdin.fileHandleForWriting.write(input)
+            try stdin.fileHandleForWriting.write(contentsOf: input)
             try stdin.fileHandleForWriting.close()
             clearStdinWriter(stdin.fileHandleForWriting)
 

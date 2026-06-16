@@ -480,6 +480,7 @@ impl ServiceHost {
                 let adapter_ctx = self.effective_adapter_ctx()?;
                 let attempt: ScriptExecutionAttemptRecord = record_blocked_script_execution(
                     &adapter_ctx,
+                    &self.app_data_dir.join("audit"),
                     &self.script_execution_audit_path(),
                     &params,
                 )?;
@@ -1246,6 +1247,10 @@ impl ServiceHost {
             .error_message
             .as_deref()
             .map(|value| truncate_chars(&redactor.redact(value), 500));
+        let draft_output = send
+            .output_text
+            .as_deref()
+            .map(|value| truncate_chars(&redactor.redact(value), 12_000));
         let request_redaction = redactor.summary();
         let completed_at = unix_timestamp_millis();
         let estimated_total_tokens = preview
@@ -1297,10 +1302,7 @@ impl ServiceHost {
             estimated_output_tokens: preview.estimated_output_tokens,
             estimated_total_tokens,
             estimated_cost_usd: preview.estimated_cost_usd,
-            draft_output: send
-                .output_text
-                .as_deref()
-                .map(|value| truncate_chars(&redact_for_llm_preview(value), 12_000)),
+            draft_output,
             draft_requires_user_copy: true,
             provider_request_sent: send.provider_request_sent,
             credential_accessed: send.credential_accessed,

@@ -30,6 +30,39 @@ Current release-readiness guardrails:
 Entries are ordered newest first. Add new version entries directly below this
 heading.
 
+### 2026-06-16 Review Remediation
+
+Status:
+
+- Complete as a post-V2.86 remediation pass, not a new public release version.
+
+Adapter behavior changes:
+
+- Shared adapter parser helpers were extracted for YAML frontmatter, required
+  strings, kebab-case skill names, and stable path ids.
+- Adapter scan roots, writable support, install support, and config schemas did
+  not change.
+
+Risk/security notes:
+
+- Catalog refreshes are transaction-protected.
+- Persisted LLM draft output now uses the strong redaction path and high-entropy
+  secret detection before storage.
+- Blocked script-execution audit writes are confined to the app audit root.
+- Swift stdio service calls have bounded timeout/decode/error coverage.
+- CI now includes `cargo audit`; `verify:gate-parity` includes `.mjs` syntax
+  verification.
+
+Validation posture:
+
+- Structure work continued without adding service protocol methods, provider
+  default calls, script execution, cloud sync, telemetry, signing, notarization,
+  DMG, or ZIP work.
+- DetailView section splitting was already below the target size and remains
+  covered by existing split view files.
+- The remaining `commands` legacy size budget is shrinking and tracked in
+  `docs/development-tasks.md`.
+
 ### V2.86 - 2026-06-16
 
 Status:

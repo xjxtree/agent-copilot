@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use crate::shared::{required_frontmatter_string, split_yaml_frontmatter, stable_path_id};
 use skills_copilot_core::{
     AdapterContext, AdapterError, AdapterRoot, AgentAdapter, AgentConfigAdapter,
     AgentConfigDocument, AgentId, PermissionRequest, RootSource, Scope, SkillInstance, SkillState,
@@ -70,7 +71,7 @@ impl AgentAdapter for CodexAdapter {
         };
 
         Ok(SkillInstance {
-            id: stable_path_id(path),
+            id: stable_path_id("codex", path),
             agent: AgentId::Codex,
             scope: Scope::AgentProject,
             project_root: None,
@@ -127,11 +128,11 @@ fn parse_skill_content(content: &str) -> Result<ParsedSkill, String> {
         .strip_prefix("---\n")
         .or_else(|| content.strip_prefix("---\r\n"))
         .ok_or_else(|| "missing YAML frontmatter".to_string())?;
-    let (frontmatter_raw, body) = split_frontmatter(rest)?;
+    let (frontmatter_raw, body) = split_yaml_frontmatter(rest)?;
     let frontmatter: serde_yaml::Value =
         serde_yaml::from_str(frontmatter_raw).map_err(|err| err.to_string())?;
-    let name = required_string(&frontmatter, "name")?;
-    let description = required_string(&frontmatter, "description")?;
+    let name = required_frontmatter_string(&frontmatter, "name", "Codex")?;
+    let description = required_frontmatter_string(&frontmatter, "description", "Codex")?;
 
     Ok(ParsedSkill {
         frontmatter_raw: frontmatter_raw.to_string(),
@@ -139,32 +140,6 @@ fn parse_skill_content(content: &str) -> Result<ParsedSkill, String> {
         name,
         description,
     })
-}
-
-fn split_frontmatter(rest: &str) -> Result<(&str, String), String> {
-    if let Some((frontmatter, body)) = rest.split_once("\n---\n") {
-        return Ok((frontmatter, body.to_string()));
-    }
-    if let Some((frontmatter, body)) = rest.split_once("\n---\r\n") {
-        return Ok((frontmatter, body.to_string()));
-    }
-    if let Some(frontmatter) = rest.strip_suffix("\n---") {
-        return Ok((frontmatter, String::new()));
-    }
-    if let Some(frontmatter) = rest.strip_suffix("\r\n---") {
-        return Ok((frontmatter, String::new()));
-    }
-    Err("unterminated YAML frontmatter".to_string())
-}
-
-fn required_string(frontmatter: &serde_yaml::Value, key: &str) -> Result<String, String> {
-    let value = frontmatter
-        .get(key)
-        .and_then(serde_yaml::Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| format!("missing required Codex frontmatter field `{key}`"))?;
-    Ok(value.to_string())
 }
 
 fn codex_user_config_path(ctx: &AdapterContext) -> PathBuf {
@@ -535,10 +510,6 @@ fn escape_toml_basic_string(value: &str) -> String {
         }
     }
     escaped
-}
-
-fn stable_path_id(path: &Path) -> String {
-    format!("codex:{}", path.display())
 }
 
 #[cfg(test)]

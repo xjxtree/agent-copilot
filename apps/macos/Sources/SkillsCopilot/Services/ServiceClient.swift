@@ -43,12 +43,6 @@ struct AppStateSnapshot: Codable, Hashable {
     }
 }
 
-private struct ServiceRequest<Params: Encodable>: Encodable {
-    let id: String
-    let method: String
-    let params: Params
-}
-
 private struct EmptyParams: Encodable {}
 
 private struct CleanupListQueueParams: Encodable {
@@ -1047,19 +1041,13 @@ private struct ProjectContextParams: Encodable {
     }
 }
 
-private struct ServiceEnvelope<ResultPayload: Decodable>: Decodable {
-    let id: String?
-    let ok: Bool
-    let result: ResultPayload?
-    let error: ServiceErrorPayload?
-}
-
 final class ServiceClient {
     enum ClientError: LocalizedError {
         case missingBinary
         case invalidOutput(String)
         case service(ServiceErrorPayload)
         case processFailed(Int32, String)
+        case processTimedOut
 
         var errorDescription: String? {
             switch self {
@@ -1071,11 +1059,13 @@ final class ServiceClient {
                 return "\(error.code): \(error.message)"
             case .processFailed(let status, let stderr):
                 return "Service exited with \(status): \(stderr)"
+            case .processTimedOut:
+                return "Service call timed out before the sidecar returned a complete response."
             }
         }
     }
 
-    private let processRunner: ServiceProcessRunning
+    let processRunner: ServiceProcessRunning
 
     init(processRunner: ServiceProcessRunning = StdioServiceProcessRunner()) {
         self.processRunner = processRunner
@@ -2453,44 +2443,4 @@ final class ServiceClient {
         )
     }
 
-    private func call<ResultPayload: Decodable, Params: Encodable>(
-        method: String,
-        params: Params
-    ) async throws -> ResultPayload {
-        let request = ServiceRequest(
-            id: UUID().uuidString,
-            method: method,
-            params: params
-        )
-        let input = try JSONEncoder().encode(request)
-        let output = try await runService(input: input)
-        let envelope = try JSONDecoder().decode(ServiceEnvelope<ResultPayload>.self, from: output)
-        if envelope.ok, let result = envelope.result {
-            return result
-        }
-        if let error = envelope.error {
-            throw ClientError.service(error)
-        }
-        throw ClientError.invalidOutput(String(data: output, encoding: .utf8) ?? "<binary>")
-    }
-
-    private func runService(input: Data) async throws -> Data {
-        try await processRunner.run(executableURL: resolveServiceURL(), input: input)
-    }
-
-    private func resolveServiceURL() throws -> URL {
-        #if DEBUG
-        if let override = ProcessInfo.processInfo.environment["SKILLS_COPILOT_SERVICE_PATH"],
-           !override.isEmpty {
-            let overrideURL = URL(fileURLWithPath: override)
-            if FileManager.default.isExecutableFile(atPath: overrideURL.path) {
-                return overrideURL
-            }
-        }
-        #endif
-        if let url = Bundle.main.url(forResource: "skills-copilot-service", withExtension: nil) {
-            return url
-        }
-        throw ClientError.missingBinary
-    }
 }
