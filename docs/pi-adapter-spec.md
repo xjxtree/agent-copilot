@@ -1,10 +1,10 @@
 # Pi Adapter Evidence Spec
 
-> Evidence date: 2026-06-10. V2.13 implements the evidence-backed read-only scanner/parser slice only; V2.21 completed scan-accuracy / dedupe / agent-metric wording alignment before any production write path.
+> Evidence date: 2026-06-10. V2.13 implemented the evidence-backed read-only scanner/parser slice; V2.21 completed scan-accuracy / dedupe / agent-metric wording alignment; V2.37 completed the guarded native global/project/package toggle slice with preview, snapshot, rollback, trust gate, and disabled-state rescan.
 
 ## Status
 
-Read-only scanner/parser support is implemented for Pi-native `~/.pi/agent/skills` and project `.pi/skills` roots, limited to directories containing `SKILL.md`. Writable toggle support is still blocked in production because Pi has multiple resource sources, package filters, project trust behavior, and compatibility roots. P0 evidence on 2026-06-10 confirmed enough mutation semantics to build a disposable harness first.
+Read-only scanner/parser support is implemented for Pi-native `~/.pi/agent/skills` and project `.pi/skills` roots, limited to directories containing `SKILL.md`. V2.37 guarded native toggle support is implemented for global/project/package disable/re-enable flows that passed disposable evidence checks. Pi install, `.agents/skills` compatibility-root writes, arbitrary compatibility-root writes, script execution, AI auto-write, and credential persistence remain blocked.
 
 Real local catalog validation on 2026-06-10 found that treating direct root `.md` files as skills pulls large numbers of ordinary Pi resource documents into the product list as broken/non-skill rows. Skills Copilot therefore intentionally does not scan direct root `.md` files for Pi until a narrower official or harness-backed discriminator exists.
 
@@ -106,18 +106,12 @@ Package evidence:
 
 Read-only state: **implemented in V2.13**. The scanner models Pi-native directory skills under `.pi/skills/**/SKILL.md` and `~/.pi/agent/skills/**/SKILL.md`. `.agents/skills` compatibility roots and direct root `.md` cataloging remain out of scope until conflict/noise policy is decided.
 
-Writable state: **harness candidate, production blocked**. A future writable adapter must first implement disposable tests for:
+Writable state: **guarded production slice implemented in V2.37 for native global/project/package toggle only**. Disable/re-enable must stay preview-first, trust-gated where project/package settings are involved, snapshot-backed, read-back verified, rollback-safe, and followed by disabled-state rescan. Broader writable support remains blocked for:
 
-- Exact JSON mutation produced by `pi config` when disabling a direct local skill path.
-- Exact JSON mutation produced by `pi config` when disabling a package-provided skill.
-- Whether default auto-discovered roots can be disabled per skill without removing files.
 - Whether `disable-model-invocation` should be treated as a read-only/writable partial state; it hides a skill from automatic model invocation but does not disable `/skill:name`.
 - Whether `enableSkillCommands: false` is a global command registration setting rather than per-skill enabled state.
-- Project trust behavior before loading `.pi/settings.json` and project-local `.pi` resources.
 - Merge behavior when global settings include a skill path and project settings exclude the same path.
 - Whether `.agents/skills` compatibility roots should be exposed under Pi or left to the Codex/agent-compatible adapter decision to avoid duplicate catalog entries.
-- Invalid JSON rollback and Skills Copilot snapshot/atomic/write-back behavior.
-- Re-enable strategy: follow Pi's observed `+path` behavior unless a harness proves deleting managed `-path` entries is safer.
 - Package install/remove is a separate decision from direct skill copy/install; do not mix them in the first writable patch.
 
 V2.21 validation scope:
@@ -132,5 +126,5 @@ Minimal evidence fixtures live under `fixtures/pi/`. They are evidence samples o
 
 - `fixtures/pi/global/agent/skills/global-pdf/SKILL.md`: global Pi skill shape, mirroring `~/.pi/agent/skills/<name>/SKILL.md`.
 - `fixtures/pi/project/.pi/skills/project-plan/SKILL.md`: project Pi skill shape.
-- `fixtures/pi/config/settings-package-filter-disabled.json`: candidate settings fragment showing package skill filtering; not verified as a direct local-skill toggle.
+- `fixtures/pi/config/settings-package-filter-disabled.json`: package skill filtering evidence for the V2.37 guarded package toggle slice; it is not authority for Pi install/remove or compatibility-root writes.
 - `fixtures/pi/broken/missing-description/SKILL.md`: malformed sample that Pi docs say should not load.

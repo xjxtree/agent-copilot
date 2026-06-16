@@ -136,7 +136,6 @@ const requiredReadmeSnippets = [
   "V2.82 验证清单（completed）",
   "pnpm verify:v2.82-docs",
   "V2.86 Rust helper/test split and module-size gate closeout completed",
-  boundaryText,
 ];
 
 for (const snippet of requiredReadmeSnippets) {
@@ -152,7 +151,6 @@ const requiredAgentsSnippets = [
   "`pnpm check:macos` and `./script/build_and_run.sh --verify` failed closed with canonical `locked-session` before UI evidence capture",
   "no fresh Computer Use screenshot is required because V2.82 has no user-visible native UI or service-protocol behavior change.",
   "V2.82 completed boundary",
-  boundaryText,
 ];
 
 for (const snippet of requiredAgentsSnippets) {

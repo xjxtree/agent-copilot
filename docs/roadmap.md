@@ -1,31 +1,71 @@
 # 路线图
 
-> 按 MVP → Product UI/UX Hardening → V1 Native macOS Pivot → macOS Native Productization → V2 Prep → V2 推进。每档都有"退出条件"，不达不升档。
+> 按 MVP → Product UI/UX Hardening → V1 Native macOS Pivot →
+> macOS Native Productization → V2 推进。每档都有退出条件，不达不升档。
 >
-> 进度判定口径：本文件中 0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；V2、非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，不代表当前 MVP/V1 进度遗漏。
+> 文档职责：本文件只记录人类可读的版本里程碑、规划范围、完成范围和非目标。
+> 实际版本任务、closeout 链接和执行口径写入 [`development-tasks.md`](./development-tasks.md)；
+> release-readiness / risk summary 写入 [`../CHANGELOG.md`](../CHANGELOG.md)；
+> 逐版本命令证据写入 `v2.*-verification-checklist.md`。
 >
-> 当前阶段：**V2.86 Rust helper/test split and module-size gate closeout completed**。V2.21-V2.86 已完成同步范围（scan accuracy/dedupe、finding/conflict 语义、Health/Adapter Capability UX、single-skill Detail 诊断口径、Agent-config timeline、Finding explainability、Skill identity/provenance dedupe、Conflict semantic closeout、Finding triage persistence、AI skill analysis workflow、Cleanup Queue、Rule tuning / suppression、Safe batch actions、Cross-agent comparison view、Local report export、Pi writable evidence harness、Pi guarded writable toggle、Hermes explicit external roots、OpenClaw workspace 深化、Adapter diagnostics、AI Provider Foundation、Prompt Preview / Redaction、AI Skill Quality Score、AI Task Readiness Check、AI Routing Confidence、Task Benchmark Set、Routing Regression Detection、Agent Behavior Trace Import、Routing Accuracy Dashboard、Cross-agent Task Readiness、Stale / Drift Detection、Local Knowledge Index、Similar Skill Grouping、Capability Taxonomy、Workspace Readiness、AI Remediation Planner、Fix Preview Drafts、Impact Preview、Batch Review Workflow、Remediation History、Prompt Run History、Agent Session Skill Review、Local Skill Map、Provider Observability、Task-first Cockpit、Skill Lifecycle Timeline、Guided Cleanup Flow、Task Cockpit primary entry / Analysis IA、Privacy / Screenshot Mode + localization polish、Swift / Rust feature modularization、Guided Cleanup safe-action deep links、Validation harness hardening、Task/remediation performance + timeout recovery、Real-local launch/window targeting stability、Task input and input-method resilience、Progressive Cockpit feedback、Real-local validation workbench、Protocol / validation gate parity、Privacy fixture and evidence-surface localization sweep、Detail navigation and visual density polish、Swift stdio sidecar cancellation cleanup、Test isolation and core model test floor、Continued module splitting、Swift Detail section splitting、Rust RPC domain module splitting、Rust helper/test split and module-size gate closeout）。V2.84-V2.86 preserved the boundary: no service protocol method or payload changes, protocol version bump, new UI surface, provider default calls, write/apply paths, hidden task state, scanner/catalog fact mutation, script execution, credential reads, raw prompt/response/trace persistence, cloud sync, telemetry, public distribution/signing/notarization/DMG/ZIP. V2.42+ provider-backed 分析仍必须 preview/redact/estimate/destination-visible/explicit-confirm 后才发送。
+> 进度判定口径：0 / 1 / 1.5 / 2 / 2.5 的退出条件代表当前已完成阶段；
+> 非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，
+> 不代表当前 MVP/V1 进度遗漏。
 >
-> 近期主线：继续围绕 AI agent skills 的管理、检查、分析和配置审计打磨体验。V2.41 Provider Foundation、V2.42 Prompt Preview / Redaction、V2.43 AI Skill Quality Score、V2.44 AI Task Readiness Check、V2.45 AI Routing Confidence、V2.46 Task Benchmark Set、V2.47 Routing Regression Detection、V2.48 Agent Behavior Trace Import、V2.49 Routing Accuracy Dashboard、V2.50 Cross-agent Task Readiness、V2.51 Stale / Drift Detection、V2.52 Local Knowledge Index、V2.53 Similar Skill Grouping、V2.54 Capability Taxonomy、V2.55 Workspace Readiness、V2.56 AI Remediation Planner、V2.57 Fix Preview Drafts、V2.58 Impact Preview、V2.59 Batch Review Workflow、V2.60 Remediation History、V2.61 Prompt Run History、V2.62 Agent Session Skill Review、V2.63 Local Skill Map、V2.64 AI Provider Observability、V2.65 Task-first Cockpit、V2.66 Skill Lifecycle Timeline、V2.67 Guided Cleanup Flow、V2.68 Task Cockpit primary entry / Analysis IA、V2.69 Privacy / Screenshot Mode + localization polish、V2.70 Swift / Rust feature modularization、V2.71 Guided Cleanup safe-action links、V2.72 Validation harness hardening、V2.73 Task/remediation performance + timeout recovery、V2.74 Real-local launch/window targeting stability、V2.75 Task input and input-method resilience、V2.76 Progressive Cockpit feedback、V2.77 Real-local validation workbench、V2.78 Protocol / validation gate parity、V2.79 Privacy fixture and evidence-surface localization sweep、V2.80 Detail navigation and visual density polish、V2.81 Swift stdio sidecar cancellation cleanup、V2.82 test isolation and core model test floor、V2.83 continued module splitting、V2.84 Swift Detail section splitting、V2.85 Rust RPC domain module splitting 与 V2.86 Rust helper/test split and module-size gate closeout completed。全平台 UI 适配、正式签名 release、notarization、DMG/ZIP、public distribution、脚本执行、云同步和 telemetry 仍不在当前规划内。
+> 当前阶段：**V2.86 Rust helper/test split and module-size gate closeout completed**。
+> V2.1-V2.86 是当前 completed baseline；尚未选择 post-V2.86 版本。
 
-> V2.46 已完成：`task.listBenchmarks` / `task.saveBenchmark` / `task.deleteBenchmark` / `task.evaluateBenchmarks` 将任务路由检查升级为 app-local benchmark set，可保存 task、expected skill refs/names、acceptable agent/scope 与成功标准，并用 V2.44/V2.45 本地 readiness/routing evidence 进行 deterministic read-only 评估；本地评估不发起 provider 请求。
-> V2.47 已完成：`task.saveRoutingBaseline` / `task.detectRoutingRegression` 在 V2.46 基准集基础上增加 routing regression 检测；依赖 app-local baseline 快照与 V2.46 benchmark 输出的可复用证据，默认不发 provider 请求、可选解释继续走 V2.42 preview/redaction/confirmation/copy-only。
-> V2.48 已完成：`trace.importLocal` / `trace.listImports` / `trace.deleteImport` 导入本地 trace/transcript，先脱敏再保存 redacted metadata/excerpt 到 app-local `trace-imports.json`，并用本地 catalog evidence 判读 hit/miss/wrong_pick/ambiguous/unknown；默认不落 raw trace，不发 provider 请求。
-> V2.49 已完成：`routing.accuracyDashboard` 从 V2.46 benchmark、V2.47 regression baseline/detection 与 V2.48 redacted trace import evidence 派生 summary、agent rows、history rows、gap/issue rows、recent evidence 与 safety flags；本地 dashboard 不写 artifact、不落 raw trace、不发 provider 请求。
-> V2.50 已完成：`task.compareAgentReadiness` 在同一任务下横向比较 Claude/Codex/opencode/Pi/Hermes/OpenClaw 的 best candidate、readiness/routing score、quality、enabled/scope/risk state、benchmark/regression/accuracy context、gap/blocker 与 evidence refs；本地比较不写 artifact、不发 provider 请求。
-> V2.51 已完成：`analysis.detectStaleDrift` 作为只读 service method 入口，围绕 fingerprint、mtime staleness、finding/conflict/analysis/source drift 与 readiness impact 做 stale/drift 说明；本地检测不写 artifact、不发 provider 请求。
-> V2.52 已完成：`knowledge.search` 作为只读 service method 入口，围绕 purpose、description/body snippets、tools、keywords、rules、source/root provenance、agent、risk、quality/readiness/stale-drift context 与 facets 做本地知识检索；本地检索不写 index artifact、不发 provider 请求。
-> V2.53 已完成：`knowledge.groupSimilarSkills` 作为本地 only、read-only、deterministic 的 grouping surface，围绕 existing catalog evidence、V2.52 derived tags、source/name/tool/rule/capability/risk overlaps 与 quality/readiness/stale-drift context，把相似/混淆 skills 分成 coverage redundancy 与 routing ambiguity 两类解释；本地 grouping 不写 artifact、不发 provider 请求。
-> V2.54 已完成：`knowledge.buildCapabilityTaxonomy` 基于 existing catalog evidence、V2.52 tags、V2.53 similar groups、quality/stale-drift context、agent/workspace/source/rule/tool/risk signals 生成能力域、覆盖、缺口、重复/冗余与 routing ambiguity；本地 taxonomy 不写 artifact、不发 provider 请求。
-> V2.55 已完成：`workspace.checkReadiness` 基于 catalog、taxonomy、task readiness/routing、cross-agent readiness、stale/drift、findings/conflicts/analysis、adapter diagnostics 与 provenance 生成 workspace checklist、agent/capability readiness、gap/blocker/evidence/safety flags；本地 workspace readiness 不写 artifact、不发 provider 请求。
-> V2.56 已完成：`remediation.plan` 基于 findings、cleanup queue、stale/drift、similar grouping、taxonomy、workspace readiness、optional task readiness/routing、conflicts/analysis、adapter diagnostics 与 provenance 生成 prioritized remediation plan items；本地 planner 不写 artifact、不发 provider 请求，optional provider explanation 仍走 V2.42 preview/redaction/confirmation/copy-only。
-> V2.63 已完成：`knowledge.buildLocalSkillMap` 基于 existing catalog evidence、V2.52 knowledge tags、V2.53 similar groups、V2.54 capability taxonomy、conflicts、cross-agent analysis、task readiness/routing/session-review context、stale/drift、source provenance 与 risk evidence 生成本地 skill map；本地 map 不创建新的 source of truth，不默认写 artifact，不发 provider 请求。
->
-> 已集成：macOS native baseline、refresh summary、V2 Prep safety gates、native SwiftPM test hardening、adapter evidence gates、首个 Codex adapter、V2.1-V2.25 各阶段能力、V2.9 Tool-global skill pool、V2.11 Adapter capability matrix、V2.16-V2.25 management/analysis/history line。后续候选变更仍需重新验证。
->
-> V2.10 安全边界：默认不真实执行 skill 脚本；任何未来执行请求必须逐次人工确认，并先展示 cwd/env/network/files preview；blocked/cancelled/failure attempts 必须审计；LLM 不能触发执行。
->
-> 最新真实本机 app 验证在 2026-06-15 对 V2.80 收口：current `dist/SkillsCopilot.app` 以 exact bundle path/PID targeting 启动，unlocked Computer Use 验证 PID `82571`、`skills-copilot.main-window`，在真实 catalog 技能上打开并滚动 `复查`，切换到 `验证工作台` 后确认 Detail 返回顶部并显示 `skills-copilot.validation-workbench`，记录 app-window evidence at `docs/ui-artifacts/v2.80-detail-density/completed.png`。后续 user-visible UI 版本仍需新的 unlocked real-local Computer Use 验证；若被锁屏、AX/window resolution、Screen Recording permission 或工具层问题阻塞，必须记录 canonical blocker，不能用 smoke 截图替代真实交互验证。
+## Current Milestone Snapshot
+
+| Range | Theme | Status |
+| --- | --- | --- |
+| V2.41-V2.64 | Provider foundation, prompt safety, read-only AI evidence, local skill map, provider observability | Completed |
+| V2.65-V2.77 | Task-first cockpit, lifecycle, guided cleanup, validation hardening, real-local workbench | Completed |
+| V2.78-V2.83 | Protocol/gate parity, privacy/localization, Detail density, IPC cancellation, test floor, continued module splitting | Completed |
+| V2.84-V2.86 | Swift Detail section splitting, Rust RPC domain module splitting, Rust helper/test split and module-size gate | Completed |
+
+Current planning boundary:
+
+- Keep the product focused on AI-agent skills management, inspection,
+  analysis, task-centered review, local skill mapping, provider observability,
+  and safe guided cleanup.
+- V2.42+ provider-backed analysis still requires preview, redaction,
+  token/cost estimate, destination visibility, and explicit confirmation.
+- Full-platform UI adaptation, signed release, notarization, DMG/ZIP,
+  public distribution, script execution, cloud sync, and telemetry remain
+  outside the active roadmap.
+- Verification governance:
+  V2.46-V2.64 keep their command evidence as inline historical closeout text
+  and intentionally have no separate checklist files. Do not backfill invented
+  screenshots, PIDs, or command results.
+- Docs gate governance:
+  V2.41-V2.72 intentionally have no package-level `verify:v2.NN-docs` scripts;
+  V2.73+ docs gates are the current automated verification line.
+
+## Closeout Evidence Index
+
+- V2.74 closeout evidence is tracked in
+  [`v2.74-verification-checklist.md`](./v2.74-verification-checklist.md).
+- V2.75 closeout evidence is tracked in
+  [`v2.75-verification-checklist.md`](./v2.75-verification-checklist.md);
+  AX-settable input; No raw prompt persistence.
+- V2.76 closeout evidence: PID `39728`,
+  `skills-copilot.task-cockpit.stage-progress`.
+- V2.77 closeout evidence: PID `34909`,
+  `skills-copilot.validation-workbench`.
+- V2.79 closeout evidence is tracked in
+  [`v2.79-verification-checklist.md`](./v2.79-verification-checklist.md).
+- V2.80 Detail navigation and visual density polish completed.
+  PID `82571`; `docs/ui-artifacts/v2.80-detail-density/completed.png`.
+- V2.81 Swift stdio sidecar cancellation cleanup completed.
+  no fresh Computer Use screenshot required because no user-visible UI changed.
+- V2.82 test isolation and core model test floor completed.
+  current canonical `locked-session` blocker recorded.
+- V2.83 continued module splitting completed.
+  no fresh Computer Use screenshot required because no user-visible UI or service-protocol behavior changed.
+- V2.84 Swift Detail section splitting completed.
+- V2.85 Rust RPC domain module splitting completed.
+- V2.86 Rust helper/test split and module-size gate closeout completed.
 
 ## 0. 设计阶段（已完成）
 
@@ -53,7 +93,7 @@
 
 ## 1. MVP — "能扫能看能 toggle"（已完成）
 
-**当前状态（2026-06-08）**：Claude Code MVP 的核心闭环已实现。应用可扫描 Claude skills、写入 SQLite catalog、运行 4 条 MVP 规则、展示列表/详情/冲突/快照，支持 `skillOverrides` 启停和 snapshot rollback。V1 已追加 Claude `settings.json` 读写 command。原生 macOS 侧边栏已补 State 过滤和 Sort 控件，并有 `pnpm test:macos-list-model` / `pnpm benchmark:macos-list-model` 覆盖 Swift list model 行为和 10k 性能。原生用户可见主文案已迁到 `UIStrings` + Swift `Localizable.strings` 资源。`pnpm check:macos` 是当前本地质量门禁：Rust 当前为 30 passed + 1 ignored，`cargo clippy` 0 warning，native list model test、native layout check、SwiftPM macOS app build、Local App Launch Verify 和 Smoke App Run 通过。Smoke App Run 会检查 `dist/SkillsCopilot.app` 是否比 Swift/Rust/icon/build/资源输入更新，避免验证旧 app。GitHub Actions 主线已调整为 Rust fmt/test/clippy + native macOS list/layout/SwiftPM/bundle/smoke。旧 Web/Tauri UI 与 Tauri IPC 壳已删除；历史 Tauri command surface 只作为 service protocol 演进记录存在。
+**历史状态快照（2026-06-08）**：Claude Code MVP 的核心闭环已实现。应用可扫描 Claude skills、写入 SQLite catalog、运行 4 条 MVP 规则、展示列表/详情/冲突/快照，支持 `skillOverrides` 启停和 snapshot rollback。V1 已追加 Claude `settings.json` 读写 command。原生 macOS 侧边栏已补 State 过滤和 Sort 控件，并有 `pnpm test:macos-list-model` / `pnpm benchmark:macos-list-model` 覆盖 Swift list model 行为和 10k 性能。原生用户可见主文案已迁到 `UIStrings` + Swift `Localizable.strings` 资源。`pnpm check:macos` 是当前本地质量门禁：Rust 当前为 30 passed + 1 ignored，`cargo clippy` 0 warning，native list model test、native layout check、SwiftPM macOS app build、Local App Launch Verify 和 Smoke App Run 通过。Smoke App Run 会检查 `dist/SkillsCopilot.app` 是否比 Swift/Rust/icon/build/资源输入更新，避免验证旧 app。GitHub Actions 主线已调整为 Rust fmt/test/clippy + native macOS list/layout/SwiftPM/bundle/smoke。旧 Web/Tauri UI 与 Tauri IPC 壳已删除；历史 Tauri command surface 只作为 service protocol 演进记录存在。
 
 > 单平台：macOS 优先（贡献者最常在的环境），其它平台 buildable 但当前不定义分发产物。
 
@@ -107,7 +147,7 @@
 
 **目标**：在继续扩展多 agent、LLM 和配置编辑器前，先把当前功能型 MVP 打磨成稳定、清晰、可扩展的桌面产品体验。
 
-**当前状态（2026-06-08）**：1.5 的产品化 UI/UX 硬化已落地并迁移到 native macOS 主线。旧 Tauri Web UI 已删除；其信息架构和交互经验作为历史记录保留在文档与 git history 中。原生 macOS shell 已具备三栏工作台、搜索、state 过滤、排序、Settings、快照预览和 rollback。scan / toggle / settings save / rollback 已有明确 loading、success、error 与 retry 状态反馈。详情 / 冲突 / 快照已补齐工作流空态、详情加载/错误态和小窗口布局保护。
+**历史状态快照（2026-06-08）**：1.5 的产品化 UI/UX 硬化已落地并迁移到 native macOS 主线。旧 Tauri Web UI 已删除；其信息架构和交互经验作为历史记录保留在文档与 git history 中。原生 macOS shell 已具备三栏工作台、搜索、state 过滤、排序、Settings、快照预览和 rollback。scan / toggle / settings save / rollback 已有明确 loading、success、error 与 retry 状态反馈。详情 / 冲突 / 快照已补齐工作流空态、详情加载/错误态和小窗口布局保护。
 
 **1.5 本地基线（2026-06-04, macOS local）**
 - 10k scan → catalog：2.142s，最大 RSS 86.6MB（`pnpm benchmark:10k`）。
@@ -171,7 +211,7 @@
 
 ## 2. V1 Native macOS Pivot — "协议先行 + 原生壳开工"（已完成基线）
 
-**当前状态（2026-06-08）**：V1 已启动，且路线已调整。早期 V1 的 Web/Tauri 验证壳已被删除，所有产品 UI 能力转向 SwiftUI/AppKit macOS 原生壳。`crates/service` 已提供 protocol v1 typed JSON stdio 方法与 contract fixtures，`apps/macos` 已提供 SwiftUI 原生壳，并通过 macOS Computer Use 验证扫描、列表、详情、findings、conflicts、snapshots、启停、Claude Settings 编辑、快照预览和回滚流。
+**历史状态快照（2026-06-08）**：V1 已启动，且路线已调整。早期 V1 的 Web/Tauri 验证壳已被删除，所有产品 UI 能力转向 SwiftUI/AppKit macOS 原生壳。`crates/service` 已提供 protocol v1 typed JSON stdio 方法与 contract fixtures，`apps/macos` 已提供 SwiftUI 原生壳，并通过 macOS Computer Use 验证扫描、列表、详情、findings、conflicts、snapshots、启停、Claude Settings 编辑、快照预览和回滚流。
 
 ### 2.1 范围
 
@@ -240,7 +280,7 @@
 
 **目标**：在扩展多 agent 和生态能力前，先把 native macOS baseline 的真实使用、发布前安全、分发准备和 adapter 证据门补稳。
 
-**当前状态（2026-06-08）**：V2 Prep 已完成。V2 Prep 完成时，Codex 已具备进入首个 adapter 实现切片的证据和写入策略；随后 §4.0 首个 Codex adapter 实现切片已集成到主分支。Pi / opencode 只具备 read-only 规划证据且 writable blocked；Hermes / OpenClaw 仍 blocked。
+**历史状态快照（2026-06-08）**：V2 Prep 已完成。V2 Prep 完成时，Codex 已具备进入首个 adapter 实现切片的证据和写入策略；随后 §4.0 首个 Codex adapter 实现切片已集成到主分支。Pi / opencode 只具备 read-only 规划证据且 writable blocked；Hermes / OpenClaw 仍 blocked。
 
 **范围**
 - 事件与刷新体验：scan progress、watcher event、自动刷新状态、失败恢复和用户可见日志。
@@ -265,10 +305,10 @@
 
 ## 4. V2 — "全 agent + 生态"
 
-**当前 V2 状态（2026-06-11）**：Codex adapter 首个实现切片、V2.1 Claude/Codex adapter experience、V2.2 project context、V2.3 adapter hardening、V2.4 opencode read-only adapter、V2.5 audit hardening、V2.6 manual readiness docs、V2.7 LLM local assist gate、V2.8 rules/permissions governance implementation、V2.9 Tool-global skill pool、V2.10 skill execution safety docs/release consistency、V2.11-V2.20 adapter/management/analysis line 已完成 closeout，且之前 mainline app 的真实本机 Computer Use 操作验证已在 2026-06-10 通过。产品重心保持在 skills 的管理、检查、分析和配置审计；真实 sandbox runner、GitHub clone import、script-file install 已从活动 backlog 删除。可执行任务清单见 [`development-tasks.md`](./development-tasks.md)。V2.10 已完成安全边界文档同步：default-deny，不真实执行；blocked/cancelled/failure attempt audit；LLM 不可触发执行。当前产品方向不规划 successful execution output log。V2.8 已完成 LLM status protocol compatibility、permissions roundtrip for V2.8 rules、explicit severity ordering、findings filtering/grouping UI、`app.stateSnapshot` refresh optimization，以及七条新本地规则：`frontmatter.tools-not-empty`、`permissions.network-declared`、`permissions.exec-needs-human`、`name.canonical-case`、`script.no-shebang`、`body.too-long`、`dependency.unknown`。Codex adapter core、commands/service、cwd→repo-root project discovery、macOS UI scan-all、agent filter、restart note、project context、config patch hardening、状态表达、安全回归、opencode native + compatibility root 扫描、guarded opencode permission writes、scanner/config/snapshot/service/UI/docs audit hardening、adapter changelog tracking、默认关闭的 LLM service/UI gate 和 request prepare/estimate 均已落地。V2.38 explicit external roots 已完成：`skills.external_dirs` 与 generic project roots 区分明确；Hermes writable/install 继续 blocked。V2.44 任务可用性评估已完成：`task.checkReadiness` 与 native Analysis readiness UI 均保持 read-only/user-triggered。
+**历史 V2 状态快照（2026-06-11）**：Codex adapter 首个实现切片、V2.1 Claude/Codex adapter experience、V2.2 project context、V2.3 adapter hardening、V2.4 opencode read-only adapter、V2.5 audit hardening、V2.6 manual readiness docs、V2.7 LLM local assist gate、V2.8 rules/permissions governance implementation、V2.9 Tool-global skill pool、V2.10 skill execution safety docs/release consistency、V2.11-V2.20 adapter/management/analysis line 已完成 closeout，且之前 mainline app 的真实本机 Computer Use 操作验证已在 2026-06-10 通过。产品重心保持在 skills 的管理、检查、分析和配置审计；真实 sandbox runner、GitHub clone import、script-file install 已从活动 backlog 删除。可执行任务清单见 [`development-tasks.md`](./development-tasks.md)。V2.10 已完成安全边界文档同步：default-deny，不真实执行；blocked/cancelled/failure attempt audit；LLM 不可触发执行。当前产品方向不规划 successful execution output log。V2.8 已完成 LLM status protocol compatibility、permissions roundtrip for V2.8 rules、explicit severity ordering、findings filtering/grouping UI、`app.stateSnapshot` refresh optimization，以及七条新本地规则：`frontmatter.tools-not-empty`、`permissions.network-declared`、`permissions.exec-needs-human`、`name.canonical-case`、`script.no-shebang`、`body.too-long`、`dependency.unknown`。Codex adapter core、commands/service、cwd→repo-root project discovery、macOS UI scan-all、agent filter、restart note、project context、config patch hardening、状态表达、安全回归、opencode native + compatibility root 扫描、guarded opencode permission writes、scanner/config/snapshot/service/UI/docs audit hardening、adapter changelog tracking、默认关闭的 LLM service/UI gate 和 request prepare/estimate 均已落地。V2.38 explicit external roots 已完成：`skills.external_dirs` 与 generic project roots 区分明确；Hermes writable/install 继续 blocked。V2.44 任务可用性评估已完成：`task.checkReadiness` 与 native Analysis readiness UI 均保持 read-only/user-triggered。
 
 **V2 剩余开发判定**
-- 近期主线：Comprehensive Agent Adapter Support，优先补齐 Pi、opencode writable、Hermes、OpenClaw。
+- 当前 adapter baseline：Pi guarded native global/project/package toggle 已完成，但 install 和 compatibility-root writes blocked；opencode guarded `permission.skill` writes 和 native install 已完成，但 custom `skills.paths` / `skills.urls` deferred；Hermes/OpenClaw 保持 read-only，writable/install blocked。
 - 跨版本 backlog：不改变 V2.1-V2.10 closeout 状态，按 [`development-tasks.md`](./development-tasks.md) 的优先级单独推进。
 - 验证口径：代码/UI/协议变更继续跑 `pnpm check:macos`；用户可见、UI 或 service protocol 变更继续重跑真实本机 Computer Use。若未来 macOS/AX 无法解析窗口，必须重新记录 blocker，不能用 smoke 截图替代。
 

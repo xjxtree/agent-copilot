@@ -1,15 +1,15 @@
 # Contributing to skills-copilot
 
-skills-copilot is currently in V2 Prep after completing the Claude Code MVP, Product UI/UX Hardening, the V1 native macOS baseline, and macOS Native Productization. Other agents remain design/spec work until their behavior is verified. The product UI direction is Rust core + service protocol + native macOS SwiftUI/AppKit shell. The native shell lives in `apps/macos`; the old Tauri/React shell has been removed.
+skills-copilot is currently at the V2.86 completed baseline after the Claude Code MVP, Product UI/UX Hardening, the V1 native macOS baseline, macOS Native Productization, and V2.1-V2.86 adapter/AI-native/validation/module-splitting line. The product UI direction is Rust core + service protocol + native macOS SwiftUI/AppKit shell. The native shell lives in `apps/macos`; the old Tauri/React shell has been removed.
 
 ## Current Contribution Scope
 
 Good contributions right now:
 
 - Fix contradictions, unclear wording, or stale assumptions in `docs/`
-- Provide verified adapter specs for `pi`, `hermes`, `openclaw`, or `opencode`
+- Improve verified adapter specs and fixtures for Claude Code, Codex, opencode, Pi, Hermes, or OpenClaw
 - Provide real sample layouts and config files for supported agents
-- Improve tests, docs, service protocol fixtures, and native macOS UI plans for the completed Claude Code MVP/V1/native baseline capability set
+- Improve tests, docs, service protocol fixtures, and native macOS UI plans for the completed V2.86 baseline
 - Help define service protocol fixtures for native and future desktop shells
 - Help harden the native macOS shell described in `docs/macos-native-plan.md`
 - Improve native validation assets and app-window-only screenshots
@@ -18,12 +18,14 @@ Good contributions right now:
 ## Design Rules
 
 - `docs/` describe the intended architecture and must be kept in sync with implementation changes.
-- Claude Code is the only fully verified MVP adapter target.
-- Codex support is provisional until its skills spec and enable/disable semantics are verified.
-- `pi`, `hermes`, `openclaw`, and `opencode` stay TBD until a real spec and sample config are provided.
+- The current adapter families are Claude Code, Codex, opencode, Pi, Hermes, and OpenClaw.
+- Claude Code and Codex have verified scan/toggle boundaries; Codex writes only user config, not project config.
+- opencode scans native plus official `.claude` / `.agents` compatibility roots; writes are limited to verified managed `permission.skill` overrides and native install roots.
+- Pi has read-only scanner support plus the V2.37 guarded native global/project/package toggle slice; Pi install and compatibility-root writes remain blocked.
+- Hermes and OpenClaw are read-only adapters; writable/install behavior remains blocked.
 - Do not guess agent directory layouts or config keys.
 - No cloud sync, telemetry, or automatic crash reporting.
-- LLM support is V1, not MVP.
+- Provider-backed AI support is implemented but remains explicit, preview/redaction/confirmation-gated, destination-visible, and copy-only unless a normal user edit/save flow validates output.
 - Do not bind new core behavior to one UI shell. Rust service logic should be callable from native macOS now and future Windows/Linux shells later.
 - Do not recreate `ui/`, `src-tauri/`, or Tauri IPC for product work.
 - The macOS native UI should use SwiftUI/AppKit system components first. Liquid Glass is a functional material for navigation, toolbars, inspectors, popovers, and command bars; do not use it as decorative blur over dense content.
@@ -53,7 +55,7 @@ Before opening a PR:
 - [ ] Any new agent behavior is backed by a source or fixture
 - [ ] I updated related docs when changing scope, lifecycle, or security behavior
 - [ ] I checked for broken internal links by inspection
-- [ ] I kept the MVP/V1/macOS-native/V2 boundary intact
+- [ ] I kept the V2.86 product and safety boundary intact
 - [ ] For code changes, I launched and operated the macOS app with macOS Computer Use, or documented the blocker
 - [ ] For UI changes, I updated prototype and completed UI artifacts under `docs/ui-artifacts/`
 
@@ -68,6 +70,8 @@ Before opening a PR:
 
 - `cargo test --workspace` must pass before opening a PR.
 - `cargo clippy --workspace --all-targets --all-features` target: 0 warnings.
+- `pnpm verify:gate-parity` must pass for protocol/docs/gate governance changes.
+- `pnpm check:privacy` must pass before committing validation evidence, screenshots, or privacy-sensitive docs.
 - `./script/build_and_run.sh --verify` should pass for native macOS UI/service changes; this builds the Rust sidecar, builds SwiftPM, assembles `dist/SkillsCopilot.app`, launches it, and checks the process.
 - Run macOS Computer Use against `dist/SkillsCopilot.app` for affected runtime flows and record the result under `docs/ui-artifacts/` when UI behavior changes.
 - `pnpm build:macos && pnpm smoke:macos-app` should pass on macOS before release-oriented changes. The smoke script validates the bundle and app launch by default; fixture mode validates native service write flows without touching real config.

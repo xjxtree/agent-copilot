@@ -67,14 +67,16 @@ try {
   assertUnderTemp(workRoot);
 
   const manifest = readJson("manifest.json");
-  assert(manifest.notice.includes("Production Pi writable support remains blocked"), "manifest must keep production write blocker explicit");
+  assert(manifest.notice.includes("V2.37 guarded Pi native toggle support is implemented"), "manifest must keep guarded toggle status explicit");
+  assert(manifest.notice.includes("install and compatibility-root writes remain blocked"), "manifest must keep blocked write scope explicit");
 
   for (const skill of manifest.skills) {
     const skillPath = join(workRoot, skill.path);
     assertUnderTemp(skillPath);
     const content = readFileSync(skillPath, "utf8");
     assert(content.includes(`name: ${skill.name}`), `skill name mismatch for ${skill.name}`);
-    assert(content.includes("production_writable: blocked"), `missing blocked marker for ${skill.name}`);
+    assert(content.includes("guarded_toggle: implemented"), `missing guarded toggle marker for ${skill.name}`);
+    assert(content.includes("install_writable: blocked"), `missing install blocked marker for ${skill.name}`);
   }
 
   const enabled = readJson(manifest.cases.enabled);

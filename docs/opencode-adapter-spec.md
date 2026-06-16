@@ -40,7 +40,7 @@ Local validation on 2026-06-08:
 - `$HOME/.config/opencode/opencode.json` exists locally.
 - No local opencode config content was inspected or modified.
 - Disposable read-only check: with temporary `HOME`, `XDG_CONFIG_HOME`, `OPENCODE_CONFIG_DIR`, and a temporary Git project, `opencode debug skill --pure` returned the synthetic `global-review`, `project-release`, and `nested-local` fixtures plus the built-in `customize-opencode` skill. No real config was read or modified. This confirms native global/project skill discovery and upward nested project discovery, but it does not verify writable permission mutation.
-- Disposable malformed check: the same command surfaced `name-mismatch` as `different-name` and surfaced a missing-description skill without a description; a missing-name skill was omitted. V2.4 should still use this app's stricter parser contract below so malformed rows become broken records rather than silently changing identity or disappearing.
+- Disposable malformed check: the same command surfaced `name-mismatch` as `different-name` and surfaced a missing-description skill without a description; a missing-name skill was omitted. The product keeps this app's stricter parser contract below so malformed rows become broken records rather than silently changing identity or disappearing.
 - Disposable writable check on 2026-06-09: `opencode debug skill --pure` continued listing synthetic skills even when temporary `OPENCODE_CONFIG_DIR/opencode.json` or project `opencode.json` set `permission.skill["<name>"] = "deny"`. Treat that command as discovery evidence only, not as proof of permission filtering. V2.12 therefore relies on official permission semantics for hide/reject behavior and verifies the app-owned write/snapshot/rollback/read-back path with fixture tests.
 
 Disposable command shape used:
@@ -148,7 +148,7 @@ OpenCode can also disable the entire `skill` tool for an agent, but that is an a
 
 ## Adapter Decision
 
-Read-only state: **approved for V2.4 implementation**. The scanner can model opencode-native skills under `.opencode/skills` and `~/.config/opencode/skills` using the parser/scan contract fixtures below.
+Read-only state: **implemented in V2.4**. The scanner models opencode-native skills under `.opencode/skills` and `~/.config/opencode/skills` using the parser/scan contract fixtures below.
 
 Compatibility root state: **implemented as scan-only**. `.claude/skills` and `.agents/skills` are included under the opencode adapter because current OpenCode official docs list them as discoverable. Claude/Codex ownership and duplicates should be explained by cross-agent analysis rather than suppressing opencode rows.
 
@@ -180,4 +180,4 @@ Parser/scan contract fixtures live under `fixtures/opencode/`.
 - `fixtures/opencode/broken/missing-description/SKILL.md`: malformed sample with required `description` missing.
 - `fixtures/opencode/broken/missing-name/SKILL.md`: malformed sample with required `name` missing.
 
-The config fixture remains writable-evidence only. It must not be used as authority for V2.4 writes.
+The config fixture is historical/disposable writable evidence only. V2.12 guarded writes use the verified app-owned strict JSON writer, snapshot/rollback/read-back tests, and exact `permission.skill` semantics; this fixture is not authority for new write scope.

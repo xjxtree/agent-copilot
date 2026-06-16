@@ -1,6 +1,6 @@
 # Codex Adapter Spec Worklist
 
-> Status: first implementation and V2.3 adapter hardening complete on 2026-06-08; real local UI operation remains pending because Computer Use/AX could launch the app process but could not resolve a visible SkillsCopilot window. `crates/adapters/src/codex/` implements Codex as **user-config writable**, not project-config writable: scan verified user/project roots, toggle by patching only the user Codex config, normalize target `[[skills.config]]` entries, preserve non-target config, and keep project-local `.codex/config.toml` skill toggles blocked.
+> Status: first implementation and V2.3 adapter hardening completed on 2026-06-08. The initial V2.0/V2.3 real-local UI pass was waived/blocked by Computer Use/AX window resolution, but later V2.68+ real-local validation captured successful `dist/SkillsCopilot.app` Computer Use evidence for the native app. `crates/adapters/src/codex/` implements Codex as **user-config writable**, not project-config writable: scan verified user/project roots, toggle by patching only the user Codex config, normalize target `[[skills.config]]` entries, preserve non-target config, and keep project-local `.codex/config.toml` skill toggles blocked.
 
 ## 1. Evidence Summary
 

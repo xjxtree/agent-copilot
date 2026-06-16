@@ -1,17 +1,39 @@
 # Agent Adapter Spec Worklists
 
-> Status: Codex first implementation, V2.1 dual adapter experience, V2.2 project context implementation, V2.3 Codex adapter hardening, V2.4 opencode read-only adapter, V2.5 audit hardening, V2.6 adapter changelog tracking, V2.7 LLM gate safety notes, V2.8-V2.10 safety/docs closeout, V2.11 Adapter Capability Matrix, V2.12 opencode writable, V2.13 Pi read-only scanner/parser, V2.14 Hermes evidence-gate closeout, and V2.15 OpenClaw evidence-gate closeout are integrated. V2.36 Pi writable evidence harness, V2.37 guarded Pi writable toggle slice, V2.38 Hermes external roots, V2.39 OpenClaw workspace deepening, and V2.40 Adapter diagnostics are complete.
-> Real local UI validation passed for the previous mainline app on 2026-06-10. V2.38 completed real app smoke launch/window id checks, while Computer Use/AX/capture returned `cgWindowNotFound` / no visible window; future user-visible, UI, or service-protocol candidates still require a fresh real local pass or explicit tool/session blocker. opencode writable, Pi read-only scan, Pi guarded native toggle, OpenClaw read-only scan, Hermes read-only scan, and Hermes explicit external-root scan are implemented; Pi install and Hermes/OpenClaw writable support remain blocked.
+> Status: V2.1-V2.86 is the synchronized completed baseline.
+> Adapter behavior is unchanged by the V2.84-V2.86 module split closeout.
+> opencode writable, Pi read-only scan, Pi guarded native toggle,
+> OpenClaw read-only scan, Hermes read-only scan,
+> and Hermes explicit external-root scan are implemented.
+> Pi install and Hermes/OpenClaw writable support remain blocked.
+> Real local UI validation is version-specific and recorded in the matching verification checklist.
+> Future user-visible, UI, or service-protocol candidates still require a fresh real local pass
+> or explicit tool/session blocker.
 > This document records what is verified enough to use for project instructions, and what is still missing before an adapter can be built.
 
 ## Current Rule
 
-Claude Code remains the mature baseline adapter. Codex has verified user/project roots, cwd-to-repo-root discovery, project-context-scoped scanning, and user-config writable toggles. V2.3 hardening added config patch robustness, explicit adapter states, root/config security regressions, and smoke/docs coverage. V2.4 added opencode as a read-only adapter for native roots; current opencode scan also follows official `.claude` / `.agents` compatibility roots.
+Claude Code remains the mature baseline adapter.
+Codex has verified user/project roots, cwd-to-repo-root discovery,
+project-context-scoped scanning, and user-config writable toggles.
+Opencode writable is enabled through managed `permission.skill` overrides;
+opencode install targets remain native roots.
 
-Pi production install remains blocked; production toggle is limited to the V2.37 evidence-backed guarded native global/project/package slice after V2.36 disposable evidence passed. Opencode writable is enabled through managed `permission.skill` overrides after V2.12 validation; opencode install targets remain native roots. Pi read-only scan is enabled for native roots after V2.13 validation. P0 evidence on 2026-06-10 promoted Hermes and OpenClaw from fully blocked to read-only scanner scope; OpenClaw read-only scan is enabled after V2.16 and Hermes read-only scan is enabled after V2.17, while writable/install stay blocked.
+Pi production install remains blocked.
+Production toggle is limited to the V2.37 evidence-backed guarded
+native global/project/package slice after V2.36 disposable evidence passed.
+OpenClaw and Hermes are read-only scanner scopes; writable/install stay blocked.
 
-The macOS app now uses the service/UI adapter capability matrix as the front-door status surface for all six agents. The matrix must make read-only, planned, and blocked states explicit before any future write affordance is exposed.
-V2.37 的 Pi 写入约束：仅启用 minimal native global/project/package 切换；install 仍 blocked，不执行脚本，不进行 AI 自动写回，不保存 credentials，不将兼容根（如 `.agents/skills`）纳入可写 scope。
+The macOS app uses the service/UI adapter capability matrix as the front-door
+status surface for all six agents. The matrix must make read-only, planned,
+and blocked states explicit before any future write affordance is exposed.
+
+V2.37 的 Pi 写入约束：
+
+- 仅启用 minimal native global/project/package 切换。
+- install 仍 blocked。
+- 不执行脚本，不进行 AI 自动写回，不保存 credentials。
+- 不将兼容根（如 `.agents/skills`）纳入可写 scope。
 
 Codex, Pi, Hermes, OpenClaw, and opencode must not be implemented from guessed paths or inferred config semantics. A new adapter needs verified evidence for:
 

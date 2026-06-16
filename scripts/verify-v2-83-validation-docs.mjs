@@ -136,7 +136,6 @@ const requiredReadmeSnippets = [
   "pnpm verify:v2.83-docs",
   "V2.1-V2.86",
   "V2.41-V2.86",
-  boundaryText,
 ];
 
 for (const snippet of requiredReadmeSnippets) {
@@ -151,7 +150,6 @@ const requiredAgentsSnippets = [
   "`FakeServiceScript.swift`",
   "no fresh Computer Use screenshot is required because V2.83 has no user-visible native UI or service-protocol behavior change.",
   "V2.83 completed boundary",
-  boundaryText,
 ];
 
 for (const snippet of requiredAgentsSnippets) {

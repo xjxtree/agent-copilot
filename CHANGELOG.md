@@ -2,49 +2,70 @@
 
 This file tracks release-readiness notes for adapter behavior, risk, validation, and deferred blockers. It is a manual tracking document, not a public release artifact log.
 
+Use it for externally meaningful changes and release-risk summaries. Do not use it
+as the active task queue; current implementation work belongs in
+`docs/development-tasks.md`, and version planning belongs in `docs/roadmap.md`.
+
+Current usage:
+
+- Active as a release-readiness / risk log.
+- Not a replacement for `docs/v2.*-verification-checklist.md`.
+- Not every internal refactor needs an entry unless it changes release risk,
+  validation posture, adapter behavior, or public-facing capability claims.
+
 Current release-readiness guardrails:
 
-- Real local Computer Use validation passed on 2026-06-09 for the current mainline app. Future user-visible, UI, or service-protocol candidates must rerun the real local pass; fixture smoke screenshots still do not replace real local validation for new changes.
-- V2.9 Tool-global import/export/install is integrated. Local directory import writes only app-controlled staging/catalog, export creates reproducible local bundles, and confirmed install routes Claude/Codex copies through verified write paths.
-- V2.8 rules and permissions governance is complete and automated validation passed on 2026-06-09; the seven new local rules are documented below.
-- Opencode is read-only and native-root-only: `~/.config/opencode/skills` and the active project `.opencode/skills`.
-- Opencode `.agents/skills` and `.claude/skills` compatibility roots are intentionally not scanned.
-- Non-Claude/Codex/opencode adapters remain blocked or planning-only until evidence gates are satisfied. Pi is read-only planning; Hermes and OpenClaw remain blocked.
+- V2.1-V2.86 are the synchronized completed baseline.
+- Real local validation evidence is version-specific. Use the matching verification checklist for exact screenshots, blockers, and commands.
+- Fixture smoke screenshots still do not replace required real local validation for user-visible changes.
+- Tool-global import/export/install is integrated. Local directory import writes only app-controlled staging/catalog, export creates reproducible local bundles, and confirmed install routes through verified write paths.
+- Opencode writable support is guarded and limited to verified managed `permission.skill` behavior and native install targets.
+- Pi production toggle is guarded and limited to the V2.37 evidence-backed global/project/package slice; Pi install remains blocked.
+- Hermes and OpenClaw remain read-only; writable/install support remains blocked.
 - No cloud sync, accounts, telemetry, anonymous crash reports, or uncontrolled outbound network calls.
 - Signing, notarization, DMG/ZIP packaging, updater work, and release artifact automation are deferred until public release work resumes.
 
-## Future Entry Template
+## V2 Adapter Impact Log
 
-### Vx.y - YYYY-MM-DD
+Entries are ordered newest first. Add new version entries directly below this
+heading.
+
+### V2.86 - 2026-06-16
 
 Status:
 
-- Complete / in progress / blocked / deferred.
+- Complete.
+- Refactor-only module split closeout plus validation-gate hardening.
 
 Adapter behavior changes:
 
-- Added, removed, or changed scan roots.
-- Changed parser behavior, malformed-skill handling, catalog attribution, UI state, or toggle semantics.
-- Changed writable/read-only support, config paths, snapshots, atomic writes, or rollback behavior.
+- No adapter scan roots, parser semantics, writable scope, install scope, or config schema changed.
+- Service protocol method names and payload shapes remain unchanged.
 
 Risk/security notes:
 
-- Path/root boundary changes.
-- Config write, snapshot, lock, read-back, rollback, or permission-model changes.
-- Compatibility-root, duplicate-root, stale-selection, project-context, or adapter-isolation risks.
-- Privacy/network posture changes.
+- Swift Detail sections were split out of `DetailView.swift`.
+- Rust service RPC handling, helpers, and tests were split into smaller files.
+- `pnpm verify:module-size` now enforces the single-file <= 5000-line target
+  for split service/test/Detail files.
+- No provider default calls, write/apply path, hidden task state,
+  scanner/catalog fact mutation, script execution, credential reads,
+  raw prompt/response/trace persistence, cloud sync, telemetry, signing,
+  notarization, DMG, or ZIP work was added.
 
 Validation run:
 
-- Commands run and exact result summary.
-- Fixture smoke coverage.
-- Real local Computer Use result, screenshot path, or explicit blocker.
+- `cargo test --workspace` passed.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` passed.
+- `swift test --package-path apps/macos` passed.
+- `pnpm verify:gate-parity` passed.
+- `pnpm check:privacy` passed.
+- `pnpm check:macos` passed, including fixture smoke app-window capture and screenshot artifact verification.
 
 Deferred blockers:
 
-- Remaining real local validation, evidence gaps, unsupported roots, unsupported writes, release packaging/signing, or other follow-up work.
-
-## V2 Adapter Impact Log
+- No V2.86-specific blocker remains.
+- Public release packaging/signing/notarization remains deferred.
 
 ### V2.10 - 2026-06-09
 
@@ -56,13 +77,21 @@ Status:
 Adapter behavior changes:
 
 - No adapter scan root, writable-toggle, or config-path behavior changed during the real local validation closeout.
-- Native macOS validation exercised the current integrated Claude Code, Codex, read-only opencode, findings, conflicts, snapshots, project context, LLM disabled state, and script safety preview surfaces against the developer's real local environment.
+- Native macOS validation exercised Claude Code, Codex, read-only opencode,
+  findings, conflicts, snapshots, project context, LLM disabled state,
+  and script safety preview surfaces against the real local environment.
 
 Risk/security notes:
 
-- `script.previewExecution` and `script.execute` remain default-deny / intent-boundary methods; no real sandbox runner, stdout/stderr capture, successful execution output log, or public execution API is claimed.
-- Real catalog data contained no structured script command records during the pass, so the script preview UI reached a safe missing-command preview-only state and did not execute anything. Service tests remain the evidence for command/cwd/env/network/files preview contracts.
-- `mcp__computer_use.get_app_state` resolved the app window, but `mcp__computer_use.click` returned an activation error. UI operation used macOS AX/System Events clicks with Computer Use state read-back after each step.
+- `script.previewExecution` and `script.execute` remain default-deny /
+  intent-boundary methods. No real sandbox runner, stdout/stderr capture,
+  successful execution output log, or public execution API is claimed.
+- Real catalog data contained no structured script command records during the pass.
+  The script preview UI reached a safe missing-command preview-only state and did not execute.
+  Service tests remain the evidence for command/cwd/env/network/files preview contracts.
+- `mcp__computer_use.get_app_state` resolved the app window, but click returned
+  an activation error. UI operation used macOS AX/System Events clicks with
+  Computer Use state read-back after each step.
 
 Validation run:
 
@@ -414,3 +443,34 @@ Deferred blockers:
 - Restore real local Computer Use validation for app-window operation.
 - Resolve Codex project-local toggle behavior before any project config write support.
 - Decide whether unsupported Codex roots should ever be scanned.
+
+## Future Entry Template
+
+### Vx.y - YYYY-MM-DD
+
+Status:
+
+- Complete / in progress / blocked / deferred.
+
+Adapter behavior changes:
+
+- Added, removed, or changed scan roots.
+- Changed parser behavior, malformed-skill handling, catalog attribution, UI state, or toggle semantics.
+- Changed writable/read-only support, config paths, snapshots, atomic writes, or rollback behavior.
+
+Risk/security notes:
+
+- Path/root boundary changes.
+- Config write, snapshot, lock, read-back, rollback, or permission-model changes.
+- Compatibility-root, duplicate-root, stale-selection, project-context, or adapter-isolation risks.
+- Privacy/network posture changes.
+
+Validation run:
+
+- Commands run and exact result summary.
+- Fixture smoke coverage.
+- Real local Computer Use result, screenshot path, or explicit blocker.
+
+Deferred blockers:
+
+- Remaining real local validation, evidence gaps, unsupported roots, unsupported writes, release packaging/signing, or other follow-up work.

@@ -9,6 +9,7 @@
 ```rust
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum AgentId {
+    ToolGlobal,
     ClaudeCode,
     Codex,
     Pi,
@@ -139,15 +140,18 @@ pub enum ConflictReason {
 pub struct PermissionRequest {
     pub tools: Vec<String>,               // 允许调用的工具；Claude Code CLI 映射自 allowed-tools
     pub files: Vec<String>,               // 允许读写的路径 glob pattern
-    pub network: NetworkAccess,           // None / ReadOnly / Full
+    pub network: NetworkAccess,           // None / ReadOnly / Full / Unknown(raw)
+    pub network_declared: bool,           // frontmatter/config 是否显式声明 network
     pub exec: bool,                       // 是否允许 fork 子进程
+    pub exec_declared: bool,              // frontmatter/config 是否显式声明 exec
     pub requires_human: bool,             // 是否需要人工确认
+    pub requires_human_declared: bool,    // frontmatter/config 是否显式声明 human confirmation
 }
 
-pub enum NetworkAccess { None, ReadOnly, Full }
+pub enum NetworkAccess { None, ReadOnly, Full, Unknown(String) }
 ```
 
-适配器把各 agent 异构的"权限字段"映射到这套统一形态。**没声明 = `tools/files` 为空、`network=None`、`exec=false`、`requires_human=true`**（最小权限 + 人工确认默认）。
+适配器把各 agent 异构的"权限字段"映射到这套统一形态。**没声明 = `tools/files` 为空、`network=None`、`network_declared=false`、`exec=false`、`exec_declared=false`、`requires_human=true`、`requires_human_declared=false`**（最小权限 + 人工确认默认）。
 
 ### 1.7 `SkillScript`
 
@@ -471,9 +475,9 @@ CREATE TABLE config_snapshot (
 - Explicitly excluded from report data model: provider/AI outputs, credentials, signed package metadata, distribution targets, telemetry records, and script execution traces.
 - Completed without adding persistent catalog schema; exports are generated from existing read models and written as redacted local artifacts.
 
-## V2.41-V2.73 AI-native skill review models
+## V2.41-V2.86 AI-native skill review models
 
-The AI-native line introduces analysis models incrementally and evidence-first. V2.41 adds app-data provider profile metadata and Keychain credential references, V2.61 adds redacted prompt run history, V2.62 adds app-local redacted Agent Session Skill Review metadata, V2.63 adds a derived Local Skill Map response, V2.64 adds a completed Provider Observability view, V2.65 adds a completed Task-first Cockpit response, V2.66 adds a completed Skill Lifecycle Timeline response, V2.67 adds completed Guided Cleanup Flow response plus app-local redacted step metadata, V2.71 adds navigation-only guided cleanup safe-action link metadata, V2.72 adds validation-only blocker taxonomy/tooling without changing persisted product models, and V2.73 adds runtime-only aggregation metadata for bounded task/remediation/Cockpit responses.
+The AI-native line introduces analysis models incrementally and evidence-first. V2.41 adds app-data provider profile metadata and Keychain credential references, V2.61 adds redacted prompt run history, V2.62 adds app-local redacted Agent Session Skill Review metadata, V2.63 adds a derived Local Skill Map response, V2.64 adds a completed Provider Observability view, V2.65 adds a completed Task-first Cockpit response, V2.66 adds a completed Skill Lifecycle Timeline response, V2.67 adds completed Guided Cleanup Flow response plus app-local redacted step metadata, V2.71 adds navigation-only guided cleanup safe-action link metadata, V2.72 adds validation-only blocker taxonomy/tooling without changing persisted product models, V2.73 adds runtime-only aggregation metadata for bounded task/remediation/Cockpit responses, and V2.74-V2.86 add validation/refactor/testability governance without expanding persisted AI/provider data models.
 
 Model families:
 

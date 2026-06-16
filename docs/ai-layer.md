@@ -4,7 +4,7 @@
 >
 > Scanner / rules / catalog 始终是事实来源；LLM/AI provider 是 AI agent skills 的核心分析增强，用于质量、任务可用性、routing 置信度、trace 分析、remediation 和 provider observability；V2.62 真实 agent session skill review、V2.63 local skill map、V2.64 provider observability、V2.65 task-first cockpit、V2.66 skill lifecycle timeline 与 V2.67 guided cleanup plan 保持 deterministic local-only，不发送 provider request。
 >
-> 当前实现边界（V2.65 complete；V2.66 complete；V2.67 completed；V2.71 completed；V2.72 completed）：
+> 当前实现边界（V2.41-V2.86 completed baseline）：
 >
 > - 已落地 disabled-by-default 的 service/UI gate 和 request prepare/estimate 能力。
 > - 已落地用户显式配置的 OpenAI-compatible / Claude-compatible provider profile 基础：`llm.listProviderProfiles`、`llm.saveProviderProfile`、`llm.deleteProviderProfile`、`llm.testProviderConnection`、macOS Keychain-first API key storage、预算字段、disabled/unconfigured state，以及 test connection 的最小 redacted call metadata。
@@ -15,6 +15,7 @@
 > - V2.67 Guided Cleanup Flow 是 completed：`cleanup.planGuidedFlow` 只读组织现有 evidence，`cleanup.recordGuidedStep` 仅可写 app-local redacted guided step metadata；真实 enable/disable/edit/remediation 仍走 existing preview-first / explicit-confirm safe methods。
 > - V2.71 Guided Cleanup safe-action links 是 completed：`safe_action_deep_link` / `deep_link` 只把 cleanup guidance 导航到既有安全入口，不新增 provider request、apply/write/toggle/script/confirmation 语义。
 > - V2.72 Validation harness hardening 是 completed：只加固验证脚本、截图证据和 Computer Use blocker 分类，不改变 AI/provider/service/write 语义。
+> - V2.73-V2.86 已完成 timeout recovery、launch/window targeting、task input resilience、progressive feedback、validation workbench、protocol/gate parity、privacy/localization、Detail density、Swift IPC cancellation、test isolation、continued module splitting、Swift Detail section split、Rust RPC domain split、Rust helper/test split 和 module-size gate；这些切片不扩展 provider/write/script/credential/cloud/telemetry 边界。
 >
 > V2.45（已完成）：
 >
@@ -129,7 +130,7 @@ Provider 配置原则：
 - provider request/response 默认不持久化；V2.42 confirmed send 只保存最小 redacted call metadata（status、duration、error、token/cost、redaction status、confirmation id、destination host），用于审计每次真实请求；V2.64 `llm.providerObservability` 在此基础上和 V2.61 prompt run metadata 上做 read-only observability summary、rows、budget/usage hints、retention/cleanup recommendations 和 evidence refs。若 export/cleanup controls 未在代码切片中实现，只能作为 observability recommendations，不应描述成可写路径。
 - provider 不得成为写入者、执行者或确认者。
 
-## 1.2 V2.41-V2.73 AI-native 能力线
+## 1.2 V2.41-V2.86 AI-native / validation / modularity 能力线
 
 | Version | AI role | 本地事实来源 |
 | --- | --- | --- |
@@ -162,6 +163,19 @@ Provider 配置原则：
 | V2.71（completed） | Guided Cleanup safe-action links | `safe_action_deep_link` / `deep_link` navigation metadata connects guided cleanup steps/actions to existing read-only or preview-first safe surfaces only; no provider request, direct apply/write/toggle/script/confirmation path |
 | V2.72（completed） | Validation harness hardening | Canonical blocker taxonomy, classifier CLI, smoke lock-session preflight, screenshot artifact failure labels, and fixture/real evidence matrix; no AI/provider/product semantic changes |
 | V2.73（completed） | Task / remediation timeout recovery | Bounded local aggregation metadata for task readiness/routing/cross-agent/remediation/Cockpit, scan/detail limits, fallback/partial diagnostics, cancel/retry UI, and stale completion protection; no provider default calls, no writes, no scripts, no credentials, no cloud sync, no telemetry |
+| V2.74（completed） | Real-local launch/window targeting stability | Exact workspace bundle/PID/window targeting, duplicate same-bundle fail-closed behavior, and stable native AX anchors; no signing/notarization/distribution expansion |
+| V2.75（completed） | Task input and input-method resilience | AX-settable multiline input, exact nonblank task preservation, whitespace-only submit blocking, and explicit Build before execution; no raw prompt persistence or hidden task state |
+| V2.76（completed） | Progressive Cockpit feedback | Staged readiness/routing/cross-agent/remediation/provider/session feedback, partial rows, elapsed time, fallback/blocked states; no provider/write/execute/credential/cloud/telemetry expansion |
+| V2.77（completed） | Real-local validation workbench | Read-only validation blocker explanations and evidence standards inside the app; no runnable validation action or provider/write/script scope |
+| V2.78（completed） | Protocol / validation gate parity | 88-method service protocol parity, drift verifier, docs gates, and V2.46-V2.64 verification-history governance without invented evidence |
+| V2.79（completed） | Privacy fixture and evidence-surface localization sweep | Fixed local host-port privacy scanning, screenshot-safe path rendering, and English/zh-Hans evidence-surface coverage without credential/network/scanner/provider/write expansion |
+| V2.80（completed） | Detail navigation and visual density polish | Stable detail top anchor and counted/collapsible dense evidence lists; presentation-only native UI change |
+| V2.81（completed） | Swift stdio sidecar cancellation cleanup | Cancellation/timeout cleanup around short-lived stdio service calls, pipe-handle cleanup, and TERM-to-SIGKILL escalation; no daemon/socket redesign |
+| V2.82（completed） | Test isolation and core model test floor | Serialized provider env mutation tests and core model wire/default/identity tests; no provider credential persistence or service protocol expansion |
+| V2.83（completed） | Continued module splitting | Protocol constants/envelopes, Detail overview helpers, and Swift fake service test helpers split without UI/protocol behavior changes |
+| V2.84（completed） | Swift Detail section splitting | Detail section files split by Task Cockpit / Skill Map / Guided Cleanup / Provider Observability / Review semantics; refactor-only |
+| V2.85（completed） | Rust RPC domain module splitting | `ServiceHost` RPC handling split across catalog/config/task/knowledge/remediation/llm-adjacent domain files while preserving the 88-method protocol |
+| V2.86（completed） | Rust helper/test split and module-size gate | Helper files and service test chunks split with `verify:module-size` wired into gate parity |
 
 V2.57 的 preview drafts 只生成可复制/可编辑的草稿建议，不提供直接 apply/write；任何 provider wording 都必须经过 V2.42 的 prompt preview / redaction / confirmation，并继续作为 copy-only 输出。
 

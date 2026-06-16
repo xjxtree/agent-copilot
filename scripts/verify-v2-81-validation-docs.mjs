@@ -127,7 +127,6 @@ const requiredReadmeSnippets = [
   "V2.81 验证清单（completed）",
   "pnpm verify:v2.81-docs",
   "V2.86 Rust helper/test split and module-size gate closeout completed",
-  "no daemon/socket redesign by default, service protocol method/payload changes, provider default calls, write/apply paths, hidden task state, scanner/catalog fact mutation, script execution, credential reads, raw prompt/response/trace persistence, cloud sync, telemetry, public distribution, signing/notarization/DMG/ZIP",
 ];
 
 for (const snippet of requiredReadmeSnippets) {
@@ -141,7 +140,6 @@ const requiredAgentsSnippets = [
   "Task Cockpit cancel/timeout cancels the active service task",
   "No fresh Computer Use screenshot is required because V2.81 has no user-visible native UI change.",
   "V2.81 completed boundary",
-  "no daemon/socket redesign by default, service protocol method/payload change, provider default call, write/apply path, hidden task state, scanner/catalog fact mutation, script execution, credential read, raw prompt/response/trace persistence, cloud sync, telemetry, public distribution, signing/notarization/DMG/ZIP",
 ];
 
 for (const snippet of requiredAgentsSnippets) {

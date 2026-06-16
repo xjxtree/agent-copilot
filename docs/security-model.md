@@ -201,7 +201,7 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
 - V2.30 草稿输出仅作 `review` 与复制使用，不能直接 apply；不会持久化 triage 状态（`Open / Reviewed / Ignored / Needs follow-up`）。
 - 当前阶段不读取或写入 LLM credentials；未来 provider 路径需显式 opt-in，并延续 V2.7 的 Keychain 优先边界。
 
-### 2.4.3 V2.41-V2.73 AI-native provider boundary
+### 2.4.3 V2.41-V2.86 AI-native provider / validation boundary
 
 **风险**：AI-native 分析会引入真实出站请求、用户配置的 endpoint/API key、prompt 内容、模型响应和成本/调用历史；如果边界不清晰，可能泄露本地路径、skill 内容、agent config、凭据或让 AI 输出绕过安全写入流程。
 
@@ -230,6 +230,7 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
 - V2.71 Guided Cleanup safe-action links 是 completed；`safe_action_deep_link` 与 `deep_link` 只能指向既有 read-only 或 preview-first 安全入口，且 `can_apply=false`。允许的目标包括 cleanup/detail、remediation plan/drafts/impact/batch review、skill lifecycle、task cockpit、safe batch preview panel context 和 guided step metadata record；禁止直接指向 `batch.applySkillToggles`、`config.toggleSkill`、script execution、provider confirmation 或任何隐藏写入/执行/确认路径。safe batch link 只打开上下文，不自动 preview/apply。
 - V2.72 Validation harness hardening 是 completed；只增加 validation blocker taxonomy、classifier CLI、lock-screen preflight、screenshot artifact failure labels 和 evidence matrix。它不改变 provider/network、skill/config write、triage、snapshot、script execution、credential、cloud sync 或 telemetry 边界。
 - V2.73 Task / remediation timeout recovery 是 completed；只增加 bounded local aggregation metadata、candidate/detail scan limits、timeout/fallback diagnostics、cancel/retry UI 和 stale completion protection。它不发送 provider request、不写 skill/config、不 mutate triage、不创建/回滚 snapshot、不执行 script、不读取 credential、不持久化 raw prompt/response/trace/secrets/unredacted local paths、不 cloud sync、不 telemetry。
+- V2.74-V2.86 are completed validation/refactor/testability slices: exact app launch/window targeting, resilient task input, progressive cockpit feedback, read-only validation workbench, protocol/gate parity, privacy/localization sweep, Detail density polish, Swift IPC cancellation cleanup, test isolation/core model floor, continued Swift/Rust module splitting, and module-size governance. They do not expand provider defaults, write/apply paths, script execution, credential reads, raw prompt/response/trace persistence, cloud sync, telemetry, signing/notarization, DMG/ZIP, or public distribution.
 - AI 输出永远是 untrusted suggestion；写入仍必须走已有 safe write path：preview-first、explicit confirm、snapshot、atomic write、readback verify、rollback。
 - AI 不能成为 `ExecutionRequester`，不能创建 `Completed` execution record，不能确认脚本执行。
 

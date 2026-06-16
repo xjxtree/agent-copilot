@@ -113,7 +113,6 @@ const requiredReadmeSnippets = [
   "Privacy fixture and evidence-surface localization sweep",
   "PID `68064`",
   "docs/ui-artifacts/v2.79-privacy-localization/completed.png",
-  "no credential reads, network behavior change, scanner/catalog fact mutation, provider/write/script/cloud/telemetry expansion",
 ];
 
 for (const snippet of requiredReadmeSnippets) {
@@ -125,7 +124,6 @@ const requiredAgentsSnippets = [
   "privacy fixture and evidence-surface localization sweep",
   "PID `68064`",
   "docs/ui-artifacts/v2.79-privacy-localization/completed.png",
-  "no credential reads, network behavior change, scanner/catalog fact mutation, provider/write/script/cloud/telemetry expansion",
 ];
 
 for (const snippet of requiredAgentsSnippets) {

@@ -9,6 +9,8 @@
 > 配置变更适配器实现 `AgentConfigAdapter`。
 >
 > 上层 scanner / catalog / UI 不直接处理 agent 特有配置语义。
+>
+> V2.41-V2.86 的 provider/task/validation/module-splitting work is tracked in README, roadmap, development tasks, and verification checklists. That line does not expand adapter roots or writable scope beyond the capability matrix below.
 
 ## V2.40 Adapter diagnostics
 

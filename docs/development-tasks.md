@@ -1,17 +1,50 @@
 # Development Tasks
 
-> Status: V2.86 Rust helper/test split and module-size gate closeout is complete. V2.84 Swift Detail section splitting, V2.85 Rust RPC domain module splitting, and V2.86 Rust helper/test split completed. V2.1 through V2.86 are the synchronized completed baseline.
+> Status: V2.86 Rust helper/test split and module-size gate closeout is complete.
+> V2.84 Swift Detail section splitting, V2.85 Rust RPC domain module splitting,
+> and V2.86 Rust helper/test split completed.
+> V2.1 through V2.86 are the synchronized completed baseline.
+>
+> Document role: this is the agent-facing implementation task ledger.
+> Keep concrete task routing, current baseline, closeout links, and validation handoff notes here.
+> Keep milestone planning in [`roadmap.md`](./roadmap.md),
+> release-risk summaries in [`../CHANGELOG.md`](../CHANGELOG.md),
+> and detailed command evidence in `v2.*-verification-checklist.md`.
 
 ## Current Baseline
 
-- Current branch baseline: `main` after V2.16-V2.28 management/analysis/history/explainability/provenance/conflict-semantics line and 2026-06-10 real local Computer Use validation; V2.22 finding/conflict 语义、V2.23 Health Dashboard / Adapter Capability UX、V2.24 Detail 诊断口径、V2.25 Agent-config timeline、V2.26 Finding explainability、V2.27 Skill identity/provenance dedupe、V2.28 Conflict semantic closeout 均已收口。
 - Product boundary: native macOS SwiftUI/AppKit shell plus Rust service protocol.
 - Completed V2 milestones: first Codex slice, V2.1 through V2.86.
-- Current priority: keep V2.26 finding explainability, V2.27 identity/provenance, V2.28 conflict semantics, V2.29 finding triage persistence, V2.30 read-only AI analysis, V2.31 read-only cleanup queue, V2.32 app-local rule tuning, V2.33 preview-first + explicit-confirm batch actions, V2.34 read-only comparison, V2.35 local redacted export, V2.36 disposable evidence, V2.37 guarded Pi toggle, V2.38 Hermes external roots, V2.39 OpenClaw workspace scope, V2.40 adapter diagnostics, V2.41 provider foundation, V2.42 prompt preview/redaction, V2.43 quality scoring, V2.44 task readiness, V2.45 routing confidence, V2.46 task benchmark set, V2.47 routing regression detection, V2.48 trace import, V2.49 routing accuracy dashboard, V2.50 cross-agent task readiness, V2.51 stale/drift detection, V2.52 local knowledge index, V2.53 similar skill grouping, V2.54 capability taxonomy, V2.55 workspace readiness, V2.56 read-only remediation planning, V2.57 read-only fix preview drafts, V2.58 read-only impact preview, V2.59 read-only batch review, V2.60 app-local remediation history, V2.61 app-local prompt run history, V2.62 app-local agent session skill review, V2.63 local skill map, V2.64 provider observability, V2.65 task-first cockpit, V2.66 skill lifecycle timeline, V2.67 guided cleanup, V2.68 cockpit-first IA, V2.69 screenshot privacy/path display, V2.70 module-boundary refactor, V2.71 guided-cleanup safe-action links, V2.72 validation harness hardening, V2.73 task/remediation timeout recovery, V2.74 launch/window targeting stable, V2.75 task input resilience, V2.76 progressive Cockpit feedback, V2.77 real-local validation workbench, V2.78 protocol / validation gate parity, V2.79 privacy fixture / evidence localization, V2.80 detail navigation / visual density polish, V2.81 Swift IPC cancellation cleanup, V2.82 test isolation/core model floor, V2.83 continued module splitting, V2.84 Swift Detail section splitting, V2.85 Rust RPC domain module splitting, and V2.86 Rust helper/test split with module-size gate.
-- Current implementation status: the macOS app and Rust service now expose user-configured OpenAI-compatible / Claude-compatible provider profiles, Keychain-first API key storage, explicit Test Connection, V2.42 prompt preview/redaction, confirmation-gated provider-backed draft output, budget fields, minimal redacted call metadata, V2.43 deterministic skill quality scoring, V2.44 deterministic task readiness, V2.45 deterministic routing confidence with `task.rankSkillRoutes`, V2.46 app-local task benchmark CRUD/evaluation with `task.listBenchmarks` / `task.saveBenchmark` / `task.deleteBenchmark` / `task.evaluateBenchmarks`, V2.47 app-local routing baseline/regression detection with `task.saveRoutingBaseline` / `task.detectRoutingRegression`, V2.48 app-local trace import/list/delete with `trace.importLocal` / `trace.listImports` / `trace.deleteImport`, V2.49 read-only routing accuracy dashboard with `routing.accuracyDashboard`, V2.50 read-only cross-agent task readiness with `task.compareAgentReadiness`, V2.51 read-only stale/drift detection with `analysis.detectStaleDrift`, V2.52 read-only local knowledge search with `knowledge.search`, V2.53 read-only similar grouping with `knowledge.groupSimilarSkills`, V2.54 read-only capability taxonomy with `knowledge.buildCapabilityTaxonomy`, V2.55 read-only workspace readiness with `workspace.checkReadiness`, V2.56 read-only remediation planning with `remediation.plan`, V2.57 read-only fix preview drafts with `remediation.previewDrafts`, V2.58 read-only impact preview with `remediation.previewImpact`, V2.59 read-only batch review with `remediation.batchReview`, V2.60 app-local remediation history with `remediation.listHistory` / `remediation.recordHistory` / `remediation.deleteHistory`, V2.61 prompt run history with `llm.listPromptRuns`, V2.62 deterministic Agent Session Skill Review with `session.reviewAgentSkillUse` / `session.listSkillReviews` / `session.deleteSkillReview`, V2.63 deterministic Local Skill Map with `knowledge.buildLocalSkillMap`, V2.64 deterministic Provider Observability with `llm.providerObservability`, V2.65 deterministic Task-first Cockpit with `task.buildCockpit`, V2.66 deterministic Skill Lifecycle Timeline with `skill.lifecycleTimeline`, V2.67 deterministic Guided Cleanup Flow with `cleanup.planGuidedFlow` / `cleanup.recordGuidedStep`, V2.68 cockpit-first native IA, V2.69 app-local screenshot privacy/path display governance, and V2.70 split Swift/Rust feature modules over these existing surfaces. Provider-backed AI analysis waits up to 10 minutes in the foreground request, then persists the completed redacted task/result record; it is not a background durable job that continues after app quit.
-- Real local Computer Use baseline: latest completed UI validation is V2.80 on 2026-06-15. The current `dist/SkillsCopilot.app` was rebuilt and launched with exact bundle path/PID targeting, unlocked Computer Use targeted the exact app path, matched PID `82571` and `skills-copilot.main-window`, selected a real catalog skill, opened `复查`, scrolled the long detail surface, switched to `验证工作台`, verified `skills-copilot.validation-workbench` at the top of the Detail surface, and recorded app-window evidence at `docs/ui-artifacts/v2.80-detail-density/completed.png`. Future user-visible UI changes need fresh unlocked Computer Use validation; if blocked, record one canonical blocker code and do not commit invalid real-local screenshots.
+- Current priority:
+  preserve the V2.26-V2.86 completed behavior while keeping future work
+  focused on task-centered skill review, local evidence, safe cleanup,
+  and maintainable module boundaries.
+- Current implementation status:
+  provider profiles, prompt preview/redaction, deterministic quality/readiness/routing,
+  task cockpit, local skill map, provider observability, lifecycle, guided cleanup,
+  and app-local history surfaces are implemented.
+- Real local Computer Use baseline:
+  latest completed UI validation is V2.80 on 2026-06-15.
+  PID `82571`, `skills-copilot.validation-workbench`, and
+  `docs/ui-artifacts/v2.80-detail-density/completed.png` remain the latest
+  completed real-local UI evidence.
+  Future user-visible UI changes need fresh unlocked Computer Use validation
+  or one canonical blocker code.
 - Quality gate for code/UI/protocol work: `pnpm check:macos`; add focused Rust/Swift tests when touching shared behavior.
-- 2026-06-16 review triage: the module-splitting follow-up assigned to V2.84, V2.85, and V2.86 is complete. V2.84 completed Swift Detail section splitting (`DetailView.swift` router/composer plus `DetailGuidedCleanupFlowPanel.swift` and peer section files), V2.85 completed Rust RPC domain module splitting (`service_host.rs` through `service_task.rs`), and V2.86 completed Rust helper/test split plus `verify:module-size` gate wiring (`service_support_helpers.rs`, `crates/service/src/tests/`). Boundary preserved: no service protocol method or payload changes, protocol version bump, new UI surface, provider default calls, write/apply paths, hidden task state, scanner/catalog fact mutation, script execution, credential reads, raw prompt/response/trace persistence, cloud sync, telemetry, public distribution/signing/notarization/DMG/ZIP.
+- 2026-06-16 review triage:
+  V2.84-V2.86 module-splitting follow-up is complete.
+  V2.84 split Swift Detail sections, V2.85 split Rust RPC domain files,
+  and V2.86 split Rust helpers/tests plus `verify:module-size`.
+- Verification governance:
+  V2.46-V2.64 have no separate checklist files. Their command evidence remains
+  inline in this ledger and historical closeout text; do not backfill invented
+  screenshots, PIDs, or command output.
+- Docs gate governance:
+  V2.41-V2.72 have no package-level `verify:v2.NN-docs` scripts.
+  V2.73+ docs gates are the current automated verification line.
+- Checklist format governance:
+  V2.41-V2.45 and V2.65-V2.72 checklist sections are historical evidence
+  snapshots; V2.73+ uses the modern gate-backed closeout template.
 
 ## User-centered Optimization Direction
 

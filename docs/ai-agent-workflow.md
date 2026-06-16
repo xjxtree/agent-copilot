@@ -54,6 +54,23 @@ Use this priority order when information conflicts:
 
 If docs conflict with code, fix the docs or code as part of the task when the requested scope allows it. Do not silently proceed with stale documentation.
 
+## Documentation Ownership Matrix
+
+Use this table before adding or moving documentation. It keeps agent-facing
+instructions, human-facing summaries, and evidence records from drifting into
+the same file.
+
+| Document | Primary audience | Put here | Do not put here |
+| --- | --- | --- | --- |
+| `AGENTS.md` | AI coding agents | Shared rules, current hard boundaries, validation expectations, compact gate anchors | Long changelog entries, full roadmap history, release notes |
+| `CLAUDE.md` | Claude Code | Claude-specific behavior, Computer Use defaults | Shared project rules already in `AGENTS.md` |
+| `README.md` | Humans | Product overview, current status, document map, common commands | Version-by-version evidence dumps or task ledgers |
+| `docs/roadmap.md` | Humans + agents | Version milestones, planned/completed scope, non-goals | Per-command validation logs or implementation scratch notes |
+| `docs/development-tasks.md` | Agents + maintainers | Active task queue, version task routing, closeout links, current implementation ledger | Marketing copy, full release notes |
+| `CHANGELOG.md` | Humans + agents | Release-readiness notes, externally meaningful behavior/risk changes, manual validation summary | Future planning, detailed task checklists |
+| `docs/v2.*-verification-checklist.md` | Agents + reviewers | Version-specific evidence snapshots and command results | Product overview or future planning |
+| Focused specs (`docs/service-protocol.md`, adapter specs, security/data/AI docs) | Implementers | Durable contracts and domain-specific rules | General project status unless directly relevant |
+
 ## Validation Rules
 
 Use focused validation for small code changes. Use full macOS validation for larger or user-visible work.
@@ -68,6 +85,10 @@ Use focused validation for small code changes. Use full macOS validation for lar
 | Major/user-visible/milestone change | `pnpm check:macos` plus real Local App Run |
 | Screenshot update | App-window-only capture; full desktop screenshots are forbidden |
 | Privacy-sensitive docs, screenshots, release evidence, or history cleanup | `pnpm check:privacy` plus manual visual inspection of new screenshots |
+
+`verify:macos-ui-layout` is intentionally reached through `pnpm check:macos`
+instead of `pnpm verify:gate-parity`, because it is a native UI layout guard
+rather than a protocol/docs parity gate.
 
 ## Smoke App Run vs Local App Run
 
@@ -96,7 +117,15 @@ pnpm dev:macos
 
 Then operate the real app with macOS Computer Use when the macOS session is confirmed unlocked and interactive.
 
-A valid `get_app_state` result for the target app window is enough to proceed. If `get_app_state` returns `remoteConnection`, `cgWindowNotFound`, `timeoutReached`, an activation error, or another signal that the session/window is not interactable, stop Computer Use attempts for that pass and record the canonical blocker. Use `pnpm classify:validation-blocker -- "<tool output>"` when the raw tool text is ambiguous. If Computer Use can observe the window but a specific action primitive such as click/key input fails, record that tool-action limitation and use another macOS AX path only when each operation is followed by Computer Use state read-back.
+A valid `get_app_state` result for the target app window is enough to proceed.
+If it returns `remoteConnection`, `cgWindowNotFound`, `timeoutReached`,
+an activation error, or another non-interactive signal, stop Computer Use
+attempts for that pass and record the canonical blocker.
+Use `pnpm classify:validation-blocker -- "<tool output>"` when the raw tool
+text is ambiguous.
+If Computer Use can observe the window but a specific action primitive fails,
+record that tool-action limitation and use another macOS AX path only when
+each operation is followed by Computer Use state read-back.
 
 ## Screenshot Rules
 
@@ -122,7 +151,11 @@ Before committing screenshots or local validation evidence, inspect them visuall
 pnpm check:privacy
 ```
 
-Screenshots and docs must not expose real local usernames, home paths, app-data paths, temp directories, credentials, tokens, or proxy-managed credential placeholders. Use placeholders such as `$HOME`, `<repo>`, `<worktree>`, `<project-root>`, `<app-data-dir>`, and `<redacted>`.
+Screenshots and docs must not expose real local usernames, home paths,
+app-data paths, temp directories, credentials, tokens,
+or proxy-managed credential placeholders.
+Use placeholders such as `$HOME`, `<repo>`, `<worktree>`,
+`<project-root>`, `<app-data-dir>`, and `<redacted>`.
 
 ## Multi-Agent Use
 

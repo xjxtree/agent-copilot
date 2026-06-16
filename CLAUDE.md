@@ -2,11 +2,12 @@
 
 # CLAUDE.md
 
-This file provides Claude Code-specific guidance for this repository. Shared project rules live in `AGENTS.md`.
+This file provides Claude Code-specific guidance for this repository. Shared project rules live in `AGENTS.md`; detailed multi-agent workflow rules live in `docs/ai-agent-workflow.md`.
 
 ## Claude Code Specific Rules
 
 - Treat `AGENTS.md` as the canonical shared instruction entrypoint.
+- Do not duplicate project history, roadmap status, or task ledgers in this file.
 - Read the relevant `docs/` file before architecture, UI, validation, or adapter changes.
 - Use macOS Computer Use for real app validation when the macOS session is unlocked and the app window can be resolved.
 - If Computer Use cannot resolve the app window, state that real local app validation is blocked and record the blocker when updating verification docs.

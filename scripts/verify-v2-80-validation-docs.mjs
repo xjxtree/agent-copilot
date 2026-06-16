@@ -127,7 +127,6 @@ const requiredReadmeSnippets = [
   "V2.80 验证清单（completed）",
   "pnpm verify:v2.80-docs",
   "V2.86 Rust helper/test split and module-size gate closeout completed",
-  "No service method, provider default call, write/apply path, hidden task state, scanner/catalog fact mutation, script execution, credential read, raw prompt/response/trace persistence, cloud sync, telemetry, or public distribution",
 ];
 
 for (const snippet of requiredReadmeSnippets) {
@@ -140,7 +139,6 @@ const requiredAgentsSnippets = [
   "PID `82571`",
   "skills-copilot.validation-workbench",
   "docs/ui-artifacts/v2.80-detail-density/completed.png",
-  "no service method/provider/write/hidden-state/scanner/script/credential/raw-persistence/cloud/telemetry/public-distribution expansion",
 ];
 
 for (const snippet of requiredAgentsSnippets) {

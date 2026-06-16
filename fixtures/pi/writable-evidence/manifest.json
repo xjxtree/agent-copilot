@@ -1,5 +1,5 @@
 {
-  "notice": "V2.36 Pi writable evidence-only harness. Production Pi writable support remains blocked.",
+  "notice": "V2.36 evidence harness promoted by V2.37: V2.37 guarded Pi native toggle support is implemented for global/project/package flows; install and compatibility-root writes remain blocked.",
   "configFile": "config/pi-settings.enabled.json",
   "skills": [
     {
