@@ -104,7 +104,18 @@ fn is_allowed_canonical_root(
             .project_root
             .as_ref()
             .and_then(|project_root| project_root.canonicalize().ok()),
-        RootSource::Extra => None,
+        RootSource::Compatibility => match root.scope {
+            Scope::AgentGlobal => ctx.user_home.canonicalize().ok(),
+            Scope::AgentProject => ctx
+                .project_root
+                .as_ref()
+                .and_then(|project_root| project_root.canonicalize().ok()),
+            Scope::ToolGlobal => None,
+            _ => None,
+        },
+        RootSource::Admin | RootSource::Plugin | RootSource::System | RootSource::Extra => {
+            Some(canonical_root.to_path_buf())
+        }
     };
     allowed_base.is_none_or(|base| canonical_root.starts_with(base))
 }
@@ -254,7 +265,22 @@ fn allowed_target_base(
             .as_ref()
             .and_then(|project_root| project_root.canonicalize().ok())
             .unwrap_or_else(|| canonical_root.to_path_buf()),
-        RootSource::Extra => canonical_root.to_path_buf(),
+        RootSource::Compatibility => match root.scope {
+            Scope::AgentGlobal => ctx
+                .user_home
+                .canonicalize()
+                .unwrap_or_else(|_| canonical_root.to_path_buf()),
+            Scope::AgentProject => ctx
+                .project_root
+                .as_ref()
+                .and_then(|project_root| project_root.canonicalize().ok())
+                .unwrap_or_else(|| canonical_root.to_path_buf()),
+            Scope::ToolGlobal => canonical_root.to_path_buf(),
+            _ => canonical_root.to_path_buf(),
+        },
+        RootSource::Admin | RootSource::Plugin | RootSource::System | RootSource::Extra => {
+            canonical_root.to_path_buf()
+        }
     }
 }
 

@@ -225,6 +225,21 @@ const versions = {
       "Final status decision: completed",
     ],
   },
+  "v2.92": {
+    title: "# V2.92 Verification Checklist",
+    required: [
+      "Codex expanded roots",
+      "RootSource::Compatibility",
+      "RootSource::Admin",
+      "RootSource::Plugin",
+      ".codex/config.toml",
+      "/etc/codex/skills",
+      "$CODEX_HOME/skills",
+      "plugin marketplace",
+      "docs/ui-artifacts/v2.92-codex-expanded-roots",
+      "Final status decision: completed",
+    ],
+  },
 };
 
 const staleStatus = [

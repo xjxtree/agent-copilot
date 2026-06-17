@@ -10,7 +10,7 @@
 >
 > 上层 scanner / catalog / UI 不直接处理 agent 特有配置语义。
 >
-> V2.41-V2.86 的 provider/task/validation/module-splitting work is tracked in README, roadmap, development tasks, and verification checklists. That line does not expand adapter roots or writable scope beyond the capability matrix below.
+> V2.41-V2.92 的 provider/task/validation/module-splitting/Agent Copilot/Codex expanded root work is tracked in README, roadmap, development tasks, and verification checklists. V2.92 expands Codex read-only roots while preserving the writable capability matrix below.
 
 ## V2.40 Adapter diagnostics
 
@@ -97,7 +97,7 @@ pub struct AdapterFeatureCapability {
 | Agent | 状态 | Scan | Toggle | Install | Writable | Blocker |
 | --- | --- | --- | --- | --- | --- | --- |
 | Claude Code | `verified` | 支持（settings、project roots） | 支持（verified） | 支持（tool-global install） | 支持（verified） | `project-local` settings 与非 verified 目标 blocked |
-| Codex | `verified` | 支持（user + verified project roots） | 支持（仅用户 `config.toml`） | 支持（tool-global install） | 支持（verified） | 项目级 `.codex/config.toml`、plugin/admin/system roots blocked |
+| Codex | `verified` | 支持（native user/project roots + read-only `$CODEX_HOME/skills`、plugin marketplace、`/etc/codex/skills` diagnostics） | 支持（仅用户 `config.toml`，且仅 native `.agents/skills` 实例） | 支持（tool-global install to native roots） | 支持（native-root allowlist） | 项目级 `.codex/config.toml`、plugin/admin/system/compat roots writable blocked |
 | opencode | `verified` | 支持 native roots + 官方 `.claude` / `.agents` compatibility roots | 支持（exact `permission.skill` deny/re-enable） | 支持（native-root 安装） | 支持（managed permission overrides） | 自定义 `skills.paths` / `skills.urls` 暂停 |
 | Pi | `guarded` | 支持 Pi-native roots | 支持 guarded native toggle（仅 global/project/package，基于证据） | blocked | limited | V2.37 已实现 preview/snapshot/rollback 与 disabled-state rescan；install、兼容 root 写入、脚本执行、AI 自动写回、credentials 仍 blocked |
 | Hermes | `read-only` | 支持 active/profile Hermes home | blocked（read-only 扫描） | blocked | blocked | 外部目录仅按 `skills.external_dirs` 显式 external roots 处理；generic project scan / toggle / install / writable blocked |
@@ -138,27 +138,29 @@ pub struct AdapterFeatureCapability {
 | 项 | 值 |
 | --- | --- |
 | AgentId | `codex` |
-| 状态 | **V2 first implementation complete** |
+| 状态 | **V2.92 expanded roots complete** |
 | Spec 工作单 | [`docs/codex-adapter-spec.md`](./codex-adapter-spec.md) |
 | 统一工作单 | [`docs/agent-adapter-spec-worklists.md`](./agent-adapter-spec-worklists.md#codex) |
 | 已核实边界 | Codex 可使用 `AGENTS.md` 作为项目指令入口；这不等同于已核实 skills adapter 的目录、配置 schema 或启停语义 |
 | Skill 格式 | 目录 + 必需 `SKILL.md`；frontmatter 中 `name` 和 `description` 必填 |
-| 首版 read-only roots | 官方并经本地 `codex-cli 0.137.0` 验证：user `$HOME/.agents/skills`；repo 从 adapter context `project_cwd` 到 `project_root` 的 `.agents/skills` |
-| 首版 blocked/deferred roots | 不扫描 `/etc/codex/skills`、plugin-distributed/system bundled skills 或本地观测到的 `$CODEX_HOME/skills`，除非另有产品决策；这些 root 不进入 V2 首个实现切片 |
+| Read-only roots | Native user `$HOME/.agents/skills` 和项目 `.agents/skills`；V2.92 还扫描/诊断 `$CODEX_HOME/skills`、local plugin marketplace skills、`/etc/codex/skills`（存在时） |
+| Writable roots | 仅 native user/project `.agents/skills` 实例可通过用户 `config.toml` override toggle；`$CODEX_HOME/skills`、plugin/admin/system roots 只读 |
 | 配置文件 | 用户级 `~/.codex/config.toml` / `$CODEX_HOME/config.toml` 已验证可用 `[[skills.config]]` 按绝对 `SKILL.md` path 禁用；skill 文件夹 path 在本地验证中未禁用 |
 | 启用控制 | 用户 config 中用绝对 `SKILL.md` path 写 `enabled = false`；re-enable 删除同 path entries |
 | Fixture | 最小 evidence fixtures 位于 `fixtures/codex/` |
-| 行动项 | 后续恢复真实本机 Computer Use 操作验证；项目级 toggle、plugin/admin/system roots、`$CODEX_HOME/skills` 兼容 root 未定前不要写对应能力 |
+| 行动项 | 后续若要启用项目级 toggle、plugin/admin/system/compat root 写入，必须重新走 evidence gate、snapshot/rollback 和 disposable fixture 验证 |
 
 Codex 当前实现边界：
 
 - 第一版可读 verified roots，并只写用户 Codex config。
-- 项目级写入启停仍 blocked。
+- V2.92 额外扫描 `$CODEX_HOME/skills`、local plugin marketplace roots、`/etc/codex/skills`，但这些 root 只读。
+- 项目级 `.codex/config.toml` 写入启停仍 blocked。
 - adapter core、commands/service、cwd→repo-root discovery 和 macOS UI scan-all 已集成。
 - 缺少 `name` 或 `description` 应作为 malformed/broken skill 处理，不应让整次 scan 失败。
 - 可选 `scripts/`、`references/`、`assets/`、`agents/openai.yaml` 只保留/展示为原始资源，不推导权限。
 - Disable 前必须先归一化同 path entries。
 - 不要写 `<repo>/.codex/config.toml`。
+- 不要写 `$CODEX_HOME/skills`、`/etc/codex/skills`、plugin marketplace roots 或 system roots。
 - 不要删除 skill 文件。
 - 不要添加 `enabled = true` 作为 re-enable。
 - Re-enable 是删除同一绝对 `SKILL.md` path 的所有 `[[skills.config]]` entries。

@@ -15,11 +15,11 @@ coding agents working in this repository.
 
 ## Current State
 
-- Current phase: **V2.91 model-task matching history completed**.
-- Completed baseline: V2.1-V2.91. V2.87 unlocked validation passed on 2026-06-17 via `pnpm check:macos`; V2.88 added Computer Use per-surface evidence under `docs/ui-artifacts/v2.88-handoff-evidence/`; V2.89 refreshed the app icon assets; V2.90 migrated the packaged app identity and default app-data id with compatibility; V2.91 added local model-task matching history.
+- Current phase: **V2.92 Codex expanded roots completed**.
+- Completed baseline: V2.1-V2.92. V2.87 unlocked validation passed on 2026-06-17 via `pnpm check:macos`; V2.88 added Computer Use per-surface evidence under `docs/ui-artifacts/v2.88-handoff-evidence/`; V2.89 refreshed the app icon assets; V2.90 migrated the packaged app identity and default app-data id with compatibility; V2.91 added local model-task matching history; V2.92 added Codex read-only expanded roots and a native-root write allowlist.
 - Completed product slice: Agent Copilot M1-M4. The displayed product name and primary packaged app identity are Agent Copilot; Swift module/source names, Rust crate names, sidecar name, AX ids, env vars, and legacy Keychain service intentionally retain `SkillsCopilot` / `skills-copilot` compatibility.
 - Current Agent Copilot surfaces: Lineup default surface, Agent Profile, sorted read-only decision queue, default-off local session preview, and default-off MCP server preview.
-- Near-term post-V2.91 planning: V2.92-V2.96 cover Codex/opencode roots, Pi install/compat writes, and Hermes/OpenClaw writable/install evidence slices.
+- Near-term post-V2.92 planning: V2.93-V2.96 cover opencode custom roots, Pi install/compat writes, and Hermes/OpenClaw writable/install evidence slices.
 - Maintained product UI: native macOS app in `apps/macos`.
 - Service boundary: Rust typed JSON stdio sidecar in `crates/service`.
 - Current app bundle path: `dist/AgentCopilot.app`.
@@ -53,7 +53,7 @@ coding agents working in this repository.
 ## Adapter Scope
 
 - Claude Code, Codex, opencode, Pi, Hermes, and OpenClaw are the current adapter families.
-- Codex support is limited to verified user/project roots, cwd-to-repo-root project discovery, project-context scoped scanning, and user-config writable toggles through `~/.codex/config.toml` / `$CODEX_HOME/config.toml`. Project config and plugin/admin/system root support is scheduled for V2.92; it remains blocked until that evidence slice closes.
+- Codex scans verified user/project `.agents/skills`, `$CODEX_HOME/skills`, local plugin marketplace roots, and `/etc/codex/skills` when present. `$CODEX_HOME/skills`, plugin/admin/system roots, and project `.codex/config.toml` are read-only diagnostics; writable toggles remain limited to user/project `.agents/skills` instances through the user config override.
 - Opencode writable support is limited to exact managed `permission.skill` overrides and native opencode install targets; compatibility roots are scan-only. Custom `skills.paths` / `skills.urls` support is scheduled for V2.93 and remains blocked until verified.
 - Pi writable support is limited to the V2.37 evidence-backed guarded native global/project/package toggle slice. Pi install and compatibility-root writes are scheduled for V2.94 and remain blocked until disposable evidence closes.
 - Hermes external roots are explicit read-only roots. Do not infer generic project roots. Hermes writable/install is scheduled for V2.95 and remains blocked until verified.
@@ -171,3 +171,8 @@ This section keeps compact machine-checked milestone anchors. Full details live 
   redacted `model-task-matches.json`, Provider Observability
   `model_task_history_rows`, and no provider/default-write/script/credential/
   cloud/telemetry expansion.
+- V2.92 Codex expanded roots: `RootSource::Compatibility`,
+  `RootSource::Admin`, `RootSource::Plugin`, `$CODEX_HOME/skills`,
+  local plugin marketplace roots, `/etc/codex/skills`, project
+  `.codex/config.toml` diagnostics, and a native `.agents/skills`
+  write allowlist; no plugin/admin/system/compat write expansion.

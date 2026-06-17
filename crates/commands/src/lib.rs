@@ -753,19 +753,28 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
             agent: AgentId::Codex.as_str(),
             display_name: "Codex",
             status: "verified",
-            scan: AdapterFeatureCapability::supported("verified"),
-            project_scan: AdapterFeatureCapability::supported("verified"),
+            scan: AdapterFeatureCapability::supported_with_reason(
+                "verified-expanded-read-only",
+                "V2.92 scans verified user/project .agents/skills plus read-only CODEX_HOME skills, local plugin marketplace roots, and admin roots when present.",
+            ),
+            project_scan: AdapterFeatureCapability::supported_with_reason(
+                "verified-expanded-read-only",
+                "Project scan remains bounded by the selected project and adds only read-only project plugin marketplace diagnostics.",
+            ),
             config_toggle: AdapterFeatureCapability::supported_with_reason(
-                "verified-user-config",
-                "Project skill toggles write only the user config.toml override; project-local .codex/config.toml remains blocked.",
+                "verified-native-roots-only",
+                "Project skill toggles write only the user config.toml override for verified user/project .agents/skills instances; project-local .codex/config.toml remains diagnostic-only.",
             ),
             config_snapshot: AdapterFeatureCapability::supported("verified"),
             install: AdapterFeatureCapability::supported("verified"),
             writable: AdapterFeatureCapability::supported_with_reason(
-                "verified-user-config",
-                "Codex writes are limited to verified user config and skill roots.",
+                "verified-native-roots-only",
+                "Codex writes are limited to verified user/project .agents/skills instances and the user config.toml override; CODEX_HOME skills, plugin, admin, and system roots are read-only.",
             ),
-            blockers: vec!["Project-local .codex/config.toml toggle semantics remain unverified."],
+            blockers: vec![
+                "Project-local .codex/config.toml toggle semantics remain unverified.",
+                "CODEX_HOME skills, plugin marketplace, admin, and system roots are scan-only.",
+            ],
         },
         AdapterCapabilityRecord {
             agent: AgentId::Opencode.as_str(),
@@ -1040,6 +1049,18 @@ fn adapter_root_reason(
         (AgentId::Pi, RootSource::Project) => {
             "Pi project/package root is scan-capable; writable toggles remain guarded by trusted project settings and install remains blocked.".to_string()
         }
+        (AgentId::Codex, RootSource::Compatibility) => {
+            "Codex compatibility/system-observed skills root; scanned read-only and never used as a toggle, install, snapshot, rollback, or config-write target.".to_string()
+        }
+        (AgentId::Codex, RootSource::Admin) => {
+            "Codex admin skills root; scanned read-only when present, skipped when missing or unreadable, and never elevated or written.".to_string()
+        }
+        (AgentId::Codex, RootSource::Plugin) => {
+            "Codex plugin-bundled skills root from a local marketplace entry; scanned read-only without running hooks, MCP servers, plugin installers, or network fetches.".to_string()
+        }
+        (AgentId::Codex, RootSource::System) => {
+            "Codex system skills are bundled by Codex; no stable local filesystem root is scanned or written by this product.".to_string()
+        }
         _ => "Root is declared by the adapter and exists for read scanning.".to_string(),
     }
 }
@@ -1049,6 +1070,10 @@ fn root_source_label(source: &RootSource) -> &'static str {
         RootSource::UserHome => "user-home",
         RootSource::Project => "project",
         RootSource::Extra => "extra",
+        RootSource::Compatibility => "compatibility",
+        RootSource::Admin => "admin",
+        RootSource::Plugin => "plugin",
+        RootSource::System => "system",
     }
 }
 
@@ -3343,7 +3368,7 @@ fn batch_snapshot_rollback_notes(affected_items: &[BatchToggleAffectedItem]) -> 
 fn batch_capability_label(agent: AgentId) -> &'static str {
     match agent {
         AgentId::ClaudeCode => "Claude Code verified config toggle",
-        AgentId::Codex => "Codex verified user-config toggle",
+        AgentId::Codex => "Codex verified native-root user-config toggle",
         AgentId::Opencode => "opencode verified exact permission.skill toggle",
         AgentId::Pi => "Pi guarded config toggle",
         AgentId::Hermes => "Hermes read-only scanner; writable blocked",
@@ -3388,12 +3413,15 @@ fn config_target_for_instance(
     match meta.agent {
         AgentId::ClaudeCode => config_target_for_claude(ctx, meta.scope),
         AgentId::Codex => match meta.scope {
-            Scope::AgentGlobal | Scope::AgentProject => Ok(ConfigTarget {
-                agent: AgentId::Codex,
-                scope: Scope::AgentGlobal,
-                path: codex_user_config_path(ctx),
-                format: ConfigFormat::Toml,
-            }),
+            Scope::AgentGlobal | Scope::AgentProject => {
+                validate_codex_toggle_instance(ctx, meta)?;
+                Ok(ConfigTarget {
+                    agent: AgentId::Codex,
+                    scope: Scope::AgentGlobal,
+                    path: codex_user_config_path(ctx),
+                    format: ConfigFormat::Toml,
+                })
+            }
             Scope::ToolGlobal => Err(CommandError::UnsupportedScope(meta.scope)),
             _ => Err(CommandError::UnsupportedScope(meta.scope)),
         },
@@ -3422,6 +3450,130 @@ fn config_target_for_instance(
             agent.as_str()
         ))),
     }
+}
+
+fn validate_codex_toggle_instance(
+    ctx: &AdapterContext,
+    meta: &SkillInstanceMeta,
+) -> Result<(), CommandError> {
+    let canonical_skill = meta.path.canonicalize().map_err(|err| {
+        CommandError::UnsafeConfigPath(format!(
+            "Codex skill {} cannot be canonicalized for the toggle allowlist: {err}",
+            meta.path.display()
+        ))
+    })?;
+    if codex_path_has_plugin_marker(&canonical_skill) {
+        return Err(CommandError::UnsafeConfigPath(
+            "Codex plugin marketplace skills are scan-only and cannot be used as toggle targets"
+                .to_string(),
+        ));
+    }
+
+    match meta.scope {
+        Scope::AgentGlobal => {
+            let native_root = ctx.user_home.join(".agents/skills");
+            if canonical_path_starts_with_existing_root(&canonical_skill, &native_root) {
+                Ok(())
+            } else {
+                Err(CommandError::UnsafeConfigPath(format!(
+                    "Codex global toggles are limited to verified user .agents/skills roots; {} is read-only",
+                    meta.path.display()
+                )))
+            }
+        }
+        Scope::AgentProject => {
+            let project_root = ctx
+                .project_root
+                .as_ref()
+                .ok_or(CommandError::UnsupportedScope(meta.scope))?;
+            let canonical_project = project_root.canonicalize().map_err(|err| {
+                CommandError::UnsafeConfigPath(format!(
+                    "Codex project root {} cannot be canonicalized for the toggle allowlist: {err}",
+                    project_root.display()
+                ))
+            })?;
+            if !canonical_skill.starts_with(&canonical_project) {
+                return Err(CommandError::UnsafeConfigPath(format!(
+                    "Codex project skill {} resolves outside the selected project root {}",
+                    meta.path.display(),
+                    project_root.display()
+                )));
+            }
+            if codex_project_native_root_allows(ctx, &canonical_skill) {
+                Ok(())
+            } else {
+                Err(CommandError::UnsafeConfigPath(format!(
+                    "Codex project toggles are limited to verified project .agents/skills roots; {} is read-only",
+                    meta.path.display()
+                )))
+            }
+        }
+        Scope::ToolGlobal => Err(CommandError::UnsupportedScope(meta.scope)),
+        _ => Err(CommandError::UnsupportedScope(meta.scope)),
+    }
+}
+
+fn codex_project_native_root_allows(ctx: &AdapterContext, canonical_skill: &Path) -> bool {
+    let Some(project_root) = &ctx.project_root else {
+        return false;
+    };
+    let start = ctx
+        .project_cwd
+        .as_deref()
+        .filter(|cwd| cwd.starts_with(project_root))
+        .unwrap_or(project_root);
+    let mut current = Some(start);
+
+    while let Some(dir) = current {
+        if canonical_path_starts_with_existing_root(canonical_skill, &dir.join(".agents/skills")) {
+            return true;
+        }
+        if dir == project_root {
+            break;
+        }
+        current = dir
+            .parent()
+            .filter(|parent| parent.starts_with(project_root));
+    }
+
+    has_agents_skills_ancestor_inside_project(canonical_skill, project_root)
+}
+
+fn has_agents_skills_ancestor_inside_project(canonical_skill: &Path, project_root: &Path) -> bool {
+    let Ok(canonical_project) = project_root.canonicalize() else {
+        return false;
+    };
+    if !canonical_skill.starts_with(&canonical_project) {
+        return false;
+    }
+    canonical_skill.ancestors().any(|ancestor| {
+        ancestor.file_name().and_then(|name| name.to_str()) == Some("skills")
+            && ancestor
+                .parent()
+                .and_then(Path::file_name)
+                .and_then(|name| name.to_str())
+                == Some(".agents")
+            && ancestor.starts_with(&canonical_project)
+    })
+}
+
+fn canonical_path_starts_with_existing_root(path: &Path, root: &Path) -> bool {
+    root.canonicalize()
+        .map(|canonical_root| path.starts_with(canonical_root))
+        .unwrap_or(false)
+}
+
+fn codex_path_has_plugin_marker(path: &Path) -> bool {
+    let components = path
+        .components()
+        .filter_map(|component| component.as_os_str().to_str())
+        .collect::<Vec<_>>();
+    components.windows(2).any(|window| {
+        matches!(
+            window,
+            [".agents", "plugins"] | [".codex", "plugins"] | [".claude-plugin", _]
+        )
+    })
 }
 
 fn project_record_matches_context(

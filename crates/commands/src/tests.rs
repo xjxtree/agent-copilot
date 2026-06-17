@@ -1808,6 +1808,154 @@ fn codex_config_path_honors_only_safe_codex_home_under_user_home() {
 }
 
 #[test]
+fn codex_expanded_roots_are_read_only_except_native_agents_roots() {
+    let temp_root = temp_test_dir("codex-expanded-roots-read-only");
+    let home = temp_root.join("home");
+    let native_path = write_codex_skill(&home, "native-toggle");
+
+    let compat_dir = home.join(".codex/skills/compat-readonly");
+    std::fs::create_dir_all(&compat_dir).expect("create compat codex skill dir");
+    let compat_path = compat_dir.join("SKILL.md");
+    std::fs::write(
+        &compat_path,
+        "---\nname: compat-readonly\ndescription: CODEX_HOME read-only skill\n---\nbody",
+    )
+    .expect("write compat codex skill");
+
+    let plugin_root = home.join(".codex/plugins/local-review");
+    let plugin_skill_dir = plugin_root.join("skills/plugin-readonly");
+    std::fs::create_dir_all(&plugin_skill_dir).expect("create plugin codex skill dir");
+    std::fs::create_dir_all(plugin_root.join(".codex-plugin"))
+        .expect("create codex plugin manifest dir");
+    std::fs::create_dir_all(home.join(".agents/plugins")).expect("create plugin marketplace dir");
+    let plugin_path = plugin_skill_dir.join("SKILL.md");
+    std::fs::write(
+        &plugin_path,
+        "---\nname: plugin-readonly\ndescription: Plugin read-only skill\n---\nbody",
+    )
+    .expect("write plugin codex skill");
+    std::fs::write(
+        plugin_root.join(".codex-plugin/plugin.json"),
+        "{\n  \"name\": \"local-review\",\n  \"skills\": \"./skills/\"\n}\n",
+    )
+    .expect("write codex plugin manifest");
+    std::fs::write(
+        home.join(".agents/plugins/marketplace.json"),
+        "{\n  \"plugins\": [\n    {\"source\": {\"source\": \"local\", \"path\": \"./.codex/plugins/local-review\"}}\n  ]\n}\n",
+    )
+    .expect("write codex plugin marketplace");
+
+    let catalog = Catalog::in_memory().expect("catalog opens");
+    catalog.init().expect("catalog initializes");
+    let ctx = AdapterContext {
+        user_home: home.clone(),
+        project_root: None,
+        project_cwd: None,
+        extra_roots: vec![],
+    };
+
+    scan_all_to_catalog(&ctx, &catalog).expect("scan all");
+    let records = catalog.list_skill_records().expect("records");
+    let native_record = records
+        .iter()
+        .find(|record| record.agent == "codex" && record.name == "native-toggle")
+        .expect("native codex record");
+    let compat_record = records
+        .iter()
+        .find(|record| record.agent == "codex" && record.name == "compat-readonly")
+        .expect("compat codex record");
+    let plugin_record = records
+        .iter()
+        .find(|record| record.agent == "codex" && record.name == "plugin-readonly")
+        .expect("plugin codex record");
+
+    let selection = vec![
+        native_record.id.clone(),
+        compat_record.id.clone(),
+        plugin_record.id.clone(),
+    ];
+    let preview = preview_skill_toggles(&catalog, &ctx, &selection, false).expect("preview");
+    assert_eq!(preview.writable_count, 1);
+    assert_eq!(preview.skipped_count, 2);
+    assert!(preview
+        .affected_items
+        .iter()
+        .any(|item| item.instance_id == native_record.id));
+    assert!(preview.skipped_items.iter().all(|item| {
+        item.reason.contains(".agents/skills") || item.reason.contains("marketplace")
+    }));
+
+    let config_path = home.join(".codex/config.toml");
+    let compat_toggle = toggle_skill(&catalog, &ctx, &compat_record.id, false)
+        .expect_err("compat root must be read-only");
+    assert!(
+        compat_toggle.to_string().contains(".agents/skills"),
+        "unexpected compat toggle error: {compat_toggle}"
+    );
+    let plugin_toggle = toggle_skill(&catalog, &ctx, &plugin_record.id, false)
+        .expect_err("plugin root must be read-only");
+    assert!(
+        plugin_toggle.to_string().contains("marketplace"),
+        "unexpected plugin toggle error: {plugin_toggle}"
+    );
+    assert!(
+        !config_path.exists(),
+        "read-only Codex roots must not create user config"
+    );
+
+    let disabled =
+        toggle_skill(&catalog, &ctx, &native_record.id, false).expect("native toggle succeeds");
+    assert!(!disabled.enabled);
+    let content = std::fs::read_to_string(&config_path).expect("read codex config");
+    assert!(content.contains(&native_path.to_string_lossy().to_string()));
+    assert!(!content.contains(&compat_path.to_string_lossy().to_string()));
+    assert!(!content.contains(&plugin_path.to_string_lossy().to_string()));
+
+    let _ = std::fs::remove_dir_all(&temp_root);
+}
+
+#[test]
+fn codex_diagnostics_include_user_and_project_config_paths() {
+    let temp_root = temp_test_dir("codex-diagnostic-config-paths");
+    let home = temp_root.join("home");
+    let project = temp_root.join("project");
+    let project_config = project.join(".codex/config.toml");
+    std::fs::create_dir_all(project_config.parent().expect("project config parent"))
+        .expect("create project config dir");
+    std::fs::write(&project_config, "# project diagnostics only\n")
+        .expect("write project codex config");
+    std::fs::create_dir_all(&home).expect("create home");
+
+    let ctx = AdapterContext {
+        user_home: home.clone(),
+        project_root: Some(project.clone()),
+        project_cwd: Some(project.clone()),
+        extra_roots: vec![],
+    };
+    let diagnostics = list_adapter_diagnostics(&ctx);
+    let codex = diagnostics
+        .iter()
+        .find(|record| record.agent == "codex")
+        .expect("codex diagnostics");
+
+    assert!(codex
+        .config
+        .paths
+        .iter()
+        .any(|path| path.path == home.join(".codex/config.toml").to_string_lossy()));
+    assert!(codex
+        .config
+        .paths
+        .iter()
+        .any(|path| path.path == project_config.to_string_lossy() && path.detected));
+    assert!(codex.blockers.iter().any(|blocker| {
+        blocker.contains(".codex/config.toml") && blocker.contains("unverified")
+    }));
+
+    let _ = std::fs::remove_dir_all(&temp_root);
+}
+
+#[test]
 fn codex_rescan_reads_disabled_state_with_adapter_toml_semantics() {
     let temp_root = std::env::temp_dir().join(format!(
         "skills-copilot-codex-disabled-toml-{}",

@@ -8,13 +8,13 @@ opencode, Pi, Hermes, and OpenClaw.
 
 | Area | Status |
 | --- | --- |
-| Current phase | V2.91 model-task matching history completed |
-| Completed baseline | V2.1-V2.91 |
-| Recent product line | V2.41-V2.91 AI-native analysis, task cockpit, validation hardening, module splitting, read-only Agent Copilot surfaces, per-surface evidence closeout, brand asset refresh, compatibility-first identifier migration, and local model-task history |
+| Current phase | V2.92 Codex expanded roots completed |
+| Completed baseline | V2.1-V2.92 |
+| Recent product line | V2.41-V2.92 AI-native analysis, task cockpit, validation hardening, module splitting, read-only Agent Copilot surfaces, per-surface evidence closeout, brand asset refresh, compatibility-first identifier migration, local model-task history, and Codex expanded root diagnostics |
 | Agent Copilot line | M1-M4 completed; unlocked app-window evidence captured |
 | Maintained UI | Native macOS app in `apps/macos` |
 | Service boundary | Rust typed JSON stdio sidecar in `crates/service` |
-| Next version | V2.92 Codex expanded roots; V2.92-V2.96 near-term plan is tracked in `docs/roadmap.md` and `docs/development-tasks.md` |
+| Next version | V2.93 opencode custom roots; V2.93-V2.96 near-term plan is tracked in `docs/roadmap.md` and `docs/development-tasks.md` |
 
 V2.84-V2.86 completed the post-V2.83 module-splitting line:
 
@@ -65,6 +65,15 @@ V2.91 adds local model-task matching history:
   redacted prompt-run metadata for read-only history rows.
 - Surfaces `model_task_history_rows` in Provider Observability without exposing
   write/delete controls in the V2.91 UI.
+
+V2.92 completes Codex expanded roots:
+
+- Adds read-only `$CODEX_HOME/skills`, local plugin marketplace roots, and
+  `/etc/codex/skills` scanning/diagnostics when present.
+- Includes project `.codex/config.toml` in diagnostics without enabling project
+  config writes.
+- Keeps Codex toggle writes limited to verified user/project `.agents/skills`
+  instances through the user `config.toml` override.
 
 ## What It Does
 
@@ -148,7 +157,7 @@ This section only keeps machine-checked status anchors. Detailed evidence lives
 in `docs/v2.*-verification-checklist.md` and `docs/development-tasks.md`.
 
 Baseline phrase used by docs gates:
-V2.91 model-task matching history completed.
+V2.92 Codex expanded roots completed.
 
 ### V2.74-V2.78
 
@@ -220,6 +229,28 @@ V2.91 model-task matching history completed.
   `./script/build_and_run.sh --verify`, fixture-data app-window capture at
   `docs/ui-artifacts/native-macos-shell/completed.png`, screenshot artifact
   verification, and privacy check.
+
+### V2.88-V2.92
+
+- V2.88 handoff/evidence closeout:
+  [`docs/v2.88-verification-checklist.md`](./docs/v2.88-verification-checklist.md),
+  per-surface app-window evidence under
+  `docs/ui-artifacts/v2.88-handoff-evidence/`.
+- V2.89 brand asset refresh:
+  [`docs/v2.89-verification-checklist.md`](./docs/v2.89-verification-checklist.md),
+  `AppIcon.svg`, regenerated `AppIcon.icns`.
+- V2.90 identifier migration:
+  [`docs/v2.90-verification-checklist.md`](./docs/v2.90-verification-checklist.md),
+  `dist/AgentCopilot.app`, `dev.agent-copilot.native`, and legacy app-data
+  compatibility.
+- V2.91 model-task matching history:
+  [`docs/v2.91-verification-checklist.md`](./docs/v2.91-verification-checklist.md),
+  app-local `model-task-matches.json` and Provider Observability rows.
+- V2.92 Codex expanded roots:
+  [`docs/v2.92-verification-checklist.md`](./docs/v2.92-verification-checklist.md),
+  read-only `$CODEX_HOME/skills`, plugin marketplace, `/etc/codex/skills`,
+  project `.codex/config.toml` diagnostics, and native `.agents/skills`
+  write allowlist.
 
 ## Development Notes
 

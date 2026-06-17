@@ -2266,8 +2266,17 @@ fn adapter_list_diagnostics_reports_roots_config_and_blockers() {
         codex
             .pointer("/access/writable_status")
             .and_then(Value::as_str),
-        Some("verified-user-config")
+        Some("verified-native-roots-only")
     );
+    assert!(codex
+        .get("roots")
+        .and_then(Value::as_array)
+        .is_some_and(|roots| roots
+            .iter()
+            .any(|root| { root.get("source").and_then(Value::as_str) == Some("compatibility") })
+            && roots
+                .iter()
+                .any(|root| { root.get("source").and_then(Value::as_str) == Some("admin") })));
     let pi = records
         .iter()
         .find(|record| record.get("agent").and_then(Value::as_str) == Some("pi"))

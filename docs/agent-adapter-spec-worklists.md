@@ -1,7 +1,7 @@
 # Agent Adapter Spec Worklists
 
-> Status: V2.1-V2.86 is the synchronized completed baseline.
-> Adapter behavior is unchanged by the V2.84-V2.86 module split closeout.
+> Status: V2.1-V2.92 is the synchronized completed baseline.
+> V2.92 expands Codex read-only roots and diagnostics without expanding writes.
 > opencode writable, Pi read-only scan, Pi guarded native toggle,
 > OpenClaw read-only scan, Hermes read-only scan,
 > and Hermes explicit external-root scan are implemented.
@@ -15,7 +15,9 @@
 
 Claude Code remains the mature baseline adapter.
 Codex has verified user/project roots, cwd-to-repo-root discovery,
-project-context-scoped scanning, and user-config writable toggles.
+project-context-scoped scanning, read-only `$CODEX_HOME/skills`, local plugin
+marketplace, and `/etc/codex/skills` diagnostics, plus user-config writable
+toggles only for native `.agents/skills` instances.
 Opencode writable is enabled through managed `permission.skill` overrides;
 opencode install targets remain native roots.
 
@@ -51,19 +53,17 @@ Codex, Pi, Hermes, OpenClaw, and opencode must not be implemented from guessed p
 | --- | --- |
 | Project instruction entrypoint | Verified: Codex reads `AGENTS.md` and supports project/nested instruction files. |
 | Skill file/directory format | Verified from official Codex Agent Skills docs: each skill is a directory with required `SKILL.md`, `name`, and `description`; optional `scripts/`, `references/`, `assets/`, and `agents/openai.yaml` may exist. Missing required frontmatter should produce a broken/malformed skill record, not abort scanning. |
-| Skill discovery roots | Verified for first implementation read-only scanning: repository `.agents/skills` from CWD to repo root, and user `$HOME/.agents/skills`. Do not infer any of this from `AGENTS.md`. |
-| Blocked/deferred roots | `/etc/codex/skills` is official but not locally validated; `$CODEX_HOME/skills` was locally observed but is not the official user authoring root; plugin/system bundled skills need a separate product decision. Do not scan these in the first implementation slice. |
+| Skill discovery roots | Verified native roots: repository `.agents/skills` from CWD to repo root, and user `$HOME/.agents/skills`. V2.92 also scans read-only `$CODEX_HOME/skills`, local plugin marketplace skill roots, and `/etc/codex/skills` when present. Do not infer any of this from `AGENTS.md`. |
+| Read-only expanded roots | `$CODEX_HOME/skills`, plugin marketplace roots, admin roots, and system roots are diagnostics/scan-only. They must not become config-toggle, install, snapshot, rollback, hook, MCP, or network-fetch targets without a new evidence pass. |
 | Config path/schema | Verified for user writes: official docs and local CLI confirm user config at `~/.codex/config.toml` / `$CODEX_HOME/config.toml` with `[[skills.config]] path = ".../SKILL.md"; enabled = false`. Local CLI did not honor the folder-path form for disabling, so use absolute `SKILL.md` paths. |
 | Enable/disable semantics | Verified for user config: user config can disable user and project skills by absolute `SKILL.md` path, and removing all matching entries re-enables default discovery. Project-local `.codex/config.toml` did not disable a project skill, even when the repo was trusted. |
 | Fixture requirement | Minimal evidence fixtures added under `fixtures/codex/`. |
-| Implementation decision | Complete V2 first implementation; user-config writable only. Current code supports adapter context `project_cwd` walking upward to `project_root`. Project-local writable toggles remain blocked; plugin/admin/system compatibility roots remain out of first scope unless separately approved. |
+| Implementation decision | Complete through V2.92. Current code supports adapter context `project_cwd` walking upward to `project_root`, read-only expanded roots, and a native `.agents/skills` write allowlist through the user config override. Project-local writable toggles and plugin/admin/system/compat writes remain blocked. |
 
 Required next evidence:
 
-- Restore real local macOS app validation with Computer Use for V2.2/V2.3 when the macOS/AX session can see a SkillsCopilot window; current blocker is a launched app process with no resolvable visible window.
 - Resolve project-local toggle behavior; local `codex-cli 0.137.0` did not honor project `.codex/config.toml` `[[skills.config]]` for the tested fixture.
-- Decide whether to scan `/etc/codex/skills`, locally observed `$CODEX_HOME/skills`, and plugin-distributed skills in a later slice.
-- Keep future Codex changes within the implemented scope unless a new evidence pass expands it: project-local config writes, `/etc/codex/skills`, `$CODEX_HOME/skills`, and plugin-distributed skills remain out of scope.
+- Keep future Codex changes within the implemented scope unless a new evidence pass expands it: project-local config writes, `/etc/codex/skills`, `$CODEX_HOME/skills`, plugin-distributed skills, and system skills remain out of writable scope.
 
 ## Pi Coding Agent
 

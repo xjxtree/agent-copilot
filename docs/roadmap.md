@@ -12,9 +12,9 @@
 > 非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，
 > 不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.91 model-task matching history completed**。
-> V2.1-V2.91 是当前 completed baseline；V2.87 于 2026-06-17 解锁后通过 `pnpm check:macos`，V2.88 补齐 Lineup / Agent Profile / Local Session Preview / MCP Preview 的 Computer Use app-window evidence，V2.89 刷新 Agent Copilot display brand app icon assets，V2.90 完成兼容优先的 packaged app identity / default app-data id 迁移，V2.91 新增本地模型-任务匹配历史证据域。
-> Agent Copilot M1-M4 decision-first IA / local evidence previews 已实现为只读感知层，显示层品牌和主要 macOS bundle 为 Agent Copilot；Swift/Rust 模块、sidecar、AX ids、env vars 和 legacy Keychain service 保持兼容。Post-V2.90 follow-ups are now scheduled as near-term V2.91-V2.96 slices below and in [`development-tasks.md`](./development-tasks.md).
+> 当前阶段：**V2.92 Codex expanded roots completed**。
+> V2.1-V2.92 是当前 completed baseline；V2.87 于 2026-06-17 解锁后通过 `pnpm check:macos`，V2.88 补齐 Lineup / Agent Profile / Local Session Preview / MCP Preview 的 Computer Use app-window evidence，V2.89 刷新 Agent Copilot display brand app icon assets，V2.90 完成兼容优先的 packaged app identity / default app-data id 迁移，V2.91 新增本地模型-任务匹配历史证据域，V2.92 完成 Codex expanded roots 只读诊断和 native-root write allowlist。
+> Agent Copilot M1-M4 decision-first IA / local evidence previews 已实现为只读感知层，显示层品牌和主要 macOS bundle 为 Agent Copilot；Swift/Rust 模块、sidecar、AX ids、env vars 和 legacy Keychain service 保持兼容。Remaining near-term follow-ups are scheduled as V2.93-V2.96 slices below and in [`development-tasks.md`](./development-tasks.md).
 
 ## Current Milestone Snapshot
 
@@ -24,9 +24,9 @@
 | V2.65-V2.77 | Task-first cockpit, lifecycle, guided cleanup, validation hardening, real-local workbench | Completed |
 | V2.78-V2.83 | Protocol/gate parity, privacy/localization, Detail density, IPC cancellation, test floor, continued module splitting | Completed |
 | V2.84-V2.86 | Swift Detail section splitting, Rust RPC domain module splitting, Rust helper/test split and module-size gate | Completed |
-| Agent Copilot M1-M4 + V2.88-V2.91 closeout | Decision-first Lineup, Agent Profile, sorted decision queue, default-off local session preview, default-off MCP server preview, per-surface evidence closeout, brand asset refresh, compatibility-first identifier migration, and local model-task history | Completed; unlocked app-window evidence captured |
+| Agent Copilot M1-M4 + V2.88-V2.92 closeout | Decision-first Lineup, Agent Profile, sorted decision queue, default-off local session preview, default-off MCP server preview, per-surface evidence closeout, brand asset refresh, compatibility-first identifier migration, local model-task history, and Codex expanded root diagnostics | Completed; unlocked app-window evidence captured |
 
-## Near-Term Post-V2.90 Plan
+## Near-Term V2.88-V2.96 Plan
 
 These slices are ordered by dependency and risk. Each version gets its own
 design/validation closeout before the next write-capability slice starts.
@@ -37,7 +37,7 @@ design/validation closeout before the next write-capability slice starts.
 | V2.89 | Brand asset refresh | Completed: refreshed Agent Copilot display brand app icon assets while keeping bundle/module/AX/app-data identifiers unchanged. | `pnpm generate:app-icon`, asset review, screenshot refresh, `pnpm check:macos`, privacy gate |
 | V2.90 | Internal identifier migration | Completed: migrated packaged app identity to `dist/AgentCopilot.app` / `dev.agent-copilot.native`, added app-data compatibility migration from `dev.skills-copilot.native`, and kept module/crate/sidecar/AX/env/Keychain compatibility stable. | [`v2.90-verification-checklist.md`](./v2.90-verification-checklist.md), app-data migration tests, `pnpm check:macos`, privacy gate |
 | V2.91 | Model-task matching history | Completed: added app-local `model-task-matches.json` history, `llm.listModelTaskMatches` / `llm.recordModelTaskMatch` / `llm.deleteModelTaskMatch`, Provider Observability model-task history rows, protocol fixtures, and privacy/redaction tests. | [`v2.91-verification-checklist.md`](./v2.91-verification-checklist.md), protocol drift, focused Rust/Swift tests, app-window screenshot, privacy gate |
-| V2.92 | Codex expanded roots | Evaluate and implement safe support for Codex project config, plugin/admin/system roots, and project-local write policy. Plugin/admin/system roots should default read-only unless rollback-safe writes are proven. | Official/local evidence, root allowlist tests, privacy gate, no unverified writes |
+| V2.92 | Codex expanded roots | Completed: added read-only `$CODEX_HOME/skills`, local plugin marketplace roots, `/etc/codex/skills`, project `.codex/config.toml` diagnostics, and a native `.agents/skills` write allowlist. | [`v2.92-verification-checklist.md`](./v2.92-verification-checklist.md), official docs evidence, root allowlist tests, privacy gate, no unverified writes |
 | V2.93 | opencode custom roots | Evaluate `skills.paths` / `skills.urls`; implement local path support only after canonicalization/dedupe evidence, and treat URL support as explicit user-confirmed fetch or metadata-only by default. | Disposable fixtures, no uncontrolled network, rollback-safe write tests where applicable |
 | V2.94 | Pi install and compatibility writes | Extend beyond V2.37 guarded native toggles only with disposable install/compat-root evidence, snapshot/rollback, and trust-gate coverage. | Disposable round-trip, rollback proof, trust gate, no script execution |
 | V2.95 | Hermes writable/install | Implement Hermes writable/install only after schema, credential preservation, rollback, and explicit external-root behavior are verified. | Hermes-specific disposable evidence, credential filtering, rollback proof |
@@ -95,6 +95,8 @@ Current planning boundary:
   [`v2.90-verification-checklist.md`](./v2.90-verification-checklist.md).
 - V2.91 model-task matching history is tracked in
   [`v2.91-verification-checklist.md`](./v2.91-verification-checklist.md).
+- V2.92 Codex expanded roots is tracked in
+  [`v2.92-verification-checklist.md`](./v2.92-verification-checklist.md).
 
 ## 0. 设计阶段（已完成）
 
@@ -360,12 +362,12 @@ Current planning boundary:
 - 解析 Codex `SKILL.md` frontmatter：`name` / `description` 必填；保留 raw frontmatter 和 body；不要从 `agents/openai.yaml` 猜测权限字段。
 - 增加 Codex fixtures/parser/commands tests：global、project、malformed、conflict、disabled/re-enabled、duplicate config entries。
 - 实现 user-config writable toggle：只 patch `$CODEX_HOME/config.toml` / `~/.codex/config.toml` 的 `[[skills.config]]`，disable 写绝对 `SKILL.md` path + `enabled = false`，enable 删除该 path 的所有 entries。
-- 接入 catalog/service contract：list/get/findings/conflicts/snapshot 对多 agent 数据仍稳定；UI 显示 agent 为 `codex`，但不把 plugin/admin/system skills 暴露为首版范围。
+- 接入 catalog/service contract：list/get/findings/conflicts/snapshot 对多 agent 数据仍稳定；UI 显示 agent 为 `codex`。首版不暴露 plugin/admin/system skills；V2.92 后这些 root 进入 read-only diagnostics，不进入写入范围。
 - 验证：`cargo test --workspace`、focused adapter/commands tests、service fixtures、`pnpm check:macos` 已通过；当前 mainline 已在 2026-06-09 后补真实 macOS Computer Use 操作验证。
 
 **不做**
 - 不写 `<repo>/.codex/config.toml`。
-- 不扫描 `/etc/codex/skills`、plugin-distributed skills 或 `$CODEX_HOME/skills`，除非另有产品决策。
+- 首版不扫描 `/etc/codex/skills`、plugin-distributed skills 或 `$CODEX_HOME/skills`；V2.92 后它们作为 read-only diagnostics 扫描/展示，仍不写入。
 - 不从 `agents/openai.yaml`、未知 frontmatter 字段或 Codex plugin metadata 推导权限、依赖或启停状态。
 - 本切片不实现 Pi / opencode / Hermes / OpenClaw adapter。
 
@@ -474,7 +476,7 @@ Current planning boundary:
 - 强化 Codex `config.toml` patch：保留非目标内容、重复 entries 归一化、异常配置给出清晰错误。
 - 细化 symlink、duplicate skill、broken skill、missing root 的 UI/refresh 表达。
 - 增加 Codex config / root 安全回归测试。
-- 继续不扫描 `/etc/codex/skills`、plugin/system skills 或 `$CODEX_HOME/skills`，除非另有产品决策。
+- 首版继续不扫描 `/etc/codex/skills`、plugin/system skills 或 `$CODEX_HOME/skills`；V2.92 后这些 root 作为 read-only diagnostics 进入 Codex expanded roots，仍不扩大写入。
 
 **Task checklist**
 - [x] Codex config patch hardening：disable 时只归一化目标 absolute `SKILL.md` path 的 `[[skills.config]]` entries；re-enable 时删除所有目标 entries；保留注释、非目标 table、非目标 skill override、未知 config key 和文件末尾换行。
@@ -916,7 +918,7 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 | --- | --- | --- |
 | Codex skills spec 仍在演化 | adapter 频繁 breaking | doc 里维护 spec 版本号；spec 一变先升 catalog schema |
 | Pi / Hermes / OpenClaw 的真实写入语义未知 | 适配器猜错 | adapter capability matrix 必须展示 blocker；opencode writable 已在 V2.12 限定为 managed `permission.skill` writes 和 native install targets；Pi production writable、Hermes writable/install、OpenClaw writable/install 未完成 disposable rollback evidence 前继续 blocked |
-| Codex evidence 被误读成完整运行时支持 | 用户或 agent 误以为所有 Codex roots / project config / plugin skills 均已支持 | roadmap / AGENTS / adapter docs 明确：当前只实现 verified user/project roots + user-config writable；project config、plugin/admin/system roots 已排入 V2.92，但在该 evidence slice 完成前继续 blocked |
+| Codex evidence 被误读成完整运行时支持 | 用户或 agent 误以为所有 Codex roots / project config / plugin skills 均可写 | roadmap / AGENTS / adapter docs 明确：V2.92 只扩展 read-only diagnostics；写入仍限 native `.agents/skills` + user-config override，project config、plugin/admin/system/compat writes 继续 blocked |
 | 贡献者门槛（Rust） | 社区贡献慢 | doc 写明"轻量贡献（rule / UI）只需 TS / Rust 单语言"；提供 good first issue |
 | LLM 成本失控 | 用户被烧钱 | 月度上限 + 单次上限 + 默认 LLM 关闭 |
 | UI shell 被重新绑到框架专属 IPC | 破坏跨平台 UI 复用 | 所有产品 UI 只走 service protocol；不重新引入 Tauri IPC |

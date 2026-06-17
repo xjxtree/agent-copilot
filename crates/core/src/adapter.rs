@@ -42,6 +42,10 @@ pub enum RootSource {
     UserHome,
     Project,
     Extra,
+    Compatibility,
+    Admin,
+    Plugin,
+    System,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

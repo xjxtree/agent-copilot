@@ -15,7 +15,7 @@ Current usage:
 
 Current release-readiness guardrails:
 
-- V2.1-V2.91 are the synchronized completed baseline.
+- V2.1-V2.92 are the synchronized completed baseline.
 - Real local validation evidence is version-specific. Use the matching verification checklist for exact screenshots, blockers, and commands.
 - Fixture smoke screenshots still do not replace required real local validation for user-visible changes.
 - Tool-global import/export/install is integrated. Local directory import writes only app-controlled staging/catalog, export creates reproducible local bundles, and confirmed install routes through verified write paths.
@@ -30,6 +30,58 @@ Current release-readiness guardrails:
 Entries are ordered newest first. Add new version entries directly below this
 heading.
 
+### V2.92 - 2026-06-17
+
+Status:
+
+- Complete.
+- Codex expanded roots completed as a read-only diagnostics and native-root
+  write-allowlist slice.
+
+Adapter behavior changes:
+
+- Codex now scans/diagnoses `$CODEX_HOME/skills`, local plugin marketplace
+  skill roots, and `/etc/codex/skills` when present.
+- Codex diagnostics include project `.codex/config.toml`.
+- Codex toggle writes remain limited to native user/project `.agents/skills`
+  instances through the user `config.toml` `[[skills.config]]` override.
+- Project config, compatibility-root, plugin, admin, and system root writes
+  remain blocked.
+
+Product/protocol changes:
+
+- Added `RootSource::Compatibility`, `RootSource::Admin`,
+  `RootSource::Plugin`, and `RootSource::System` for adapter provenance.
+- Updated adapter capability and diagnostics explanations for Codex expanded
+  roots.
+- No service protocol method count changed; `SUPPORTED_METHODS` remains 93.
+
+Risk/security notes:
+
+- Local plugin marketplace parsing accepts only local in-root plugin paths and
+  skips escaping or remote sources.
+- Expanded roots are scan-only and do not run plugin hooks, MCP servers,
+  installers, scripts, provider calls, or network fetches.
+- No credential reads, raw prompt/response/trace persistence, skill file
+  mutation, cloud sync, telemetry, signing, notarization, DMG, or ZIP work was
+  added.
+
+Validation posture:
+
+- Focused Codex adapter and commands tests passed.
+- V2.92 docs gate, service protocol drift, gate parity, screenshot artifact
+  verification, and privacy gate passed.
+- V2.92 app-window evidence is under
+  `docs/ui-artifacts/v2.92-codex-expanded-roots/`.
+- `pnpm check:macos` passed.
+- `pnpm check:privacy` passed.
+
+Near-term follow-up plan:
+
+- V2.93 covers opencode custom `skills.paths` / `skills.urls`.
+- V2.94-V2.96 cover Pi install/compat writes, Hermes writable/install, and
+  OpenClaw writable/install.
+
 ### V2.91 - 2026-06-17
 
 Status:
@@ -40,8 +92,9 @@ Status:
 Adapter behavior changes:
 
 - No adapter scan roots, writable scopes, install scopes, or config schemas changed.
-- Codex/opencode/Pi/Hermes/OpenClaw write/install expansion remains deferred to
-  V2.92-V2.96 evidence slices.
+- Codex expanded-root diagnostics completed in V2.92; opencode/Pi/Hermes/
+  OpenClaw write/install expansion remains deferred to V2.93-V2.96 evidence
+  slices.
 
 Product/protocol changes:
 
@@ -73,8 +126,8 @@ Validation posture:
 
 Near-term follow-up plan:
 
-- V2.92 covers Codex expanded roots/project config/plugin/admin/system-root
-  evidence.
+- V2.92 completed Codex expanded roots/project config/plugin/admin/system-root
+  read-only diagnostics.
 - V2.93-V2.96 cover opencode custom roots, Pi install/compat writes, Hermes
   writable/install, and OpenClaw writable/install.
 
@@ -131,9 +184,9 @@ Validation posture:
 Near-term follow-up plan:
 
 - V2.91 covers model-task matching history as a new evidence domain.
-- V2.92-V2.96 cover Codex/opencode/Pi/Hermes/OpenClaw adapter unblock slices,
-  with each write/install capability remaining blocked until its own disposable
-  evidence and rollback gates pass.
+- At the time, V2.92-V2.96 were planned for Codex/opencode/Pi/Hermes/OpenClaw
+  adapter unblock slices; V2.92 is now complete and later write/install slices
+  still require disposable evidence and rollback gates.
 
 ### V2.89 - 2026-06-17
 
@@ -172,7 +225,7 @@ Near-term follow-up plan:
 
 - V2.90 covers internal identifier migration with data/validation migration.
 - V2.91 covers model-task matching history as a new evidence domain.
-- V2.92-V2.96 cover Codex/opencode/Pi/Hermes/OpenClaw adapter unblock slices, with each write/install capability remaining blocked until its own disposable evidence and rollback gates pass.
+- At the time, V2.92-V2.96 were planned for Codex/opencode/Pi/Hermes/OpenClaw adapter unblock slices; V2.92 is now complete and later write/install slices still require disposable evidence and rollback gates.
 
 ### V2.88 - 2026-06-17
 
@@ -212,7 +265,7 @@ Near-term follow-up plan:
 - V2.89 covers brand assets.
 - V2.90 covers internal identifier migration with data/validation migration.
 - V2.91 covers model-task matching history as a new evidence domain.
-- V2.92-V2.96 cover Codex/opencode/Pi/Hermes/OpenClaw adapter unblock slices, with each write/install capability remaining blocked until its own disposable evidence and rollback gates pass.
+- At the time, V2.92-V2.96 were planned for Codex/opencode/Pi/Hermes/OpenClaw adapter unblock slices; V2.92 is now complete and later write/install slices still require disposable evidence and rollback gates.
 
 ### V2.87 - 2026-06-17
 
@@ -253,7 +306,7 @@ Near-term follow-up plan:
 - V2.89 covers brand assets.
 - V2.90 covers internal identifier migration with data/validation migration.
 - V2.91 covers model-task matching history as a new evidence domain.
-- V2.92-V2.96 cover Codex/opencode/Pi/Hermes/OpenClaw adapter unblock slices, with each write/install capability remaining blocked until its own disposable evidence and rollback gates pass.
+- At the time, V2.92-V2.96 were planned for Codex/opencode/Pi/Hermes/OpenClaw adapter unblock slices; V2.92 is now complete and later write/install slices still require disposable evidence and rollback gates.
 
 ### 2026-06-16 Review Remediation
 
@@ -596,7 +649,7 @@ Adapter behavior changes:
 Risk/security notes:
 
 - Codex writes remain limited to verified user config at `~/.codex/config.toml` / `$CODEX_HOME/config.toml`.
-- Project-local `.codex/config.toml`, `/etc/codex/skills`, `$CODEX_HOME/skills`, plugin/admin/system roots, and other unverified roots remain unsupported.
+- At the V2.3 boundary, project-local `.codex/config.toml`, `/etc/codex/skills`, `$CODEX_HOME/skills`, plugin/admin/system roots, and other unverified roots remained unsupported. V2.92 later added read-only diagnostics for those expanded roots while keeping writes blocked.
 - Added regression coverage for unsafe `CODEX_HOME`, config path canonicalization, project-boundary write checks, and stale catalog selection.
 
 Validation run:
@@ -696,7 +749,7 @@ Adapter behavior changes:
 Risk/security notes:
 
 - Does not write `<repo>/.codex/config.toml`.
-- Does not scan `/etc/codex/skills`, plugin-distributed skills, system/admin roots, or `$CODEX_HOME/skills`.
+- At this initial boundary, scan support did not include `/etc/codex/skills`, plugin-distributed skills, system/admin roots, or `$CODEX_HOME/skills`. V2.92 later added read-only diagnostics for those roots while keeping writes blocked.
 - Does not infer permissions, dependencies, or enablement state from `agents/openai.yaml`, unknown frontmatter fields, or plugin metadata.
 - Pi, opencode, Hermes, and OpenClaw were not implemented in this slice.
 - Signing, notarization, DMG/ZIP packaging, and release artifact automation were not implemented.

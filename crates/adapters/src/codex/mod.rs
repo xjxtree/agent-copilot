@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+};
 
 use crate::shared::{required_frontmatter_string, split_yaml_frontmatter, stable_path_id};
 use skills_copilot_core::{
@@ -31,6 +34,12 @@ impl AgentAdapter for CodexAdapter {
             source: RootSource::UserHome,
         }];
 
+        roots.push(AdapterRoot {
+            scope: Scope::AgentGlobal,
+            path: codex_home_dir(ctx).join("skills"),
+            source: RootSource::Compatibility,
+        });
+
         if let Some(project_root) = &ctx.project_root {
             roots.extend(codex_project_skill_roots(
                 project_root,
@@ -38,7 +47,13 @@ impl AgentAdapter for CodexAdapter {
             ));
         }
 
-        roots
+        roots.extend(codex_plugin_skill_roots(ctx));
+        roots.push(AdapterRoot {
+            scope: Scope::AgentGlobal,
+            path: PathBuf::from("/etc/codex/skills"),
+            source: RootSource::Admin,
+        });
+        dedup_roots(roots)
     }
 
     fn parse(&self, path: &Path) -> Result<SkillInstance, AdapterError> {
@@ -100,7 +115,11 @@ impl AgentAdapter for CodexAdapter {
     }
 
     fn config_paths(&self, ctx: &AdapterContext) -> Vec<PathBuf> {
-        vec![codex_user_config_path(ctx)]
+        let mut paths = vec![codex_user_config_path(ctx)];
+        if let Some(project_root) = &ctx.project_root {
+            paths.push(project_root.join(".codex/config.toml"));
+        }
+        paths
     }
 }
 
@@ -143,6 +162,10 @@ fn parse_skill_content(content: &str) -> Result<ParsedSkill, String> {
 }
 
 fn codex_user_config_path(ctx: &AdapterContext) -> PathBuf {
+    codex_home_dir(ctx).join("config.toml")
+}
+
+fn codex_home_dir(ctx: &AdapterContext) -> PathBuf {
     // AdapterContext does not yet expose a first-class Codex home override.
     // Honor CODEX_HOME only when it stays within the context user home;
     // otherwise use the verified default user config path.
@@ -150,7 +173,6 @@ fn codex_user_config_path(ctx: &AdapterContext) -> PathBuf {
         .map(PathBuf::from)
         .filter(|path| path.is_absolute() && path.starts_with(&ctx.user_home))
         .unwrap_or_else(|| ctx.user_home.join(".codex"))
-        .join("config.toml")
 }
 
 fn codex_project_skill_roots(project_root: &Path, project_cwd: Option<&Path>) -> Vec<AdapterRoot> {
@@ -175,6 +197,132 @@ fn codex_project_skill_roots(project_root: &Path, project_cwd: Option<&Path>) ->
     }
 
     roots
+}
+
+fn codex_plugin_skill_roots(ctx: &AdapterContext) -> Vec<AdapterRoot> {
+    let mut roots = Vec::new();
+    roots.extend(plugin_skill_roots_from_marketplace(
+        &ctx.user_home.join(".agents/plugins/marketplace.json"),
+        &ctx.user_home,
+        Scope::AgentGlobal,
+    ));
+
+    if let Some(project_root) = &ctx.project_root {
+        roots.extend(plugin_skill_roots_from_marketplace(
+            &project_root.join(".agents/plugins/marketplace.json"),
+            project_root,
+            Scope::AgentProject,
+        ));
+        roots.extend(plugin_skill_roots_from_marketplace(
+            &project_root.join(".claude-plugin/marketplace.json"),
+            project_root,
+            Scope::AgentProject,
+        ));
+    }
+
+    roots
+}
+
+fn plugin_skill_roots_from_marketplace(
+    marketplace_path: &Path,
+    marketplace_root: &Path,
+    scope: Scope,
+) -> Vec<AdapterRoot> {
+    let Ok(content) = std::fs::read_to_string(marketplace_path) else {
+        return Vec::new();
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&content) else {
+        return Vec::new();
+    };
+    let Some(plugins) = value.get("plugins").and_then(serde_json::Value::as_array) else {
+        return Vec::new();
+    };
+
+    plugins
+        .iter()
+        .filter_map(plugin_source_path)
+        .filter_map(|source_path| resolve_local_marketplace_path(marketplace_root, source_path))
+        .filter_map(|plugin_root| plugin_skills_root(&plugin_root))
+        .map(|path| AdapterRoot {
+            scope,
+            path,
+            source: RootSource::Plugin,
+        })
+        .collect()
+}
+
+fn plugin_source_path(plugin: &serde_json::Value) -> Option<&str> {
+    let source = plugin.get("source")?;
+    if let Some(path) = source.as_str() {
+        return Some(path);
+    }
+    let object = source.as_object()?;
+    if object
+        .get("source")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|kind| kind != "local")
+    {
+        return None;
+    }
+    object.get("path").and_then(serde_json::Value::as_str)
+}
+
+fn plugin_skills_root(plugin_root: &Path) -> Option<PathBuf> {
+    let manifest_path = plugin_root.join(".codex-plugin/plugin.json");
+    let content = std::fs::read_to_string(manifest_path).ok()?;
+    let value = serde_json::from_str::<serde_json::Value>(&content).ok()?;
+    let skills_path = value
+        .get("skills")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("./skills/");
+    let path = resolve_local_marketplace_path(plugin_root, skills_path)?;
+    if path.is_dir() {
+        Some(path)
+    } else {
+        None
+    }
+}
+
+fn resolve_local_marketplace_path(base: &Path, raw_path: &str) -> Option<PathBuf> {
+    if !raw_path.starts_with("./") {
+        return None;
+    }
+    let canonical_base = base.canonicalize().ok()?;
+    let canonical_path = canonical_base.join(raw_path).canonicalize().ok()?;
+    if canonical_path.starts_with(&canonical_base) {
+        Some(canonical_path)
+    } else {
+        None
+    }
+}
+
+fn dedup_roots(roots: Vec<AdapterRoot>) -> Vec<AdapterRoot> {
+    let mut seen = HashSet::new();
+    let mut deduped = Vec::new();
+    for root in roots {
+        let key = format!(
+            "{}|{}|{}",
+            root.scope.as_str(),
+            root_source_key(&root.source),
+            root.path.to_string_lossy()
+        );
+        if seen.insert(key) {
+            deduped.push(root);
+        }
+    }
+    deduped
+}
+
+fn root_source_key(source: &RootSource) -> &'static str {
+    match source {
+        RootSource::UserHome => "user-home",
+        RootSource::Project => "project",
+        RootSource::Extra => "extra",
+        RootSource::Compatibility => "compatibility",
+        RootSource::Admin => "admin",
+        RootSource::Plugin => "plugin",
+        RootSource::System => "system",
+    }
 }
 
 fn patch_codex_config(content: &str, skill_path: &Path, on: bool) -> Result<String, AdapterError> {
@@ -519,7 +667,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn exposes_verified_user_and_project_roots_only() {
+    fn exposes_native_and_read_only_expanded_roots() {
         let adapter = CodexAdapter;
         let ctx = AdapterContext {
             user_home: PathBuf::from("/tmp/home"),
@@ -534,23 +682,88 @@ mod tests {
 
         let roots = adapter.roots(&ctx);
 
-        assert_eq!(roots.len(), 4);
+        assert_eq!(roots.len(), 6);
         assert_eq!(roots[0].path, PathBuf::from("/tmp/home/.agents/skills"));
         assert_eq!(roots[0].scope, Scope::AgentGlobal);
         assert_eq!(roots[0].source, RootSource::UserHome);
+        assert_eq!(roots[1].path, PathBuf::from("/tmp/home/.codex/skills"));
+        assert_eq!(roots[1].scope, Scope::AgentGlobal);
+        assert_eq!(roots[1].source, RootSource::Compatibility);
         assert_eq!(
-            roots[1].path,
+            roots[2].path,
             PathBuf::from("/tmp/project/nested/deeper/.agents/skills")
         );
         assert_eq!(
-            roots[2].path,
+            roots[3].path,
             PathBuf::from("/tmp/project/nested/.agents/skills")
         );
-        assert_eq!(roots[3].path, PathBuf::from("/tmp/project/.agents/skills"));
-        for root in &roots[1..] {
+        assert_eq!(roots[4].path, PathBuf::from("/tmp/project/.agents/skills"));
+        for root in &roots[2..5] {
             assert_eq!(root.scope, Scope::AgentProject);
             assert_eq!(root.source, RootSource::Project);
         }
+        assert_eq!(roots[5].path, PathBuf::from("/etc/codex/skills"));
+        assert_eq!(roots[5].scope, Scope::AgentGlobal);
+        assert_eq!(roots[5].source, RootSource::Admin);
+    }
+
+    #[test]
+    fn scans_local_plugin_marketplace_skill_roots_read_only() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "skills-copilot-codex-plugin-roots-{}",
+            std::process::id()
+        ));
+        let home = temp_root.join("home");
+        let plugin_root = home.join(".codex/plugins/local-review");
+        let skills_root = plugin_root.join("skills");
+        std::fs::create_dir_all(skills_root.join("review-helper"))
+            .expect("create plugin skill dir");
+        std::fs::create_dir_all(plugin_root.join(".codex-plugin"))
+            .expect("create plugin manifest dir");
+        std::fs::create_dir_all(home.join(".agents/plugins")).expect("create marketplace parent");
+        std::fs::write(
+            plugin_root.join(".codex-plugin/plugin.json"),
+            "{\n  \"name\": \"local-review\",\n  \"skills\": \"./skills/\"\n}\n",
+        )
+        .expect("write plugin manifest");
+        std::fs::write(
+            skills_root.join("review-helper/SKILL.md"),
+            "---\nname: review-helper\ndescription: Plugin fixture\n---\nBody.\n",
+        )
+        .expect("write plugin skill");
+        std::fs::write(
+            home.join(".agents/plugins/marketplace.json"),
+            "{\n  \"plugins\": [\n    {\"source\": {\"source\": \"local\", \"path\": \"./.codex/plugins/local-review\"}},\n    {\"source\": {\"source\": \"local\", \"path\": \"./../outside\"}},\n    {\"source\": \"https://example.invalid/plugin.tgz\"}\n  ]\n}\n",
+        )
+        .expect("write marketplace");
+
+        let adapter = CodexAdapter;
+        let ctx = AdapterContext {
+            user_home: home,
+            project_root: None,
+            project_cwd: None,
+            extra_roots: vec![],
+        };
+        let roots = adapter.roots(&ctx);
+
+        assert!(
+            roots.iter().any(|root| {
+                root.source == RootSource::Plugin
+                    && root.scope == Scope::AgentGlobal
+                    && root.path == skills_root.canonicalize().expect("canonical plugin skills")
+            }),
+            "local marketplace plugin skills roots should be exposed as read-only plugin roots"
+        );
+        assert_eq!(
+            roots
+                .iter()
+                .filter(|root| root.source == RootSource::Plugin)
+                .count(),
+            1,
+            "remote and escaping marketplace plugin sources must be skipped"
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_root);
     }
 
     #[test]
