@@ -186,6 +186,19 @@ const versions = {
       "Final status decision: completed",
     ],
   },
+  "v2.89": {
+    title: "# V2.89 Verification Checklist",
+    required: [
+      "Brand asset refresh",
+      "AppIcon.icns",
+      "AppIcon.svg",
+      "Agent Copilot display brand",
+      "unchanged internal identifiers",
+      "docs/ui-artifacts/v2.89-brand-assets",
+      "pnpm generate:app-icon",
+      "Final status decision: completed",
+    ],
+  },
 };
 
 const staleStatus = [

@@ -15,11 +15,11 @@ coding agents working in this repository.
 
 ## Current State
 
-- Current phase: **V2.88 handoff and per-surface Agent Copilot evidence closeout completed**.
-- Completed baseline: V2.1-V2.88. V2.87 unlocked validation passed on 2026-06-17 via `pnpm check:macos`; V2.88 added Computer Use per-surface evidence under `docs/ui-artifacts/v2.88-handoff-evidence/`.
+- Current phase: **V2.89 Agent Copilot brand asset refresh completed**.
+- Completed baseline: V2.1-V2.89. V2.87 unlocked validation passed on 2026-06-17 via `pnpm check:macos`; V2.88 added Computer Use per-surface evidence under `docs/ui-artifacts/v2.88-handoff-evidence/`; V2.89 refreshed the app icon assets without internal identifier migration.
 - Completed product slice: Agent Copilot M1-M4. The displayed product name is Agent Copilot; internal bundle/module/AX/app-data identifiers may still contain `SkillsCopilot` / `skills-copilot` and must not be renamed without a migration plan.
 - Current Agent Copilot surfaces: Lineup default surface, Agent Profile, sorted read-only decision queue, default-off local session preview, and default-off MCP server preview.
-- Near-term post-V2.88 planning: V2.89-V2.96 cover brand assets, identifier migration, model-task history, Codex/opencode roots, Pi install/compat writes, and Hermes/OpenClaw writable/install evidence slices.
+- Near-term post-V2.89 planning: V2.90-V2.96 cover identifier migration, model-task history, Codex/opencode roots, Pi install/compat writes, and Hermes/OpenClaw writable/install evidence slices.
 - Maintained product UI: native macOS app in `apps/macos`.
 - Service boundary: Rust typed JSON stdio sidecar in `crates/service`.
 - Current app bundle path: `dist/SkillsCopilot.app`.
@@ -160,3 +160,4 @@ This section keeps compact machine-checked milestone anchors. Full details live 
 - V2.86 Rust helper/test split and module-size gate closeout: `service_support_helpers.rs`, `crates/service/src/tests/`, `verify:module-size`.
 - V2.87 Agent Copilot first pass: `AgentCopilotOverviewPanel.swift`, `AgentCopilotDecision.swift`, `LocalSessionPreview.swift`, `McpServerPreview.swift`, `service_task.rs`, `service_evidence.rs`, and protocol fixtures for `session.previewLocalSessions` / `evidence.previewMcpServers`.
 - V2.88 handoff/evidence closeout: `docs/v2.88-verification-checklist.md` and `docs/ui-artifacts/v2.88-handoff-evidence/` record unlocked Computer Use evidence for Lineup, Agent Profile, Local Session Preview, and MCP Preview.
+- V2.89 brand asset refresh: `AppIcon.svg`, regenerated `AppIcon.icns`, `script/generate_app_icon.sh`, `docs/v2.89-verification-checklist.md`, and `docs/ui-artifacts/v2.89-brand-assets/`; internal `SkillsCopilot` / `skills-copilot` identifiers remain unchanged.

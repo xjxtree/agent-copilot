@@ -8,7 +8,7 @@
 >
 > Scanner / rules / catalog 始终是事实来源；LLM/AI provider 是 AI agent skills 的核心分析增强，用于质量、任务可用性、routing 置信度、trace 分析、remediation 和 provider observability；V2.62 真实 agent session skill review、V2.63 local skill map、V2.64 provider observability、V2.65 task-first cockpit、V2.66 skill lifecycle timeline 与 V2.67 guided cleanup plan 保持 deterministic local-only，不发送 provider request。
 >
-> 当前实现边界（V2.41-V2.88 implementation line）：
+> 当前实现边界（V2.41-V2.89 implementation line）：
 >
 > - 已落地 disabled-by-default 的 service/UI gate 和 request prepare/estimate 能力。
 > - 已落地用户显式配置的 OpenAI-compatible / Claude-compatible provider profile 基础：`llm.listProviderProfiles`、`llm.saveProviderProfile`、`llm.deleteProviderProfile`、`llm.testProviderConnection`、macOS Keychain-first API key storage、预算字段、disabled/unconfigured state，以及 test connection 的最小 redacted call metadata。
@@ -19,7 +19,7 @@
 > - V2.67 Guided Cleanup Flow 是 completed：`cleanup.planGuidedFlow` 只读组织现有 evidence，`cleanup.recordGuidedStep` 仅可写 app-local redacted guided step metadata；真实 enable/disable/edit/remediation 仍走 existing preview-first / explicit-confirm safe methods。
 > - V2.71 Guided Cleanup safe-action links 是 completed：`safe_action_deep_link` / `deep_link` 只把 cleanup guidance 导航到既有安全入口，不新增 provider request、apply/write/toggle/script/confirmation 语义。
 > - V2.72 Validation harness hardening 是 completed：只加固验证脚本、截图证据和 Computer Use blocker 分类，不改变 AI/provider/service/write 语义。
-> - V2.73-V2.88 已完成/实现 timeout recovery、launch/window targeting、task input resilience、progressive feedback、validation workbench、protocol/gate parity、privacy/localization、Detail density、Swift IPC cancellation、test isolation、continued module splitting、Swift Detail section split、Rust RPC domain split、Rust helper/test split、module-size gate、Agent Copilot first pass 的 Lineup / Agent Profile / local session preview / MCP server preview，以及 V2.88 per-surface evidence closeout；这些切片不扩展 provider/write/script/credential/cloud/telemetry 边界。V2.87 于 2026-06-17 解锁后通过 `pnpm check:macos`，V2.88 补齐 Lineup / Agent Profile / Local Session Preview / MCP Preview 的 Computer Use app-window evidence。
+> - V2.73-V2.89 已完成/实现 timeout recovery、launch/window targeting、task input resilience、progressive feedback、validation workbench、protocol/gate parity、privacy/localization、Detail density、Swift IPC cancellation、test isolation、continued module splitting、Swift Detail section split、Rust RPC domain split、Rust helper/test split、module-size gate、Agent Copilot first pass 的 Lineup / Agent Profile / local session preview / MCP server preview、V2.88 per-surface evidence closeout，以及 V2.89 visual-only brand asset refresh；这些切片不扩展 provider/write/script/credential/cloud/telemetry 边界。V2.87 于 2026-06-17 解锁后通过 `pnpm check:macos`，V2.88 补齐 Lineup / Agent Profile / Local Session Preview / MCP Preview 的 Computer Use app-window evidence，V2.89 刷新 `AppIcon.svg` / `AppIcon.icns` 且不迁移内部标识。
 >
 > V2.45（已完成）：
 >
@@ -134,7 +134,7 @@ Provider 配置原则：
 - provider request/response 默认不持久化；V2.42 confirmed send 只保存最小 redacted call metadata（status、duration、error、token/cost、redaction status、confirmation id、destination host），用于审计每次真实请求；V2.64 `llm.providerObservability` 在此基础上和 V2.61 prompt run metadata 上做 read-only observability summary、rows、budget/usage hints、retention/cleanup recommendations 和 evidence refs。若 export/cleanup controls 未在代码切片中实现，只能作为 observability recommendations，不应描述成可写路径。
 - provider 不得成为写入者、执行者或确认者。
 
-## 1.2 V2.41-V2.88 AI-native / validation / modularity 能力线
+## 1.2 V2.41-V2.89 AI-native / validation / modularity 能力线
 
 | Version | AI role | 本地事实来源 |
 | --- | --- | --- |
@@ -182,6 +182,7 @@ Provider 配置原则：
 | V2.86（completed） | Rust helper/test split and module-size gate | Helper files and service test chunks split with `verify:module-size` wired into gate parity |
 | V2.87（completed） | Agent Copilot first pass | Lineup default surface, Agent Profile, sorted read-only decision queue, default-off `session.previewLocalSessions`, default-off `evidence.previewMcpServers`, and current 90-method protocol parity |
 | V2.88（completed） | Agent Copilot evidence closeout | Per-surface Computer Use app-window evidence for Lineup, Agent Profile, Local Session Preview, and MCP Preview; V2.87/V2.88 docs gates wired into gate parity |
+| V2.89（completed） | Brand asset refresh | Visual-only Agent Copilot app icon refresh via `AppIcon.svg` / `AppIcon.icns`; no provider/write/script/credential/cloud/telemetry or internal identifier migration |
 
 V2.57 的 preview drafts 只生成可复制/可编辑的草稿建议，不提供直接 apply/write；任何 provider wording 都必须经过 V2.42 的 prompt preview / redaction / confirmation，并继续作为 copy-only 输出。
 

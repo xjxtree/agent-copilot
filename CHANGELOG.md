@@ -15,7 +15,7 @@ Current usage:
 
 Current release-readiness guardrails:
 
-- V2.1-V2.88 are the synchronized completed baseline.
+- V2.1-V2.89 are the synchronized completed baseline.
 - Real local validation evidence is version-specific. Use the matching verification checklist for exact screenshots, blockers, and commands.
 - Fixture smoke screenshots still do not replace required real local validation for user-visible changes.
 - Tool-global import/export/install is integrated. Local directory import writes only app-controlled staging/catalog, export creates reproducible local bundles, and confirmed install routes through verified write paths.
@@ -29,6 +29,45 @@ Current release-readiness guardrails:
 
 Entries are ordered newest first. Add new version entries directly below this
 heading.
+
+### V2.89 - 2026-06-17
+
+Status:
+
+- Complete.
+- Agent Copilot brand asset refresh completed.
+
+Adapter behavior changes:
+
+- No adapter scan roots, writable scopes, install scopes, or config schemas changed.
+- No internal bundle/module/AX/app-data identifier migration; V2.90 still owns that work.
+
+Product/protocol changes:
+
+- Added `AppIcon.svg` as the reviewable Agent Copilot display brand icon source.
+- Regenerated `AppIcon.icns` for the bundled macOS app icon.
+- Added `script/generate_app_icon.sh` and `pnpm generate:app-icon` for manual local regeneration.
+- No service protocol method, payload, or protocol version changed.
+
+Risk/security notes:
+
+- The asset refresh is visual-only and build-time only.
+- Internal `SkillsCopilot` / `skills-copilot` identifiers, `dist/SkillsCopilot.app`, `APP_NAME`, `BUNDLE_ID`, Swift module names, and AX ids remain unchanged.
+- No provider default calls, write/apply paths, product script execution, credential reads, raw prompt/response/trace persistence, cloud sync, telemetry, signing, notarization, DMG, or ZIP work was added.
+
+Validation posture:
+
+- `pnpm generate:app-icon` regenerated `AppIcon.icns` from `AppIcon.svg`.
+- `pnpm check:macos` passed after the asset refresh.
+- V2.89 app-window evidence is under `docs/ui-artifacts/v2.89-brand-assets/`.
+- `pnpm verify:screenshot-artifacts docs/ui-artifacts/v2.89-brand-assets` passed.
+- `pnpm check:privacy` passed.
+
+Near-term follow-up plan:
+
+- V2.90 covers internal identifier migration with data/validation migration.
+- V2.91 covers model-task matching history as a new evidence domain.
+- V2.92-V2.96 cover Codex/opencode/Pi/Hermes/OpenClaw adapter unblock slices, with each write/install capability remaining blocked until its own disposable evidence and rollback gates pass.
 
 ### V2.88 - 2026-06-17
 

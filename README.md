@@ -8,13 +8,13 @@ opencode, Pi, Hermes, and OpenClaw.
 
 | Area | Status |
 | --- | --- |
-| Current phase | V2.88 handoff and per-surface Agent Copilot evidence closeout completed |
-| Completed baseline | V2.1-V2.88 |
-| Recent product line | V2.41-V2.88 AI-native analysis, task cockpit, validation hardening, module splitting, read-only Agent Copilot surfaces, and per-surface evidence closeout |
+| Current phase | V2.89 Agent Copilot brand asset refresh completed |
+| Completed baseline | V2.1-V2.89 |
+| Recent product line | V2.41-V2.89 AI-native analysis, task cockpit, validation hardening, module splitting, read-only Agent Copilot surfaces, per-surface evidence closeout, and brand asset refresh |
 | Agent Copilot line | M1-M4 completed; unlocked app-window evidence captured |
 | Maintained UI | Native macOS app in `apps/macos` |
 | Service boundary | Rust typed JSON stdio sidecar in `crates/service` |
-| Next version | V2.89 brand asset refresh; V2.90-V2.96 near-term plan is tracked in `docs/roadmap.md` and `docs/development-tasks.md` |
+| Next version | V2.90 internal identifier migration; V2.91-V2.96 near-term plan is tracked in `docs/roadmap.md` and `docs/development-tasks.md` |
 
 V2.84-V2.86 completed the post-V2.83 module-splitting line:
 
@@ -37,6 +37,14 @@ V2.88 closes the handoff/evidence gap:
 - Authorized preview checks used only disposable `/tmp/ac-v288` fixtures and
   kept session/MCP output read-only and redacted.
 - V2.87/V2.88 verification checklists are wired into `pnpm verify:gate-parity`.
+
+V2.89 refreshes the Agent Copilot display brand assets:
+
+- Adds `AppIcon.svg` as the reviewable icon source.
+- Regenerates `AppIcon.icns` for the bundled macOS app icon.
+- Keeps `SkillsCopilot` / `skills-copilot`, bundle id, module names, AX ids,
+  app-data paths, and `dist/SkillsCopilot.app` unchanged for the future V2.90
+  migration slice.
 
 ## What It Does
 
@@ -120,7 +128,7 @@ This section only keeps machine-checked status anchors. Detailed evidence lives
 in `docs/v2.*-verification-checklist.md` and `docs/development-tasks.md`.
 
 Baseline phrase used by docs gates:
-V2.88 handoff and per-surface Agent Copilot evidence closeout completed.
+V2.89 Agent Copilot brand asset refresh completed.
 
 ### V2.74-V2.78
 
