@@ -240,6 +240,21 @@ const versions = {
       "Final status decision: completed",
     ],
   },
+  "v2.93": {
+    title: "# V2.93 Verification Checklist",
+    required: [
+      "opencode custom roots",
+      "RootSource::Configured",
+      "skills.paths",
+      "skills.urls",
+      "canonicalization/dedupe",
+      "no uncontrolled network",
+      "metadata-only",
+      "configured local paths",
+      "docs/ui-artifacts/v2.93-opencode-custom-roots",
+      "Final status decision: completed",
+    ],
+  },
 };
 
 const staleStatus = [

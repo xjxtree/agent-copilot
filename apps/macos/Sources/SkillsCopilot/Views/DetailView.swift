@@ -629,6 +629,8 @@ enum SkillProvenanceDisplay {
                 return UIStrings.provenanceAgentsCompatibilityRoot
             }
             return skill.provenance.label
+        case .configured:
+            return "\(DisplayText.agent(skill.agent)) \(UIStrings.provenanceConfiguredRoot)"
         case .external:
             if skill.agent == "hermes" {
                 return UIStrings.provenanceHermesExternalRoot
@@ -658,6 +660,8 @@ enum SkillProvenanceDisplay {
             return UIStrings.provenanceNativeKind
         case .compatibility:
             return UIStrings.provenanceCompatibilityKind
+        case .configured:
+            return UIStrings.provenanceConfiguredKind
         case .external:
             return UIStrings.provenanceExternalKind
         case .readOnly:

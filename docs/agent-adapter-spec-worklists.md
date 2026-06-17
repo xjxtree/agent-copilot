@@ -1,7 +1,9 @@
 # Agent Adapter Spec Worklists
 
-> Status: V2.1-V2.92 is the synchronized completed baseline.
+> Status: V2.1-V2.93 is the synchronized completed baseline.
 > V2.92 expands Codex read-only roots and diagnostics without expanding writes.
+> V2.93 adds opencode configured local `skills.paths` scanning without URL
+> fetching or configured-root writes.
 > opencode writable, Pi read-only scan, Pi guarded native toggle,
 > OpenClaw read-only scan, Hermes read-only scan,
 > and Hermes explicit external-root scan are implemented.
@@ -19,7 +21,8 @@ project-context-scoped scanning, read-only `$CODEX_HOME/skills`, local plugin
 marketplace, and `/etc/codex/skills` diagnostics, plus user-config writable
 toggles only for native `.agents/skills` instances.
 Opencode writable is enabled through managed `permission.skill` overrides;
-opencode install targets remain native roots.
+opencode install targets remain native roots. Opencode configured local
+`skills.paths` roots are scan-only; `skills.urls` is metadata-only/no-fetch.
 
 Pi production install remains blocked.
 Production toggle is limited to the V2.37 evidence-backed guarded
@@ -102,19 +105,19 @@ Required next evidence:
 | Project instruction entrypoint | Verified: opencode uses `AGENTS.md` for project rules and falls back to `CLAUDE.md` only when `AGENTS.md` is absent. |
 | Agent definitions | Public docs describe opencode agent configuration and prompt files. Agents are not the same as this app's Skill model. |
 | Command definitions | Public docs describe custom commands under opencode command locations. Commands are not needed for the skill adapter evidence gate. |
-| Skill discovery roots | Current implementation scans official OpenCode roots: global/project `.opencode/skills`, `.claude/skills`, and `.agents/skills`, walking project roots from `project_cwd` upward to `project_root`. |
+| Skill discovery roots | Current implementation scans official OpenCode roots: global/project `.opencode/skills`, `.claude/skills`, and `.agents/skills`, walking project roots from `project_cwd` upward to `project_root`; V2.93 also scans configured local `skills.paths` roots from readable JSON/JSONC opencode config. |
 | Skill file/directory format | Verified: one folder per skill name with `SKILL.md`; required YAML frontmatter fields `name` and `description`; `name` must match the containing directory. Missing `name`, missing `description`, or name/directory mismatch should produce broken records rather than aborting the scan. |
-| Config path/schema | Partially verified from official docs and local path existence: global `~/.config/opencode/opencode.json`, project `opencode.json`, `.opencode` directories, and custom/managed config paths. |
+| Config path/schema | Partially verified from official docs, schema, source evidence, and local path existence: global `~/.config/opencode/opencode.json` / `opencode.jsonc`, project `opencode.json` / `opencode.jsonc`, `.opencode` directories, `skills.paths`, `skills.urls`, and custom/managed config paths. |
 | Enable/disable semantics | Partially documented but not writable-verified: pattern permissions under `permission.skill` support `allow`, `deny`, and `ask`; `deny` hides/rejects a skill. Exact write and re-enable semantics remain unverified. |
 | Fixture requirement | Parser/scan contract fixtures promoted under `fixtures/opencode/`: valid global, valid project, nested project root, name mismatch, missing description, and missing name. The config fixture remains writable-evidence only. |
-| Implementation decision | Native and compatibility roots are scanned. Writable config is guarded through exact `permission.skill` rules; tool-global installs remain limited to native opencode roots. Custom configured skill paths remain deferred. |
+| Implementation decision | Native, compatibility, and configured local `skills.paths` roots are scanned. Writable config is guarded through exact `permission.skill` rules; tool-global installs remain limited to native opencode roots. `skills.urls` remains metadata-only/no-fetch. |
 
 Required next evidence:
 
 - Keep disposable local verification scoped to temporary `HOME`, `XDG_CONFIG_HOME`, `OPENCODE_CONFIG_DIR`, and fixture projects. The 2026-06-08 `opencode debug skill --pure` check confirmed synthetic native global/project/nested project skills were listed without reading or modifying real config.
 - Capture exact config patch behavior for disabling one skill by exact name, re-enabling that skill, and resolving wildcard/exact-name conflicts.
-- Decide in a later slice whether custom configured skill paths should be exposed through opencode after non-destructive evidence confirms their semantics.
-- Decide in a later slice whether custom `skills.paths` / `skills.urls` are in scope, and what trust/provenance labels they need.
+- Keep configured local `skills.paths` read-only and covered by canonicalization/dedupe/project-boundary tests before expanding it.
+- Scope a separate confirmation/cache/rollback design before any `skills.urls` fetch support is considered.
 - Decide UI semantics for `ask`; it is neither fully enabled nor disabled.
 - Verify behavior when managed config or `OPENCODE_CONFIG_CONTENT` overrides local writable config.
 

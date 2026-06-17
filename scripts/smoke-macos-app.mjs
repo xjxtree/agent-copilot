@@ -291,6 +291,7 @@ function createFixtureEnvironment() {
   const claudeSkillsRoot = join(home, ".claude", "skills");
   const codexSkillsRoot = join(home, ".agents", "skills");
   const opencodeSkillsRoot = join(home, ".config", "opencode", "skills");
+  const opencodeConfiguredSkillsRoot = join(root, "opencode-configured-skills");
   const projectRoot = join(root, "fixture-project");
   const projectCwd = join(projectRoot, "nested", "workspace");
   const projectCodexSkillsRoot = join(projectRoot, ".agents", "skills");
@@ -301,6 +302,7 @@ function createFixtureEnvironment() {
   mkdirSync(claudeSkillsRoot, { recursive: true });
   mkdirSync(codexSkillsRoot, { recursive: true });
   mkdirSync(opencodeSkillsRoot, { recursive: true });
+  mkdirSync(opencodeConfiguredSkillsRoot, { recursive: true });
   mkdirSync(projectCodexSkillsRoot, { recursive: true });
   mkdirSync(projectOpencodeSkillsRoot, { recursive: true });
   mkdirSync(join(projectRoot, ".git"), { recursive: true });
@@ -339,6 +341,24 @@ function createFixtureEnvironment() {
     opencodeSkillsRoot,
     "opencode-global-smoke",
     "---\nname: opencode-global-smoke\ndescription: Global opencode fixture for native smoke.\n---\nGlobal opencode body.\n",
+  );
+  writeSkill(
+    opencodeConfiguredSkillsRoot,
+    "opencode-configured-smoke",
+    "---\nname: opencode-configured-smoke\ndescription: Configured opencode fixture for native smoke.\n---\nConfigured opencode body.\n",
+  );
+  writeFileSync(
+    join(home, ".config", "opencode", "opencode.json"),
+    JSON.stringify(
+      {
+        skills: {
+          paths: [opencodeConfiguredSkillsRoot],
+          urls: ["https://example.invalid/skills/index.json"],
+        },
+      },
+      null,
+      2,
+    ) + "\n",
   );
   writeSkill(
     projectOpencodeSkillsRoot,
@@ -880,13 +900,19 @@ function assertFixtureOpencodeGlobalSmoke(skills) {
     "opencode-global-smoke",
     "global opencode fixture missing from no-project scanAll",
   );
+  assertSkillPresent(
+    skills,
+    "opencode",
+    "opencode-configured-smoke",
+    "configured opencode skills.paths fixture missing from no-project scanAll",
+  );
   assertSkillNotCurrentVisible(
     skills,
     "opencode-project-smoke",
     "project opencode fixture should not be visible before project context is active",
     "opencode",
   );
-  note("fixture opencode global smoke passed: native global root visible without project context");
+  note("fixture opencode global smoke passed: native and configured local roots visible without project context");
 }
 
 function runFixtureOpencodeWritableSmoke(skills, env, fixture) {

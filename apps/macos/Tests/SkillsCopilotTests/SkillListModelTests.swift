@@ -169,6 +169,11 @@ struct SkillListModelTests {
             scope: "agent-project",
             path: "/repo/.agents/skills/foo/SKILL.md"
         )
+        let opencodeConfigured = Self.identityRecord(
+            agent: "opencode",
+            scope: "agent-global",
+            path: "/fixture/custom-opencode-skills/foo/SKILL.md"
+        )
         let codexAgentsNative = Self.identityRecord(
             agent: "codex",
             scope: "agent-project",
@@ -224,6 +229,8 @@ struct SkillListModelTests {
         try expectEqual(opencodeGlobal.provenance.label, "opencode native global", "opencode global native label")
         try expectEqual(opencodeClaudeCompatibility.provenance.rootKind, .compatibility, "opencode .claude roots should be compatibility roots.")
         try expectEqual(opencodeAgentsCompatibility.provenance.rootKind, .compatibility, "opencode .agents roots should be compatibility roots.")
+        try expectEqual(opencodeConfigured.provenance.rootKind, .configured, "opencode skills.paths rows should be configured roots.")
+        try expectEqual(opencodeConfigured.provenance.label, "opencode configured global", "opencode configured root label")
         try expectEqual(codexAgentsNative.provenance.rootKind, .native, "Codex .agents roots should be native roots.")
         try expectEqual(claudeAgentsCompatibility.provenance.rootKind, .unknown, "Claude Code should not treat .agents roots as native Claude roots.")
         try expectEqual(claudeGlobalDisplayAgent.provenance.rootKind, .native, "Claude Code display agent and tilde .claude roots should be native.")

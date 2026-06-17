@@ -10,7 +10,7 @@
 >
 > 上层 scanner / catalog / UI 不直接处理 agent 特有配置语义。
 >
-> V2.41-V2.92 的 provider/task/validation/module-splitting/Agent Copilot/Codex expanded root work is tracked in README, roadmap, development tasks, and verification checklists. V2.92 expands Codex read-only roots while preserving the writable capability matrix below.
+> V2.41-V2.93 的 provider/task/validation/module-splitting/Agent Copilot/Codex expanded root/opencode configured-root work is tracked in README, roadmap, development tasks, and verification checklists. V2.92 expands Codex read-only roots and V2.93 adds opencode configured local roots while preserving the writable capability matrix below.
 
 ## V2.40 Adapter diagnostics
 
@@ -98,7 +98,7 @@ pub struct AdapterFeatureCapability {
 | --- | --- | --- | --- | --- | --- | --- |
 | Claude Code | `verified` | 支持（settings、project roots） | 支持（verified） | 支持（tool-global install） | 支持（verified） | `project-local` settings 与非 verified 目标 blocked |
 | Codex | `verified` | 支持（native user/project roots + read-only `$CODEX_HOME/skills`、plugin marketplace、`/etc/codex/skills` diagnostics） | 支持（仅用户 `config.toml`，且仅 native `.agents/skills` 实例） | 支持（tool-global install to native roots） | 支持（native-root allowlist） | 项目级 `.codex/config.toml`、plugin/admin/system/compat roots writable blocked |
-| opencode | `verified` | 支持 native roots + 官方 `.claude` / `.agents` compatibility roots | 支持（exact `permission.skill` deny/re-enable） | 支持（native-root 安装） | 支持（managed permission overrides） | 自定义 `skills.paths` / `skills.urls` 暂停 |
+| opencode | `verified` | 支持 native roots + 官方 `.claude` / `.agents` compatibility roots + configured local `skills.paths` roots | 支持（exact `permission.skill` deny/re-enable） | 支持（native-root 安装） | 支持（managed permission overrides） | `skills.urls` metadata-only/no-fetch；configured/compat roots 不作为 install/write target |
 | Pi | `guarded` | 支持 Pi-native roots | 支持 guarded native toggle（仅 global/project/package，基于证据） | blocked | limited | V2.37 已实现 preview/snapshot/rollback 与 disabled-state rescan；install、兼容 root 写入、脚本执行、AI 自动写回、credentials 仍 blocked |
 | Hermes | `read-only` | 支持 active/profile Hermes home | blocked（read-only 扫描） | blocked | blocked | 外部目录仅按 `skills.external_dirs` 显式 external roots 处理；generic project scan / toggle / install / writable blocked |
 | OpenClaw | `read-only` | 支持文档化 filesystem roots | blocked（read-only scan only） | blocked | blocked | project scope 仅 workspace，toggle/install/writable blocked |
@@ -226,7 +226,7 @@ V2.16 第一版只做 read-only filesystem scanner；toggle/install/writable 继
 ### 2.6 opencode
 ### 2.6.1 opencode provenance 口径（V2.27）
 
-- 在 catalog 和 analysis 视图中，opencode 条目需展示 provenance label：`native`（`~/.config/opencode/skills`、`project/.opencode/skills`）与 `compatibility`（`~/.claude/skills`、`~/.agents/skills` 等官方兼容目录）。
+- 在 catalog 和 analysis 视图中，opencode 条目需展示 provenance label：`native`（`~/.config/opencode/skills`、`project/.opencode/skills`）、`compatibility`（`~/.claude/skills`、`~/.agents/skills` 等官方兼容目录）与 `configured`（JSON/JSONC `skills.paths` configured local roots）。
 - 身份口径由 `(agent, scope, definition_id, path)` 决定；跨 root 的同名条目作为可解释重叠，保留于 Analysis，不直接变更 conflict 口径。
 - `id` 规则仍以实例主键为准，provenance 仅用于用户可解释展示与分析分组。
 
@@ -234,22 +234,24 @@ V2.16 第一版只做 read-only filesystem scanner；toggle/install/writable 继
 | 项 | 值 |
 | --- | --- |
 | AgentId | `opencode` |
-| 状态 | **Verified guarded writable with compatibility scanning** —— scanner 覆盖 opencode native roots 与官方 `.claude` / `.agents` compatibility roots；V2.12 已实现 exact `permission.skill` deny/re-enable、snapshot/rollback，native-root install 仍为唯一 install target |
+| 状态 | **Verified guarded writable with compatibility/configured scanning** —— scanner 覆盖 opencode native roots、官方 `.claude` / `.agents` compatibility roots，以及 V2.93 configured local `skills.paths` roots；V2.12 已实现 exact `permission.skill` deny/re-enable、snapshot/rollback，native-root install 仍为唯一 install target |
 | Spec 工作单 | [`docs/opencode-adapter-spec.md`](./opencode-adapter-spec.md) |
 | 统一工作单 | [`docs/agent-adapter-spec-worklists.md`](./agent-adapter-spec-worklists.md#opencode) |
 | 本地观测 | 2026-06-08 本机 `opencode --version` 为 `1.16.2`；`~/.config/opencode/skills/` 和 `~/.config/opencode/opencode.json` 存在；未读取或修改真实 config 内容 |
-| Skill roots | 扫描 `~/.config/opencode/skills`、项目 `.opencode/skills`（native）以及 `~/.claude/skills` / `.claude/skills` / `~/.agents/skills` / `.agents/skills`（compatibility） |
+| Skill roots | 扫描 `~/.config/opencode/skills`、项目 `.opencode/skills`（native）、`~/.claude/skills` / `.claude/skills` / `~/.agents/skills` / `.agents/skills`（compatibility），以及 readable global/project JSON/JSONC config 中的 local `skills.paths`（configured） |
 | Skill 格式 | 每个 skill 一个目录加 `SKILL.md`；frontmatter `name`/`description` 必填；`name` 必须匹配目录名；unknown fields ignored |
-| 配置文件 | 全局 `~/.config/opencode/opencode.json`；项目根 `opencode.json`；`.opencode` 目录；`OPENCODE_CONFIG` / `OPENCODE_CONFIG_DIR`；managed config 只读 |
+| 配置文件 | 全局 `~/.config/opencode/opencode.json` / `opencode.jsonc`；项目根 `opencode.json` / `opencode.jsonc`；`.opencode` 目录；`OPENCODE_CONFIG` / `OPENCODE_CONFIG_DIR` / `OPENCODE_CONFIG_CONTENT`；managed config 只读 |
 | 启用控制 | `permission.skill` 支持 `allow` / `deny` / `ask`；V2.12 只写 exact `permission.skill.<name> = "deny"`，re-enable 只移除同名 exact deny，不改 wildcard rules |
 | Fixture | parser/scan contract fixtures 位于 `fixtures/opencode/` |
-| 行动项 | 兼容 roots 已纳入 opencode 扫描；按 V2.21 扫描准确性与 path 去重口径保留重复来源；继续用 cross-agent analysis 暴露与 Claude/Codex 的重复关系，install 仍只写 native opencode roots |
+| 行动项 | 兼容 roots 与 configured local `skills.paths` roots 已纳入 opencode 扫描；按 V2.21 扫描准确性与 path 去重口径保留重复来源；继续用 cross-agent analysis 暴露与 Claude/Codex 的重复关系，install 仍只写 native opencode roots；`skills.urls` 继续 metadata-only/no-fetch |
 
 opencode roots 口径：
 
 - 当前实现扫描用户 native root：`~/.config/opencode/skills/<name>/SKILL.md`。
 - 当前实现扫描项目 native root：`.opencode/skills/<name>/SKILL.md`。
 - 当前实现按官方文档扫描 `.claude/skills` 和 `.agents/skills` compatibility roots；这些记录归属 opencode 视图，同时由 cross-agent analysis 表达与 Claude/Codex 的重复和冲突。
+- 当前实现以 `RootSource::Configured` 扫描 readable JSON/JSONC `skills.paths` local roots；它们只读，不作为 install/write target。
+- 当前实现不抓取 `skills.urls`；URL entries 只作为 metadata/no-fetch boundary 记录到能力说明与 blockers。
 - 项目 discovery 从 cwd 向上到 Git worktree。
 
 ### 3.5 扫描准确性与去重统计（V2.21 完成）

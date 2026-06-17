@@ -780,8 +780,14 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
             agent: AgentId::Opencode.as_str(),
             display_name: "opencode",
             status: "verified",
-            scan: AdapterFeatureCapability::supported("verified"),
-            project_scan: AdapterFeatureCapability::supported("verified"),
+            scan: AdapterFeatureCapability::supported_with_reason(
+                "verified-configured-local-paths",
+                "Scans native roots, official compatibility roots, and local skills.paths directories declared in opencode JSON/JSONC config; skills.urls are metadata-only and never fetched during scan.",
+            ),
+            project_scan: AdapterFeatureCapability::supported_with_reason(
+                "verified-configured-local-paths",
+                "Project scan keeps cwd-to-project native/compat roots and accepts project-local skills.paths after canonicalization and project-boundary checks.",
+            ),
             config_toggle: AdapterFeatureCapability::supported_with_reason(
                 "verified-exact-skill-deny",
                 "V2.12 writes exact permission.skill.<name> = deny and re-enables by removing that exact deny without changing wildcard rules.",
@@ -792,13 +798,16 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
             ),
             install: AdapterFeatureCapability::supported_with_reason(
                 "verified",
-                "Tool-global skills can be installed to native opencode user/project skill roots after confirmation; compatibility roots are scanned but not install targets.",
+                "Tool-global skills can be installed to native opencode user/project skill roots after confirmation; compatibility and configured roots are scanned but not install targets.",
             ),
             writable: AdapterFeatureCapability::supported_with_reason(
                 "verified",
-                "Writable support uses managed exact skill permission overrides; file installs stay limited to native opencode roots.",
+                "Writable support uses managed exact skill permission overrides; skill-file writes and installs stay limited to native opencode roots.",
             ),
-            blockers: Vec::new(),
+            blockers: vec![
+                "skills.urls are recognized as config scope but remain metadata-only; scans and diagnostics do not fetch network skill indexes.",
+                "OPENCODE_CONFIG, OPENCODE_CONFIG_DIR, OPENCODE_CONFIG_CONTENT, remote org config, and managed settings can affect opencode runtime but are not read or mutated by this app.",
+            ],
         },
         AdapterCapabilityRecord {
             agent: AgentId::Pi.as_str(),
@@ -1052,6 +1061,9 @@ fn adapter_root_reason(
         (AgentId::Codex, RootSource::Compatibility) => {
             "Codex compatibility/system-observed skills root; scanned read-only and never used as a toggle, install, snapshot, rollback, or config-write target.".to_string()
         }
+        (AgentId::Opencode, RootSource::Configured) => {
+            "OpenCode skills.paths local directory from opencode config; scanned read-only as a filesystem source and never used as an install target or skill-file write target. skills.urls are not fetched by diagnostics or scans.".to_string()
+        }
         (AgentId::Codex, RootSource::Admin) => {
             "Codex admin skills root; scanned read-only when present, skipped when missing or unreadable, and never elevated or written.".to_string()
         }
@@ -1071,6 +1083,7 @@ fn root_source_label(source: &RootSource) -> &'static str {
         RootSource::Project => "project",
         RootSource::Extra => "extra",
         RootSource::Compatibility => "compatibility",
+        RootSource::Configured => "configured",
         RootSource::Admin => "admin",
         RootSource::Plugin => "plugin",
         RootSource::System => "system",

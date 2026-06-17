@@ -27,6 +27,7 @@ struct SkillRecord: Codable, Identifiable, Hashable {
 enum SkillProvenanceRootKind: String, Hashable {
     case native
     case compatibility
+    case configured
     case external
     case toolGlobal
     case readOnly
@@ -175,6 +176,7 @@ extension SkillRecord {
             if normalizedPathContains(".opencode/skills/") || normalizedPathContains(".config/opencode/skills/") {
                 return .native
             }
+            return .configured
         case "claude-code":
             if normalizedPathContains(".claude/skills/") {
                 return .native
@@ -286,6 +288,8 @@ extension SkillRecord {
             rootLabel = "native"
         case .compatibility:
             rootLabel = "compatibility"
+        case .configured:
+            rootLabel = "configured"
         case .external:
             rootLabel = "external"
         case .toolGlobal:

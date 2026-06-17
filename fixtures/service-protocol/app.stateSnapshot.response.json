@@ -197,11 +197,13 @@
           "status": "verified",
           "scan": {
             "supported": true,
-            "status": "verified"
+            "status": "verified-configured-local-paths",
+            "reason": "Scans native roots, official compatibility roots, and local skills.paths directories declared in opencode JSON/JSONC config; skills.urls are metadata-only and never fetched during scan."
           },
           "project_scan": {
             "supported": true,
-            "status": "verified"
+            "status": "verified-configured-local-paths",
+            "reason": "Project scan keeps cwd-to-project native/compat roots and accepts project-local skills.paths after canonicalization and project-boundary checks."
           },
           "config_toggle": {
             "supported": true,
@@ -211,19 +213,22 @@
           "config_snapshot": {
             "supported": true,
             "status": "verified",
-            "reason": "opencode global/project opencode.json writes use snapshot, atomic write, verify, and rollback."
+            "reason": "opencode global/project opencode.json writes use the same snapshot, atomic write, verify, and rollback path as other writable adapters."
           },
           "install": {
             "supported": true,
             "status": "verified",
-            "reason": "Tool-global skills can be installed to native opencode user/project skill roots after confirmation; compatibility roots are scanned but not install targets."
+            "reason": "Tool-global skills can be installed to native opencode user/project skill roots after confirmation; compatibility and configured roots are scanned but not install targets."
           },
           "writable": {
             "supported": true,
             "status": "verified",
-            "reason": "Writable support uses managed exact skill permission overrides; file installs stay limited to native opencode roots."
+            "reason": "Writable support uses managed exact skill permission overrides; skill-file writes and installs stay limited to native opencode roots."
           },
-          "blockers": []
+          "blockers": [
+            "skills.urls are recognized as config scope but remain metadata-only; scans and diagnostics do not fetch network skill indexes.",
+            "OPENCODE_CONFIG, OPENCODE_CONFIG_DIR, OPENCODE_CONFIG_CONTENT, remote org config, and managed settings can affect opencode runtime but are not read or mutated by this app."
+          ]
         },
         {
           "agent": "pi",

@@ -15,11 +15,11 @@ Current usage:
 
 Current release-readiness guardrails:
 
-- V2.1-V2.92 are the synchronized completed baseline.
+- V2.1-V2.93 are the synchronized completed baseline.
 - Real local validation evidence is version-specific. Use the matching verification checklist for exact screenshots, blockers, and commands.
 - Fixture smoke screenshots still do not replace required real local validation for user-visible changes.
 - Tool-global import/export/install is integrated. Local directory import writes only app-controlled staging/catalog, export creates reproducible local bundles, and confirmed install routes through verified write paths.
-- Opencode writable support is guarded and limited to verified managed `permission.skill` behavior and native install targets.
+- Opencode support includes native roots, official compatibility roots, and configured local `skills.paths` roots. Writable support remains guarded and limited to verified managed `permission.skill` behavior; install targets remain native roots.
 - Pi production toggle is guarded and limited to the V2.37 evidence-backed global/project/package slice; Pi install remains blocked until the planned V2.94 disposable evidence slice closes.
 - Hermes and OpenClaw remain read-only; writable/install support remains blocked until the planned V2.95/V2.96 evidence slices close.
 - No cloud sync, accounts, telemetry, anonymous crash reports, or uncontrolled outbound network calls.
@@ -29,6 +29,56 @@ Current release-readiness guardrails:
 
 Entries are ordered newest first. Add new version entries directly below this
 heading.
+
+### V2.93 - 2026-06-17
+
+Status:
+
+- Complete.
+- opencode custom roots completed for local `skills.paths`; `skills.urls`
+  remains metadata-only with no default network fetch.
+
+Adapter behavior changes:
+
+- opencode now reads JSON/JSONC `skills.paths` from declared user/project
+  config paths and exposes local directories as `RootSource::Configured`.
+- Configured local paths are canonicalized/deduped before scanning; project
+  config paths that resolve outside the active project are not added.
+- Configured roots are scan/read sources only for skill files; install targets
+  remain native `~/.config/opencode/skills` and project `.opencode/skills`.
+- `skills.urls` is recognized as a config boundary but is not fetched during
+  scan or diagnostics.
+
+Product/protocol changes:
+
+- Added opencode configured provenance labels in the macOS model/detail display.
+- Updated adapter capability fixtures and service diagnostics tests.
+- No service protocol method count changed; `SUPPORTED_METHODS` remains 93.
+
+Risk/security notes:
+
+- No uncontrolled outbound network call was added.
+- No credential reads, raw prompt/response/trace persistence, script execution,
+  cloud sync, telemetry, signing, notarization, DMG, ZIP, or release automation
+  was added.
+- opencode config writes still use exact managed `permission.skill` overrides
+  with existing snapshot/rollback behavior and preserve unrelated config such as
+  `skills.paths`.
+
+Validation posture:
+
+- Focused opencode adapter, scanner, commands, service diagnostics, Swift model,
+  service protocol fixture, and protocol drift checks passed.
+- V2.93 docs gate, gate parity, UI evidence blocker, and privacy gate are
+  tracked in `docs/v2.93-verification-checklist.md`.
+- V2.93 app-window evidence notes are under
+  `docs/ui-artifacts/v2.93-opencode-custom-roots/`; current capture failed
+  closed with canonical `locked-session`.
+
+Near-term follow-up plan:
+
+- V2.94 covers Pi install and compatibility writes.
+- V2.95-V2.96 cover Hermes writable/install and OpenClaw writable/install.
 
 ### V2.92 - 2026-06-17
 
@@ -78,7 +128,8 @@ Validation posture:
 
 Near-term follow-up plan:
 
-- V2.93 covers opencode custom `skills.paths` / `skills.urls`.
+- V2.93 later completed opencode configured local `skills.paths` scanning while
+  keeping `skills.urls` metadata-only/no-fetch.
 - V2.94-V2.96 cover Pi install/compat writes, Hermes writable/install, and
   OpenClaw writable/install.
 
@@ -92,9 +143,9 @@ Status:
 Adapter behavior changes:
 
 - No adapter scan roots, writable scopes, install scopes, or config schemas changed.
-- Codex expanded-root diagnostics completed in V2.92; opencode/Pi/Hermes/
-  OpenClaw write/install expansion remains deferred to V2.93-V2.96 evidence
-  slices.
+- Codex expanded-root diagnostics completed in V2.92; opencode configured local
+  roots completed in V2.93; Pi/Hermes/OpenClaw write/install expansion remains
+  deferred to V2.94-V2.96 evidence slices.
 
 Product/protocol changes:
 
@@ -128,8 +179,8 @@ Near-term follow-up plan:
 
 - V2.92 completed Codex expanded roots/project config/plugin/admin/system-root
   read-only diagnostics.
-- V2.93-V2.96 cover opencode custom roots, Pi install/compat writes, Hermes
-  writable/install, and OpenClaw writable/install.
+- V2.93 later completed opencode custom local roots; V2.94-V2.96 cover Pi
+  install/compat writes, Hermes writable/install, and OpenClaw writable/install.
 
 ### V2.90 - 2026-06-17
 
@@ -185,8 +236,8 @@ Near-term follow-up plan:
 
 - V2.91 covers model-task matching history as a new evidence domain.
 - At the time, V2.92-V2.96 were planned for Codex/opencode/Pi/Hermes/OpenClaw
-  adapter unblock slices; V2.92 is now complete and later write/install slices
-  still require disposable evidence and rollback gates.
+  adapter unblock slices; V2.92 and V2.93 are now complete, and later
+  write/install slices still require disposable evidence and rollback gates.
 
 ### V2.89 - 2026-06-17
 
@@ -225,7 +276,7 @@ Near-term follow-up plan:
 
 - V2.90 covers internal identifier migration with data/validation migration.
 - V2.91 covers model-task matching history as a new evidence domain.
-- At the time, V2.92-V2.96 were planned for Codex/opencode/Pi/Hermes/OpenClaw adapter unblock slices; V2.92 is now complete and later write/install slices still require disposable evidence and rollback gates.
+- At the time, V2.92-V2.96 were planned for Codex/opencode/Pi/Hermes/OpenClaw adapter unblock slices; V2.92 and V2.93 are now complete, and later write/install slices still require disposable evidence and rollback gates.
 
 ### V2.88 - 2026-06-17
 
@@ -237,7 +288,7 @@ Status:
 Adapter behavior changes:
 
 - No adapter scan roots, writable scopes, install scopes, or config schemas changed.
-- Pi install/compatibility-root writes, Hermes writable/install, OpenClaw writable/install, and custom opencode roots remain blocked until their planned evidence slices close.
+- Pi install/compatibility-root writes, Hermes writable/install, and OpenClaw writable/install remain blocked until their planned evidence slices close; opencode custom local roots completed in V2.93 with `skills.urls` metadata-only/no-fetch.
 
 Product/protocol changes:
 
@@ -265,7 +316,7 @@ Near-term follow-up plan:
 - V2.89 covers brand assets.
 - V2.90 covers internal identifier migration with data/validation migration.
 - V2.91 covers model-task matching history as a new evidence domain.
-- At the time, V2.92-V2.96 were planned for Codex/opencode/Pi/Hermes/OpenClaw adapter unblock slices; V2.92 is now complete and later write/install slices still require disposable evidence and rollback gates.
+- At the time, V2.92-V2.96 were planned for Codex/opencode/Pi/Hermes/OpenClaw adapter unblock slices; V2.92 and V2.93 are now complete, and later write/install slices still require disposable evidence and rollback gates.
 
 ### V2.87 - 2026-06-17
 
@@ -306,7 +357,7 @@ Near-term follow-up plan:
 - V2.89 covers brand assets.
 - V2.90 covers internal identifier migration with data/validation migration.
 - V2.91 covers model-task matching history as a new evidence domain.
-- At the time, V2.92-V2.96 were planned for Codex/opencode/Pi/Hermes/OpenClaw adapter unblock slices; V2.92 is now complete and later write/install slices still require disposable evidence and rollback gates.
+- At the time, V2.92-V2.96 were planned for Codex/opencode/Pi/Hermes/OpenClaw adapter unblock slices; V2.92 and V2.93 are now complete, and later write/install slices still require disposable evidence and rollback gates.
 
 ### 2026-06-16 Review Remediation
 
@@ -628,7 +679,7 @@ Validation run:
 Deferred blockers:
 
 - Disposable local round-trip for writable opencode semantics.
-- Decision on whether opencode compatibility roots or custom `skills.paths` / `skills.urls` should ever be exposed.
+- V2.93 later exposed opencode configured local `skills.paths` roots as read-only; `skills.urls` remains metadata-only/no-fetch pending a future explicit confirmation/cache design.
 - Future real local app Computer Use reruns for later candidates.
 
 ### V2.3 - 2026-06-08

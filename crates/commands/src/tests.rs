@@ -498,6 +498,78 @@ fn scan_all_report_splits_agent_counts_and_roots() {
 }
 
 #[test]
+fn scan_all_includes_opencode_configured_local_paths_and_preserves_config_on_toggle() {
+    let temp_root = std::env::temp_dir().join(format!(
+        "skills-copilot-opencode-configured-command-{}",
+        std::process::id()
+    ));
+    let home = temp_root.join("home");
+    let configured_root = temp_root.join("configured-skills");
+    let skill_dir = configured_root.join("custom-review");
+    std::fs::create_dir_all(&skill_dir).expect("create configured skill dir");
+    std::fs::create_dir_all(home.join(".config/opencode")).expect("create opencode config dir");
+    std::fs::write(
+        skill_dir.join("SKILL.md"),
+        "---\nname: custom-review\ndescription: opencode configured command fixture\n---\nbody",
+    )
+    .expect("write configured opencode skill");
+    let config_path = home.join(".config/opencode/opencode.json");
+    std::fs::write(
+        &config_path,
+        format!(
+            "{{\"skills\":{{\"paths\":[\"{}\"],\"urls\":[\"https://example.invalid/skills/\"]}}}}\n",
+            configured_root.to_string_lossy()
+        ),
+    )
+    .expect("write opencode config");
+
+    let catalog = Catalog::in_memory().expect("catalog opens");
+    catalog.init().expect("catalog initializes");
+    let ctx = AdapterContext {
+        user_home: home,
+        project_root: None,
+        project_cwd: None,
+        extra_roots: vec![],
+    };
+
+    let report = scan_all_catalog_report(&ctx, &catalog).expect("scan all succeeds");
+    let opencode = report
+        .agents
+        .iter()
+        .find(|agent| agent.agent == AgentId::Opencode)
+        .expect("opencode report");
+    assert_eq!(opencode.scanned_count, 1);
+    assert!(opencode.scanned_roots.iter().any(|root| {
+        root == &configured_root
+            .canonicalize()
+            .expect("canonical configured root")
+            .to_string_lossy()
+            .to_string()
+    }));
+    let record = catalog
+        .list_skill_records()
+        .expect("records")
+        .into_iter()
+        .find(|record| record.agent == "opencode" && record.name == "custom-review")
+        .expect("configured opencode record");
+
+    let disabled =
+        toggle_skill(&catalog, &ctx, &record.id, false).expect("configured toggle succeeds");
+
+    assert!(!disabled.enabled);
+    let config: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&config_path).expect("opencode config"))
+            .expect("config json");
+    assert_eq!(
+        config["skills"]["paths"][0],
+        configured_root.to_string_lossy().to_string()
+    );
+    assert_eq!(config["permission"]["skill"]["custom-review"], "deny");
+
+    let _ = std::fs::remove_dir_all(&temp_root);
+}
+
+#[test]
 fn exports_tool_global_manifest_stably_without_absolute_reproducible_paths() {
     let temp_root = std::env::temp_dir().join(format!(
         "skills-copilot-export-stable-{}",

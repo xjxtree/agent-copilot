@@ -8,13 +8,13 @@ opencode, Pi, Hermes, and OpenClaw.
 
 | Area | Status |
 | --- | --- |
-| Current phase | V2.92 Codex expanded roots completed |
-| Completed baseline | V2.1-V2.92 |
-| Recent product line | V2.41-V2.92 AI-native analysis, task cockpit, validation hardening, module splitting, read-only Agent Copilot surfaces, per-surface evidence closeout, brand asset refresh, compatibility-first identifier migration, local model-task history, and Codex expanded root diagnostics |
+| Current phase | V2.93 opencode custom roots completed |
+| Completed baseline | V2.1-V2.93 |
+| Recent product line | V2.41-V2.93 AI-native analysis, task cockpit, validation hardening, module splitting, read-only Agent Copilot surfaces, per-surface evidence closeout, brand asset refresh, compatibility-first identifier migration, local model-task history, Codex expanded root diagnostics, and opencode configured local roots |
 | Agent Copilot line | M1-M4 completed; unlocked app-window evidence captured |
 | Maintained UI | Native macOS app in `apps/macos` |
 | Service boundary | Rust typed JSON stdio sidecar in `crates/service` |
-| Next version | V2.93 opencode custom roots; V2.93-V2.96 near-term plan is tracked in `docs/roadmap.md` and `docs/development-tasks.md` |
+| Next version | V2.94 Pi install and compatibility writes; V2.94-V2.96 near-term plan is tracked in `docs/roadmap.md` and `docs/development-tasks.md` |
 
 V2.84-V2.86 completed the post-V2.83 module-splitting line:
 
@@ -74,6 +74,15 @@ V2.92 completes Codex expanded roots:
   config writes.
 - Keeps Codex toggle writes limited to verified user/project `.agents/skills`
   instances through the user `config.toml` override.
+
+V2.93 completes opencode custom local roots:
+
+- Adds read-only `skills.paths` local directory scanning from opencode
+  JSON/JSONC config as `RootSource::Configured`.
+- Keeps `skills.urls` metadata-only; scans and diagnostics do not fetch
+  network skill indexes by default.
+- Keeps opencode installs limited to native roots and config toggles limited to
+  exact managed `permission.skill` overrides.
 
 ## What It Does
 
@@ -157,7 +166,7 @@ This section only keeps machine-checked status anchors. Detailed evidence lives
 in `docs/v2.*-verification-checklist.md` and `docs/development-tasks.md`.
 
 Baseline phrase used by docs gates:
-V2.92 Codex expanded roots completed.
+V2.93 opencode custom roots completed.
 
 ### V2.74-V2.78
 
@@ -230,7 +239,7 @@ V2.92 Codex expanded roots completed.
   `docs/ui-artifacts/native-macos-shell/completed.png`, screenshot artifact
   verification, and privacy check.
 
-### V2.88-V2.92
+### V2.88-V2.93
 
 - V2.88 handoff/evidence closeout:
   [`docs/v2.88-verification-checklist.md`](./docs/v2.88-verification-checklist.md),
@@ -251,6 +260,11 @@ V2.92 Codex expanded roots completed.
   read-only `$CODEX_HOME/skills`, plugin marketplace, `/etc/codex/skills`,
   project `.codex/config.toml` diagnostics, and native `.agents/skills`
   write allowlist.
+- V2.93 opencode custom roots:
+  [`docs/v2.93-verification-checklist.md`](./docs/v2.93-verification-checklist.md),
+  `RootSource::Configured`, configured local `skills.paths` scanning,
+  canonicalization/dedupe, metadata-only `skills.urls`, and no uncontrolled
+  network fetch.
 
 ## Development Notes
 

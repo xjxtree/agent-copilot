@@ -1,11 +1,11 @@
 # Development Tasks
 
-> Status: V2.92 Codex expanded roots is complete.
+> Status: V2.93 opencode custom local roots is complete.
 > V2.84 Swift Detail section splitting, V2.85 Rust RPC domain module splitting,
 > and V2.86 Rust helper/test split completed.
-> V2.1 through V2.92 are the synchronized completed baseline; V2.87 unlocked `pnpm check:macos` passed on 2026-06-17, V2.88 captured per-surface Computer Use evidence, V2.89 refreshed app icon assets, V2.90 migrated packaged app identity/default app-data id with compatibility, V2.91 added local model-task matching history, and V2.92 completed Codex expanded roots with read-only diagnostics plus a native-root write allowlist.
+> V2.1 through V2.93 are the synchronized completed baseline; V2.87 unlocked `pnpm check:macos` passed on 2026-06-17, V2.88 captured per-surface Computer Use evidence, V2.89 refreshed app icon assets, V2.90 migrated packaged app identity/default app-data id with compatibility, V2.91 added local model-task matching history, V2.92 completed Codex expanded roots with read-only diagnostics plus a native-root write allowlist, and V2.93 completed opencode configured local `skills.paths` scanning while keeping `skills.urls` metadata-only/no-fetch.
 > Agent Copilot M1-M4 first implementation pass is integrated; near-term
-> post-V2.90 work is scheduled below and in [`roadmap.md`](./roadmap.md).
+> post-V2.93 work is scheduled below and in [`roadmap.md`](./roadmap.md).
 >
 > Document role: this is the agent-facing implementation task ledger.
 > Keep concrete task routing, current baseline, closeout links, and validation handoff notes here.
@@ -16,10 +16,10 @@
 ## Current Baseline
 
 - Product boundary: native macOS SwiftUI/AppKit shell plus Rust service protocol.
-- Completed V2 milestones: first Codex slice, V2.1 through V2.92.
-- Current completed milestone: V2.92 Codex expanded roots; unlocked macOS validation passed on 2026-06-17.
+- Completed V2 milestones: first Codex slice, V2.1 through V2.93.
+- Current completed milestone: V2.93 opencode custom local roots; unlocked macOS validation passed on 2026-06-17.
 - Current priority:
-  preserve the V2.26-V2.92 completed behavior while keeping future work
+  preserve the V2.26-V2.93 completed behavior while keeping future work
   focused on task-centered skill review, local evidence, safe cleanup,
   and maintainable module boundaries.
 - Current implementation status:
@@ -47,6 +47,13 @@
   Project `.codex/config.toml` is diagnostics-only. Toggle writes remain
   limited to user/project `.agents/skills` instances through the user
   `config.toml` override.
+- V2.93 opencode custom roots status:
+  opencode scans native roots, official `.claude` / `.agents` compatibility
+  roots, and configured local `skills.paths` roots from JSON/JSONC config.
+  Configured roots use `RootSource::Configured`, canonicalization/dedupe, and
+  project-boundary checks. `skills.urls` is recognized only as a metadata
+  boundary and is not fetched; installs remain native-root-only and writes
+  remain exact managed `permission.skill` overrides.
 - UI validation baseline:
   latest Agent Copilot app-window evidence is 2026-06-17:
   `pnpm check:macos` passed, `./script/build_and_run.sh --verify` launched
@@ -70,7 +77,7 @@ rescheduled.
 | V2.90 | Completed | Internal identifier migration: migrated packaged app identity and default app-data id to Agent Copilot while preserving module/crate/sidecar/AX/env/Keychain compatibility and legacy app-data copy behavior. | [`v2.90-verification-checklist.md`](./v2.90-verification-checklist.md), app-data migration tests, refreshed app-window screenshot, `pnpm check:macos`, privacy gate |
 | V2.91 | Completed | Model-task matching history: added a local evidence domain for historical model/task fit, protocol fixtures, app-local record/delete methods, and read-only Provider Observability display rows. | [`v2.91-verification-checklist.md`](./v2.91-verification-checklist.md), focused Rust/Swift tests, service protocol drift, app-window evidence, privacy gate |
 | V2.92 | Completed | Codex expanded roots: implemented read-only `$CODEX_HOME/skills`, local plugin marketplace roots, `/etc/codex/skills`, project `.codex/config.toml` diagnostics, and a native `.agents/skills` write allowlist. | [`v2.92-verification-checklist.md`](./v2.92-verification-checklist.md), official docs evidence, root allowlist tests, app-window evidence, privacy gate |
-| V2.93 | Planned | opencode custom roots: evaluate and implement safe `skills.paths` / `skills.urls` behavior. Local paths require canonicalization/dedupe; URLs require explicit user confirmation or metadata-only default. | Disposable fixtures, no uncontrolled network, duplicate/root tests, rollback proof where writes are scoped |
+| V2.93 | Completed | opencode custom roots: implemented safe configured local `skills.paths` scanning with `RootSource::Configured`, canonicalization/dedupe, project-boundary checks, and metadata-only/no-fetch `skills.urls` handling. | [`v2.93-verification-checklist.md`](./v2.93-verification-checklist.md), OpenCode docs/source evidence, duplicate/root tests, canonical `locked-session` UI blocker, privacy gate |
 | V2.94 | Planned | Pi install and compatibility-root writes: extend beyond V2.37 guarded native toggles only with disposable install/compat-root evidence. | Disposable round-trip, snapshot/rollback, trust gate, invalid config handling, no script execution |
 | V2.95 | Planned | Hermes writable/install: verify schema, credential preservation, external-root semantics, and rollback-safe writes before enabling. | Hermes disposable evidence, credential filtering, rollback proof, capability matrix update |
 | V2.96 | Planned | OpenClaw writable/install: verify workspace-scope writes, precedence, install behavior, and rollback before enabling. | OpenClaw disposable evidence, workspace-bound write tests, rollback proof, capability matrix update |
@@ -205,6 +212,8 @@ V2.90 closeout evidence lives in [`v2.90-verification-checklist.md`](./v2.90-ver
 V2.91 closeout evidence lives in [`v2.91-verification-checklist.md`](./v2.91-verification-checklist.md) and is guarded by `pnpm verify:v2.91-docs`. It records completed model-task matching history: app-local redacted `model-task-matches.json`, `llm.listModelTaskMatches`, `llm.recordModelTaskMatch`, `llm.deleteModelTaskMatch`, Provider Observability `model_task_history_rows`, protocol fixtures, focused Rust/Swift tests, refreshed app-window evidence, and unchanged no-provider/default-write/script/credential/cloud/telemetry boundary.
 
 V2.92 closeout evidence lives in [`v2.92-verification-checklist.md`](./v2.92-verification-checklist.md) and is guarded by `pnpm verify:v2.92-docs`. It records completed Codex expanded roots: read-only `$CODEX_HOME/skills`, local plugin marketplace roots, `/etc/codex/skills`, project `.codex/config.toml` diagnostics, `RootSource::Compatibility` / `RootSource::Admin` / `RootSource::Plugin`, native `.agents/skills` write allowlist tests, refreshed app-window evidence, and unchanged no-provider/default-write/script/credential/cloud/telemetry boundary.
+
+V2.93 closeout evidence lives in [`v2.93-verification-checklist.md`](./v2.93-verification-checklist.md) and is guarded by `pnpm verify:v2.93-docs`. It records completed opencode custom local roots: `RootSource::Configured`, JSON/JSONC `skills.paths` local directory scanning, configured-root canonicalization/dedupe, project-boundary checks, opencode configured provenance labels, metadata-only/no-fetch `skills.urls`, focused Rust/Swift coverage, the canonical `locked-session` app-window evidence blocker, and unchanged no-provider/default-write/script/credential/cloud/telemetry boundary.
 
 ## Post-V2.78 Version Plan
 
@@ -667,7 +676,7 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 | P2 | V2.86 Rust helper/test split and module-size gate | Completed | Split helpers such as `service_support_helpers.rs` and service tests under `crates/service/src/tests/`; add `verify:module-size` to gate parity | Single-file <= 5000-line target is now automated |
 | P0 | V2.11 Adapter Capability Matrix | Completed and in use | Run focused protocol/UI checks when needed, then use the matrix as the gate for future Pi/opencode/Hermes/OpenClaw work | macOS UI shows precise scan/toggle/install status and blockers for all six agents |
 | P0 | Pi comprehensive adapter support | Read-only scanner complete; V2.37 guarded native toggle complete; install and compatibility-root writes blocked | Keep Pi toggle limited to global/project/package write scope and keep install/AI auto-write/script execution credentials-unsafe paths blocked; exclude arbitrary compatibility roots from write path | Guarded native toggle preserves preview/snapshot/rollback, trust gate, invalid JSON/config handling, re-enable behavior, and disabled-state rescan |
-| P0 | opencode support | Native and official compatibility roots are scanned; guarded `permission.skill` writes are implemented; install targets remain native roots | Keep compatibility-root scan coverage and managed permission/write tests current; custom `skills.paths` / `skills.urls` are scheduled for V2.93 and remain blocked pending evidence | opencode-visible skills match current official discovery roots without enabling unverified custom paths or unsafe file writes |
+| P0 | opencode support | Native and official compatibility roots are scanned; configured local `skills.paths` roots are scanned read-only; guarded `permission.skill` writes are implemented; install targets remain native roots | Keep compatibility/configured-root scan coverage, managed permission/write tests, and no-fetch `skills.urls` boundary current; do not add URL fetch or configured-root install/write targets without a new explicit evidence gate | opencode-visible skills match current official discovery and configured local path roots without enabling unsafe file writes or uncontrolled network access |
 | P0 | Hermes adapter support | Read-only scanner implemented; writable/install blocked | Keep scoped read-only scan of active Hermes home `skills/**/SKILL.md`; treat `skills.external_dirs` as explicit external roots only (not generic project-scope inference); keep `.env`/`auth.json`/`logs`/cron content filtered and CLI-only scan read-only | Hermes skills appear in catalog read-only; generic project scan and writes remain blocked |
 | P0 | OpenClaw adapter support | Read-only scanner implemented; writable/install blocked | Keep scoped read-only filesystem scan over documented roots; project scan only for confirmed OpenClaw workspace roots; no OpenClaw CLI calls during ordinary scan | OpenClaw skills appear in catalog read-only; arbitrary repo roots and writes/install remain blocked |
 | P0 | Cross-agent skill analysis | Implemented read-only | Keep catalog summaries for duplicate/conflict/precedence/source-overlap groups aligned with fixtures and UI needs | Users can identify conflicting or duplicated skills across agents without manually comparing lists |
@@ -698,7 +707,7 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 - If the task improves finding explanations, skill identity/provenance, conflict semantics, triage persistence, or read-only AI analysis workflow, use V2.26-V2.30.
 - If the task builds cleanup queue, policy tuning, safe batch actions, cross-agent comparison, or local report export, use V2.31-V2.35.
 - If the task is Pi writable evidence, Hermes external roots, OpenClaw workspace deepening, or adapter diagnostics, use V2.36-V2.40.
-- If the task is AI provider foundation, prompt safety, AI quality/readiness/routing, task benchmark/regression, trace analysis, knowledge index, remediation, Agent Session Skill Review, Local Skill Map, provider observability, task cockpit, skill lifecycle, guided cleanup, cockpit-first IA, screenshot/privacy-safe UI presentation, completed Swift/Rust feature modularization, guided-cleanup safe-action links, validation harness hardening, completed Task/remediation timeout recovery, completed launch/window targeting stability, completed task input resilience, completed progressive Cockpit feedback, completed real-local validation workbench, completed protocol/docs/gate parity, completed privacy fixture/evidence localization, completed detail navigation/visual density polish, completed Swift service IPC cancellation cleanup, completed test isolation/core model floor, completed continued module splitting, completed Swift Detail section splitting, completed Rust RPC domain module splitting, completed Rust helper/test split and module-size gate, completed Agent Copilot first pass, completed Agent Copilot per-surface evidence closeout, completed brand asset refresh, completed identifier migration, completed model-task matching history, or completed Codex expanded root diagnostics, use V2.41-V2.92.
+- If the task is AI provider foundation, prompt safety, AI quality/readiness/routing, task benchmark/regression, trace analysis, knowledge index, remediation, Agent Session Skill Review, Local Skill Map, provider observability, task cockpit, skill lifecycle, guided cleanup, cockpit-first IA, screenshot/privacy-safe UI presentation, completed Swift/Rust feature modularization, guided-cleanup safe-action links, validation harness hardening, completed Task/remediation timeout recovery, completed launch/window targeting stability, completed task input resilience, completed progressive Cockpit feedback, completed real-local validation workbench, completed protocol/docs/gate parity, completed privacy fixture/evidence localization, completed detail navigation/visual density polish, completed Swift service IPC cancellation cleanup, completed test isolation/core model floor, completed continued module splitting, completed Swift Detail section splitting, completed Rust RPC domain module splitting, completed Rust helper/test split and module-size gate, completed Agent Copilot first pass, completed Agent Copilot per-surface evidence closeout, completed brand asset refresh, completed identifier migration, completed model-task matching history, completed Codex expanded root diagnostics, or completed opencode configured local root diagnostics, use V2.41-V2.93.
 - If the task is post-V2.71 product consolidation or validation harness hardening, use V2.72.
 - If the task is privacy fixture hardening or evidence-surface privacy/localization sweep after V2.77, use completed V2.79 and preserve its no credential/network/scanner/provider/write/script/cloud/telemetry boundary.
 - If the task is detail navigation or visual density polish, use V2.80.

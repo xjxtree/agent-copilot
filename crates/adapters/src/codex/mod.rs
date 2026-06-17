@@ -319,6 +319,7 @@ fn root_source_key(source: &RootSource) -> &'static str {
         RootSource::Project => "project",
         RootSource::Extra => "extra",
         RootSource::Compatibility => "compatibility",
+        RootSource::Configured => "configured",
         RootSource::Admin => "admin",
         RootSource::Plugin => "plugin",
         RootSource::System => "system",

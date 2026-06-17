@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+};
 
 use crate::shared::{
     required_frontmatter_string, split_yaml_frontmatter, stable_path_id, validate_kebab_skill_name,
@@ -46,7 +49,8 @@ impl AgentAdapter for OpencodeAdapter {
             ));
         }
 
-        roots
+        roots.extend(opencode_configured_skill_roots(ctx));
+        dedup_roots(roots)
     }
 
     fn parse(&self, path: &Path) -> Result<SkillInstance, AdapterError> {
@@ -102,8 +106,11 @@ impl AgentAdapter for OpencodeAdapter {
         instance.enabled
     }
 
-    fn config_paths(&self, _ctx: &AdapterContext) -> Vec<PathBuf> {
-        vec![_ctx.user_home.join(".config/opencode/opencode.json")]
+    fn config_paths(&self, ctx: &AdapterContext) -> Vec<PathBuf> {
+        opencode_config_sources(ctx)
+            .into_iter()
+            .map(|source| source.path)
+            .collect()
     }
 }
 
@@ -186,6 +193,289 @@ fn opencode_project_skill_roots(
     }
 
     roots
+}
+
+#[derive(Debug)]
+struct OpencodeConfigSource {
+    path: PathBuf,
+    scope: Scope,
+}
+
+fn opencode_config_sources(ctx: &AdapterContext) -> Vec<OpencodeConfigSource> {
+    let mut sources = vec![
+        OpencodeConfigSource {
+            path: ctx.user_home.join(".config/opencode/opencode.json"),
+            scope: Scope::AgentGlobal,
+        },
+        OpencodeConfigSource {
+            path: ctx.user_home.join(".config/opencode/opencode.jsonc"),
+            scope: Scope::AgentGlobal,
+        },
+    ];
+    if let Some(project_root) = &ctx.project_root {
+        sources.push(OpencodeConfigSource {
+            path: project_root.join("opencode.json"),
+            scope: Scope::AgentProject,
+        });
+        sources.push(OpencodeConfigSource {
+            path: project_root.join("opencode.jsonc"),
+            scope: Scope::AgentProject,
+        });
+    }
+    sources
+}
+
+fn opencode_configured_skill_roots(ctx: &AdapterContext) -> Vec<AdapterRoot> {
+    let relative_base = opencode_relative_path_base(ctx);
+    opencode_config_sources(ctx)
+        .into_iter()
+        .flat_map(|source| {
+            read_opencode_config_skill_paths(&source.path)
+                .into_iter()
+                .filter_map({
+                    let relative_base = relative_base.clone();
+                    move |raw_path| {
+                        let expanded =
+                            expand_opencode_skill_path(&raw_path, &ctx.user_home, &relative_base)?;
+                        if !opencode_configured_path_allowed(ctx, source.scope, &expanded) {
+                            return None;
+                        }
+                        Some(AdapterRoot {
+                            scope: opencode_configured_scope(ctx, source.scope, &raw_path),
+                            path: expanded,
+                            source: RootSource::Configured,
+                        })
+                    }
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+fn opencode_relative_path_base(ctx: &AdapterContext) -> PathBuf {
+    ctx.project_cwd
+        .as_ref()
+        .filter(|cwd| {
+            ctx.project_root
+                .as_ref()
+                .is_some_and(|project_root| cwd.starts_with(project_root))
+        })
+        .or(ctx.project_root.as_ref())
+        .unwrap_or(&ctx.user_home)
+        .to_path_buf()
+}
+
+fn opencode_configured_scope(ctx: &AdapterContext, config_scope: Scope, raw_path: &str) -> Scope {
+    if config_scope == Scope::AgentGlobal
+        && !opencode_path_is_home_or_absolute(raw_path)
+        && ctx.project_root.is_some()
+    {
+        Scope::AgentProject
+    } else {
+        config_scope
+    }
+}
+
+fn opencode_path_is_home_or_absolute(raw_path: &str) -> bool {
+    raw_path == "~" || raw_path.starts_with("~/") || Path::new(raw_path).is_absolute()
+}
+
+fn opencode_configured_path_allowed(
+    ctx: &AdapterContext,
+    config_scope: Scope,
+    expanded: &Path,
+) -> bool {
+    if config_scope != Scope::AgentProject {
+        return true;
+    }
+    let Some(project_root) = &ctx.project_root else {
+        return false;
+    };
+    if let Ok(canonical_path) = expanded.canonicalize() {
+        return project_root
+            .canonicalize()
+            .is_ok_and(|canonical_project| canonical_path.starts_with(canonical_project));
+    }
+    expanded.starts_with(project_root)
+}
+
+fn expand_opencode_skill_path(
+    raw_path: &str,
+    user_home: &Path,
+    relative_base: &Path,
+) -> Option<PathBuf> {
+    let trimmed = raw_path.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if trimmed == "~" {
+        return Some(user_home.to_path_buf());
+    }
+    if let Some(rest) = trimmed.strip_prefix("~/") {
+        return Some(user_home.join(rest));
+    }
+    let path = PathBuf::from(trimmed);
+    if path.is_absolute() {
+        Some(path)
+    } else {
+        Some(relative_base.join(path))
+    }
+}
+
+fn read_opencode_config_skill_paths(config_path: &Path) -> Vec<String> {
+    let Ok(content) = std::fs::read_to_string(config_path) else {
+        return Vec::new();
+    };
+    let normalized = normalize_opencode_jsonc_for_read(&content);
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&normalized) else {
+        return Vec::new();
+    };
+    value
+        .get("skills")
+        .and_then(|skills| skills.get("paths"))
+        .and_then(serde_json::Value::as_array)
+        .map(|paths| {
+            paths
+                .iter()
+                .filter_map(serde_json::Value::as_str)
+                .map(str::trim)
+                .filter(|path| !path.is_empty())
+                .map(ToString::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn normalize_opencode_jsonc_for_read(content: &str) -> String {
+    strip_json_trailing_commas(&strip_json_comments(content))
+}
+
+fn strip_json_comments(content: &str) -> String {
+    let mut output = String::with_capacity(content.len());
+    let mut chars = content.chars().peekable();
+    let mut in_string = false;
+    let mut escaped = false;
+
+    while let Some(ch) = chars.next() {
+        if in_string {
+            output.push(ch);
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+
+        if ch == '"' {
+            in_string = true;
+            output.push(ch);
+            continue;
+        }
+
+        if ch == '/' {
+            match chars.peek().copied() {
+                Some('/') => {
+                    chars.next();
+                    for next in chars.by_ref() {
+                        if next == '\n' {
+                            output.push('\n');
+                            break;
+                        }
+                    }
+                    continue;
+                }
+                Some('*') => {
+                    chars.next();
+                    let mut previous = '\0';
+                    for next in chars.by_ref() {
+                        if previous == '*' && next == '/' {
+                            break;
+                        }
+                        previous = next;
+                    }
+                    continue;
+                }
+                _ => {}
+            }
+        }
+
+        output.push(ch);
+    }
+
+    output
+}
+
+fn strip_json_trailing_commas(content: &str) -> String {
+    let chars = content.chars().collect::<Vec<_>>();
+    let mut output = String::with_capacity(content.len());
+    let mut in_string = false;
+    let mut escaped = false;
+    for (index, ch) in chars.iter().copied().enumerate() {
+        if in_string {
+            output.push(ch);
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+
+        if ch == '"' {
+            in_string = true;
+            output.push(ch);
+            continue;
+        }
+
+        if ch == ',' {
+            let next_non_ws = chars[index + 1..].iter().find(|next| !next.is_whitespace());
+            if matches!(next_non_ws, Some('}' | ']')) {
+                continue;
+            }
+        }
+
+        output.push(ch);
+    }
+    output
+}
+
+fn dedup_roots(roots: Vec<AdapterRoot>) -> Vec<AdapterRoot> {
+    let mut seen = HashSet::new();
+    let mut deduped = Vec::new();
+    for root in roots {
+        let key_path = root
+            .path
+            .canonicalize()
+            .unwrap_or_else(|_| root.path.clone());
+        let key = format!(
+            "{}|{}|{}",
+            root.scope.as_str(),
+            root_source_key(&root.source),
+            key_path.to_string_lossy()
+        );
+        if seen.insert(key) {
+            deduped.push(root);
+        }
+    }
+    deduped
+}
+
+fn root_source_key(source: &RootSource) -> &'static str {
+    match source {
+        RootSource::UserHome => "user-home",
+        RootSource::Project => "project",
+        RootSource::Extra => "extra",
+        RootSource::Compatibility => "compatibility",
+        RootSource::Configured => "configured",
+        RootSource::Admin => "admin",
+        RootSource::Plugin => "plugin",
+        RootSource::System => "system",
+    }
 }
 
 fn containing_dir_name(path: &Path) -> String {
@@ -336,6 +626,95 @@ mod tests {
                 .all(|root| !root.path.starts_with("/tmp/unverified")),
             "opencode must not scan unverified extra roots"
         );
+    }
+
+    #[test]
+    fn exposes_configured_skills_paths_as_read_only_roots() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "skills-copilot-opencode-configured-roots-{}",
+            std::process::id()
+        ));
+        let home = temp_root.join("home");
+        let project = temp_root.join("project");
+        let configured_global = home.join("custom-opencode-skills");
+        let configured_project = project.join("custom/project-skills");
+        let outside_project = temp_root.join("outside-project");
+        std::fs::create_dir_all(home.join(".config/opencode")).expect("create config dir");
+        std::fs::create_dir_all(&configured_global).expect("create global configured root");
+        std::fs::create_dir_all(&configured_project).expect("create project configured root");
+        std::fs::create_dir_all(&outside_project).expect("create outside configured root");
+        std::fs::write(
+            home.join(".config/opencode/opencode.jsonc"),
+            r#"{
+              // OpenCode accepts JSONC for read-only discovery.
+              "skills": {
+                "paths": [
+                  "~/custom-opencode-skills",
+                  "~/custom-opencode-skills",
+                ],
+                "urls": ["https://example.invalid/.well-known/skills/"]
+              },
+            }"#,
+        )
+        .expect("write global opencode config");
+        std::fs::write(
+            project.join("opencode.json"),
+            format!(
+                "{{\"skills\":{{\"paths\":[\"custom/project-skills\", \"{}\"]}}}}",
+                outside_project.to_string_lossy()
+            ),
+        )
+        .expect("write project opencode config");
+        let adapter = OpencodeAdapter;
+        let ctx = AdapterContext {
+            user_home: home.clone(),
+            project_root: Some(project.clone()),
+            project_cwd: Some(project.clone()),
+            extra_roots: vec![AdapterRoot {
+                scope: Scope::AgentGlobal,
+                path: temp_root.join("unverified-extra"),
+                source: RootSource::Extra,
+            }],
+        };
+
+        let roots = adapter.roots(&ctx);
+
+        assert_eq!(
+            roots
+                .iter()
+                .filter(|root| root.source == RootSource::Configured)
+                .count(),
+            2,
+            "configured paths are deduped and project config cannot add an outside-project root"
+        );
+        assert!(roots.iter().any(|root| {
+            root.scope == Scope::AgentGlobal
+                && root.source == RootSource::Configured
+                && root.path == configured_global
+        }));
+        assert!(roots.iter().any(|root| {
+            root.scope == Scope::AgentProject
+                && root.source == RootSource::Configured
+                && root.path == configured_project
+        }));
+        assert!(
+            roots.iter().all(|root| {
+                !root.path.starts_with(&outside_project)
+                    && !root
+                        .path
+                        .to_string_lossy()
+                        .contains("https://example.invalid")
+            }),
+            "skills.urls must not become filesystem roots"
+        );
+        assert!(
+            roots
+                .iter()
+                .all(|root| !root.path.starts_with(temp_root.join("unverified-extra"))),
+            "ctx.extra_roots must remain ignored by opencode"
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_root);
     }
 
     #[test]

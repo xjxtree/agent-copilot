@@ -113,9 +113,11 @@ fn is_allowed_canonical_root(
             Scope::ToolGlobal => None,
             _ => None,
         },
-        RootSource::Admin | RootSource::Plugin | RootSource::System | RootSource::Extra => {
-            Some(canonical_root.to_path_buf())
-        }
+        RootSource::Configured
+        | RootSource::Admin
+        | RootSource::Plugin
+        | RootSource::System
+        | RootSource::Extra => Some(canonical_root.to_path_buf()),
     };
     allowed_base.is_none_or(|base| canonical_root.starts_with(base))
 }
@@ -278,9 +280,11 @@ fn allowed_target_base(
             Scope::ToolGlobal => canonical_root.to_path_buf(),
             _ => canonical_root.to_path_buf(),
         },
-        RootSource::Admin | RootSource::Plugin | RootSource::System | RootSource::Extra => {
-            canonical_root.to_path_buf()
-        }
+        RootSource::Configured
+        | RootSource::Admin
+        | RootSource::Plugin
+        | RootSource::System
+        | RootSource::Extra => canonical_root.to_path_buf(),
     }
 }
 
@@ -926,6 +930,71 @@ mod tests {
             by_name.get("agent-compatible"),
             Some(&(SkillState::Disabled, false)),
             "opencode compatibility roots must honor opencode permission.skill"
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn opencode_scans_configured_local_paths_without_fetching_urls() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "skills-copilot-opencode-configured-scan-{}",
+            std::process::id()
+        ));
+        let home = temp_root.join("home");
+        let configured_root = temp_root.join("custom-skills");
+        let skill_dir = configured_root.join("custom-review");
+        std::fs::create_dir_all(&skill_dir).expect("create configured skill dir");
+        std::fs::create_dir_all(home.join(".config/opencode")).expect("create opencode config dir");
+        std::fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: custom-review\ndescription: opencode configured path fixture\n---\nBody.",
+        )
+        .expect("write configured skill");
+        std::fs::write(
+            home.join(".config/opencode/opencode.json"),
+            format!(
+                r#"{{
+                  "skills": {{
+                    "paths": ["{0}", "{0}"],
+                    "urls": ["https://example.invalid/.well-known/skills/"]
+                  }},
+                  "permission": {{
+                    "skill": {{
+                      "custom-review": "deny"
+                    }}
+                  }}
+                }}"#,
+                configured_root.to_string_lossy()
+            ),
+        )
+        .expect("write opencode config");
+
+        let ctx = AdapterContext {
+            user_home: home,
+            project_root: None,
+            project_cwd: None,
+            extra_roots: vec![],
+        };
+
+        let report = scan_agent(&OpencodeAdapter, &ctx).expect("scan succeeds");
+
+        assert_eq!(report.instances.len(), 1);
+        assert_eq!(report.instances[0].name, "custom-review");
+        assert_eq!(report.instances[0].state, SkillState::Disabled);
+        assert!(!report.instances[0].enabled);
+        assert_eq!(
+            report.scanned_roots.len(),
+            1,
+            "duplicate configured paths should canonicalize and dedupe before scanning"
+        );
+        assert!(report.scanned_roots[0].ends_with("custom-skills"));
+        assert!(
+            report
+                .skipped_roots
+                .iter()
+                .all(|root| !root.to_string_lossy().contains("https://example.invalid")),
+            "skills.urls must not become skipped filesystem roots or trigger fetch attempts"
         );
 
         let _ = std::fs::remove_dir_all(&temp_root);

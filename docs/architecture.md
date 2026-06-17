@@ -141,7 +141,7 @@ flowchart TD
 - 解析失败不能让整个 scan 崩，要降级为 `state=broken` 并记日志
 - 任何写操作（toggle、edit config）必须走"原子写 + 回滚"路径
 - Codex adapter scans verified user/project `.agents/skills` plus V2.92 read-only `$CODEX_HOME/skills`, local plugin marketplace roots, and `/etc/codex/skills` diagnostics. Toggle writes still only patch the user `config.toml` override for native `.agents/skills` instances; never write `<repo>/.codex/config.toml`, compatibility, plugin, admin, or system roots.
-- Opencode adapter 扫描官方 roots：`~/.config/opencode/skills`、active project `.opencode/skills`、全局/项目 `.claude/skills`、全局/项目 `.agents/skills`；custom `skills.paths` / `skills.urls` 仍 deferred。Writes 只能走 managed `permission.skill` config override，install 只能写 native opencode roots
+- Opencode adapter 扫描官方 roots：`~/.config/opencode/skills`、active project `.opencode/skills`、全局/项目 `.claude/skills`、全局/项目 `.agents/skills`，并以 `RootSource::Configured` 只读扫描 JSON/JSONC `skills.paths` configured local roots；`skills.urls` 仅 metadata-only/no-fetch。Writes 只能走 managed `permission.skill` config override，install 只能写 native opencode roots
 
 ## 7. 错误与日志
 

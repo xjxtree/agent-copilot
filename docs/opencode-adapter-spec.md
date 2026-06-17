@@ -1,6 +1,6 @@
 # opencode Adapter Evidence Spec
 
-> Evidence date: 2026-06-10. Current decision: opencode scans native roots plus official `.claude` / `.agents` compatibility roots. Guarded writes remain limited to exact-name `permission.skill` patches in verified `opencode.json` targets, and tool-global installs remain limited to verified native opencode skill roots. V2.21 completed scan-accuracy, dedupe, and agent-metric alignment requirements.
+> Evidence date: 2026-06-17. Current decision: opencode scans native roots, official `.claude` / `.agents` compatibility roots, and configured local `skills.paths` roots from JSON/JSONC config. `skills.urls` is recognized as a config boundary but remains metadata-only/no-fetch. Guarded writes remain limited to exact-name `permission.skill` patches in verified `opencode.json` targets, and tool-global installs remain limited to verified native opencode skill roots. V2.21 completed scan-accuracy, dedupe, and agent-metric alignment requirements; V2.93 completed configured local root scanning.
 
 ## Status
 
@@ -12,8 +12,9 @@ Scanner/parser implementation follows the current official OpenCode Agent Skills
 - Project Claude-compatible roots: `.claude/skills/<name>/SKILL.md`, walking from `project_cwd` upward through ancestors until `project_root`.
 - Global agent-compatible root: `~/.agents/skills/<name>/SKILL.md`.
 - Project agent-compatible roots: `.agents/skills/<name>/SKILL.md`, walking from `project_cwd` upward through ancestors until `project_root`.
+- Configured local roots from `skills.paths` in readable global/project `opencode.json` or `opencode.jsonc`; paths are expanded, canonicalized, deduped, and constrained to the declaring scope.
 
-Compatibility roots are scan-only sources under the opencode adapter. They intentionally create cross-agent overlap with Claude/Codex roots when the same physical or named skill is available to multiple agents; the app should surface that through cross-agent analysis rather than hiding the opencode-visible skill.
+Compatibility and configured roots are scan-only sources under the opencode adapter. They intentionally create cross-agent overlap with Claude/Codex roots when the same physical or named skill is available to multiple agents; the app should surface that through cross-agent analysis rather than hiding the opencode-visible skill.
 
 V2.21 completed focus:
 
@@ -30,7 +31,7 @@ Writable toggle support is enabled for app-managed strict JSON config files:
 - Every config toggle uses the existing snapshot, lock, atomic write, read-back verification, and rollback path.
 - Tool-global install copies only the source `SKILL.md` into `$HOME/.config/opencode/skills/<name>/SKILL.md` or `<project>/.opencode/skills/<name>/SKILL.md`.
 
-Remaining boundaries: JSONC/commented configs are not mutated by the app's strict JSON writer; managed config and `OPENCODE_CONFIG_CONTENT` can still override local files at opencode runtime; custom `skills.paths` / `skills.urls` remain out of scope.
+Remaining boundaries: JSONC/commented configs are read for configured local roots but are not mutated by the app's strict JSON writer; managed config, `OPENCODE_CONFIG`, `OPENCODE_CONFIG_DIR`, and `OPENCODE_CONFIG_CONTENT` can still override local files at opencode runtime and remain read-only/out of scope for mutation; `skills.urls` stays metadata-only/no-fetch unless a future explicit confirmation flow is scoped.
 
 Local validation on 2026-06-08:
 
@@ -62,15 +63,18 @@ Exact relevant result: the JSON array contained `customize-opencode` with `locat
 
 ## Official Evidence
 
-Official docs used on 2026-06-08:
+Official docs and source used on 2026-06-17:
 
 - OpenCode Agent Skills: <https://opencode.ai/docs/skills/>
 - OpenCode Config: <https://opencode.ai/docs/config>
+- OpenCode config schema: <https://opencode.ai/config.json>
+- OpenCode skill loader source: <https://raw.githubusercontent.com/anomalyco/opencode/dev/packages/opencode/src/skill/index.ts>
+- OpenCode skill URL discovery source: <https://raw.githubusercontent.com/anomalyco/opencode/dev/packages/opencode/src/skill/discovery.ts>
 - OpenCode Agents: <https://opencode.ai/docs/agents/>
 - OpenCode Commands: <https://opencode.ai/docs/commands/>
 - OpenCode Rules: <https://opencode.ai/docs/rules/>
 
-The Agent Skills page is the canonical source for this adapter evidence. Agents and commands are related opencode concepts, but they should not be mapped into this app's `SkillInstance` unless product scope explicitly expands beyond skills.
+The Agent Skills page is the canonical source for fixed skill roots; the config schema and source evidence confirm `skills.paths` and `skills.urls`. Agents and commands are related opencode concepts, but they should not be mapped into this app's `SkillInstance` unless product scope explicitly expands beyond skills.
 
 ## Directory And Format Evidence
 
@@ -93,8 +97,9 @@ OpenCode itself can load native roots plus Claude/agent-compatible roots. The pr
 - Include: `~/.claude/skills/<name>/SKILL.md`.
 - Include: `.agents/skills/<name>/SKILL.md` found while walking from `project_cwd` upward to `project_root`.
 - Include: `~/.agents/skills/<name>/SKILL.md`.
+- Include: configured local `skills.paths` directories from readable global/project JSON/JSONC config after expansion, canonicalization, dedupe, and scope checks.
 - Exclude: built-in `<built-in>` skills and non-filesystem skills.
-- Exclude: custom `skills.paths` / `skills.urls` from `opencode.json` until a later evidence pass defines duplicate handling, trust, and read-only provenance.
+- Exclude: `skills.urls` network fetching; URL entries are metadata-only and never fetched during scan or diagnostics.
 
 `SKILL.md` must start with YAML frontmatter. Recognized fields:
 
@@ -152,6 +157,8 @@ Read-only state: **implemented in V2.4**. The scanner models opencode-native ski
 
 Compatibility root state: **implemented as scan-only**. `.claude/skills` and `.agents/skills` are included under the opencode adapter because current OpenCode official docs list them as discoverable. Claude/Codex ownership and duplicates should be explained by cross-agent analysis rather than suppressing opencode rows.
 
+Configured local root state: **implemented in V2.93 as scan-only**. JSON/JSONC `skills.paths` entries are read from declared user/project config files, expanded relative to the declaring scope, canonicalized, deduped, and exposed as `RootSource::Configured`. They are not install targets and do not become direct file-write targets.
+
 Writable state: **verified for V2.12 guarded implementation**:
 
 - Disable writes `permission.skill["<exact-name>"] = "deny"` based on official opencode permission semantics.
@@ -164,9 +171,9 @@ Still deferred:
 - JSONC/commented config mutation; strict JSON is required for app-managed writes.
 - Runtime proof that `opencode debug skill --pure` reflects permission filtering; it currently appears to be discovery-only.
 - How to surface `"ask"` in UI; it is neither fully enabled nor disabled.
-- Whether custom `skills.paths` / `skills.urls` should be exposed under the opencode adapter after non-destructive evidence confirms their semantics.
-- Whether custom `skills.paths` / `skills.urls` should be scanned, and what trust/provenance labels they require.
+- Fetching or caching `skills.urls`; URL entries require a future explicit confirmation and cache/rollback design before any network access.
 - Whether managed config or `OPENCODE_CONFIG_CONTENT` can make a local write ineffective.
+- Whether `OPENCODE_CONFIG`, `OPENCODE_CONFIG_DIR`, remote org config, or managed settings should be surfaced in diagnostics beyond the current documented blockers.
 
 ## Fixtures
 
@@ -180,4 +187,4 @@ Parser/scan contract fixtures live under `fixtures/opencode/`.
 - `fixtures/opencode/broken/missing-description/SKILL.md`: malformed sample with required `description` missing.
 - `fixtures/opencode/broken/missing-name/SKILL.md`: malformed sample with required `name` missing.
 
-The config fixture is historical/disposable writable evidence only. V2.12 guarded writes use the verified app-owned strict JSON writer, snapshot/rollback/read-back tests, and exact `permission.skill` semantics; this fixture is not authority for new write scope.
+The config fixture is historical/disposable writable evidence only. V2.12 guarded writes use the verified app-owned strict JSON writer, snapshot/rollback/read-back tests, and exact `permission.skill` semantics; this fixture is not authority for new write scope. V2.93 configured-root tests create temporary JSON/JSONC configs dynamically so duplicate paths, project-boundary checks, and metadata-only `skills.urls` behavior are verified without touching real opencode config.

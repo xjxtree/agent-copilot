@@ -2231,9 +2231,20 @@ fn adapter_list_diagnostics_reports_roots_config_and_blockers() {
     ));
     let home = temp_root.join("home");
     let project = temp_root.join("project");
+    let opencode_configured_root = temp_root.join("opencode-configured-skills");
     fs::create_dir_all(home.join(".pi/agent/skills")).expect("create Pi skills root");
     fs::create_dir_all(home.join(".codex")).expect("create Codex config parent");
     fs::write(home.join(".codex/config.toml"), "[skills]\n").expect("write Codex config");
+    fs::create_dir_all(home.join(".config/opencode")).expect("create opencode config parent");
+    fs::create_dir_all(&opencode_configured_root).expect("create opencode configured root");
+    fs::write(
+        home.join(".config/opencode/opencode.json"),
+        format!(
+            "{{\"skills\":{{\"paths\":[\"{}\"],\"urls\":[\"https://example.invalid/skills/\"]}}}}\n",
+            opencode_configured_root.to_string_lossy()
+        ),
+    )
+    .expect("write opencode config");
 
     let host = ServiceHost {
         app_data_dir: temp_root.join("app-data"),
@@ -2277,6 +2288,32 @@ fn adapter_list_diagnostics_reports_roots_config_and_blockers() {
             && roots
                 .iter()
                 .any(|root| { root.get("source").and_then(Value::as_str) == Some("admin") })));
+    let opencode = records
+        .iter()
+        .find(|record| record.get("agent").and_then(Value::as_str) == Some("opencode"))
+        .expect("opencode diagnostics");
+    assert_eq!(
+        opencode.pointer("/config/status").and_then(Value::as_str),
+        Some("detected")
+    );
+    assert!(opencode
+        .get("roots")
+        .and_then(Value::as_array)
+        .is_some_and(|roots| roots.iter().any(|root| {
+            root.get("source").and_then(Value::as_str) == Some("configured")
+                && root
+                    .get("reason")
+                    .and_then(Value::as_str)
+                    .is_some_and(|reason| reason.contains("skills.paths"))
+        })));
+    assert!(opencode
+        .get("blockers")
+        .and_then(Value::as_array)
+        .is_some_and(|blockers| blockers.iter().any(|blocker| {
+            blocker
+                .as_str()
+                .is_some_and(|text| text.contains("skills.urls"))
+        })));
     let pi = records
         .iter()
         .find(|record| record.get("agent").and_then(Value::as_str) == Some("pi"))

@@ -39,7 +39,7 @@ for (const [text, label] of [
   requireText(text, label, "V2.73+ docs gates");
 }
 
-requireText(adapters, "docs/agent-adapters.md", "V2.41-V2.92");
+requireText(adapters, "docs/agent-adapters.md", "V2.41-V2.93");
 requireText(agents, "AGENTS.md", "V2.78 completed boundary");
 requireText(packageJson, "package.json", "\"verify:pi-writable-evidence-fixtures\"");
 requireText(packageJson, "package.json", "\"verify:doc-governance\"");

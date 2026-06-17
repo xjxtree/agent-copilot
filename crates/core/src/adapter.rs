@@ -43,6 +43,7 @@ pub enum RootSource {
     Project,
     Extra,
     Compatibility,
+    Configured,
     Admin,
     Plugin,
     System,

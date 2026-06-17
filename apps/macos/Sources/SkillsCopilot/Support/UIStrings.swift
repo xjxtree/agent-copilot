@@ -209,6 +209,7 @@ enum UIStrings {
     static var provenanceKind: String { text("metadata.provenanceKind", "Kind") }
     static var provenanceNativeKind: String { text("metadata.provenance.kind.native", "Native") }
     static var provenanceCompatibilityKind: String { text("metadata.provenance.kind.compatibility", "Compatibility") }
+    static var provenanceConfiguredKind: String { text("metadata.provenance.kind.configured", "Configured") }
     static var provenanceInferredKind: String { text("metadata.provenance.kind.inferred", "Inferred") }
     static var provenanceToolGlobalKind: String { text("metadata.provenance.kind.toolGlobal", "Tool-global") }
     static var provenanceReadOnlyKind: String { text("metadata.provenance.kind.readOnly", "Read-only") }
@@ -217,6 +218,7 @@ enum UIStrings {
     static var provenanceNativeOpencodeRoot: String { text("metadata.provenance.root.nativeOpencode", "Native opencode root") }
     static var provenanceClaudeCompatibilityRoot: String { text("metadata.provenance.root.claudeCompatibility", "Claude compatibility root") }
     static var provenanceAgentsCompatibilityRoot: String { text("metadata.provenance.root.agentsCompatibility", "Agents compatibility root") }
+    static var provenanceConfiguredRoot: String { text("metadata.provenance.root.configured", "configured root") }
     static var provenanceToolGlobalRoot: String { text("metadata.provenance.root.toolGlobal", "Tool-global staging") }
     static var provenanceReadOnlyRoot: String { text("metadata.provenance.root.readOnly", "read-only root") }
     static var provenanceExternalRoot: String { text("metadata.provenance.root.external", "External root") }
