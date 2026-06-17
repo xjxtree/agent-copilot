@@ -18,11 +18,13 @@ struct SkillListModelTests {
     private func detailWorkbenchSectionsExposeDiagnostics() throws {
         try expectEqual(
             DetailSection.visibleCases,
-            [.taskCockpit, .validationWorkbench, .overview, .skillMap, .cleanup, .guidedCleanup, .observability, .findings, .conflicts, .history, .analysis],
+            [.lineup, .agentProfile, .taskCockpit, .validationWorkbench, .overview, .skillMap, .cleanup, .guidedCleanup, .observability, .findings, .conflicts, .history, .analysis],
             "Skill detail should expose the full diagnostic workbench section order."
         )
-        try expectEqual(DetailSection.primaryWorkCases, [.taskCockpit, .validationWorkbench, .skillMap, .guidedCleanup, .observability, .analysis], "Primary work surfaces should keep Task Cockpit first.")
-        try expectEqual(DetailSection.taskCockpit.title, "Task-first Cockpit", "Task Cockpit should be the primary work surface.")
+        try expectEqual(DetailSection.primaryWorkCases, [.lineup, .agentProfile, .taskCockpit, .validationWorkbench, .skillMap, .guidedCleanup, .observability, .analysis], "Primary work surfaces should start from Agent Copilot object-level surfaces.")
+        try expectEqual(DetailSection.lineup.title, "Lineup", "Lineup should be the default decision overview surface.")
+        try expectEqual(DetailSection.agentProfile.title, "Agent Profile", "Agent Profile section title")
+        try expectEqual(DetailSection.taskCockpit.title, "Task-first Cockpit", "Task Cockpit should remain a primary work surface.")
         try expectEqual(DetailSection.validationWorkbench.title, "Validation Workbench", "Validation Workbench section title")
         try expectEqual(DetailSection.skillMap.title, "Skill Map", "Skill Map section title")
         try expectEqual(DetailSection.guidedCleanup.title, "Guided Cleanup Flow", "Guided Cleanup section title")

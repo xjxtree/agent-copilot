@@ -1,24 +1,42 @@
-# skills-copilot
+# Agent Copilot
 
-Desktop GUI for managing, inspecting, and auditing AI-agent skills across
-Claude Code, Codex, opencode, Pi, Hermes, and OpenClaw.
+Desktop GUI, internally still built from the `skills-copilot` workspace, for
+managing, inspecting, and auditing AI-agent skills across Claude Code, Codex,
+opencode, Pi, Hermes, and OpenClaw.
 
 ## Current Status
 
 | Area | Status |
 | --- | --- |
-| Current phase | V2.86 Rust helper/test split and module-size gate closeout completed |
-| Completed baseline | V2.1-V2.86 |
-| Recent product line | V2.41-V2.86 AI-native analysis, task cockpit, validation hardening, and module splitting |
+| Current phase | V2.88 handoff and per-surface Agent Copilot evidence closeout completed |
+| Completed baseline | V2.1-V2.88 |
+| Recent product line | V2.41-V2.88 AI-native analysis, task cockpit, validation hardening, module splitting, read-only Agent Copilot surfaces, and per-surface evidence closeout |
+| Agent Copilot line | M1-M4 completed; unlocked app-window evidence captured |
 | Maintained UI | Native macOS app in `apps/macos` |
 | Service boundary | Rust typed JSON stdio sidecar in `crates/service` |
-| Next version | No post-V2.86 version has been selected yet |
+| Next version | V2.89 brand asset refresh; V2.90-V2.96 near-term plan is tracked in `docs/roadmap.md` and `docs/development-tasks.md` |
 
 V2.84-V2.86 completed the post-V2.83 module-splitting line:
 
 - V2.84 Swift Detail section splitting.
 - V2.85 Rust RPC domain module splitting.
 - V2.86 Rust helper/test split and module-size gate.
+
+V2.87 implements the first Agent Copilot pass:
+
+- Display-level Agent Copilot brand, Lineup default surface, and Agent Profile.
+- Sorted read-only decision queue over local health, cleanup, task, provider, and review evidence.
+- Default-off `session.previewLocalSessions` with explicit authorized directories and redacted excerpts only.
+- Default-off `evidence.previewMcpServers` with explicit authorized MCP config files and redacted server metadata only.
+- Visual evidence note: 2026-06-17 unlocked `pnpm check:macos` passed; fixture-data smoke captured the full Agent Copilot app window at `docs/ui-artifacts/native-macos-shell/completed.png`.
+
+V2.88 closes the handoff/evidence gap:
+
+- Per-surface Computer Use evidence was captured for Lineup, Agent Profile,
+  Local Session Preview, and MCP Preview.
+- Authorized preview checks used only disposable `/tmp/ac-v288` fixtures and
+  kept session/MCP output read-only and redacted.
+- V2.87/V2.88 verification checklists are wired into `pnpm verify:gate-parity`.
 
 ## What It Does
 
@@ -27,6 +45,7 @@ V2.84-V2.86 completed the post-V2.83 module-splitting line:
 - Provides guarded enable/disable flows only for verified writable scopes.
 - Supports local report export, cleanup queue, guided cleanup, and task-first cockpit views.
 - Supports user-configured provider-backed explanations only after prompt preview, redaction, destination visibility, and explicit confirmation.
+- Starts from an Agent Copilot lineup overview and Agent Profile surface for read-only, evidence-backed navigation across task, cleanup, observability, and review workflows.
 
 ## What It Does Not Do
 
@@ -101,7 +120,7 @@ This section only keeps machine-checked status anchors. Detailed evidence lives
 in `docs/v2.*-verification-checklist.md` and `docs/development-tasks.md`.
 
 Baseline phrase used by docs gates:
-V2.86 Rust helper/test split and module-size gate closeout completed.
+V2.88 handoff and per-surface Agent Copilot evidence closeout completed.
 
 ### V2.74-V2.78
 
@@ -162,6 +181,17 @@ V2.86 Rust helper/test split and module-size gate closeout completed.
 - V2.86 Rust helper/test split:
   module-size, `service_support_helpers.rs`, `crates/service/src/tests/`,
   `pnpm verify:v2.86-docs`, `pnpm check:macos` passed.
+
+### V2.87
+
+- Agent Copilot first implementation pass:
+  Lineup default surface, Agent Profile, sorted decision queue,
+  `session.previewLocalSessions`, `evidence.previewMcpServers`,
+  and protocol drift count 90.
+- 2026-06-17 unlocked `pnpm check:macos` passed end to end, including
+  `./script/build_and_run.sh --verify`, fixture-data app-window capture at
+  `docs/ui-artifacts/native-macos-shell/completed.png`, screenshot artifact
+  verification, and privacy check.
 
 ## Development Notes
 

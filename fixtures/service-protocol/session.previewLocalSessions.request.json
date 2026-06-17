@@ -1,0 +1,11 @@
+{
+  "id": "fixture-session-preview-local",
+  "method": "session.previewLocalSessions",
+  "params": {
+    "authorized_roots": [
+      "$HOME/.codex/sessions"
+    ],
+    "limit": 20,
+    "max_excerpt_chars": 1000
+  }
+}

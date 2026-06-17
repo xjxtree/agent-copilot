@@ -29,8 +29,8 @@ enum AppLanguage: String, CaseIterable, Identifiable {
 }
 
 enum UIStrings {
-    static var appTitle: String { text("app.title", "Skills Copilot") }
-    static var appWindowTitle: String { text("app.windowTitle", "SkillsCopilot") }
+    static var appTitle: String { text("app.title", "Agent Copilot") }
+    static var appWindowTitle: String { text("app.windowTitle", "Agent Copilot") }
     static var searchPrompt: String { text("search.prompt", "Search") }
     static var scan: String { text("action.scan", "Scan") }
     static var reload: String { text("action.reload", "Reload") }
@@ -245,7 +245,7 @@ enum UIStrings {
     static var findingTriageFilterActive: String { text("findings.triage.filter.active", "Active") }
     static var findingTriageFilterAll: String { text("findings.triage.filter.all", "All triage") }
     static var findingTriageNoticeTitle: String { text("findings.triage.notice.title", "Local finding triage") }
-    static var findingTriageNoticeBody: String { text("findings.triage.notice.body", "Triage labels are stored only in SkillsCopilot app data. They do not write agent config, skill content, toggle snapshots, scripts, or AI output. If a finding changes after rescan, it reopens as Open.") }
+    static var findingTriageNoticeBody: String { text("findings.triage.notice.body", "Triage labels are stored only in Agent Copilot app data. They do not write agent config, skill content, toggle snapshots, scripts, or AI output. If a finding changes after rescan, it reopens as Open.") }
     static var findingTriageActionReviewed: String { text("findings.triage.action.reviewed", "Mark reviewed") }
     static var findingTriageActionIgnored: String { text("findings.triage.action.ignored", "Ignore") }
     static var findingTriageActionFollowUp: String { text("findings.triage.action.followUp", "Needs follow-up") }
@@ -691,7 +691,7 @@ enum UIStrings {
     static var validationWorkbenchRealLocalComputerUse: String { text("validationWorkbench.evidence.realLocalComputerUse", "Unlocked real-local Computer Use") }
     static var validationWorkbenchRealLocalComputerUseDetail: String { text("validationWorkbench.evidence.realLocalComputerUse.detail", "UI closeout requires an unlocked, interactive macOS session where Computer Use can resolve the exact app window and read back the visible surface or a canonical blocker is recorded.") }
     static var validationWorkbenchAppWindowScreenshot: String { text("validationWorkbench.evidence.appWindowScreenshot", "Full app-window screenshot") }
-    static var validationWorkbenchAppWindowScreenshotDetail: String { text("validationWorkbench.evidence.appWindowScreenshot.detail", "Accepted screenshots must capture only the SkillsCopilot app window and pass black, flat, transparent, invalid-image, and privacy checks.") }
+    static var validationWorkbenchAppWindowScreenshotDetail: String { text("validationWorkbench.evidence.appWindowScreenshot.detail", "Accepted screenshots must capture only the Agent Copilot app window and pass black, flat, transparent, invalid-image, and privacy checks.") }
     static var validationWorkbenchFixtureSupportingTitle: String { text("validationWorkbench.evidence.fixtureSupporting", "Fixture smoke is supporting evidence") }
     static var validationWorkbenchFixtureSupportingDetail: String { text("validationWorkbench.evidence.fixtureSupporting.detail", "Fixture launch and smoke checks can prove build and service health, but cannot replace unlocked real-local UI operation or final app-window evidence.") }
     static var validationWorkbenchCanonicalRecord: String { text("validationWorkbench.evidence.canonicalRecord", "Canonical blocker record") }
@@ -700,7 +700,7 @@ enum UIStrings {
     static var validationWorkbenchLockedSessionSummary: String { text("validationWorkbench.blocker.lockedSession.summary", "The macOS session is locked or not clearly interactive, so Computer Use and screenshot evidence cannot prove the live UI.") }
     static var validationWorkbenchLockedSessionAction: String { text("validationWorkbench.blocker.lockedSession.action", "Unlock the session, keep the app visible, then retry real-local Computer Use. If it remains locked, record locked-session.") }
     static var validationWorkbenchWindowAXTitle: String { text("validationWorkbench.blocker.windowAX.title", "Window not found / no AX window") }
-    static var validationWorkbenchWindowAXSummary: String { text("validationWorkbench.blocker.windowAX.summary", "Computer Use, CG, AX, or activation could not resolve the expected SkillsCopilot main window.") }
+    static var validationWorkbenchWindowAXSummary: String { text("validationWorkbench.blocker.windowAX.summary", "Computer Use, CG, AX, or activation could not resolve the expected Agent Copilot main window.") }
     static var validationWorkbenchWindowAXAction: String { text("validationWorkbench.blocker.windowAX.action", "Relaunch the exact dist/SkillsCopilot.app bundle, verify PID/window identity, and record window-not-found, no-ax-window, or activation-failed when resolution still fails.") }
     static var validationWorkbenchScreenRecordingTitle: String { text("validationWorkbench.blocker.screenRecording.title", "Screen Recording permission") }
     static var validationWorkbenchScreenRecordingSummary: String { text("validationWorkbench.blocker.screenRecording.summary", "The capture or automation layer lacks macOS Screen Recording authorization, so visual evidence is not trustworthy.") }
@@ -734,7 +734,7 @@ enum UIStrings {
     static var validationWorkbenchEvidenceRequiredAction: String { text("validationWorkbench.evidence.required.action", "Run the real app in an unlocked interactive macOS session, target the current bundle/window, exercise the relevant UI, and capture app-window evidence.") }
     static var validationWorkbenchLockedSessionEvidence: String { text("validationWorkbench.blocker.lockedSession.evidence", "Record locked-session while blocked; completion still requires unlocked real-local Computer Use evidence.") }
     static var validationWorkbenchWindowNotFoundTitle: String { text("validationWorkbench.blocker.windowNotFound.title", "Target app window was not found") }
-    static var validationWorkbenchWindowNotFoundSummary: String { text("validationWorkbench.blocker.windowNotFound.summary", "CG window lookup could not find one visible SkillsCopilot window for the expected bundle path and PID, or multiple same-bundle windows made targeting ambiguous.") }
+    static var validationWorkbenchWindowNotFoundSummary: String { text("validationWorkbench.blocker.windowNotFound.summary", "CG window lookup could not find one visible Agent Copilot window for the expected bundle path and PID, or multiple same-bundle windows made targeting ambiguous.") }
     static var validationWorkbenchWindowNotFoundAction: String { text("validationWorkbench.blocker.windowNotFound.action", "Relaunch the exact workspace bundle, close duplicate same-bundle windows, and retry exact PID/window targeting.") }
     static var validationWorkbenchWindowNotFoundEvidence: String { text("validationWorkbench.blocker.windowNotFound.evidence", "A resolved current-bundle PID, visible main window, and app-window screenshot are required.") }
     static var validationWorkbenchNoAXWindowTitle: String { text("validationWorkbench.blocker.noAXWindow.title", "Accessibility window was not resolved") }

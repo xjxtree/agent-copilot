@@ -1,10 +1,14 @@
 # AI 层：本地事实层 + AI-native 判断层
 
+> Product display name: Agent Copilot. Internal workspace, crate, fallback config,
+> bundle/module, and app-data identifiers may still use `skills-copilot` /
+> `SkillsCopilot`; do not rename those without a dedicated migration plan.
+>
 > 原则：**本地 deterministic 逻辑负责事实，用户显式配置的大模型负责复杂判断**。
 >
 > Scanner / rules / catalog 始终是事实来源；LLM/AI provider 是 AI agent skills 的核心分析增强，用于质量、任务可用性、routing 置信度、trace 分析、remediation 和 provider observability；V2.62 真实 agent session skill review、V2.63 local skill map、V2.64 provider observability、V2.65 task-first cockpit、V2.66 skill lifecycle timeline 与 V2.67 guided cleanup plan 保持 deterministic local-only，不发送 provider request。
 >
-> 当前实现边界（V2.41-V2.86 completed baseline）：
+> 当前实现边界（V2.41-V2.88 implementation line）：
 >
 > - 已落地 disabled-by-default 的 service/UI gate 和 request prepare/estimate 能力。
 > - 已落地用户显式配置的 OpenAI-compatible / Claude-compatible provider profile 基础：`llm.listProviderProfiles`、`llm.saveProviderProfile`、`llm.deleteProviderProfile`、`llm.testProviderConnection`、macOS Keychain-first API key storage、预算字段、disabled/unconfigured state，以及 test connection 的最小 redacted call metadata。
@@ -15,7 +19,7 @@
 > - V2.67 Guided Cleanup Flow 是 completed：`cleanup.planGuidedFlow` 只读组织现有 evidence，`cleanup.recordGuidedStep` 仅可写 app-local redacted guided step metadata；真实 enable/disable/edit/remediation 仍走 existing preview-first / explicit-confirm safe methods。
 > - V2.71 Guided Cleanup safe-action links 是 completed：`safe_action_deep_link` / `deep_link` 只把 cleanup guidance 导航到既有安全入口，不新增 provider request、apply/write/toggle/script/confirmation 语义。
 > - V2.72 Validation harness hardening 是 completed：只加固验证脚本、截图证据和 Computer Use blocker 分类，不改变 AI/provider/service/write 语义。
-> - V2.73-V2.86 已完成 timeout recovery、launch/window targeting、task input resilience、progressive feedback、validation workbench、protocol/gate parity、privacy/localization、Detail density、Swift IPC cancellation、test isolation、continued module splitting、Swift Detail section split、Rust RPC domain split、Rust helper/test split 和 module-size gate；这些切片不扩展 provider/write/script/credential/cloud/telemetry 边界。
+> - V2.73-V2.88 已完成/实现 timeout recovery、launch/window targeting、task input resilience、progressive feedback、validation workbench、protocol/gate parity、privacy/localization、Detail density、Swift IPC cancellation、test isolation、continued module splitting、Swift Detail section split、Rust RPC domain split、Rust helper/test split、module-size gate、Agent Copilot first pass 的 Lineup / Agent Profile / local session preview / MCP server preview，以及 V2.88 per-surface evidence closeout；这些切片不扩展 provider/write/script/credential/cloud/telemetry 边界。V2.87 于 2026-06-17 解锁后通过 `pnpm check:macos`，V2.88 补齐 Lineup / Agent Profile / Local Session Preview / MCP Preview 的 Computer Use app-window evidence。
 >
 > V2.45（已完成）：
 >
@@ -130,7 +134,7 @@ Provider 配置原则：
 - provider request/response 默认不持久化；V2.42 confirmed send 只保存最小 redacted call metadata（status、duration、error、token/cost、redaction status、confirmation id、destination host），用于审计每次真实请求；V2.64 `llm.providerObservability` 在此基础上和 V2.61 prompt run metadata 上做 read-only observability summary、rows、budget/usage hints、retention/cleanup recommendations 和 evidence refs。若 export/cleanup controls 未在代码切片中实现，只能作为 observability recommendations，不应描述成可写路径。
 - provider 不得成为写入者、执行者或确认者。
 
-## 1.2 V2.41-V2.86 AI-native / validation / modularity 能力线
+## 1.2 V2.41-V2.88 AI-native / validation / modularity 能力线
 
 | Version | AI role | 本地事实来源 |
 | --- | --- | --- |
@@ -167,15 +171,17 @@ Provider 配置原则：
 | V2.75（completed） | Task input and input-method resilience | AX-settable multiline input, exact nonblank task preservation, whitespace-only submit blocking, and explicit Build before execution; no raw prompt persistence or hidden task state |
 | V2.76（completed） | Progressive Cockpit feedback | Staged readiness/routing/cross-agent/remediation/provider/session feedback, partial rows, elapsed time, fallback/blocked states; no provider/write/execute/credential/cloud/telemetry expansion |
 | V2.77（completed） | Real-local validation workbench | Read-only validation blocker explanations and evidence standards inside the app; no runnable validation action or provider/write/script scope |
-| V2.78（completed） | Protocol / validation gate parity | 88-method service protocol parity, drift verifier, docs gates, and V2.46-V2.64 verification-history governance without invented evidence |
+| V2.78（completed） | Protocol / validation gate parity | Historical 88-method service protocol parity at V2.78 closeout, drift verifier, docs gates, and V2.46-V2.64 verification-history governance without invented evidence |
 | V2.79（completed） | Privacy fixture and evidence-surface localization sweep | Fixed local host-port privacy scanning, screenshot-safe path rendering, and English/zh-Hans evidence-surface coverage without credential/network/scanner/provider/write expansion |
 | V2.80（completed） | Detail navigation and visual density polish | Stable detail top anchor and counted/collapsible dense evidence lists; presentation-only native UI change |
 | V2.81（completed） | Swift stdio sidecar cancellation cleanup | Cancellation/timeout cleanup around short-lived stdio service calls, pipe-handle cleanup, and TERM-to-SIGKILL escalation; no daemon/socket redesign |
 | V2.82（completed） | Test isolation and core model test floor | Serialized provider env mutation tests and core model wire/default/identity tests; no provider credential persistence or service protocol expansion |
 | V2.83（completed） | Continued module splitting | Protocol constants/envelopes, Detail overview helpers, and Swift fake service test helpers split without UI/protocol behavior changes |
 | V2.84（completed） | Swift Detail section splitting | Detail section files split by Task Cockpit / Skill Map / Guided Cleanup / Provider Observability / Review semantics; refactor-only |
-| V2.85（completed） | Rust RPC domain module splitting | `ServiceHost` RPC handling split across catalog/config/task/knowledge/remediation/llm-adjacent domain files while preserving the 88-method protocol |
+| V2.85（completed） | Rust RPC domain module splitting | `ServiceHost` RPC handling split across catalog/config/task/knowledge/remediation/llm-adjacent domain files while preserving the then-current 88-method protocol |
 | V2.86（completed） | Rust helper/test split and module-size gate | Helper files and service test chunks split with `verify:module-size` wired into gate parity |
+| V2.87（completed） | Agent Copilot first pass | Lineup default surface, Agent Profile, sorted read-only decision queue, default-off `session.previewLocalSessions`, default-off `evidence.previewMcpServers`, and current 90-method protocol parity |
+| V2.88（completed） | Agent Copilot evidence closeout | Per-surface Computer Use app-window evidence for Lineup, Agent Profile, Local Session Preview, and MCP Preview; V2.87/V2.88 docs gates wired into gate parity |
 
 V2.57 的 preview drafts 只生成可复制/可编辑的草稿建议，不提供直接 apply/write；任何 provider wording 都必须经过 V2.42 的 prompt preview / redaction / confirmation，并继续作为 copy-only 输出。
 
@@ -184,6 +190,8 @@ V2.60 remediation history 已完成：`remediation.recordHistory` 只在 app dat
 V2.61 prompt run history 只用于改善慢速 provider-backed 分析体验：`llm.confirmPromptAndSend` 仍由用户显式确认触发，并把 redacted task metadata、status/error/duration/token/cost、provider/model/destination、redaction summary、copy-only draft output 和 safety flags 写入 app data `prompt-runs.json`；`llm.listPromptRuns` 只读该本地记录。该路径不持久化 raw prompt、raw provider response JSON、API key、credential、raw trace 或 unredacted local path，也不提供写回、执行、config/snapshot/triage mutation、cloud sync 或 telemetry。
 
 V2.62 Agent Session Skill Review 已完成：`session.reviewAgentSkillUse` 在用户显式粘贴/导入 agent session 或引用 trace import 后，本地 deterministic review 只基于 redacted metadata、catalog/routing/trace evidence 与 expected skill refs/names 判读 hit/miss/wrong-pick/ambiguous/unknown、detected vs expected skills、duplicate/similar-skill interference、safe next steps 与 evidence refs；`session.listSkillReviews` 只读列表，`session.deleteSkillReview` 只删除 app-local metadata。该路径只允许 `agent-session-reviews.json` redacted review metadata，不持久化 raw transcript、raw prompt、raw response、secrets、unredacted local paths、skill files 或 agent config；不改 triage、不创建/回滚 snapshot、不执行脚本、不发 provider request、不云同步、不发 telemetry。
+
+V2.87 Agent Copilot first pass 已实现：Lineup / Agent Profile 是 read-only local evidence surfaces，`AgentCopilotDecisionModel` 只基于现有 local health/cleanup/task/provider/review evidence 排序并导航到已有只读或 preview-first surface。`session.previewLocalSessions` 和 `evidence.previewMcpServers` 都是 default-off、user-triggered local previews；前者只读取显式授权目录内的 session files 并返回 redacted metadata/excerpts，后者只读取显式授权 MCP JSON config files 并返回 redacted server metadata、args count 和 env key count。两者都不保存 raw transcript/raw config/env values，不发送 provider request，不写 skill/config，不改 triage/snapshot，不执行脚本，不读取 credentials，不 cloud sync，不 telemetry。
 
 V2.63 Local Skill Map 已完成：`knowledge.buildLocalSkillMap` 在用户显式触发后，从 existing catalog/knowledge/similar/taxonomy/conflict/task/risk evidence 派生 map，不扫描新的外部来源，不写新的 truth store。该路径默认不持久化 map artifact，不持久化 raw prompt、raw response、raw trace、secrets 或 unredacted local paths；不写 skill/config、不改 triage、不创建/回滚 snapshot、不执行脚本、不发 provider request、不云同步、不发 telemetry。
 

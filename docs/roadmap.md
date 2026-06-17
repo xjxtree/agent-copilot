@@ -12,8 +12,10 @@
 > 非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，
 > 不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.86 Rust helper/test split and module-size gate closeout completed**。
-> V2.1-V2.86 是当前 completed baseline；尚未选择 post-V2.86 版本。
+> 当前阶段：**V2.88 handoff and per-surface Agent Copilot evidence closeout completed**。
+> V2.1-V2.88 是当前 completed baseline；V2.87 于 2026-06-17 解锁后通过 `pnpm check:macos`，V2.88 补齐 Lineup / Agent Profile / Local Session Preview / MCP Preview 的 Computer Use app-window evidence。
+> Agent Copilot M1-M4 decision-first IA / local evidence previews 已实现为只读感知层，显示层品牌为 Agent Copilot，内部 `SkillsCopilot` / `skills-copilot`
+> 标识保持稳定，除非另立迁移专项。Post-V2.88 follow-ups are now scheduled as near-term V2.89-V2.96 slices below and in [`development-tasks.md`](./development-tasks.md).
 
 ## Current Milestone Snapshot
 
@@ -23,6 +25,24 @@
 | V2.65-V2.77 | Task-first cockpit, lifecycle, guided cleanup, validation hardening, real-local workbench | Completed |
 | V2.78-V2.83 | Protocol/gate parity, privacy/localization, Detail density, IPC cancellation, test floor, continued module splitting | Completed |
 | V2.84-V2.86 | Swift Detail section splitting, Rust RPC domain module splitting, Rust helper/test split and module-size gate | Completed |
+| Agent Copilot M1-M4 + V2.88 closeout | Decision-first Lineup, Agent Profile, sorted decision queue, default-off local session preview, default-off MCP server preview, and per-surface evidence closeout | Completed; unlocked app-window evidence captured |
+
+## Near-Term Post-V2.88 Plan
+
+These slices are ordered by dependency and risk. Each version gets its own
+design/validation closeout before the next write-capability slice starts.
+
+| Version | Theme | Planned scope | Exit gate |
+| --- | --- | --- | --- |
+| V2.88 | Handoff and per-surface evidence | Completed: reviewed staging scope, preserved V2.87 scope, and captured app-window-only evidence for Lineup, Agent Profile, Local Session Preview, and MCP Preview. | `pnpm check:macos`, `pnpm check:privacy`, `pnpm verify:screenshot-artifacts docs/ui-artifacts/v2.88-handoff-evidence`, staged-file review |
+| V2.89 | Brand asset refresh | Decide and implement app icon / visual asset updates for the Agent Copilot display brand without renaming bundle/module/AX/app-data identifiers. | Asset review, screenshot refresh, `pnpm check:macos`, privacy gate |
+| V2.90 | Internal identifier migration | Migrate bundle id, crate/module names, AX identifiers, app-data paths, docs, and validation scripts only after a data migration and rollback design. | Migration design, compatibility/rollback tests, app-data preservation proof, `pnpm check:macos` |
+| V2.91 | Model-task matching history | Add a new local evidence domain for model-task fit history after protocol, privacy, redaction, fixture, and UI design review. | Design-first review, no-provider/no-write defaults, protocol fixtures, focused Rust/Swift tests |
+| V2.92 | Codex expanded roots | Evaluate and implement safe support for Codex project config, plugin/admin/system roots, and project-local write policy. Plugin/admin/system roots should default read-only unless rollback-safe writes are proven. | Official/local evidence, root allowlist tests, privacy gate, no unverified writes |
+| V2.93 | opencode custom roots | Evaluate `skills.paths` / `skills.urls`; implement local path support only after canonicalization/dedupe evidence, and treat URL support as explicit user-confirmed fetch or metadata-only by default. | Disposable fixtures, no uncontrolled network, rollback-safe write tests where applicable |
+| V2.94 | Pi install and compatibility writes | Extend beyond V2.37 guarded native toggles only with disposable install/compat-root evidence, snapshot/rollback, and trust-gate coverage. | Disposable round-trip, rollback proof, trust gate, no script execution |
+| V2.95 | Hermes writable/install | Implement Hermes writable/install only after schema, credential preservation, rollback, and explicit external-root behavior are verified. | Hermes-specific disposable evidence, credential filtering, rollback proof |
+| V2.96 | OpenClaw writable/install | Implement OpenClaw writable/install only after workspace-scope write semantics, precedence, rollback, and install behavior are verified. | OpenClaw disposable evidence, workspace-bound writes, rollback proof |
 
 Current planning boundary:
 
@@ -66,6 +86,10 @@ Current planning boundary:
 - V2.84 Swift Detail section splitting completed.
 - V2.85 Rust RPC domain module splitting completed.
 - V2.86 Rust helper/test split and module-size gate closeout completed.
+- V2.87 Agent Copilot first pass closeout evidence is tracked in
+  [`v2.87-verification-checklist.md`](./v2.87-verification-checklist.md).
+- V2.88 handoff and per-surface evidence closeout is tracked in
+  [`v2.88-verification-checklist.md`](./v2.88-verification-checklist.md).
 
 ## 0. 设计阶段（已完成）
 
@@ -308,7 +332,7 @@ Current planning boundary:
 **历史 V2 状态快照（2026-06-11）**：Codex adapter 首个实现切片、V2.1 Claude/Codex adapter experience、V2.2 project context、V2.3 adapter hardening、V2.4 opencode read-only adapter、V2.5 audit hardening、V2.6 manual readiness docs、V2.7 LLM local assist gate、V2.8 rules/permissions governance implementation、V2.9 Tool-global skill pool、V2.10 skill execution safety docs/release consistency、V2.11-V2.20 adapter/management/analysis line 已完成 closeout，且之前 mainline app 的真实本机 Computer Use 操作验证已在 2026-06-10 通过。产品重心保持在 skills 的管理、检查、分析和配置审计；真实 sandbox runner、GitHub clone import、script-file install 已从活动 backlog 删除。可执行任务清单见 [`development-tasks.md`](./development-tasks.md)。V2.10 已完成安全边界文档同步：default-deny，不真实执行；blocked/cancelled/failure attempt audit；LLM 不可触发执行。当前产品方向不规划 successful execution output log。V2.8 已完成 LLM status protocol compatibility、permissions roundtrip for V2.8 rules、explicit severity ordering、findings filtering/grouping UI、`app.stateSnapshot` refresh optimization，以及七条新本地规则：`frontmatter.tools-not-empty`、`permissions.network-declared`、`permissions.exec-needs-human`、`name.canonical-case`、`script.no-shebang`、`body.too-long`、`dependency.unknown`。Codex adapter core、commands/service、cwd→repo-root project discovery、macOS UI scan-all、agent filter、restart note、project context、config patch hardening、状态表达、安全回归、opencode native + compatibility root 扫描、guarded opencode permission writes、scanner/config/snapshot/service/UI/docs audit hardening、adapter changelog tracking、默认关闭的 LLM service/UI gate 和 request prepare/estimate 均已落地。V2.38 explicit external roots 已完成：`skills.external_dirs` 与 generic project roots 区分明确；Hermes writable/install 继续 blocked。V2.44 任务可用性评估已完成：`task.checkReadiness` 与 native Analysis readiness UI 均保持 read-only/user-triggered。
 
 **V2 剩余开发判定**
-- 当前 adapter baseline：Pi guarded native global/project/package toggle 已完成，但 install 和 compatibility-root writes blocked；opencode guarded `permission.skill` writes 和 native install 已完成，但 custom `skills.paths` / `skills.urls` deferred；Hermes/OpenClaw 保持 read-only，writable/install blocked。
+- 当前 adapter baseline：Pi guarded native global/project/package toggle 已完成，但 install 和 compatibility-root writes 在 V2.94 前继续 blocked；opencode guarded `permission.skill` writes 和 native install 已完成，但 custom `skills.paths` / `skills.urls` 排入 V2.93 前继续 blocked；Hermes/OpenClaw 保持 read-only，writable/install 分别排入 V2.95/V2.96 前继续 blocked。
 - 跨版本 backlog：不改变 V2.1-V2.10 closeout 状态，按 [`development-tasks.md`](./development-tasks.md) 的优先级单独推进。
 - 验证口径：代码/UI/协议变更继续跑 `pnpm check:macos`；用户可见、UI 或 service protocol 变更继续重跑真实本机 Computer Use。若未来 macOS/AX 无法解析窗口，必须重新记录 blocker，不能用 smoke 截图替代。
 
@@ -887,7 +911,7 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 | --- | --- | --- |
 | Codex skills spec 仍在演化 | adapter 频繁 breaking | doc 里维护 spec 版本号；spec 一变先升 catalog schema |
 | Pi / Hermes / OpenClaw 的真实写入语义未知 | 适配器猜错 | adapter capability matrix 必须展示 blocker；opencode writable 已在 V2.12 限定为 managed `permission.skill` writes 和 native install targets；Pi production writable、Hermes writable/install、OpenClaw writable/install 未完成 disposable rollback evidence 前继续 blocked |
-| Codex evidence 被误读成完整运行时支持 | 用户或 agent 误以为所有 Codex roots / project config / plugin skills 均已支持 | roadmap / AGENTS / adapter docs 明确：当前只实现 verified user/project roots + user-config writable；project config、plugin/admin/system roots 仍待后续决策 |
+| Codex evidence 被误读成完整运行时支持 | 用户或 agent 误以为所有 Codex roots / project config / plugin skills 均已支持 | roadmap / AGENTS / adapter docs 明确：当前只实现 verified user/project roots + user-config writable；project config、plugin/admin/system roots 已排入 V2.92，但在该 evidence slice 完成前继续 blocked |
 | 贡献者门槛（Rust） | 社区贡献慢 | doc 写明"轻量贡献（rule / UI）只需 TS / Rust 单语言"；提供 good first issue |
 | LLM 成本失控 | 用户被烧钱 | 月度上限 + 单次上限 + 默认 LLM 关闭 |
 | UI shell 被重新绑到框架专属 IPC | 破坏跨平台 UI 复用 | 所有产品 UI 只走 service protocol；不重新引入 Tauri IPC |
@@ -1094,7 +1118,7 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 
 ### V2.73-V2.86 Closeout
 
-2026-06-15 real-local audit 记录在 [`real-local-app-audit-2026-06-15.md`](./real-local-app-audit-2026-06-15.md)。V2.73 已完成 Task / remediation performance and timeout recovery；V2.74 已完成 Real-local launch and window targeting stability；V2.75 已完成 Task input and input-method resilience；V2.76 已完成 Progressive Cockpit feedback；V2.77 已完成 Real-local validation workbench；V2.78 已完成 Protocol / validation gate parity；V2.79 已完成 Privacy fixture and evidence-surface localization sweep；V2.80 Detail navigation and visual density polish completed；V2.81 Swift stdio sidecar cancellation cleanup completed；V2.82 test isolation and core model test floor completed；V2.83 continued module splitting completed；V2.84 Swift Detail section splitting completed；V2.85 Rust RPC domain module splitting completed；V2.86 Rust helper/test split and module-size gate closeout completed。
+2026-06-15 real-local audit was consolidated into the V2.73-V2.86 closeout line, and the standalone audit report has been removed. V2.73 已完成 Task / remediation performance and timeout recovery；V2.74 已完成 Real-local launch and window targeting stability；V2.75 已完成 Task input and input-method resilience；V2.76 已完成 Progressive Cockpit feedback；V2.77 已完成 Real-local validation workbench；V2.78 已完成 Protocol / validation gate parity；V2.79 已完成 Privacy fixture and evidence-surface localization sweep；V2.80 Detail navigation and visual density polish completed；V2.81 Swift stdio sidecar cancellation cleanup completed；V2.82 test isolation and core model test floor completed；V2.83 continued module splitting completed；V2.84 Swift Detail section splitting completed；V2.85 Rust RPC domain module splitting completed；V2.86 Rust helper/test split and module-size gate closeout completed。
 
 | Version | Work area | Status / scope | Non-goals |
 | --- | --- | --- | --- |
@@ -1103,7 +1127,7 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 | V2.75 | Task input and input-method resilience | Completed: AX-settable multiline Task Cockpit input, Chinese/emoji/multiline/space preservation, whitespace-only blocking, explicit Build submit, PID `43079` Computer Use evidence, and screenshot evidence | No raw prompt persistence, cloud sync, provider default calls, write paths, script execution, credential reads, telemetry, or broad text editor rewrite |
 | V2.76 | Progressive Cockpit feedback | Completed: split Cockpit loading into readiness/routing/cross-agent/remediation/provider/session stages with partial results, elapsed time, visible timeout/fallback/blocked/skipped rows, PID `39728` Computer Use evidence, and `skills-copilot.task-cockpit.stage-progress` | No new provider default calls, write/apply paths, script execution, credential reads, cloud sync, telemetry, or analytic endpoint |
 | V2.77 | Real-local validation workbench | Completed: surfaced validation preflight status and blocker explanations for locked session, window-not-found/no-AX-window, Screen Recording permission, stale or duplicate bundle, black/flat/transparent/invalid captures, Computer Use timeout, remote connection, activation failure, and unknown tool-layer failures; closeout includes `skills-copilot.validation-workbench`, PID `34909`, and `docs/ui-artifacts/v2.77-validation-workbench/completed.png` evidence | No replacement for unlocked manual visual review |
-| V2.78 | Protocol / validation gate parity | Completed: synchronized service-protocol docs with all 88 supported methods, added `pnpm verify:service-protocol-drift`, wired `pnpm verify:gate-parity` into local/CI gates, added file-level session review fixtures, preserved V2.46-V2.64 verification-history governance, and recorded completed `docs/v2.78-verification-checklist.md` evidence | No protocol rename, payload expansion, public release automation, provider/write/script/cloud/telemetry scope |
+| V2.78 | Protocol / validation gate parity | Completed: synchronized service-protocol docs with the then-current 88 supported methods, added `pnpm verify:service-protocol-drift`, wired `pnpm verify:gate-parity` into local/CI gates, added file-level session review fixtures, preserved V2.46-V2.64 verification-history governance, and recorded completed `docs/v2.78-verification-checklist.md` evidence | No protocol rename, payload expansion, public release automation, provider/write/script/cloud/telemetry scope |
 | V2.79 | Privacy fixture and evidence-surface localization sweep | Completed: replaced literal local host-port fixtures, extended privacy scanning for host-port fingerprints, applied path redaction/collapse/reveal plus Chinese localization across Guided Cleanup, Skill Map, Review, Task Cockpit, Provider Observability, Validation Workbench, and nested evidence cards; closeout is guarded by `pnpm verify:v2.79-docs`, PID `68064` Computer Use evidence, and `docs/ui-artifacts/v2.79-privacy-localization/completed.png` | No credential reads, no network behavior change, no scanner/catalog fact mutation, no provider/write/script/cloud/telemetry expansion |
 | V2.80 | Detail navigation and visual density polish | Completed: reset Detail scroll to a stable top anchor when switching major surfaces; added counted/collapsible dense evidence lists, screenshot-safe evidence labels, PID `82571` Computer Use evidence, and `docs/ui-artifacts/v2.80-detail-density/completed.png` | No new service method, provider default call, write/apply path, hidden task state, scanner/catalog fact mutation, script execution, credential read, raw prompt/response/trace persistence, cloud sync, telemetry, or public distribution |
 | V2.81 | Swift service IPC cancellation cleanup | Completed: added cancellation/timeout cleanup around short-lived stdio sidecar calls, including child-process termination, pipe-handle cleanup, Task Cockpit service-task cancellation, and bounded TERM-to-SIGKILL escalation for stubborn children | No daemon/socket redesign by default, service protocol method/payload changes, provider default calls, write/apply paths, hidden task state, scanner/catalog fact mutation, script execution, credential reads, raw prompt/response/trace persistence, cloud sync, telemetry, public distribution, signing/notarization/DMG/ZIP |
@@ -1125,7 +1149,7 @@ V2.76 closeout evidence is tracked in [`v2.76-verification-checklist.md`](./v2.7
 
 V2.77 closeout evidence is tracked in [`v2.77-verification-checklist.md`](./v2.77-verification-checklist.md) and guarded by `pnpm verify:v2.77-docs`. It records completed Real-local validation workbench evidence: canonical blocker explanations, evidence standards, fixture-smoke supporting-only guidance, no runnable validation actions, `skills-copilot.validation-workbench`, PID `34909`, unlocked Computer Use against `<repo>/dist/SkillsCopilot.app`, screenshot evidence at `docs/ui-artifacts/v2.77-validation-workbench/completed.png`, and no provider/write/apply/script/credential/cloud/telemetry scope expansion.
 
-V2.78 closeout evidence is tracked in [`v2.78-verification-checklist.md`](./v2.78-verification-checklist.md) and guarded by `pnpm verify:v2.78-docs`. It records completed protocol/validation gate parity evidence: current 88-method `SUPPORTED_METHODS` source-of-truth expectation, `pnpm verify:service-protocol-drift`, `pnpm verify:v2.78-docs`, `pnpm verify:gate-parity`, CI/local gate wiring, V2.46-V2.64 verification-history governance, file-level session review fixtures, and no protocol rename/payload expansion/provider/write/script/cloud/telemetry scope.
+V2.78 closeout evidence is tracked in [`v2.78-verification-checklist.md`](./v2.78-verification-checklist.md) and guarded by `pnpm verify:v2.78-docs`. It records completed protocol/validation gate parity evidence: the then-current 88-method `SUPPORTED_METHODS` source-of-truth expectation, `pnpm verify:service-protocol-drift`, `pnpm verify:v2.78-docs`, `pnpm verify:gate-parity`, CI/local gate wiring, V2.46-V2.64 verification-history governance, file-level session review fixtures, and no protocol rename/payload expansion/provider/write/script/cloud/telemetry scope.
 
 V2.79 closeout evidence is tracked in [`v2.79-verification-checklist.md`](./v2.79-verification-checklist.md) and guarded by `pnpm verify:v2.79-docs`. It records completed Privacy fixture and evidence-surface localization sweep evidence: fixed local host-port privacy scanning, non-local provider fixture destinations, screenshot-safe path rendering, English/zh-Hans evidence-surface coverage, focused tests, shared gates, PID `68064` real-local Computer Use, and `docs/ui-artifacts/v2.79-privacy-localization/completed.png`. No credential reads, network behavior change, scanner/catalog fact mutation, provider/write/script/cloud/telemetry expansion is allowed in V2.79.
 
@@ -1139,7 +1163,7 @@ V2.83 closeout evidence is tracked in [`v2.83-verification-checklist.md`](./v2.8
 
 V2.84 closeout evidence is tracked in [`v2.84-verification-checklist.md`](./v2.84-verification-checklist.md) and guarded by `pnpm verify:v2.84-docs`. It records completed Swift Detail section splitting: `DetailView.swift` acts as a small router/composer; `DetailGuidedCleanupFlowPanel.swift`, `DetailProviderObservabilityPanel.swift`, `DetailReviewCoreSection.swift`, and peer Detail section files preserve existing UI semantics; `verify:module-size` guards the split files; no fresh Computer Use screenshot is required because no user-visible native UI behavior changed.
 
-V2.85 closeout evidence is tracked in [`v2.85-verification-checklist.md`](./v2.85-verification-checklist.md) and guarded by `pnpm verify:v2.85-docs`. It records completed Rust RPC domain module splitting: `service_host.rs`, `service_cleanup.rs`, `service_knowledge.rs`, `service_llm.rs`, `service_remediation.rs`, and `service_task.rs` hold the split `ServiceHost` implementation, while protocol drift verification scans the split service files and preserves the 88-method protocol surface.
+V2.85 closeout evidence is tracked in [`v2.85-verification-checklist.md`](./v2.85-verification-checklist.md) and guarded by `pnpm verify:v2.85-docs`. It records completed Rust RPC domain module splitting: `service_host.rs`, `service_cleanup.rs`, `service_knowledge.rs`, `service_llm.rs`, `service_remediation.rs`, and `service_task.rs` hold the split `ServiceHost` implementation, while protocol drift verification scans the split service files and preserved the then-current 88-method protocol surface.
 
 V2.86 closeout evidence is tracked in [`v2.86-verification-checklist.md`](./v2.86-verification-checklist.md) and guarded by `pnpm verify:v2.86-docs`. It records completed Rust helper/test split and module-size gate closeout: `service_support_helpers.rs` and peer helper files plus chunks under `crates/service/src/tests/` are checked by `pnpm verify:module-size`, which is wired into `pnpm verify:gate-parity`.
 

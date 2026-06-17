@@ -15,9 +15,11 @@ coding agents working in this repository.
 
 ## Current State
 
-- Current phase: **V2.86 Rust helper/test split and module-size gate closeout completed**.
-- Completed baseline: V2.1-V2.86. The V2.41-V2.86 AI-native/read-only analysis, cockpit, validation, and module-splitting line is closed.
-- No post-V2.86 version has been selected.
+- Current phase: **V2.88 handoff and per-surface Agent Copilot evidence closeout completed**.
+- Completed baseline: V2.1-V2.88. V2.87 unlocked validation passed on 2026-06-17 via `pnpm check:macos`; V2.88 added Computer Use per-surface evidence under `docs/ui-artifacts/v2.88-handoff-evidence/`.
+- Completed product slice: Agent Copilot M1-M4. The displayed product name is Agent Copilot; internal bundle/module/AX/app-data identifiers may still contain `SkillsCopilot` / `skills-copilot` and must not be renamed without a migration plan.
+- Current Agent Copilot surfaces: Lineup default surface, Agent Profile, sorted read-only decision queue, default-off local session preview, and default-off MCP server preview.
+- Near-term post-V2.88 planning: V2.89-V2.96 cover brand assets, identifier migration, model-task history, Codex/opencode roots, Pi install/compat writes, and Hermes/OpenClaw writable/install evidence slices.
 - Maintained product UI: native macOS app in `apps/macos`.
 - Service boundary: Rust typed JSON stdio sidecar in `crates/service`.
 - Current app bundle path: `dist/SkillsCopilot.app`.
@@ -47,11 +49,11 @@ coding agents working in this repository.
 ## Adapter Scope
 
 - Claude Code, Codex, opencode, Pi, Hermes, and OpenClaw are the current adapter families.
-- Codex support is limited to verified user/project roots, cwd-to-repo-root project discovery, project-context scoped scanning, and user-config writable toggles through `~/.codex/config.toml` / `$CODEX_HOME/config.toml`.
-- Opencode writable support is limited to exact managed `permission.skill` overrides and native opencode install targets; compatibility roots are scan-only.
-- Pi writable support is limited to the V2.37 evidence-backed guarded native global/project/package toggle slice. Pi install and compatibility-root writes remain blocked.
-- Hermes external roots are explicit read-only roots. Do not infer generic project roots.
-- OpenClaw workspace scope is read-only and limited to `<workspace>/skills` and `<workspace>/.agents/skills`.
+- Codex support is limited to verified user/project roots, cwd-to-repo-root project discovery, project-context scoped scanning, and user-config writable toggles through `~/.codex/config.toml` / `$CODEX_HOME/config.toml`. Project config and plugin/admin/system root support is scheduled for V2.92; it remains blocked until that evidence slice closes.
+- Opencode writable support is limited to exact managed `permission.skill` overrides and native opencode install targets; compatibility roots are scan-only. Custom `skills.paths` / `skills.urls` support is scheduled for V2.93 and remains blocked until verified.
+- Pi writable support is limited to the V2.37 evidence-backed guarded native global/project/package toggle slice. Pi install and compatibility-root writes are scheduled for V2.94 and remain blocked until disposable evidence closes.
+- Hermes external roots are explicit read-only roots. Do not infer generic project roots. Hermes writable/install is scheduled for V2.95 and remains blocked until verified.
+- OpenClaw workspace scope is read-only and limited to `<workspace>/skills` and `<workspace>/.agents/skills`. OpenClaw writable/install is scheduled for V2.96 and remains blocked until verified.
 
 ## Safety Boundaries
 
@@ -127,7 +129,7 @@ This section keeps compact machine-checked milestone anchors. Full details live 
 - V2.75 completed boundary: Task input and input-method resilience, PID `43079`, no raw prompt persistence.
 - V2.76 completed boundary: Progressive Cockpit feedback, PID `39728`, `skills-copilot.task-cockpit.stage-progress`, no provider/write/execute/credentials/cloud/telemetry expansion.
 - V2.77 completed boundary: `skills-copilot.validation-workbench`, PID `34909`, no provider/write/apply/script/credential/cloud/telemetry expansion.
-- V2.78 completed boundary: Protocol / validation gate parity over all 88 `SUPPORTED_METHODS`, `pnpm verify:service-protocol-drift`, `pnpm verify:gate-parity`, file-level session review fixtures, and V2.46-V2.64 verification-history governance without invented evidence.
+- V2.78 completed boundary: Protocol / validation gate parity over the then-current 88 `SUPPORTED_METHODS`, `pnpm verify:service-protocol-drift`, `pnpm verify:gate-parity`, file-level session review fixtures, and V2.46-V2.64 verification-history governance without invented evidence.
 
 ### V2.79-V2.83
 
@@ -156,3 +158,5 @@ This section keeps compact machine-checked milestone anchors. Full details live 
 - V2.84 Swift Detail section splitting: `DetailView.swift`, `DetailGuidedCleanupFlowPanel.swift`, `verify:module-size`.
 - V2.85 Rust RPC domain module splitting: `service_host.rs`, `service_task.rs`.
 - V2.86 Rust helper/test split and module-size gate closeout: `service_support_helpers.rs`, `crates/service/src/tests/`, `verify:module-size`.
+- V2.87 Agent Copilot first pass: `AgentCopilotOverviewPanel.swift`, `AgentCopilotDecision.swift`, `LocalSessionPreview.swift`, `McpServerPreview.swift`, `service_task.rs`, `service_evidence.rs`, and protocol fixtures for `session.previewLocalSessions` / `evidence.previewMcpServers`.
+- V2.88 handoff/evidence closeout: `docs/v2.88-verification-checklist.md` and `docs/ui-artifacts/v2.88-handoff-evidence/` record unlocked Computer Use evidence for Lineup, Agent Profile, Local Session Preview, and MCP Preview.

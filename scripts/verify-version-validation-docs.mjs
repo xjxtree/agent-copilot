@@ -160,6 +160,32 @@ const versions = {
       "Final status decision: completed",
     ],
   },
+  "v2.87": {
+    title: "# V2.87 Verification Checklist",
+    required: [
+      "Agent Copilot first pass",
+      "Lineup default surface",
+      "Agent Profile",
+      "session.previewLocalSessions",
+      "evidence.previewMcpServers",
+      "90 methods",
+      "docs/ui-artifacts/native-macos-shell/completed.png",
+      "Final status decision: completed",
+    ],
+  },
+  "v2.88": {
+    title: "# V2.88 Verification Checklist",
+    required: [
+      "handoff and per-surface evidence",
+      "Lineup",
+      "Agent Profile",
+      "Local Session Preview",
+      "MCP Preview",
+      "docs/ui-artifacts/v2.88-handoff-evidence",
+      "/tmp/ac-v288",
+      "Final status decision: completed",
+    ],
+  },
 };
 
 const staleStatus = [

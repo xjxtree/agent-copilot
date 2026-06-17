@@ -1,7 +1,11 @@
-# skills-copilot — 架构总览
+# Agent Copilot — 架构总览
 
-> 状态：**V2.86 Rust helper/test split and module-size gate closeout completed**。
-> V2.1-V2.86 是当前同步完成基线。
+> Workspace / crate / bundle internals still use `skills-copilot` / `SkillsCopilot`
+> identifiers. Agent Copilot is the displayed product name; identifier migration
+> requires a separate data/validation migration plan.
+
+> 状态：**V2.87 Agent Copilot first implementation pass completed with unlocked macOS app-window evidence**。
+> V2.1-V2.87 是当前同步完成基线；V2.87 unlocked validation passed on 2026-06-17 via `pnpm check:macos`，并捕获完整 app-window smoke evidence。
 > 产品方向是 **Rust 跨平台核心 + service protocol + macOS SwiftUI/AppKit 原生壳**。
 > `crates/service` stdio sidecar 和 `apps/macos` SwiftUI 壳是当前产品边界。
 > macOS 原生 UI 是唯一维护的产品 UI；旧 Tauri + React UI / Tauri IPC 壳已删除。
@@ -26,6 +30,10 @@
   不触发 hidden apply/write/provider/script path。
 - V2.72 validation harness hardening 只影响验证脚本/文档，
   不影响运行时产品架构。
+- V2.87 Agent Copilot first pass adds Lineup, Agent Profile, sorted read-only
+  decision queue, default-off local session preview, and default-off MCP server
+  preview. These are local evidence surfaces and do not add provider defaults,
+  write/apply paths, script execution, credential reads, cloud sync, or telemetry.
 
 **非目标（首版）**
 - 不替代各 agent 的运行时（不解析它们的 prompt，不代理它们的工具调用）。

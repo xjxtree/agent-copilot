@@ -68,6 +68,25 @@ extension ServiceClient {
         }
     }
 
+    func previewLocalSessions(
+        authorizedRoots: [String],
+        agent: String? = nil,
+        limit: Int = 20
+    ) async throws -> LocalSessionPreviewResult {
+        let params = LocalSessionPreviewParams(
+            authorizedRoots: authorizedRoots,
+            agent: agent,
+            limit: limit,
+            maxFiles: 200,
+            maxExcerptChars: 1000
+        )
+        do {
+            return try await call(method: "session.previewLocalSessions", params: params)
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable()
+        }
+    }
+
     func listAgentSessionSkillReviews(
         taskText: String? = nil,
         agent: String? = nil,

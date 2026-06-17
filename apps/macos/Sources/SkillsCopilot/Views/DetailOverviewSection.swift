@@ -1,6 +1,8 @@
 import SwiftUI
 
 enum DetailSection: String, CaseIterable, Identifiable {
+    case lineup
+    case agentProfile
     case taskCockpit
     case validationWorkbench
     case overview
@@ -20,11 +22,24 @@ enum DetailSection: String, CaseIterable, Identifiable {
     }
 
     static var primaryWorkCases: [DetailSection] {
-        [.taskCockpit, .validationWorkbench, .skillMap, .guidedCleanup, .observability, .analysis]
+        [.lineup, .agentProfile, .taskCockpit, .validationWorkbench, .skillMap, .guidedCleanup, .observability, .analysis]
+    }
+
+    var requiresSelectedSkill: Bool {
+        switch self {
+        case .overview, .findings, .conflicts, .history:
+            return true
+        case .lineup, .agentProfile, .taskCockpit, .validationWorkbench, .skillMap, .cleanup, .guidedCleanup, .observability, .analysis:
+            return false
+        }
     }
 
     var title: String {
         switch self {
+        case .lineup:
+            return UIStrings.text("detail.lineup", "Lineup")
+        case .agentProfile:
+            return UIStrings.text("detail.agentProfile", "Agent Profile")
         case .taskCockpit:
             return UIStrings.taskCockpitTitle
         case .validationWorkbench:
@@ -52,6 +67,10 @@ enum DetailSection: String, CaseIterable, Identifiable {
 
     var systemImage: String {
         switch self {
+        case .lineup:
+            return "rectangle.3.group"
+        case .agentProfile:
+            return "person.crop.rectangle.stack"
         case .taskCockpit:
             return "rectangle.grid.2x2"
         case .validationWorkbench:
@@ -79,6 +98,10 @@ enum DetailSection: String, CaseIterable, Identifiable {
 
     var summary: String {
         switch self {
+        case .lineup:
+            return UIStrings.text("detail.section.lineup.summary", "Review the whole agent lineup by readiness, risks, cleanup pressure, provider context, and evidence-backed next navigation.")
+        case .agentProfile:
+            return UIStrings.text("detail.section.agentProfile.summary", "Inspect one agent's capability, health, scan state, and related read-only work surfaces.")
         case .taskCockpit:
             return UIStrings.text("detail.section.taskCockpit.summary", "Start from the current task and review readiness, routes, agents, skills, session context, provider context, gaps, blockers, and evidence in one read-only cockpit.")
         case .validationWorkbench:

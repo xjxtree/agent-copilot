@@ -1,6 +1,10 @@
 # 安全模型
 
-> skills-copilot 触达的内容天然是“会跑的代码”：skill 自带脚本，被各 agent 加载后可能被执行。
+> Product display name: Agent Copilot. Internal workspace, fallback config path,
+> app-data identity, bundle/module names, and AX identifiers may still use
+> `skills-copilot` / `SkillsCopilot`; do not rename those without a migration plan.
+
+> Agent Copilot 触达的内容天然是“会跑的代码”：skill 自带脚本，被各 agent 加载后可能被执行。
 >
 > 默认策略：**deny by default、显式 opt-in、最小权限**。
 >
@@ -223,6 +227,8 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
 - V2.64 export/cleanup is recommendation-only in this slice. Any future export/cleanup controls must be redacted, app-local, user-triggered, explicit, and separately validated.
 - Imported trace/log 必须本地脱敏后再允许进入 provider prompt；默认不得发送 credentials、tokens、real home paths、temp paths、private URLs 或 raw config secrets。
 - V2.62 Agent Session Skill Review 必须由用户显式导入/粘贴 trace 或未来显式选择本地 agent 会话后触发；不得后台索引全量 agent 历史，不得保存 raw transcript。仅允许保存 redacted metadata/excerpt、skill usage evidence refs、review outcome 与 safety flags。
+- V2.87 `session.previewLocalSessions` 是 default-off local evidence preview：必须由用户显式输入授权目录后触发，不得扫描默认 `~/.claude`、`~/.codex`、opencode 或其它 agent 会话存储。读取必须限制在 canonical authorized root 内，立即脱敏并只返回 redacted metadata/excerpt/evidence refs；不得创建 trace import/session review 记录，不得保存 raw transcript、raw prompt/response、secrets、unredacted paths，不得写 skill/config、mutate triage/snapshot、执行脚本、读取 credentials、发送 provider/network request、cloud sync 或 telemetry。
+- V2.87 `evidence.previewMcpServers` 是 default-off local evidence preview：必须由用户显式输入授权 MCP JSON config 文件后触发，不得扫描默认 agent/desktop config 位置。输出只允许 redacted server name/source/transport/command metadata、args count、env key count、evidence refs、redaction summary 与 safety flags；不得返回 env values、raw config content、credentials、unredacted paths，不得写 skill/config、mutate triage/snapshot、执行脚本、发送 provider/network request、cloud sync 或 telemetry。
 - V2.63 Local Skill Map 必须由用户显式触发，且只派生 existing catalog evidence、knowledge tags、similar groups、capability taxonomy、conflict/cross-agent analysis、task readiness/routing/session-review context、stale/drift 与 risk evidence。它不得创建新的 source of truth，不得默认持久化 map artifact，不得写 skill/config、snapshot、triage，不得执行脚本，不得默认发送 provider request，也不得保存 raw prompt/raw response/raw trace/secrets/unredacted local paths。
 - V2.65 Task-first Cockpit 只能聚合现有 local evidence 与 redacted provider/run metadata；不得创建新的 hidden task state source，不得自动触发 provider 请求或写入，不得持久化 raw prompt/response/trace/secrets/unredacted local paths。
 - V2.66 Skill Lifecycle Timeline 已完成；`skill.lifecycleTimeline` 只能从 existing catalog evidence、scan/provenance/fingerprint state、stale/drift、finding/triage/remediation history、prompt run metadata、provider observability metadata 与 session review outcomes 派生 redacted lifecycle metadata。它不得默认持久化 new raw lifecycle artifacts，不得写 skill files 或 agent config，不得 mutate triage，不得创建/回滚 snapshots，不得执行 scripts，不得默认发送 provider/network requests，不得读取 credentials，不得保存 raw skill content、raw prompt/response、raw trace/transcript、secrets 或 unredacted local paths，不得 cloud sync 或 telemetry。
@@ -230,7 +236,7 @@ V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit ext
 - V2.71 Guided Cleanup safe-action links 是 completed；`safe_action_deep_link` 与 `deep_link` 只能指向既有 read-only 或 preview-first 安全入口，且 `can_apply=false`。允许的目标包括 cleanup/detail、remediation plan/drafts/impact/batch review、skill lifecycle、task cockpit、safe batch preview panel context 和 guided step metadata record；禁止直接指向 `batch.applySkillToggles`、`config.toggleSkill`、script execution、provider confirmation 或任何隐藏写入/执行/确认路径。safe batch link 只打开上下文，不自动 preview/apply。
 - V2.72 Validation harness hardening 是 completed；只增加 validation blocker taxonomy、classifier CLI、lock-screen preflight、screenshot artifact failure labels 和 evidence matrix。它不改变 provider/network、skill/config write、triage、snapshot、script execution、credential、cloud sync 或 telemetry 边界。
 - V2.73 Task / remediation timeout recovery 是 completed；只增加 bounded local aggregation metadata、candidate/detail scan limits、timeout/fallback diagnostics、cancel/retry UI 和 stale completion protection。它不发送 provider request、不写 skill/config、不 mutate triage、不创建/回滚 snapshot、不执行 script、不读取 credential、不持久化 raw prompt/response/trace/secrets/unredacted local paths、不 cloud sync、不 telemetry。
-- V2.74-V2.86 are completed validation/refactor/testability slices: exact app launch/window targeting, resilient task input, progressive cockpit feedback, read-only validation workbench, protocol/gate parity, privacy/localization sweep, Detail density polish, Swift IPC cancellation cleanup, test isolation/core model floor, continued Swift/Rust module splitting, and module-size governance. They do not expand provider defaults, write/apply paths, script execution, credential reads, raw prompt/response/trace persistence, cloud sync, telemetry, signing/notarization, DMG/ZIP, or public distribution.
+- V2.74-V2.87 validation/refactor/testability/product slices keep the same safety boundary: exact app launch/window targeting, resilient task input, progressive cockpit feedback, read-only validation workbench, protocol/gate parity, privacy/localization sweep, Detail density polish, Swift IPC cancellation cleanup, test isolation/core model floor, continued Swift/Rust module splitting, module-size governance, and Agent Copilot read-only local evidence previews. They do not expand provider defaults, write/apply paths, script execution, credential reads, raw prompt/response/trace persistence, cloud sync, telemetry, signing/notarization, DMG/ZIP, or public distribution.
 - AI 输出永远是 untrusted suggestion；写入仍必须走已有 safe write path：preview-first、explicit confirm、snapshot、atomic write、readback verify、rollback。
 - AI 不能成为 `ExecutionRequester`，不能创建 `Completed` execution record，不能确认脚本执行。
 

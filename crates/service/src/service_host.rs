@@ -61,6 +61,14 @@ impl ServiceHost {
                 let adapter_ctx = self.effective_adapter_ctx()?;
                 serde_json::to_value(list_adapter_diagnostics(&adapter_ctx)).map_err(Into::into)
             }
+            "evidence.previewMcpServers" => {
+                let params: McpServerPreviewParams = if request.params.is_null() {
+                    McpServerPreviewParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.preview_mcp_servers(params)?).map_err(Into::into)
+            }
             "evidence.piWritableHarness" => {
                 let params: PiWritableHarnessParams = if request.params.is_null() {
                     PiWritableHarnessParams::default()
@@ -245,6 +253,14 @@ impl ServiceHost {
                 };
                 serde_json::to_value(self.build_skill_lifecycle_timeline(params)?)
                     .map_err(Into::into)
+            }
+            "session.previewLocalSessions" => {
+                let params: LocalSessionPreviewParams = if request.params.is_null() {
+                    LocalSessionPreviewParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.preview_local_sessions(params)?).map_err(Into::into)
             }
             "session.reviewAgentSkillUse" => {
                 let params: AgentSessionSkillReviewParams = if request.params.is_null() {
@@ -1670,18 +1686,25 @@ impl ServiceHost {
         &self,
         adapter_ctx: &AdapterContext,
     ) -> Vec<(String, &'static str)> {
-        let mut roots = vec![
-            (
-                self.app_data_dir.to_string_lossy().to_string(),
-                "<app-data-dir>",
-            ),
-            (adapter_ctx.user_home.to_string_lossy().to_string(), "$HOME"),
-        ];
+        fn push_root(
+            roots: &mut Vec<(String, &'static str)>,
+            path: &Path,
+            placeholder: &'static str,
+        ) {
+            roots.push((path.to_string_lossy().to_string(), placeholder));
+            if let Ok(canonical) = path.canonicalize() {
+                roots.push((canonical.to_string_lossy().to_string(), placeholder));
+            }
+        }
+
+        let mut roots = Vec::new();
+        push_root(&mut roots, &self.app_data_dir, "<app-data-dir>");
+        push_root(&mut roots, &adapter_ctx.user_home, "$HOME");
         if let Some(project_root) = adapter_ctx.project_root.as_ref() {
-            roots.push((project_root.to_string_lossy().to_string(), "<project-root>"));
+            push_root(&mut roots, project_root, "<project-root>");
         }
         if let Some(project_cwd) = adapter_ctx.project_cwd.as_ref() {
-            roots.push((project_cwd.to_string_lossy().to_string(), "<project-cwd>"));
+            push_root(&mut roots, project_cwd, "<project-cwd>");
         }
         roots.sort_by_key(|right| std::cmp::Reverse(right.0.len()));
         roots.dedup_by(|left, right| left.0 == right.0);

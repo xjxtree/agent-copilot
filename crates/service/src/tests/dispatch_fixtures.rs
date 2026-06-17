@@ -44,6 +44,10 @@ fn dispatch_coverage_params(method: &str) -> Value {
         "catalog.getSkill" | "config.toggleSkill" => {
             json!({ "instance_id": "missing-skill", "on": false })
         }
+        "evidence.previewMcpServers" => json!({
+            "authorized_config_paths": ["/tmp/skills-copilot-fixture-mcp.json"],
+            "limit": 4
+        }),
         "skill.exportBundle" => {
             json!({ "source_path": "/tmp/skills-copilot-missing-skill/SKILL.md" })
         }
@@ -195,6 +199,11 @@ fn dispatch_coverage_params(method: &str) -> Value {
             "agent": "codex",
             "selected_skill_id": "fixture-skill-id",
             "limit": 4
+        }),
+        "session.previewLocalSessions" => json!({
+            "authorized_roots": ["/tmp/skills-copilot-fixture-sessions"],
+            "limit": 4,
+            "max_excerpt_chars": 800
         }),
         "session.reviewAgentSkillUse" => json!({
             "content": "Fixture session selected fixture-skill-id for local routing.",
@@ -440,6 +449,58 @@ pub(super) struct WireAdapterDiagnosticAccessSummary {
 pub(super) struct WireAdapterDiagnosticLastScan {
     pub(super) status: String,
     pub(super) reason: String,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct WireMcpServerPreviewPath {
+    pub(super) path: String,
+    pub(super) status: String,
+    pub(super) server_count: usize,
+    pub(super) blocker: Option<String>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct WireMcpServerPreviewRow {
+    pub(super) id: String,
+    pub(super) name: String,
+    pub(super) source_path: String,
+    pub(super) transport: String,
+    pub(super) command: Option<String>,
+    pub(super) args_count: usize,
+    pub(super) env_key_count: usize,
+    pub(super) evidence_refs: Vec<String>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct WireMcpServerPreviewResult {
+    pub(super) generated_by: String,
+    pub(super) authorized: bool,
+    pub(super) authorization_required: bool,
+    pub(super) evidence_available: bool,
+    pub(super) evidence_insufficient: bool,
+    pub(super) authorized_paths: Vec<WireMcpServerPreviewPath>,
+    pub(super) count: usize,
+    pub(super) server_rows: Vec<WireMcpServerPreviewRow>,
+    pub(super) gap_notes: Vec<String>,
+    pub(super) blocker_notes: Vec<String>,
+    pub(super) redaction_summary: WireAgentSessionSkillReviewRedactionSummary,
+    pub(super) safety_flags: WireAgentSessionSkillReviewSafetyFlags,
+    pub(super) read_only: bool,
+    pub(super) provider_request_sent: bool,
+    pub(super) skill_files_mutated: bool,
+    pub(super) agent_config_mutated: bool,
+    pub(super) snapshot_created: bool,
+    pub(super) triage_mutated: bool,
+    pub(super) raw_prompt_persisted: bool,
+    pub(super) raw_response_persisted: bool,
+    pub(super) raw_trace_persisted: bool,
+    pub(super) credential_accessed: bool,
 }
 
 #[allow(dead_code)]
@@ -2841,6 +2902,58 @@ pub(super) struct WireAgentSessionSkillReviewSafetyFlags {
     pub(super) raw_trace_persisted: bool,
     pub(super) cloud_sync_performed: bool,
     pub(super) telemetry_emitted: bool,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct WireLocalSessionPreviewRoot {
+    pub(super) root: String,
+    pub(super) status: String,
+    pub(super) candidate_count: usize,
+    pub(super) blocker: Option<String>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct WireLocalSessionPreviewRow {
+    pub(super) id: String,
+    pub(super) title: String,
+    pub(super) source_kind: String,
+    pub(super) agent: Option<String>,
+    pub(super) redacted_path: String,
+    pub(super) modified_at: Option<i64>,
+    pub(super) excerpt: String,
+    pub(super) excerpt_char_count: usize,
+    pub(super) content_hash: String,
+    pub(super) evidence_refs: Vec<String>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct WireLocalSessionPreviewResult {
+    pub(super) generated_by: String,
+    pub(super) authorized: bool,
+    pub(super) authorization_required: bool,
+    pub(super) roots: Vec<WireLocalSessionPreviewRoot>,
+    pub(super) count: usize,
+    pub(super) total_candidate_count: usize,
+    pub(super) session_rows: Vec<WireLocalSessionPreviewRow>,
+    pub(super) gap_notes: Vec<String>,
+    pub(super) blocker_notes: Vec<String>,
+    pub(super) redaction_summary: WireAgentSessionSkillReviewRedactionSummary,
+    pub(super) safety_flags: WireAgentSessionSkillReviewSafetyFlags,
+    pub(super) read_only: bool,
+    pub(super) provider_request_sent: bool,
+    pub(super) skill_files_mutated: bool,
+    pub(super) agent_config_mutated: bool,
+    pub(super) snapshot_created: bool,
+    pub(super) triage_mutated: bool,
+    pub(super) raw_prompt_persisted: bool,
+    pub(super) raw_response_persisted: bool,
+    pub(super) raw_trace_persisted: bool,
 }
 
 #[allow(dead_code)]

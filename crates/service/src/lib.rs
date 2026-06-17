@@ -40,6 +40,7 @@ mod project_context;
 mod protocol;
 mod provider;
 mod service_cleanup;
+mod service_evidence;
 mod service_guided_cleanup_helpers;
 mod service_host;
 mod service_knowledge;
@@ -3026,6 +3027,123 @@ pub struct AgentSessionSkillReviewSafetyFlags {
     pub raw_trace_persisted: bool,
     pub cloud_sync_performed: bool,
     pub telemetry_emitted: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct McpServerPreviewParams {
+    #[serde(default, alias = "authorized_paths", alias = "config_paths")]
+    pub authorized_config_paths: Vec<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct McpServerPreviewPath {
+    pub path: String,
+    pub status: String,
+    pub server_count: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blocker: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct McpServerPreviewRow {
+    pub id: String,
+    pub name: String,
+    pub source_path: String,
+    pub transport: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    pub args_count: usize,
+    pub env_key_count: usize,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct McpServerPreviewResult {
+    pub generated_by: &'static str,
+    pub authorized: bool,
+    pub authorization_required: bool,
+    pub evidence_available: bool,
+    pub evidence_insufficient: bool,
+    pub authorized_paths: Vec<McpServerPreviewPath>,
+    pub count: usize,
+    pub server_rows: Vec<McpServerPreviewRow>,
+    pub gap_notes: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub redaction_summary: AgentSessionSkillReviewRedactionSummary,
+    pub safety_flags: AgentSessionSkillReviewSafetyFlags,
+    pub read_only: bool,
+    pub provider_request_sent: bool,
+    pub skill_files_mutated: bool,
+    pub agent_config_mutated: bool,
+    pub snapshot_created: bool,
+    pub triage_mutated: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_trace_persisted: bool,
+    pub credential_accessed: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct LocalSessionPreviewParams {
+    #[serde(default, alias = "authorized_dirs", alias = "authorized_paths")]
+    pub authorized_roots: Vec<String>,
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+    #[serde(default)]
+    pub max_files: Option<usize>,
+    #[serde(default)]
+    pub max_excerpt_chars: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LocalSessionPreviewRoot {
+    pub root: String,
+    pub status: String,
+    pub candidate_count: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blocker: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LocalSessionPreviewRow {
+    pub id: String,
+    pub title: String,
+    pub source_kind: String,
+    pub agent: Option<String>,
+    pub redacted_path: String,
+    pub modified_at: Option<i64>,
+    pub excerpt: String,
+    pub excerpt_char_count: usize,
+    pub content_hash: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LocalSessionPreviewResult {
+    pub generated_by: &'static str,
+    pub authorized: bool,
+    pub authorization_required: bool,
+    pub roots: Vec<LocalSessionPreviewRoot>,
+    pub count: usize,
+    pub total_candidate_count: usize,
+    pub session_rows: Vec<LocalSessionPreviewRow>,
+    pub gap_notes: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub redaction_summary: AgentSessionSkillReviewRedactionSummary,
+    pub safety_flags: AgentSessionSkillReviewSafetyFlags,
+    pub read_only: bool,
+    pub provider_request_sent: bool,
+    pub skill_files_mutated: bool,
+    pub agent_config_mutated: bool,
+    pub snapshot_created: bool,
+    pub triage_mutated: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_trace_persisted: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

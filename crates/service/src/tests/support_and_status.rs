@@ -74,6 +74,7 @@ fn status_request_returns_supported_methods() {
     assert!(methods.contains(&Value::String("app.version".to_string())));
     assert!(methods.contains(&Value::String("app.stateSnapshot".to_string())));
     assert!(methods.contains(&Value::String("adapter.listDiagnostics".to_string())));
+    assert!(methods.contains(&Value::String("evidence.previewMcpServers".to_string())));
     assert!(methods.contains(&Value::String("analysis.scoreSkillQuality".to_string())));
     assert!(methods.contains(&Value::String("analysis.detectStaleDrift".to_string())));
     assert!(methods.contains(&Value::String("knowledge.search".to_string())));
@@ -100,6 +101,7 @@ fn status_request_returns_supported_methods() {
     assert!(methods.contains(&Value::String("task.saveRoutingBaseline".to_string())));
     assert!(methods.contains(&Value::String("task.detectRoutingRegression".to_string())));
     assert!(methods.contains(&Value::String("routing.accuracyDashboard".to_string())));
+    assert!(methods.contains(&Value::String("session.previewLocalSessions".to_string())));
     assert!(methods.contains(&Value::String("session.reviewAgentSkillUse".to_string())));
     assert!(methods.contains(&Value::String("session.listSkillReviews".to_string())));
     assert!(methods.contains(&Value::String("session.deleteSkillReview".to_string())));

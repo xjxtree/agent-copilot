@@ -26,7 +26,15 @@ struct DetailView: View {
                             SuccessBanner(message: message)
                         }
 
-                        if store.selectedDetailSection == .taskCockpit {
+                        if store.selectedDetailSection == .lineup {
+                            DetailSectionSwitcher(selection: $store.selectedDetailSection)
+
+                            AgentCopilotOverviewPanel()
+                        } else if store.selectedDetailSection == .agentProfile {
+                            DetailSectionSwitcher(selection: $store.selectedDetailSection)
+
+                            AgentProfilePanel()
+                        } else if store.selectedDetailSection == .taskCockpit {
                             DetailSectionSwitcher(selection: $store.selectedDetailSection)
 
                             TaskCockpitPanel(
@@ -109,7 +117,7 @@ struct DetailView: View {
                             DetailSectionSwitcher(selection: $store.selectedDetailSection)
 
                             switch store.selectedDetailSection {
-                            case .taskCockpit, .validationWorkbench, .guidedCleanup, .observability:
+                            case .lineup, .agentProfile, .taskCockpit, .validationWorkbench, .guidedCleanup, .observability:
                                 EmptyView()
                             case .overview:
                                 VStack(alignment: .leading, spacing: 16) {
@@ -460,12 +468,15 @@ struct DetailView: View {
                                 agentSessionSkillReviewTranscript: $store.agentSessionSkillReviewTranscript,
                                 agentSessionSkillReviewTask: $store.agentSessionSkillReviewTask,
                                 agentSessionSkillReviewExpectedSkills: $store.agentSessionSkillReviewExpectedSkills,
+                                localSessionPreviewRoots: $store.localSessionPreviewRoots,
                                 agentSessionSkillReviewList: store.agentSessionSkillReviewList,
                                 agentSessionSkillReviewResult: store.agentSessionSkillReviewResult,
                                 agentSessionSkillReviewDeleteResult: store.agentSessionSkillReviewDeleteResult,
+                                localSessionPreviewResult: store.localSessionPreviewResult,
                                 latestAgentSessionSkillReview: store.latestAgentSessionSkillReview,
                                 isLoadingAgentSessionSkillReviews: store.isLoadingAgentSessionSkillReviews,
                                 isReviewingAgentSessionSkillUse: store.isReviewingAgentSessionSkillUse,
+                                isPreviewingLocalSessions: store.isPreviewingLocalSessions,
                                 isDeletingAgentSessionSkillReview: { record in store.isDeletingAgentSessionSkillReview(record) },
                                 onLoadAgentSessionSkillReviews: {
                                     Task {
@@ -475,6 +486,11 @@ struct DetailView: View {
                                 onReviewAgentSessionSkillUse: {
                                     Task {
                                         await store.reviewAgentSessionSkillUse()
+                                    }
+                                },
+                                onPreviewLocalSessions: {
+                                    Task {
+                                        await store.previewLocalSessions()
                                     }
                                 },
                                 onDeleteAgentSessionSkillReview: { record in

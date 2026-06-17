@@ -135,15 +135,19 @@ struct AnalysisSection: View {
     @Binding var agentSessionSkillReviewTranscript: String
     @Binding var agentSessionSkillReviewTask: String
     @Binding var agentSessionSkillReviewExpectedSkills: String
+    @Binding var localSessionPreviewRoots: String
     let agentSessionSkillReviewList: AgentSessionSkillReviewListResult
     let agentSessionSkillReviewResult: AgentSessionSkillReviewResult?
     let agentSessionSkillReviewDeleteResult: AgentSessionSkillReviewDeleteResult?
+    let localSessionPreviewResult: LocalSessionPreviewResult
     let latestAgentSessionSkillReview: AgentSessionSkillReviewRecord?
     let isLoadingAgentSessionSkillReviews: Bool
     let isReviewingAgentSessionSkillUse: Bool
+    let isPreviewingLocalSessions: Bool
     let isDeletingAgentSessionSkillReview: (AgentSessionSkillReviewRecord) -> Bool
     let onLoadAgentSessionSkillReviews: () -> Void
     let onReviewAgentSessionSkillUse: () -> Void
+    let onPreviewLocalSessions: () -> Void
     let onDeleteAgentSessionSkillReview: (AgentSessionSkillReviewRecord) -> Void
     let onLoadTraceImports: () -> Void
     let onImportTrace: () -> Void
@@ -271,15 +275,19 @@ struct AnalysisSection: View {
                 transcriptText: $agentSessionSkillReviewTranscript,
                 taskText: $agentSessionSkillReviewTask,
                 expectedSkills: $agentSessionSkillReviewExpectedSkills,
+                localSessionRoots: $localSessionPreviewRoots,
                 listResult: agentSessionSkillReviewList,
                 reviewResult: agentSessionSkillReviewResult,
                 deleteResult: agentSessionSkillReviewDeleteResult,
+                localSessionPreviewResult: localSessionPreviewResult,
                 latestRecord: latestAgentSessionSkillReview,
                 isLoading: isLoadingAgentSessionSkillReviews,
                 isReviewing: isReviewingAgentSessionSkillUse,
+                isPreviewingLocalSessions: isPreviewingLocalSessions,
                 isDeleting: isDeletingAgentSessionSkillReview,
                 onLoad: onLoadAgentSessionSkillReviews,
                 onReview: onReviewAgentSessionSkillUse,
+                onPreviewLocalSessions: onPreviewLocalSessions,
                 onDelete: onDeleteAgentSessionSkillReview
             )
         }

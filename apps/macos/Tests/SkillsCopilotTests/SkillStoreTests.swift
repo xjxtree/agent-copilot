@@ -4,7 +4,7 @@ import Foundation
 @MainActor
 struct SkillStoreTests {
     func run() async throws {
-        try defaultNavigationStartsAtTaskCockpit()
+        try defaultNavigationStartsAtLineup()
         try await reloadKeepsSelectedSkillWhenItStillExists()
         try await reloadFallsBackToFirstSkillWhenSelectionIsMissing()
         try await emptyCatalogKeepsFriendlyEmptyModel()
@@ -89,9 +89,9 @@ struct SkillStoreTests {
         try await previewScriptExecutionSafetyStoresBlockedPreviewWithoutExecute()
     }
 
-    private func defaultNavigationStartsAtTaskCockpit() throws {
+    private func defaultNavigationStartsAtLineup() throws {
         let store = SkillStore(service: ServiceClient())
-        try expectEqual(store.selectedDetailSection, .taskCockpit, "V2.68 should make Task Cockpit the default detail entry.")
+        try expectEqual(store.selectedDetailSection, .lineup, "Agent Copilot should start at the lineup decision overview.")
     }
 
     private func reloadKeepsSelectedSkillWhenItStillExists() async throws {

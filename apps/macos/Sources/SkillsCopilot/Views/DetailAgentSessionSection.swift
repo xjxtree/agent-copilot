@@ -122,15 +122,19 @@ struct AgentSessionSkillReviewPanel: View {
     @Binding var transcriptText: String
     @Binding var taskText: String
     @Binding var expectedSkills: String
+    @Binding var localSessionRoots: String
     let listResult: AgentSessionSkillReviewListResult
     let reviewResult: AgentSessionSkillReviewResult?
     let deleteResult: AgentSessionSkillReviewDeleteResult?
+    let localSessionPreviewResult: LocalSessionPreviewResult
     let latestRecord: AgentSessionSkillReviewRecord?
     let isLoading: Bool
     let isReviewing: Bool
+    let isPreviewingLocalSessions: Bool
     let isDeleting: (AgentSessionSkillReviewRecord) -> Bool
     let onLoad: () -> Void
     let onReview: () -> Void
+    let onPreviewLocalSessions: () -> Void
     let onDelete: (AgentSessionSkillReviewRecord) -> Void
 
     var body: some View {
@@ -151,6 +155,13 @@ struct AgentSessionSkillReviewPanel: View {
             Label(UIStrings.agentSessionReviewNoWriteBoundary, systemImage: "nosign")
                 .font(.callout)
                 .foregroundStyle(.secondary)
+
+            LocalSessionPreviewPanel(
+                roots: $localSessionRoots,
+                result: localSessionPreviewResult,
+                isPreviewing: isPreviewingLocalSessions,
+                onPreview: onPreviewLocalSessions
+            )
 
             VStack(alignment: .leading, spacing: 8) {
                 TextField(UIStrings.agentSessionReviewTaskPlaceholder, text: $taskText, axis: .vertical)
@@ -229,6 +240,108 @@ struct AgentSessionSkillReviewPanel: View {
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
         .adaptiveMaterialSurface()
+    }
+}
+
+struct LocalSessionPreviewPanel: View {
+    @Binding var roots: String
+    let result: LocalSessionPreviewResult
+    let isPreviewing: Bool
+    let onPreview: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(UIStrings.text("localSessionPreview.title", "Local Session Sources"), systemImage: "folder.badge.gearshape")
+                    .font(.callout.bold())
+                Spacer()
+                Text(UIStrings.text("localSessionPreview.mode", "Explicit authorization"))
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(UIStrings.text("localSessionPreview.boundary", "Preview is default-off: enter authorized local session directories explicitly. The preview reads redacted metadata/excerpts only and does not create trace or review records."))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            TextField(UIStrings.text("localSessionPreview.placeholder", "One authorized directory per line"), text: $roots, axis: .vertical)
+                .textFieldStyle(.roundedBorder)
+                .lineLimit(1...3)
+
+            HStack(spacing: 8) {
+                Button {
+                    onPreview()
+                } label: {
+                    Label(UIStrings.text("localSessionPreview.action", "Preview Sessions"), systemImage: "eye")
+                }
+                .disabled(isPreviewing)
+
+                if isPreviewing {
+                    Label(UIStrings.llmPreparing, systemImage: "hourglass")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+            }
+
+            if result.authorizationRequired {
+                Label(UIStrings.text("localSessionPreview.authorizationRequired", "No directory is authorized, so no default agent session store was scanned."), systemImage: "lock")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            ForEach(result.blockerNotes.prefix(3), id: \.self) { note in
+                PrivacyEvidenceText(value: note, font: .caption, lineLimit: 2)
+            }
+
+            if !result.roots.isEmpty {
+                DenseDisclosureList(result.roots.map(rootLabel), visibleLimit: 3, spacing: 4) { root in
+                    PrivacyEvidenceText(value: root, font: .caption2, lineLimit: 1)
+                }
+            }
+
+            if result.sessionRows.isEmpty {
+                Text(result.fallbackReason ?? UIStrings.text("localSessionPreview.noRows", "No redacted local session previews are loaded."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(result.sessionRows.prefix(6)) { row in
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text(row.title)
+                                    .font(.caption.bold())
+                                    .lineLimit(1)
+                                Spacer()
+                                if let agent = row.agent, !agent.isEmpty {
+                                    Text(DisplayText.agent(agent))
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            PrivacyEvidenceText(value: row.redactedPath, font: .caption2, lineLimit: 1)
+                            PrivacyEvidenceText(value: row.excerpt, font: .caption, lineLimit: 3)
+                            RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: row.evidenceRefs, systemImage: "checklist")
+                        }
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.18), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func rootLabel(_ root: LocalSessionPreviewRoot) -> String {
+        if let blocker = root.blocker, !blocker.isEmpty {
+            return "\(root.root) · \(root.status) · \(blocker)"
+        }
+        return "\(root.root) · \(root.status) · \(root.candidateCount)"
     }
 }
 

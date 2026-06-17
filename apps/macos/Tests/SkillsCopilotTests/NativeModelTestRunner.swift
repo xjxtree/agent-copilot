@@ -79,6 +79,9 @@ public func runNativeModelTests() {
         try AgentConfigTimelineModelTests().run()
         try LocalizationModelTests().run()
         try MainWindowModelTests().run()
+        try AgentCopilotDecisionModelTests().run()
+        try LocalSessionPreviewModelTests().run()
+        try McpServerPreviewModelTests().run()
         try SkillListModelTests().run()
         try runAsyncTest {
             try await ServiceClientProcessTests().run()

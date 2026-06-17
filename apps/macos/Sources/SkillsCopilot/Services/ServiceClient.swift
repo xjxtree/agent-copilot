@@ -794,6 +794,22 @@ struct AgentSessionSkillReviewDeleteParams: Encodable {
     }
 }
 
+struct LocalSessionPreviewParams: Encodable {
+    let authorizedRoots: [String]
+    let agent: String?
+    let limit: Int?
+    let maxFiles: Int?
+    let maxExcerptChars: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case authorizedRoots = "authorized_roots"
+        case agent
+        case limit
+        case maxFiles = "max_files"
+        case maxExcerptChars = "max_excerpt_chars"
+    }
+}
+
 struct PrepareLLMActionParams: Encodable {
     let action: LLMAction
     let instanceId: String

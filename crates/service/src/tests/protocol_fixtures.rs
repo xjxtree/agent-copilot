@@ -280,6 +280,31 @@ pub(super) fn decode_response_fixture(method: &str, result: &Value, path: &Path)
                 .iter()
                 .any(|diagnostic| diagnostic.access.writable_status == "blocked"));
         }
+        "evidence.previewMcpServers" => {
+            let preview: WireMcpServerPreviewResult = decode_fixture_result(method, result, path);
+            assert_eq!(preview.generated_by, "local-v2.87");
+            assert!(preview.authorized);
+            assert!(!preview.authorization_required);
+            assert!(preview.evidence_available);
+            assert!(!preview.evidence_insufficient);
+            assert_eq!(preview.count, preview.server_rows.len());
+            assert!(preview.read_only);
+            assert!(!preview.provider_request_sent);
+            assert!(!preview.skill_files_mutated);
+            assert!(!preview.agent_config_mutated);
+            assert!(!preview.snapshot_created);
+            assert!(!preview.triage_mutated);
+            assert!(!preview.raw_prompt_persisted);
+            assert!(!preview.raw_response_persisted);
+            assert!(!preview.raw_trace_persisted);
+            assert!(!preview.credential_accessed);
+            assert_agent_session_review_safety(&preview.safety_flags);
+            assert!(!preview.redaction_summary.raw_trace_persisted);
+            for row in &preview.server_rows {
+                assert!(!row.evidence_refs.is_empty());
+                assert!(!row.source_path.is_empty());
+            }
+        }
         "evidence.piWritableHarness" => {
             let report: WirePiWritableHarnessReport = decode_fixture_result(method, result, path);
             assert!(!report.production_writes_enabled);
@@ -783,6 +808,28 @@ pub(super) fn decode_response_fixture(method: &str, result: &Value, path: &Path)
             }
             for row in &timeline.agent_rows {
                 assert_agent_readiness_safety_flags(&row.safety_flags);
+            }
+        }
+        "session.previewLocalSessions" => {
+            let preview: WireLocalSessionPreviewResult =
+                decode_fixture_result(method, result, path);
+            assert_eq!(preview.generated_by, "local-v2.87");
+            assert!(preview.read_only);
+            assert!(!preview.provider_request_sent);
+            assert!(!preview.skill_files_mutated);
+            assert!(!preview.agent_config_mutated);
+            assert!(!preview.snapshot_created);
+            assert!(!preview.triage_mutated);
+            assert!(!preview.raw_prompt_persisted);
+            assert!(!preview.raw_response_persisted);
+            assert!(!preview.raw_trace_persisted);
+            assert_eq!(preview.count, preview.session_rows.len());
+            assert_agent_session_review_safety(&preview.safety_flags);
+            assert!(!preview.redaction_summary.raw_trace_persisted);
+            for row in &preview.session_rows {
+                assert_eq!(row.source_kind, "authorized-local-session");
+                assert!(!row.excerpt.is_empty());
+                assert!(!row.evidence_refs.is_empty());
             }
         }
         "task.listBenchmarks" => {

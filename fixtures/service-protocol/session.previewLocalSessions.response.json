@@ -1,0 +1,87 @@
+{
+  "id": "fixture-session-preview-local",
+  "ok": true,
+  "result": {
+    "generated_by": "local-v2.87",
+    "authorized": true,
+    "authorization_required": false,
+    "roots": [
+      {
+        "root": "$HOME/.codex/sessions",
+        "status": "authorized-read-only",
+        "candidate_count": 1
+      }
+    ],
+    "count": 1,
+    "total_candidate_count": 1,
+    "session_rows": [
+      {
+        "id": "local-session-fixturehash",
+        "title": "fixture-session",
+        "source_kind": "authorized-local-session",
+        "agent": "codex",
+        "redacted_path": "$HOME/.codex/sessions/fixture-session.jsonl",
+        "modified_at": 1781600000000,
+        "excerpt": "{\"role\":\"assistant\",\"content\":\"Used fixture-skill-id for local task with <redacted>.\"}",
+        "excerpt_char_count": 82,
+        "content_hash": "fixturehash",
+        "evidence_refs": [
+          "session.path:$HOME/.codex/sessions/fixture-session.jsonl",
+          "session.content_hash:fixturehash"
+        ]
+      }
+    ],
+    "gap_notes": [],
+    "blocker_notes": [],
+    "redaction_summary": {
+      "status": "redacted-local-only",
+      "redacted_value_count": 2,
+      "redacted_fields": [
+        "local paths",
+        "secret-like tokens and private URLs"
+      ],
+      "placeholders": [
+        "$HOME",
+        "<project-root>",
+        "<project-cwd>",
+        "<app-data-dir>",
+        "<redacted>",
+        "<redacted-url>"
+      ],
+      "raw_trace_persisted": false,
+      "raw_prompt_persisted": false,
+      "raw_response_persisted": false,
+      "raw_secret_returned": false
+    },
+    "safety_flags": {
+      "read_only": true,
+      "app_local_only": true,
+      "provider_request_sent": false,
+      "write_back_allowed": false,
+      "write_actions_available": false,
+      "skill_files_mutated": false,
+      "agent_config_mutated": false,
+      "script_execution_allowed": false,
+      "execution_actions_available": false,
+      "config_mutation_allowed": false,
+      "snapshot_created": false,
+      "triage_mutation_allowed": false,
+      "credential_accessed": false,
+      "raw_secret_returned": false,
+      "raw_prompt_persisted": false,
+      "raw_response_persisted": false,
+      "raw_trace_persisted": false,
+      "cloud_sync_performed": false,
+      "telemetry_emitted": false
+    },
+    "read_only": true,
+    "provider_request_sent": false,
+    "skill_files_mutated": false,
+    "agent_config_mutated": false,
+    "snapshot_created": false,
+    "triage_mutated": false,
+    "raw_prompt_persisted": false,
+    "raw_response_persisted": false,
+    "raw_trace_persisted": false
+  }
+}

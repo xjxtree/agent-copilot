@@ -10,6 +10,9 @@ const files = {
   app: await read("apps/macos/Sources/SkillsCopilot/App/SkillsCopilotApp.swift"),
   content: await read("apps/macos/Sources/SkillsCopilot/Views/ContentView.swift"),
   detail: await read("apps/macos/Sources/SkillsCopilot/Views/DetailView.swift"),
+  agentCopilotOverview: await read("apps/macos/Sources/SkillsCopilot/Views/AgentCopilotOverviewPanel.swift"),
+  agentCopilotDecision: await read("apps/macos/Sources/SkillsCopilot/Models/AgentCopilotDecision.swift"),
+  mcpServerPreview: await read("apps/macos/Sources/SkillsCopilot/Models/McpServerPreview.swift"),
   detailOverview: await read("apps/macos/Sources/SkillsCopilot/Views/DetailOverviewSection.swift"),
   detailPrimitives: await read("apps/macos/Sources/SkillsCopilot/Views/DetailPresentationPrimitives.swift"),
   detailReviewCore: await read("apps/macos/Sources/SkillsCopilot/Views/DetailReviewCoreSection.swift"),
@@ -28,6 +31,7 @@ const files = {
   guidedCleanupModel: await read("apps/macos/Sources/SkillsCopilot/Models/GuidedCleanupFlow.swift"),
   privacyPath: await read("apps/macos/Sources/SkillsCopilot/Views/PrivacyPathView.swift"),
   serviceClient: await read("apps/macos/Sources/SkillsCopilot/Services/ServiceClient.swift"),
+  serviceClientEvidence: await read("apps/macos/Sources/SkillsCopilot/Services/ServiceClientEvidenceRPC.swift"),
   serviceClientTransport: await read("apps/macos/Sources/SkillsCopilot/Services/ServiceClientTransport.swift"),
   serviceProcessRunner: await read("apps/macos/Sources/SkillsCopilot/Services/ServiceProcessRunner.swift"),
   settings: await read("apps/macos/Sources/SkillsCopilot/Views/SettingsView.swift"),
@@ -47,6 +51,7 @@ const files = {
 };
 files.detailSurface = [
   files.detail,
+  files.agentCopilotOverview,
   files.detailOverview,
   files.detailPrimitives,
   files.detailReviewCore,
@@ -65,6 +70,7 @@ files.detailSurface = [
 ].join("\n");
 files.serviceIPC = [
   files.serviceClient,
+  files.serviceClientEvidence,
   files.serviceClientTransport,
   files.serviceProcessRunner,
 ].join("\n");
@@ -140,12 +146,32 @@ const checks = [
   {
     label: "detail sections expose task-first IA summaries",
     text: files.detailSurface,
-    pattern: /static var primaryWorkCases:[\s\S]*?\[\.taskCockpit,\s*\.validationWorkbench,\s*\.skillMap,\s*\.guidedCleanup,\s*\.observability,\s*\.analysis\][\s\S]*?UIStrings\.taskCockpitTitle[\s\S]*?UIStrings\.validationWorkbenchTitle[\s\S]*?UIStrings\.guidedCleanupFlowTitle[\s\S]*?UIStrings\.providerObservabilityTitle/,
+    pattern: /static var primaryWorkCases:[\s\S]*?\[\.lineup,\s*\.agentProfile,\s*\.taskCockpit,\s*\.validationWorkbench,\s*\.skillMap,\s*\.guidedCleanup,\s*\.observability,\s*\.analysis\][\s\S]*?UIStrings\.taskCockpitTitle[\s\S]*?UIStrings\.validationWorkbenchTitle[\s\S]*?UIStrings\.guidedCleanupFlowTitle[\s\S]*?UIStrings\.providerObservabilityTitle/,
   },
   {
     label: "task cockpit renders before empty detail fallback",
     text: files.detailSurface,
-    pattern: /if store\.selectedDetailSection == \.taskCockpit[\s\S]*?TaskCockpitPanel\([\s\S]*?else if let skill[\s\S]*?EmptyDetailView\(\)/,
+    pattern: /else if store\.selectedDetailSection == \.taskCockpit[\s\S]*?TaskCockpitPanel\([\s\S]*?else if let skill[\s\S]*?EmptyDetailView\(\)/,
+  },
+  {
+    label: "local session preview is default-off, explicitly authorized, and privacy-rendered",
+    text: files.detailAgentSession + "\n" + files.storeSurface + "\n" + files.serviceProtocol,
+    pattern: /LocalSessionPreviewPanel\([\s\S]*?roots:\s*\$localSessionRoots[\s\S]*?Preview is default-off[\s\S]*?TextField\(UIStrings\.text\("localSessionPreview\.placeholder"[\s\S]*?PrivacyEvidenceText\(value:\s*row\.redactedPath[\s\S]*?PrivacyEvidenceText\(value:\s*row\.excerpt[\s\S]*?func previewLocalSessions\(\)\s*async[\s\S]*?service\.previewLocalSessions[\s\S]*?session\.previewLocalSessions/,
+  },
+  {
+    label: "MCP server preview is default-off, explicitly authorized, and privacy-rendered",
+    text: files.agentCopilotOverview + "\n" + files.storeSurface + "\n" + files.serviceClientEvidence + "\n" + files.mcpServerPreview + "\n" + files.serviceProtocol,
+    pattern: /McpServerPreviewPanel\([\s\S]*?paths:\s*\$store\.mcpServerPreviewPaths[\s\S]*?Preview is default-off[\s\S]*?TextField\(UIStrings\.text\("mcpServerPreview\.placeholder"[\s\S]*?PrivacyEvidenceText\(value:\s*row\.sourcePath[\s\S]*?PrivacyEvidenceText\(value:\s*command[\s\S]*?func previewMcpServers\(\)\s*async[\s\S]*?service\.previewMcpServers[\s\S]*?evidence\.previewMcpServers/,
+  },
+  {
+    label: "Agent Copilot object-level overview renders before skill detail fallback",
+    text: files.detailSurface,
+    pattern: /if store\.selectedDetailSection == \.lineup[\s\S]*?AgentCopilotOverviewPanel\(\)[\s\S]*?else if store\.selectedDetailSection == \.agentProfile[\s\S]*?AgentProfilePanel\(\)[\s\S]*?else if let skill/,
+  },
+  {
+    label: "Agent Copilot decision queue has explicit sorted priority and evidence refs",
+    text: files.agentCopilotDecision + "\n" + files.agentCopilotOverview,
+    pattern: /enum AgentCopilotDecisionPriority:[\s\S]*?case critical = 400[\s\S]*?static func sorted\([\s\S]*?left\.priority > right\.priority[\s\S]*?impactScore[\s\S]*?evidenceRefs\.count[\s\S]*?return AgentCopilotDecisionModel\.sorted\(items\)[\s\S]*?DenseDisclosureList\(item\.evidenceRefs,\s*visibleLimit:\s*3[\s\S]*?PrivacyEvidenceText\(value:\s*evidenceRef/,
   },
   {
     label: "guided cleanup renders safe-link buttons",
@@ -438,10 +464,10 @@ const nativeIPCCleanupChecks = [
       && !/(cancel|timeout|pid|socket|daemon|token)/i.test(serviceRequestBody),
   },
   {
-    label: "V2.81 protocol method surface remains the V2.78 88-method contract",
-    passed: supportedMethods.length === 88
-      && statusFixtureMethods.length === 88
-      && /current count is 88 methods/.test(files.serviceProtocol),
+    label: "V2.87 Agent Copilot protocol method surface remains the current 90-method contract",
+    passed: supportedMethods.length === 90
+      && statusFixtureMethods.length === 90
+      && /current count is 90 methods/.test(files.serviceProtocol),
   },
   {
     label: "V2.81 protocol surface has no IPC control, daemon, process, or socket methods",

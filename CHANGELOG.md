@@ -15,13 +15,13 @@ Current usage:
 
 Current release-readiness guardrails:
 
-- V2.1-V2.86 are the synchronized completed baseline.
+- V2.1-V2.88 are the synchronized completed baseline.
 - Real local validation evidence is version-specific. Use the matching verification checklist for exact screenshots, blockers, and commands.
 - Fixture smoke screenshots still do not replace required real local validation for user-visible changes.
 - Tool-global import/export/install is integrated. Local directory import writes only app-controlled staging/catalog, export creates reproducible local bundles, and confirmed install routes through verified write paths.
 - Opencode writable support is guarded and limited to verified managed `permission.skill` behavior and native install targets.
-- Pi production toggle is guarded and limited to the V2.37 evidence-backed global/project/package slice; Pi install remains blocked.
-- Hermes and OpenClaw remain read-only; writable/install support remains blocked.
+- Pi production toggle is guarded and limited to the V2.37 evidence-backed global/project/package slice; Pi install remains blocked until the planned V2.94 disposable evidence slice closes.
+- Hermes and OpenClaw remain read-only; writable/install support remains blocked until the planned V2.95/V2.96 evidence slices close.
 - No cloud sync, accounts, telemetry, anonymous crash reports, or uncontrolled outbound network calls.
 - Signing, notarization, DMG/ZIP packaging, updater work, and release artifact automation are deferred until public release work resumes.
 
@@ -29,6 +29,87 @@ Current release-readiness guardrails:
 
 Entries are ordered newest first. Add new version entries directly below this
 heading.
+
+### V2.88 - 2026-06-17
+
+Status:
+
+- Complete.
+- Handoff and per-surface Agent Copilot evidence closeout completed.
+
+Adapter behavior changes:
+
+- No adapter scan roots, writable scopes, install scopes, or config schemas changed.
+- Pi install/compatibility-root writes, Hermes writable/install, OpenClaw writable/install, and custom opencode roots remain blocked until their planned evidence slices close.
+
+Product/protocol changes:
+
+- No product feature expansion beyond V2.87 evidence closeout and docs/gate synchronization.
+- Added V2.87 and V2.88 verification checklist gates to `pnpm verify:gate-parity`.
+- Captured per-surface app-window evidence for Lineup, Agent Profile, Local Session Preview, and MCP Preview.
+
+Risk/security notes:
+
+- Authorized Local Session and MCP preview checks used disposable `/tmp/ac-v288` fixtures only.
+- Local Session Preview remained explicit-authorized, read-only, and redacted.
+- MCP Preview returned server metadata, args count, env-key count, and evidence refs; it did not return env values or raw config content.
+- No provider default calls, write/apply paths, script execution, credential reads, raw prompt/response/trace persistence, cloud sync, telemetry, signing, notarization, DMG, or ZIP work was added.
+
+Validation posture:
+
+- `pnpm check:macos` passed in an unlocked interactive session.
+- Computer Use resolved the current workspace `dist/SkillsCopilot.app` window.
+- V2.88 screenshots are under `docs/ui-artifacts/v2.88-handoff-evidence/`.
+- `pnpm verify:screenshot-artifacts docs/ui-artifacts/v2.88-handoff-evidence` passed.
+- `pnpm check:privacy` passed.
+
+Near-term follow-up plan:
+
+- V2.89 covers brand assets.
+- V2.90 covers internal identifier migration with data/validation migration.
+- V2.91 covers model-task matching history as a new evidence domain.
+- V2.92-V2.96 cover Codex/opencode/Pi/Hermes/OpenClaw adapter unblock slices, with each write/install capability remaining blocked until its own disposable evidence and rollback gates pass.
+
+### V2.87 - 2026-06-17
+
+Status:
+
+- Complete.
+- Agent Copilot first implementation pass with unlocked macOS app-window evidence.
+
+Adapter behavior changes:
+
+- No adapter scan roots, writable scopes, install scopes, or config schemas changed.
+- Display-level product name is Agent Copilot; internal bundle/module/AX/app-data identifiers remain `SkillsCopilot` / `skills-copilot`.
+
+Product/protocol changes:
+
+- Added the Lineup default surface, Agent Profile surface, and sorted read-only decision queue.
+- Added default-off `session.previewLocalSessions` for explicitly authorized local session directories.
+- Added default-off `evidence.previewMcpServers` for explicitly authorized MCP JSON config files.
+- Service protocol support increased to 90 methods with request/response fixtures and drift verification.
+
+Risk/security notes:
+
+- New Agent Copilot surfaces remain read-only local evidence previews.
+- Local session preview returns redacted metadata/excerpts/evidence refs only and does not persist raw transcripts or create trace/review records.
+- MCP server preview returns redacted server metadata plus args/env-key counts only and does not return env values or raw config content.
+- No provider default calls, write/apply paths, script execution, credential reads, raw prompt/response/trace persistence, cloud sync, telemetry, signing, notarization, DMG, or ZIP work was added.
+
+Validation posture:
+
+- 2026-06-17 unlocked `pnpm check:macos` passed end to end.
+- `./script/build_and_run.sh --verify` launched `dist/SkillsCopilot.app`.
+- Fixture-data smoke captured full app-window evidence at `docs/ui-artifacts/native-macos-shell/completed.png`.
+- `pnpm verify:gate-parity` and `pnpm check:privacy` passed.
+
+Near-term follow-up plan:
+
+- V2.88 closes staging/per-surface evidence.
+- V2.89 covers brand assets.
+- V2.90 covers internal identifier migration with data/validation migration.
+- V2.91 covers model-task matching history as a new evidence domain.
+- V2.92-V2.96 cover Codex/opencode/Pi/Hermes/OpenClaw adapter unblock slices, with each write/install capability remaining blocked until its own disposable evidence and rollback gates pass.
 
 ### 2026-06-16 Review Remediation
 

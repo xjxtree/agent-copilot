@@ -1924,6 +1924,188 @@ impl ServiceHost {
         })
     }
 
+    pub fn preview_local_sessions(
+        &self,
+        params: LocalSessionPreviewParams,
+    ) -> Result<LocalSessionPreviewResult, ServiceError> {
+        let limit = params.limit.unwrap_or(20).clamp(1, 100);
+        let max_files = params.max_files.unwrap_or(200).clamp(1, 1_000);
+        let max_excerpt_chars = params.max_excerpt_chars.unwrap_or(1_000).clamp(120, 4_000);
+        let requested_roots = normalize_string_list(params.authorized_roots);
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let redaction_roots = self.trace_redaction_roots(&adapter_ctx);
+        let mut redactor = PromptRedactor::new(&redaction_roots);
+
+        if requested_roots.is_empty() {
+            return Ok(LocalSessionPreviewResult {
+                generated_by: "local-v2.87",
+                authorized: false,
+                authorization_required: true,
+                roots: Vec::new(),
+                count: 0,
+                total_candidate_count: 0,
+                session_rows: Vec::new(),
+                gap_notes: Vec::new(),
+                blocker_notes: vec![
+                    "No local session directory was authorized; session.previewLocalSessions does not scan default agent storage."
+                        .to_string(),
+                ],
+                redaction_summary: agent_session_review_redaction_summary_from(redactor.summary()),
+                safety_flags: agent_session_review_safety_flags(),
+                read_only: true,
+                provider_request_sent: false,
+                skill_files_mutated: false,
+                agent_config_mutated: false,
+                snapshot_created: false,
+                triage_mutated: false,
+                raw_prompt_persisted: false,
+                raw_response_persisted: false,
+                raw_trace_persisted: false,
+            });
+        }
+
+        let mut root_rows = Vec::new();
+        let mut session_rows = Vec::new();
+        let mut gap_notes = Vec::new();
+        let mut blocker_notes = Vec::new();
+        let mut total_candidate_count = 0usize;
+
+        for root in requested_roots {
+            let redacted_root = redactor.redact(&root);
+            let root_path = PathBuf::from(&root);
+            if !root_path.is_absolute() {
+                let blocker = "Authorized session roots must be absolute paths.".to_string();
+                blocker_notes.push(format!("{redacted_root}: {blocker}"));
+                root_rows.push(LocalSessionPreviewRoot {
+                    root: redacted_root,
+                    status: "blocked".to_string(),
+                    candidate_count: 0,
+                    blocker: Some(blocker),
+                });
+                continue;
+            }
+            if !root_path.exists() {
+                let blocker = "Authorized session root does not exist.".to_string();
+                blocker_notes.push(format!("{redacted_root}: {blocker}"));
+                root_rows.push(LocalSessionPreviewRoot {
+                    root: redacted_root,
+                    status: "blocked".to_string(),
+                    candidate_count: 0,
+                    blocker: Some(blocker),
+                });
+                continue;
+            }
+            if !root_path.is_dir() {
+                let blocker = "Authorized session root is not a directory.".to_string();
+                blocker_notes.push(format!("{redacted_root}: {blocker}"));
+                root_rows.push(LocalSessionPreviewRoot {
+                    root: redacted_root,
+                    status: "blocked".to_string(),
+                    candidate_count: 0,
+                    blocker: Some(blocker),
+                });
+                continue;
+            }
+
+            let canonical_root = match root_path.canonicalize() {
+                Ok(path) => path,
+                Err(error) => {
+                    let blocker = format!("Authorized session root could not be resolved: {error}");
+                    blocker_notes.push(format!("{redacted_root}: {}", redactor.redact(&blocker)));
+                    root_rows.push(LocalSessionPreviewRoot {
+                        root: redacted_root,
+                        status: "blocked".to_string(),
+                        candidate_count: 0,
+                        blocker: Some(redactor.redact(&blocker)),
+                    });
+                    continue;
+                }
+            };
+
+            let files = collect_local_session_files(
+                &canonical_root,
+                max_files,
+                &mut gap_notes,
+                &mut redactor,
+            );
+            total_candidate_count += files.len();
+            let mut root_candidate_count = 0usize;
+            for file in files {
+                if session_rows.len() >= limit {
+                    break;
+                }
+                match local_session_preview_row(
+                    &file,
+                    &canonical_root,
+                    params.agent.as_deref(),
+                    max_excerpt_chars,
+                    &mut redactor,
+                ) {
+                    Ok(Some(row)) => {
+                        root_candidate_count += 1;
+                        session_rows.push(row);
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        gap_notes.push(format!(
+                            "{}: {}",
+                            redactor.redact(&file.to_string_lossy()),
+                            redactor.redact(&error.to_string())
+                        ));
+                    }
+                }
+            }
+
+            root_rows.push(LocalSessionPreviewRoot {
+                root: redacted_root,
+                status: "authorized-read-only".to_string(),
+                candidate_count: root_candidate_count,
+                blocker: None,
+            });
+        }
+
+        session_rows.sort_by(|left, right| {
+            right
+                .modified_at
+                .cmp(&left.modified_at)
+                .then_with(|| left.title.cmp(&right.title))
+                .then_with(|| left.id.cmp(&right.id))
+        });
+        session_rows.truncate(limit);
+        let count = session_rows.len();
+        if count == 0 && blocker_notes.is_empty() {
+            gap_notes.push(
+                "Authorized roots did not contain supported local session files (.jsonl, .json, .txt, .log, .md)."
+                    .to_string(),
+            );
+        }
+
+        Ok(LocalSessionPreviewResult {
+            generated_by: "local-v2.87",
+            authorized: root_rows
+                .iter()
+                .any(|root| root.status == "authorized-read-only"),
+            authorization_required: false,
+            roots: root_rows,
+            count,
+            total_candidate_count,
+            session_rows,
+            gap_notes,
+            blocker_notes,
+            redaction_summary: agent_session_review_redaction_summary_from(redactor.summary()),
+            safety_flags: agent_session_review_safety_flags(),
+            read_only: true,
+            provider_request_sent: false,
+            skill_files_mutated: false,
+            agent_config_mutated: false,
+            snapshot_created: false,
+            triage_mutated: false,
+            raw_prompt_persisted: false,
+            raw_response_persisted: false,
+            raw_trace_persisted: false,
+        })
+    }
+
     pub fn list_agent_skill_reviews(
         &self,
         params: AgentSessionListSkillReviewsParams,
@@ -2144,4 +2326,147 @@ impl ServiceHost {
             raw_trace_persisted: false,
         })
     }
+}
+
+fn collect_local_session_files(
+    root: &Path,
+    max_files: usize,
+    gap_notes: &mut Vec<String>,
+    redactor: &mut PromptRedactor<'_>,
+) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    let mut directories = vec![root.to_path_buf()];
+
+    while let Some(directory) = directories.pop() {
+        let entries = match fs::read_dir(&directory) {
+            Ok(entries) => entries,
+            Err(error) => {
+                gap_notes.push(format!(
+                    "{}: {}",
+                    redactor.redact(&directory.to_string_lossy()),
+                    redactor.redact(&error.to_string())
+                ));
+                continue;
+            }
+        };
+        for entry in entries.flatten() {
+            if files.len() >= max_files {
+                gap_notes.push(format!(
+                    "Local session preview stopped after {} candidate file(s) for bounded read latency.",
+                    max_files
+                ));
+                return files;
+            }
+            let path = entry.path();
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            if file_type.is_dir() {
+                directories.push(path);
+            } else if file_type.is_file() && is_supported_local_session_file(&path) {
+                match path.canonicalize() {
+                    Ok(canonical) if canonical.starts_with(root) => files.push(canonical),
+                    Ok(canonical) => gap_notes.push(format!(
+                        "{}: skipped because it resolves outside the authorized root.",
+                        redactor.redact(&canonical.to_string_lossy())
+                    )),
+                    Err(error) => gap_notes.push(format!(
+                        "{}: {}",
+                        redactor.redact(&path.to_string_lossy()),
+                        redactor.redact(&error.to_string())
+                    )),
+                }
+            }
+        }
+    }
+
+    files
+}
+
+fn is_supported_local_session_file(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| {
+            matches!(
+                extension.to_ascii_lowercase().as_str(),
+                "jsonl" | "json" | "txt" | "log" | "md"
+            )
+        })
+        .unwrap_or(false)
+}
+
+fn local_session_preview_row(
+    path: &Path,
+    root: &Path,
+    requested_agent: Option<&str>,
+    max_excerpt_chars: usize,
+    redactor: &mut PromptRedactor<'_>,
+) -> Result<Option<LocalSessionPreviewRow>, ServiceError> {
+    if !path.starts_with(root) {
+        return Ok(None);
+    }
+    const MAX_READ_BYTES: usize = 96_000;
+    let mut bytes = fs::read(path)?;
+    if bytes.is_empty() {
+        return Ok(None);
+    }
+    if bytes.len() > MAX_READ_BYTES {
+        bytes.truncate(MAX_READ_BYTES);
+    }
+    let content = String::from_utf8_lossy(&bytes).to_string();
+    let excerpt = truncate_chars(&redactor.redact(&content), max_excerpt_chars);
+    let excerpt_char_count = excerpt.chars().count();
+    let content_hash = trace_content_hash(&content);
+    let short_hash = content_hash.chars().take(12).collect::<String>();
+    let redacted_path = redactor.redact(&path.to_string_lossy());
+    let title = local_session_title(path, &short_hash);
+    let agent = requested_agent
+        .map(str::trim)
+        .filter(|agent| !agent.is_empty())
+        .map(|agent| truncate_chars(&redactor.redact(agent), 80))
+        .or_else(|| infer_local_session_agent(path));
+    Ok(Some(LocalSessionPreviewRow {
+        id: format!("local-session-{short_hash}"),
+        title,
+        source_kind: "authorized-local-session".to_string(),
+        agent,
+        redacted_path: redacted_path.clone(),
+        modified_at: local_session_modified_at(path),
+        excerpt,
+        excerpt_char_count,
+        content_hash,
+        evidence_refs: vec![
+            format!("session.path:{redacted_path}"),
+            format!("session.content_hash:{short_hash}"),
+        ],
+    }))
+}
+
+fn local_session_title(path: &Path, short_hash: &str) -> String {
+    path.file_stem()
+        .and_then(|name| name.to_str())
+        .map(|name| truncate_chars(name, 120))
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| format!("Local session {short_hash}"))
+}
+
+fn infer_local_session_agent(path: &Path) -> Option<String> {
+    let normalized = path.to_string_lossy().to_ascii_lowercase();
+    if normalized.contains(".claude") {
+        Some("claude-code".to_string())
+    } else if normalized.contains(".codex") {
+        Some("codex".to_string())
+    } else if normalized.contains("opencode") {
+        Some("opencode".to_string())
+    } else {
+        None
+    }
+}
+
+fn local_session_modified_at(path: &Path) -> Option<i64> {
+    let modified = fs::metadata(path).ok()?.modified().ok()?;
+    modified
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .map(|duration| duration.as_millis() as i64)
 }

@@ -61,6 +61,8 @@ final class SkillStore: ObservableObject {
     @Published private(set) var agentSessionSkillReviewList = AgentSessionSkillReviewListResult(reviews: [])
     @Published private(set) var agentSessionSkillReviewResult: AgentSessionSkillReviewResult?
     @Published private(set) var agentSessionSkillReviewDeleteResult: AgentSessionSkillReviewDeleteResult?
+    @Published private(set) var localSessionPreviewResult = LocalSessionPreviewResult()
+    @Published private(set) var mcpServerPreviewResult = McpServerPreviewResult()
     @Published private(set) var isLoadingTaskBenchmarks = false
     @Published private(set) var isSavingTaskBenchmark = false
     @Published private(set) var isEvaluatingTaskBenchmarks = false
@@ -86,6 +88,8 @@ final class SkillStore: ObservableObject {
     @Published private(set) var isImportingTrace = false
     @Published private(set) var isLoadingAgentSessionSkillReviews = false
     @Published private(set) var isReviewingAgentSessionSkillUse = false
+    @Published private(set) var isPreviewingLocalSessions = false
+    @Published private(set) var isPreviewingMcpServers = false
     @Published private(set) var deletingTaskBenchmarkIDs: Set<String> = []
     @Published private(set) var deletingTraceImportIDs: Set<String> = []
     @Published private(set) var deletingAgentSessionSkillReviewIDs: Set<String> = []
@@ -128,7 +132,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var aiProviderMessage: String?
     @Published private(set) var aiProviderErrorMessage: String?
     @Published var selectedSkillID: SkillRecord.ID?
-    @Published var selectedDetailSection: DetailSection = .taskCockpit
+    @Published var selectedDetailSection: DetailSection = .lineup
     @Published var searchText = "" {
         didSet { handleListCriteriaChanged() }
     }
@@ -155,6 +159,8 @@ final class SkillStore: ObservableObject {
             agentSessionSkillReviewResult = nil
             agentSessionSkillReviewDeleteResult = nil
             agentSessionSkillReviewList = AgentSessionSkillReviewListResult(reviews: [])
+            localSessionPreviewResult = LocalSessionPreviewResult()
+            mcpServerPreviewResult = McpServerPreviewResult()
             Task { await loadAgentConfigSnapshots() }
             Task { await loadCleanupQueue() }
             Task { await loadCrossAgentComparisons() }
@@ -230,6 +236,8 @@ final class SkillStore: ObservableObject {
     @Published var agentSessionSkillReviewTranscript = ""
     @Published var agentSessionSkillReviewTask = ""
     @Published var agentSessionSkillReviewExpectedSkills = ""
+    @Published var localSessionPreviewRoots = ""
+    @Published var mcpServerPreviewPaths = ""
     @Published var errorMessage: String?
 
     private let service: ServiceClient
@@ -1888,6 +1896,48 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func previewLocalSessions() async {
+        let roots = normalizedLocalSessionPreviewRoots
+        guard !isRefreshBusy else {
+            localSessionPreviewResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        isPreviewingLocalSessions = true
+        defer { isPreviewingLocalSessions = false }
+
+        let agent = agentFilter == .all ? nil : agentFilter.rawValue
+        do {
+            localSessionPreviewResult = try await service.previewLocalSessions(
+                authorizedRoots: roots,
+                agent: agent,
+                limit: 20
+            )
+        } catch {
+            localSessionPreviewResult = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
+    func previewMcpServers() async {
+        let paths = normalizedMcpServerPreviewPaths
+        guard !isRefreshBusy else {
+            mcpServerPreviewResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
+            return
+        }
+
+        isPreviewingMcpServers = true
+        defer { isPreviewingMcpServers = false }
+
+        do {
+            mcpServerPreviewResult = try await service.previewMcpServers(
+                authorizedConfigPaths: paths,
+                limit: 20
+            )
+        } catch {
+            mcpServerPreviewResult = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
     func reviewAgentSessionSkillUse() async {
         let transcriptText = normalizedAgentSessionSkillReviewTranscript
         guard !transcriptText.isEmpty else {
@@ -2554,6 +2604,20 @@ final class SkillStore: ObservableObject {
         agentSessionSkillReviewTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private var normalizedLocalSessionPreviewRoots: [String] {
+        localSessionPreviewRoots
+            .split(whereSeparator: { $0 == "," || $0 == "\n" || $0 == ";" })
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private var normalizedMcpServerPreviewPaths: [String] {
+        mcpServerPreviewPaths
+            .split(whereSeparator: { $0 == "," || $0 == "\n" || $0 == ";" })
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
     private var normalizedTraceExpectedSkillNames: [String] {
         traceImportExpectedSkills
             .split(whereSeparator: { $0 == "," || $0 == "\n" || $0 == ";" })
@@ -2767,6 +2831,8 @@ final class SkillStore: ObservableObject {
         agentSessionSkillReviewResult = nil
         agentSessionSkillReviewDeleteResult = nil
         agentSessionSkillReviewList = AgentSessionSkillReviewListResult(reviews: [])
+        localSessionPreviewResult = LocalSessionPreviewResult()
+        mcpServerPreviewResult = McpServerPreviewResult()
         Task { @MainActor [weak self] in
             await self?.loadSelectedDetail()
             await self?.loadCrossAgentComparisons()

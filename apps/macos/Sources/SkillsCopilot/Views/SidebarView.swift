@@ -480,7 +480,7 @@ private struct AgentWorkspaceHeader: View {
                         section: section,
                         isSelected: store.selectedDetailSection == section,
                         action: {
-                            if store.selectedSkillID == nil {
+                            if section.requiresSelectedSkill, store.selectedSkillID == nil {
                                 store.selectedSkillID = store.filteredSkills.first?.id ?? store.skills.first?.id
                             }
                             store.selectedDetailSection = section

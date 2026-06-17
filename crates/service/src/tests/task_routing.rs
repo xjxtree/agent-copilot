@@ -2539,6 +2539,296 @@ fn trace_import_rejects_empty_content_without_writing() {
 }
 
 #[test]
+fn local_session_preview_requires_explicit_authorized_roots() {
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-local-session-preview-empty-test-{}-{}",
+        std::process::id(),
+        unique_suffix(),
+    ));
+    let host = test_host(app_data_dir.clone());
+
+    let response = host.handle(ServiceRequest {
+        id: Some("session-preview-empty".to_string()),
+        method: "session.previewLocalSessions".to_string(),
+        params: json!({}),
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("local session preview result");
+    assert_eq!(
+        result
+            .get("authorization_required")
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(result.get("count").and_then(Value::as_u64), Some(0));
+    assert_eq!(
+        result.get("raw_trace_persisted").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert!(!host.trace_imports_path().exists());
+    assert!(!host.agent_session_reviews_path().exists());
+    assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+    let _ = fs::remove_dir_all(app_data_dir);
+}
+
+#[test]
+fn local_session_preview_reads_authorized_roots_with_redaction_only() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-local-session-preview-test-{}-{unique}",
+        std::process::id(),
+    ));
+    let user_home = env::temp_dir().join(format!(
+        "skills-copilot-local-session-preview-home-{}-{unique}",
+        std::process::id(),
+    ));
+    let project_root = app_data_dir.join("project-root");
+    let session_root = user_home.join(".codex/sessions");
+    fs::create_dir_all(&session_root).expect("create session root");
+    let raw_secret = "session-secret-value";
+    let key_label = ["API", "_", "KEY"].join("");
+    let session_path = session_root.join("fixture-session.jsonl");
+    fs::write(
+        &session_path,
+        format!(
+            "{{\"role\":\"assistant\",\"content\":\"Used llm-skill-id for local task at {} with {key_label}={raw_secret}\"}}\n",
+            project_root.display()
+        ),
+    )
+    .expect("write session");
+    fs::write(session_root.join("ignored.bin"), raw_secret).expect("write ignored binary");
+    let host = ServiceHost {
+        app_data_dir: app_data_dir.clone(),
+        adapter_ctx: AdapterContext {
+            user_home: user_home.clone(),
+            project_root: Some(project_root.clone()),
+            project_cwd: Some(project_root.clone()),
+            extra_roots: Vec::new(),
+        },
+    };
+
+    let response = host.handle(ServiceRequest {
+        id: Some("session-preview".to_string()),
+        method: "session.previewLocalSessions".to_string(),
+        params: json!({
+            "authorized_roots": [session_root.to_string_lossy().to_string()],
+            "limit": 10,
+            "max_excerpt_chars": 800
+        }),
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("local session preview result");
+    assert_eq!(
+        result.get("generated_by").and_then(Value::as_str),
+        Some("local-v2.87")
+    );
+    assert_eq!(
+        result.get("authorized").and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        result
+            .get("authorization_required")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(result.get("count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        result
+            .pointer("/session_rows/0/agent")
+            .and_then(Value::as_str),
+        Some("codex")
+    );
+    assert_eq!(
+        result
+            .pointer("/session_rows/0/source_kind")
+            .and_then(Value::as_str),
+        Some("authorized-local-session")
+    );
+    assert_eq!(
+        result.get("raw_trace_persisted").and_then(Value::as_bool),
+        Some(false)
+    );
+    let serialized = serde_json::to_string(&result).expect("serialize result");
+    assert!(serialized.contains("$HOME"));
+    assert!(serialized.contains("<project-root>"));
+    assert!(serialized.contains("<redacted>"));
+    assert!(!serialized.contains(raw_secret));
+    assert!(!serialized.contains(&key_label));
+    assert!(!serialized.contains(&user_home.to_string_lossy().to_string()));
+    assert!(!serialized.contains(&project_root.to_string_lossy().to_string()));
+    assert!(!host.trace_imports_path().exists());
+    assert!(!host.agent_session_reviews_path().exists());
+    assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+    let _ = fs::remove_dir_all(app_data_dir);
+    let _ = fs::remove_dir_all(user_home);
+}
+
+#[test]
+fn mcp_server_preview_requires_explicit_authorized_config_paths() {
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-mcp-preview-empty-test-{}-{}",
+        std::process::id(),
+        unique_suffix(),
+    ));
+    let host = test_host(app_data_dir.clone());
+
+    let response = host.handle(ServiceRequest {
+        id: Some("mcp-preview-empty".to_string()),
+        method: "evidence.previewMcpServers".to_string(),
+        params: json!({}),
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("mcp preview result");
+    assert_eq!(
+        result
+            .get("authorization_required")
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        result.get("authorized").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(result.get("count").and_then(Value::as_u64), Some(0));
+    assert_eq!(
+        result.get("provider_request_sent").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result.get("raw_trace_persisted").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert!(result
+        .get("gap_notes")
+        .and_then(Value::as_array)
+        .is_some_and(|notes| notes.iter().any(|note| note
+            .as_str()
+            .is_some_and(|text| text.contains("does not scan default")))));
+    assert!(!host.catalog_path().exists());
+    assert!(!host.trace_imports_path().exists());
+    assert!(!host.agent_session_reviews_path().exists());
+    assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+    let _ = fs::remove_dir_all(app_data_dir);
+}
+
+#[test]
+fn mcp_server_preview_reads_authorized_configs_with_redaction_only() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-mcp-preview-test-{}-{unique}",
+        std::process::id(),
+    ));
+    let user_home = env::temp_dir().join(format!(
+        "skills-copilot-mcp-preview-home-{}-{unique}",
+        std::process::id(),
+    ));
+    let project_root = app_data_dir.join("project-root");
+    let config_dir = user_home.join(".config/agent");
+    fs::create_dir_all(&config_dir).expect("create config dir");
+    let raw_secret = "mcp-secret-value";
+    let config_path = config_dir.join("mcp.json");
+    fs::write(
+        &config_path,
+        format!(
+            r#"{{
+  "mcpServers": {{
+    "filesystem": {{
+      "command": "{}/bin/mcp-filesystem",
+      "args": ["--root", "{}"],
+      "env": {{
+        "MCP_TOKEN": "{raw_secret}"
+      }}
+    }},
+    "remote-search": {{
+      "transport": "sse",
+      "url": "https://example.invalid/mcp"
+    }}
+  }}
+}}"#,
+            user_home.display(),
+            project_root.display(),
+        ),
+    )
+    .expect("write mcp config");
+    let host = ServiceHost {
+        app_data_dir: app_data_dir.clone(),
+        adapter_ctx: AdapterContext {
+            user_home: user_home.clone(),
+            project_root: Some(project_root.clone()),
+            project_cwd: Some(project_root.clone()),
+            extra_roots: Vec::new(),
+        },
+    };
+
+    let response = host.handle(ServiceRequest {
+        id: Some("mcp-preview".to_string()),
+        method: "evidence.previewMcpServers".to_string(),
+        params: json!({
+            "authorized_config_paths": [config_path.to_string_lossy().to_string()],
+            "limit": 10
+        }),
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("mcp preview result");
+    assert_eq!(
+        result.get("generated_by").and_then(Value::as_str),
+        Some("local-v2.87")
+    );
+    assert_eq!(
+        result.get("authorized").and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        result
+            .get("authorization_required")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(result.get("count").and_then(Value::as_u64), Some(2));
+    assert_eq!(
+        result
+            .pointer("/server_rows/0/source_path")
+            .and_then(Value::as_str),
+        Some("$HOME/.config/agent/mcp.json")
+    );
+    assert_eq!(
+        result.get("provider_request_sent").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result.get("credential_accessed").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result.get("raw_trace_persisted").and_then(Value::as_bool),
+        Some(false)
+    );
+    let serialized = serde_json::to_string(&result).expect("serialize result");
+    assert!(serialized.contains("$HOME"));
+    assert!(serialized.contains("mcp.server:filesystem"));
+    assert!(serialized.contains("\"env_key_count\":1"));
+    assert!(!serialized.contains(raw_secret));
+    assert!(!serialized.contains("MCP_TOKEN"));
+    assert!(!serialized.contains(&user_home.to_string_lossy().to_string()));
+    assert!(!serialized.contains(&project_root.to_string_lossy().to_string()));
+    assert!(!host.catalog_path().exists());
+    assert!(!host.trace_imports_path().exists());
+    assert!(!host.agent_session_reviews_path().exists());
+    assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+    let _ = fs::remove_dir_all(app_data_dir);
+    let _ = fs::remove_dir_all(user_home);
+}
+
+#[test]
 fn trace_import_persists_redacted_only_app_local_record() {
     let unique = unique_suffix();
     let app_data_dir = env::temp_dir().join(format!(
