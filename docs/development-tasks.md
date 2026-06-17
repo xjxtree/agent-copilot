@@ -1,11 +1,11 @@
 # Development Tasks
 
-> Status: V2.89 Agent Copilot brand asset refresh is complete.
+> Status: V2.90 Agent Copilot identifier migration is complete.
 > V2.84 Swift Detail section splitting, V2.85 Rust RPC domain module splitting,
 > and V2.86 Rust helper/test split completed.
-> V2.1 through V2.89 are the synchronized completed baseline; V2.87 unlocked `pnpm check:macos` passed on 2026-06-17, V2.88 captured per-surface Computer Use evidence, and V2.89 refreshed app icon assets.
+> V2.1 through V2.90 are the synchronized completed baseline; V2.87 unlocked `pnpm check:macos` passed on 2026-06-17, V2.88 captured per-surface Computer Use evidence, V2.89 refreshed app icon assets, and V2.90 migrated packaged app identity/default app-data id with compatibility.
 > Agent Copilot M1-M4 first implementation pass is integrated; near-term
-> post-V2.89 work is scheduled below and in [`roadmap.md`](./roadmap.md).
+> post-V2.90 work is scheduled below and in [`roadmap.md`](./roadmap.md).
 >
 > Document role: this is the agent-facing implementation task ledger.
 > Keep concrete task routing, current baseline, closeout links, and validation handoff notes here.
@@ -16,10 +16,10 @@
 ## Current Baseline
 
 - Product boundary: native macOS SwiftUI/AppKit shell plus Rust service protocol.
-- Completed V2 milestones: first Codex slice, V2.1 through V2.89.
-- Current completed milestone: V2.89 brand asset refresh; unlocked macOS validation passed on 2026-06-17.
+- Completed V2 milestones: first Codex slice, V2.1 through V2.90.
+- Current completed milestone: V2.90 identifier migration; unlocked macOS validation passed on 2026-06-17.
 - Current priority:
-  preserve the V2.26-V2.89 completed behavior while keeping future work
+  preserve the V2.26-V2.90 completed behavior while keeping future work
   focused on task-centered skill review, local evidence, safe cleanup,
   and maintainable module boundaries.
 - Current implementation status:
@@ -29,21 +29,23 @@
 - Agent Copilot rollout status:
   displayed product name, Lineup default surface, Agent Profile surface,
   sorted decision queue, default-off local session preview, and default-off MCP
-  server preview are implemented. Internal `SkillsCopilot` / `skills-copilot`
-  identifiers remain stable unless the V2.90 migration explicitly scopes
-  bundle/module/AX/app-data changes. V2.89 refreshed `AppIcon.svg` /
-  `AppIcon.icns` only.
+  server preview are implemented. V2.90 migrated the primary packaged app to
+  `dist/AgentCopilot.app`, changed the primary bundle/default app-data id to
+  `dev.agent-copilot.native`, and retained compatibility for Swift/Rust module
+  names, the `skills-copilot-service` sidecar, `skills-copilot.*` AX ids,
+  `SKILLS_COPILOT_*` env vars, legacy `dev.skills-copilot.native` app data,
+  and the legacy Keychain service.
 - UI validation baseline:
   latest Agent Copilot app-window evidence is 2026-06-17:
   `pnpm check:macos` passed, `./script/build_and_run.sh --verify` launched
-  `dist/SkillsCopilot.app`, fixture-data smoke captured
+  `dist/AgentCopilot.app`, fixture-data smoke captured
   `docs/ui-artifacts/native-macos-shell/completed.png`, and V2.88 Computer Use
   evidence captured `docs/ui-artifacts/v2.88-handoff-evidence/`.
   Future user-visible UI changes need fresh unlocked UI validation or one
   canonical blocker code.
 - Quality gate for code/UI/protocol work: `pnpm check:macos`; add focused Rust/Swift tests when touching shared behavior.
 
-## Near-Term Post-V2.89 Task Ledger
+## Near-Term Post-V2.90 Task Ledger
 
 Treat these as the next planned work queue. Do not start a later write/install
 slice until the earlier evidence/design slice has closed or been explicitly
@@ -53,7 +55,7 @@ rescheduled.
 | --- | --- | --- | --- |
 | V2.88 | Completed | Handoff closeout: reviewed staging scope, preserved V2.87 scope, and captured per-surface app-window-only evidence for Lineup, Agent Profile, Local Session Preview, and MCP Preview. | [`v2.88-verification-checklist.md`](./v2.88-verification-checklist.md), `git status`, staged-file review, `pnpm check:macos`, `pnpm check:privacy`, screenshot artifact verification |
 | V2.89 | Completed | Brand asset refresh: implemented app icon / visual asset updates for the Agent Copilot display brand while keeping internal identifiers unchanged. | [`v2.89-verification-checklist.md`](./v2.89-verification-checklist.md), asset diff review, refreshed app-window screenshot, `pnpm check:macos`, privacy gate |
-| V2.90 | Planned | Internal identifier migration: decide and implement bundle id, crate/module, AX id, app-data path, docs, and validation-script migration only with compatibility and rollback coverage. | Migration design doc, data preservation tests, rollback test, updated validation scripts |
+| V2.90 | Completed | Internal identifier migration: migrated packaged app identity and default app-data id to Agent Copilot while preserving module/crate/sidecar/AX/env/Keychain compatibility and legacy app-data copy behavior. | [`v2.90-verification-checklist.md`](./v2.90-verification-checklist.md), app-data migration tests, refreshed app-window screenshot, `pnpm check:macos`, privacy gate |
 | V2.91 | Planned | Model-task matching history: design and implement a new local evidence domain for historical model/task fit. | Design-first review, protocol fixtures, privacy/redaction tests, no-provider/no-write defaults |
 | V2.92 | Planned | Codex expanded roots: evaluate project config, plugin/admin/system roots, and project-local write policy; keep plugin/admin/system roots read-only unless rollback-safe writes are proven. | Official/local evidence, root allowlist tests, project write rollback tests if scoped |
 | V2.93 | Planned | opencode custom roots: evaluate and implement safe `skills.paths` / `skills.urls` behavior. Local paths require canonicalization/dedupe; URLs require explicit user confirmation or metadata-only default. | Disposable fixtures, no uncontrolled network, duplicate/root tests, rollback proof where writes are scoped |
@@ -185,6 +187,8 @@ V2.87 closeout evidence lives in [`v2.87-verification-checklist.md`](./v2.87-ver
 V2.88 closeout evidence lives in [`v2.88-verification-checklist.md`](./v2.88-verification-checklist.md) and is guarded by `pnpm verify:v2.88-docs`. It records completed handoff and per-surface evidence: Lineup, Agent Profile, Local Session Preview default-off/authorized fixture output, MCP Preview default-off/authorized fixture output, V2.87/V2.88 docs-gate wiring, and unchanged no-provider/write/script/credential/cloud/telemetry boundary.
 
 V2.89 closeout evidence lives in [`v2.89-verification-checklist.md`](./v2.89-verification-checklist.md) and is guarded by `pnpm verify:v2.89-docs`. It records completed Agent Copilot brand asset refresh: reviewable `AppIcon.svg`, regenerated `AppIcon.icns`, manual `pnpm generate:app-icon` helper, refreshed app-window evidence, and unchanged internal `SkillsCopilot` / `skills-copilot` identifiers.
+
+V2.90 closeout evidence lives in [`v2.90-verification-checklist.md`](./v2.90-verification-checklist.md) and is guarded by `pnpm verify:v2.90-docs`. It records completed compatibility-first identifier migration: `dist/AgentCopilot.app`, `dev.agent-copilot.native`, default app-data migration from legacy `dev.skills-copilot.native`, `agent-copilot-app-data-migration.json`, refreshed app-window evidence, and preserved Swift/Rust module, sidecar, AX, env-var, and Keychain compatibility.
 
 ## Post-V2.78 Version Plan
 
@@ -678,7 +682,7 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 - If the task improves finding explanations, skill identity/provenance, conflict semantics, triage persistence, or read-only AI analysis workflow, use V2.26-V2.30.
 - If the task builds cleanup queue, policy tuning, safe batch actions, cross-agent comparison, or local report export, use V2.31-V2.35.
 - If the task is Pi writable evidence, Hermes external roots, OpenClaw workspace deepening, or adapter diagnostics, use V2.36-V2.40.
-- If the task is AI provider foundation, prompt safety, AI quality/readiness/routing, task benchmark/regression, trace analysis, knowledge index, remediation, Agent Session Skill Review, Local Skill Map, provider observability, task cockpit, skill lifecycle, guided cleanup, cockpit-first IA, screenshot/privacy-safe UI presentation, completed Swift/Rust feature modularization, guided-cleanup safe-action links, validation harness hardening, completed Task/remediation timeout recovery, completed launch/window targeting stability, completed task input resilience, completed progressive Cockpit feedback, completed real-local validation workbench, completed protocol/docs/gate parity, completed privacy fixture/evidence localization, completed detail navigation/visual density polish, completed Swift service IPC cancellation cleanup, completed test isolation/core model floor, completed continued module splitting, completed Swift Detail section splitting, completed Rust RPC domain module splitting, completed Rust helper/test split and module-size gate, completed Agent Copilot first pass, completed Agent Copilot per-surface evidence closeout, or completed brand asset refresh, use V2.41-V2.89.
+- If the task is AI provider foundation, prompt safety, AI quality/readiness/routing, task benchmark/regression, trace analysis, knowledge index, remediation, Agent Session Skill Review, Local Skill Map, provider observability, task cockpit, skill lifecycle, guided cleanup, cockpit-first IA, screenshot/privacy-safe UI presentation, completed Swift/Rust feature modularization, guided-cleanup safe-action links, validation harness hardening, completed Task/remediation timeout recovery, completed launch/window targeting stability, completed task input resilience, completed progressive Cockpit feedback, completed real-local validation workbench, completed protocol/docs/gate parity, completed privacy fixture/evidence localization, completed detail navigation/visual density polish, completed Swift service IPC cancellation cleanup, completed test isolation/core model floor, completed continued module splitting, completed Swift Detail section splitting, completed Rust RPC domain module splitting, completed Rust helper/test split and module-size gate, completed Agent Copilot first pass, completed Agent Copilot per-surface evidence closeout, completed brand asset refresh, or completed identifier migration, use V2.41-V2.90.
 - If the task is post-V2.71 product consolidation or validation harness hardening, use V2.72.
 - If the task is privacy fixture hardening or evidence-surface privacy/localization sweep after V2.77, use completed V2.79 and preserve its no credential/network/scanner/provider/write/script/cloud/telemetry boundary.
 - If the task is detail navigation or visual density polish, use V2.80.

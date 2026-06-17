@@ -16,10 +16,12 @@ import { platform, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { formatValidationBlocker } from "./validation-blockers.mjs";
 
-const appName = "SkillsCopilot";
-const bundleId = "dev.skills-copilot.native";
+const appName = "AgentCopilot";
+const bundleId = "dev.agent-copilot.native";
+const legacyAppName = "SkillsCopilot";
+const legacyBundleId = "dev.skills-copilot.native";
 const processName = appName;
-const appPath = resolve(process.env.SKILLS_COPILOT_APP ?? "dist/SkillsCopilot.app");
+const appPath = resolve(process.env.SKILLS_COPILOT_APP ?? "dist/AgentCopilot.app");
 const appBinary = join(appPath, "Contents", "MacOS", appName);
 const serviceBinary = join(appPath, "Contents", "Resources", "skills-copilot-service");
 const screenshotPath = resolve(
@@ -118,11 +120,13 @@ import Foundation
 let args = Array(CommandLine.arguments.dropFirst())
 let bundleId = args.indices.contains(0) ? args[0] : ""
 let appName = args.indices.contains(1) ? args[1] : ""
+let legacyBundleId = args.indices.contains(2) ? args[2] : ""
+let legacyAppName = args.indices.contains(3) ? args[3] : ""
 var rows: [[String: Any]] = []
 
 for app in NSWorkspace.shared.runningApplications {
-    let identifierMatches = app.bundleIdentifier == bundleId
-    let nameMatches = app.localizedName == appName
+    let identifierMatches = app.bundleIdentifier == bundleId || app.bundleIdentifier == legacyBundleId
+    let nameMatches = app.localizedName == appName || app.localizedName == legacyAppName
     guard identifierMatches || nameMatches else { continue }
     rows.append([
         "pid": Int(app.processIdentifier),
@@ -138,7 +142,7 @@ for app in NSWorkspace.shared.runningApplications {
 let data = try JSONSerialization.data(withJSONObject: rows, options: [])
 print(String(data: data, encoding: .utf8)!)
 `;
-  const result = runSwift(swift, [bundleId, appName]);
+  const result = runSwift(swift, [bundleId, appName, legacyBundleId, legacyAppName]);
   if (!result.ok) {
     fail(formatValidationBlocker(
       result.stderr || result.stdout || "tool-layer-unknown: unable to query running macOS applications",
@@ -556,11 +560,15 @@ guard let pid = Int32(rawPid),
     exit(2)
 }
 
-let activated = app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
-if !activated {
-    fputs("activation-failed: failed to activate \\(app.localizedName ?? "target app") pid \\(pid).\\n", stderr)
-    exit(3)
+let deadline = Date().addingTimeInterval(5)
+while Date() < deadline {
+    if app.isActive || app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps]) {
+        exit(0)
+    }
+    Thread.sleep(forTimeInterval: 0.25)
 }
+fputs("activation-failed: failed to activate \\(app.localizedName ?? "target app") pid \\(pid).\\n", stderr)
+exit(3)
 `;
   const result = runSwift(swift, [String(pid)]);
   if (!result.ok) {

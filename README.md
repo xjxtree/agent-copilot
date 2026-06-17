@@ -8,13 +8,13 @@ opencode, Pi, Hermes, and OpenClaw.
 
 | Area | Status |
 | --- | --- |
-| Current phase | V2.89 Agent Copilot brand asset refresh completed |
-| Completed baseline | V2.1-V2.89 |
-| Recent product line | V2.41-V2.89 AI-native analysis, task cockpit, validation hardening, module splitting, read-only Agent Copilot surfaces, per-surface evidence closeout, and brand asset refresh |
+| Current phase | V2.90 Agent Copilot identifier migration completed |
+| Completed baseline | V2.1-V2.90 |
+| Recent product line | V2.41-V2.90 AI-native analysis, task cockpit, validation hardening, module splitting, read-only Agent Copilot surfaces, per-surface evidence closeout, brand asset refresh, and compatibility-first identifier migration |
 | Agent Copilot line | M1-M4 completed; unlocked app-window evidence captured |
 | Maintained UI | Native macOS app in `apps/macos` |
 | Service boundary | Rust typed JSON stdio sidecar in `crates/service` |
-| Next version | V2.90 internal identifier migration; V2.91-V2.96 near-term plan is tracked in `docs/roadmap.md` and `docs/development-tasks.md` |
+| Next version | V2.91 model-task matching history; V2.92-V2.96 near-term plan is tracked in `docs/roadmap.md` and `docs/development-tasks.md` |
 
 V2.84-V2.86 completed the post-V2.83 module-splitting line:
 
@@ -42,9 +42,20 @@ V2.89 refreshes the Agent Copilot display brand assets:
 
 - Adds `AppIcon.svg` as the reviewable icon source.
 - Regenerates `AppIcon.icns` for the bundled macOS app icon.
-- Keeps `SkillsCopilot` / `skills-copilot`, bundle id, module names, AX ids,
-  app-data paths, and `dist/SkillsCopilot.app` unchanged for the future V2.90
-  migration slice.
+- At the V2.89 boundary, kept `SkillsCopilot` / `skills-copilot`, bundle id,
+  module names, AX ids, app-data paths, and `dist/SkillsCopilot.app`
+  unchanged until the V2.90 migration slice.
+
+V2.90 completes the first internal identifier migration slice:
+
+- Changes the primary packaged app to `dist/AgentCopilot.app` with
+  `CFBundleIdentifier=dev.agent-copilot.native`.
+- Migrates the service default app-data id to `dev.agent-copilot.native` with a
+  compatibility copy from legacy `dev.skills-copilot.native` app data when
+  needed.
+- Preserves Swift module names, Rust crate names, the `skills-copilot-service`
+  sidecar, `skills-copilot.*` AX ids, `SKILLS_COPILOT_*` env vars, and the
+  legacy Keychain service for compatibility.
 
 ## What It Does
 
@@ -120,7 +131,7 @@ The old Tauri/React UI and Tauri IPC shell have been removed. Do not recreate
 | `pnpm verify:module-size` | V2.86 single-file size gate |
 | `pnpm verify:macos-ui-layout` | Native UI static layout checks |
 | `pnpm smoke:macos-app -- --fixture-data --capture-window` | Fixture smoke with app-window capture |
-| `pnpm dev:macos` | Rebuild and launch `dist/SkillsCopilot.app` with real local environment |
+| `pnpm dev:macos` | Rebuild and launch `dist/AgentCopilot.app` with real local environment |
 
 ## Recent Verification Anchors
 
@@ -128,7 +139,7 @@ This section only keeps machine-checked status anchors. Detailed evidence lives
 in `docs/v2.*-verification-checklist.md` and `docs/development-tasks.md`.
 
 Baseline phrase used by docs gates:
-V2.89 Agent Copilot brand asset refresh completed.
+V2.90 Agent Copilot identifier migration completed.
 
 ### V2.74-V2.78
 

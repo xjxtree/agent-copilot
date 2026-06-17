@@ -8,7 +8,8 @@ impl ServiceHost {
             .ok_or_else(|| ServiceError::InvalidRequest("HOME is not set".to_string()))?;
         let app_data_dir = env::var_os("SKILLS_COPILOT_APP_DATA_DIR")
             .map(PathBuf::from)
-            .unwrap_or_else(|| default_app_data_dir(&user_home));
+            .map(Ok)
+            .unwrap_or_else(|| resolve_default_app_data_dir(&user_home))?;
         let project_cwd = env::var_os("SKILLS_COPILOT_PROJECT_CWD").map(PathBuf::from);
         let project_root = env::var_os("SKILLS_COPILOT_PROJECT_ROOT")
             .map(PathBuf::from)

@@ -2,8 +2,11 @@
 set -euo pipefail
 
 MODE="${1:-run}"
-APP_NAME="SkillsCopilot"
-BUNDLE_ID="dev.skills-copilot.native"
+APP_NAME="AgentCopilot"
+BUNDLE_ID="dev.agent-copilot.native"
+LEGACY_APP_NAME="SkillsCopilot"
+LEGACY_BUNDLE_ID="dev.skills-copilot.native"
+SWIFT_PRODUCT_NAME="SkillsCopilot"
 MIN_SYSTEM_VERSION="13.0"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -38,15 +41,17 @@ import Foundation
 let args = Array(CommandLine.arguments.dropFirst())
 let bundleId = args.indices.contains(0) ? args[0] : ""
 let appName = args.indices.contains(1) ? args[1] : ""
+let legacyBundleId = args.indices.contains(2) ? args[2] : ""
+let legacyAppName = args.indices.contains(3) ? args[3] : ""
 
 for app in NSWorkspace.shared.runningApplications {
-    let identifierMatches = app.bundleIdentifier == bundleId
-    let nameMatches = app.localizedName == appName
+    let identifierMatches = app.bundleIdentifier == bundleId || app.bundleIdentifier == legacyBundleId
+    let nameMatches = app.localizedName == appName || app.localizedName == legacyAppName
     guard identifierMatches || nameMatches else { continue }
     let bundlePath = app.bundleURL?.resolvingSymlinksInPath().standardizedFileURL.path ?? ""
     print("\(app.processIdentifier)\t\(bundlePath)")
 }
-' "$BUNDLE_ID" "$APP_NAME"
+' "$BUNDLE_ID" "$APP_NAME" "$LEGACY_BUNDLE_ID" "$LEGACY_APP_NAME"
 }
 
 wait_for_no_running_app_instances() {
@@ -144,11 +149,15 @@ guard let pid = Int32(rawPid),
     exit(2)
 }
 
-let activated = app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
-if !activated {
-    fputs("activation-failed: failed to activate \(app.localizedName ?? "target app") pid \(pid).\n", stderr)
-    exit(3)
+let deadline = Date().addingTimeInterval(5)
+while Date() < deadline {
+    if app.isActive || app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps]) {
+        exit(0)
+    }
+    Thread.sleep(forTimeInterval: 0.25)
 }
+fputs("activation-failed: failed to activate \(app.localizedName ?? "target app") pid \(pid).\n", stderr)
+exit(3)
 ' "$pid"
 }
 
@@ -162,7 +171,9 @@ import AppKit
 import CoreGraphics
 import Foundation
 
-let rawPid = CommandLine.arguments.dropFirst().first ?? ""
+let args = Array(CommandLine.arguments.dropFirst())
+let rawPid = args.indices.contains(0) ? args[0] : ""
+let appName = args.indices.contains(1) ? args[1] : "AgentCopilot"
 guard let expectedPid = Int32(rawPid) else {
     fputs("window-not-found: invalid app pid \(rawPid).\n", stderr)
     exit(2)
@@ -194,16 +205,16 @@ let matches = windows.compactMap { window -> UInt32? in
 }
 
 if matches.isEmpty {
-    fputs("window-not-found: No visible SkillsCopilot app window found for pid \(expectedPid).\n", stderr)
+    fputs("window-not-found: No visible \(appName) app window found for pid \(expectedPid).\n", stderr)
     exit(1)
 }
 if matches.count > 1 {
     let ids = matches.map(String.init).joined(separator: ",")
-    fputs("window-not-found: multiple visible SkillsCopilot windows create window ambiguity for pid \(expectedPid): \(ids)\n", stderr)
+    fputs("window-not-found: multiple visible \(appName) windows create window ambiguity for pid \(expectedPid): \(ids)\n", stderr)
     exit(1)
 }
 print(matches[0])
-' "$pid" 2>&1)"; then
+' "$pid" "$APP_NAME" 2>&1)"; then
       status=0
       printf '%s\n' "$output"
       return 0
@@ -230,7 +241,7 @@ RUST_SERVICE="$ROOT_DIR/target/debug/skills-copilot-service"
 
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES"
-cp "$SWIFT_BIN_DIR/$APP_NAME" "$APP_BINARY"
+cp "$SWIFT_BIN_DIR/$SWIFT_PRODUCT_NAME" "$APP_BINARY"
 cp "$RUST_SERVICE" "$SERVICE_BINARY"
 if [[ -d "$SWIFT_RESOURCES" ]]; then
   cp -R "$SWIFT_RESOURCES"/. "$APP_RESOURCES"/

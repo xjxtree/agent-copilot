@@ -15,7 +15,7 @@ Current usage:
 
 Current release-readiness guardrails:
 
-- V2.1-V2.89 are the synchronized completed baseline.
+- V2.1-V2.90 are the synchronized completed baseline.
 - Real local validation evidence is version-specific. Use the matching verification checklist for exact screenshots, blockers, and commands.
 - Fixture smoke screenshots still do not replace required real local validation for user-visible changes.
 - Tool-global import/export/install is integrated. Local directory import writes only app-controlled staging/catalog, export creates reproducible local bundles, and confirmed install routes through verified write paths.
@@ -29,6 +29,63 @@ Current release-readiness guardrails:
 
 Entries are ordered newest first. Add new version entries directly below this
 heading.
+
+### V2.90 - 2026-06-17
+
+Status:
+
+- Complete.
+- Agent Copilot internal identifier migration completed as a compatibility-first slice.
+
+Adapter behavior changes:
+
+- No adapter scan roots, writable scopes, install scopes, or config schemas changed.
+- `SKILLS_COPILOT_*` environment variables remain supported.
+
+Product/protocol changes:
+
+- Primary packaged app changed to `dist/AgentCopilot.app`.
+- `CFBundleName` and `CFBundleExecutable` are now `AgentCopilot`.
+- Primary bundle id and service default app-data id changed to
+  `dev.agent-copilot.native`.
+- Legacy app-data id `dev.skills-copilot.native` is retained as a migration
+  source and compatibility boundary.
+- Existing legacy app data is copied to the new default directory when the new
+  directory is absent; the legacy directory is not deleted.
+- Added migration marker `agent-copilot-app-data-migration.json`.
+- No service protocol method, payload, or protocol version changed.
+
+Risk/security notes:
+
+- Swift package/product/target/module names remain `SkillsCopilot`.
+- Rust crate names remain `skills-copilot-*`.
+- Sidecar binary remains `skills-copilot-service`.
+- AX identifiers remain `skills-copilot.*`.
+- Keychain service remains `dev.skills-copilot.native.llm`; V2.90 does not copy
+  or duplicate credentials.
+- No provider default calls, hidden write/apply paths, product script execution,
+  credential copies, raw prompt/response/trace persistence, cloud sync,
+  telemetry, signing, notarization, DMG, or ZIP work was added.
+
+Validation posture:
+
+- Focused Rust app-data migration tests passed.
+- `swift test --package-path apps/macos` passed.
+- `./script/build_and_run.sh --verify` launched and verified
+  `dist/AgentCopilot.app`.
+- `pnpm smoke:macos-app -- --fixture-data --capture-window` launched
+  `AgentCopilot` and passed.
+- V2.90 app-window evidence is under
+  `docs/ui-artifacts/v2.90-identifier-migration/`.
+- `pnpm check:macos` passed.
+- `pnpm check:privacy` passed.
+
+Near-term follow-up plan:
+
+- V2.91 covers model-task matching history as a new evidence domain.
+- V2.92-V2.96 cover Codex/opencode/Pi/Hermes/OpenClaw adapter unblock slices,
+  with each write/install capability remaining blocked until its own disposable
+  evidence and rollback gates pass.
 
 ### V2.89 - 2026-06-17
 

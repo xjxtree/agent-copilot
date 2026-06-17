@@ -189,6 +189,121 @@ fn status_request_returns_supported_methods() {
 }
 
 #[test]
+fn default_app_data_dir_uses_agent_copilot_bundle_id() {
+    let home = env::temp_dir().join(format!(
+        "skills-copilot-app-data-default-test-{}-{}",
+        std::process::id(),
+        unix_timestamp_millis()
+    ));
+
+    let preferred = default_app_data_dir(&home);
+    let legacy = legacy_app_data_dir(&home);
+
+    assert!(preferred.ends_with(DEFAULT_BUNDLE_ID));
+    assert!(legacy.ends_with(LEGACY_BUNDLE_ID));
+    assert_ne!(preferred, legacy);
+}
+
+#[test]
+fn resolve_default_app_data_dir_copies_legacy_data_once() {
+    let home = env::temp_dir().join(format!(
+        "skills-copilot-app-data-migration-test-{}-{}",
+        std::process::id(),
+        unix_timestamp_millis()
+    ));
+    let preferred = default_app_data_dir(&home);
+    let legacy = legacy_app_data_dir(&home);
+    fs::create_dir_all(legacy.join("llm")).expect("create legacy llm data");
+    fs::write(legacy.join("project-context.json"), "{\"active\":null}\n")
+        .expect("seed legacy project context");
+    fs::write(
+        legacy.join("llm").join("provider-profiles.json"),
+        "{\"version\":1,\"profiles\":[]}\n",
+    )
+    .expect("seed legacy provider profiles");
+
+    let resolved = resolve_default_app_data_dir(&home).expect("resolve migrated app data dir");
+
+    assert_eq!(resolved, preferred);
+    assert!(legacy.exists(), "legacy app data must not be deleted");
+    assert_eq!(
+        fs::read_to_string(preferred.join("project-context.json"))
+            .expect("migrated project context"),
+        "{\"active\":null}\n"
+    );
+    assert_eq!(
+        fs::read_to_string(preferred.join("llm").join("provider-profiles.json"))
+            .expect("migrated provider metadata"),
+        "{\"version\":1,\"profiles\":[]}\n"
+    );
+    let marker: Value = serde_json::from_str(
+        &fs::read_to_string(preferred.join("agent-copilot-app-data-migration.json"))
+            .expect("migration marker"),
+    )
+    .expect("parse migration marker");
+    assert_eq!(
+        marker.get("source_bundle_id").and_then(Value::as_str),
+        Some(LEGACY_BUNDLE_ID)
+    );
+    assert_eq!(
+        marker.get("target_bundle_id").and_then(Value::as_str),
+        Some(DEFAULT_BUNDLE_ID)
+    );
+
+    let _ = fs::remove_dir_all(home);
+}
+
+#[test]
+fn resolve_default_app_data_dir_does_not_overwrite_existing_preferred_data() {
+    let home = env::temp_dir().join(format!(
+        "skills-copilot-app-data-existing-test-{}-{}",
+        std::process::id(),
+        unix_timestamp_millis()
+    ));
+    let preferred = default_app_data_dir(&home);
+    let legacy = legacy_app_data_dir(&home);
+    fs::create_dir_all(&preferred).expect("create preferred app data");
+    fs::create_dir_all(&legacy).expect("create legacy app data");
+    fs::write(
+        preferred.join("project-context.json"),
+        "{\"preferred\":true}\n",
+    )
+    .expect("seed preferred data");
+    fs::write(legacy.join("project-context.json"), "{\"legacy\":true}\n")
+        .expect("seed legacy data");
+
+    let resolved = resolve_default_app_data_dir(&home).expect("resolve preferred app data dir");
+
+    assert_eq!(resolved, preferred);
+    assert_eq!(
+        fs::read_to_string(preferred.join("project-context.json")).expect("preferred data"),
+        "{\"preferred\":true}\n"
+    );
+    assert!(
+        !preferred
+            .join("agent-copilot-app-data-migration.json")
+            .exists(),
+        "existing preferred data should not receive a migration marker"
+    );
+
+    let _ = fs::remove_dir_all(home);
+}
+
+#[test]
+fn explicit_app_data_env_override_bypasses_default_migration() {
+    let override_dir = env::temp_dir().join(format!(
+        "skills-copilot-app-data-override-test-{}-{}",
+        std::process::id(),
+        unix_timestamp_millis()
+    ));
+    let _guard = EnvVarGuard::set("SKILLS_COPILOT_APP_DATA_DIR", &override_dir);
+
+    let host = ServiceHost::from_env().expect("host from env");
+
+    assert_eq!(host.app_data_dir, override_dir);
+}
+
+#[test]
 fn list_agent_config_snapshots_returns_selected_agent_timeline_only() {
     let temp_root = std::env::temp_dir().join(format!(
         "skills-copilot-service-timeline-{}",

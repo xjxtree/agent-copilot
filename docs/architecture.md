@@ -49,7 +49,7 @@
 | UI 协议 | **JSON-RPC / typed JSON service boundary** | `crates/service` 已提供 stdio sidecar；让 macOS 原生壳和未来 Windows/Linux shell 调同一套 Rust service；避免把业务逻辑绑死在任何 UI 框架。 |
 | 持久化 | **SQLite**（catalog）+ JSON（运行时 UI 状态） | SQLite 存 skills 目录快照、基础元数据、原始 frontmatter、冲突分组；标准化 frontmatter 索引留到后续。UI 状态用本地 JSON 即可。 |
 | LLM / AI Analysis | **AI-native 判断层**，通过用户配置的 provider profile 接入 | V2.41+ provider foundation 已完成：OpenAI-compatible / Claude-compatible endpoint、API key、model、Keychain-first storage、Test Connection、预算字段和最小 redacted call metadata。调用前必须 prompt preview/redaction/destination visibility/explicit confirmation，启用时只发往用户指定 endpoint。 |
-| 当前 app 运行 | **Local App Run + Smoke App Run** | 当前阶段只使用 `dist/SkillsCopilot.app`；Local App Run 走真实本机环境，Smoke App Run 走 fixture 环境。正式分发、签名、公证留到后续阶段。 |
+| 当前 app 运行 | **Local App Run + Smoke App Run** | 当前阶段只使用 `dist/AgentCopilot.app`；Local App Run 走真实本机环境，Smoke App Run 走 fixture 环境。正式分发、签名、公证留到后续阶段。 |
 
 **备选：Electron + Node** —— 仅在团队完全无 Rust 经验时考虑。代价是包体、安全模型、内存占用。
 

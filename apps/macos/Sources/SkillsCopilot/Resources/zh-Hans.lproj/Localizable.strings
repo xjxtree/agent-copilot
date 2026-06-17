@@ -286,13 +286,13 @@
 "validationWorkbench.blocker.lockedSession.action" = "解锁会话，保持应用可见，然后重试真实本机 Computer Use；如果仍被锁定，记录 locked-session。";
 "validationWorkbench.blocker.windowAX.title" = "找不到窗口 / 无 AX 窗口";
 "validationWorkbench.blocker.windowAX.summary" = "Computer Use、CG、AX 或激活流程无法解析预期的 Agent Copilot 主窗口。";
-"validationWorkbench.blocker.windowAX.action" = "重新启动精确的 dist/SkillsCopilot.app 应用包，验证 PID/窗口身份；若仍无法解析，记录 window-not-found、no-ax-window 或 activation-failed。";
+"validationWorkbench.blocker.windowAX.action" = "重新启动精确的 dist/AgentCopilot.app 应用包，验证 PID/窗口身份；若仍无法解析，记录 window-not-found、no-ax-window 或 activation-failed。";
 "validationWorkbench.blocker.screenRecording.title" = "屏幕录制权限";
 "validationWorkbench.blocker.screenRecording.summary" = "捕获或自动化层缺少 macOS 屏幕录制授权，因此视觉证据不可信。";
 "validationWorkbench.blocker.screenRecording.action" = "为相关终端或 Codex helper 授予屏幕录制权限后重试；否则记录 screen-recording-permission。";
 "validationWorkbench.blocker.bundle.title" = "过期或重复应用包";
 "validationWorkbench.blocker.bundle.summary" = "正在运行的应用可能早于源码构建、来自不同路径，或因为重复同应用包进程/窗口而存在歧义。";
-"validationWorkbench.blocker.bundle.action" = "重建，只启动精确工作区 dist/SkillsCopilot.app，确认 PID 与应用包路径；无法消除歧义时记录 stale-bundle 或 window-not-found。";
+"validationWorkbench.blocker.bundle.action" = "重建，只启动精确工作区 dist/AgentCopilot.app，确认 PID 与应用包路径；无法消除歧义时记录 stale-bundle 或 window-not-found。";
 "validationWorkbench.blocker.capture.title" = "无效截图证据";
 "validationWorkbench.blocker.capture.summary" = "截图为黑屏、近似单色、大面积透明、无效、过小，或不适合用于 UI 收口。";
 "validationWorkbench.blocker.capture.action" = "拒绝该截图，只保留应用窗口证据，并记录匹配的捕获阻塞项，而不是把截图计为验证通过。";
@@ -357,7 +357,7 @@
 "validationWorkbench.blocker.screenRecording.evidence" = "需要一张权限有效且显示应用窗口的截图。";
 "validationWorkbench.blocker.staleBundle.title" = "运行中的应用包已过期";
 "validationWorkbench.blocker.staleBundle.summary" = "可见应用不是刚构建的工作区应用包，或早于源码输入。";
-"validationWorkbench.blocker.staleBundle.action" = "重建，停止过期同包进程，启动精确的 dist/SkillsCopilot.app 路径，并重试验证。";
+"validationWorkbench.blocker.staleBundle.action" = "重建，停止过期同包进程，启动精确的 dist/AgentCopilot.app 路径，并重试验证。";
 "validationWorkbench.blocker.staleBundle.evidence" = "证据必须标识当前工作区应用包路径以及匹配的进程/窗口。";
 "validationWorkbench.blocker.toolLayerUnknown.title" = "未知工具层失败";
 "validationWorkbench.blocker.toolLayerUnknown.summary" = "验证工具返回了未分类失败，因此应用不能将本次运行视为成功。";

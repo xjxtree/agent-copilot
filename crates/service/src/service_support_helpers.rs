@@ -71,14 +71,96 @@ pub fn handle_request_json(input: &str) -> String {
 }
 
 pub(crate) fn default_app_data_dir(user_home: &Path) -> PathBuf {
+    app_data_dir_for_bundle_id(user_home, DEFAULT_BUNDLE_ID)
+}
+
+pub(crate) fn legacy_app_data_dir(user_home: &Path) -> PathBuf {
+    app_data_dir_for_bundle_id(user_home, LEGACY_BUNDLE_ID)
+}
+
+pub(crate) fn resolve_default_app_data_dir(user_home: &Path) -> Result<PathBuf, ServiceError> {
+    let preferred = default_app_data_dir(user_home);
+    let legacy = legacy_app_data_dir(user_home);
+    if preferred.exists() || !legacy.is_dir() {
+        return Ok(preferred);
+    }
+    migrate_legacy_app_data_dir(&legacy, &preferred)?;
+    Ok(preferred)
+}
+
+fn app_data_dir_for_bundle_id(user_home: &Path, bundle_id: &str) -> PathBuf {
     if cfg!(target_os = "macos") {
         user_home
             .join("Library")
             .join("Application Support")
-            .join(DEFAULT_BUNDLE_ID)
+            .join(bundle_id)
     } else {
-        user_home.join(".skills-copilot").join(DEFAULT_BUNDLE_ID)
+        user_home.join(".skills-copilot").join(bundle_id)
     }
+}
+
+fn migrate_legacy_app_data_dir(source: &Path, target: &Path) -> Result<(), ServiceError> {
+    if target.exists() {
+        return Ok(());
+    }
+    let parent = target
+        .parent()
+        .ok_or_else(|| ServiceError::InvalidRequest("app data target has no parent".to_string()))?;
+    fs::create_dir_all(parent)?;
+    let target_name = target
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("agent-copilot-app-data");
+    let staging = parent.join(format!(
+        ".{target_name}.migration-{}",
+        unix_timestamp_millis()
+    ));
+    if staging.exists() {
+        fs::remove_dir_all(&staging)?;
+    }
+
+    let result = (|| -> Result<(), ServiceError> {
+        fs::create_dir_all(&staging)?;
+        copy_app_data_contents(source, &staging)?;
+        let marker = json!({
+            "version": 1,
+            "migration": "v2.90-agent-copilot-app-data",
+            "source_bundle_id": LEGACY_BUNDLE_ID,
+            "target_bundle_id": DEFAULT_BUNDLE_ID,
+            "source_path": display_path(source),
+            "target_path": display_path(target),
+            "migrated_at_unix_ms": unix_timestamp_millis(),
+        });
+        fs::write(
+            staging.join("agent-copilot-app-data-migration.json"),
+            serde_json::to_string_pretty(&marker)?,
+        )?;
+        fs::rename(&staging, target)?;
+        Ok(())
+    })();
+
+    if result.is_err() {
+        let _ = fs::remove_dir_all(&staging);
+    }
+    result
+}
+
+fn copy_app_data_contents(source: &Path, target: &Path) -> Result<(), ServiceError> {
+    for entry in fs::read_dir(source)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let destination = target.join(entry.file_name());
+        if file_type.is_symlink() {
+            continue;
+        }
+        if file_type.is_dir() {
+            fs::create_dir_all(&destination)?;
+            copy_app_data_contents(&entry.path(), &destination)?;
+        } else if file_type.is_file() {
+            fs::copy(entry.path(), destination)?;
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn infer_project_root(cwd: &Path) -> PathBuf {

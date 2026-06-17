@@ -1085,11 +1085,17 @@ The file stores the current user-selected project and recent project list. It is
 
 Default macOS catalog path is:
 
-`~/Library/Application Support/dev.skills-copilot.native/catalog.sqlite`
+`~/Library/Application Support/dev.agent-copilot.native/catalog.sqlite`
 
 Project context is persisted separately at:
 
-`~/Library/Application Support/dev.skills-copilot.native/project-context.json`
+`~/Library/Application Support/dev.agent-copilot.native/project-context.json`
+
+When `SKILLS_COPILOT_APP_DATA_DIR` is not set, V2.90 copies legacy
+`~/Library/Application Support/dev.skills-copilot.native` app data to the new
+default directory if the new directory is absent. The legacy directory is not
+deleted, and Keychain credentials remain under the legacy
+`dev.skills-copilot.native.llm` service.
 
 ## Project Context Precedence
 

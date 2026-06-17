@@ -64,7 +64,7 @@ use project_context::{
     ProjectContext, ProjectContextParams, ProjectContextState, ProjectContextSummary,
 };
 pub use protocol::{
-    ServiceErrorRecord, ServiceRequest, ServiceResponse, DEFAULT_BUNDLE_ID,
+    ServiceErrorRecord, ServiceRequest, ServiceResponse, DEFAULT_BUNDLE_ID, LEGACY_BUNDLE_ID,
     SERVICE_PROTOCOL_VERSION, SUPPORTED_METHODS,
 };
 use provider::{

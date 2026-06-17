@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_TARGET="${1:-SkillsCopilot}"
+APP_TARGET="${1:-AgentCopilot}"
 OUTPUT_PATH="${2:-docs/ui-artifacts/native-macos-shell/completed.png}"
 TARGET_PID="${SKILLS_COPILOT_TARGET_PID:-${3:-}}"
 TARGET_WINDOW_ID="${SKILLS_COPILOT_TARGET_WINDOW_ID:-${4:-}}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEFAULT_APP_BUNDLE="$ROOT_DIR/dist/SkillsCopilot.app"
+DEFAULT_APP_BUNDLE="$ROOT_DIR/dist/AgentCopilot.app"
 TARGET_BUNDLE_PATH="${SKILLS_COPILOT_APP:-}"
 APP_OWNER="$APP_TARGET"
 OUTPUT_ABS="$OUTPUT_PATH"
@@ -41,7 +41,7 @@ import Foundation
 import ImageIO
 
 let args = Array(CommandLine.arguments.dropFirst())
-let owner = args.indices.contains(0) && !args[0].isEmpty ? args[0] : "SkillsCopilot"
+let owner = args.indices.contains(0) && !args[0].isEmpty ? args[0] : "AgentCopilot"
 let outputPath = args.indices.contains(1) && !args[1].isEmpty ? args[1] : "completed.png"
 let targetPid = args.indices.contains(2) && !args[2].isEmpty ? Int32(args[2]) : nil
 let targetBundlePath = args.indices.contains(3) && !args[3].isEmpty

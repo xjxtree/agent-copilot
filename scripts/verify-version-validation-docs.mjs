@@ -199,6 +199,19 @@ const versions = {
       "Final status decision: completed",
     ],
   },
+  "v2.90": {
+    title: "# V2.90 Verification Checklist",
+    required: [
+      "Internal identifier migration",
+      "dist/AgentCopilot.app",
+      "dev.agent-copilot.native",
+      "dev.skills-copilot.native",
+      "app-data compatibility migration",
+      "agent-copilot-app-data-migration.json",
+      "docs/ui-artifacts/v2.90-identifier-migration",
+      "Final status decision: completed",
+    ],
+  },
 };
 
 const staleStatus = [
