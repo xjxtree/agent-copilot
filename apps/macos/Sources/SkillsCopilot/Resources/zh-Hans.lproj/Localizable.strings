@@ -241,6 +241,13 @@
 "providerObservability.providers" = "提供方";
 "providerObservability.models" = "模型";
 "providerObservability.destinations" = "目标";
+"providerObservability.modelTaskHistory" = "模型-任务历史";
+"providerObservability.empty.modelTaskHistory" = "未返回模型-任务历史。";
+"providerObservability.taskKind" = "任务类型";
+"providerObservability.matchStatus" = "匹配状态";
+"providerObservability.confidence" = "置信度";
+"providerObservability.sourceKind" = "来源类型";
+"providerObservability.redactionStatus" = "脱敏";
 "providerObservability.recentCalls" = "最近调用";
 "providerObservability.statusRows" = "状态行";
 "providerObservability.errorRows" = "错误";

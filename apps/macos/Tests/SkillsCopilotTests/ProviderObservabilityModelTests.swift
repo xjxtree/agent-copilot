@@ -127,6 +127,48 @@ struct ProviderObservabilityModelTests {
                 "destination_rows": [
                   {"kind":"destination","label":"llm.example.com","destination_host":"llm.example.com","call_count":2,"status":"partial"}
                 ],
+                "model_task_history_rows": [
+                  {
+                    "id": "model-task:fixture",
+                    "source": "model-task-matches.json",
+                    "source_kind": "manual",
+                    "title": "Release audit model fit",
+                    "task": "Review local release audit evidence.",
+                    "task_kind": "task_readiness",
+                    "agent": "codex",
+                    "provider": "openai-compatible",
+                    "model": "gpt-5",
+                    "destination_host": "llm.example.com",
+                    "match_status": "fit",
+                    "confidence_score": 88,
+                    "status": "fit",
+                    "latency_ms": 720,
+                    "estimated_total_tokens": 540,
+                    "estimated_cost_usd": 0.014,
+                    "gap_notes": [],
+                    "blocker_notes": [],
+                    "outcome_notes": ["The model was recorded as a fit for release audit work."],
+                    "evidence_refs": ["prompt-run:preview-1"],
+                    "redaction_status": "redacted-local-only",
+                    "safety_flags": {
+                      "provider_request_sent": false,
+                      "write_back_allowed": false,
+                      "write_actions_available": false,
+                      "script_execution_allowed": false,
+                      "execution_actions_available": false,
+                      "config_mutation_allowed": false,
+                      "snapshot_created": false,
+                      "triage_mutation_allowed": false,
+                      "credential_accessed": false,
+                      "raw_prompt_persisted": false,
+                      "raw_response_persisted": false,
+                      "raw_trace_persisted": false,
+                      "cloud_sync_enabled": false,
+                      "telemetry_enabled": false,
+                      "raw_secret_returned": false
+                    }
+                  }
+                ],
                 "status_rows": [
                   {"severity":"info","status":"succeeded","title":"Succeeded","detail":"One call completed.","count":1},
                   {"severity":"warning","status":"blocked","title":"Blocked locally","detail":"One preview never sent a provider request.","count":1}
@@ -200,6 +242,9 @@ struct ProviderObservabilityModelTests {
         try expectEqual(result.providerRows.first?.label, "OpenAI-compatible", "Provider observability should decode provider rows.")
         try expectEqual(result.modelRows.count, 2, "Provider observability should decode model rows.")
         try expectEqual(result.destinationRows.first?.destinationHost, "llm.example.com", "Provider observability should decode destination rows.")
+        try expectEqual(result.modelTaskHistoryRows.first?.title, "Release audit model fit", "Provider observability should decode model-task history rows.")
+        try expectEqual(result.modelTaskHistoryRows.first?.confidenceScore, 88, "Provider observability should decode model-task confidence.")
+        try expectFalse(result.modelTaskHistoryRows.first?.safetyFlags.providerRequestSent ?? true, "Model-task history rows must not send provider requests.")
         try expectEqual(result.statusRows.count, 2, "Provider observability should decode status rows.")
         try expectEqual(result.errorRows.first?.title, "Timeout", "Provider observability should decode error rows.")
         try expectEqual(result.budgetHints.first?.title, "Monthly budget healthy", "Provider observability should decode budget hints.")

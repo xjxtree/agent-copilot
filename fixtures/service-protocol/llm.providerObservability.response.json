@@ -26,6 +26,7 @@
     "call_rows": [],
     "history_rows": [],
     "grouping_rows": [],
+    "model_task_history_rows": [],
     "status_rows": [
       {
         "id": "status-row-prompt-runs-absent",

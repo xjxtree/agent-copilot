@@ -92,6 +92,23 @@ fn dispatch_coverage_params(method: &str) -> Value {
         "llm.providerObservability" => json!({
             "limit": 4
         }),
+        "llm.listModelTaskMatches" => json!({
+            "limit": 4
+        }),
+        "llm.recordModelTaskMatch" => json!({
+            "id": "dispatch-model-task-match",
+            "title": "Dispatch model-task match",
+            "task": "Fixture local release audit task",
+            "task_kind": "task_readiness",
+            "provider": "openai-compatible",
+            "model": "dispatch-model",
+            "match_status": "fit",
+            "source_kind": "manual",
+            "evidence_refs": ["dispatch:model-task"]
+        }),
+        "llm.deleteModelTaskMatch" => json!({
+            "id": "dispatch-model-task-match"
+        }),
         "llm.prepareSkillAnalysis" => {
             json!({ "instance_ids": ["missing-skill"], "analysis_kind": "overview" })
         }
@@ -3712,6 +3729,8 @@ pub(super) struct WireLlmProviderObservabilityResult {
     pub(super) call_rows: Vec<WireLlmProviderObservabilityCallRow>,
     pub(super) history_rows: Vec<WireLlmProviderObservabilityHistoryRow>,
     pub(super) grouping_rows: Vec<WireLlmProviderObservabilityGroupingRow>,
+    #[serde(default)]
+    pub(super) model_task_history_rows: Vec<WireModelTaskMatchEvidenceRow>,
     pub(super) status_rows: Vec<WireLlmProviderObservabilityStatusRow>,
     pub(super) budget_usage_hints: Vec<WireLlmProviderObservabilityBudgetUsageHint>,
     pub(super) retention_recommendations:
@@ -3908,6 +3927,216 @@ pub(super) struct WireLlmProviderObservabilityPromptMetadata {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct WireLlmProviderObservabilitySafetyFlags {
+    pub(super) read_only: bool,
+    pub(super) app_local_only: bool,
+    pub(super) provider_request_sent: bool,
+    pub(super) credential_accessed: bool,
+    pub(super) draft_copy_only: bool,
+    pub(super) write_back_allowed: bool,
+    pub(super) write_actions_available: bool,
+    pub(super) skill_files_mutated: bool,
+    pub(super) agent_config_mutated: bool,
+    pub(super) script_execution_allowed: bool,
+    pub(super) execution_actions_available: bool,
+    pub(super) config_mutation_allowed: bool,
+    pub(super) snapshot_created: bool,
+    pub(super) triage_mutation_allowed: bool,
+    pub(super) raw_secret_returned: bool,
+    pub(super) raw_prompt_persisted: bool,
+    pub(super) raw_response_persisted: bool,
+    pub(super) raw_trace_persisted: bool,
+    pub(super) unredacted_paths_returned: bool,
+    pub(super) cloud_sync_performed: bool,
+    pub(super) telemetry_emitted: bool,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct WireModelTaskMatchListResult {
+    pub(super) generated_by: String,
+    pub(super) status: String,
+    pub(super) summary: WireModelTaskMatchSummary,
+    pub(super) records: Vec<WireModelTaskMatchRecord>,
+    pub(super) model_rows: Vec<WireModelTaskMatchModelRow>,
+    pub(super) task_rows: Vec<WireModelTaskMatchTaskRow>,
+    pub(super) recent_evidence_rows: Vec<WireModelTaskMatchEvidenceRow>,
+    pub(super) gap_notes: Vec<String>,
+    pub(super) blocker_notes: Vec<String>,
+    pub(super) evidence_references: Vec<WireLlmProviderObservabilityEvidenceReference>,
+    pub(super) app_local_only: bool,
+    pub(super) history_file: String,
+    pub(super) provider_request_sent: bool,
+    pub(super) credential_accessed: bool,
+    pub(super) raw_prompt_persisted: bool,
+    pub(super) raw_response_persisted: bool,
+    pub(super) raw_trace_persisted: bool,
+    pub(super) safety_flags: WireModelTaskMatchSafetyFlags,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct WireModelTaskMatchRecordResult {
+    pub(super) generated_by: String,
+    pub(super) record: WireModelTaskMatchRecord,
+    pub(super) count: usize,
+    pub(super) app_local_only: bool,
+    pub(super) history_file: String,
+    pub(super) provider_request_sent: bool,
+    pub(super) skill_files_mutated: bool,
+    pub(super) agent_config_mutated: bool,
+    pub(super) snapshot_created: bool,
+    pub(super) triage_mutated: bool,
+    pub(super) raw_prompt_persisted: bool,
+    pub(super) raw_response_persisted: bool,
+    pub(super) raw_trace_persisted: bool,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct WireModelTaskMatchDeleteResult {
+    pub(super) record_id: String,
+    pub(super) deleted: bool,
+    pub(super) remaining_count: usize,
+    pub(super) app_local_only: bool,
+    pub(super) provider_request_sent: bool,
+    pub(super) skill_files_mutated: bool,
+    pub(super) agent_config_mutated: bool,
+    pub(super) snapshot_created: bool,
+    pub(super) triage_mutated: bool,
+    pub(super) raw_prompt_persisted: bool,
+    pub(super) raw_response_persisted: bool,
+    pub(super) raw_trace_persisted: bool,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct WireModelTaskMatchRecord {
+    pub(super) id: String,
+    pub(super) title: String,
+    pub(super) task: String,
+    pub(super) task_kind: String,
+    pub(super) agent: Option<String>,
+    pub(super) profile_id: Option<String>,
+    pub(super) provider: String,
+    pub(super) model: String,
+    pub(super) destination_host: Option<String>,
+    pub(super) match_status: String,
+    pub(super) confidence_score: Option<u8>,
+    pub(super) latency_ms: Option<u64>,
+    pub(super) estimated_total_tokens: Option<u32>,
+    pub(super) estimated_cost_usd: Option<f64>,
+    pub(super) source_kind: String,
+    pub(super) prompt_run_ids: Vec<String>,
+    pub(super) session_review_ids: Vec<String>,
+    pub(super) trace_import_ids: Vec<String>,
+    pub(super) benchmark_ids: Vec<String>,
+    pub(super) evidence_refs: Vec<String>,
+    pub(super) gap_notes: Vec<String>,
+    pub(super) blocker_notes: Vec<String>,
+    pub(super) outcome_notes: Vec<String>,
+    pub(super) created_at: i64,
+    pub(super) updated_at: i64,
+    pub(super) redaction_summary: WireLlmPromptRunRedactionSummary,
+    pub(super) safety_flags: WireModelTaskMatchSafetyFlags,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct WireModelTaskMatchSummary {
+    pub(super) stored_record_count: usize,
+    pub(super) prompt_run_count: usize,
+    pub(super) returned_record_count: usize,
+    pub(super) returned_prompt_run_count: usize,
+    pub(super) model_count: usize,
+    pub(super) task_kind_count: usize,
+    pub(super) fit_count: usize,
+    pub(super) partial_fit_count: usize,
+    pub(super) mismatch_count: usize,
+    pub(super) unknown_count: usize,
+    pub(super) estimated_total_tokens: u64,
+    pub(super) estimated_cost_usd: f64,
+    pub(super) latest_activity_at: Option<i64>,
+    pub(super) summary: String,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct WireModelTaskMatchModelRow {
+    pub(super) id: String,
+    pub(super) provider: String,
+    pub(super) model: String,
+    pub(super) destination_host: Option<String>,
+    pub(super) stored_record_count: usize,
+    pub(super) prompt_run_count: usize,
+    pub(super) fit_count: usize,
+    pub(super) partial_fit_count: usize,
+    pub(super) mismatch_count: usize,
+    pub(super) unknown_count: usize,
+    pub(super) estimated_total_tokens: u64,
+    pub(super) estimated_cost_usd: f64,
+    pub(super) latest_activity_at: Option<i64>,
+    pub(super) evidence_refs: Vec<String>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct WireModelTaskMatchTaskRow {
+    pub(super) id: String,
+    pub(super) task_kind: String,
+    pub(super) status: String,
+    pub(super) stored_record_count: usize,
+    pub(super) prompt_run_count: usize,
+    pub(super) fit_count: usize,
+    pub(super) partial_fit_count: usize,
+    pub(super) mismatch_count: usize,
+    pub(super) unknown_count: usize,
+    pub(super) estimated_total_tokens: u64,
+    pub(super) estimated_cost_usd: f64,
+    pub(super) latest_activity_at: Option<i64>,
+    pub(super) evidence_refs: Vec<String>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct WireModelTaskMatchEvidenceRow {
+    pub(super) id: String,
+    pub(super) source: String,
+    pub(super) source_kind: String,
+    pub(super) title: String,
+    pub(super) task: Option<String>,
+    pub(super) task_kind: String,
+    pub(super) agent: Option<String>,
+    pub(super) provider: String,
+    pub(super) model: String,
+    pub(super) destination_host: Option<String>,
+    pub(super) match_status: String,
+    pub(super) confidence_score: Option<u8>,
+    pub(super) status: String,
+    pub(super) created_at: i64,
+    pub(super) updated_at: Option<i64>,
+    pub(super) latency_ms: Option<u64>,
+    pub(super) estimated_total_tokens: u32,
+    pub(super) estimated_cost_usd: f64,
+    pub(super) gap_notes: Vec<String>,
+    pub(super) blocker_notes: Vec<String>,
+    pub(super) outcome_notes: Vec<String>,
+    pub(super) evidence_refs: Vec<String>,
+    pub(super) redaction_status: String,
+    pub(super) safety_flags: WireModelTaskMatchSafetyFlags,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct WireModelTaskMatchSafetyFlags {
     pub(super) read_only: bool,
     pub(super) app_local_only: bool,
     pub(super) provider_request_sent: bool,

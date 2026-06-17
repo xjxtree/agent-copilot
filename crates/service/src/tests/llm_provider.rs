@@ -1040,6 +1040,338 @@ fn llm_provider_observability_aggregates_seeded_metadata_and_preserves_privacy_b
 }
 
 #[test]
+fn model_task_matches_empty_list_is_safe_and_does_not_initialize_app_data() {
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-model-task-empty-{}-{}",
+        std::process::id(),
+        unique_suffix(),
+    ));
+    let host = test_host(app_data_dir.clone());
+
+    let response = host.handle(ServiceRequest {
+        id: Some("model-task-list".to_string()),
+        method: "llm.listModelTaskMatches".to_string(),
+        params: Value::Null,
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("model task match list result");
+    assert_eq!(
+        result.get("generated_by").and_then(Value::as_str),
+        Some("local-v2.91")
+    );
+    assert_eq!(
+        result
+            .pointer("/summary/stored_record_count")
+            .and_then(Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        result
+            .pointer("/summary/prompt_run_count")
+            .and_then(Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        result
+            .pointer("/safety_flags/provider_request_sent")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result
+            .pointer("/safety_flags/raw_prompt_persisted")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert!(
+        !app_data_dir.exists(),
+        "empty model-task history list must not initialize app data"
+    );
+
+    let _ = fs::remove_dir_all(app_data_dir);
+}
+
+#[test]
+fn model_task_match_record_rejects_empty_task_or_model() {
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-model-task-invalid-{}-{}",
+        std::process::id(),
+        unique_suffix(),
+    ));
+    let host = test_host(app_data_dir.clone());
+
+    let missing_task = host.handle(ServiceRequest {
+        id: Some("model-task-record-missing-task".to_string()),
+        method: "llm.recordModelTaskMatch".to_string(),
+        params: json!({ "task": " ", "model": "fixture-model" }),
+    });
+    assert!(!missing_task.ok);
+    assert_eq!(
+        missing_task.error.expect("missing task error").code,
+        "invalid_request"
+    );
+
+    let missing_model = host.handle(ServiceRequest {
+        id: Some("model-task-record-missing-model".to_string()),
+        method: "llm.recordModelTaskMatch".to_string(),
+        params: json!({ "task": "fixture task", "model": " " }),
+    });
+    assert!(!missing_model.ok);
+    assert_eq!(
+        missing_model.error.expect("missing model error").code,
+        "invalid_request"
+    );
+
+    assert!(
+        !app_data_dir.exists(),
+        "invalid model-task record requests must not initialize app data"
+    );
+
+    let _ = fs::remove_dir_all(app_data_dir);
+}
+
+#[test]
+fn model_task_match_record_redacts_and_writes_only_app_local_history() {
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-model-task-record-{}-{}",
+        std::process::id(),
+        unique_suffix(),
+    ));
+    let host = test_host(app_data_dir.clone());
+    let local_path = app_data_dir
+        .join("fixture-project")
+        .join("SKILL.md")
+        .to_string_lossy()
+        .to_string();
+    let secret = "ABCDEF1234567890ABCDEF1234567890";
+
+    let response = host.handle(ServiceRequest {
+        id: Some("model-task-record".to_string()),
+        method: "llm.recordModelTaskMatch".to_string(),
+        params: json!({
+            "id": "model-task-redaction",
+            "title": format!("Review api_key {secret}"),
+            "task": format!("Audit task at {local_path} api_key {secret}"),
+            "task_kind": "task_readiness",
+            "provider": "openai-compatible",
+            "model": "fixture-model",
+            "destination_host": "https://api.fixture.invalid/v1",
+            "match_status": "fit",
+            "source_kind": "manual",
+            "evidence_refs": [format!("path:{local_path}")],
+            "outcome_notes": [format!("Observed api_key {secret}")]
+        }),
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("model task record result");
+    let serialized = serde_json::to_string(&result).expect("serialize result");
+    assert!(!serialized.contains(&local_path));
+    assert!(!serialized.contains(secret));
+    assert!(serialized.contains("<app-data-dir>"));
+    assert!(serialized.contains("<redacted"));
+    assert_eq!(
+        result
+            .pointer("/record/safety_flags/provider_request_sent")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert!(host.model_task_matches_path().exists());
+    assert!(
+        !host.llm_prompt_runs_path().exists(),
+        "recording model-task history must not create prompt-run history"
+    );
+
+    let content =
+        fs::read_to_string(host.model_task_matches_path()).expect("model task history content");
+    assert!(!content.contains(&local_path));
+    assert!(!content.contains(secret));
+    assert!(content.contains("<app-data-dir>"));
+
+    let _ = fs::remove_dir_all(app_data_dir);
+}
+
+#[test]
+fn model_task_match_list_aggregates_records_and_prompt_runs_with_filters() {
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-model-task-list-{}-{}",
+        std::process::id(),
+        unique_suffix(),
+    ));
+    let host = test_host(app_data_dir.clone());
+
+    let prompt_run = LlmPromptRunRecord {
+        id: "prompt-run-model-task".to_string(),
+        preview_id: "preview-model-task".to_string(),
+        confirmation_id: "confirm-model-task".to_string(),
+        action: "task_readiness".to_string(),
+        request_kind: "task_readiness".to_string(),
+        analysis_kind: None,
+        scope: Some("selected".to_string()),
+        instance_id: Some("fixture-skill".to_string()),
+        instance_ids: vec!["fixture-skill".to_string()],
+        definition_id: Some("fixture-definition".to_string()),
+        agent: Some("codex".to_string()),
+        task: Some("Review release evidence.".to_string()),
+        profile_id: "fixture-openai".to_string(),
+        provider: "openai-compatible".to_string(),
+        model: "fixture-model".to_string(),
+        destination_host: "api.fixture.invalid".to_string(),
+        status: "succeeded".to_string(),
+        error_code: None,
+        error_message: None,
+        duration_ms: 50,
+        estimated_input_tokens: 100,
+        estimated_output_tokens: 25,
+        estimated_total_tokens: 125,
+        estimated_cost_usd: 0.01,
+        draft_output: None,
+        draft_requires_user_copy: true,
+        provider_request_sent: true,
+        credential_accessed: true,
+        raw_secret_returned: false,
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+        redaction_summary: LlmPromptRunRedactionSummary {
+            status: "redacted-local-only".to_string(),
+            redacted_value_count: 0,
+            redacted_fields: Vec::new(),
+            placeholders: vec!["<redacted>".to_string()],
+            raw_prompt_persisted: false,
+            raw_response_persisted: false,
+            raw_trace_persisted: false,
+            raw_secret_returned: false,
+        },
+        created_at: 10,
+        completed_at: 20,
+        safety_flags: llm_prompt_run_safety_flags(true, true),
+    };
+    host.save_llm_prompt_runs(&[prompt_run])
+        .expect("save prompt run");
+
+    let record = host.handle(ServiceRequest {
+        id: Some("model-task-record".to_string()),
+        method: "llm.recordModelTaskMatch".to_string(),
+        params: json!({
+            "id": "model-task-fit",
+            "title": "Fixture model fit",
+            "task": "Review release evidence.",
+            "task_kind": "task_readiness",
+            "agent": "codex",
+            "provider": "openai-compatible",
+            "model": "fixture-model",
+            "destination_host": "api.fixture.invalid",
+            "match_status": "fit",
+            "confidence_score": 90,
+            "estimated_total_tokens": 75,
+            "estimated_cost_usd": 0.02,
+            "evidence_refs": ["prompt-run:prompt-run-model-task"]
+        }),
+    });
+    assert!(record.ok, "{:?}", record.error);
+
+    let response = host.handle(ServiceRequest {
+        id: Some("model-task-list-filtered".to_string()),
+        method: "llm.listModelTaskMatches".to_string(),
+        params: json!({
+            "provider": "openai-compatible",
+            "model": "fixture-model",
+            "task_kind": "task_readiness",
+            "match_status": "fit",
+            "agent": "codex",
+            "limit": 10
+        }),
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("model task list result");
+    assert_eq!(
+        result
+            .pointer("/summary/returned_record_count")
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        result
+            .pointer("/summary/returned_prompt_run_count")
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        result
+            .pointer("/model_rows/0/provider")
+            .and_then(Value::as_str),
+        Some("openai-compatible")
+    );
+    assert_eq!(
+        result
+            .pointer("/recent_evidence_rows")
+            .and_then(Value::as_array)
+            .map(Vec::len),
+        Some(2)
+    );
+    assert_eq!(
+        result
+            .pointer("/safety_flags/provider_request_sent")
+            .and_then(Value::as_bool),
+        Some(false),
+        "listing history must not send fresh provider traffic"
+    );
+
+    let _ = fs::remove_dir_all(app_data_dir);
+}
+
+#[test]
+fn model_task_match_delete_is_app_local_only() {
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-model-task-delete-{}-{}",
+        std::process::id(),
+        unique_suffix(),
+    ));
+    let host = test_host(app_data_dir.clone());
+
+    let record = host.handle(ServiceRequest {
+        id: Some("model-task-record".to_string()),
+        method: "llm.recordModelTaskMatch".to_string(),
+        params: json!({
+            "id": "model-task-delete-me",
+            "task": "Fixture task",
+            "model": "fixture-model"
+        }),
+    });
+    assert!(record.ok, "{:?}", record.error);
+
+    let response = host.handle(ServiceRequest {
+        id: Some("model-task-delete".to_string()),
+        method: "llm.deleteModelTaskMatch".to_string(),
+        params: json!({ "id": "model-task-delete-me" }),
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("delete result");
+    assert_eq!(result.get("deleted").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        result
+            .pointer("/provider_request_sent")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        result
+            .pointer("/skill_files_mutated")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    let records = host
+        .load_model_task_matches()
+        .expect("load model task matches");
+    assert!(records.is_empty());
+
+    let _ = fs::remove_dir_all(app_data_dir);
+}
+
+#[test]
 fn app_version_returns_version_and_protocol() {
     let host = ServiceHost {
         app_data_dir: PathBuf::from("/tmp/skills-copilot-test"),

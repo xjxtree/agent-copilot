@@ -1157,6 +1157,60 @@ pub(super) fn decode_response_fixture(method: &str, result: &Value, path: &Path)
                 assert!(!recommendation.cleanup_action_available);
                 assert!(!recommendation.write_action_available);
             }
+            for row in &observability.model_task_history_rows {
+                assert_model_task_match_safety(&row.safety_flags);
+            }
+        }
+        "llm.listModelTaskMatches" => {
+            let history: WireModelTaskMatchListResult = decode_fixture_result(method, result, path);
+            assert_eq!(history.generated_by, "local-v2.91");
+            assert_eq!(history.history_file, "model-task-matches.json");
+            assert!(history.app_local_only);
+            assert!(!history.provider_request_sent);
+            assert!(!history.credential_accessed);
+            assert!(!history.raw_prompt_persisted);
+            assert!(!history.raw_response_persisted);
+            assert!(!history.raw_trace_persisted);
+            assert_model_task_match_safety(&history.safety_flags);
+            assert_eq!(history.summary.returned_record_count, history.records.len());
+            for record in &history.records {
+                assert_model_task_match_safety(&record.safety_flags);
+                assert!(!record.redaction_summary.raw_prompt_persisted);
+                assert!(!record.redaction_summary.raw_response_persisted);
+                assert!(!record.redaction_summary.raw_trace_persisted);
+            }
+            for row in &history.recent_evidence_rows {
+                assert_model_task_match_safety(&row.safety_flags);
+            }
+        }
+        "llm.recordModelTaskMatch" => {
+            let recorded: WireModelTaskMatchRecordResult =
+                decode_fixture_result(method, result, path);
+            assert_eq!(recorded.generated_by, "local-v2.91");
+            assert_eq!(recorded.history_file, "model-task-matches.json");
+            assert!(recorded.app_local_only);
+            assert!(!recorded.provider_request_sent);
+            assert!(!recorded.skill_files_mutated);
+            assert!(!recorded.agent_config_mutated);
+            assert!(!recorded.snapshot_created);
+            assert!(!recorded.triage_mutated);
+            assert!(!recorded.raw_prompt_persisted);
+            assert!(!recorded.raw_response_persisted);
+            assert!(!recorded.raw_trace_persisted);
+            assert_model_task_match_safety(&recorded.record.safety_flags);
+        }
+        "llm.deleteModelTaskMatch" => {
+            let deleted: WireModelTaskMatchDeleteResult =
+                decode_fixture_result(method, result, path);
+            assert!(deleted.app_local_only);
+            assert!(!deleted.provider_request_sent);
+            assert!(!deleted.skill_files_mutated);
+            assert!(!deleted.agent_config_mutated);
+            assert!(!deleted.snapshot_created);
+            assert!(!deleted.triage_mutated);
+            assert!(!deleted.raw_prompt_persisted);
+            assert!(!deleted.raw_response_persisted);
+            assert!(!deleted.raw_trace_persisted);
         }
         "llm.prepareAction" => {
             let prepare: WireLlmPrepareActionResult = decode_fixture_result(method, result, path);
@@ -1545,6 +1599,29 @@ pub(super) fn assert_provider_observability_safety(
     flags: &WireLlmProviderObservabilitySafetyFlags,
 ) {
     assert!(flags.read_only);
+    assert!(flags.app_local_only);
+    assert!(!flags.provider_request_sent);
+    assert!(!flags.credential_accessed);
+    assert!(flags.draft_copy_only);
+    assert!(!flags.write_back_allowed);
+    assert!(!flags.write_actions_available);
+    assert!(!flags.skill_files_mutated);
+    assert!(!flags.agent_config_mutated);
+    assert!(!flags.script_execution_allowed);
+    assert!(!flags.execution_actions_available);
+    assert!(!flags.config_mutation_allowed);
+    assert!(!flags.snapshot_created);
+    assert!(!flags.triage_mutation_allowed);
+    assert!(!flags.raw_secret_returned);
+    assert!(!flags.raw_prompt_persisted);
+    assert!(!flags.raw_response_persisted);
+    assert!(!flags.raw_trace_persisted);
+    assert!(!flags.unredacted_paths_returned);
+    assert!(!flags.cloud_sync_performed);
+    assert!(!flags.telemetry_emitted);
+}
+
+pub(super) fn assert_model_task_match_safety(flags: &WireModelTaskMatchSafetyFlags) {
     assert!(flags.app_local_only);
     assert!(!flags.provider_request_sent);
     assert!(!flags.credential_accessed);

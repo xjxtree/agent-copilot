@@ -464,10 +464,10 @@ const nativeIPCCleanupChecks = [
       && !/(cancel|timeout|pid|socket|daemon|token)/i.test(serviceRequestBody),
   },
   {
-    label: "V2.87 Agent Copilot protocol method surface remains the current 90-method contract",
-    passed: supportedMethods.length === 90
-      && statusFixtureMethods.length === 90
-      && /current count is 90 methods/.test(files.serviceProtocol),
+    label: "V2.91 Agent Copilot protocol method surface remains the current 93-method contract",
+    passed: supportedMethods.length === 93
+      && statusFixtureMethods.length === 93
+      && /current count is 93 methods/.test(files.serviceProtocol),
   },
   {
     label: "V2.81 protocol surface has no IPC control, daemon, process, or socket methods",

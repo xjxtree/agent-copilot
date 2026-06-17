@@ -4001,6 +4001,7 @@ pub struct LlmProviderObservabilityResult {
     pub call_rows: Vec<LlmProviderObservabilityCallRow>,
     pub history_rows: Vec<LlmProviderObservabilityHistoryRow>,
     pub grouping_rows: Vec<LlmProviderObservabilityGroupingRow>,
+    pub model_task_history_rows: Vec<ModelTaskMatchEvidenceRow>,
     pub status_rows: Vec<LlmProviderObservabilityStatusRow>,
     pub budget_usage_hints: Vec<LlmProviderObservabilityBudgetUsageHint>,
     pub retention_recommendations: Vec<LlmProviderObservabilityRetentionRecommendationRow>,
@@ -4176,6 +4177,269 @@ pub struct LlmProviderObservabilityPromptMetadata {
 
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct LlmProviderObservabilitySafetyFlags {
+    pub read_only: bool,
+    pub app_local_only: bool,
+    pub provider_request_sent: bool,
+    pub credential_accessed: bool,
+    pub draft_copy_only: bool,
+    pub write_back_allowed: bool,
+    pub write_actions_available: bool,
+    pub skill_files_mutated: bool,
+    pub agent_config_mutated: bool,
+    pub script_execution_allowed: bool,
+    pub execution_actions_available: bool,
+    pub config_mutation_allowed: bool,
+    pub snapshot_created: bool,
+    pub triage_mutation_allowed: bool,
+    pub raw_secret_returned: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_trace_persisted: bool,
+    pub unredacted_paths_returned: bool,
+    pub cloud_sync_performed: bool,
+    pub telemetry_emitted: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct ModelTaskMatchListParams {
+    #[serde(default)]
+    pub provider: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub task_kind: Option<String>,
+    #[serde(default)]
+    pub match_status: Option<String>,
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default)]
+    pub source_kind: Option<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ModelTaskMatchRecordParams {
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(default)]
+    pub title: Option<String>,
+    pub task: String,
+    #[serde(default)]
+    pub task_kind: Option<String>,
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default)]
+    pub profile_id: Option<String>,
+    #[serde(default)]
+    pub provider: Option<String>,
+    pub model: String,
+    #[serde(default)]
+    pub destination_host: Option<String>,
+    #[serde(default)]
+    pub match_status: Option<String>,
+    #[serde(default)]
+    pub confidence_score: Option<u8>,
+    #[serde(default)]
+    pub latency_ms: Option<u64>,
+    #[serde(default)]
+    pub estimated_total_tokens: Option<u32>,
+    #[serde(default)]
+    pub estimated_cost_usd: Option<f64>,
+    #[serde(default)]
+    pub source_kind: Option<String>,
+    #[serde(default)]
+    pub prompt_run_ids: Vec<String>,
+    #[serde(default)]
+    pub session_review_ids: Vec<String>,
+    #[serde(default)]
+    pub trace_import_ids: Vec<String>,
+    #[serde(default)]
+    pub benchmark_ids: Vec<String>,
+    #[serde(default)]
+    pub evidence_refs: Vec<String>,
+    #[serde(default)]
+    pub gap_notes: Vec<String>,
+    #[serde(default)]
+    pub blocker_notes: Vec<String>,
+    #[serde(default)]
+    pub outcome_notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ModelTaskMatchDeleteParams {
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelTaskMatchRecord {
+    pub id: String,
+    pub title: String,
+    pub task: String,
+    pub task_kind: String,
+    pub agent: Option<String>,
+    pub profile_id: Option<String>,
+    pub provider: String,
+    pub model: String,
+    pub destination_host: Option<String>,
+    pub match_status: String,
+    pub confidence_score: Option<u8>,
+    pub latency_ms: Option<u64>,
+    pub estimated_total_tokens: Option<u32>,
+    pub estimated_cost_usd: Option<f64>,
+    pub source_kind: String,
+    pub prompt_run_ids: Vec<String>,
+    pub session_review_ids: Vec<String>,
+    pub trace_import_ids: Vec<String>,
+    pub benchmark_ids: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub gap_notes: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub outcome_notes: Vec<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub redaction_summary: LlmPromptRunRedactionSummary,
+    pub safety_flags: ModelTaskMatchSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ModelTaskMatchListResult {
+    pub generated_by: &'static str,
+    pub status: String,
+    pub summary: ModelTaskMatchSummary,
+    pub records: Vec<ModelTaskMatchRecord>,
+    pub model_rows: Vec<ModelTaskMatchModelRow>,
+    pub task_rows: Vec<ModelTaskMatchTaskRow>,
+    pub recent_evidence_rows: Vec<ModelTaskMatchEvidenceRow>,
+    pub gap_notes: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub evidence_references: Vec<LlmProviderObservabilityEvidenceReference>,
+    pub app_local_only: bool,
+    pub history_file: &'static str,
+    pub provider_request_sent: bool,
+    pub credential_accessed: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_trace_persisted: bool,
+    pub safety_flags: ModelTaskMatchSafetyFlags,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ModelTaskMatchRecordResult {
+    pub generated_by: &'static str,
+    pub record: ModelTaskMatchRecord,
+    pub count: usize,
+    pub app_local_only: bool,
+    pub history_file: &'static str,
+    pub provider_request_sent: bool,
+    pub skill_files_mutated: bool,
+    pub agent_config_mutated: bool,
+    pub snapshot_created: bool,
+    pub triage_mutated: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_trace_persisted: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ModelTaskMatchDeleteResult {
+    pub record_id: String,
+    pub deleted: bool,
+    pub remaining_count: usize,
+    pub app_local_only: bool,
+    pub provider_request_sent: bool,
+    pub skill_files_mutated: bool,
+    pub agent_config_mutated: bool,
+    pub snapshot_created: bool,
+    pub triage_mutated: bool,
+    pub raw_prompt_persisted: bool,
+    pub raw_response_persisted: bool,
+    pub raw_trace_persisted: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ModelTaskMatchSummary {
+    pub stored_record_count: usize,
+    pub prompt_run_count: usize,
+    pub returned_record_count: usize,
+    pub returned_prompt_run_count: usize,
+    pub model_count: usize,
+    pub task_kind_count: usize,
+    pub fit_count: usize,
+    pub partial_fit_count: usize,
+    pub mismatch_count: usize,
+    pub unknown_count: usize,
+    pub estimated_total_tokens: u64,
+    pub estimated_cost_usd: f64,
+    pub latest_activity_at: Option<i64>,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ModelTaskMatchModelRow {
+    pub id: String,
+    pub provider: String,
+    pub model: String,
+    pub destination_host: Option<String>,
+    pub stored_record_count: usize,
+    pub prompt_run_count: usize,
+    pub fit_count: usize,
+    pub partial_fit_count: usize,
+    pub mismatch_count: usize,
+    pub unknown_count: usize,
+    pub estimated_total_tokens: u64,
+    pub estimated_cost_usd: f64,
+    pub latest_activity_at: Option<i64>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ModelTaskMatchTaskRow {
+    pub id: String,
+    pub task_kind: String,
+    pub status: String,
+    pub stored_record_count: usize,
+    pub prompt_run_count: usize,
+    pub fit_count: usize,
+    pub partial_fit_count: usize,
+    pub mismatch_count: usize,
+    pub unknown_count: usize,
+    pub estimated_total_tokens: u64,
+    pub estimated_cost_usd: f64,
+    pub latest_activity_at: Option<i64>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ModelTaskMatchEvidenceRow {
+    pub id: String,
+    pub source: String,
+    pub source_kind: String,
+    pub title: String,
+    pub task: Option<String>,
+    pub task_kind: String,
+    pub agent: Option<String>,
+    pub provider: String,
+    pub model: String,
+    pub destination_host: Option<String>,
+    pub match_status: String,
+    pub confidence_score: Option<u8>,
+    pub status: String,
+    pub created_at: i64,
+    pub updated_at: Option<i64>,
+    pub latency_ms: Option<u64>,
+    pub estimated_total_tokens: u32,
+    pub estimated_cost_usd: f64,
+    pub gap_notes: Vec<String>,
+    pub blocker_notes: Vec<String>,
+    pub outcome_notes: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub redaction_status: String,
+    pub safety_flags: ModelTaskMatchSafetyFlags,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct ModelTaskMatchSafetyFlags {
     pub read_only: bool,
     pub app_local_only: bool,
     pub provider_request_sent: bool,

@@ -15,7 +15,7 @@ Current usage:
 
 Current release-readiness guardrails:
 
-- V2.1-V2.90 are the synchronized completed baseline.
+- V2.1-V2.91 are the synchronized completed baseline.
 - Real local validation evidence is version-specific. Use the matching verification checklist for exact screenshots, blockers, and commands.
 - Fixture smoke screenshots still do not replace required real local validation for user-visible changes.
 - Tool-global import/export/install is integrated. Local directory import writes only app-controlled staging/catalog, export creates reproducible local bundles, and confirmed install routes through verified write paths.
@@ -29,6 +29,54 @@ Current release-readiness guardrails:
 
 Entries are ordered newest first. Add new version entries directly below this
 heading.
+
+### V2.91 - 2026-06-17
+
+Status:
+
+- Complete.
+- Model-task matching history completed as a local evidence-domain slice.
+
+Adapter behavior changes:
+
+- No adapter scan roots, writable scopes, install scopes, or config schemas changed.
+- Codex/opencode/Pi/Hermes/OpenClaw write/install expansion remains deferred to
+  V2.92-V2.96 evidence slices.
+
+Product/protocol changes:
+
+- Added `llm.listModelTaskMatches`, `llm.recordModelTaskMatch`, and
+  `llm.deleteModelTaskMatch`.
+- Added app-local redacted `model-task-matches.json` metadata for historical
+  model/task fit.
+- Extended Provider Observability with read-only `model_task_history_rows`.
+- Added protocol request/response fixtures and Swift/Rust decode tests.
+
+Risk/security notes:
+
+- V2.91 record/delete methods only mutate app-local redacted metadata.
+- The V2.91 native UI exposes read-only history rows and no write/delete controls.
+- No provider default calls, hidden apply paths, product script execution,
+  credential reads, raw prompt/response/trace persistence, skill file mutation,
+  agent config mutation, snapshots, triage mutation, cloud sync, telemetry,
+  signing, notarization, DMG, or ZIP work was added.
+
+Validation posture:
+
+- Focused Rust model-task history tests passed.
+- Service protocol fixture decode and dispatch coverage passed.
+- `swift test --package-path apps/macos` passed.
+- V2.91 app-window evidence is under
+  `docs/ui-artifacts/v2.91-model-task-history/`.
+- `pnpm check:macos` passed.
+- `pnpm check:privacy` passed.
+
+Near-term follow-up plan:
+
+- V2.92 covers Codex expanded roots/project config/plugin/admin/system-root
+  evidence.
+- V2.93-V2.96 cover opencode custom roots, Pi install/compat writes, Hermes
+  writable/install, and OpenClaw writable/install.
 
 ### V2.90 - 2026-06-17
 

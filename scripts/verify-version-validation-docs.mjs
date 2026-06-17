@@ -212,6 +212,19 @@ const versions = {
       "Final status decision: completed",
     ],
   },
+  "v2.91": {
+    title: "# V2.91 Verification Checklist",
+    required: [
+      "Model-task matching history",
+      "llm.listModelTaskMatches",
+      "llm.recordModelTaskMatch",
+      "llm.deleteModelTaskMatch",
+      "model-task-matches.json",
+      "model_task_history_rows",
+      "docs/ui-artifacts/v2.91-model-task-history",
+      "Final status decision: completed",
+    ],
+  },
 };
 
 const staleStatus = [

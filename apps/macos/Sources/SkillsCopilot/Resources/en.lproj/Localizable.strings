@@ -241,6 +241,13 @@
 "providerObservability.providers" = "Providers";
 "providerObservability.models" = "Models";
 "providerObservability.destinations" = "Destinations";
+"providerObservability.modelTaskHistory" = "Model-task history";
+"providerObservability.empty.modelTaskHistory" = "No model-task history returned.";
+"providerObservability.taskKind" = "Task kind";
+"providerObservability.matchStatus" = "Match status";
+"providerObservability.confidence" = "Confidence";
+"providerObservability.sourceKind" = "Source kind";
+"providerObservability.redactionStatus" = "Redaction";
 "providerObservability.recentCalls" = "Recent calls";
 "providerObservability.statusRows" = "Status rows";
 "providerObservability.errorRows" = "Errors";

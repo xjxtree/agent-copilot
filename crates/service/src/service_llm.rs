@@ -394,6 +394,17 @@ impl ServiceHost {
             prompt_runs.len(),
             call_metadata.len(),
         );
+        let model_task_history_rows = self
+            .list_model_task_matches(ModelTaskMatchListParams {
+                provider: params.provider.clone(),
+                model: params.model.clone(),
+                task_kind: params.action.clone(),
+                match_status: None,
+                agent: None,
+                source_kind: None,
+                limit: Some(limit),
+            })?
+            .recent_evidence_rows;
         let evidence_references = provider_observability_evidence_references(
             &history_rows,
             &call_rows,
@@ -424,6 +435,7 @@ impl ServiceHost {
             call_rows,
             history_rows,
             grouping_rows,
+            model_task_history_rows,
             status_rows,
             budget_usage_hints,
             retention_recommendations,
@@ -439,6 +451,271 @@ impl ServiceHost {
                 note: "Provider observability is a deterministic local read model; this method never sends provider traffic or reads credentials.".to_string(),
             },
             safety_flags: llm_provider_observability_safety_flags(),
+        })
+    }
+
+    pub fn list_model_task_matches(
+        &self,
+        params: ModelTaskMatchListParams,
+    ) -> Result<ModelTaskMatchListResult, ServiceError> {
+        let limit = params.limit.unwrap_or(50).clamp(1, 500);
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let redaction_roots = self.trace_redaction_roots(&adapter_ctx);
+        let filters = ModelTaskMatchFilters::from_params(&params);
+        let stored_records = self.load_model_task_matches()?;
+        let prompt_runs = self.load_llm_prompt_runs()?;
+
+        let mut records = stored_records
+            .iter()
+            .filter(|record| filters.matches_record(record))
+            .map(|record| redacted_model_task_record(record, &redaction_roots))
+            .collect::<Vec<_>>();
+        records.truncate(limit);
+
+        let matched_prompt_runs = prompt_runs
+            .iter()
+            .filter(|run| filters.matches_prompt_run(run))
+            .collect::<Vec<_>>();
+
+        let mut recent_evidence_rows = records
+            .iter()
+            .map(model_task_record_evidence_row)
+            .chain(
+                matched_prompt_runs
+                    .iter()
+                    .map(|run| prompt_run_model_task_evidence_row(run, &redaction_roots)),
+            )
+            .collect::<Vec<_>>();
+        recent_evidence_rows.sort_by(model_task_evidence_row_sort);
+        recent_evidence_rows.truncate(limit);
+
+        let model_rows = model_task_model_rows(&recent_evidence_rows, limit);
+        let task_rows = model_task_task_rows(&recent_evidence_rows, limit);
+        let gap_notes = model_task_match_gap_notes(
+            stored_records.len(),
+            prompt_runs.len(),
+            records.len(),
+            matched_prompt_runs.len(),
+        );
+        let blocker_notes = Vec::new();
+        let evidence_references = model_task_match_evidence_references(
+            stored_records.len(),
+            prompt_runs.len(),
+            &recent_evidence_rows,
+        );
+        let summary = model_task_match_summary(
+            stored_records.len(),
+            prompt_runs.len(),
+            records.len(),
+            matched_prompt_runs.len().min(limit),
+            &model_rows,
+            &task_rows,
+            &recent_evidence_rows,
+        );
+        let status = if blocker_notes.is_empty() {
+            "ready".to_string()
+        } else {
+            "partial".to_string()
+        };
+
+        Ok(ModelTaskMatchListResult {
+            generated_by: "local-v2.91",
+            status,
+            summary,
+            records,
+            model_rows,
+            task_rows,
+            recent_evidence_rows,
+            gap_notes,
+            blocker_notes,
+            evidence_references,
+            app_local_only: true,
+            history_file: "model-task-matches.json",
+            provider_request_sent: false,
+            credential_accessed: false,
+            raw_prompt_persisted: false,
+            raw_response_persisted: false,
+            raw_trace_persisted: false,
+            safety_flags: model_task_match_safety_flags(true),
+        })
+    }
+
+    pub fn record_model_task_match(
+        &self,
+        params: ModelTaskMatchRecordParams,
+    ) -> Result<ModelTaskMatchRecordResult, ServiceError> {
+        let task = params.task.trim();
+        if task.is_empty() {
+            return Err(ServiceError::InvalidRequest(
+                "llm.recordModelTaskMatch requires a non-empty task".to_string(),
+            ));
+        }
+        let model = params.model.trim();
+        if model.is_empty() {
+            return Err(ServiceError::InvalidRequest(
+                "llm.recordModelTaskMatch requires a non-empty model".to_string(),
+            ));
+        }
+
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let roots = self.trace_redaction_roots(&adapter_ctx);
+        let mut redactor = PromptRedactor::new(&roots);
+        let now = unix_timestamp_millis();
+        let redacted_task = truncate_chars(&redactor.redact(task), 600);
+        let redacted_model = truncate_chars(&redactor.redact(model), 160);
+        let provider = params
+            .provider
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| truncate_chars(&redactor.redact(value), 120))
+            .unwrap_or_else(|| "unknown".to_string());
+        let destination_host = params
+            .destination_host
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| truncate_chars(&redactor.redact(value), 160));
+        let profile_id = params
+            .profile_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| truncate_chars(&redactor.redact(value), 160));
+        let task_kind = params
+            .task_kind
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| truncate_chars(&redactor.redact(value), 120))
+            .unwrap_or_else(|| "general".to_string());
+        let agent = params
+            .agent
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| truncate_chars(&redactor.redact(value), 120));
+        let title = params
+            .title
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| truncate_chars(&redactor.redact(value), 180))
+            .unwrap_or_else(|| format!("{task_kind} on {redacted_model}"));
+        let source_kind = normalize_model_task_source_kind(params.source_kind.as_deref());
+        let match_status = normalize_model_task_match_status(params.match_status.as_deref());
+        let confidence_score = params.confidence_score.map(|score| score.min(100));
+        let prompt_run_ids =
+            redact_model_task_string_list(&params.prompt_run_ids, &mut redactor, 160);
+        let session_review_ids =
+            redact_model_task_string_list(&params.session_review_ids, &mut redactor, 160);
+        let trace_import_ids =
+            redact_model_task_string_list(&params.trace_import_ids, &mut redactor, 160);
+        let benchmark_ids =
+            redact_model_task_string_list(&params.benchmark_ids, &mut redactor, 160);
+        let mut evidence_refs =
+            redact_model_task_string_list(&params.evidence_refs, &mut redactor, 180);
+        if evidence_refs.is_empty() {
+            evidence_refs.push("app-data:model-task-matches.json".to_string());
+        }
+        let gap_notes = redact_model_task_string_list(&params.gap_notes, &mut redactor, 300);
+        let blocker_notes =
+            redact_model_task_string_list(&params.blocker_notes, &mut redactor, 300);
+        let outcome_notes =
+            redact_model_task_string_list(&params.outcome_notes, &mut redactor, 300);
+        let redaction_summary = model_task_match_redaction_summary_from(redactor.summary());
+        let id = params
+            .id
+            .as_deref()
+            .map(sanitize_model_task_match_id)
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| stable_model_task_match_id(&redacted_task, &redacted_model, now));
+
+        let mut records = self.load_model_task_matches()?;
+        let created_at = records
+            .iter()
+            .find(|record| record.id == id)
+            .map(|record| record.created_at)
+            .unwrap_or(now);
+        let record = ModelTaskMatchRecord {
+            id: id.clone(),
+            title,
+            task: redacted_task,
+            task_kind,
+            agent,
+            profile_id,
+            provider,
+            model: redacted_model,
+            destination_host,
+            match_status,
+            confidence_score,
+            latency_ms: params.latency_ms,
+            estimated_total_tokens: params.estimated_total_tokens,
+            estimated_cost_usd: params.estimated_cost_usd,
+            source_kind,
+            prompt_run_ids,
+            session_review_ids,
+            trace_import_ids,
+            benchmark_ids,
+            evidence_refs,
+            gap_notes,
+            blocker_notes,
+            outcome_notes,
+            created_at,
+            updated_at: now,
+            redaction_summary,
+            safety_flags: model_task_match_safety_flags(false),
+        };
+        records.retain(|existing| existing.id != id);
+        records.push(record.clone());
+        self.save_model_task_matches(&records)?;
+
+        Ok(ModelTaskMatchRecordResult {
+            generated_by: "local-v2.91",
+            record,
+            count: records.len(),
+            app_local_only: true,
+            history_file: "model-task-matches.json",
+            provider_request_sent: false,
+            skill_files_mutated: false,
+            agent_config_mutated: false,
+            snapshot_created: false,
+            triage_mutated: false,
+            raw_prompt_persisted: false,
+            raw_response_persisted: false,
+            raw_trace_persisted: false,
+        })
+    }
+
+    pub fn delete_model_task_match(
+        &self,
+        params: ModelTaskMatchDeleteParams,
+    ) -> Result<ModelTaskMatchDeleteResult, ServiceError> {
+        let id = sanitize_model_task_match_id(&params.id);
+        if id.is_empty() {
+            return Err(ServiceError::InvalidRequest(
+                "llm.deleteModelTaskMatch requires a non-empty id".to_string(),
+            ));
+        }
+        let mut records = self.load_model_task_matches()?;
+        let before = records.len();
+        records.retain(|record| record.id != id);
+        let deleted = records.len() != before;
+        self.save_model_task_matches(&records)?;
+
+        Ok(ModelTaskMatchDeleteResult {
+            record_id: id,
+            deleted,
+            remaining_count: records.len(),
+            app_local_only: true,
+            provider_request_sent: false,
+            skill_files_mutated: false,
+            agent_config_mutated: false,
+            snapshot_created: false,
+            triage_mutated: false,
+            raw_prompt_persisted: false,
+            raw_response_persisted: false,
+            raw_trace_persisted: false,
         })
     }
 
@@ -1857,6 +2134,557 @@ impl ServiceHost {
             Ok("No current conflicts or findings were loaded.".to_string())
         } else {
             Ok(lines.join("\n"))
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+struct ModelTaskMatchFilters {
+    provider: Option<String>,
+    model: Option<String>,
+    task_kind: Option<String>,
+    match_status: Option<String>,
+    agent: Option<String>,
+    source_kind: Option<String>,
+}
+
+impl ModelTaskMatchFilters {
+    fn from_params(params: &ModelTaskMatchListParams) -> Self {
+        Self {
+            provider: normalized_model_task_filter(params.provider.as_deref()),
+            model: normalized_model_task_filter(params.model.as_deref()),
+            task_kind: normalized_model_task_filter(params.task_kind.as_deref()),
+            match_status: params
+                .match_status
+                .as_deref()
+                .map(|value| normalize_model_task_match_status(Some(value)))
+                .filter(|value| !value.is_empty()),
+            agent: normalized_model_task_filter(params.agent.as_deref()),
+            source_kind: params
+                .source_kind
+                .as_deref()
+                .map(|value| normalize_model_task_source_kind(Some(value)))
+                .filter(|value| !value.is_empty()),
+        }
+    }
+
+    fn matches_record(&self, record: &ModelTaskMatchRecord) -> bool {
+        self.provider
+            .as_deref()
+            .is_none_or(|filter| record.provider.eq_ignore_ascii_case(filter))
+            && self
+                .model
+                .as_deref()
+                .is_none_or(|filter| record.model.eq_ignore_ascii_case(filter))
+            && self
+                .task_kind
+                .as_deref()
+                .is_none_or(|filter| record.task_kind.eq_ignore_ascii_case(filter))
+            && self
+                .match_status
+                .as_deref()
+                .is_none_or(|filter| record.match_status.eq_ignore_ascii_case(filter))
+            && self.agent.as_deref().is_none_or(|filter| {
+                record
+                    .agent
+                    .as_deref()
+                    .is_some_and(|agent| agent.eq_ignore_ascii_case(filter))
+            })
+            && self
+                .source_kind
+                .as_deref()
+                .is_none_or(|filter| record.source_kind.eq_ignore_ascii_case(filter))
+    }
+
+    fn matches_prompt_run(&self, run: &LlmPromptRunRecord) -> bool {
+        self.provider
+            .as_deref()
+            .is_none_or(|filter| run.provider.eq_ignore_ascii_case(filter))
+            && self
+                .model
+                .as_deref()
+                .is_none_or(|filter| run.model.eq_ignore_ascii_case(filter))
+            && self
+                .task_kind
+                .as_deref()
+                .is_none_or(|filter| run.request_kind.eq_ignore_ascii_case(filter))
+            && self.match_status.as_deref().is_none_or(|filter| {
+                normalize_model_task_match_status(Some(&run.status)).eq_ignore_ascii_case(filter)
+            })
+            && self.agent.as_deref().is_none_or(|filter| {
+                run.agent
+                    .as_deref()
+                    .is_some_and(|agent| agent.eq_ignore_ascii_case(filter))
+            })
+            && self
+                .source_kind
+                .as_deref()
+                .is_none_or(|filter| filter == "prompt_run")
+    }
+}
+
+fn normalized_model_task_filter(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn redact_model_task_string_list(
+    values: &[String],
+    redactor: &mut PromptRedactor<'_>,
+    max_chars: usize,
+) -> Vec<String> {
+    let mut redacted = values
+        .iter()
+        .filter_map(|value| {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(truncate_chars(&redactor.redact(trimmed), max_chars))
+            }
+        })
+        .collect::<Vec<_>>();
+    redacted.sort();
+    redacted.dedup();
+    redacted
+}
+
+fn redacted_model_task_record(
+    record: &ModelTaskMatchRecord,
+    redaction_roots: &[(String, &'static str)],
+) -> ModelTaskMatchRecord {
+    ModelTaskMatchRecord {
+        id: observability_redact(&record.id, redaction_roots, 160),
+        title: observability_redact(&record.title, redaction_roots, 180),
+        task: observability_redact(&record.task, redaction_roots, 600),
+        task_kind: observability_redact(&record.task_kind, redaction_roots, 120),
+        agent: record
+            .agent
+            .as_deref()
+            .map(|value| observability_redact(value, redaction_roots, 120)),
+        profile_id: record
+            .profile_id
+            .as_deref()
+            .map(|value| observability_redact(value, redaction_roots, 160)),
+        provider: observability_redact(&record.provider, redaction_roots, 120),
+        model: observability_redact(&record.model, redaction_roots, 160),
+        destination_host: record
+            .destination_host
+            .as_deref()
+            .map(|value| observability_redact(value, redaction_roots, 160)),
+        match_status: normalize_model_task_match_status(Some(&record.match_status)),
+        confidence_score: record.confidence_score.map(|score| score.min(100)),
+        latency_ms: record.latency_ms,
+        estimated_total_tokens: record.estimated_total_tokens,
+        estimated_cost_usd: record.estimated_cost_usd,
+        source_kind: normalize_model_task_source_kind(Some(&record.source_kind)),
+        prompt_run_ids: redact_existing_model_task_list(&record.prompt_run_ids, redaction_roots),
+        session_review_ids: redact_existing_model_task_list(
+            &record.session_review_ids,
+            redaction_roots,
+        ),
+        trace_import_ids: redact_existing_model_task_list(
+            &record.trace_import_ids,
+            redaction_roots,
+        ),
+        benchmark_ids: redact_existing_model_task_list(&record.benchmark_ids, redaction_roots),
+        evidence_refs: redact_existing_model_task_list(&record.evidence_refs, redaction_roots),
+        gap_notes: redact_existing_model_task_list(&record.gap_notes, redaction_roots),
+        blocker_notes: redact_existing_model_task_list(&record.blocker_notes, redaction_roots),
+        outcome_notes: redact_existing_model_task_list(&record.outcome_notes, redaction_roots),
+        created_at: record.created_at,
+        updated_at: record.updated_at,
+        redaction_summary: record.redaction_summary.clone(),
+        safety_flags: model_task_match_safety_flags(record.safety_flags.read_only),
+    }
+}
+
+fn redact_existing_model_task_list(
+    values: &[String],
+    redaction_roots: &[(String, &'static str)],
+) -> Vec<String> {
+    let mut values = values
+        .iter()
+        .filter_map(|value| {
+            let redacted = observability_redact(value, redaction_roots, 300);
+            if redacted.trim().is_empty() {
+                None
+            } else {
+                Some(redacted)
+            }
+        })
+        .collect::<Vec<_>>();
+    values.sort();
+    values.dedup();
+    values
+}
+
+fn model_task_record_evidence_row(record: &ModelTaskMatchRecord) -> ModelTaskMatchEvidenceRow {
+    ModelTaskMatchEvidenceRow {
+        id: format!("model-task-match:{}", record.id),
+        source: "model-task-matches.json".to_string(),
+        source_kind: record.source_kind.clone(),
+        title: record.title.clone(),
+        task: Some(record.task.clone()),
+        task_kind: record.task_kind.clone(),
+        agent: record.agent.clone(),
+        provider: record.provider.clone(),
+        model: record.model.clone(),
+        destination_host: record.destination_host.clone(),
+        match_status: record.match_status.clone(),
+        confidence_score: record.confidence_score,
+        status: record.match_status.clone(),
+        created_at: record.created_at,
+        updated_at: Some(record.updated_at),
+        latency_ms: record.latency_ms,
+        estimated_total_tokens: record.estimated_total_tokens.unwrap_or(0),
+        estimated_cost_usd: record.estimated_cost_usd.unwrap_or(0.0),
+        gap_notes: record.gap_notes.clone(),
+        blocker_notes: record.blocker_notes.clone(),
+        outcome_notes: record.outcome_notes.clone(),
+        evidence_refs: record.evidence_refs.clone(),
+        redaction_status: record.redaction_summary.status.clone(),
+        safety_flags: model_task_match_safety_flags(true),
+    }
+}
+
+fn prompt_run_model_task_evidence_row(
+    run: &LlmPromptRunRecord,
+    redaction_roots: &[(String, &'static str)],
+) -> ModelTaskMatchEvidenceRow {
+    let mut evidence_refs = vec![format!(
+        "prompt-run:{}",
+        observability_redact(&run.id, redaction_roots, 160)
+    )];
+    if let Some(instance_id) = run.instance_id.as_deref() {
+        evidence_refs.push(format!(
+            "skill:{}",
+            observability_redact(instance_id, redaction_roots, 160)
+        ));
+    }
+    evidence_refs.sort();
+    evidence_refs.dedup();
+    let mut outcome_notes = vec![
+        "Derived from redacted app-local prompt-run metadata; no raw prompt or response is returned."
+            .to_string(),
+    ];
+    if run.provider_request_sent {
+        outcome_notes.push(
+            "Historical metadata records that the original confirmed prompt run sent a provider request."
+                .to_string(),
+        );
+    }
+    if run.credential_accessed {
+        outcome_notes.push(
+            "Historical metadata records credential access for the original confirmed prompt run."
+                .to_string(),
+        );
+    }
+    ModelTaskMatchEvidenceRow {
+        id: provider_observability_row_id("model-task-prompt-run", &[&run.id]),
+        source: "prompt-runs.json".to_string(),
+        source_kind: "prompt_run".to_string(),
+        title: format!(
+            "{} on {}",
+            observability_redact(&run.request_kind, redaction_roots, 120),
+            observability_redact(&run.model, redaction_roots, 160)
+        ),
+        task: run
+            .task
+            .as_deref()
+            .map(|value| observability_redact(value, redaction_roots, 600)),
+        task_kind: observability_redact(&run.request_kind, redaction_roots, 120),
+        agent: run
+            .agent
+            .as_deref()
+            .map(|value| observability_redact(value, redaction_roots, 120)),
+        provider: observability_redact(&run.provider, redaction_roots, 120),
+        model: observability_redact(&run.model, redaction_roots, 160),
+        destination_host: Some(observability_redact(
+            &run.destination_host,
+            redaction_roots,
+            160,
+        )),
+        match_status: normalize_model_task_match_status(Some(&run.status)),
+        confidence_score: None,
+        status: observability_redact(&run.status, redaction_roots, 80),
+        created_at: run.created_at,
+        updated_at: Some(run.completed_at),
+        latency_ms: Some(run.duration_ms),
+        estimated_total_tokens: run.estimated_total_tokens,
+        estimated_cost_usd: run.estimated_cost_usd,
+        gap_notes: if run.task.is_none() {
+            vec!["Prompt-run metadata has no task text, so only request kind and model fit can be displayed.".to_string()]
+        } else {
+            Vec::new()
+        },
+        blocker_notes: Vec::new(),
+        outcome_notes,
+        evidence_refs,
+        redaction_status: observability_redact(&run.redaction_summary.status, redaction_roots, 160),
+        safety_flags: model_task_match_safety_flags(true),
+    }
+}
+
+fn model_task_evidence_row_sort(
+    left: &ModelTaskMatchEvidenceRow,
+    right: &ModelTaskMatchEvidenceRow,
+) -> std::cmp::Ordering {
+    right
+        .updated_at
+        .unwrap_or(right.created_at)
+        .cmp(&left.updated_at.unwrap_or(left.created_at))
+        .then_with(|| left.provider.cmp(&right.provider))
+        .then_with(|| left.model.cmp(&right.model))
+        .then_with(|| left.id.cmp(&right.id))
+}
+
+#[derive(Debug, Default)]
+struct ModelTaskGroupAccumulator {
+    stored_record_count: usize,
+    prompt_run_count: usize,
+    fit_count: usize,
+    partial_fit_count: usize,
+    mismatch_count: usize,
+    unknown_count: usize,
+    estimated_total_tokens: u64,
+    estimated_cost_usd: f64,
+    latest_activity_at: Option<i64>,
+    evidence_refs: Vec<String>,
+}
+
+impl ModelTaskGroupAccumulator {
+    fn add(&mut self, row: &ModelTaskMatchEvidenceRow) {
+        if row.source_kind == "prompt_run" {
+            self.prompt_run_count += 1;
+        } else {
+            self.stored_record_count += 1;
+        }
+        match row.match_status.as_str() {
+            "fit" => self.fit_count += 1,
+            "partial_fit" => self.partial_fit_count += 1,
+            "mismatch" => self.mismatch_count += 1,
+            _ => self.unknown_count += 1,
+        }
+        self.estimated_total_tokens += u64::from(row.estimated_total_tokens);
+        self.estimated_cost_usd += row.estimated_cost_usd;
+        let activity_at = row.updated_at.unwrap_or(row.created_at);
+        self.latest_activity_at = self.latest_activity_at.max(Some(activity_at));
+        append_model_task_unique(&mut self.evidence_refs, &row.evidence_refs);
+    }
+}
+
+fn model_task_model_rows(
+    rows: &[ModelTaskMatchEvidenceRow],
+    limit: usize,
+) -> Vec<ModelTaskMatchModelRow> {
+    let mut groups: BTreeMap<(String, String, Option<String>), ModelTaskGroupAccumulator> =
+        BTreeMap::new();
+    for row in rows {
+        groups
+            .entry((
+                row.provider.clone(),
+                row.model.clone(),
+                row.destination_host.clone(),
+            ))
+            .or_default()
+            .add(row);
+    }
+    let mut rows = groups
+        .into_iter()
+        .map(
+            |((provider, model, destination_host), group)| ModelTaskMatchModelRow {
+                id: provider_observability_row_id(
+                    "model-task-model",
+                    &[&provider, &model, destination_host.as_deref().unwrap_or("")],
+                ),
+                provider,
+                model,
+                destination_host,
+                stored_record_count: group.stored_record_count,
+                prompt_run_count: group.prompt_run_count,
+                fit_count: group.fit_count,
+                partial_fit_count: group.partial_fit_count,
+                mismatch_count: group.mismatch_count,
+                unknown_count: group.unknown_count,
+                estimated_total_tokens: group.estimated_total_tokens,
+                estimated_cost_usd: group.estimated_cost_usd,
+                latest_activity_at: group.latest_activity_at,
+                evidence_refs: group.evidence_refs,
+            },
+        )
+        .collect::<Vec<_>>();
+    rows.sort_by(|left, right| {
+        right
+            .latest_activity_at
+            .cmp(&left.latest_activity_at)
+            .then_with(|| left.provider.cmp(&right.provider))
+            .then_with(|| left.model.cmp(&right.model))
+    });
+    rows.truncate(limit);
+    rows
+}
+
+fn model_task_task_rows(
+    rows: &[ModelTaskMatchEvidenceRow],
+    limit: usize,
+) -> Vec<ModelTaskMatchTaskRow> {
+    let mut groups: BTreeMap<(String, String), ModelTaskGroupAccumulator> = BTreeMap::new();
+    for row in rows {
+        groups
+            .entry((row.task_kind.clone(), row.match_status.clone()))
+            .or_default()
+            .add(row);
+    }
+    let mut rows = groups
+        .into_iter()
+        .map(|((task_kind, status), group)| ModelTaskMatchTaskRow {
+            id: provider_observability_row_id("model-task-task", &[&task_kind, &status]),
+            task_kind,
+            status,
+            stored_record_count: group.stored_record_count,
+            prompt_run_count: group.prompt_run_count,
+            fit_count: group.fit_count,
+            partial_fit_count: group.partial_fit_count,
+            mismatch_count: group.mismatch_count,
+            unknown_count: group.unknown_count,
+            estimated_total_tokens: group.estimated_total_tokens,
+            estimated_cost_usd: group.estimated_cost_usd,
+            latest_activity_at: group.latest_activity_at,
+            evidence_refs: group.evidence_refs,
+        })
+        .collect::<Vec<_>>();
+    rows.sort_by(|left, right| {
+        right
+            .latest_activity_at
+            .cmp(&left.latest_activity_at)
+            .then_with(|| left.task_kind.cmp(&right.task_kind))
+            .then_with(|| left.status.cmp(&right.status))
+    });
+    rows.truncate(limit);
+    rows
+}
+
+fn model_task_match_summary(
+    stored_record_count: usize,
+    prompt_run_count: usize,
+    returned_record_count: usize,
+    returned_prompt_run_count: usize,
+    model_rows: &[ModelTaskMatchModelRow],
+    task_rows: &[ModelTaskMatchTaskRow],
+    evidence_rows: &[ModelTaskMatchEvidenceRow],
+) -> ModelTaskMatchSummary {
+    let mut summary = ModelTaskMatchSummary {
+        stored_record_count,
+        prompt_run_count,
+        returned_record_count,
+        returned_prompt_run_count,
+        model_count: model_rows.len(),
+        task_kind_count: task_rows.len(),
+        fit_count: 0,
+        partial_fit_count: 0,
+        mismatch_count: 0,
+        unknown_count: 0,
+        estimated_total_tokens: 0,
+        estimated_cost_usd: 0.0,
+        latest_activity_at: None,
+        summary: String::new(),
+    };
+    for row in evidence_rows {
+        match row.match_status.as_str() {
+            "fit" => summary.fit_count += 1,
+            "partial_fit" => summary.partial_fit_count += 1,
+            "mismatch" => summary.mismatch_count += 1,
+            _ => summary.unknown_count += 1,
+        }
+        summary.estimated_total_tokens += u64::from(row.estimated_total_tokens);
+        summary.estimated_cost_usd += row.estimated_cost_usd;
+        summary.latest_activity_at = summary
+            .latest_activity_at
+            .max(Some(row.updated_at.unwrap_or(row.created_at)));
+    }
+    summary.summary = if evidence_rows.is_empty() {
+        "No app-local model-task match history or prompt-run model/task metadata matched the selected filters."
+            .to_string()
+    } else {
+        format!(
+            "Returned {} model-task evidence row(s) across {} model grouping(s) and {} task grouping(s).",
+            evidence_rows.len(),
+            summary.model_count,
+            summary.task_kind_count
+        )
+    };
+    summary
+}
+
+fn model_task_match_gap_notes(
+    stored_record_count: usize,
+    prompt_run_count: usize,
+    returned_record_count: usize,
+    returned_prompt_run_count: usize,
+) -> Vec<String> {
+    let mut notes = Vec::new();
+    if stored_record_count == 0 {
+        notes.push(
+            "No app-local model-task match records exist yet; only prompt-run metadata can be summarized."
+                .to_string(),
+        );
+    }
+    if prompt_run_count == 0 {
+        notes.push(
+            "No app-local prompt-run metadata exists yet; historical provider/model usage is unavailable."
+                .to_string(),
+        );
+    }
+    if stored_record_count > 0 && returned_record_count == 0 {
+        notes.push("Stored match records exist but none matched the selected filters.".to_string());
+    }
+    if prompt_run_count > 0 && returned_prompt_run_count == 0 {
+        notes.push("Prompt-run metadata exists but none matched the selected filters.".to_string());
+    }
+    notes
+}
+
+fn model_task_match_evidence_references(
+    stored_record_count: usize,
+    prompt_run_count: usize,
+    evidence_rows: &[ModelTaskMatchEvidenceRow],
+) -> Vec<LlmProviderObservabilityEvidenceReference> {
+    let mut references = Vec::new();
+    references.push(LlmProviderObservabilityEvidenceReference {
+        id: "app-data:model-task-matches.json".to_string(),
+        kind: "app-local-file",
+        label: "model-task-matches.json".to_string(),
+        source: "model-task-matches.json".to_string(),
+    });
+    references.push(LlmProviderObservabilityEvidenceReference {
+        id: "app-data:prompt-runs.json".to_string(),
+        kind: "app-local-file",
+        label: "prompt-runs.json".to_string(),
+        source: "prompt-runs.json".to_string(),
+    });
+    if stored_record_count == 0 && prompt_run_count == 0 && evidence_rows.is_empty() {
+        return references;
+    }
+    for row in evidence_rows {
+        references.push(LlmProviderObservabilityEvidenceReference {
+            id: row.id.clone(),
+            kind: "model-task-evidence",
+            label: row.title.clone(),
+            source: row.source.clone(),
+        });
+    }
+    references.sort_by(|left, right| left.id.cmp(&right.id));
+    references.dedup_by(|left, right| left.id == right.id);
+    references
+}
+
+fn append_model_task_unique(target: &mut Vec<String>, values: &[String]) {
+    for value in values {
+        if !target.contains(value) {
+            target.push(value.clone());
         }
     }
 }

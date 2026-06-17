@@ -343,6 +343,22 @@ impl ServiceHost {
                 };
                 serde_json::to_value(self.llm_provider_observability(params)?).map_err(Into::into)
             }
+            "llm.listModelTaskMatches" => {
+                let params: ModelTaskMatchListParams = if request.params.is_null() {
+                    ModelTaskMatchListParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                serde_json::to_value(self.list_model_task_matches(params)?).map_err(Into::into)
+            }
+            "llm.recordModelTaskMatch" => {
+                let params: ModelTaskMatchRecordParams = serde_json::from_value(request.params)?;
+                serde_json::to_value(self.record_model_task_match(params)?).map_err(Into::into)
+            }
+            "llm.deleteModelTaskMatch" => {
+                let params: ModelTaskMatchDeleteParams = serde_json::from_value(request.params)?;
+                serde_json::to_value(self.delete_model_task_match(params)?).map_err(Into::into)
+            }
             "llm.prepareAction" => {
                 let params: LlmPrepareActionParams = serde_json::from_value(request.params)?;
                 serde_json::to_value(self.prepare_llm_action(params)?).map_err(Into::into)
@@ -884,6 +900,10 @@ impl ServiceHost {
         self.app_data_dir.join("prompt-runs.json")
     }
 
+    pub(crate) fn model_task_matches_path(&self) -> PathBuf {
+        self.app_data_dir.join("model-task-matches.json")
+    }
+
     pub(crate) fn remediation_history_path(&self) -> PathBuf {
         self.app_data_dir.join("remediation-history.json")
     }
@@ -1012,6 +1032,32 @@ impl ServiceHost {
         let mut runs: Vec<LlmPromptRunRecord> = serde_json::from_str(&content)?;
         runs.sort_by(llm_prompt_run_record_sort);
         Ok(runs)
+    }
+
+    pub(crate) fn load_model_task_matches(
+        &self,
+    ) -> Result<Vec<ModelTaskMatchRecord>, ServiceError> {
+        let path = self.model_task_matches_path();
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        let content = fs::read_to_string(path)?;
+        let mut records: Vec<ModelTaskMatchRecord> = serde_json::from_str(&content)?;
+        records.sort_by(model_task_match_record_sort);
+        Ok(records)
+    }
+
+    pub(crate) fn save_model_task_matches(
+        &self,
+        records: &[ModelTaskMatchRecord],
+    ) -> Result<(), ServiceError> {
+        fs::create_dir_all(&self.app_data_dir)?;
+        let path = self.model_task_matches_path();
+        let mut sorted = records.to_vec();
+        sorted.sort_by(model_task_match_record_sort);
+        let content = serde_json::to_string_pretty(&sorted)?;
+        fs::write(path, content)?;
+        Ok(())
     }
 
     pub(crate) fn load_llm_prompt_runs_for_observability(

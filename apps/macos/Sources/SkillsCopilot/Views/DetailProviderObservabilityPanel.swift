@@ -104,6 +104,7 @@ struct ProviderObservabilityResultView: View {
             ProviderObservabilityDimensionList(title: UIStrings.providerObservabilityProviders, rows: result.providerRows, systemImage: "person.crop.circle.badge.checkmark")
             ProviderObservabilityDimensionList(title: UIStrings.providerObservabilityModels, rows: result.modelRows, systemImage: "cpu")
             ProviderObservabilityDimensionList(title: UIStrings.providerObservabilityDestinations, rows: result.destinationRows, systemImage: "network")
+            ProviderObservabilityModelTaskHistoryList(rows: result.modelTaskHistoryRows)
             ProviderObservabilityCallList(rows: result.callRows)
             ProviderObservabilityIssueList(title: UIStrings.providerObservabilityStatusRows, rows: result.statusRows, systemImage: "list.bullet.rectangle")
             ProviderObservabilityIssueList(title: UIStrings.providerObservabilityErrorRows, rows: result.errorRows, systemImage: "exclamationmark.triangle")
@@ -194,6 +195,66 @@ struct ProviderObservabilityDimensionList: View {
                 }
             }
         }
+    }
+}
+
+struct ProviderObservabilityModelTaskHistoryList: View {
+    let rows: [ProviderObservabilityModelTaskHistoryRow]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(UIStrings.providerObservabilityModelTaskHistory)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            if rows.isEmpty {
+                Text(UIStrings.providerObservabilityNoModelTaskHistory)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(rows.prefix(8)) { row in
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Label(row.title, systemImage: row.statusIsProblem ? "questionmark.diamond" : "checkmark.seal")
+                                .font(.callout.bold())
+                                .foregroundStyle(row.statusIsProblem ? .orange : .primary)
+                            Spacer()
+                            Text(row.matchStatus)
+                                .font(.caption2.bold())
+                                .foregroundStyle(.secondary)
+                        }
+                        Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
+                            MetadataRow(label: UIStrings.providerObservabilityTaskKind, value: row.taskKind)
+                            MetadataRow(label: UIStrings.providerObservabilitySourceKind, value: row.sourceKind)
+                            MetadataRow(label: UIStrings.llmProvider, value: row.provider)
+                            MetadataRow(label: UIStrings.llmModel, value: row.model)
+                            if let destinationHost = row.destinationHost, !destinationHost.isEmpty {
+                                MetadataRow(label: UIStrings.llmPromptDestination, value: destinationHost)
+                            }
+                            MetadataRow(label: UIStrings.providerObservabilityDuration, value: durationLabel(row.latencyMS))
+                            MetadataRow(label: UIStrings.providerObservabilityEstimatedTokens, value: "\(row.estimatedTotalTokens)")
+                            MetadataRow(label: UIStrings.providerObservabilityEstimatedCost, value: costLabel(row.estimatedCostUSD))
+                            MetadataRow(label: UIStrings.providerObservabilityConfidence, value: confidenceLabel(row.confidenceScore))
+                            MetadataRow(label: UIStrings.providerObservabilityRedactionStatus, value: row.redactionStatus)
+                        }
+                        if let task = row.task, !task.isEmpty {
+                            PrivacyEvidenceText(value: task, font: .caption, lineLimit: nil)
+                        }
+                        RoutingInlineList(title: UIStrings.providerObservabilityNotes, empty: UIStrings.providerObservabilityNoRows, values: row.outcomeNotes, systemImage: "info.circle")
+                        RoutingInlineList(title: UIStrings.knowledgeGapNotes, empty: UIStrings.routingAccuracyNoGaps, values: row.gapNotes, systemImage: "puzzlepiece.extension")
+                        RoutingInlineList(title: UIStrings.knowledgeBlockerNotes, empty: UIStrings.routingAccuracyNoBlockers, values: row.blockerNotes, systemImage: "exclamationmark.octagon")
+                        RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: row.evidenceRefs, systemImage: "checklist")
+                    }
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+                }
+            }
+        }
+    }
+
+    private func confidenceLabel(_ value: Int?) -> String {
+        guard let value else { return UIStrings.unknown }
+        return "\(value)%"
     }
 }
 

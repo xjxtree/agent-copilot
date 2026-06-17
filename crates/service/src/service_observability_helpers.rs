@@ -410,6 +410,123 @@ pub(crate) fn llm_provider_observability_safety_flags() -> LlmProviderObservabil
     }
 }
 
+pub(crate) fn model_task_match_safety_flags(read_only: bool) -> ModelTaskMatchSafetyFlags {
+    ModelTaskMatchSafetyFlags {
+        read_only,
+        app_local_only: true,
+        provider_request_sent: false,
+        credential_accessed: false,
+        draft_copy_only: true,
+        write_back_allowed: false,
+        write_actions_available: false,
+        skill_files_mutated: false,
+        agent_config_mutated: false,
+        script_execution_allowed: false,
+        execution_actions_available: false,
+        config_mutation_allowed: false,
+        snapshot_created: false,
+        triage_mutation_allowed: false,
+        raw_secret_returned: false,
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+        raw_trace_persisted: false,
+        unredacted_paths_returned: false,
+        cloud_sync_performed: false,
+        telemetry_emitted: false,
+    }
+}
+
+pub(crate) fn model_task_match_record_sort(
+    left: &ModelTaskMatchRecord,
+    right: &ModelTaskMatchRecord,
+) -> std::cmp::Ordering {
+    right
+        .updated_at
+        .cmp(&left.updated_at)
+        .then_with(|| right.created_at.cmp(&left.created_at))
+        .then_with(|| left.provider.cmp(&right.provider))
+        .then_with(|| left.model.cmp(&right.model))
+        .then_with(|| left.id.cmp(&right.id))
+}
+
+pub(crate) fn normalize_model_task_match_status(value: Option<&str>) -> String {
+    let normalized = value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("unknown")
+        .to_ascii_lowercase()
+        .replace('-', "_");
+    match normalized.as_str() {
+        "fit" | "hit" | "matched" | "match" | "succeeded" | "success" => "fit".to_string(),
+        "partial" | "partial_fit" | "ambiguous" | "warning" => "partial_fit".to_string(),
+        "mismatch" | "miss" | "wrong_pick" | "failed" | "failure" | "error" => {
+            "mismatch".to_string()
+        }
+        _ => "unknown".to_string(),
+    }
+}
+
+pub(crate) fn normalize_model_task_source_kind(value: Option<&str>) -> String {
+    let normalized = value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("manual")
+        .to_ascii_lowercase()
+        .replace('-', "_");
+    match normalized.as_str() {
+        "prompt_run" | "provider_call" | "session_review" | "manual" | "benchmark" => normalized,
+        _ => "manual".to_string(),
+    }
+}
+
+pub(crate) fn sanitize_model_task_match_id(id: &str) -> String {
+    let mut value = id
+        .trim()
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | ':' | '.') {
+                ch
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+    while value.contains("--") {
+        value = value.replace("--", "-");
+    }
+    value.trim_matches('-').chars().take(96).collect::<String>()
+}
+
+pub(crate) fn stable_model_task_match_id(task: &str, model: &str, now: i64) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(task.as_bytes());
+    hasher.update(b"\0");
+    hasher.update(model.as_bytes());
+    hasher.update(b"\0");
+    hasher.update(now.to_string().as_bytes());
+    let digest = hasher.finalize();
+    format!("model-task-{}", hex_prefix(&digest, 12))
+}
+
+pub(crate) fn model_task_match_redaction_summary_from(
+    summary: LlmPromptRedactionSummary,
+) -> LlmPromptRunRedactionSummary {
+    LlmPromptRunRedactionSummary {
+        status: "redacted-local-only".to_string(),
+        redacted_value_count: summary.redacted_value_count,
+        redacted_fields: summary.redacted_fields,
+        placeholders: summary
+            .placeholders
+            .into_iter()
+            .map(ToOwned::to_owned)
+            .collect(),
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+        raw_trace_persisted: false,
+        raw_secret_returned: false,
+    }
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct ProviderObservabilityFilters {
     profile_id: Option<String>,

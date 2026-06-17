@@ -657,6 +657,13 @@ enum UIStrings {
     static var providerObservabilityProviders: String { text("providerObservability.providers", "Providers") }
     static var providerObservabilityModels: String { text("providerObservability.models", "Models") }
     static var providerObservabilityDestinations: String { text("providerObservability.destinations", "Destinations") }
+    static var providerObservabilityModelTaskHistory: String { text("providerObservability.modelTaskHistory", "Model-task history") }
+    static var providerObservabilityNoModelTaskHistory: String { text("providerObservability.empty.modelTaskHistory", "No model-task history returned.") }
+    static var providerObservabilityTaskKind: String { text("providerObservability.taskKind", "Task kind") }
+    static var providerObservabilityMatchStatus: String { text("providerObservability.matchStatus", "Match status") }
+    static var providerObservabilityConfidence: String { text("providerObservability.confidence", "Confidence") }
+    static var providerObservabilitySourceKind: String { text("providerObservability.sourceKind", "Source kind") }
+    static var providerObservabilityRedactionStatus: String { text("providerObservability.redactionStatus", "Redaction") }
     static var providerObservabilityRecentCalls: String { text("providerObservability.recentCalls", "Recent calls") }
     static var providerObservabilityStatusRows: String { text("providerObservability.statusRows", "Status rows") }
     static var providerObservabilityErrorRows: String { text("providerObservability.errorRows", "Errors") }

@@ -8,13 +8,13 @@ opencode, Pi, Hermes, and OpenClaw.
 
 | Area | Status |
 | --- | --- |
-| Current phase | V2.90 Agent Copilot identifier migration completed |
-| Completed baseline | V2.1-V2.90 |
-| Recent product line | V2.41-V2.90 AI-native analysis, task cockpit, validation hardening, module splitting, read-only Agent Copilot surfaces, per-surface evidence closeout, brand asset refresh, and compatibility-first identifier migration |
+| Current phase | V2.91 model-task matching history completed |
+| Completed baseline | V2.1-V2.91 |
+| Recent product line | V2.41-V2.91 AI-native analysis, task cockpit, validation hardening, module splitting, read-only Agent Copilot surfaces, per-surface evidence closeout, brand asset refresh, compatibility-first identifier migration, and local model-task history |
 | Agent Copilot line | M1-M4 completed; unlocked app-window evidence captured |
 | Maintained UI | Native macOS app in `apps/macos` |
 | Service boundary | Rust typed JSON stdio sidecar in `crates/service` |
-| Next version | V2.91 model-task matching history; V2.92-V2.96 near-term plan is tracked in `docs/roadmap.md` and `docs/development-tasks.md` |
+| Next version | V2.92 Codex expanded roots; V2.92-V2.96 near-term plan is tracked in `docs/roadmap.md` and `docs/development-tasks.md` |
 
 V2.84-V2.86 completed the post-V2.83 module-splitting line:
 
@@ -56,6 +56,15 @@ V2.90 completes the first internal identifier migration slice:
 - Preserves Swift module names, Rust crate names, the `skills-copilot-service`
   sidecar, `skills-copilot.*` AX ids, `SKILLS_COPILOT_*` env vars, and the
   legacy Keychain service for compatibility.
+
+V2.91 adds local model-task matching history:
+
+- Adds `llm.listModelTaskMatches`, `llm.recordModelTaskMatch`, and
+  `llm.deleteModelTaskMatch` as protocol-backed app-local metadata methods.
+- Stores only redacted `model-task-matches.json` records and combines them with
+  redacted prompt-run metadata for read-only history rows.
+- Surfaces `model_task_history_rows` in Provider Observability without exposing
+  write/delete controls in the V2.91 UI.
 
 ## What It Does
 
@@ -139,7 +148,7 @@ This section only keeps machine-checked status anchors. Detailed evidence lives
 in `docs/v2.*-verification-checklist.md` and `docs/development-tasks.md`.
 
 Baseline phrase used by docs gates:
-V2.90 Agent Copilot identifier migration completed.
+V2.91 model-task matching history completed.
 
 ### V2.74-V2.78
 

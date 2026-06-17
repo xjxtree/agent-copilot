@@ -1,0 +1,10 @@
+{
+  "id": "fixture-llm-list-model-task-matches",
+  "method": "llm.listModelTaskMatches",
+  "params": {
+    "limit": 10,
+    "provider": "openai-compatible",
+    "model": "gpt-5",
+    "task_kind": "task_readiness"
+  }
+}

@@ -637,6 +637,138 @@ struct ProviderObservabilityIssueRow: Decodable, Identifiable, Hashable {
     }
 }
 
+struct ProviderObservabilityModelTaskHistoryRow: Decodable, Identifiable, Hashable {
+    let id: String
+    let source: String
+    let sourceKind: String
+    let title: String
+    let task: String?
+    let taskKind: String
+    let agent: String?
+    let provider: String
+    let model: String
+    let destinationHost: String?
+    let matchStatus: String
+    let confidenceScore: Int?
+    let status: String
+    let latencyMS: Int?
+    let estimatedTotalTokens: Int
+    let estimatedCostUSD: Double?
+    let gapNotes: [String]
+    let blockerNotes: [String]
+    let outcomeNotes: [String]
+    let evidenceRefs: [String]
+    let redactionStatus: String
+    let safetyFlags: ProviderObservabilitySafety
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case source
+        case sourceKind = "source_kind"
+        case sourceKindAlt = "sourceKind"
+        case title
+        case task
+        case taskKind = "task_kind"
+        case taskKindAlt = "taskKind"
+        case agent
+        case provider
+        case model
+        case destinationHost = "destination_host"
+        case destinationHostAlt = "destinationHost"
+        case matchStatus = "match_status"
+        case matchStatusAlt = "matchStatus"
+        case confidenceScore = "confidence_score"
+        case confidenceScoreAlt = "confidenceScore"
+        case status
+        case latencyMS = "latency_ms"
+        case latencyMSAlt = "latencyMS"
+        case estimatedTotalTokens = "estimated_total_tokens"
+        case estimatedTotalTokensAlt = "estimatedTotalTokens"
+        case estimatedCostUSD = "estimated_cost_usd"
+        case estimatedCostUSDAlt = "estimatedCostUSD"
+        case gapNotes = "gap_notes"
+        case gapNotesAlt = "gapNotes"
+        case blockerNotes = "blocker_notes"
+        case blockerNotesAlt = "blockerNotes"
+        case outcomeNotes = "outcome_notes"
+        case outcomeNotesAlt = "outcomeNotes"
+        case evidenceRefs = "evidence_refs"
+        case evidenceRefsAlt = "evidenceRefs"
+        case redactionStatus = "redaction_status"
+        case redactionStatusAlt = "redactionStatus"
+        case safetyFlags = "safety_flags"
+        case safetyFlagsAlt = "safetyFlags"
+    }
+
+    init(from decoder: Decoder) throws {
+        if let value = try? decoder.singleValueContainer().decode(String.self) {
+            id = "model-task:\(value)"
+            source = UIStrings.unknown
+            sourceKind = UIStrings.unknown
+            title = value
+            task = nil
+            taskKind = UIStrings.unknown
+            agent = nil
+            provider = UIStrings.unknown
+            model = UIStrings.unknown
+            destinationHost = nil
+            matchStatus = UIStrings.unknown
+            confidenceScore = nil
+            status = UIStrings.unknown
+            latencyMS = nil
+            estimatedTotalTokens = 0
+            estimatedCostUSD = nil
+            gapNotes = []
+            blockerNotes = []
+            outcomeNotes = []
+            evidenceRefs = [value]
+            redactionStatus = UIStrings.unknown
+            safetyFlags = ProviderObservabilitySafety()
+            return
+        }
+
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        source = try container.decodeIfPresent(String.self, forKey: .source) ?? UIStrings.unknown
+        sourceKind = try container.decodeIfPresent(String.self, forKey: .sourceKind)
+            ?? container.decodeIfPresent(String.self, forKey: .sourceKindAlt)
+            ?? UIStrings.unknown
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? id
+        task = try container.decodeIfPresent(String.self, forKey: .task)
+        taskKind = try container.decodeIfPresent(String.self, forKey: .taskKind)
+            ?? container.decodeIfPresent(String.self, forKey: .taskKindAlt)
+            ?? UIStrings.unknown
+        agent = try container.decodeIfPresent(String.self, forKey: .agent)
+        provider = try container.decodeIfPresent(String.self, forKey: .provider) ?? UIStrings.unknown
+        model = try container.decodeIfPresent(String.self, forKey: .model) ?? UIStrings.unknown
+        destinationHost = try container.decodeIfPresent(String.self, forKey: .destinationHost)
+            ?? container.decodeIfPresent(String.self, forKey: .destinationHostAlt)
+        matchStatus = try container.decodeIfPresent(String.self, forKey: .matchStatus)
+            ?? container.decodeIfPresent(String.self, forKey: .matchStatusAlt)
+            ?? UIStrings.unknown
+        confidenceScore = try container.decodeFlexibleProviderObservabilityInt(keys: [.confidenceScore, .confidenceScoreAlt])
+        status = try container.decodeIfPresent(String.self, forKey: .status) ?? matchStatus
+        latencyMS = try container.decodeFlexibleProviderObservabilityInt(keys: [.latencyMS, .latencyMSAlt])
+        estimatedTotalTokens = try container.decodeFlexibleProviderObservabilityInt(keys: [.estimatedTotalTokens, .estimatedTotalTokensAlt]) ?? 0
+        estimatedCostUSD = try container.decodeFlexibleProviderObservabilityDouble(keys: [.estimatedCostUSD, .estimatedCostUSDAlt])
+        gapNotes = try container.decodeFlexibleProviderObservabilityStringArray(keys: [.gapNotes, .gapNotesAlt])
+        blockerNotes = try container.decodeFlexibleProviderObservabilityStringArray(keys: [.blockerNotes, .blockerNotesAlt])
+        outcomeNotes = try container.decodeFlexibleProviderObservabilityStringArray(keys: [.outcomeNotes, .outcomeNotesAlt])
+        evidenceRefs = try container.decodeFlexibleProviderObservabilityStringArray(keys: [.evidenceRefs, .evidenceRefsAlt])
+        redactionStatus = try container.decodeIfPresent(String.self, forKey: .redactionStatus)
+            ?? container.decodeIfPresent(String.self, forKey: .redactionStatusAlt)
+            ?? UIStrings.unknown
+        safetyFlags = try container.decodeIfPresent(ProviderObservabilitySafety.self, forKey: .safetyFlags)
+            ?? container.decodeIfPresent(ProviderObservabilitySafety.self, forKey: .safetyFlagsAlt)
+            ?? ProviderObservabilitySafety()
+    }
+
+    var statusIsProblem: Bool {
+        let value = matchStatus.lowercased()
+        return value.contains("mismatch") || value.contains("unknown") || value.contains("fail") || value.contains("error")
+    }
+}
+
 struct ProviderObservabilityHintRow: Decodable, Identifiable, Hashable {
     let id: String
     let severity: String
@@ -960,6 +1092,7 @@ struct ProviderObservabilityResult: Decodable, Hashable {
     let providerRows: [ProviderObservabilityDimensionRow]
     let modelRows: [ProviderObservabilityDimensionRow]
     let destinationRows: [ProviderObservabilityDimensionRow]
+    let modelTaskHistoryRows: [ProviderObservabilityModelTaskHistoryRow]
     let statusRows: [ProviderObservabilityIssueRow]
     let errorRows: [ProviderObservabilityIssueRow]
     let budgetHints: [ProviderObservabilityHintRow]
@@ -1007,6 +1140,8 @@ struct ProviderObservabilityResult: Decodable, Hashable {
         case destinationRows = "destination_rows"
         case destinationRowsAlt = "destinationRows"
         case destinations
+        case modelTaskHistoryRows = "model_task_history_rows"
+        case modelTaskHistoryRowsAlt = "modelTaskHistoryRows"
         case statusRows = "status_rows"
         case statusRowsAlt = "statusRows"
         case statuses
@@ -1058,6 +1193,7 @@ struct ProviderObservabilityResult: Decodable, Hashable {
         providerRows: [ProviderObservabilityDimensionRow] = [],
         modelRows: [ProviderObservabilityDimensionRow] = [],
         destinationRows: [ProviderObservabilityDimensionRow] = [],
+        modelTaskHistoryRows: [ProviderObservabilityModelTaskHistoryRow] = [],
         statusRows: [ProviderObservabilityIssueRow] = [],
         errorRows: [ProviderObservabilityIssueRow] = [],
         budgetHints: [ProviderObservabilityHintRow] = [],
@@ -1080,6 +1216,7 @@ struct ProviderObservabilityResult: Decodable, Hashable {
         self.providerRows = providerRows
         self.modelRows = modelRows
         self.destinationRows = destinationRows
+        self.modelTaskHistoryRows = modelTaskHistoryRows
         self.statusRows = statusRows
         self.errorRows = errorRows
         self.budgetHints = budgetHints
@@ -1115,6 +1252,10 @@ struct ProviderObservabilityResult: Decodable, Hashable {
         let decodedDestinationRows = try container.decodeProviderObservabilityRows(
             type: ProviderObservabilityDimensionRow.self,
             keys: [.destinationRows, .destinationRowsAlt, .destinations]
+        )
+        let decodedModelTaskHistoryRows = try container.decodeProviderObservabilityRows(
+            type: ProviderObservabilityModelTaskHistoryRow.self,
+            keys: [.modelTaskHistoryRows, .modelTaskHistoryRowsAlt]
         )
         let decodedStatusRows = try container.decodeProviderObservabilityRows(
             type: ProviderObservabilityIssueRow.self,
@@ -1176,6 +1317,7 @@ struct ProviderObservabilityResult: Decodable, Hashable {
         providerRows = normalizedProviderRows
         modelRows = normalizedModelRows
         destinationRows = normalizedDestinationRows
+        modelTaskHistoryRows = decodedModelTaskHistoryRows
         statusRows = decodedStatusRows
         errorRows = decodedErrorRows
         budgetHints = decodedBudgetHints

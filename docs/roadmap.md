@@ -12,8 +12,8 @@
 > 非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，
 > 不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.90 Agent Copilot identifier migration completed**。
-> V2.1-V2.90 是当前 completed baseline；V2.87 于 2026-06-17 解锁后通过 `pnpm check:macos`，V2.88 补齐 Lineup / Agent Profile / Local Session Preview / MCP Preview 的 Computer Use app-window evidence，V2.89 刷新 Agent Copilot display brand app icon assets，V2.90 完成兼容优先的 packaged app identity / default app-data id 迁移。
+> 当前阶段：**V2.91 model-task matching history completed**。
+> V2.1-V2.91 是当前 completed baseline；V2.87 于 2026-06-17 解锁后通过 `pnpm check:macos`，V2.88 补齐 Lineup / Agent Profile / Local Session Preview / MCP Preview 的 Computer Use app-window evidence，V2.89 刷新 Agent Copilot display brand app icon assets，V2.90 完成兼容优先的 packaged app identity / default app-data id 迁移，V2.91 新增本地模型-任务匹配历史证据域。
 > Agent Copilot M1-M4 decision-first IA / local evidence previews 已实现为只读感知层，显示层品牌和主要 macOS bundle 为 Agent Copilot；Swift/Rust 模块、sidecar、AX ids、env vars 和 legacy Keychain service 保持兼容。Post-V2.90 follow-ups are now scheduled as near-term V2.91-V2.96 slices below and in [`development-tasks.md`](./development-tasks.md).
 
 ## Current Milestone Snapshot
@@ -24,7 +24,7 @@
 | V2.65-V2.77 | Task-first cockpit, lifecycle, guided cleanup, validation hardening, real-local workbench | Completed |
 | V2.78-V2.83 | Protocol/gate parity, privacy/localization, Detail density, IPC cancellation, test floor, continued module splitting | Completed |
 | V2.84-V2.86 | Swift Detail section splitting, Rust RPC domain module splitting, Rust helper/test split and module-size gate | Completed |
-| Agent Copilot M1-M4 + V2.88-V2.90 closeout | Decision-first Lineup, Agent Profile, sorted decision queue, default-off local session preview, default-off MCP server preview, per-surface evidence closeout, brand asset refresh, and compatibility-first identifier migration | Completed; unlocked app-window evidence captured |
+| Agent Copilot M1-M4 + V2.88-V2.91 closeout | Decision-first Lineup, Agent Profile, sorted decision queue, default-off local session preview, default-off MCP server preview, per-surface evidence closeout, brand asset refresh, compatibility-first identifier migration, and local model-task history | Completed; unlocked app-window evidence captured |
 
 ## Near-Term Post-V2.90 Plan
 
@@ -36,7 +36,7 @@ design/validation closeout before the next write-capability slice starts.
 | V2.88 | Handoff and per-surface evidence | Completed: reviewed staging scope, preserved V2.87 scope, and captured app-window-only evidence for Lineup, Agent Profile, Local Session Preview, and MCP Preview. | `pnpm check:macos`, `pnpm check:privacy`, `pnpm verify:screenshot-artifacts docs/ui-artifacts/v2.88-handoff-evidence`, staged-file review |
 | V2.89 | Brand asset refresh | Completed: refreshed Agent Copilot display brand app icon assets while keeping bundle/module/AX/app-data identifiers unchanged. | `pnpm generate:app-icon`, asset review, screenshot refresh, `pnpm check:macos`, privacy gate |
 | V2.90 | Internal identifier migration | Completed: migrated packaged app identity to `dist/AgentCopilot.app` / `dev.agent-copilot.native`, added app-data compatibility migration from `dev.skills-copilot.native`, and kept module/crate/sidecar/AX/env/Keychain compatibility stable. | [`v2.90-verification-checklist.md`](./v2.90-verification-checklist.md), app-data migration tests, `pnpm check:macos`, privacy gate |
-| V2.91 | Model-task matching history | Add a new local evidence domain for model-task fit history after protocol, privacy, redaction, fixture, and UI design review. | Design-first review, no-provider/no-write defaults, protocol fixtures, focused Rust/Swift tests |
+| V2.91 | Model-task matching history | Completed: added app-local `model-task-matches.json` history, `llm.listModelTaskMatches` / `llm.recordModelTaskMatch` / `llm.deleteModelTaskMatch`, Provider Observability model-task history rows, protocol fixtures, and privacy/redaction tests. | [`v2.91-verification-checklist.md`](./v2.91-verification-checklist.md), protocol drift, focused Rust/Swift tests, app-window screenshot, privacy gate |
 | V2.92 | Codex expanded roots | Evaluate and implement safe support for Codex project config, plugin/admin/system roots, and project-local write policy. Plugin/admin/system roots should default read-only unless rollback-safe writes are proven. | Official/local evidence, root allowlist tests, privacy gate, no unverified writes |
 | V2.93 | opencode custom roots | Evaluate `skills.paths` / `skills.urls`; implement local path support only after canonicalization/dedupe evidence, and treat URL support as explicit user-confirmed fetch or metadata-only by default. | Disposable fixtures, no uncontrolled network, rollback-safe write tests where applicable |
 | V2.94 | Pi install and compatibility writes | Extend beyond V2.37 guarded native toggles only with disposable install/compat-root evidence, snapshot/rollback, and trust-gate coverage. | Disposable round-trip, rollback proof, trust gate, no script execution |
@@ -93,6 +93,8 @@ Current planning boundary:
   [`v2.89-verification-checklist.md`](./v2.89-verification-checklist.md).
 - V2.90 Agent Copilot identifier migration is tracked in
   [`v2.90-verification-checklist.md`](./v2.90-verification-checklist.md).
+- V2.91 model-task matching history is tracked in
+  [`v2.91-verification-checklist.md`](./v2.91-verification-checklist.md).
 
 ## 0. 设计阶段（已完成）
 

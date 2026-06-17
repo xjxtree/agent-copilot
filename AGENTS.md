@@ -15,15 +15,19 @@ coding agents working in this repository.
 
 ## Current State
 
-- Current phase: **V2.90 Agent Copilot identifier migration completed**.
-- Completed baseline: V2.1-V2.90. V2.87 unlocked validation passed on 2026-06-17 via `pnpm check:macos`; V2.88 added Computer Use per-surface evidence under `docs/ui-artifacts/v2.88-handoff-evidence/`; V2.89 refreshed the app icon assets; V2.90 migrated the packaged app identity and default app-data id with compatibility.
+- Current phase: **V2.91 model-task matching history completed**.
+- Completed baseline: V2.1-V2.91. V2.87 unlocked validation passed on 2026-06-17 via `pnpm check:macos`; V2.88 added Computer Use per-surface evidence under `docs/ui-artifacts/v2.88-handoff-evidence/`; V2.89 refreshed the app icon assets; V2.90 migrated the packaged app identity and default app-data id with compatibility; V2.91 added local model-task matching history.
 - Completed product slice: Agent Copilot M1-M4. The displayed product name and primary packaged app identity are Agent Copilot; Swift module/source names, Rust crate names, sidecar name, AX ids, env vars, and legacy Keychain service intentionally retain `SkillsCopilot` / `skills-copilot` compatibility.
 - Current Agent Copilot surfaces: Lineup default surface, Agent Profile, sorted read-only decision queue, default-off local session preview, and default-off MCP server preview.
-- Near-term post-V2.90 planning: V2.91-V2.96 cover model-task history, Codex/opencode roots, Pi install/compat writes, and Hermes/OpenClaw writable/install evidence slices.
+- Near-term post-V2.91 planning: V2.92-V2.96 cover Codex/opencode roots, Pi install/compat writes, and Hermes/OpenClaw writable/install evidence slices.
 - Maintained product UI: native macOS app in `apps/macos`.
 - Service boundary: Rust typed JSON stdio sidecar in `crates/service`.
 - Current app bundle path: `dist/AgentCopilot.app`.
 - Legacy Tauri/React UI is removed. Do not recreate `ui/`, `src-tauri/`, or Tauri IPC.
+- V2.91 model-task history stores only redacted app-local `model-task-matches.json`
+  metadata. Provider Observability displays `model_task_history_rows` read-only;
+  do not add write/delete UI controls without a new scoped version and explicit
+  safety review.
 
 ## Documentation Ownership
 
@@ -162,3 +166,8 @@ This section keeps compact machine-checked milestone anchors. Full details live 
 - V2.88 handoff/evidence closeout: `docs/v2.88-verification-checklist.md` and `docs/ui-artifacts/v2.88-handoff-evidence/` record unlocked Computer Use evidence for Lineup, Agent Profile, Local Session Preview, and MCP Preview.
 - V2.89 brand asset refresh: `AppIcon.svg`, regenerated `AppIcon.icns`, `script/generate_app_icon.sh`, `docs/v2.89-verification-checklist.md`, and `docs/ui-artifacts/v2.89-brand-assets/`; internal `SkillsCopilot` / `skills-copilot` identifiers remain unchanged.
 - V2.90 identifier migration: `dist/AgentCopilot.app`, `dev.agent-copilot.native`, `dev.skills-copilot.native` app-data compatibility migration, `agent-copilot-app-data-migration.json`, `docs/v2.90-verification-checklist.md`, and `docs/ui-artifacts/v2.90-identifier-migration/`; Swift/Rust module names, `skills-copilot-service`, AX ids, env vars, and legacy Keychain service remain stable.
+- V2.91 model-task matching history: `llm.listModelTaskMatches`,
+  `llm.recordModelTaskMatch`, `llm.deleteModelTaskMatch`,
+  redacted `model-task-matches.json`, Provider Observability
+  `model_task_history_rows`, and no provider/default-write/script/credential/
+  cloud/telemetry expansion.
