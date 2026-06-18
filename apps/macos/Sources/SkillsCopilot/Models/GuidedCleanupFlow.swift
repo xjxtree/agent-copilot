@@ -686,7 +686,7 @@ struct GuidedCleanupSafeActionDeepLink: Decodable, Hashable {
         case "cleanup.listQueue", "batch.previewSkillToggles":
             return "cleanup"
         case "skill.lifecycleTimeline":
-            return "skillMap"
+            return "analysis"
         case "task.buildCockpit":
             return "taskCockpit"
         case "cleanup.recordGuidedStep":

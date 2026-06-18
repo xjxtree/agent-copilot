@@ -5,6 +5,9 @@ struct FindingsSection: View {
     @EnvironmentObject private var store: SkillStore
     let skill: SkillRecord
     let findings: [RuleFindingRecord]
+    let conflicts: [ConflictGroupRecord]
+    let selectedSkillID: String
+    let currentAgentSkillIDs: Set<String>
     @State private var severityFilter = FindingDisplayModel.allFilterValue
     @State private var ruleFilter = FindingDisplayModel.allFilterValue
     @State private var triageFilter: FindingTriageFilter = .active
@@ -54,12 +57,34 @@ struct FindingsSection: View {
     }
 
     private var visibleImpactedCount: Int {
-        let ids = Set(visibleGroups.flatMap { group in
+        let ids = visibleFindingInstanceIDs.union(visibleConflictInstanceIDs)
+        return max(ids.count, combinedVisibleEntryCount == 0 ? 0 : 1)
+    }
+
+    private var visibleFindingInstanceIDs: Set<String> {
+        Set(visibleGroups.flatMap { group in
             group.issues.flatMap { issue in
                 issue.findings.compactMap(\.instanceId)
             }
         })
-        return max(ids.count, visibleEntryCount == 0 ? 0 : 1)
+    }
+
+    private var visibleConflictInstanceIDs: Set<String> {
+        Set(conflicts.flatMap { conflict in
+            conflict.instanceIds.filter { currentAgentSkillIDs.contains($0) }
+        })
+    }
+
+    private var totalIssueAndConflictCount: Int {
+        totalIssueCount + conflicts.count
+    }
+
+    private var visibleIssueAndConflictCount: Int {
+        visibleIssueCount + conflicts.count
+    }
+
+    private var combinedVisibleEntryCount: Int {
+        visibleEntryCount + conflicts.count
     }
 
     private var triageCounts: FindingTriageCounts {
@@ -68,7 +93,7 @@ struct FindingsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if findings.isEmpty {
+            if findings.isEmpty && conflicts.isEmpty {
                 EmptyState(
                     title: UIStrings.noFindings,
                     systemImage: "checkmark.seal",
@@ -78,16 +103,18 @@ struct FindingsSection: View {
                 FindingTriageNotice()
 
                 FindingsSummaryStrip(
-                    visibleIssueCount: visibleIssueCount,
-                    totalIssueCount: totalIssueCount,
-                    visibleEntryCount: visibleEntryCount,
+                    visibleIssueCount: visibleIssueAndConflictCount,
+                    totalIssueCount: totalIssueAndConflictCount,
+                    visibleEntryCount: combinedVisibleEntryCount,
                     visibleImpactedCount: visibleImpactedCount,
                     triageCounts: triageCounts
                 )
 
-                findingFilters
+                if !findings.isEmpty {
+                    findingFilters
+                }
 
-                if visibleGroups.isEmpty {
+                if visibleGroups.isEmpty && conflicts.isEmpty {
                     EmptyState(
                         title: UIStrings.noMatchingFindings,
                         systemImage: "line.3.horizontal.decrease.circle",
@@ -126,6 +153,12 @@ struct FindingsSection: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
+
+                    SameAgentConflictIssuesView(
+                        conflicts: conflicts,
+                        selectedSkillID: selectedSkillID,
+                        currentAgentSkillIDs: currentAgentSkillIDs
+                    )
                 }
             }
         }
@@ -168,7 +201,7 @@ struct FindingsSection: View {
             Spacer(minLength: 0)
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text(UIStrings.visibleFindingGroupsSummary(visibleIssueCount, totalIssueCount, visibleEntryCount))
+                Text(UIStrings.visibleFindingGroupsSummary(visibleIssueAndConflictCount, totalIssueAndConflictCount, combinedVisibleEntryCount))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Text(UIStrings.findingScopeSummary(skill.name, DisplayText.agent(skill.agent)))
@@ -213,7 +246,7 @@ struct FindingsSummaryStrip: View {
     let triageCounts: FindingTriageCounts
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 10)], alignment: .leading, spacing: 10) {
+        DetailMetricGrid {
             SummaryChip(title: UIStrings.text("findings.summary.issueGroups", "Issue groups"), value: "\(visibleIssueCount) / \(totalIssueCount)", systemImage: "rectangle.stack.badge.exclamationmark")
             SummaryChip(title: UIStrings.text("findings.summary.impacted", "Impacted"), value: "\(visibleImpactedCount)", systemImage: "target")
             SummaryChip(title: UIStrings.text("findings.summary.entries", "Scan entries"), value: "\(visibleEntryCount)", systemImage: "list.bullet.rectangle")
@@ -278,7 +311,7 @@ struct FindingIssueCard: View {
                     .font(.caption.bold())
                     .foregroundStyle(.secondary)
 
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 8)], alignment: .leading, spacing: 8) {
+                DetailMetricGrid(maxColumns: 4, minColumnWidth: 190, spacing: 8) {
                     FindingExplanationField(title: UIStrings.findingRuleID, value: issue.ruleId, systemImage: "number")
                     FindingExplanationField(title: UIStrings.findingRuleSource, value: issue.ruleSource, systemImage: "scope")
                     FindingExplanationField(title: UIStrings.findingCatalogTarget, value: issue.catalogTarget, systemImage: "shippingbox")
@@ -593,17 +626,22 @@ struct PermissionSummaryCard: View {
     }
 }
 
-struct ConflictsSection: View {
+struct SameAgentConflictIssuesView: View {
     let conflicts: [ConflictGroupRecord]
     let selectedSkillID: String
     let currentAgentSkillIDs: Set<String>
+    var showsEmptyState = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        if conflicts.isEmpty {
+            if showsEmptyState {
+                EmptyState(title: UIStrings.noConflicts, systemImage: "checkmark.circle", message: UIStrings.noConflictsMessage)
+            }
+        } else {
             VStack(alignment: .leading, spacing: 8) {
-                Label(UIStrings.text("conflicts.sameAgentWorkbench", "Current-agent conflict workbench"), systemImage: "person.crop.circle.badge.exclamationmark")
+                Label(UIStrings.text("conflicts.issueSection", "Same-agent conflict issues"), systemImage: "person.crop.circle.badge.exclamationmark")
                     .font(.headline)
-                Text(UIStrings.text("conflicts.sameAgentExplanation", "Conflicts only include current-agent runtime/name collisions. Cross-agent duplicate names and source overlap are analysis insights, so they are reviewed from the Analysis tab instead of inflating conflict counts."))
+                Text(UIStrings.text("conflicts.issueSection.summary", "Current-agent runtime/name collisions are listed here with other issues because they can affect reliable skill selection."))
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -611,43 +649,69 @@ struct ConflictsSection: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .adaptiveMaterialSurface()
 
-            if conflicts.isEmpty {
-                EmptyState(title: UIStrings.noConflicts, systemImage: "checkmark.circle", message: UIStrings.noConflictsMessage)
-            } else {
-                ForEach(conflicts) { conflict in
-                    let currentAgentInstanceIDs = conflict.instanceIds.filter { currentAgentSkillIDs.contains($0) }
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack(alignment: .firstTextBaseline) {
-                            Text(conflict.reason)
-                                .font(.headline)
-                            Spacer()
-                            Text(UIStrings.text("conflicts.currentAgentOnlyBadge", "current agent only"))
+            ForEach(conflicts) { conflict in
+                let currentAgentInstanceIDs = conflict.instanceIds.filter { currentAgentSkillIDs.contains($0) }
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(conflict.reason)
+                            .font(.headline)
+                        Spacer()
+                        Text(UIStrings.text("conflicts.currentAgentOnlyBadge", "current agent only"))
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(.quaternary.opacity(0.35), in: Capsule())
+                    }
+                    DetailMetricGrid {
+                        SummaryChip(title: UIStrings.definition, value: conflict.definitionId, systemImage: "number")
+                        SummaryChip(title: UIStrings.winner, value: conflict.winnerId ?? UIStrings.none, systemImage: "crown")
+                        SummaryChip(title: UIStrings.instances, value: "\(currentAgentInstanceIDs.count)", systemImage: "rectangle.stack")
+                        SummaryChip(title: UIStrings.text("conflicts.selectedInstance", "Selected"), value: selectedSkillID, systemImage: "target")
+                    }
+
+                    if !currentAgentInstanceIDs.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(UIStrings.instances)
                                 .font(.caption.bold())
                                 .foregroundStyle(.secondary)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(.quaternary.opacity(0.35), in: Capsule())
+
+                            ForEach(currentAgentInstanceIDs, id: \.self) { instanceID in
+                                Label(
+                                    instanceID == selectedSkillID ? "\(instanceID) · selected" : instanceID,
+                                    systemImage: instanceID == selectedSkillID ? "target" : "circle"
+                                )
+                                .font(.caption)
+                                .lineLimit(2)
+                                .truncationMode(.middle)
+                                .textSelection(.enabled)
+                            }
                         }
-                        MetadataLine(label: UIStrings.definition, value: conflict.definitionId)
-                        MetadataLine(label: UIStrings.winner, value: conflict.winnerId ?? UIStrings.none)
-                        Text(UIStrings.instances)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        ForEach(currentAgentInstanceIDs, id: \.self) { instanceID in
-                            Label(
-                                instanceID == selectedSkillID ? "\(instanceID) · selected" : instanceID,
-                                systemImage: instanceID == selectedSkillID ? "target" : "circle"
-                            )
-                            .font(.caption)
-                            .textSelection(.enabled)
-                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.quaternary.opacity(0.24), in: RoundedRectangle(cornerRadius: 8))
                     }
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .adaptiveMaterialSurface()
                 }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .adaptiveMaterialSurface()
             }
         }
+    }
+}
+
+struct ConflictsSection: View {
+    let conflicts: [ConflictGroupRecord]
+    let selectedSkillID: String
+    let currentAgentSkillIDs: Set<String>
+
+    var body: some View {
+        SameAgentConflictIssuesView(
+            conflicts: conflicts,
+            selectedSkillID: selectedSkillID,
+            currentAgentSkillIDs: currentAgentSkillIDs,
+            showsEmptyState: true
+        )
     }
 }
 
@@ -673,17 +737,15 @@ struct AgentConfigHistorySection: View {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(alignment: .top) {
                             VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Text(snapshot.reason)
-                                        .font(.headline)
-                                    Text(DisplayText.timestamp(snapshot.createdAt))
-                                        .foregroundStyle(.secondary)
+                                Text(snapshot.reason)
+                                    .font(.headline)
+                                    .lineLimit(2)
+                                DetailMetricGrid {
+                                    SummaryChip(title: UIStrings.target, value: snapshot.target, systemImage: "scope")
+                                    SummaryChip(title: UIStrings.scope, value: DisplayText.scope(snapshot.scope), systemImage: "folder")
+                                    SummaryChip(title: UIStrings.text("history.created", "Created"), value: DisplayText.timestamp(snapshot.createdAt), systemImage: "calendar")
+                                    SummaryChip(title: UIStrings.text("history.characters", "Captured"), value: UIStrings.charactersCaptured(snapshot.content.count), systemImage: "textformat.size")
                                 }
-                                MetadataLine(label: UIStrings.target, value: snapshot.target)
-                                MetadataLine(label: UIStrings.scope, value: DisplayText.scope(snapshot.scope))
-                                Text(UIStrings.charactersCaptured(snapshot.content.count))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
                             }
                             Spacer()
 

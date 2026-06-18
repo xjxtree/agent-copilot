@@ -68,7 +68,7 @@ struct ProviderObservabilityResultView: View {
                     .textSelection(.enabled)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 10)], alignment: .leading, spacing: 10) {
+            DetailMetricGrid {
                 SummaryChip(title: UIStrings.providerObservabilityCalls, value: "\(callCount)", systemImage: "network")
                 SummaryChip(title: UIStrings.providerObservabilitySuccesses, value: "\(successCount)", systemImage: "checkmark.circle")
                 SummaryChip(title: UIStrings.providerObservabilityFailures, value: "\(failureCount)", systemImage: "xmark.octagon")
@@ -77,6 +77,8 @@ struct ProviderObservabilityResultView: View {
                 SummaryChip(title: UIStrings.providerObservabilityEstimatedCost, value: costLabel(result.summary.estimatedCostUSD), systemImage: "dollarsign.circle")
                 SummaryChip(title: UIStrings.providerObservabilityDuration, value: durationLabel(result.summary.totalDurationMS), systemImage: "timer")
             }
+
+            ProviderObservabilityChartsPanel(result: result)
 
             Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
                 MetadataRow(label: UIStrings.routingAccuracyGeneratedBy, value: result.generatedBy)
@@ -146,6 +148,408 @@ struct ProviderObservabilityResultView: View {
         let copy = promptRequest.copyOnly ? UIStrings.llmPromptCopyOnly : UIStrings.llmSkillAnalysisEnabledUnsafe
         let redaction = promptRequest.redacted ? UIStrings.aiProviderAuditRedaction : UIStrings.llmSkillAnalysisEnabledUnsafe
         return "\(promptRequest.requestKind) · \(state) · \(copy) · \(redaction)"
+    }
+}
+
+struct ProviderObservabilityChartsPanel: View {
+    let result: ProviderObservabilityResult
+
+    private let columns = [GridItem(.adaptive(minimum: 245), spacing: 10)]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Label(UIStrings.providerObservabilityChartsTitle, systemImage: "chart.bar.xaxis")
+                    .font(.headline)
+                Spacer()
+                Text(UIStrings.providerObservabilityChartsMode)
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(UIStrings.providerObservabilityChartsSummary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
+                ProviderObservabilityChartCard(
+                    title: UIStrings.providerObservabilityChartStatus,
+                    subtitle: UIStrings.providerObservabilityCalls,
+                    systemImage: "checklist",
+                    rows: statusChartRows
+                )
+                ProviderObservabilityChartCard(
+                    title: UIStrings.providerObservabilityChartModelTokens,
+                    subtitle: UIStrings.providerObservabilityEstimatedTokens,
+                    systemImage: "cpu",
+                    rows: modelTokenRows
+                )
+                ProviderObservabilityChartCard(
+                    title: UIStrings.providerObservabilityChartDestinationCost,
+                    subtitle: UIStrings.providerObservabilityEstimatedCost,
+                    systemImage: "network",
+                    rows: destinationCostRows
+                )
+                ProviderObservabilityChartCard(
+                    title: UIStrings.providerObservabilityChartModelLatency,
+                    subtitle: UIStrings.providerObservabilityAverageDuration,
+                    systemImage: "timer",
+                    rows: modelLatencyRows
+                )
+                ProviderObservabilityChartCard(
+                    title: UIStrings.providerObservabilityChartModelTaskConfidence,
+                    subtitle: UIStrings.providerObservabilityModelTaskHistory,
+                    systemImage: "target",
+                    rows: modelTaskConfidenceRows
+                )
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.2), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var statusChartRows: [ProviderObservabilityChartRow] {
+        let success = result.summary.successCount > 0
+            ? result.summary.successCount
+            : result.callRows.filter { !$0.statusIsProblem }.count
+        let failure = result.summary.failureCount > 0
+            ? result.summary.failureCount
+            : result.callRows.filter(\.statusIsProblem).count
+        let blocked = result.summary.blockedCount
+        let summaryRows = [
+            ProviderObservabilityChartRow(
+                label: UIStrings.providerObservabilitySuccesses,
+                value: Double(success),
+                valueLabel: "\(success)",
+                detail: UIStrings.providerObservabilityCalls,
+                color: .green
+            ),
+            ProviderObservabilityChartRow(
+                label: UIStrings.providerObservabilityFailures,
+                value: Double(failure),
+                valueLabel: "\(failure)",
+                detail: UIStrings.providerObservabilityCalls,
+                color: .red
+            ),
+            ProviderObservabilityChartRow(
+                label: UIStrings.providerObservabilityBlocked,
+                value: Double(blocked),
+                valueLabel: "\(blocked)",
+                detail: UIStrings.providerObservabilityCalls,
+                color: .orange
+            ),
+        ]
+
+        if summaryRows.contains(where: { $0.value > 0 }) {
+            return summaryRows
+        }
+
+        return chartRowsByStatusFromCalls
+    }
+
+    private var chartRowsByStatusFromCalls: [ProviderObservabilityChartRow] {
+        let groups = Dictionary(grouping: result.callRows, by: \.status)
+        return groups
+            .map { status, calls in
+                ProviderObservabilityChartRow(
+                    label: status,
+                    value: Double(calls.count),
+                    valueLabel: "\(calls.count)",
+                    detail: UIStrings.providerObservabilityCalls,
+                    color: color(forStatus: status)
+                )
+            }
+            .sorted { left, right in
+                if left.value == right.value {
+                    return left.label.localizedCaseInsensitiveCompare(right.label) == .orderedAscending
+                }
+                return left.value > right.value
+            }
+            .prefix(5)
+            .map { $0 }
+    }
+
+    private var modelTokenRows: [ProviderObservabilityChartRow] {
+        let dimensionRows = result.modelRows
+            .filter { $0.estimatedTokens > 0 }
+            .map { row in
+                ProviderObservabilityChartRow(
+                    label: row.label,
+                    value: Double(row.estimatedTokens),
+                    valueLabel: compactIntLabel(row.estimatedTokens),
+                    detail: callsDetail(row.callCount),
+                    color: .blue
+                )
+            }
+        if !dimensionRows.isEmpty {
+            return topChartRows(dimensionRows)
+        }
+
+        return topChartRows(callAggregates(\.model).map { aggregate in
+            ProviderObservabilityChartRow(
+                label: aggregate.label,
+                value: Double(aggregate.tokenCount),
+                valueLabel: compactIntLabel(aggregate.tokenCount),
+                detail: callsDetail(aggregate.callCount),
+                color: .blue
+            )
+        })
+    }
+
+    private var destinationCostRows: [ProviderObservabilityChartRow] {
+        let dimensionRows = result.destinationRows
+            .compactMap { row -> ProviderObservabilityChartRow? in
+                guard let cost = row.estimatedCostUSD, cost > 0 else { return nil }
+                return ProviderObservabilityChartRow(
+                    label: row.label,
+                    value: cost,
+                    valueLabel: costLabel(cost),
+                    detail: callsDetail(row.callCount),
+                    color: .mint
+                )
+            }
+        if !dimensionRows.isEmpty {
+            return topChartRows(dimensionRows)
+        }
+
+        return topChartRows(callAggregates(\.destinationHost).compactMap { aggregate in
+            guard aggregate.cost > 0 else { return nil }
+            return ProviderObservabilityChartRow(
+                label: aggregate.label,
+                value: aggregate.cost,
+                valueLabel: costLabel(aggregate.cost),
+                detail: callsDetail(aggregate.callCount),
+                color: .mint
+            )
+        })
+    }
+
+    private var modelLatencyRows: [ProviderObservabilityChartRow] {
+        let dimensionRows = result.modelRows
+            .compactMap { row -> ProviderObservabilityChartRow? in
+                guard let duration = row.averageDurationMS, duration > 0 else { return nil }
+                return ProviderObservabilityChartRow(
+                    label: row.label,
+                    value: Double(duration),
+                    valueLabel: durationLabel(duration),
+                    detail: callsDetail(row.callCount),
+                    color: .indigo
+                )
+            }
+        if !dimensionRows.isEmpty {
+            return topChartRows(dimensionRows)
+        }
+
+        return topChartRows(callAggregates(\.model).compactMap { aggregate in
+            guard let duration = aggregate.averageDurationMS else { return nil }
+            return ProviderObservabilityChartRow(
+                label: aggregate.label,
+                value: Double(duration),
+                valueLabel: durationLabel(duration),
+                detail: callsDetail(aggregate.callCount),
+                color: .indigo
+            )
+        })
+    }
+
+    private var modelTaskConfidenceRows: [ProviderObservabilityChartRow] {
+        let rows = result.modelTaskHistoryRows.compactMap { row -> ProviderObservabilityChartRow? in
+            guard let confidence = row.confidenceScore else { return nil }
+            let label = row.model == UIStrings.unknown ? row.title : row.model
+            return ProviderObservabilityChartRow(
+                label: label,
+                value: Double(confidence),
+                valueLabel: "\(confidence)%",
+                detail: row.matchStatus,
+                color: row.statusIsProblem ? .orange : .green
+            )
+        }
+        return topChartRows(rows)
+    }
+
+    private func callAggregates(_ keyPath: KeyPath<ProviderObservabilityCallRow, String>) -> [ProviderObservabilityCallAggregate] {
+        var groups: [String: ProviderObservabilityCallAggregate] = [:]
+        for row in result.callRows {
+            let label = row[keyPath: keyPath].isEmpty ? UIStrings.unknown : row[keyPath: keyPath]
+            groups[label, default: ProviderObservabilityCallAggregate(label: label)].add(row)
+        }
+        return groups.values.sorted { left, right in
+            if left.callCount == right.callCount {
+                return left.label.localizedCaseInsensitiveCompare(right.label) == .orderedAscending
+            }
+            return left.callCount > right.callCount
+        }
+    }
+
+    private func topChartRows(_ rows: [ProviderObservabilityChartRow]) -> [ProviderObservabilityChartRow] {
+        rows
+            .filter { $0.value > 0 }
+            .sorted { left, right in
+                if left.value == right.value {
+                    return left.label.localizedCaseInsensitiveCompare(right.label) == .orderedAscending
+                }
+                return left.value > right.value
+            }
+            .prefix(5)
+            .map { $0 }
+    }
+
+    private func callsDetail(_ count: Int) -> String {
+        "\(count) \(UIStrings.providerObservabilityCalls.lowercased())"
+    }
+
+    private func compactIntLabel(_ value: Int) -> String {
+        if value >= 1_000_000 {
+            return "\((Double(value) / 1_000_000.0).providerObservabilityCompact)M"
+        }
+        if value >= 1_000 {
+            return "\((Double(value) / 1_000.0).providerObservabilityCompact)k"
+        }
+        return "\(value)"
+    }
+
+    private func color(forStatus status: String) -> Color {
+        let value = status.lowercased()
+        if value.contains("success") || value.contains("succeed") || value.contains("ok") {
+            return .green
+        }
+        if value.contains("fail") || value.contains("error") || value.contains("timeout") {
+            return .red
+        }
+        if value.contains("block") {
+            return .orange
+        }
+        return .blue
+    }
+}
+
+private struct ProviderObservabilityChartCard: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let rows: [ProviderObservabilityChartRow]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Label(title, systemImage: systemImage)
+                    .font(.callout.bold())
+                    .lineLimit(1)
+                Spacer()
+                Text(subtitle)
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            if rows.isEmpty {
+                Text(UIStrings.providerObservabilityChartEmpty)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(minHeight: 86, alignment: .center)
+                    .frame(maxWidth: .infinity)
+            } else {
+                VStack(alignment: .leading, spacing: 9) {
+                    ForEach(rows) { row in
+                        ProviderObservabilityBarRow(row: row, maxValue: maxValue)
+                    }
+                }
+                .frame(minHeight: 86, alignment: .top)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.24), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var maxValue: Double {
+        rows.map(\.value).max() ?? 0
+    }
+}
+
+private struct ProviderObservabilityBarRow: View {
+    let row: ProviderObservabilityChartRow
+    let maxValue: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(row.label)
+                    .font(.caption.bold())
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+                Text(row.valueLabel)
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(.secondary.opacity(0.12))
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(row.color.opacity(0.82))
+                        .frame(width: barWidth(in: proxy.size.width))
+                }
+            }
+            .frame(height: 7)
+
+            Text(row.detail)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+    }
+
+    private func barWidth(in width: CGFloat) -> CGFloat {
+        guard maxValue > 0, row.value > 0 else { return 0 }
+        return max(2, width * CGFloat(row.value / maxValue))
+    }
+}
+
+private struct ProviderObservabilityChartRow: Identifiable {
+    let label: String
+    let value: Double
+    let valueLabel: String
+    let detail: String
+    let color: Color
+
+    var id: String { "\(label):\(valueLabel):\(detail)" }
+}
+
+private struct ProviderObservabilityCallAggregate {
+    let label: String
+    var callCount = 0
+    var tokenCount = 0
+    var cost = 0.0
+    var durationTotalMS = 0
+    var durationCount = 0
+
+    var averageDurationMS: Int? {
+        guard durationCount > 0 else { return nil }
+        return durationTotalMS / durationCount
+    }
+
+    mutating func add(_ row: ProviderObservabilityCallRow) {
+        callCount += 1
+        tokenCount += row.totalTokens
+        cost += row.estimatedCostUSD ?? 0
+        if let duration = row.durationMS, duration > 0 {
+            durationTotalMS += duration
+            durationCount += 1
+        }
+    }
+}
+
+private extension Double {
+    var providerObservabilityCompact: String {
+        if self >= 10 {
+            return formatted(.number.precision(.fractionLength(0)))
+        }
+        return formatted(.number.precision(.fractionLength(1)))
     }
 }
 

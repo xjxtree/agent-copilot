@@ -86,7 +86,7 @@ struct GuidedCleanupFlowResultView: View {
                     .textSelection(.enabled)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 10)], alignment: .leading, spacing: 10) {
+            DetailMetricGrid {
                 SummaryChip(title: UIStrings.guidedCleanupFlowSteps, value: "\(stepCount)", systemImage: "list.clipboard")
                 SummaryChip(title: UIStrings.guidedCleanupFlowIssueGroups, value: "\(issueGroupCount)", systemImage: "exclamationmark.triangle")
                 SummaryChip(title: UIStrings.guidedCleanupFlowSafeActions, value: "\(safeActionCount)", systemImage: "arrow.right.circle")

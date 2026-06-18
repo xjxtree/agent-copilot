@@ -67,7 +67,7 @@ struct RemediationPlanResultView: View {
                     .textSelection(.enabled)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+            DetailMetricGrid {
                 SummaryChip(title: UIStrings.remediationPlanItems, value: "\(itemCount)", systemImage: "list.bullet")
                 SummaryChip(title: UIStrings.remediationPlanCritical, value: "\(criticalCount)", systemImage: "exclamationmark.octagon")
                 SummaryChip(title: UIStrings.cleanupPriorityHigh, value: "\(highCount)", systemImage: "exclamationmark.triangle")
@@ -397,7 +397,7 @@ struct RemediationPreviewDraftsResultView: View {
                     .textSelection(.enabled)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+            DetailMetricGrid {
                 SummaryChip(title: UIStrings.fixPreviewDrafts, value: "\(draftCount)", systemImage: "doc.text")
                 SummaryChip(title: UIStrings.fixPreviewFrontmatter, value: "\(frontmatterCount)", systemImage: "list.bullet.rectangle")
                 SummaryChip(title: UIStrings.fixPreviewDescription, value: "\(descriptionCount)", systemImage: "text.alignleft")
@@ -745,7 +745,7 @@ struct RemediationImpactPreviewResultView: View {
                     .textSelection(.enabled)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+            DetailMetricGrid {
                 SummaryChip(title: UIStrings.impactPreviewImpacts, value: "\(impactCount)", systemImage: "scope")
                 SummaryChip(title: UIStrings.impactPreviewTaskImpacts, value: "\(taskImpactCount)", systemImage: "checklist")
                 SummaryChip(title: UIStrings.impactPreviewAgentImpacts, value: "\(agentImpactCount)", systemImage: "person.2")
@@ -1042,7 +1042,7 @@ struct RemediationBatchReviewResultView: View {
                     .textSelection(.enabled)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+            DetailMetricGrid {
                 SummaryChip(title: UIStrings.remediationBatchReviewItems, value: "\(itemCount)", systemImage: "checklist")
                 SummaryChip(title: UIStrings.remediationBatchReviewGroups, value: "\(groupCount)", systemImage: "rectangle.stack")
                 SummaryChip(title: UIStrings.remediationBatchReviewTaskRows, value: "\(taskCount)", systemImage: "text.badge.checkmark")
@@ -1465,7 +1465,7 @@ struct RemediationHistoryResultView: View {
                     .textSelection(.enabled)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+            DetailMetricGrid {
                 SummaryChip(title: UIStrings.remediationHistoryRecords, value: "\(recordCount)", systemImage: "archivebox")
                 SummaryChip(title: UIStrings.remediationHistoryRecorded, value: "\(recordedCount)", systemImage: "checkmark.seal")
                 SummaryChip(title: UIStrings.remediationHistoryRecurrence, value: "\(recurrenceCount)", systemImage: "arrow.triangle.2.circlepath")

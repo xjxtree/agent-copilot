@@ -54,35 +54,22 @@ struct SkillsCopilotApp: App {
             }
 
             CommandMenu(UIStrings.menuSkills) {
-                Button(UIStrings.text("menu.showLineup", "Show Lineup")) {
-                    store.selectedDetailSection = .lineup
+                Button(UIStrings.text("menu.showAgentWorkspace", "Show Agent Workspace")) {
+                    store.selectedSidebarSelection = .agentWorkspace
                 }
                 .keyboardShortcut("1", modifiers: [.command])
 
-                Button(UIStrings.text("menu.showAgentProfile", "Show Agent Profile")) {
-                    store.selectedDetailSection = .agentProfile
+                Button(UIStrings.menuShowOverview) {
+                    store.selectedSidebarSelection = store.selectedSkillID.map(SidebarSelection.skill)
+                    store.selectedDetailSection = .overview
                 }
                 .keyboardShortcut("2", modifiers: [.command])
 
-                Button(UIStrings.menuShowTaskCockpit) {
-                    store.selectedDetailSection = .taskCockpit
-                }
-                .keyboardShortcut("3", modifiers: [.command])
-
-                Button(UIStrings.menuShowOverview) {
-                    store.selectedDetailSection = .overview
-                }
-                .keyboardShortcut("4", modifiers: [.command])
-
                 Button(UIStrings.menuShowFindings) {
+                    store.selectedSidebarSelection = store.selectedSkillID.map(SidebarSelection.skill)
                     store.selectedDetailSection = .findings
                 }
-                .keyboardShortcut("5", modifiers: [.command])
-
-                Button(UIStrings.menuShowConflicts) {
-                    store.selectedDetailSection = .conflicts
-                }
-                .keyboardShortcut("6", modifiers: [.command])
+                .keyboardShortcut("3", modifiers: [.command])
 
                 Divider()
 

@@ -193,7 +193,7 @@ struct LongTextReviewBlock: View {
     let text: String
     let emptyText: String
     let systemImage: String
-    var renderMode: LongTextRenderMode = .plain
+    var renderMode: LongTextRenderMode = .markdown
     @State private var isShowingDetails = false
 
     private var hasText: Bool {
@@ -320,6 +320,10 @@ struct RenderedMarkdownDocument: View {
         MarkdownRenderDocument(text: text, maxBlocks: maxBlocks)
     }
 
+    private var compactTableRowLimit: Int? {
+        maxBlocks == nil ? nil : 4
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             ForEach(Array(document.blocks.enumerated()), id: \.offset) { _, block in
@@ -354,14 +358,57 @@ struct RenderedMarkdownDocument: View {
                     .foregroundStyle(.secondary)
                 MarkdownInlineText(value, font: .callout)
             }
+        case let .quote(value):
+            HStack(alignment: .top, spacing: 8) {
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(.secondary.opacity(0.5))
+                    .frame(width: 3)
+                MarkdownInlineText(value, font: .callout)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 2)
+        case let .table(rows):
+            if maxBlocks == nil {
+                MarkdownTableView(rows: rows, maxRows: compactTableRowLimit)
+            } else {
+                MarkdownTableSummaryView(rows: rows)
+            }
         case .rule:
             Divider()
         case let .code(value):
+            MarkdownCodeBlockView(
+                value: value,
+                wrapsLines: maxBlocks != nil,
+                lineLimit: maxBlocks == nil ? nil : 8
+            )
+        }
+    }
+}
+
+struct MarkdownCodeBlockView: View {
+    let value: String
+    var wrapsLines = false
+    var lineLimit: Int? = nil
+
+    var body: some View {
+        if wrapsLines {
             Text(value)
                 .font(.system(.callout, design: .monospaced))
+                .lineLimit(lineLimit)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(8)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 4))
+        } else {
+            ScrollView(.horizontal) {
+                Text(value)
+                    .font(.system(.callout, design: .monospaced))
+                    .fixedSize(horizontal: true, vertical: false)
+                    .padding(8)
+            }
+            .scrollIndicators(.automatic)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 4))
         }
     }
 }
@@ -379,11 +426,256 @@ struct MarkdownInlineText: View {
         if let attributed = try? AttributedString(markdown: value) {
             Text(attributed)
                 .font(font)
+                .fixedSize(horizontal: false, vertical: true)
         } else {
             Text(value)
                 .font(font)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
+}
+
+struct MarkdownTableDisplayModel {
+    static let minimumColumnWidth: CGFloat = 120
+    static let maximumColumnWidth: CGFloat = 280
+    private static let approximateCharacterWidth: CGFloat = 7
+    private static let horizontalPadding: CGFloat = 28
+
+    let rows: [[String]]
+    let maxVisibleRows: Int?
+
+    var nonEmptyRows: [[String]] {
+        rows.filter { row in
+            !row.allSatisfy { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        }
+    }
+
+    var displayRows: [[String]] {
+        guard let maxVisibleRows, nonEmptyRows.count > maxVisibleRows else {
+            return nonEmptyRows
+        }
+        return Array(nonEmptyRows.prefix(maxVisibleRows))
+    }
+
+    var usesCardLayout: Bool {
+        columnCount > 3 || (columnCount > 2 && containsLongBodyCell)
+    }
+
+    var headerRow: [String] {
+        normalizedRow(nonEmptyRows.first ?? [])
+    }
+
+    var displayCardRows: [[String]] {
+        let bodyRows = cardBodyRows
+        guard let maxVisibleRows else {
+            return bodyRows
+        }
+        let visibleBodyCount = max(1, maxVisibleRows - 1)
+        return Array(bodyRows.prefix(visibleBodyCount))
+    }
+
+    var hiddenRowCount: Int {
+        if usesCardLayout {
+            return max(0, cardBodyRows.count - displayCardRows.count)
+        }
+        return max(0, nonEmptyRows.count - displayRows.count)
+    }
+
+    var bodyRowCount: Int {
+        cardBodyRows.count
+    }
+
+    var columnCount: Int {
+        max(nonEmptyRows.map(\.count).max() ?? 0, 1)
+    }
+
+    func normalizedRow(_ row: [String]) -> [String] {
+        guard row.count < columnCount else { return row }
+        return row + Array(repeating: "", count: columnCount - row.count)
+    }
+
+    func columnWidth(at columnIndex: Int) -> CGFloat {
+        let maxWeight = nonEmptyRows
+            .compactMap { row -> String? in
+                guard columnIndex < row.count else { return nil }
+                return row[columnIndex]
+            }
+            .map(Self.displayWeight)
+            .max() ?? 0
+        let clampedWeight = min(max(maxWeight, 12), 36)
+        let estimatedWidth = CGFloat(clampedWeight) * Self.approximateCharacterWidth + Self.horizontalPadding
+        return min(Self.maximumColumnWidth, max(Self.minimumColumnWidth, estimatedWidth))
+    }
+
+    func totalWidth(horizontalSpacing: CGFloat = 10) -> CGFloat {
+        let columnsWidth = (0..<columnCount).reduce(CGFloat.zero) { partial, index in
+            partial + columnWidth(at: index)
+        }
+        let spacingWidth = max(CGFloat(columnCount - 1), 0) * horizontalSpacing
+        return columnsWidth + spacingWidth
+    }
+
+    private var cardBodyRows: [[String]] {
+        let rows = nonEmptyRows
+        guard rows.count > 1 else {
+            return rows
+        }
+        return Array(rows.dropFirst())
+    }
+
+    private var containsLongBodyCell: Bool {
+        cardBodyRows
+            .flatMap { $0 }
+            .contains { Self.displayWeight($0) > 48 }
+    }
+
+    private static func displayWeight(_ text: String) -> Int {
+        text.reduce(0) { partial, character in
+            let isASCII = character.unicodeScalars.allSatisfy { scalar in
+                scalar.value < 128
+            }
+            return partial + (isASCII ? 1 : 2)
+        }
+    }
+}
+
+struct MarkdownTableView: View {
+    let model: MarkdownTableDisplayModel
+
+    init(rows: [[String]], maxRows: Int? = nil) {
+        self.model = MarkdownTableDisplayModel(rows: rows, maxVisibleRows: maxRows)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if model.usesCardLayout {
+                MarkdownTableCardList(model: model)
+                    .padding(8)
+            } else {
+                ScrollView(.horizontal) {
+                    Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 6) {
+                        ForEach(Array(model.displayRows.enumerated()), id: \.offset) { rowIndex, row in
+                            GridRow {
+                                ForEach(Array(model.normalizedRow(row).enumerated()), id: \.offset) { columnIndex, value in
+                                    MarkdownInlineText(
+                                        value.isEmpty ? " " : value,
+                                        font: rowIndex == 0 ? .caption.bold() : .caption
+                                    )
+                                    .frame(width: model.columnWidth(at: columnIndex), alignment: .leading)
+                                    .padding(.vertical, 3)
+                                }
+                            }
+                            if rowIndex == 0 && model.displayRows.count > 1 {
+                                Divider()
+                                    .gridCellColumns(model.columnCount)
+                            }
+                        }
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                    .padding(8)
+                }
+                .scrollIndicators(.automatic)
+            }
+
+            if model.hiddenRowCount > 0 {
+                Text(UIStrings.markdownTableHiddenRows(model.hiddenRowCount))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 6)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 4))
+    }
+}
+
+struct MarkdownTableSummaryView: View {
+    let model: MarkdownTableDisplayModel
+
+    init(rows: [[String]]) {
+        self.model = MarkdownTableDisplayModel(rows: rows, maxVisibleRows: nil)
+    }
+
+    var body: some View {
+        Label(
+            UIStrings.markdownTablePreviewSummary,
+            systemImage: "tablecells"
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 4))
+    }
+}
+
+struct MarkdownTableCardList: View {
+    let model: MarkdownTableDisplayModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(Array(model.displayCardRows.enumerated()), id: \.offset) { _, row in
+                MarkdownTableCard(row: model.normalizedRow(row), headers: model.headerRow)
+            }
+        }
+    }
+}
+
+struct MarkdownTableCard: View {
+    let row: [String]
+    let headers: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            if !titleText.isEmpty {
+                MarkdownInlineText(titleText, font: .caption.bold())
+            }
+
+            ForEach(fieldRows, id: \.index) { field in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(field.label)
+                        .font(.caption2.bold())
+                        .foregroundStyle(.secondary)
+                    MarkdownInlineText(field.value, font: .caption)
+                }
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.32), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var titleText: String {
+        row.first?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    private var fieldRows: [MarkdownTableCardField] {
+        row.enumerated().compactMap { index, value in
+            guard index > 0 else { return nil }
+            let cleanValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !cleanValue.isEmpty else { return nil }
+            return MarkdownTableCardField(
+                index: index,
+                label: headerLabel(at: index),
+                value: cleanValue
+            )
+        }
+    }
+
+    private func headerLabel(at index: Int) -> String {
+        guard index < headers.count else {
+            return "#\(index + 1)"
+        }
+        let cleanHeader = headers[index].trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleanHeader.isEmpty ? "#\(index + 1)" : cleanHeader
+    }
+}
+
+struct MarkdownTableCardField {
+    let index: Int
+    let label: String
+    let value: String
 }
 
 enum MarkdownRenderBlock {
@@ -391,6 +683,8 @@ enum MarkdownRenderBlock {
     case paragraph(String)
     case bullet(String)
     case numbered(marker: String, String)
+    case quote(String)
+    case table([[String]])
     case rule
     case code(String)
 }
@@ -400,7 +694,7 @@ struct MarkdownRenderDocument {
     let isTruncated: Bool
 
     init(text: String, maxBlocks: Int?) {
-        let parsedBlocks = Self.parse(text: text)
+        let parsedBlocks = Self.parse(text: Self.renderableText(from: text))
         if let maxBlocks, parsedBlocks.count > maxBlocks {
             self.blocks = Array(parsedBlocks.prefix(maxBlocks))
             self.isTruncated = true
@@ -410,11 +704,46 @@ struct MarkdownRenderDocument {
         }
     }
 
+    static func renderableText(from text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("```") else { return text }
+        let lines = trimmed.components(separatedBy: "\n")
+        guard lines.count >= 3,
+              let firstLine = lines.first?.trimmingCharacters(in: .whitespacesAndNewlines),
+              firstLine.hasPrefix("```"),
+              lines.last?.trimmingCharacters(in: .whitespacesAndNewlines) == "```"
+        else { return text }
+
+        let language = firstLine
+            .dropFirst(3)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let bodyLines = lines.dropFirst().dropLast()
+        let body = bodyLines.joined(separator: "\n")
+        let isMarkdownFence = ["markdown", "md", "gfm"].contains(language)
+        let looksLikeMarkdown = body.contains("|")
+            || body.contains("\n#")
+            || body.contains("\n- ")
+            || body.contains("\n* ")
+            || body.hasPrefix("#")
+            || body.hasPrefix("- ")
+            || body.hasPrefix("* ")
+
+        guard isMarkdownFence || (language.isEmpty && looksLikeMarkdown) else {
+            return text
+        }
+        guard !bodyLines.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("```") }) else {
+            return text
+        }
+        return body
+    }
+
     private static func parse(text: String) -> [MarkdownRenderBlock] {
         let lines = normalizeMarkdownBlocks(in: text).components(separatedBy: "\n")
         var blocks: [MarkdownRenderBlock] = []
         var paragraphLines: [String] = []
         var codeLines: [String] = []
+        var tableRows: [[String]] = []
         var isInCodeBlock = false
 
         func flushParagraph() {
@@ -426,6 +755,12 @@ struct MarkdownRenderDocument {
                 blocks.append(.paragraph(paragraph))
             }
             paragraphLines.removeAll()
+        }
+
+        func flushTable() {
+            guard !tableRows.isEmpty else { return }
+            blocks.append(.table(tableRows))
+            tableRows.removeAll()
         }
 
         func flushCodeBlock() {
@@ -453,22 +788,37 @@ struct MarkdownRenderDocument {
 
             guard !trimmed.isEmpty else {
                 flushParagraph()
+                flushTable()
                 continue
             }
 
-            if let heading = headingBlock(from: trimmed) {
+            if let tableRow = tableRow(from: trimmed) {
+                flushParagraph()
+                tableRows.append(tableRow)
+            } else if isTableSeparator(trimmed) {
+                continue
+            } else if let heading = headingBlock(from: trimmed) {
+                flushTable()
                 flushParagraph()
                 blocks.append(heading)
             } else if isRule(trimmed) {
+                flushTable()
                 flushParagraph()
                 blocks.append(.rule)
             } else if let bullet = bulletBlock(from: trimmed) {
+                flushTable()
                 flushParagraph()
                 blocks.append(bullet)
             } else if let numbered = numberedBlock(from: trimmed) {
+                flushTable()
                 flushParagraph()
                 blocks.append(numbered)
+            } else if let quote = quoteBlock(from: trimmed) {
+                flushTable()
+                flushParagraph()
+                blocks.append(quote)
             } else {
+                flushTable()
                 paragraphLines.append(line)
             }
         }
@@ -476,6 +826,7 @@ struct MarkdownRenderDocument {
         if isInCodeBlock {
             flushCodeBlock()
         }
+        flushTable()
         flushParagraph()
         return blocks.isEmpty ? [.paragraph(text)] : blocks
     }
@@ -483,7 +834,19 @@ struct MarkdownRenderDocument {
     private static func normalizeMarkdownBlocks(in text: String) -> String {
         var normalized = text.replacingOccurrences(of: "\r\n", with: "\n")
         normalized = normalized.replacingOccurrences(of: "\r", with: "\n")
+        return normalized
+            .components(separatedBy: "\n")
+            .map { line in
+                normalizeInlineMarkdownBreaks(in: line)
+            }
+            .joined(separator: "\n")
+    }
 
+    private static func normalizeInlineMarkdownBreaks(in text: String) -> String {
+        if isStandaloneTableLine(text) {
+            return text
+        }
+        var normalized = text
         for marker in [" --- ", " *** ", " ___ "] {
             normalized = normalized.replacingOccurrences(of: marker, with: "\n\(marker.trimmingCharacters(in: .whitespaces))\n")
         }
@@ -503,8 +866,60 @@ struct MarkdownRenderDocument {
         normalized = normalized.replacingOccurrences(of: " - ", with: "\n- ")
         normalized = normalized.replacingOccurrences(of: " * ", with: "\n* ")
         normalized = normalized.replacingOccurrences(of: " + ", with: "\n+ ")
+        for index in 1...20 {
+            normalized = normalized.replacingOccurrences(of: " \(index). ", with: "\n\(index). ")
+        }
 
         return normalized
+            .components(separatedBy: "\n")
+            .map { normalizeInlineTableRows(in: $0) }
+            .joined(separator: "\n")
+    }
+
+    private static func normalizeInlineTableRows(in text: String) -> String {
+        let pipeCount = text.filter { $0 == "|" }.count
+        guard pipeCount >= 4 else { return text }
+
+        var normalized = text
+        normalized = normalized.replacingOccurrences(of: " | |", with: " |\n|")
+        normalized = normalized.replacingOccurrences(of: "| |", with: "|\n|")
+
+        let boundaryMarkers = [
+            (" | ###### ", " |\n###### "),
+            (" | ##### ", " |\n##### "),
+            (" | #### ", " |\n#### "),
+            (" | ### ", " |\n### "),
+            (" | ## ", " |\n## "),
+            (" | # ", " |\n# "),
+            (" | - ", " |\n- "),
+            (" | * ", " |\n* "),
+            (" | + ", " |\n+ "),
+        ]
+        for (marker, replacement) in boundaryMarkers {
+            normalized = normalized.replacingOccurrences(of: marker, with: replacement)
+        }
+
+        guard let firstPipe = normalized.firstIndex(of: "|") else {
+            return normalized
+        }
+        let prefix = normalized[..<firstPipe].trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prefix.isEmpty else {
+            return normalized
+        }
+        let tableStart = normalized[firstPipe...]
+        guard tableStart.dropFirst().contains("|") else {
+            return normalized
+        }
+        return "\(prefix)\n\(tableStart)"
+    }
+
+    private static func isStandaloneTableLine(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("|"),
+              trimmed.hasSuffix("|"),
+              trimmed.filter({ $0 == "|" }).count >= 3
+        else { return false }
+        return !trimmed.contains(" | |")
     }
 
     private static func headingBlock(from trimmed: String) -> MarkdownRenderBlock? {
@@ -535,6 +950,35 @@ struct MarkdownRenderDocument {
         let content = String(trimmed[trimmed.index(after: contentStart)...]).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty else { return nil }
         return .numbered(marker: "\(number).", content)
+    }
+
+    private static func quoteBlock(from trimmed: String) -> MarkdownRenderBlock? {
+        guard trimmed.hasPrefix(">") else { return nil }
+        let content = String(trimmed.dropFirst()).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty else { return nil }
+        return .quote(content)
+    }
+
+    private static func tableRow(from trimmed: String) -> [String]? {
+        guard trimmed.contains("|"),
+              !isTableSeparator(trimmed)
+        else { return nil }
+        let cells = trimmed
+            .trimmingCharacters(in: CharacterSet(charactersIn: "|"))
+            .split(separator: "|", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        guard cells.count >= 2 else { return nil }
+        return cells
+    }
+
+    private static func isTableSeparator(_ trimmed: String) -> Bool {
+        guard trimmed.contains("|") else { return false }
+        let stripped = trimmed
+            .replacingOccurrences(of: "|", with: "")
+            .replacingOccurrences(of: ":", with: "")
+            .replacingOccurrences(of: "-", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return stripped.isEmpty
     }
 
     private static func isRule(_ trimmed: String) -> Bool {
@@ -919,6 +1363,10 @@ struct LLMPromptSendResultView: View {
                     systemImage: "doc.on.doc",
                     renderMode: .markdown
                 )
+            } else if result.success {
+                Label(UIStrings.llmPromptNoOutput, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
 
             Label(UIStrings.llmReviewNoActions, systemImage: "nosign")

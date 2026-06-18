@@ -20,23 +20,72 @@ struct SummaryChip: View {
     let systemImage: String
 
     var body: some View {
-        Label {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: systemImage)
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .frame(width: 24)
+
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
-                    .font(.caption2)
+                    .font(.caption2.bold())
                     .foregroundStyle(.secondary)
-                Text(value)
-                    .font(.caption.bold())
                     .lineLimit(1)
+                Text(value)
+                    .font(.callout.bold())
+                    .lineLimit(2)
                     .truncationMode(.middle)
             }
-        } icon: {
-            Image(systemName: systemImage)
-                .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+        .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+        .background(.quaternary.opacity(0.26), in: RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+struct DetailMetricGrid<Content: View>: View {
+    let maxColumns: Int
+    let minColumnWidth: CGFloat
+    let spacing: CGFloat
+    @ViewBuilder let content: () -> Content
+
+    init(
+        maxColumns: Int = 3,
+        minColumnWidth: CGFloat = 170,
+        spacing: CGFloat = 10,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.maxColumns = max(1, min(maxColumns, 4))
+        self.minColumnWidth = minColumnWidth
+        self.spacing = spacing
+        self.content = content
+    }
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            if maxColumns >= 4 {
+                grid(columnCount: 4)
+            }
+            if maxColumns >= 3 {
+                grid(columnCount: 3)
+            }
+            if maxColumns >= 2 {
+                grid(columnCount: 2)
+            }
+            grid(columnCount: 1)
+        }
+    }
+
+    private func grid(columnCount: Int) -> some View {
+        LazyVGrid(
+            columns: Array(repeating: GridItem(.flexible(minimum: minColumnWidth), spacing: spacing), count: columnCount),
+            alignment: .leading,
+            spacing: spacing
+        ) {
+            content()
+        }
     }
 }
 

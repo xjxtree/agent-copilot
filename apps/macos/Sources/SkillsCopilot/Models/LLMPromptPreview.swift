@@ -378,6 +378,7 @@ struct LLMPromptSendResult: Decodable, Identifiable, Hashable {
         case reason
         case outputText = "output_text"
         case responseText = "response_text"
+        case draftOutput = "draft_output"
         case draftText = "draft_text"
         case resultText = "result_text"
         case summaryDraft = "summary_draft"
@@ -443,14 +444,18 @@ struct LLMPromptSendResult: Decodable, Identifiable, Hashable {
             ?? (success ? UIStrings.llmPromptSendSucceeded : UIStrings.llmPromptSendFailed)
         let decodedOutputText = try container.decodeIfPresent(String.self, forKey: .outputText)
         let decodedResponseText = try container.decodeIfPresent(String.self, forKey: .responseText)
+        let decodedDraftOutput = try container.decodeIfPresent(String.self, forKey: .draftOutput)
         let decodedDraftText = try container.decodeIfPresent(String.self, forKey: .draftText)
         let decodedResultText = try container.decodeIfPresent(String.self, forKey: .resultText)
         let decodedSummaryDraft = try container.decodeIfPresent(String.self, forKey: .summaryDraft)
-        outputText = decodedOutputText
-            ?? decodedResponseText
-            ?? decodedDraftText
-            ?? decodedResultText
-            ?? decodedSummaryDraft
+        outputText = Self.firstNonEmpty(
+            decodedOutputText,
+            decodedResponseText,
+            decodedDraftOutput,
+            decodedDraftText,
+            decodedResultText,
+            decodedSummaryDraft
+        )
         draftCopyOnly = try container.decodeIfPresent(Bool.self, forKey: .draftCopyOnly)
             ?? container.decodeIfPresent(Bool.self, forKey: .copyOnly)
             ?? container.decodeIfPresent(Bool.self, forKey: .readOnly)
@@ -468,6 +473,15 @@ struct LLMPromptSendResult: Decodable, Identifiable, Hashable {
             ?? container.decodeIfPresent(Bool.self, forKey: .executionActionsAvailable)
             ?? false
         audit = decodedAudit
+    }
+
+    private static func firstNonEmpty(_ values: String?...) -> String? {
+        for value in values {
+            if let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return value
+            }
+        }
+        return nil
     }
 
     static func unavailable(previewID: String = "", reason: String) -> LLMPromptSendResult {

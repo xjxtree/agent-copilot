@@ -7,10 +7,8 @@ extension SkillStore {
             selectedSkillID = skillID
         }
         switch item.kind {
-        case .finding, .integrity:
+        case .finding, .integrity, .conflict:
             selectedDetailSection = .findings
-        case .conflict:
-            selectedDetailSection = .conflicts
         case .analysis:
             selectedDetailSection = .analysis
         case .unknown:
@@ -34,16 +32,26 @@ extension SkillStore {
 
         if let section = detailSection(forGuidedCleanupLink: link) {
             selectedDetailSection = section
+            if section.isAgentWorkspaceSurface {
+                selectedSidebarSelection = .agentWorkspace
+            } else if DetailSection.primaryWorkCases.contains(section) {
+                selectedSidebarSelection = .work(section)
+            } else if let selectedSkillID {
+                selectedSidebarSelection = .skill(selectedSkillID)
+            }
         }
 
         switch link.trigger {
         case "selectDetailSection", "openSafeBatchPreviewPanel":
             return
         case "buildTaskCockpit":
-            selectedDetailSection = .taskCockpit
+            selectedSidebarSelection = .agentWorkspace
             await buildTaskCockpit()
         case "loadSkillLifecycleTimeline":
-            selectedDetailSection = .skillMap
+            selectedDetailSection = .analysis
+            if let selectedSkillID {
+                selectedSidebarSelection = .skill(selectedSkillID)
+            }
             await loadSkillLifecycleTimeline()
         case "planRemediation":
             selectedDetailSection = .analysis
@@ -65,17 +73,27 @@ extension SkillStore {
     }
 
     private func detailSection(forGuidedCleanupLink link: GuidedCleanupSafeActionDeepLink) -> DetailSection? {
-        if let detailSection = link.detailSection,
-           let section = DetailSection(rawValue: detailSection) {
-            return section
+        if let detailSection = link.detailSection {
+            if detailSection == "skillMap" {
+                return .analysis
+            }
+            if detailSection == "validationWorkbench" {
+                return .agentWorkspace
+            }
+            if let section = DetailSection(rawValue: detailSection) {
+                if section == .cleanup || section == .conflicts {
+                    return .findings
+                }
+                return section
+            }
         }
         switch link.method {
         case "cleanup.listQueue", "batch.previewSkillToggles":
-            return .cleanup
+            return .findings
         case "skill.lifecycleTimeline":
-            return .skillMap
+            return .analysis
         case "task.buildCockpit":
-            return .taskCockpit
+            return .agentWorkspace
         case "cleanup.recordGuidedStep":
             return .guidedCleanup
         case "remediation.plan", "remediation.previewDrafts", "remediation.previewImpact", "remediation.batchReview":

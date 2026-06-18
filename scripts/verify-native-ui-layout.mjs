@@ -21,12 +21,16 @@ const files = {
   detailKnowledgeSkillMap: await read("apps/macos/Sources/SkillsCopilot/Views/DetailKnowledgeSkillMapPanels.swift"),
   detailGuidedCleanup: await read("apps/macos/Sources/SkillsCopilot/Views/DetailGuidedCleanupFlowPanel.swift"),
   detailProviderObservability: await read("apps/macos/Sources/SkillsCopilot/Views/DetailProviderObservabilityPanel.swift"),
+  providerObservabilitySettings: await read("apps/macos/Sources/SkillsCopilot/Views/ProviderObservabilitySettingsPanel.swift"),
+  localReportExport: await read("apps/macos/Sources/SkillsCopilot/Views/LocalReportExportPanel.swift"),
+  batchSkillOperation: await read("apps/macos/Sources/SkillsCopilot/Views/BatchSkillOperationSheet.swift"),
   detailLocalSkillMap: await read("apps/macos/Sources/SkillsCopilot/Views/DetailLocalSkillMapViews.swift"),
   detailTaskBenchmark: await read("apps/macos/Sources/SkillsCopilot/Views/DetailTaskBenchmarkSection.swift"),
   detailAgentSession: await read("apps/macos/Sources/SkillsCopilot/Views/DetailAgentSessionSection.swift"),
   detailLLM: await read("apps/macos/Sources/SkillsCopilot/Views/DetailLLMSection.swift"),
   detailHeaderOverview: await read("apps/macos/Sources/SkillsCopilot/Views/DetailHeaderOverviewSection.swift"),
   detailFindingsHistory: await read("apps/macos/Sources/SkillsCopilot/Views/DetailFindingsHistorySection.swift"),
+  agentIconProvider: await read("apps/macos/Sources/SkillsCopilot/Support/AgentIconProvider.swift"),
   formatter: await read("apps/macos/Sources/SkillsCopilot/Support/Formatters.swift"),
   guidedCleanupModel: await read("apps/macos/Sources/SkillsCopilot/Models/GuidedCleanupFlow.swift"),
   privacyPath: await read("apps/macos/Sources/SkillsCopilot/Views/PrivacyPathView.swift"),
@@ -41,12 +45,13 @@ const files = {
   storeWorkflow: await read("apps/macos/Sources/SkillsCopilot/Stores/SkillStoreWorkflowSelectors.swift"),
   taskCockpit: await read("apps/macos/Sources/SkillsCopilot/Views/TaskCockpitPanel.swift"),
   taskInput: await read("apps/macos/Sources/SkillsCopilot/Views/TaskInputTextEditor.swift"),
-  validationWorkbench: await read("apps/macos/Sources/SkillsCopilot/Views/ValidationWorkbenchPanel.swift"),
   material: await read("apps/macos/Sources/SkillsCopilot/Views/AdaptiveMaterialSurface.swift"),
   localizable: await read("apps/macos/Sources/SkillsCopilot/Resources/en.lproj/Localizable.strings"),
   serviceProtocol: await read("docs/service-protocol.md"),
   serviceStatusFixture: await read("fixtures/service-protocol/service.status.response.json"),
   serviceRust: await read("crates/service/src/lib.rs"),
+  serviceKnowledge: await read("crates/service/src/service_knowledge.rs"),
+  serviceLLMPromptHelpers: await read("crates/service/src/service_llm_prompt_helpers.rs"),
   serviceRustProtocol: await read("crates/service/src/protocol.rs"),
 };
 files.detailSurface = [
@@ -60,6 +65,7 @@ files.detailSurface = [
   files.detailKnowledgeSkillMap,
   files.detailGuidedCleanup,
   files.detailProviderObservability,
+  files.providerObservabilitySettings,
   files.detailLocalSkillMap,
   files.detailTaskBenchmark,
   files.detailAgentSession,
@@ -79,7 +85,12 @@ files.storeSurface = [
   files.storeNavigation,
   files.storeWorkflow,
 ].join("\n");
-files.serviceRustSurface = [files.serviceRust, files.serviceRustProtocol].join("\n");
+files.serviceRustSurface = [
+  files.serviceRust,
+  files.serviceKnowledge,
+  files.serviceLLMPromptHelpers,
+  files.serviceRustProtocol,
+].join("\n");
 
 const runServiceBody = extractFunctionBody(files.serviceIPC, "runService");
 const serviceRequestBody = extractServiceRequestBody(files.serviceIPC);
@@ -102,21 +113,6 @@ const checks = [
     label: "sidebar column has bounded native width",
     text: files.content,
     pattern: /\.navigationSplitViewColumnWidth\(min:\s*300,\s*ideal:\s*340,\s*max:\s*430\)/,
-  },
-  {
-    label: "sidebar exposes scan action",
-    text: files.sidebar,
-    pattern: /Label\(UIStrings\.text\("action\.scanSkills",\s*"Scan Skills"\),\s*systemImage:\s*"folder\.badge\.gearshape"\)/,
-  },
-  {
-    label: "sidebar exposes reload action",
-    text: files.sidebar,
-    pattern: /Label\(UIStrings\.text\("action\.reloadCatalog",\s*"Reload Catalog"\),\s*systemImage:\s*"arrow\.clockwise"\)/,
-  },
-  {
-    label: "sidebar exposes adapter capability status",
-    text: files.sidebar,
-    pattern: /AdapterCapabilityCard\(\s*capability:\s*capability,\s*scanSummary:/,
   },
   {
     label: "sidebar exposes state filter",
@@ -144,14 +140,14 @@ const checks = [
     pattern: /\.onChange\(of:\s*store\.selectedDetailSection\)[\s\S]*?proxy\.scrollTo\(Self\.topAnchorID,\s*anchor:\s*\.top\)/,
   },
   {
-    label: "detail sections expose task-first IA summaries",
+    label: "detail sections omit retired and settings-owned work surfaces",
     text: files.detailSurface,
-    pattern: /static var primaryWorkCases:[\s\S]*?\[\.lineup,\s*\.agentProfile,\s*\.taskCockpit,\s*\.validationWorkbench,\s*\.skillMap,\s*\.guidedCleanup,\s*\.observability,\s*\.analysis\][\s\S]*?UIStrings\.taskCockpitTitle[\s\S]*?UIStrings\.validationWorkbenchTitle[\s\S]*?UIStrings\.guidedCleanupFlowTitle[\s\S]*?UIStrings\.providerObservabilityTitle/,
+    pattern: /static var visibleCases:[\s\S]*?\[\.overview,\s*\.findings,\s*\.history,\s*\.analysis\][\s\S]*?static var primaryWorkCases:[\s\S]*?\[\][\s\S]*?UIStrings\.providerObservabilityTitle/,
   },
   {
-    label: "task cockpit renders before empty detail fallback",
+    label: "agent workspace aggregate renders before empty detail fallback",
     text: files.detailSurface,
-    pattern: /else if store\.selectedDetailSection == \.taskCockpit[\s\S]*?TaskCockpitPanel\([\s\S]*?else if let skill[\s\S]*?EmptyDetailView\(\)/,
+    pattern: /if store\.selectedDetailSection\.isAgentWorkspaceSurface[\s\S]*?AgentWorkspacePanel\(\)[\s\S]*?else if let skill[\s\S]*?EmptyDetailView\(\)/,
   },
   {
     label: "local session preview is default-off, explicitly authorized, and privacy-rendered",
@@ -164,14 +160,19 @@ const checks = [
     pattern: /McpServerPreviewPanel\([\s\S]*?paths:\s*\$store\.mcpServerPreviewPaths[\s\S]*?Preview is default-off[\s\S]*?TextField\(UIStrings\.text\("mcpServerPreview\.placeholder"[\s\S]*?PrivacyEvidenceText\(value:\s*row\.sourcePath[\s\S]*?PrivacyEvidenceText\(value:\s*command[\s\S]*?func previewMcpServers\(\)\s*async[\s\S]*?service\.previewMcpServers[\s\S]*?evidence\.previewMcpServers/,
   },
   {
-    label: "Agent Copilot object-level overview renders before skill detail fallback",
+    label: "Agent Workspace combines Agent Profile and Task Preflight before skill detail fallback",
     text: files.detailSurface,
-    pattern: /if store\.selectedDetailSection == \.lineup[\s\S]*?AgentCopilotOverviewPanel\(\)[\s\S]*?else if store\.selectedDetailSection == \.agentProfile[\s\S]*?AgentProfilePanel\(\)[\s\S]*?else if let skill/,
+    pattern: /if store\.selectedDetailSection\.isAgentWorkspaceSurface[\s\S]*?AgentWorkspacePanel\(\)[\s\S]*?else if store\.selectedDetailSection == \.guidedCleanup[\s\S]*?else if let skill/,
   },
   {
-    label: "Agent Copilot decision queue has explicit sorted priority and evidence refs",
+    label: "Agent Workspace orders capability, Task Preflight, MCP, and local export",
     text: files.agentCopilotDecision + "\n" + files.agentCopilotOverview,
-    pattern: /enum AgentCopilotDecisionPriority:[\s\S]*?case critical = 400[\s\S]*?static func sorted\([\s\S]*?left\.priority > right\.priority[\s\S]*?impactScore[\s\S]*?evidenceRefs\.count[\s\S]*?return AgentCopilotDecisionModel\.sorted\(items\)[\s\S]*?DenseDisclosureList\(item\.evidenceRefs,\s*visibleLimit:\s*3[\s\S]*?PrivacyEvidenceText\(value:\s*evidenceRef/,
+    pattern: /struct AgentWorkspacePanel:[\s\S]*?AgentProfilePanel\(\)[\s\S]*?struct AgentProfilePanel:[\s\S]*?AgentCapabilitySummaryCard\(capability:\s*capability\)[\s\S]*?TaskCockpitPanel\([\s\S]*?McpServerPreviewPanel\([\s\S]*?LocalReportExportPanel\(includeSelectedSkill:\s*false\)[\s\S]*?private struct McpServerPreviewPanel:/,
+  },
+  {
+    label: "Agent Profile metrics use a white agent summary container",
+    text: files.agentCopilotOverview + "\n" + files.agentIconProvider,
+    pattern: /AgentProfileSummaryCard\(agent:\s*store\.agentFilter,\s*metrics:\s*\[[\s\S]*?AgentProfileMetric\(title:\s*UIStrings\.skills[\s\S]*?AgentProfileMetric\(title:\s*UIStrings\.text\("agentCopilot\.metric\.conflicts"[\s\S]*?private struct AgentProfileSummaryCard:[\s\S]*?AgentProfileIconBadge\(filter:\s*agent\)[\s\S]*?Text\(agent\.title\)[\s\S]*?textBackgroundColor[\s\S]*?stroke\(\.quaternary\.opacity\(0\.35\),\s*lineWidth:\s*1\)[\s\S]*?private struct AgentProfileIconBadge:[\s\S]*?AgentIconProvider\.image\(for:\s*filter\)[\s\S]*?private struct AgentProfileMetricGrid:[\s\S]*?adaptive\(minimum:\s*150\)[\s\S]*?private struct AgentProfileMetricCard:[\s\S]*?minHeight:\s*54,\s*maxHeight:\s*54[\s\S]*?enum AgentIconProvider/,
   },
   {
     label: "guided cleanup renders safe-link buttons",
@@ -194,9 +195,39 @@ const checks = [
     pattern: /struct GuidedCleanupSafeActionDeepLink:[\s\S]*?case canApply = "can_apply"[\s\S]*?defaultTrigger\(for method:[\s\S]*?case "batch\.previewSkillToggles":[\s\S]*?return "openSafeBatchPreviewPanel"/,
   },
   {
-    label: "analysis section mounts remediation safe entry panels",
+    label: "analysis section mounts focused smart-analysis panels",
     text: files.detailSurface,
-    pattern: /TaskRoutingAssessmentPanel\([\s\S]*?RemediationPlanPanel\([\s\S]*?RemediationPreviewDraftsPanel\([\s\S]*?RemediationImpactPreviewPanel\([\s\S]*?RemediationBatchReviewPanel\([\s\S]*?RemediationHistoryPanel\([\s\S]*?AgentSessionSkillReviewPanel\(/,
+    pattern: /SkillQualityScorePanel\([\s\S]*?TaskRoutingAssessmentPanel\([\s\S]*?struct SkillQualityScorePanel/,
+  },
+  {
+    label: "LLM Markdown output renders wide tables as readable cards",
+    text: files.detailLLM,
+    pattern: /struct MarkdownTableDisplayModel[\s\S]*?var usesCardLayout:[\s\S]*?columnCount > 3 \|\| \(columnCount > 2 && containsLongBodyCell\)[\s\S]*?struct MarkdownTableView:[\s\S]*?if model\.usesCardLayout[\s\S]*?MarkdownTableCardList\(model:\s*model\)[\s\S]*?struct MarkdownTableCard:/,
+  },
+  {
+    label: "LLM Markdown output normalizes collapsed provider markdown tables",
+    text: files.detailLLM,
+    pattern: /normalizeMarkdownBlocks\(in text:[\s\S]*?normalizeInlineMarkdownBreaks\(in: line\)[\s\S]*?normalizeInlineTableRows\(in text:[\s\S]*?\| \|[\s\S]*?isStandaloneTableLine/,
+  },
+  {
+    label: "LLM Markdown compact previews collapse tables into summary rows",
+    text: `${files.detailLLM}\n${files.localizable}`,
+    pattern: /case let \.table\(rows\):[\s\S]*?if maxBlocks == nil[\s\S]*?MarkdownTableView\(rows:\s*rows[\s\S]*?else[\s\S]*?MarkdownTableSummaryView\(rows:\s*rows\)[\s\S]*?llm\.markdown\.table\.previewSummary/,
+  },
+  {
+    label: "LLM Markdown output unwraps whole-response markdown fences",
+    text: files.detailLLM,
+    pattern: /static func renderableText\(from text: String\)[\s\S]*?hasPrefix\("```"\)[\s\S]*?\["markdown", "md", "gfm"\]\.contains\(language\)[\s\S]*?return body/,
+  },
+  {
+    label: "LLM Markdown compact previews wrap code blocks instead of horizontal overflow",
+    text: files.detailLLM,
+    pattern: /MarkdownCodeBlockView\([\s\S]*?wrapsLines:\s*maxBlocks != nil[\s\S]*?struct MarkdownCodeBlockView:[\s\S]*?if wrapsLines[\s\S]*?\.fixedSize\(horizontal:\s*false,\s*vertical:\s*true\)/,
+  },
+  {
+    label: "LLM prompt instructions forbid model tables and whole-answer code fences",
+    text: `${files.serviceRust}\n${files.serviceLLMPromptHelpers}`,
+    pattern: /Do not use Markdown tables[\s\S]*?Do not wrap the answer in fenced code blocks[\s\S]*?Required quality-score response shape/,
   },
   {
     label: "task cockpit panel lives in a dedicated module file",
@@ -204,14 +235,9 @@ const checks = [
     pattern: /struct TaskCockpitPanel:[\s\S]*?TaskCockpitResultView[\s\S]*?TaskCockpitSafetyList/,
   },
   {
-    label: "task cockpit exposes progressive staged feedback",
+    label: "task cockpit keeps progressive staged feedback inside technical diagnostics",
     text: files.taskCockpit,
-    pattern: /TaskCockpitStageProgressView\([\s\S]*?TaskCockpitProgressSnapshot\([\s\S]*?ForEach\(snapshot\.stageRows\)[\s\S]*?TaskCockpitStageTile\(row:[\s\S]*?accessibilityIdentifier\(AppAccessibilityID\.taskCockpitStageProgress\)/,
-  },
-  {
-    label: "validation workbench uses shared snapshot and stable accessibility identifiers",
-    text: files.validationWorkbench,
-    pattern: /ValidationWorkbenchModel\.canonicalSnapshot[\s\S]*?AppAccessibilityID\.validationWorkbench[\s\S]*?AppAccessibilityID\.validationWorkbenchSummary[\s\S]*?AppAccessibilityID\.validationWorkbenchEvidence[\s\S]*?AppAccessibilityID\.validationWorkbenchBlockerRow/,
+    pattern: /struct TaskCockpitStageProgressView:[\s\S]*?TaskCockpitProgressSnapshot\([\s\S]*?ForEach\(snapshot\.stageRows\)[\s\S]*?TaskCockpitStageTile\(row:[\s\S]*?accessibilityIdentifier\(AppAccessibilityID\.taskCockpitStageProgress\)[\s\S]*?struct TaskCockpitTechnicalDiagnosticsView:[\s\S]*?TaskCockpitStageProgressView\(/,
   },
   {
     label: "task cockpit task input uses an AX-settable multiline TextField",
@@ -249,9 +275,19 @@ const checks = [
     pattern: /struct TaskCockpitEvidenceList:[\s\S]*?DenseDisclosureList\(evidence,\s*visibleLimit:\s*6,\s*spacing:\s*6\)[\s\S]*?PrivacyEvidenceText\(value:\s*source,\s*font:\s*\.caption2,\s*lineLimit:\s*1\)[\s\S]*?PrivacyEvidenceText\(value:\s*item\.detail,\s*font:\s*\.caption,\s*lineLimit:\s*nil\)/,
   },
   {
-    label: "sidebar exposes primary work surfaces",
+    label: "agent workspace header owns the compact agent selector",
     text: files.sidebar,
-    pattern: /Text\(UIStrings\.text\("nav\.work",\s*"Work"\)\)[\s\S]*?ForEach\(DetailSection\.primaryWorkCases\)/,
+    pattern: /Section\s*{[\s\S]*?AgentWorkspaceHeader\(\)[\s\S]*?\.tag\(SidebarSelection\.agentWorkspace\)[\s\S]*?Section\s*{[\s\S]*?ProjectContextControls\(\)[\s\S]*?private struct AgentWorkspaceHeader:[\s\S]*?AgentSelectorMenu\(width:\s*84\)[\s\S]*?private struct AgentSelectorMenu:[\s\S]*?Picker\(UIStrings\.agent,\s*selection:\s*\$store\.agentFilter\)[\s\S]*?\.pickerStyle\(\.menu\)[\s\S]*?\.frame\(width:\s*width,\s*alignment:\s*\.trailing\)[\s\S]*?\.accessibilityValue\(store\.agentFilter\.title\)/,
+  },
+  {
+    label: "project title row owns merged project selection and actions",
+    text: files.sidebar,
+    pattern: /private struct ProjectContextControls:[\s\S]*?HStack\(alignment:\s*\.center,\s*spacing:\s*8\)[\s\S]*?Text\(UIStrings\.project\)[\s\S]*?projectSelectionMenu[\s\S]*?projectActionsMenu[\s\S]*?private var projectSelectionMenu: some View[\s\S]*?Label\(UIStrings\.chooseProject,\s*systemImage:\s*"folder\.badge\.plus"\)[\s\S]*?Divider\(\)[\s\S]*?Section\(UIStrings\.recentProjects\)[\s\S]*?await store\.setProject\([\s\S]*?Label\(UIStrings\.text\("project\.chooseMenu"[\s\S]*?\.frame\(width:\s*92\)[\s\S]*?private var projectActionsMenu: some View/,
+  },
+  {
+    label: "skill-list batch header aligns with sidebar row controls",
+    text: files.sidebar,
+    pattern: /private struct SkillListSectionHeader:[\s\S]*?private static let trailingControlInset: CGFloat = 14[\s\S]*?Button\(action:\s*action\)[\s\S]*?\.padding\(\.trailing,\s*Self\.trailingControlInset\)/,
   },
   {
     label: "findings expose severity filter",
@@ -314,9 +350,14 @@ const checks = [
     pattern: /PrivacyPathRow\(label:\s*UIStrings\.source,\s*path:\s*skill\.displayPath\)[\s\S]*?PrivacyPathRow\(label:\s*UIStrings\.source,\s*path:\s*preview\.sourcePath\)/,
   },
   {
-    label: "sidebar uses privacy path display for report, project, roots, and catalog paths",
+    label: "local report export uses privacy path display for exported files",
+    text: files.localReportExport,
+    pattern: /PrivacyPathText\(path:\s*result\.displayPath/,
+  },
+  {
+    label: "sidebar uses privacy path display for project paths",
     text: files.sidebar,
-    pattern: /PrivacyPathText\(path:\s*result\.displayPath[\s\S]*?PrivacyPathLabel\(path:\s*value[\s\S]*?PrivacyPathText\(path:\s*rootPath[\s\S]*?PrivacyPathLabel\(path:\s*store\.status\?\.catalogPath/,
+    pattern: /PrivacyPathText\(path:\s*rootPath/,
   },
   {
     label: "material surfaces respect reduced transparency",
@@ -476,6 +517,88 @@ const nativeIPCCleanupChecks = [
 ];
 
 const customChecks = [
+  {
+    label: "sidebar omits the retired Work section",
+    passed: !/Section\(UIStrings\.text\("nav\.work",\s*"Work"\)\)/.test(files.sidebar)
+      && !/SidebarWorkSurfaceRow/.test(files.sidebar)
+      && !/ForEach\(DetailSection\.primaryWorkCases\)/.test(files.sidebar),
+  },
+  {
+    label: "settings owns Provider Observability with dashboard-first logs",
+    passed: /ProviderObservabilitySettingsPanel\(\)/.test(files.settings)
+      && /Label\(UIStrings\.providerObservabilityTitle,\s*systemImage:\s*"waveform\.path\.ecg\.rectangle"\)/.test(files.settings)
+      && /selectedMode:\s*ProviderObservabilitySettingsMode\s*=\s*\.dashboard/.test(files.providerObservabilitySettings)
+      && /case \.dashboard:[\s\S]*ProviderObservabilityDashboardSettingsView\(result:\s*result\)/.test(files.providerObservabilitySettings)
+      && /case \.logs:[\s\S]*ProviderObservabilityLogSettingsView\(/.test(files.providerObservabilitySettings)
+      && /statusFilter/.test(files.providerObservabilitySettings)
+      && /providerFilter/.test(files.providerObservabilitySettings)
+      && /modelFilter/.test(files.providerObservabilitySettings)
+      && /destinationFilter/.test(files.providerObservabilitySettings)
+      && /showIssuesOnly/.test(files.providerObservabilitySettings)
+      && /searchText/.test(files.providerObservabilitySettings),
+  },
+  {
+    label: "Agent Workspace does not expose the retired evidence surface navigation grid",
+    passed: !/AgentProfileNavigationGrid|agentCopilot\.evidenceSurfaces|selectedSidebarSelection\s*=\s*\.work\(section\)/.test(files.agentCopilotOverview),
+  },
+  {
+    label: "local report export lives in Agent Workspace detail instead of the sidebar",
+    passed: !/LocalReportExportPanel\(/.test(files.sidebar)
+      && /LocalReportExportPanel\(includeSelectedSkill:\s*false\)/.test(files.agentCopilotOverview)
+      && /Task\s*{\s*await store\.exportLocalReport\(includeSelectedSkill:\s*includeSelectedSkill\)\s*}/.test(files.localReportExport)
+      && /NSWorkspace\.shared\.open\(fileURL\)/.test(files.localReportExport)
+      && /NSWorkspace\.shared\.activateFileViewerSelecting\(\[fileURL\]\)/.test(files.localReportExport)
+      && /NSPasteboard\.general\.setString\(fileURL\.path,\s*forType:\s*\.string\)/.test(files.localReportExport)
+      && /LocalReportFileResolver\.fileURL/.test(files.localReportExport),
+  },
+  {
+    label: "local report export clears stale result when report scope changes",
+    passed: /private func clearLocalReportExportState\(\)/.test(files.store)
+      && /@Published var selectedSkillID:[\s\S]*?clearLocalReportExportState\(\)[\s\S]*?synchronizeSidebarSelectionWithSelectedSkill\(\)/.test(files.store)
+      && /@Published var searchText[\s\S]*?clearLocalReportExportState\(\)[\s\S]*?handleListCriteriaChanged\(\)/.test(files.store)
+      && /@Published var agentFilter[\s\S]*?clearLocalReportExportState\(\)[\s\S]*?handleListCriteriaChanged\(\)/.test(files.store)
+      && /@Published var stateFilter[\s\S]*?clearLocalReportExportState\(\)[\s\S]*?handleListCriteriaChanged\(\)/.test(files.store)
+      && /@Published var localReportFormat:[\s\S]*?didSet\s*{\s*clearLocalReportExportState\(\)\s*}/.test(files.store)
+      && /@Published var sortOrder[\s\S]*?clearLocalReportExportState\(\)[\s\S]*?handleListCriteriaChanged\(\)/.test(files.store),
+  },
+  {
+    label: "smart analysis quality score no longer exposes cross-agent comparison as a detail component",
+    passed: /id:\s*"same_agent_conflicts"/.test(files.serviceKnowledge)
+      && /label:\s*"Same-agent conflicts"/.test(files.serviceKnowledge)
+      && !/id:\s*"conflict_and_overlap"/.test(files.serviceKnowledge)
+      && !/Compare cross-agent overlap/.test(files.serviceLLMPromptHelpers)
+      && !/cross-agent overlap currently involves this skill/.test(files.serviceLLMPromptHelpers),
+  },
+  {
+    label: "smart analysis copy focuses on quality, task fit, and routing",
+    passed: /Use focused smart analysis panels for quality scoring, task fit, and routing\./.test(files.detailOverview)
+      && /"detail\.section\.analysis\.summary"\s*=\s*"Use focused smart analysis panels for quality scoring, task fit, and routing\."/.test(files.localizable)
+      && !/"detail\.section\.analysis\.summary"\s*=\s*".*cross-agent comparison/.test(files.localizable),
+  },
+  {
+    label: "safe batch lives behind the skill-list batch operation sheet",
+    passed: !/SafeBatchTogglePanel|BatchTogglePreviewSummary/.test(files.sidebar)
+      && /SkillListSectionHeader\([\s\S]*?store\.resetBatchToggleSelectionToVisibleSkills\(\)[\s\S]*?isBatchOperationPresented\s*=\s*true/.test(files.sidebar)
+      && /BatchSkillOperationSheet\(\)/.test(files.sidebar)
+      && /Toggle\(isOn:\s*selectionBinding\)/.test(files.batchSkillOperation)
+      && /store\.selectAllVisibleBatchToggleSkills\(\)/.test(files.batchSkillOperation)
+      && /store\.clearBatchToggleSelection\(\)/.test(files.batchSkillOperation)
+      && /await store\.previewVisibleBatchToggle\(\)/.test(files.batchSkillOperation)
+      && /await store\.applyVisibleBatchTogglePreview\(confirmingPreviewID:\s*previewID\)/.test(files.batchSkillOperation),
+  },
+  {
+    label: "Provider Observability settings presents chart summaries before detailed evidence rows",
+    passed: /ProviderObservabilityChartsPanel\(result:\s*result\)/.test(files.providerObservabilitySettings)
+      && /struct ProviderObservabilityChartCard/.test(files.detailProviderObservability)
+      && /providerObservabilityChartModelTokens/.test(files.detailProviderObservability)
+      && /providerObservabilityChartDestinationCost/.test(files.detailProviderObservability)
+      && /ProviderObservabilityDimensionList/.test(files.detailProviderObservability),
+  },
+  {
+    label: "sidebar keeps adapter capability content in the Agent Workspace detail surface",
+    passed: !/SidebarAgentStatusPanel|AdapterCapabilityCard|RefreshStatusView/.test(files.sidebar)
+      && /AgentCapabilitySummaryCard\(capability:\s*capability\)/.test(files.agentCopilotOverview),
+  },
   {
     label: "V2.80 detail evidence lists are row-capped and use privacy rendering",
     passed: detailEvidenceLists.every((name) => {

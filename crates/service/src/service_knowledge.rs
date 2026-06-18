@@ -180,29 +180,13 @@ impl ServiceHost {
             );
             conflict_refs.push(evidence_id);
         }
-        for group in &related_analysis {
-            let evidence_id = push_quality_evidence(
-                &mut evidence,
-                "analysis",
-                &group.id,
-                format!(
-                    "{} analysis `{}`: {}",
-                    redact_for_llm_preview(&group.severity),
-                    redact_for_llm_preview(&group.kind),
-                    redact_for_llm_preview(&group.title)
-                ),
-                Some(group.severity.clone()),
-                Some(skill.id.clone()),
-            );
-            conflict_refs.push(evidence_id);
-        }
         let (conflict_score, conflict_summary, conflict_suggestions) =
             quality_conflict_component(&conflicts, &related_analysis);
         reasons.push(conflict_summary.clone());
         suggestions.extend(conflict_suggestions);
         components.push(SkillQualityScoreComponent {
-            id: "conflict_and_overlap",
-            label: "Conflicts and overlap",
+            id: "same_agent_conflicts",
+            label: "Same-agent conflicts",
             score: conflict_score,
             max_score: 15,
             summary: conflict_summary,

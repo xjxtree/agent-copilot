@@ -3,12 +3,14 @@ import SwiftUI
 
 struct SidebarView: View {
     @EnvironmentObject private var store: SkillStore
+    @State private var isBatchOperationPresented = false
 
     var body: some View {
-        List(selection: $store.selectedSkillID) {
+        List(selection: $store.selectedSidebarSelection) {
             Section {
                 AgentWorkspaceHeader()
                     .padding(.vertical, 6)
+                    .tag(SidebarSelection.agentWorkspace)
             }
 
             Section {
@@ -51,21 +53,30 @@ struct SidebarView: View {
                 }
             } else {
                 Section {
-                    SafeBatchTogglePanel()
-                    LocalReportExportPanel()
-                }
-
-                Section(skillListSectionTitle) {
                     ForEach(store.filteredSkills) { skill in
                         SkillRow(skill: skill)
-                            .tag(skill.id)
+                            .tag(SidebarSelection.skill(skill.id))
                     }
+                } header: {
+                    SkillListSectionHeader(
+                        title: skillListSectionTitle,
+                        visibleCount: store.filteredSkills.count,
+                        isBatchDisabled: store.filteredSkills.isEmpty || store.isRefreshBusy,
+                        action: {
+                            store.resetBatchToggleSelectionToVisibleSkills()
+                            isBatchOperationPresented = true
+                        }
+                    )
                 }
                 .id(skillListRefreshID)
             }
         }
         .listStyle(.sidebar)
         .navigationTitle(UIStrings.skills)
+        .sheet(isPresented: $isBatchOperationPresented) {
+            BatchSkillOperationSheet()
+                .environmentObject(store)
+        }
     }
 
     private var skillListSectionTitle: String {
@@ -108,339 +119,48 @@ struct SidebarView: View {
         }
         return UIStrings.noSkillsMatchSearch
     }
+
 }
 
-private struct SidebarWorkSurfaceRow: View {
-    let section: DetailSection
-    let isSelected: Bool
+private struct SkillListSectionHeader: View {
+    let title: String
+    let visibleCount: Int
+    let isBatchDisabled: Bool
     let action: () -> Void
 
-    var body: some View {
-        Button(action: action) {
-            Label {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(section.title)
-                        .font(.callout.weight(isSelected ? .semibold : .regular))
-                        .lineLimit(1)
-                    Text(section.summary)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-            } icon: {
-                Image(systemName: section.systemImage)
-                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
-                    .frame(width: 18)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .padding(.vertical, 3)
-        .background(isSelected ? Color.accentColor.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
-    }
-}
-
-private struct LocalReportExportPanel: View {
-    @EnvironmentObject private var store: SkillStore
+    private static let trailingControlInset: CGFloat = 14
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Label(UIStrings.localReportTitle, systemImage: "square.and.arrow.down")
+        HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
                     .font(.caption.bold())
-                    .foregroundStyle(.green)
-                Spacer()
-                if let result = store.localReportExportResult, !result.isUnavailable {
-                    Text(result.format.title)
-                        .font(.caption2.bold())
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Text(UIStrings.localReportBoundary)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(4)
-
-            Picker(UIStrings.localReportFormat, selection: $store.localReportFormat) {
-                ForEach(LocalReportFormat.allCases) { format in
-                    Label(format.title, systemImage: format.systemImage).tag(format)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-
-            Button {
-                Task { await store.exportLocalReport() }
-            } label: {
-                Label(UIStrings.localReportExport, systemImage: "square.and.arrow.down")
-                    .frame(maxWidth: .infinity)
-            }
-            .controlSize(.small)
-            .disabled(store.isRefreshBusy)
-
-            if store.isExportingLocalReport {
-                Label(UIStrings.localReportExporting, systemImage: "hourglass")
-                    .font(.caption)
                     .foregroundStyle(.secondary)
-            }
-
-            if let result = store.localReportExportResult {
-                LocalReportExportResultView(result: result)
-            }
-        }
-        .padding(10)
-        .background(.green.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
-    }
-}
-
-private struct LocalReportExportResultView: View {
-    let result: LocalReportExportResult
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Label(result.isUnavailable ? UIStrings.localReportUnavailableFallback : result.displayName, systemImage: result.isUnavailable ? "lock.fill" : "doc.text")
-                .font(.caption.bold())
-                .foregroundStyle(result.isUnavailable ? .secondary : .primary)
-                .lineLimit(2)
-
-            if !result.isUnavailable {
-                PrivacyPathText(path: result.displayPath, font: .caption2, lineLimit: 2)
-            }
-
-            Text(result.summary)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(3)
-
-            if !result.sections.isEmpty {
-                Text("\(UIStrings.localReportSections): \(result.sectionSummary)")
+                    .lineLimit(1)
+                Text(UIStrings.batchToggleSelectedCount(visibleCount))
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
-                    .lineLimit(2)
+                    .lineLimit(1)
             }
 
-            Label(result.redacted ? UIStrings.localReportRedacted : UIStrings.localReportNotRedactedWarning, systemImage: result.redacted ? "eye.slash" : "exclamationmark.triangle")
-                .font(.caption2.bold())
-                .foregroundStyle(result.redacted ? Color.secondary : Color.orange)
-        }
-        .padding(8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
-    }
-}
+            Spacer(minLength: 8)
 
-private struct SafeBatchTogglePanel: View {
-    @EnvironmentObject private var store: SkillStore
-    @State private var showAffected = false
-    @State private var showSkipped = false
-    @State private var pendingApplyPreview: BatchTogglePreview?
-    @State private var showApplyConfirmation = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Label(UIStrings.batchToggleTitle, systemImage: "checklist.checked")
-                    .font(.caption.bold())
-                    .foregroundStyle(.blue)
-                Spacer()
-                Text(UIStrings.batchToggleSelectedCount(store.batchToggleSelectedSkills.count))
-                    .font(.caption2.bold())
-                    .foregroundStyle(.secondary)
-            }
-
-            Text(UIStrings.batchToggleBoundary)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(3)
-
-            Picker(UIStrings.batchToggleTarget, selection: $store.batchToggleAction) {
-                ForEach(BatchToggleAction.allCases) { action in
-                    Label(action.title, systemImage: action.systemImage).tag(action)
+            Button(action: action) {
+                ViewThatFits(in: .horizontal) {
+                    Label(UIStrings.batchToggleOpen, systemImage: "checklist.checked")
+                    Image(systemName: "checklist.checked")
                 }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-
-            HStack(spacing: 8) {
-                Button {
-                    Task { await store.previewVisibleBatchToggle() }
-                } label: {
-                    Label(UIStrings.preview, systemImage: "eye")
-                        .frame(maxWidth: .infinity)
-                }
-                .controlSize(.small)
-                .disabled(store.isRefreshBusy || store.isPreviewingBatchToggle || store.batchToggleSelectedSkills.isEmpty)
-
-                Button {
-                    pendingApplyPreview = store.batchTogglePreview
-                    showApplyConfirmation = true
-                } label: {
-                    Label(UIStrings.batchToggleApply, systemImage: "checkmark.circle")
-                        .frame(maxWidth: .infinity)
-                }
-                .controlSize(.small)
-                .disabled(!store.canApplyBatchTogglePreview || store.isPreviewingBatchToggle)
-                .help(store.batchTogglePreview?.applySupported == false ? UIStrings.batchToggleApplyUnavailable : "")
-            }
-
-            if store.isPreviewingBatchToggle {
-                Label(UIStrings.batchTogglePreviewing, systemImage: "hourglass")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            if let preview = store.batchTogglePreview {
-                BatchTogglePreviewSummary(
-                    preview: preview,
-                    showAffected: $showAffected,
-                    showSkipped: $showSkipped
-                )
-            }
-        }
-        .padding(10)
-        .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
-        .alert(
-            pendingApplyPreview.map { UIStrings.batchToggleConfirmTitle(action: $0.action.title, count: $0.writableCount) }
-                ?? UIStrings.batchToggleConfirmTitle(action: store.batchToggleAction.title, count: 0),
-            isPresented: $showApplyConfirmation,
-            presenting: pendingApplyPreview
-        ) { preview in
-            Button(UIStrings.cancel, role: .cancel) {
-                pendingApplyPreview = nil
-            }
-            Button(UIStrings.batchToggleConfirmApply(action: preview.action.title, count: preview.writableCount), role: .destructive) {
-                let previewID = preview.id
-                pendingApplyPreview = nil
-                Task { await store.applyVisibleBatchTogglePreview(confirmingPreviewID: previewID) }
-            }
-        } message: { preview in
-            Text(UIStrings.batchToggleConfirmMessage(
-                action: preview.action.title.lowercased(),
-                affected: preview.writableCount,
-                skipped: preview.skippedCount,
-                snapshot: preview.snapshotPlan.summary
-            ))
-        }
-    }
-}
-
-private struct BatchTogglePreviewSummary: View {
-    let preview: BatchTogglePreview
-    @Binding var showAffected: Bool
-    @Binding var showSkipped: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack(spacing: 6) {
-                BatchToggleCountPill(title: UIStrings.batchToggleSelected, value: preview.selectedCount)
-                BatchToggleCountPill(title: UIStrings.batchToggleWritable, value: preview.writableCount)
-                BatchToggleCountPill(title: UIStrings.batchToggleSkipped, value: preview.skippedCount)
-            }
-
-            Label(UIStrings.batchToggleActionTarget(preview.action.title), systemImage: preview.action.systemImage)
                 .font(.caption.bold())
-                .foregroundStyle(.primary)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Label(UIStrings.batchToggleSnapshotPlan, systemImage: "clock.arrow.circlepath")
-                    .font(.caption.bold())
-                Text(preview.snapshotPlan.summary)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
-                if !preview.snapshotPlan.targets.isEmpty {
-                    Text(preview.snapshotPlan.targets.prefix(2).joined(separator: ", "))
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                }
             }
-            .padding(8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
-
-            DisclosureGroup(isExpanded: $showAffected) {
-                BatchToggleItemList(items: preview.affectedSkills, emptyMessage: UIStrings.batchToggleNoAffectedSkills)
-            } label: {
-                Text(UIStrings.batchToggleAffectedSkills(preview.affectedSkills.count))
-                    .font(.caption.bold())
-            }
-
-            DisclosureGroup(isExpanded: $showSkipped) {
-                BatchToggleItemList(items: preview.skippedItems, emptyMessage: UIStrings.batchToggleNoSkippedSkills)
-            } label: {
-                Text(UIStrings.batchToggleSkippedSkills(preview.skippedItems.count))
-                    .font(.caption.bold())
-            }
-
-            if !preview.applySupported {
-                Label(UIStrings.batchToggleApplyUnavailable, systemImage: "lock.fill")
-                    .font(.caption2.bold())
-                    .foregroundStyle(.secondary)
-            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(isBatchDisabled)
+            .help(UIStrings.batchToggleOpenHelp)
         }
-    }
-}
-
-private struct BatchToggleCountPill: View {
-    let title: String
-    let value: Int
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(title)
-                .foregroundStyle(.secondary)
-            Text("\(value)")
-                .fontWeight(.bold)
-                .monospacedDigit()
-        }
-        .font(.caption2)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 8))
-    }
-}
-
-private struct BatchToggleItemList: View {
-    let items: [BatchToggleSkillItem]
-    let emptyMessage: String
-
-    var body: some View {
-        if items.isEmpty {
-            Text(emptyMessage)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .padding(.vertical, 3)
-        } else {
-            VStack(alignment: .leading, spacing: 5) {
-                ForEach(items.prefix(6)) { item in
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(item.name)
-                            .font(.caption.bold())
-                            .lineLimit(1)
-                        Text(itemSubtitle(item))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
-                    .padding(.vertical, 2)
-                }
-                if items.count > 6 {
-                    Text(UIStrings.batchToggleMoreItems(items.count - 6))
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-        }
-    }
-
-    private func itemSubtitle(_ item: BatchToggleSkillItem) -> String {
-        let base = [DisplayText.agent(item.agent), DisplayText.scope(item.scope, agent: item.agent)].filter { !$0.isEmpty }.joined(separator: " · ")
-        guard let reason = item.reason, !reason.isEmpty else { return base }
-        return base.isEmpty ? reason : "\(base) · \(reason)"
+        .textCase(nil)
+        .padding(.trailing, Self.trailingControlInset)
+        .padding(.top, 7)
+        .padding(.bottom, 5)
     }
 }
 
@@ -448,142 +168,49 @@ private struct AgentWorkspaceHeader: View {
     @EnvironmentObject private var store: SkillStore
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                AgentIconBadge(filter: store.agentFilter)
+        HStack(spacing: 10) {
+            AgentIconBadge(filter: store.agentFilter)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(store.agentFilter.title)
-                        .font(.headline)
-                        .lineLimit(1)
-                    Text(UIStrings.text("sidebar.agentWorkspace", "Agent workspace"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Picker(UIStrings.agent, selection: $store.agentFilter) {
-                ForEach(SkillAgentFilter.managementCases) { filter in
-                    Text(shortTitle(for: filter)).tag(filter)
-                }
-            }
-            .pickerStyle(.menu)
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text(UIStrings.text("nav.work", "Work"))
-                    .font(.caption.bold())
+            VStack(alignment: .leading, spacing: 2) {
+                Text(store.agentFilter.title)
+                    .font(.headline)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+                Text(UIStrings.text("sidebar.agentWorkspace", "Agent workspace"))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
-
-                ForEach(DetailSection.primaryWorkCases) { section in
-                    SidebarWorkSurfaceRow(
-                        section: section,
-                        isSelected: store.selectedDetailSection == section,
-                        action: {
-                            if section.requiresSelectedSkill, store.selectedSkillID == nil {
-                                store.selectedSkillID = store.filteredSkills.first?.id ?? store.skills.first?.id
-                            }
-                            store.selectedDetailSection = section
-                        }
-                    )
-                }
+                    .lineLimit(1)
             }
+            .layoutPriority(1)
 
-            if let capability = store.selectedAdapterCapability {
-                AdapterCapabilityCard(
-                    capability: capability,
-                    scanSummary: store.selectedAgentRefreshSummary
-                )
-            }
+            Spacer(minLength: 6)
 
-            SkillHealthDashboardCard(
-                summary: store.healthSummary,
-                agentSummary: store.selectedAgentHealthSummary,
-                totalCount: agentSkills.count,
-                enabledCount: enabledAgentSkills.count,
-                disabledCount: disabledAgentSkills.count,
-                findingDisplayCount: agentFindingCount,
-                conflictDisplayCount: agentConflictCount,
-                onFilter: { filter in
-                    store.stateFilter = filter
-                }
-            )
-
-            VStack(spacing: 8) {
-                Button {
-                    Task { await store.scanAll() }
-                } label: {
-                    Label(UIStrings.text("action.scanSkills", "Scan Skills"), systemImage: "folder.badge.gearshape")
-                        .frame(maxWidth: .infinity)
-                }
-                .controlSize(.small)
-                .disabled(store.isRefreshBusy)
-                .help(UIStrings.text("help.scan", "Scan supported agent roots and refresh the catalog."))
-
-                Button {
-                    Task { await store.reload() }
-                } label: {
-                    Label(UIStrings.text("action.reloadCatalog", "Reload Catalog"), systemImage: "arrow.clockwise")
-                        .frame(maxWidth: .infinity)
-                }
-                .controlSize(.small)
-                .disabled(store.isRefreshBusy)
-                .help(UIStrings.text("help.reload", "Reload the current catalog without scanning roots."))
-            }
-
-            AgentConfigTimelinePanel(
-                model: AgentConfigTimelineModel.make(
-                    snapshots: store.agentConfigSnapshots,
-                    agentFilter: store.agentFilter
-                ),
-                isLoading: store.isLoadingAgentConfigSnapshots,
-                isWriting: store.isWriting,
-                onPreview: { snapshotID in
-                    try await store.previewRollback(snapshotID: snapshotID)
-                },
-                onRollback: { snapshotID in
-                    await store.rollbackSnapshot(snapshotID: snapshotID)
-                }
-            )
-
-            RefreshStatusView()
+            AgentSelectorMenu(width: 84)
         }
-        .padding(12)
-        .adaptiveMaterialSurface()
-        .task {
-            await store.loadAgentConfigSnapshots()
+        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+    }
+}
+
+private struct AgentSelectorMenu: View {
+    @EnvironmentObject private var store: SkillStore
+    let width: CGFloat
+
+    var body: some View {
+        Picker(UIStrings.agent, selection: $store.agentFilter) {
+            ForEach(SkillAgentFilter.managementCases) { filter in
+                Label(shortTitle(for: filter), systemImage: systemImage(for: filter))
+                    .tag(filter)
+            }
         }
-    }
-
-    private var agentSkills: [SkillRecord] {
-        store.skills.filter { store.agentFilter.includes($0) }
-    }
-
-    private var enabledAgentSkills: [SkillRecord] {
-        agentSkills.filter { DisplayText.statusKind($0.state, enabled: $0.enabled) == .enabled }
-    }
-
-    private var disabledAgentSkills: [SkillRecord] {
-        agentSkills.filter { DisplayText.statusKind($0.state, enabled: $0.enabled) == .disabled }
-    }
-
-    private var agentFindingCount: Int {
-        let agentSkillIDs = Set(agentSkills.map(\.id))
-        return FindingDisplayModel.issueGroups(
-            findings: store.findings.filter { finding in
-                guard let instanceId = finding.instanceId else { return false }
-                return agentSkillIDs.contains(instanceId)
-            },
-            severityFilter: FindingDisplayModel.allFilterValue,
-            ruleFilter: FindingDisplayModel.allFilterValue
-        ).count
-    }
-
-    private var agentConflictCount: Int {
-        SkillListModel.sameAgentConflictGroupCount(
-            skills: agentSkills,
-            conflicts: store.conflicts
-        )
+        .labelsHidden()
+        .pickerStyle(.menu)
+        .controlSize(.small)
+        .frame(width: width, alignment: .trailing)
+        .help("\(UIStrings.text("help.agentSelector", "Select the agent workspace.")) \(store.agentFilter.title)")
+        .accessibilityLabel(UIStrings.agent)
+        .accessibilityValue(store.agentFilter.title)
     }
 
     private func shortTitle(for filter: SkillAgentFilter) -> String {
@@ -602,6 +229,25 @@ private struct AgentWorkspaceHeader: View {
             return UIStrings.openclaw
         case .all:
             return UIStrings.text("filter.all", "All")
+        }
+    }
+
+    private func systemImage(for filter: SkillAgentFilter) -> String {
+        switch filter {
+        case .claudeCode:
+            return "sparkle"
+        case .codex:
+            return "terminal"
+        case .opencode:
+            return "curlybraces"
+        case .pi:
+            return "pi"
+        case .hermes:
+            return "bolt"
+        case .openclaw:
+            return "shippingbox"
+        case .all:
+            return "square.grid.2x2"
         }
     }
 }
@@ -644,7 +290,7 @@ private struct SkillHealthDashboardCard: View {
     }
 
     private var findingsTitle: String {
-        let base = UIStrings.text("health.findingIssueGroups", "Finding groups")
+        let base = UIStrings.text("health.findingIssueGroups", "Issues")
         guard riskCount > 0 else { return base }
         return "\(base) · \(riskCount) \(UIStrings.text("health.riskSuffix", "risk"))"
     }
@@ -863,339 +509,6 @@ private struct HealthActionRow: View {
         .padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.22), in: RoundedRectangle(cornerRadius: 8))
-    }
-}
-
-private struct AdapterCapabilityCard: View {
-    let capability: AdapterCapabilityRecord
-    let scanSummary: AgentRefreshSummary?
-    @State private var diagnosticsExpanded = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 7) {
-                Label(UIStrings.adapterCapabilities, systemImage: statusIcon)
-                    .font(.caption.bold())
-                    .foregroundStyle(statusColor)
-                Spacer()
-                Text(statusTitle)
-                    .font(.caption2.bold())
-                    .foregroundStyle(statusColor)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(statusColor.opacity(0.12), in: Capsule())
-            }
-
-            HStack(spacing: 6) {
-                CapabilityPill(title: UIStrings.adapterScan, feature: capability.scan)
-                CapabilityPill(title: UIStrings.adapterToggle, feature: capability.configToggle)
-                CapabilityPill(title: UIStrings.adapterInstall, feature: capability.install)
-            }
-
-            Text(UIStrings.text("adapter.diagnostics.readOnlyBoundary", "Diagnostics are read-only: roots, config capability, writable reason, and scan activity are shown without changing agent config or executing scripts."))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(3)
-
-            DisclosureGroup(isExpanded: $diagnosticsExpanded) {
-                VStack(alignment: .leading, spacing: 8) {
-                    AdapterDiagnosticsRow(
-                        label: UIStrings.text("adapter.diagnostics.config", "Config detected"),
-                        value: configDiagnostics
-                    )
-                    AdapterDiagnosticsRow(
-                        label: UIStrings.text("adapter.diagnostics.writable", "Writable reason"),
-                        value: writableDiagnostics
-                    )
-
-                    if let scanSummary {
-                        AdapterDiagnosticsRow(
-                            label: UIStrings.text("adapter.diagnostics.lastScan", "Last scan"),
-                            value: scanActivitySummary(scanSummary)
-                        )
-                        HStack(spacing: 6) {
-                            AdapterDiagnosticCount(
-                                title: UIStrings.text("adapter.diagnostics.roots.discovered", "Discovered"),
-                                count: scanSummary.rootsScanned.count,
-                                systemImage: "folder.badge.gearshape"
-                            )
-                            AdapterDiagnosticCount(
-                                title: UIStrings.text("adapter.diagnostics.roots.skipped", "Skipped"),
-                                count: scanSummary.rootsSkipped.count,
-                                systemImage: "folder.badge.questionmark"
-                            )
-                            AdapterDiagnosticCount(
-                                title: UIStrings.text("adapter.diagnostics.roots.blocked", "Blocked"),
-                                count: blockedReasonCount,
-                                systemImage: "lock.trianglebadge.exclamationmark"
-                            )
-                        }
-                        AdapterPathList(
-                            title: UIStrings.text("adapter.diagnostics.roots.considered", "Roots considered"),
-                            values: scanSummary.rootsConsidered
-                        )
-                        AdapterPathList(
-                            title: UIStrings.text("adapter.diagnostics.roots.scanned", "Roots scanned"),
-                            values: scanSummary.rootsScanned
-                        )
-                        AdapterPathList(
-                            title: UIStrings.text("adapter.diagnostics.roots.skippedList", "Roots skipped"),
-                            values: scanSummary.rootsSkipped
-                        )
-                    } else {
-                        AdapterDiagnosticsRow(
-                            label: UIStrings.text("adapter.diagnostics.lastScan", "Last scan"),
-                            value: UIStrings.text("adapter.diagnostics.noScanActivity", "No per-agent scan activity is available yet. Run Scan Skills to populate root diagnostics.")
-                        )
-                    }
-
-                    AdapterPathList(
-                        title: UIStrings.text("adapter.diagnostics.blockers", "Blocked reasons"),
-                        values: blockedReasons
-                    )
-                }
-                .padding(.top, 5)
-            } label: {
-                Label(UIStrings.text("adapter.diagnostics.title", "Adapter Diagnostics"), systemImage: "stethoscope")
-                    .font(.caption.bold())
-            }
-
-            if let primaryBlocker = capability.blockers.first {
-                Text(primaryBlocker)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            if capability.agent == "openclaw" {
-                Label(UIStrings.openClawWorkspaceBoundary, systemImage: "folder.badge.questionmark")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
-            }
-        }
-        .padding(10)
-        .background(statusColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
-    }
-
-    private var configDiagnostics: String {
-        let toggle = featureStatusSummary(capability.configToggle)
-        let snapshot = featureStatusSummary(capability.configSnapshot)
-        return UIStrings.text(
-            "adapter.diagnostics.config.summary",
-            "Toggle: \(toggle); snapshots: \(snapshot)"
-        )
-    }
-
-    private var writableDiagnostics: String {
-        if capability.writable.supported {
-            return capability.writable.reason ?? UIStrings.text("adapter.diagnostics.writable.verified", "Writable capability is verified for this adapter scope.")
-        }
-        return capability.writable.reason ?? UIStrings.readOnlyAdapterStatus(capability.displayName)
-    }
-
-    private var blockedReasons: [String] {
-        var reasons = capability.blockers
-        if let scanSummary {
-            reasons.append(contentsOf: scanSummary.recoveryActions)
-        }
-        return Array(Set(reasons.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })).sorted()
-    }
-
-    private var blockedReasonCount: Int {
-        blockedReasons.count + (scanSummary?.rootsSkipped.count ?? 0)
-    }
-
-    private func featureStatusSummary(_ feature: AdapterFeatureCapability) -> String {
-        if feature.supported {
-            return feature.reason ?? UIStrings.text("adapter.feature.verified", "Verified")
-        }
-        let reason = feature.reason ?? feature.status
-        return "\(featureTitle(for: feature)): \(reason)"
-    }
-
-    private func featureTitle(for feature: AdapterFeatureCapability) -> String {
-        switch feature.status {
-        case "read-only":
-            return UIStrings.text("adapter.feature.readOnly", "Read-only")
-        case "planned":
-            return UIStrings.text("adapter.feature.planned", "Planned")
-        default:
-            return UIStrings.text("adapter.feature.blocked", "Blocked")
-        }
-    }
-
-    private func scanActivitySummary(_ summary: AgentRefreshSummary) -> String {
-        UIStrings.text(
-            "adapter.diagnostics.lastScan.summary",
-            "\(summary.status): \(summary.scannedCount) discovered, \(summary.catalogCount) cataloged, \(summary.brokenCount) broken."
-        )
-    }
-
-    private var statusTitle: String {
-        switch capability.status {
-        case "verified":
-            return UIStrings.text("adapter.status.verified", "Verified")
-        case "read-only":
-            return UIStrings.text("adapter.status.readOnly", "Read-only")
-        case "planned":
-            return UIStrings.text("adapter.status.planned", "Planned")
-        default:
-            return UIStrings.text("adapter.status.blocked", "Blocked")
-        }
-    }
-
-    private var statusIcon: String {
-        switch capability.status {
-        case "verified":
-            return "checkmark.seal.fill"
-        case "read-only":
-            return "lock.fill"
-        case "planned":
-            return "calendar.badge.clock"
-        default:
-            return "exclamationmark.triangle.fill"
-        }
-    }
-
-    private var statusColor: Color {
-        switch capability.status {
-        case "verified":
-            return .green
-        case "read-only", "planned":
-            return .orange
-        default:
-            return .red
-        }
-    }
-}
-
-private struct AdapterDiagnosticsRow: View {
-    let label: String
-    let value: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label)
-                .font(.caption2.bold())
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.caption2)
-                .foregroundStyle(.primary)
-                .lineLimit(4)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private struct AdapterDiagnosticCount: View {
-    let title: String
-    let count: Int
-    let systemImage: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Image(systemName: systemImage)
-            Text("\(count)")
-                .font(.caption.bold())
-            Text(title)
-                .lineLimit(1)
-        }
-        .font(.caption2)
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 5)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-    }
-}
-
-private struct AdapterPathList: View {
-    let title: String
-    let values: [String]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title)
-                .font(.caption2.bold())
-                .foregroundStyle(.secondary)
-            if values.isEmpty {
-                Text(UIStrings.text("adapter.diagnostics.roots.none", "None reported."))
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            } else {
-                ForEach(Array(values.prefix(3)), id: \.self) { value in
-                    PrivacyPathLabel(path: value, systemImage: "folder")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-                if values.count > 3 {
-                    Text(UIStrings.text("adapter.diagnostics.roots.more", "+\(values.count - 3) more"))
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private struct CapabilityPill: View {
-    let title: String
-    let feature: AdapterFeatureCapability
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                Image(systemName: featureIcon)
-                Text(title)
-                    .lineLimit(1)
-            }
-            Text(featureTitle)
-                .lineLimit(1)
-        }
-        .font(.caption2.bold())
-        .foregroundStyle(featureColor)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 5)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(featureColor.opacity(feature.supported ? 0.12 : 0.08), in: RoundedRectangle(cornerRadius: 8))
-        .help(feature.reason ?? feature.status)
-    }
-
-    private var featureTitle: String {
-        if feature.supported {
-            return UIStrings.text("adapter.feature.verified", "Verified")
-        }
-        switch feature.status {
-        case "read-only":
-            return UIStrings.text("adapter.feature.readOnly", "Read-only")
-        case "planned":
-            return UIStrings.text("adapter.feature.planned", "Planned")
-        default:
-            return UIStrings.text("adapter.feature.blocked", "Blocked")
-        }
-    }
-
-    private var featureIcon: String {
-        if feature.supported {
-            return "checkmark.circle.fill"
-        }
-        if feature.status == "read-only" {
-            return "lock.fill"
-        }
-        return "exclamationmark.triangle.fill"
-    }
-
-    private var featureColor: Color {
-        if feature.supported {
-            return .green
-        }
-        if feature.status == "read-only" || feature.status == "planned" {
-            return .orange
-        }
-        return .red
     }
 }
 
@@ -1452,120 +765,15 @@ private struct AgentIconBadge: View {
     }
 }
 
-private enum AgentIconProvider {
-    static func image(for filter: SkillAgentFilter) -> NSImage? {
-        for candidate in candidates(for: filter) {
-            if let image = load(candidate: candidate) {
-                image.size = NSSize(width: 32, height: 32)
-                return image
-            }
-        }
-        return nil
-    }
-
-    private static func candidates(for filter: SkillAgentFilter) -> [AgentIconCandidate] {
-        switch filter {
-        case .claudeCode:
-            return [
-                .appBundle("/Applications/Claude.app"),
-                .resource("/Applications/Claude.app/Contents/Resources/electron.icns"),
-                .fileIcon("/opt/homebrew/bin/claude")
-            ]
-        case .codex:
-            return [
-                .appBundle("/Applications/Codex.app"),
-                .resource("/Applications/Codex.app/Contents/Resources/icon.icns"),
-                .resource("/Applications/Codex.app/Contents/Resources/app.icns"),
-                .resource("/Applications/Codex.app/Contents/Resources/default_app/icon.png"),
-                .fileIcon("/opt/homebrew/bin/codex")
-            ]
-        case .opencode:
-            return [
-                .appBundle("/Applications/OpenCode.app"),
-                .appBundle("/Applications/opencode.app"),
-                .resource("/Applications/OpenCode.app/Contents/Resources/icon.icns"),
-                .fileIcon("/opt/homebrew/bin/opencode")
-            ]
-        case .pi:
-            return [
-                .bundledResource("PiBadge.svg"),
-                .appBundle("/Applications/Pi.app"),
-                .appBundle("/Applications/Pi Coding Agent.app"),
-                .resource("/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/assets/icon.png"),
-                .resource("/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/resources/icon.png"),
-                .resource("/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/dist/icon.png"),
-                .fileIcon("/opt/homebrew/bin/pi")
-            ]
-        case .hermes:
-            return [
-                .bundledResource("HermesIcon.png")
-            ]
-        case .openclaw:
-            return [
-                .bundledResource("OpenClawIcon.svg")
-            ]
-        case .all:
-            return []
-        }
-    }
-
-    private static func load(candidate: AgentIconCandidate) -> NSImage? {
-        switch candidate.kind {
-        case .bundledResource:
-            guard let url = Bundle.module.url(forResource: candidate.path, withExtension: nil) else {
-                return nil
-            }
-            return NSImage(contentsOf: url)
-        case .appBundle, .fileIcon:
-            guard FileManager.default.fileExists(atPath: candidate.path) else {
-                return nil
-            }
-            return NSWorkspace.shared.icon(forFile: candidate.path)
-        case .resource:
-            guard FileManager.default.fileExists(atPath: candidate.path) else {
-                return nil
-            }
-            return NSImage(contentsOfFile: candidate.path)
-        }
-    }
-}
-
-private struct AgentIconCandidate {
-    enum Kind {
-        case appBundle
-        case fileIcon
-        case bundledResource
-        case resource
-    }
-
-    let kind: Kind
-    let path: String
-
-    static func appBundle(_ path: String) -> AgentIconCandidate {
-        AgentIconCandidate(kind: .appBundle, path: path)
-    }
-
-    static func fileIcon(_ path: String) -> AgentIconCandidate {
-        AgentIconCandidate(kind: .fileIcon, path: path)
-    }
-
-    static func bundledResource(_ path: String) -> AgentIconCandidate {
-        AgentIconCandidate(kind: .bundledResource, path: path)
-    }
-
-    static func resource(_ path: String) -> AgentIconCandidate {
-        AgentIconCandidate(kind: .resource, path: path)
-    }
-}
-
 private struct ProjectContextControls: View {
     @EnvironmentObject private var store: SkillStore
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 8) {
                 Image(systemName: store.activeProjectContext == nil ? "folder.badge.questionmark" : "folder")
                     .foregroundStyle(store.activeProjectContext == nil ? Color.secondary : Color.accentColor)
+                    .frame(width: 20)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(UIStrings.project)
@@ -1575,6 +783,12 @@ private struct ProjectContextControls: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
+                .layoutPriority(1)
+
+                Spacer(minLength: 6)
+
+                projectSelectionMenu
+                projectActionsMenu
             }
 
             VStack(alignment: .leading, spacing: 3) {
@@ -1604,62 +818,70 @@ private struct ProjectContextControls: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(3)
             }
-
-            HStack(spacing: 8) {
-                Button {
-                    chooseProject()
-                } label: {
-                    Label(UIStrings.chooseProject, systemImage: "folder.badge.plus")
-                }
-                .controlSize(.small)
-
-                Menu {
-                    if store.recentProjectContexts.isEmpty {
-                        Text(UIStrings.noRecentProjects)
-                    } else {
-                        ForEach(store.recentProjectContexts) { context in
-                            Button {
-                                Task {
-                                    await store.setProject(
-                                        rootPath: context.rootPath,
-                                        currentCWD: context.currentCWD,
-                                        name: context.name
-                                    )
-                                }
-                            } label: {
-                                Text(context.name)
-                            }
-                        }
-                    }
-                } label: {
-                    Label(UIStrings.recentProjects, systemImage: "clock")
-                }
-                .controlSize(.small)
-
-                Spacer()
-
-                Menu {
-                    Button {
-                        revealActiveProject()
-                    } label: {
-                        Label(UIStrings.revealInFinder, systemImage: "arrow.up.forward.app")
-                    }
-                    .disabled(store.activeProjectContext == nil)
-
-                    Button(role: .destructive) {
-                        Task { await store.clearProject() }
-                    } label: {
-                        Label(UIStrings.clearProject, systemImage: "xmark.circle")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-                .controlSize(.small)
-                .disabled(store.activeProjectContext == nil)
-            }
         }
         .disabled(store.isRefreshBusy)
         .padding(.vertical, 4)
+    }
+
+    private var projectSelectionMenu: some View {
+        Menu {
+            Button {
+                chooseProject()
+            } label: {
+                Label(UIStrings.chooseProject, systemImage: "folder.badge.plus")
+            }
+
+            Divider()
+
+            if store.recentProjectContexts.isEmpty {
+                Text(UIStrings.noRecentProjects)
+            } else {
+                Section(UIStrings.recentProjects) {
+                    ForEach(store.recentProjectContexts) { context in
+                        Button {
+                            Task {
+                                await store.setProject(
+                                    rootPath: context.rootPath,
+                                    currentCWD: context.currentCWD,
+                                    name: context.name
+                                )
+                            }
+                        } label: {
+                            Text(context.name)
+                        }
+                    }
+                }
+            }
+        } label: {
+            Label(UIStrings.text("project.chooseMenu", "Choose"), systemImage: "folder.badge.plus")
+                .lineLimit(1)
+                .frame(width: 92)
+        }
+        .controlSize(.small)
+        .help(UIStrings.projectChoosePrompt)
+    }
+
+    private var projectActionsMenu: some View {
+        Menu {
+            Button {
+                revealActiveProject()
+            } label: {
+                Label(UIStrings.revealInFinder, systemImage: "arrow.up.forward.app")
+            }
+            .disabled(store.activeProjectContext == nil)
+
+            Button(role: .destructive) {
+                Task { await store.clearProject() }
+            } label: {
+                Label(UIStrings.clearProject, systemImage: "xmark.circle")
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .frame(width: 28)
+        }
+        .controlSize(.small)
+        .disabled(store.activeProjectContext == nil)
+        .help(UIStrings.text("project.moreActions", "Project actions"))
     }
 
     private func chooseProject() {
@@ -1724,88 +946,6 @@ private struct AgentStatTile: View {
         .padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.32), in: RoundedRectangle(cornerRadius: 8))
-    }
-}
-
-private struct RefreshStatusView: View {
-    @EnvironmentObject private var store: SkillStore
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                if store.isLoading || store.isScanning {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Image(systemName: store.canRetryLastRefresh ? "exclamationmark.triangle.fill" : "arrow.triangle.2.circlepath.circle")
-                        .foregroundStyle(store.canRetryLastRefresh ? .orange : .secondary)
-                }
-                Text(store.refreshStatusMessage)
-                    .font(.caption)
-                    .foregroundStyle(store.canRetryLastRefresh ? .orange : .secondary)
-                    .lineLimit(2)
-            }
-
-            if store.canRetryLastRefresh {
-                Button {
-                    Task { await store.retryLastRefresh() }
-                } label: {
-                    Label(UIStrings.retryRefresh, systemImage: "arrow.clockwise")
-                }
-                .controlSize(.small)
-            }
-
-            DisclosureGroup(UIStrings.text("refresh.details", "Refresh Details")) {
-                VStack(alignment: .leading, spacing: 7) {
-                    PrivacyPathLabel(path: store.status?.catalogPath ?? UIStrings.catalogNotLoaded, systemImage: "shippingbox")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-
-                    Label(store.watcherStatusMessage, systemImage: "dot.radiowaves.left.and.right")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(3)
-
-                    if !store.refreshLogEntries.isEmpty {
-                        Divider()
-                        VStack(alignment: .leading, spacing: 6) {
-                            ForEach(Array(store.refreshLogEntries.enumerated()), id: \.offset) { _, entry in
-                                Label(entry.message, systemImage: refreshLogIcon(entry.level))
-                                    .font(.caption2)
-                                    .foregroundStyle(refreshLogColor(entry.level))
-                                    .lineLimit(3)
-                            }
-                        }
-                    }
-                }
-                .padding(.top, 4)
-            }
-            .font(.caption)
-        }
-        .padding(.top, 6)
-    }
-}
-
-private func refreshLogIcon(_ level: String) -> String {
-    switch level {
-    case "error":
-        return "exclamationmark.triangle.fill"
-    case "warning":
-        return "exclamationmark.triangle"
-    default:
-        return "checkmark.circle"
-    }
-}
-
-private func refreshLogColor(_ level: String) -> Color {
-    switch level {
-    case "error":
-        return .red
-    case "warning":
-        return .orange
-    default:
-        return .secondary
     }
 }
 

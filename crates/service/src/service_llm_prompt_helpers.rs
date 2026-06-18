@@ -1528,11 +1528,10 @@ pub(crate) fn quality_risk_component(
 
 pub(crate) fn quality_conflict_component(
     conflicts: &[ConflictGroupRecord],
-    analysis_groups: &[CrossAgentAnalysisGroup],
+    _analysis_groups: &[CrossAgentAnalysisGroup],
 ) -> (u8, String, Vec<SkillQualitySuggestion>) {
     let conflict_deduction = (conflicts.len() as i16 * 12).min(15);
-    let analysis_deduction = (analysis_groups.len() as i16 * 5).min(10);
-    let score = (15i16 - (conflict_deduction + analysis_deduction).min(15)).clamp(0, 15) as u8;
+    let score = (15i16 - conflict_deduction).clamp(0, 15) as u8;
     let mut suggestions = Vec::new();
     if !conflicts.is_empty() {
         suggestions.push(SkillQualitySuggestion {
@@ -1543,22 +1542,12 @@ pub(crate) fn quality_conflict_component(
             evidence_refs: Vec::new(),
         });
     }
-    if !analysis_groups.is_empty() {
-        suggestions.push(SkillQualitySuggestion {
-            priority: "medium",
-            title: "Compare cross-agent overlap".to_string(),
-            detail: "Use read-only comparison to decide whether similar skills improve coverage or create routing ambiguity."
-                .to_string(),
-            evidence_refs: Vec::new(),
-        });
-    }
-    let summary = if conflicts.is_empty() && analysis_groups.is_empty() {
-        "No same-agent conflict or cross-agent overlap currently involves this skill.".to_string()
+    let summary = if conflicts.is_empty() {
+        "No same-agent conflict currently involves this skill.".to_string()
     } else {
         format!(
-            "{} same-agent conflict(s) and {} cross-agent analysis group(s) involve this skill.",
-            conflicts.len(),
-            analysis_groups.len()
+            "{} same-agent conflict(s) involve this skill.",
+            conflicts.len()
         )
     };
     (score, summary, suggestions)
@@ -1727,7 +1716,7 @@ pub(crate) fn render_quality_score_prompt_section(
         .collect::<Vec<_>>()
         .join("\n");
     format!(
-        "Quality score evidence:\n- skill id: {}\n- name: {}\n- agent: {}\n- scope: {}\n- score: {} / 100\n- grade: {}\n- band: {}\n\nComponents:\n{}\n\nEvidence references:\n{}\n\nSuggested improvements:\n{}\n\nSafety flags: read_only=true, provider_request_sent=false, write_back_allowed=false, script_execution_allowed=false, config_mutation_allowed=false, snapshot_created=false, triage_mutation_allowed=false, credential_accessed=false, raw_prompt_persisted=false, raw_response_persisted=false.",
+        "Quality score evidence:\n- skill id: {}\n- name: {}\n- agent: {}\n- scope: {}\n- score: {} / 100\n- grade: {}\n- band: {}\n\nComponents:\n{}\n\nEvidence references:\n{}\n\nSuggested improvements:\n{}\n\nRequired quality-score response shape:\n- `## 结论` or `## Verdict`: one short paragraph with the score, grade, and main reason.\n- `## 组成项` or `## Components`: one bullet per component, using `component: score - issue - evidence`.\n- `## 问题` or `## Issues`: only the most important local evidence-backed problems.\n- `## 建议` or `## Suggestions`: copy-only next steps.\nDo not use Markdown tables. Do not wrap the answer in fenced code blocks.\n\nSafety flags: read_only=true, provider_request_sent=false, write_back_allowed=false, script_execution_allowed=false, config_mutation_allowed=false, snapshot_created=false, triage_mutation_allowed=false, credential_accessed=false, raw_prompt_persisted=false, raw_response_persisted=false.",
         redactor.redact(&score.instance_id),
         redactor.redact(&score.skill_name),
         redactor.redact(&score.agent),

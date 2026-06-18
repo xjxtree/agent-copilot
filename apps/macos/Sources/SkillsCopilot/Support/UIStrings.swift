@@ -52,6 +52,8 @@ enum UIStrings {
     static var chooseProject: String { text("action.chooseProject", "Choose Project") }
     static var clearProject: String { text("action.clearProject", "Clear Project") }
     static var revealInFinder: String { text("action.revealInFinder", "Reveal in Finder") }
+    static var openFile: String { text("action.openFile", "Open") }
+    static var copyPath: String { text("action.copyPath", "Copy Path") }
     static var skills: String { text("nav.skills", "Skills") }
     static var project: String { text("nav.project", "Project") }
     static var view: String { text("nav.view", "View") }
@@ -66,7 +68,7 @@ enum UIStrings {
     static var openclaw: String { text("agent.openclaw", "OpenClaw") }
     static var detailSection: String { text("detail.section", "Detail Section") }
     static var overview: String { text("detail.overview", "Overview") }
-    static var findings: String { text("detail.findings", "Findings") }
+    static var findings: String { text("detail.findings", "Issues") }
     static var conflicts: String { text("detail.conflicts", "Conflicts") }
     static var cleanupQueue: String { text("cleanup.queue", "Cleanup Queue") }
     static var cleanupKindFinding: String { text("cleanup.kind.finding", "Findings") }
@@ -114,8 +116,14 @@ enum UIStrings {
     static var crossAgentComparisonDifferenceFindings: String { text("comparison.crossAgent.difference.findings", "Finding counts differ") }
     static var crossAgentComparisonDifferenceDefinition: String { text("comparison.crossAgent.difference.definition", "Definition IDs differ") }
     static var batchToggleTitle: String { text("batchToggle.title", "Safe Batch") }
+    static var batchToggleOpen: String { text("batchToggle.open", "Batch") }
+    static var batchToggleOpenHelp: String { text("batchToggle.open.help", "Choose visible skills, preview the safe enable/disable plan, then apply confirmed writable changes.") }
+    static var batchToggleSheetTitle: String { text("batchToggle.sheet.title", "Batch Skill Operations") }
+    static var batchToggleSheetSubtitle: String { text("batchToggle.sheet.subtitle", "Select skills from the current sidebar result, then preview before applying enable or disable changes.") }
     static var batchToggleBoundary: String { text("batchToggle.boundary", "Preview-first enable/disable for visible skills only. Read-only adapters and unverified writable roots are skipped; no scripts, AI provider calls, credentials, skill-content writes, or public release actions are available.") }
     static var batchToggleTarget: String { text("batchToggle.target", "Batch target") }
+    static var batchToggleSelectAll: String { text("batchToggle.selectAll", "Select All") }
+    static var batchToggleClearSelection: String { text("batchToggle.clearSelection", "Clear") }
     static var batchToggleSelected: String { text("batchToggle.selected", "Selected") }
     static var batchToggleWritable: String { text("batchToggle.writable", "Writable") }
     static var batchToggleSkipped: String { text("batchToggle.skipped", "Skipped") }
@@ -130,6 +138,7 @@ enum UIStrings {
     static var batchToggleNoAffectedSkills: String { text("batchToggle.noAffectedSkills", "No writable affected skills in this preview.") }
     static var batchToggleNoSkippedSkills: String { text("batchToggle.noSkippedSkills", "No skipped skills in this preview.") }
     static var batchTogglePreviewChanged: String { text("batchToggle.previewChanged", "Batch preview changed before confirmation. Preview again before applying.") }
+    static var batchToggleNoSelection: String { text("batchToggle.noSelection", "Select at least one visible skill to prepare a batch preview.") }
     static var localReportTitle: String { text("localReport.title", "Local Report Export") }
     static var localReportBoundary: String { text("localReport.boundary", "User-triggered local redacted audit export only. No public distribution, provider calls, credentials, script execution, config mutation, or background sync.") }
     static var localReportFormat: String { text("localReport.format", "Format") }
@@ -177,10 +186,10 @@ enum UIStrings {
     static var catalogNotLoaded: String { text("state.catalogNotLoaded", "Catalog not loaded") }
     static var noSkillSelected: String { text("empty.noSkillSelected", "No Skill Selected") }
     static var noSkillSelectedMessage: String { text("empty.noSkillSelected.message", "Reload the catalog or select a skill from the sidebar.") }
-    static var noFindings: String { text("empty.noFindings", "No Findings") }
-    static var noFindingsMessage: String { text("empty.noFindings.message", "No rule findings are associated with this skill.") }
-    static var noMatchingFindings: String { text("empty.noMatchingFindings", "No Matching Findings") }
-    static var noMatchingFindingsMessage: String { text("empty.noMatchingFindings.message", "Adjust the triage, severity, or rule filter to show findings.") }
+    static var noFindings: String { text("empty.noFindings", "No Issues") }
+    static var noFindingsMessage: String { text("empty.noFindings.message", "No rule issues are associated with this skill.") }
+    static var noMatchingFindings: String { text("empty.noMatchingFindings", "No Matching Issues") }
+    static var noMatchingFindingsMessage: String { text("empty.noMatchingFindings.message", "Adjust the triage, severity, or rule filter to show issues.") }
     static var noConflicts: String { text("empty.noConflicts", "No Conflicts") }
     static var noConflictsMessage: String { text("empty.noConflicts.message", "No same-agent conflict currently references this skill in the current agent. Cross-agent duplicates are not shown as conflicts.") }
     static var noSnapshots: String { text("empty.noSnapshots", "No Agent Config History") }
@@ -263,7 +272,7 @@ enum UIStrings {
     static var ruleTuningUnsuppressRule: String { text("rules.tuning.unsuppressRule", "Unsuppress rule") }
     static var ruleTuningSuppressed: String { text("rules.tuning.suppressed", "Suppressed locally") }
     static var ruleTuningRuleWide: String { text("rules.tuning.ruleWide", "Rule-wide") }
-    static var ruleTuningFindingGroup: String { text("rules.tuning.findingGroup", "Finding group") }
+    static var ruleTuningFindingGroup: String { text("rules.tuning.findingGroup", "Issue") }
     static var ruleTuningNoOverride: String { text("rules.tuning.noOverride", "No local override") }
     static var findingExplanation: String { text("findings.explanation", "Why this appears") }
     static var findingRuleID: String { text("findings.ruleId", "Rule ID") }
@@ -652,6 +661,11 @@ enum UIStrings {
     static var providerObservabilityAction: String { text("providerObservability.action.build", "Build Observability") }
     static var providerObservabilityUnavailable: String { text("providerObservability.unavailable", "Provider observability is unavailable in this service build.") }
     static var providerObservabilityNoResult: String { text("providerObservability.empty.result", "No provider observability dashboard loaded.") }
+    static var providerObservabilitySettingsMode: String { text("providerObservability.settings.mode", "Observability view") }
+    static var providerObservabilityDashboard: String { text("providerObservability.settings.dashboard", "Dashboard") }
+    static var providerObservabilityLogs: String { text("providerObservability.settings.logs", "Logs") }
+    static var providerObservabilityIssuesOnly: String { text("providerObservability.settings.issuesOnly", "Issues only") }
+    static var providerObservabilityNoFilteredCalls: String { text("providerObservability.empty.filteredCalls", "No provider logs match the current filters.") }
     static var providerObservabilityCalls: String { text("providerObservability.calls", "Calls") }
     static var providerObservabilitySuccesses: String { text("providerObservability.successes", "Succeeded") }
     static var providerObservabilityFailures: String { text("providerObservability.failures", "Failed") }
@@ -682,130 +696,29 @@ enum UIStrings {
     static var providerObservabilityEstimatedCost: String { text("providerObservability.estimatedCost", "Estimated cost") }
     static var providerObservabilityNotes: String { text("providerObservability.notes", "Notes") }
     static var providerObservabilityThreshold: String { text("providerObservability.threshold", "Threshold") }
-    static var validationWorkbenchTitle: String { text("validationWorkbench.title", "Validation Workbench") }
-    static var validationWorkbenchBoundary: String { text("validationWorkbench.boundary", "Read-only real-local validation guidance for app-window evidence, canonical blockers, and next actions. It cannot launch tools, capture screenshots, write files, mutate agent config, execute scripts, call providers, read credentials, sync cloud data, emit telemetry, or create hidden background jobs.") }
-    static var validationWorkbenchSummaryTitle: String { text("validationWorkbench.summary.title", "Validation summary") }
-    static var validationWorkbenchEvidenceTitle: String { text("validationWorkbench.evidence.title", "Evidence standards") }
-    static var validationWorkbenchBlockersTitle: String { text("validationWorkbench.blockers.title", "Canonical blockers and next actions") }
-    static var validationWorkbenchNoActions: String { text("validationWorkbench.noActions", "No runnable validation action is exposed here. Use this surface as a preflight checklist and blocker reference only.") }
-    static var validationWorkbenchNextAction: String { text("validationWorkbench.nextAction", "Next action") }
-    static var validationWorkbenchStatusBlocked: String { text("validationWorkbench.status.blocked", "Blocker") }
-    static var validationWorkbenchStatusRequired: String { text("validationWorkbench.status.required", "Required") }
-    static var validationWorkbenchStatusSupporting: String { text("validationWorkbench.status.supporting", "Supporting") }
-    static var validationWorkbenchCanonicalBlockers: String { text("validationWorkbench.summary.canonicalBlockers", "Canonical blockers") }
-    static var validationWorkbenchRequiredEvidence: String { text("validationWorkbench.summary.requiredEvidence", "Required UI evidence") }
-    static var validationWorkbenchFixtureSmoke: String { text("validationWorkbench.summary.fixtureSmoke", "Fixture smoke") }
-    static var validationWorkbenchSupportingOnly: String { text("validationWorkbench.summary.supportingOnly", "supporting only") }
-    static var validationWorkbenchRunnableActions: String { text("validationWorkbench.summary.runnableActions", "Runnable actions") }
-    static var validationWorkbenchRealLocalComputerUse: String { text("validationWorkbench.evidence.realLocalComputerUse", "Unlocked real-local Computer Use") }
-    static var validationWorkbenchRealLocalComputerUseDetail: String { text("validationWorkbench.evidence.realLocalComputerUse.detail", "UI closeout requires an unlocked, interactive macOS session where Computer Use can resolve the exact app window and read back the visible surface or a canonical blocker is recorded.") }
-    static var validationWorkbenchAppWindowScreenshot: String { text("validationWorkbench.evidence.appWindowScreenshot", "Full app-window screenshot") }
-    static var validationWorkbenchAppWindowScreenshotDetail: String { text("validationWorkbench.evidence.appWindowScreenshot.detail", "Accepted screenshots must capture only the Agent Copilot app window and pass black, flat, transparent, invalid-image, and privacy checks.") }
-    static var validationWorkbenchFixtureSupportingTitle: String { text("validationWorkbench.evidence.fixtureSupporting", "Fixture smoke is supporting evidence") }
-    static var validationWorkbenchFixtureSupportingDetail: String { text("validationWorkbench.evidence.fixtureSupporting.detail", "Fixture launch and smoke checks can prove build and service health, but cannot replace unlocked real-local UI operation or final app-window evidence.") }
-    static var validationWorkbenchCanonicalRecord: String { text("validationWorkbench.evidence.canonicalRecord", "Canonical blocker record") }
-    static var validationWorkbenchCanonicalRecordDetail: String { text("validationWorkbench.evidence.canonicalRecord.detail", "When real-local validation is blocked, record the canonical blocker code and raw signal instead of accepting stale, fixture, desktop, black, or ambiguous screenshots.") }
-    static var validationWorkbenchLockedSessionTitle: String { text("validationWorkbench.blocker.lockedSession.title", "Locked session") }
-    static var validationWorkbenchLockedSessionSummary: String { text("validationWorkbench.blocker.lockedSession.summary", "The macOS session is locked or not clearly interactive, so Computer Use and screenshot evidence cannot prove the live UI.") }
-    static var validationWorkbenchLockedSessionAction: String { text("validationWorkbench.blocker.lockedSession.action", "Unlock the session, keep the app visible, then retry real-local Computer Use. If it remains locked, record locked-session.") }
-    static var validationWorkbenchWindowAXTitle: String { text("validationWorkbench.blocker.windowAX.title", "Window not found / no AX window") }
-    static var validationWorkbenchWindowAXSummary: String { text("validationWorkbench.blocker.windowAX.summary", "Computer Use, CG, AX, or activation could not resolve the expected Agent Copilot main window.") }
-    static var validationWorkbenchWindowAXAction: String { text("validationWorkbench.blocker.windowAX.action", "Relaunch the exact dist/AgentCopilot.app bundle, verify PID/window identity, and record window-not-found, no-ax-window, or activation-failed when resolution still fails.") }
-    static var validationWorkbenchScreenRecordingTitle: String { text("validationWorkbench.blocker.screenRecording.title", "Screen Recording permission") }
-    static var validationWorkbenchScreenRecordingSummary: String { text("validationWorkbench.blocker.screenRecording.summary", "The capture or automation layer lacks macOS Screen Recording authorization, so visual evidence is not trustworthy.") }
-    static var validationWorkbenchScreenRecordingAction: String { text("validationWorkbench.blocker.screenRecording.action", "Grant Screen Recording permission to the relevant terminal or Codex helper, then retry; otherwise record screen-recording-permission.") }
-    static var validationWorkbenchBundleTitle: String { text("validationWorkbench.blocker.bundle.title", "Stale or duplicate bundle") }
-    static var validationWorkbenchBundleSummary: String { text("validationWorkbench.blocker.bundle.summary", "The running app may be older than the source build, launched from a different path, or ambiguous because duplicate same-bundle processes/windows exist.") }
-    static var validationWorkbenchBundleAction: String { text("validationWorkbench.blocker.bundle.action", "Rebuild, launch only the exact workspace dist/AgentCopilot.app, confirm the PID and bundle path, and record stale-bundle or window-not-found for unresolved ambiguity.") }
-    static var validationWorkbenchCaptureTitle: String { text("validationWorkbench.blocker.capture.title", "Invalid screenshot evidence") }
-    static var validationWorkbenchCaptureSummary: String { text("validationWorkbench.blocker.capture.summary", "The screenshot is black, near-flat, mostly transparent, invalid, too small, or otherwise unusable for UI closeout.") }
-    static var validationWorkbenchCaptureAction: String { text("validationWorkbench.blocker.capture.action", "Reject the capture, keep only app-window evidence, and record the matching capture blocker instead of counting the screenshot as validation.") }
-    static var validationWorkbenchToolLayerTitle: String { text("validationWorkbench.blocker.toolLayer.title", "Computer Use tool-layer failure") }
-    static var validationWorkbenchToolLayerSummary: String { text("validationWorkbench.blocker.toolLayer.summary", "Computer Use timed out, returned remoteConnection, or produced an unknown tool-layer failure before reliable UI read-back.") }
-    static var validationWorkbenchToolLayerAction: String { text("validationWorkbench.blocker.toolLayer.action", "Classify the raw tool output, record computer-use-timeout, remote-connection, or tool-layer-unknown, and retry only after the session/window is interactive.") }
-    static var validationWorkbenchSectionSessionWindowTitle: String { text("validationWorkbench.section.sessionWindow.title", "Session / Window") }
-    static var validationWorkbenchSectionSessionWindowExplanation: String { text("validationWorkbench.section.sessionWindow.explanation", "Confirms the interactive macOS session, app activation, visible window, and AX window identity before accepting UI evidence.") }
-    static var validationWorkbenchSectionPermissionsTitle: String { text("validationWorkbench.section.permissions.title", "Permissions") }
-    static var validationWorkbenchSectionPermissionsExplanation: String { text("validationWorkbench.section.permissions.explanation", "Confirms screenshot capture is authorized before app-window evidence is accepted.") }
-    static var validationWorkbenchSectionBundleFreshnessTitle: String { text("validationWorkbench.section.bundleFreshness.title", "Bundle freshness") }
-    static var validationWorkbenchSectionBundleFreshnessExplanation: String { text("validationWorkbench.section.bundleFreshness.explanation", "Confirms the launched app is the current workspace bundle and not an older same-bundle process.") }
-    static var validationWorkbenchSectionScreenshotQualityTitle: String { text("validationWorkbench.section.screenshotQuality.title", "Screenshot quality") }
-    static var validationWorkbenchSectionScreenshotQualityExplanation: String { text("validationWorkbench.section.screenshotQuality.explanation", "Rejects unreadable screenshots, including black, flat, transparent, or structurally invalid captures.") }
-    static var validationWorkbenchSectionComputerUseToolLayerTitle: String { text("validationWorkbench.section.computerUseToolLayer.title", "Computer Use / tool layer") }
-    static var validationWorkbenchSectionComputerUseToolLayerExplanation: String { text("validationWorkbench.section.computerUseToolLayer.explanation", "Records Computer Use, remote connection, timeout, and unknown tool-layer failures as blockers.") }
-    static var validationWorkbenchSectionEvidenceStandardsTitle: String { text("validationWorkbench.section.evidenceStandards.title", "Evidence standards") }
-    static var validationWorkbenchSectionEvidenceStandardsExplanation: String { text("validationWorkbench.section.evidenceStandards.explanation", "Keeps fixture smoke evidence separate from unlocked real-local Computer Use and app-window screenshot evidence.") }
-    static var validationWorkbenchReadOnlySafetyNote: String { text("validationWorkbench.model.readOnlySafetyNote", "Read-only guidance only; it does not call providers, write files, execute scripts, read credentials, sync cloud data, emit telemetry, or start background jobs.") }
-    static var validationWorkbenchRequiredRealLocalEvidence: String { text("validationWorkbench.model.requiredRealLocalEvidence", "Unlocked real-local Computer Use against the current app bundle plus an app-window screenshot that is nonblack, nonflat, nontransparent, and visually inspected.") }
-    static var validationWorkbenchFixtureSmokeLimitation: String { text("validationWorkbench.model.fixtureSmokeLimitation", "Fixture smoke may prove build/service health, but it cannot replace blocked real-local Computer Use or app-window screenshot evidence.") }
-    static var validationWorkbenchSummaryText: String { text("validationWorkbench.model.summaryText", "Real-local validation remains pending until unlocked Computer Use can target the current app window and produce acceptable app-window screenshot evidence. Fixture smoke is supporting evidence only.") }
-    static var validationWorkbenchEvidenceRequiredTitle: String { text("validationWorkbench.evidence.required.title", "Unlocked real-local Computer Use is required") }
-    static var validationWorkbenchEvidenceRequiredAction: String { text("validationWorkbench.evidence.required.action", "Run the real app in an unlocked interactive macOS session, target the current bundle/window, exercise the relevant UI, and capture app-window evidence.") }
-    static var validationWorkbenchLockedSessionEvidence: String { text("validationWorkbench.blocker.lockedSession.evidence", "Record locked-session while blocked; completion still requires unlocked real-local Computer Use evidence.") }
-    static var validationWorkbenchWindowNotFoundTitle: String { text("validationWorkbench.blocker.windowNotFound.title", "Target app window was not found") }
-    static var validationWorkbenchWindowNotFoundSummary: String { text("validationWorkbench.blocker.windowNotFound.summary", "CG window lookup could not find one visible Agent Copilot window for the expected bundle path and PID, or multiple same-bundle windows made targeting ambiguous.") }
-    static var validationWorkbenchWindowNotFoundAction: String { text("validationWorkbench.blocker.windowNotFound.action", "Relaunch the exact workspace bundle, close duplicate same-bundle windows, and retry exact PID/window targeting.") }
-    static var validationWorkbenchWindowNotFoundEvidence: String { text("validationWorkbench.blocker.windowNotFound.evidence", "A resolved current-bundle PID, visible main window, and app-window screenshot are required.") }
-    static var validationWorkbenchNoAXWindowTitle: String { text("validationWorkbench.blocker.noAXWindow.title", "Accessibility window was not resolved") }
-    static var validationWorkbenchNoAXWindowSummary: String { text("validationWorkbench.blocker.noAXWindow.summary", "The app may have a CG window, but AX did not expose a usable app window for interaction.") }
-    static var validationWorkbenchNoAXWindowAction: String { text("validationWorkbench.blocker.noAXWindow.action", "Confirm Accessibility permission, activate the exact app process, and retry AX/Computer Use window discovery.") }
-    static var validationWorkbenchNoAXWindowEvidence: String { text("validationWorkbench.blocker.noAXWindow.evidence", "A matching AX window for the targeted app process is required before UI interaction evidence is accepted.") }
-    static var validationWorkbenchComputerUseTimeoutTitle: String { text("validationWorkbench.blocker.computerUseTimeout.title", "Computer Use timed out") }
-    static var validationWorkbenchComputerUseTimeoutSummary: String { text("validationWorkbench.blocker.computerUseTimeout.summary", "Computer Use did not return usable app state or interaction evidence before its timeout.") }
-    static var validationWorkbenchComputerUseTimeoutAction: String { text("validationWorkbench.blocker.computerUseTimeout.action", "Retry after confirming the session is unlocked, the app is active, and the target window is visible.") }
-    static var validationWorkbenchComputerUseTimeoutEvidence: String { text("validationWorkbench.blocker.computerUseTimeout.evidence", "A completed Computer Use interaction against the real local app is required; timeout is only a blocker record.") }
-    static var validationWorkbenchRemoteConnectionTitle: String { text("validationWorkbench.blocker.remoteConnection.title", "Remote connection blocked UI automation") }
-    static var validationWorkbenchRemoteConnectionSummary: String { text("validationWorkbench.blocker.remoteConnection.summary", "Computer Use reported a remote connection condition that prevents trusted local app-window evidence.") }
-    static var validationWorkbenchRemoteConnectionAction: String { text("validationWorkbench.blocker.remoteConnection.action", "Switch to a local interactive macOS session and rerun validation.") }
-    static var validationWorkbenchRemoteConnectionEvidence: String { text("validationWorkbench.blocker.remoteConnection.evidence", "Validation evidence must come from the local app window, not a blocked remote-control state.") }
-    static var validationWorkbenchActivationFailedTitle: String { text("validationWorkbench.blocker.activationFailed.title", "App activation failed") }
-    static var validationWorkbenchActivationFailedSummary: String { text("validationWorkbench.blocker.activationFailed.summary", "The target process could not be activated before UI inspection or interaction.") }
-    static var validationWorkbenchActivationFailedAction: String { text("validationWorkbench.blocker.activationFailed.action", "Relaunch the exact app bundle, ensure it is foregroundable, and retry activation/window targeting.") }
-    static var validationWorkbenchActivationFailedEvidence: String { text("validationWorkbench.blocker.activationFailed.evidence", "The active app process must match the current bundle before interaction evidence is accepted.") }
-    static var validationWorkbenchBlackCaptureTitle: String { text("validationWorkbench.blocker.blackCapture.title", "Screenshot is black") }
-    static var validationWorkbenchBlackCaptureSummary: String { text("validationWorkbench.blocker.blackCapture.summary", "A black or near-black image cannot prove visible UI state.") }
-    static var validationWorkbenchBlackCaptureAction: String { text("validationWorkbench.blocker.blackCapture.action", "Fix session, permission, or capture targeting issues and retake the app-window screenshot.") }
-    static var validationWorkbenchBlackCaptureEvidence: String { text("validationWorkbench.blocker.blackCapture.evidence", "Accepted screenshots must show readable app UI and pass black-image rejection.") }
-    static var validationWorkbenchFlatCaptureTitle: String { text("validationWorkbench.blocker.flatCapture.title", "Screenshot has near-zero visual variance") }
-    static var validationWorkbenchFlatCaptureSummary: String { text("validationWorkbench.blocker.flatCapture.summary", "A flat or near-single-color capture cannot prove UI layout or interaction state.") }
-    static var validationWorkbenchFlatCaptureAction: String { text("validationWorkbench.blocker.flatCapture.action", "Retake the app-window screenshot after confirming the window is visible and capture targets the app content.") }
-    static var validationWorkbenchFlatCaptureEvidence: String { text("validationWorkbench.blocker.flatCapture.evidence", "Accepted screenshots must be nonflat and visually inspectable.") }
-    static var validationWorkbenchTransparentCaptureTitle: String { text("validationWorkbench.blocker.transparentCapture.title", "Screenshot is mostly transparent") }
-    static var validationWorkbenchTransparentCaptureSummary: String { text("validationWorkbench.blocker.transparentCapture.summary", "A transparent capture is not usable app-window evidence.") }
-    static var validationWorkbenchTransparentCaptureAction: String { text("validationWorkbench.blocker.transparentCapture.action", "Retry capture with a visible app window and valid Screen Recording permissions.") }
-    static var validationWorkbenchTransparentCaptureEvidence: String { text("validationWorkbench.blocker.transparentCapture.evidence", "Accepted screenshots must contain opaque app UI content.") }
-    static var validationWorkbenchInvalidCaptureTitle: String { text("validationWorkbench.blocker.invalidCapture.title", "Screenshot artifact is invalid") }
-    static var validationWorkbenchInvalidCaptureSummary: String { text("validationWorkbench.blocker.invalidCapture.summary", "The screenshot file is missing, too small, structurally invalid, or otherwise unreadable.") }
-    static var validationWorkbenchInvalidCaptureAction: String { text("validationWorkbench.blocker.invalidCapture.action", "Regenerate the screenshot artifact and verify it before using it as evidence.") }
-    static var validationWorkbenchInvalidCaptureEvidence: String { text("validationWorkbench.blocker.invalidCapture.evidence", "Accepted screenshot artifacts must be valid images with app-window dimensions.") }
-    static var validationWorkbenchScreenRecordingEvidence: String { text("validationWorkbench.blocker.screenRecording.evidence", "A permission-valid capture that shows the app window is required.") }
-    static var validationWorkbenchStaleBundleTitle: String { text("validationWorkbench.blocker.staleBundle.title", "Running app bundle is stale") }
-    static var validationWorkbenchStaleBundleSummary: String { text("validationWorkbench.blocker.staleBundle.summary", "The visible app is not the freshly built workspace bundle or is older than the source inputs.") }
-    static var validationWorkbenchStaleBundleAction: String { text("validationWorkbench.blocker.staleBundle.action", "Rebuild, stop stale same-bundle processes, launch the exact dist/AgentCopilot.app path, and retry validation.") }
-    static var validationWorkbenchStaleBundleEvidence: String { text("validationWorkbench.blocker.staleBundle.evidence", "Evidence must identify the current workspace bundle path and matching process/window.") }
-    static var validationWorkbenchToolLayerUnknownTitle: String { text("validationWorkbench.blocker.toolLayerUnknown.title", "Unknown tool-layer failure") }
-    static var validationWorkbenchToolLayerUnknownSummary: String { text("validationWorkbench.blocker.toolLayerUnknown.summary", "The validation tool returned an unclassified failure, so the app cannot treat the run as successful.") }
-    static var validationWorkbenchToolLayerUnknownAction: String { text("validationWorkbench.blocker.toolLayerUnknown.action", "Capture the raw failure text, classify it if possible, and rerun with a known blocker or successful evidence path.") }
-    static var validationWorkbenchToolLayerUnknownEvidence: String { text("validationWorkbench.blocker.toolLayerUnknown.evidence", "Unknown tool-layer failures must be recorded as blockers until a concrete successful real-local run is available.") }
-
-    static func validationWorkbenchSectionBlockers(_ count: Int) -> String {
-        format("validationWorkbench.section.blockers", "%d blockers", count)
-    }
-
-    static var taskCockpitTitle: String { text("taskCockpit.title", "Task-first Cockpit") }
-    static var taskCockpitBoundary: String { text("taskCockpit.boundary", "User-triggered, deterministic, read-only task cockpit from local readiness, routing, session-review, provider-observability, remediation, gap, blocker, and evidence metadata. It cannot send provider requests, write skill files, mutate agent config, create snapshots, change triage, execute scripts, read credentials, persist raw prompts/responses/traces, sync cloud data, or emit telemetry.") }
-    static var taskCockpitAction: String { text("taskCockpit.action.build", "Build Cockpit") }
+    static var providerObservabilityChartsTitle: String { text("providerObservability.charts.title", "Charts") }
+    static var providerObservabilityChartsMode: String { text("providerObservability.charts.mode", "Redacted metadata") }
+    static var providerObservabilityChartsSummary: String { text("providerObservability.charts.summary", "Charts summarize redacted local metadata only; detailed rows below remain the evidence trail.") }
+    static var providerObservabilityChartStatus: String { text("providerObservability.chart.status", "Call status") }
+    static var providerObservabilityChartModelTokens: String { text("providerObservability.chart.modelTokens", "Model tokens") }
+    static var providerObservabilityChartDestinationCost: String { text("providerObservability.chart.destinationCost", "Destination cost") }
+    static var providerObservabilityChartModelLatency: String { text("providerObservability.chart.modelLatency", "Model latency") }
+    static var providerObservabilityChartModelTaskConfidence: String { text("providerObservability.chart.modelTaskConfidence", "Model-task fit") }
+    static var providerObservabilityChartEmpty: String { text("providerObservability.chart.empty", "No chart data") }
+    static var taskCockpitTitle: String { text("taskCockpit.title", "Task Preflight") }
+    static var taskCockpitBoundary: String { text("taskCockpit.boundary", "Read-only local preflight for whether this task can proceed, which agent/skill should handle it, why, and what must be fixed first. It cannot send provider requests, write skill files, mutate agent config, create snapshots, execute scripts, read credentials, sync cloud data, or emit telemetry.") }
+    static var taskCockpitAction: String { text("taskCockpit.action.build", "Build Preflight") }
     static var taskCockpitRetry: String { text("taskCockpit.action.retry", "Retry") }
-    static var taskCockpitUnavailable: String { text("taskCockpit.unavailable", "Task-first cockpit is unavailable in this service build.") }
-    static var taskCockpitTaskRequired: String { text("taskCockpit.taskRequired", "Enter a task before building the cockpit.") }
+    static var taskCockpitUnavailable: String { text("taskCockpit.unavailable", "Task preflight is unavailable in this service build.") }
+    static var taskCockpitTaskRequired: String { text("taskCockpit.taskRequired", "Enter a task before building preflight.") }
     static var taskCockpitTaskPlaceholder: String { text("taskCockpit.task.placeholder", "Describe the task, or leave blank to reuse the current readiness/routing task") }
     static var taskCockpitInputReady: String { text("taskCockpit.input.ready", "Ready for explicit submit.") }
-    static var taskCockpitNoResult: String { text("taskCockpit.empty.result", "No task cockpit loaded.") }
-    static var taskCockpitLoaded: String { text("taskCockpit.loaded", "Task cockpit loaded from local evidence.") }
-    static var taskCockpitCancelled: String { text("taskCockpit.cancelled", "Task cockpit build was cancelled. No provider or write action was started.") }
-    static var taskCockpitCatalogUnavailableDiagnostic: String { text("taskCockpit.diagnostic.catalogUnavailable", "The service returned cockpit metadata without an available catalog.") }
-    static var taskCockpitPartialNoRows: String { text("taskCockpit.diagnostic.partialNoRows", "The service returned cockpit metadata, but no candidate, context, gap, blocker, or evidence rows.") }
-    static var taskCockpitSections: String { text("taskCockpit.sections", "Cockpit sections") }
+    static var taskCockpitNoResult: String { text("taskCockpit.empty.result", "No task preflight loaded.") }
+    static var taskCockpitLoaded: String { text("taskCockpit.loaded", "Task preflight loaded from local evidence.") }
+    static var taskCockpitCancelled: String { text("taskCockpit.cancelled", "Task preflight build was cancelled. No provider or write action was started.") }
+    static var taskCockpitCatalogUnavailableDiagnostic: String { text("taskCockpit.diagnostic.catalogUnavailable", "The service returned preflight metadata without an available catalog.") }
+    static var taskCockpitPartialNoRows: String { text("taskCockpit.diagnostic.partialNoRows", "The service returned preflight metadata, but no candidate, context, gap, blocker, or evidence rows.") }
+    static var taskCockpitSections: String { text("taskCockpit.sections", "Preflight sections") }
     static var taskCockpitTasks: String { text("taskCockpit.tasks", "Task rows") }
     static var taskCockpitRoutes: String { text("taskCockpit.routes", "Route candidates") }
     static var taskCockpitAgents: String { text("taskCockpit.agents", "Agent candidates") }
@@ -817,6 +730,36 @@ enum UIStrings {
     static var taskCockpitNoRows: String { text("taskCockpit.empty.rows", "No rows returned.") }
     static var taskCockpitRecommendedAgent: String { text("taskCockpit.recommendedAgent", "Recommended agent") }
     static var taskCockpitRecommendedSkill: String { text("taskCockpit.recommendedSkill", "Recommended skill") }
+    static var taskCockpitPartialNotice: String { text("taskCockpit.partialNotice", "Core preflight completed, but part of the optional diagnostics did not return. The recommendation below is still based on local catalog evidence.") }
+    static var taskCockpitVerdictReady: String { text("taskCockpit.verdict.ready", "Ready to proceed") }
+    static var taskCockpitVerdictNeedsReview: String { text("taskCockpit.verdict.needsReview", "Needs review first") }
+    static var taskCockpitVerdictBlocked: String { text("taskCockpit.verdict.blocked", "Do not run yet") }
+    static var taskCockpitVerdictUnavailable: String { text("taskCockpit.verdict.unavailable", "Preflight unavailable") }
+    static var taskCockpitVerdictReadyMessage: String { text("taskCockpit.verdict.ready.message", "A local route and usable skill were found. Continue in the recommended agent after a normal human check.") }
+    static var taskCockpitVerdictNeedsReviewMessage: String { text("taskCockpit.verdict.needsReview.message", "A likely route exists, but the task has gaps or lower confidence that should be reviewed before execution.") }
+    static var taskCockpitVerdictBlockedMessage: String { text("taskCockpit.verdict.blocked.message", "The task is missing required readiness, routing, or safety signals. Resolve the issues below and run preflight again.") }
+    static var taskCockpitVerdictUnavailableMessage: String { text("taskCockpit.verdict.unavailable.message", "The service did not return enough local metadata to make a recommendation.") }
+    static var taskCockpitReadinessShort: String { text("taskCockpit.score.readiness", "Readiness") }
+    static var taskCockpitRoutingShort: String { text("taskCockpit.score.routing", "Routing") }
+    static var taskCockpitRecommendationTitle: String { text("taskCockpit.recommendation.title", "Recommended path") }
+    static var taskCockpitReasonsTitle: String { text("taskCockpit.reasons.title", "Why this route") }
+    static var taskCockpitNoReasons: String { text("taskCockpit.reasons.empty", "No readable route reasons were returned.") }
+    static var taskCockpitReasonReadinessBlocked: String { text("taskCockpit.reason.readinessBlocked", "Readiness is blocked: the task does not currently have enough local fit evidence for a confident handoff.") }
+    static var taskCockpitReasonRoutingBlocked: String { text("taskCockpit.reason.routingBlocked", "Routing confidence is blocked: the task did not map cleanly to a stable skill route.") }
+    static var taskCockpitReasonTaskWordingWeak: String { text("taskCockpit.reason.taskWordingWeak", "The task wording is too broad for the selected skill. Add concrete product, system, or action keywords if this route is intended.") }
+    static var taskCockpitReasonExecNeedsHuman: String { text("taskCockpit.reason.execNeedsHuman", "The candidate skill may require command execution. Confirm the exact action manually before using it.") }
+    static var taskCockpitReasonNetworkDeclared: String { text("taskCockpit.reason.networkDeclared", "The candidate skill declares network access. Confirm the destination and permission boundary before using it.") }
+    static var taskCockpitReasonRouteAmbiguous: String { text("taskCockpit.reason.routeAmbiguous", "There are close alternative routes, so the current task wording is not specific enough.") }
+    static var taskCockpitReasonCrossAgentDuplicate: String { text("taskCockpit.reason.crossAgentDuplicate", "There are cross-agent duplicate or overlap signals that may affect routing clarity.") }
+    static var taskCockpitReasonTaskFitWeak: String { text("taskCockpit.reason.taskFitWeak", "Task fit is weak, so directly choosing this skill may be inaccurate.") }
+    static var taskCockpitAttentionTitle: String { text("taskCockpit.attention.title", "Needs attention") }
+    static var taskCockpitNoAttentionItems: String { text("taskCockpit.attention.empty", "No blocking issue was found in the user-facing preflight.") }
+    static var taskCockpitNextStepReady: String { text("taskCockpit.next.ready", "Next: continue with the recommended agent and skill. This page will not run the task for you.") }
+    static var taskCockpitNextStepNeedsReview: String { text("taskCockpit.next.needsReview", "Next: review the gaps, adjust the task wording or selected skill, then regenerate Preflight.") }
+    static var taskCockpitNextStepBlocked: String { text("taskCockpit.next.blocked", "Next: fix the blocking items first, then regenerate Preflight before handing the task to an agent.") }
+    static var taskCockpitNextStepUnavailable: String { text("taskCockpit.next.unavailable", "Next: refresh the catalog or choose a project/agent, then try Preflight again.") }
+    static var taskCockpitDiagnosticsTitle: String { text("taskCockpit.diagnostics.title", "Technical diagnostics") }
+    static var taskCockpitDiagnosticsSummary: String { text("taskCockpit.diagnostics.summary", "Internal stage rows, raw evidence references, provider/session/remediation context, and safety flags are kept here for debugging and reviewer evidence.") }
     static var taskCockpitProgressTitle: String { text("taskCockpit.progress.title", "Progressive feedback") }
     static var taskCockpitProgressPending: String { text("taskCockpit.progress.pending", "Pending") }
     static var taskCockpitProgressChecking: String { text("taskCockpit.progress.checking", "Checking") }
@@ -831,19 +774,19 @@ enum UIStrings {
     static var taskCockpitProgressFailed: String { text("taskCockpit.progress.failed", "Stopped") }
 
     static func taskCockpitPreparingStatus(elapsedSeconds: Int, timeoutSeconds: Int) -> String {
-        format("taskCockpit.preparingStatus", "Preparing local cockpit... %d/%d seconds before timeout.", elapsedSeconds, timeoutSeconds)
+        format("taskCockpit.preparingStatus", "Preparing local preflight... %d/%d seconds before timeout.", elapsedSeconds, timeoutSeconds)
     }
 
     static func taskCockpitTimedOut(_ timeoutSeconds: Int) -> String {
-        format("taskCockpit.timedOut", "Task cockpit did not finish within %d seconds. No provider or write action was started; retry when the service is responsive.", timeoutSeconds)
+        format("taskCockpit.timedOut", "Task preflight did not finish within %d seconds. No provider or write action was started; retry when the service is responsive.", timeoutSeconds)
     }
 
     static func taskCockpitFailed(_ reason: String) -> String {
-        format("taskCockpit.failed", "Task cockpit build stopped: %@.", reason)
+        format("taskCockpit.failed", "Task preflight build stopped: %@.", reason)
     }
 
-    static func taskCockpitLoadedWithFallback(_ reason: String) -> String {
-        format("taskCockpit.loadedWithFallback", "Loaded fallback or partial cockpit metadata: %@.", reason)
+    static func taskCockpitLoadedWithFallback(_ _: String) -> String {
+        text("taskCockpit.loadedWithFallback", "Task preflight completed with partial diagnostics. Core recommendation is shown below.")
     }
 
     static func taskCockpitElapsedSeconds(_ elapsedSeconds: Int) -> String {
@@ -1183,6 +1126,11 @@ enum UIStrings {
     static var llmPromptCopyFullText: String { text("llm.promptPreview.copyFullText", "Copy Full Text") }
     static var llmPromptCloseDetails: String { text("llm.promptPreview.closeDetails", "Close") }
     static var llmPromptHistoryNote: String { text("llm.promptPreview.historyNote", "Latest provider output is shown here and saved in local prompt run history.") }
+    static var llmPromptNoOutput: String { text("llm.promptPreview.noOutput", "Provider response did not include copy-only output text.") }
+    static func markdownTableHiddenRows(_ count: Int) -> String {
+        format("llm.markdown.table.hiddenRows", "%d more rows in full details", count)
+    }
+    static var markdownTablePreviewSummary: String { text("llm.markdown.table.previewSummary", "Table content is folded in this preview. Open details to inspect the full Markdown table.") }
     static var scriptExecutionSafety: String { text("scriptExecution.safety", "Script Execution Safety") }
     static var scriptExecutionPreviewOnly: String { text("scriptExecution.previewOnly", "Preview-only") }
     static var scriptExecutionUnavailable: String { text("scriptExecution.unavailable", "Script execution preflight is unavailable in this service build. Scripts remain non-executable from the native UI.") }
@@ -1223,10 +1171,9 @@ enum UIStrings {
     static var menuScanSkills: String { text("menu.scanSkills", "Scan Skills") }
     static var menuReloadSkills: String { text("menu.reloadSkills", "Reload Skills") }
     static var menuSkills: String { text("menu.skills", "Skills") }
-    static var menuShowTaskCockpit: String { text("menu.showTaskCockpit", "Show Task Cockpit") }
+    static var menuShowTaskCockpit: String { text("menu.showTaskCockpit", "Show Task Preflight") }
     static var menuShowOverview: String { text("menu.showOverview", "Show Overview") }
-    static var menuShowFindings: String { text("menu.showFindings", "Show Findings") }
-    static var menuShowConflicts: String { text("menu.showConflicts", "Show Same-agent Conflicts") }
+    static var menuShowFindings: String { text("menu.showFindings", "Show Issues") }
     static var menuClearSearch: String { text("menu.clearSearch", "Clear Search") }
 
     static func enabledSummary(enabled: Int, total: Int) -> String {
@@ -1262,7 +1209,7 @@ enum UIStrings {
     }
 
     static func visibleFindingsSummary(_ visible: Int, _ total: Int) -> String {
-        format("findings.visibleSummary", "%d of %d findings", visible, total)
+        format("findings.visibleSummary", "%d of %d issues", visible, total)
     }
 
     static func visibleFindingGroupsSummary(_ visibleGroups: Int, _ totalGroups: Int, _ visibleEntries: Int) -> String {
@@ -1296,7 +1243,7 @@ enum UIStrings {
     static var ruleTuningSuppressionCleared: String { text("rules.tuning.cleared.suppression", "Cleared app-local rule suppression. No skill files or agent config were changed.") }
 
     static func noFindingsForSkillMessage(_ agent: String) -> String {
-        format("empty.noFindingsForSkill.message", "No rule findings are associated with this %@ skill.", agent)
+        format("empty.noFindingsForSkill.message", "No rule issues are associated with this %@ skill.", agent)
     }
 
     static func findingScopeSummary(_ skill: String, _ agent: String) -> String {
@@ -1375,6 +1322,10 @@ enum UIStrings {
         format("batchToggle.selectedCount", "%d visible", count)
     }
 
+    static func batchToggleScopeSummary(agent: String, visible: Int, selected: Int) -> String {
+        format("batchToggle.scopeSummary", "%@ · %d visible · %d selected", agent, visible, selected)
+    }
+
     static func batchToggleActionTarget(_ action: String) -> String {
         format("batchToggle.actionTarget", "Target: %@", action)
     }
@@ -1428,6 +1379,10 @@ enum UIStrings {
 
     static func localReportExported(_ filename: String) -> String {
         format("localReport.exported", "Exported local redacted report: %@.", filename)
+    }
+
+    static func providerObservabilityLogCount(_ count: Int, total: Int) -> String {
+        format("providerObservability.logs.count", "%d of %d calls", count, total)
     }
 
     static func toggledSkill(on: Bool, name: String) -> String {

@@ -1,12 +1,11 @@
 import SwiftUI
 
 enum DetailSection: String, CaseIterable, Identifiable {
+    case agentWorkspace
     case lineup
     case agentProfile
     case taskCockpit
-    case validationWorkbench
     case overview
-    case skillMap
     case cleanup
     case guidedCleanup
     case observability
@@ -18,36 +17,34 @@ enum DetailSection: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     static var visibleCases: [DetailSection] {
-        Self.allCases
+        [.overview, .findings, .history, .analysis]
     }
 
     static var primaryWorkCases: [DetailSection] {
-        [.lineup, .agentProfile, .taskCockpit, .validationWorkbench, .skillMap, .guidedCleanup, .observability, .analysis]
+        []
     }
 
     var requiresSelectedSkill: Bool {
         switch self {
         case .overview, .findings, .conflicts, .history:
             return true
-        case .lineup, .agentProfile, .taskCockpit, .validationWorkbench, .skillMap, .cleanup, .guidedCleanup, .observability, .analysis:
+        case .agentWorkspace, .lineup, .agentProfile, .taskCockpit, .cleanup, .guidedCleanup, .observability, .analysis:
             return false
         }
     }
 
     var title: String {
         switch self {
+        case .agentWorkspace:
+            return UIStrings.text("detail.agentWorkspace", "Agent Workspace")
         case .lineup:
             return UIStrings.text("detail.lineup", "Lineup")
         case .agentProfile:
             return UIStrings.text("detail.agentProfile", "Agent Profile")
         case .taskCockpit:
             return UIStrings.taskCockpitTitle
-        case .validationWorkbench:
-            return UIStrings.validationWorkbenchTitle
         case .overview:
             return UIStrings.overview
-        case .skillMap:
-            return UIStrings.text("detail.skillMap", "Skill Map")
         case .cleanup:
             return UIStrings.cleanupQueue
         case .guidedCleanup:
@@ -57,28 +54,26 @@ enum DetailSection: String, CaseIterable, Identifiable {
         case .findings:
             return UIStrings.findings
         case .conflicts:
-            return UIStrings.text("detail.conflicts.sameAgentTab", "Same-agent Conflicts")
+            return UIStrings.findings
         case .history:
             return UIStrings.text("detail.history", "History")
         case .analysis:
-            return UIStrings.text("detail.analysisReview", "Review")
+            return UIStrings.text("detail.analysisReview", "Smart Analysis")
         }
     }
 
     var systemImage: String {
         switch self {
+        case .agentWorkspace:
+            return "person.crop.square"
         case .lineup:
             return "rectangle.3.group"
         case .agentProfile:
             return "person.crop.rectangle.stack"
         case .taskCockpit:
-            return "rectangle.grid.2x2"
-        case .validationWorkbench:
             return "checklist"
         case .overview:
             return "stethoscope"
-        case .skillMap:
-            return "point.3.connected.trianglepath.dotted"
         case .cleanup:
             return "tray.full"
         case .guidedCleanup:
@@ -88,7 +83,7 @@ enum DetailSection: String, CaseIterable, Identifiable {
         case .findings:
             return "exclamationmark.triangle"
         case .conflicts:
-            return "rectangle.2.swap"
+            return "exclamationmark.triangle"
         case .history:
             return "clock.arrow.circlepath"
         case .analysis:
@@ -98,32 +93,39 @@ enum DetailSection: String, CaseIterable, Identifiable {
 
     var summary: String {
         switch self {
+        case .agentWorkspace:
+            return UIStrings.text("detail.section.agentWorkspace.summary", "Review the selected agent profile and task preflight from one workspace entry.")
         case .lineup:
             return UIStrings.text("detail.section.lineup.summary", "Review the whole agent lineup by readiness, risks, cleanup pressure, provider context, and evidence-backed next navigation.")
         case .agentProfile:
             return UIStrings.text("detail.section.agentProfile.summary", "Inspect one agent's capability, health, scan state, and related read-only work surfaces.")
         case .taskCockpit:
-            return UIStrings.text("detail.section.taskCockpit.summary", "Start from the current task and review readiness, routes, agents, skills, session context, provider context, gaps, blockers, and evidence in one read-only cockpit.")
-        case .validationWorkbench:
-            return UIStrings.text("detail.section.validationWorkbench.summary", "Inspect real-local validation evidence standards, canonical blockers, and next-action guidance before UI closeout.")
+            return UIStrings.text("detail.section.taskCockpit.summary", "Check whether the current task can proceed, which agent/skill should handle it, why, and what must be fixed first.")
         case .overview:
             return UIStrings.text("detail.section.overview.summary", "Inspect the selected skill metadata, permissions, provenance, and raw catalog details.")
-        case .skillMap:
-            return UIStrings.text("detail.section.skillMap.summary", "Review the local skill map and lifecycle timeline derived from existing catalog, task, risk, provenance, and history evidence.")
         case .cleanup:
-            return UIStrings.text("detail.section.cleanup.summary", "Review the read-only Cleanup Queue for open findings, integrity issues, conflicts, and analysis insights.")
+            return UIStrings.text("detail.section.cleanup.summary", "Cleanup Queue has been retired from the skill detail switcher; issue review now starts from Issues.")
         case .guidedCleanup:
             return UIStrings.text("detail.section.guidedCleanup.summary", "Plan guided cleanup steps and record app-local redacted step metadata without applying fixes or changing agent config.")
         case .observability:
             return UIStrings.text("detail.section.observability.summary", "Inspect redacted app-local provider call and prompt-run metadata without sending provider requests.")
         case .findings:
-            return UIStrings.text("detail.section.findings.summary", "Explain selected-skill finding groups with rules, affected instances, remediation text, and evidence.")
+            return UIStrings.text("detail.section.findings.summary", "Explain selected-skill issue groups with rules, affected instances, remediation text, and evidence.")
         case .conflicts:
-            return UIStrings.text("detail.section.conflicts.summary", "Review current-agent runtime/name collisions only; cross-agent duplicate and source-overlap evidence stays in Review.")
+            return UIStrings.text("detail.section.findings.summary", "Explain selected-skill issue groups with rules, affected instances, remediation text, and evidence.")
         case .history:
             return UIStrings.text("detail.section.history.summary", "Review selected-skill toggle and config history.")
         case .analysis:
-            return UIStrings.text("detail.section.analysis.summary", "Use focused review panels for cross-agent comparison, quality, task fit, routing, and session skill-use review.")
+            return UIStrings.text("detail.section.analysis.summary", "Use focused smart analysis panels for quality scoring, task fit, and routing.")
+        }
+    }
+
+    var isAgentWorkspaceSurface: Bool {
+        switch self {
+        case .agentWorkspace, .lineup, .agentProfile, .taskCockpit:
+            return true
+        case .overview, .cleanup, .guidedCleanup, .observability, .findings, .conflicts, .history, .analysis:
+            return false
         }
     }
 }
@@ -154,7 +156,7 @@ struct SkillSummaryCard: View {
                 .lineLimit(nil)
                 .textSelection(.enabled)
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 10)], alignment: .leading, spacing: 10) {
+            DetailMetricGrid {
                 SummaryChip(title: UIStrings.agent, value: DisplayText.agent(skill.agent), systemImage: "person.crop.circle")
                 SummaryChip(title: UIStrings.scope, value: DisplayText.scope(for: skill), systemImage: "folder")
                 SummaryChip(title: UIStrings.provenanceRoot, value: SkillProvenanceDisplay.rootClass(for: skill), systemImage: "externaldrive")
@@ -209,7 +211,7 @@ struct CleanupQueueSection: View {
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
 
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], alignment: .leading, spacing: 10) {
+                DetailMetricGrid {
                     SummaryChip(title: UIStrings.text("cleanup.summary.total", "Open queue"), value: "\(result.summary.total)", systemImage: "number")
                     SummaryChip(title: CleanupQueueKind.finding.title, value: "\(result.summary.findingCount)", systemImage: CleanupQueueKind.finding.systemImage)
                     SummaryChip(title: CleanupQueueKind.integrity.title, value: "\(result.summary.integrityCount)", systemImage: CleanupQueueKind.integrity.systemImage)
@@ -398,7 +400,7 @@ private struct OverviewRiskPanel: View {
                     .foregroundStyle(.secondary)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], alignment: .leading, spacing: 8) {
+            DetailMetricGrid(minColumnWidth: 150, spacing: 8) {
                 ForEach(permissionSummary.rows.prefix(5)) { row in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(row.label)

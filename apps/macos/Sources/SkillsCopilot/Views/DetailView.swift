@@ -26,36 +26,8 @@ struct DetailView: View {
                             SuccessBanner(message: message)
                         }
 
-                        if store.selectedDetailSection == .lineup {
-                            DetailSectionSwitcher(selection: $store.selectedDetailSection)
-
-                            AgentCopilotOverviewPanel()
-                        } else if store.selectedDetailSection == .agentProfile {
-                            DetailSectionSwitcher(selection: $store.selectedDetailSection)
-
-                            AgentProfilePanel()
-                        } else if store.selectedDetailSection == .taskCockpit {
-                            DetailSectionSwitcher(selection: $store.selectedDetailSection)
-
-                            TaskCockpitPanel(
-                                taskText: $store.taskCockpitText,
-                                currentTaskText: store.selectedTaskCockpitInput,
-                                result: store.taskCockpitResult,
-                                isBuilding: store.isBuildingTaskCockpit,
-                                operationState: store.taskCockpitOperationState,
-                                onBuild: {
-                                    Task {
-                                        await store.buildTaskCockpit()
-                                    }
-                                },
-                                onCancel: {
-                                    store.cancelTaskCockpitBuild()
-                                }
-                            )
-                        } else if store.selectedDetailSection == .validationWorkbench {
-                            DetailSectionSwitcher(selection: $store.selectedDetailSection)
-
-                            ValidationWorkbenchPanel()
+                        if store.selectedDetailSection.isAgentWorkspaceSurface {
+                            AgentWorkspacePanel()
                         } else if store.selectedDetailSection == .guidedCleanup {
                             DetailSectionSwitcher(selection: $store.selectedDetailSection)
 
@@ -80,18 +52,6 @@ struct DetailView: View {
                                     }
                                 }
                             )
-                        } else if store.selectedDetailSection == .observability {
-                            DetailSectionSwitcher(selection: $store.selectedDetailSection)
-
-                            ProviderObservabilityPanel(
-                                result: store.providerObservabilityResult,
-                                isLoading: store.isLoadingProviderObservability,
-                                onLoad: {
-                                    Task {
-                                        await store.loadProviderObservability()
-                                    }
-                                }
-                            )
                         } else if let skill {
                             let selectedFindingGroups = FindingDisplayModel.issueGroups(
                                 findings: store.selectedFindings,
@@ -100,11 +60,9 @@ struct DetailView: View {
                             )
                             HeaderView(
                                 skill: skill,
-                                detail: store.selectedSkillDetail,
-                                findingCount: selectedFindingGroups.count,
-                                conflictCount: store.selectedConflicts.count,
+                                adoptingAgentSummary: adoptingAgentSummary(for: skill),
+                                issueCount: selectedFindingGroups.count + store.selectedConflicts.count,
                                 isWriting: store.isWriting,
-                                llmStatus: store.llmStatus,
                                 adapterCapability: store.adapterCapabilities.first { $0.agent == skill.agent },
                                 onSelectSection: { section in
                                     store.selectedDetailSection = section
@@ -117,7 +75,7 @@ struct DetailView: View {
                             DetailSectionSwitcher(selection: $store.selectedDetailSection)
 
                             switch store.selectedDetailSection {
-                            case .lineup, .agentProfile, .taskCockpit, .validationWorkbench, .guidedCleanup, .observability:
+                            case .agentWorkspace, .lineup, .agentProfile, .taskCockpit, .guidedCleanup, .observability:
                                 EmptyView()
                             case .overview:
                                 VStack(alignment: .leading, spacing: 16) {
@@ -148,46 +106,10 @@ struct DetailView: View {
                                         ToolGlobalPreviewCard(skill: skill)
                                     }
                                 }
-                            case .skillMap:
-                                VStack(alignment: .leading, spacing: 16) {
-                                    LocalSkillMapPanel(
-                                        skill: skill,
-                                        result: store.localSkillMapResult,
-                                        isBuilding: store.isBuildingLocalSkillMap,
-                                        onBuild: {
-                                            Task {
-                                                await store.buildLocalSkillMap()
-                                            }
-                                        }
-                                    )
-
-                                    SkillLifecycleTimelinePanel(
-                                        skill: skill,
-                                        result: store.skillLifecycleTimelineResult,
-                                        isLoading: store.isLoadingSkillLifecycleTimeline,
-                                        onLoad: {
-                                            Task {
-                                                await store.loadSkillLifecycleTimeline()
-                                            }
-                                        }
-                                    )
-                                }
-                            case .cleanup:
-                                CleanupQueueSection(
-                                    result: store.cleanupQueue,
-                                    items: store.filteredCleanupQueueItems,
-                                    kindFilter: $store.cleanupKindFilter,
-                                    priorityFilter: $store.cleanupPriorityFilter,
-                                    agentTitle: store.agentFilter.title,
-                                    isLoading: store.isLoadingCleanupQueue,
-                                    onOpen: { item in
-                                        store.openCleanupQueueItem(item)
-                                    }
-                                )
-                            case .findings:
-                                FindingsSection(skill: skill, findings: store.selectedFindings)
-                            case .conflicts:
-                                ConflictsSection(
+                            case .cleanup, .findings, .conflicts:
+                                FindingsSection(
+                                    skill: skill,
+                                    findings: store.selectedFindings,
                                     conflicts: store.selectedConflicts,
                                     selectedSkillID: skill.id,
                                     currentAgentSkillIDs: Set(store.skills.filter { $0.agent == skill.agent }.map(\.id))
@@ -199,27 +121,23 @@ struct DetailView: View {
                                 )
                             case .analysis:
                                 AnalysisSection(
-                                skill: skill,
-                                comparisonResult: store.crossAgentComparisons,
-                                selectedComparisonGroup: store.selectedCrossAgentComparisonGroup,
-                                isLoadingComparisons: store.isLoadingCrossAgentComparisons,
-                                agentTitle: store.agentFilter.title,
-                                llmStatus: store.llmStatus,
-                                qualityScore: { skill in store.skillQualityScore(for: skill) },
-                                isScoringQuality: { skill in store.isScoringSkillQuality(for: skill) },
-                                qualityPromptPreview: { skill in store.skillQualityPromptPreview(for: skill) },
-                                isPreviewingQualityPrompt: { skill in store.isPreviewingSkillQualityPrompt(for: skill) },
-                                isSendingQualityPrompt: { skill in store.isSendingSkillQualityPrompt(for: skill) },
-                                qualityPromptSendResult: { skill in store.skillQualityPromptSendResult(for: skill) },
-                                canSendQualityPrompt: { skill in store.canSendSkillQualityPrompt(for: skill) },
-                                taskCockpitText: $store.taskCockpitText,
-                                taskCockpitInput: store.selectedTaskCockpitInput,
-                                taskCockpitResult: store.taskCockpitResult,
-                                isBuildingTaskCockpit: store.isBuildingTaskCockpit,
-                                taskReadinessText: $store.taskReadinessText,
-                                taskReadinessResult: { skill in store.taskReadiness(for: skill) },
-                                isCheckingTaskReadiness: { skill in store.isCheckingTaskReadiness(for: skill) },
-                                taskReadinessPromptPreview: { skill in store.taskReadinessPromptPreview(for: skill) },
+                                    skill: skill,
+                                    llmStatus: store.llmStatus,
+                                    qualityScore: { skill in store.skillQualityScore(for: skill) },
+                                    isScoringQuality: { skill in store.isScoringSkillQuality(for: skill) },
+                                    qualityPromptPreview: { skill in store.skillQualityPromptPreview(for: skill) },
+                                    isPreviewingQualityPrompt: { skill in store.isPreviewingSkillQualityPrompt(for: skill) },
+                                    isSendingQualityPrompt: { skill in store.isSendingSkillQualityPrompt(for: skill) },
+                                    qualityPromptSendResult: { skill in store.skillQualityPromptSendResult(for: skill) },
+                                    canSendQualityPrompt: { skill in store.canSendSkillQualityPrompt(for: skill) },
+                                    taskCockpitText: $store.taskCockpitText,
+                                    taskCockpitInput: store.selectedTaskCockpitInput,
+                                    taskCockpitResult: store.taskCockpitResult,
+                                    isBuildingTaskCockpit: store.isBuildingTaskCockpit,
+                                    taskReadinessText: $store.taskReadinessText,
+                                    taskReadinessResult: { skill in store.taskReadiness(for: skill) },
+                                    isCheckingTaskReadiness: { skill in store.isCheckingTaskReadiness(for: skill) },
+                                    taskReadinessPromptPreview: { skill in store.taskReadinessPromptPreview(for: skill) },
                                 isPreviewingTaskReadinessPrompt: { skill in store.isPreviewingTaskReadinessPrompt(for: skill) },
                                 isSendingTaskReadinessPrompt: { skill in store.isSendingTaskReadinessPrompt(for: skill) },
                                 taskReadinessPromptSendResult: { skill in store.taskReadinessPromptSendResult(for: skill) },
@@ -608,6 +526,38 @@ struct DetailView: View {
                 proxy.scrollTo(Self.topAnchorID, anchor: .top)
             }
         }
+    }
+
+    private func adoptingAgentSummary(for skill: SkillRecord) -> String {
+        let selectedDefinition = normalizedIdentityValue(skill.definitionId)
+        let selectedName = normalizedIdentityValue(skill.name)
+        let agents = store.skills
+            .filter { candidate in
+                let candidateDefinition = normalizedIdentityValue(candidate.definitionId)
+                let candidateName = normalizedIdentityValue(candidate.name)
+                let sameDefinition = !selectedDefinition.isEmpty && candidateDefinition == selectedDefinition
+                let sameName = !selectedName.isEmpty && candidateName == selectedName
+                return sameDefinition || sameName
+            }
+            .map { DisplayText.agent($0.agent) }
+            .reduce(into: Set<String>()) { partialResult, agent in
+                partialResult.insert(agent)
+            }
+            .sorted { lhs, rhs in
+                lhs.localizedStandardCompare(rhs) == .orderedAscending
+            }
+
+        let displayAgents = agents.isEmpty ? [DisplayText.agent(skill.agent)] : agents
+        let visibleAgents = displayAgents.prefix(2).joined(separator: ", ")
+        let hiddenCount = displayAgents.count - 2
+        guard hiddenCount > 0 else {
+            return visibleAgents
+        }
+        return "\(visibleAgents) +\(hiddenCount)"
+    }
+
+    private func normalizedIdentityValue(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 }
 

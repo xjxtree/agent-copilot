@@ -3,10 +3,6 @@ import SwiftUI
 
 struct AnalysisSection: View {
     let skill: SkillRecord
-    let comparisonResult: CrossAgentComparisonResult
-    let selectedComparisonGroup: CrossAgentComparisonGroup?
-    let isLoadingComparisons: Bool
-    let agentTitle: String
     let llmStatus: LLMStatus
     let qualityScore: (SkillRecord) -> SkillQualityScoreResult?
     let isScoringQuality: (SkillRecord) -> Bool
@@ -179,24 +175,13 @@ struct AnalysisSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 10) {
-                Label(UIStrings.text("analysis.workbench", "Read-only Analysis / Insights workbench"), systemImage: "sparkles.rectangle.stack")
+                Label(UIStrings.text("analysis.workbench", "Smart Analysis"), systemImage: "sparkles.rectangle.stack")
                     .font(.headline)
-                Text(UIStrings.text("analysis.workbench.summary.compact", "Focused single-skill review: compare cross-agent overlap, score local quality, test task fit/routing, and review session skill use. Provider-backed explanations remain previewed, confirmed, copy-only, and persisted as local redacted run history."))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                Label(UIStrings.text("analysis.crossAgentNote", "Cross-agent duplicates and source overlap live here as analysis insights; same-agent runtime/name collisions remain in Conflicts."), systemImage: "rectangle.3.group.bubble")
+                Text(UIStrings.text("analysis.workbench.summary.compact", "Focused single-skill analysis: score local quality and test task fit/routing. Provider-backed explanations remain previewed, confirmed, copy-only, and persisted as local redacted run history."))
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-
-            CrossAgentComparisonPanel(
-                skill: skill,
-                result: comparisonResult,
-                selectedGroup: selectedComparisonGroup,
-                isLoading: isLoadingComparisons,
-                agentTitle: agentTitle
-            )
 
             SkillQualityScorePanel(
                 skill: skill,
@@ -238,239 +223,11 @@ struct AnalysisSection: View {
                 onSendRoutingPrompt: onSendRoutingConfidencePrompt
             )
 
-            RemediationPlanPanel(
-                result: remediationPlanResult,
-                isPlanning: isPlanningRemediation,
-                onPlan: onPlanRemediation
-            )
-
-            RemediationPreviewDraftsPanel(
-                result: remediationPreviewDraftsResult,
-                isPreviewing: isPreviewingRemediationDrafts,
-                onPreview: onPreviewRemediationDrafts
-            )
-
-            RemediationImpactPreviewPanel(
-                result: remediationImpactPreviewResult,
-                isPreviewing: isPreviewingRemediationImpact,
-                onPreview: onPreviewRemediationImpact
-            )
-
-            RemediationBatchReviewPanel(
-                result: remediationBatchReviewResult,
-                isReviewing: isReviewingRemediationBatch,
-                onReview: onReviewRemediationBatch
-            )
-
-            RemediationHistoryPanel(
-                result: remediationHistoryResult,
-                recordResult: remediationHistoryRecordResult,
-                isLoading: isLoadingRemediationHistory,
-                isRecording: isRecordingRemediationHistory,
-                onLoad: onLoadRemediationHistory,
-                onRecord: onRecordRemediationHistory
-            )
-
-            AgentSessionSkillReviewPanel(
-                transcriptText: $agentSessionSkillReviewTranscript,
-                taskText: $agentSessionSkillReviewTask,
-                expectedSkills: $agentSessionSkillReviewExpectedSkills,
-                localSessionRoots: $localSessionPreviewRoots,
-                listResult: agentSessionSkillReviewList,
-                reviewResult: agentSessionSkillReviewResult,
-                deleteResult: agentSessionSkillReviewDeleteResult,
-                localSessionPreviewResult: localSessionPreviewResult,
-                latestRecord: latestAgentSessionSkillReview,
-                isLoading: isLoadingAgentSessionSkillReviews,
-                isReviewing: isReviewingAgentSessionSkillUse,
-                isPreviewingLocalSessions: isPreviewingLocalSessions,
-                isDeleting: isDeletingAgentSessionSkillReview,
-                onLoad: onLoadAgentSessionSkillReviews,
-                onReview: onReviewAgentSessionSkillUse,
-                onPreviewLocalSessions: onPreviewLocalSessions,
-                onDelete: onDeleteAgentSessionSkillReview
-            )
         }
     }
 
 }
 
-
-struct CrossAgentComparisonPanel: View {
-    let skill: SkillRecord
-    let result: CrossAgentComparisonResult
-    let selectedGroup: CrossAgentComparisonGroup?
-    let isLoading: Bool
-    let agentTitle: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline) {
-                Label(UIStrings.crossAgentComparisonTitle, systemImage: "rectangle.3.group")
-                    .font(.headline)
-                Spacer()
-                Label(UIStrings.readOnlyPreview, systemImage: "lock.shield")
-                    .font(.caption.bold())
-                    .foregroundStyle(.secondary)
-            }
-
-            Text(UIStrings.crossAgentComparisonBoundary)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
-
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], alignment: .leading, spacing: 10) {
-                SummaryChip(title: UIStrings.crossAgentComparisonGroups, value: "\(result.summary.totalCount)", systemImage: "rectangle.stack")
-                SummaryChip(title: UIStrings.crossAgentComparisonAgents, value: "\(result.summary.agentCount)", systemImage: "person.3")
-                SummaryChip(title: UIStrings.crossAgentComparisonRiskGroups, value: "\(result.summary.riskCount)", systemImage: "exclamationmark.triangle")
-                SummaryChip(title: UIStrings.crossAgentComparisonWritableMismatch, value: "\(result.summary.writableMismatchCount)", systemImage: "lock.trianglebadge.exclamationmark")
-            }
-
-            if isLoading {
-                Label(UIStrings.loading, systemImage: "hourglass")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-
-            if let fallbackReason = result.fallbackReason, !fallbackReason.isEmpty {
-                Label(fallbackReason, systemImage: "info.circle")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-
-            Text(UIStrings.crossAgentComparisonFilterContext(agentTitle))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            if let selectedGroup {
-                CrossAgentComparisonGroupCard(group: selectedGroup, selectedSkillID: skill.id)
-            } else {
-                VStack(alignment: .leading, spacing: 6) {
-                    Label(UIStrings.crossAgentComparisonNoSelectedGroup, systemImage: "checkmark.seal")
-                        .font(.subheadline.bold())
-                    Text(UIStrings.crossAgentComparisonNoSelectedGroupMessage)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
-            }
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .adaptiveMaterialSurface()
-    }
-}
-
-struct CrossAgentComparisonGroupCard: View {
-    let group: CrossAgentComparisonGroup
-    let selectedSkillID: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(group.title)
-                        .font(.subheadline.bold())
-                    Text("\(group.matchKind) · \(group.members.count) \(UIStrings.skills.lowercased())")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Text(group.riskLevel.capitalized)
-                    .font(.caption.bold())
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(riskTint.opacity(0.16), in: Capsule())
-                    .foregroundStyle(riskTint)
-            }
-
-            if !group.differences.isEmpty {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(UIStrings.crossAgentComparisonDifferences)
-                        .font(.caption.bold())
-                        .foregroundStyle(.secondary)
-                    ForEach(group.differences, id: \.self) { difference in
-                        Label(difference, systemImage: "arrow.left.arrow.right")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(group.members) { member in
-                    CrossAgentComparisonMemberRow(
-                        member: member,
-                        isSelected: member.instanceID == selectedSkillID
-                    )
-                }
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
-    }
-
-    private var riskTint: Color {
-        switch group.riskLevel.lowercased() {
-        case "critical", "high", "error":
-            return .red
-        case "warning", "medium":
-            return .orange
-        default:
-            return .secondary
-        }
-    }
-}
-
-struct CrossAgentComparisonMemberRow: View {
-    let member: CrossAgentComparisonMember
-    let isSelected: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Label(DisplayText.agent(member.agent), systemImage: isSelected ? "target" : "person.crop.circle")
-                    .font(.callout.bold())
-                Text(DisplayText.state(member.state, enabled: member.enabled))
-                    .font(.caption.bold())
-                    .foregroundStyle(DisplayText.stateColor(member.state, enabled: member.enabled))
-                Spacer()
-                SafetyPill(
-                    label: member.writableCapability ? UIStrings.crossAgentComparisonWritable : UIStrings.readOnly,
-                    isBlocked: !member.writableCapability
-                )
-            }
-
-            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 5) {
-                MetadataRow(label: UIStrings.scope, value: DisplayText.scope(member.scope, agent: member.agent))
-                MetadataRow(label: UIStrings.provenanceRoot, value: member.sourceRoot)
-                MetadataRow(label: UIStrings.findings, value: "\(member.findingCount)")
-                MetadataRow(label: UIStrings.definition, value: member.definitionID.nonEmpty ?? UIStrings.emptyPlaceholder)
-            }
-
-            if let reason = member.writableReason, !reason.isEmpty {
-                Label(reason, systemImage: "lock")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            if !member.displayPath.isEmpty {
-                PrivacyPathText(path: member.displayPath, font: .caption, lineLimit: 1)
-            }
-
-            if !member.differences.isEmpty {
-                Text(member.differences.joined(separator: ", "))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(10)
-        .background(isSelected ? Color.accentColor.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
-    }
-}
 
 struct SkillQualityScorePanel: View {
     let skill: SkillRecord
@@ -1424,7 +1181,7 @@ struct CrossAgentReadinessResultView: View {
                     .textSelection(.enabled)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+            DetailMetricGrid {
                 SummaryChip(
                     title: UIStrings.crossAgentReadinessAgents,
                     value: "\(result.summary.agentCount > 0 ? result.summary.agentCount : result.agentRows.count)",

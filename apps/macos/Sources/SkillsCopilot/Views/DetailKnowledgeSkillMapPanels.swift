@@ -71,7 +71,7 @@ struct KnowledgeSearchResultView: View {
                     .textSelection(.enabled)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+            DetailMetricGrid {
                 SummaryChip(title: UIStrings.knowledgeMatches, value: "\(resultCount)", systemImage: "magnifyingglass")
                 SummaryChip(title: UIStrings.agent, value: "\(agentCount)", systemImage: "person.3")
                 SummaryChip(title: UIStrings.knowledgeFacets, value: "\(result.facetRows.count)", systemImage: "tag")
@@ -385,7 +385,7 @@ struct SkillLifecycleTimelineResultView: View {
                     .textSelection(.enabled)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 10)], alignment: .leading, spacing: 10) {
+            DetailMetricGrid {
                 SummaryChip(title: UIStrings.skillLifecycleTimelineEvents, value: "\(eventCount)", systemImage: "timeline.selection")
                 SummaryChip(title: UIStrings.skillLifecycleTimelineSkillRows, value: "\(skillCount)", systemImage: "target")
                 SummaryChip(title: UIStrings.skillLifecycleTimelineAgentRows, value: "\(agentCount)", systemImage: "person.3")

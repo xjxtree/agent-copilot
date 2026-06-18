@@ -68,7 +68,7 @@ struct RoutingAccuracyDashboardView: View {
                     .textSelection(.enabled)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+            DetailMetricGrid {
                 SummaryChip(
                     title: UIStrings.routingAccuracyAccuracyRate,
                     value: dashboard.summary.accuracyRate.map(RoutingAccuracySummary.percentLabel)
@@ -434,7 +434,7 @@ struct StaleDriftResultView: View {
                     .textSelection(.enabled)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+            DetailMetricGrid {
                 SummaryChip(title: UIStrings.staleDriftStale, value: "\(result.summary.staleCount)", systemImage: "clock")
                 SummaryChip(title: UIStrings.staleDriftDrift, value: "\(result.summary.driftCount)", systemImage: "arrow.triangle.2.circlepath")
                 SummaryChip(title: UIStrings.staleDriftCandidates, value: "\(candidateCount)", systemImage: "rectangle.stack")
@@ -720,7 +720,7 @@ struct SimilarSkillGroupingResultView: View {
                     .textSelection(.enabled)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+            DetailMetricGrid {
                 SummaryChip(title: UIStrings.similarGroupingGroups, value: "\(groupCount)", systemImage: "rectangle.stack")
                 SummaryChip(title: UIStrings.similarGroupingMembers, value: "\(memberCount)", systemImage: "person.3")
                 SummaryChip(title: UIStrings.similarGroupingDuplicate, value: "\(duplicateCount)", systemImage: "doc.on.doc")
@@ -1038,7 +1038,7 @@ struct CapabilityTaxonomyResultView: View {
                     .textSelection(.enabled)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+            DetailMetricGrid {
                 SummaryChip(title: UIStrings.capabilityTaxonomyDomains, value: "\(domainCount)", systemImage: "square.grid.3x3")
                 SummaryChip(title: UIStrings.knowledgeCapabilities, value: "\(capabilityCount)", systemImage: "tag")
                 SummaryChip(title: UIStrings.similarGroupingMembers, value: "\(skillCount)", systemImage: "doc.text")
@@ -1359,7 +1359,7 @@ struct WorkspaceReadinessResultView: View {
                     .textSelection(.enabled)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+            DetailMetricGrid {
                 SummaryChip(title: UIStrings.workspaceReadinessOverall, value: result.summary.overallState, systemImage: "gauge.medium")
                 SummaryChip(title: UIStrings.similarGroupingReadiness, value: scoreLabel, systemImage: "speedometer")
                 SummaryChip(title: UIStrings.workspaceReadinessChecklist, value: "\(checklistCount)", systemImage: "checklist")

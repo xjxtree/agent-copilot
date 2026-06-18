@@ -25,17 +25,30 @@
   and maintainable module boundaries.
 - Current implementation status:
   provider profiles, prompt preview/redaction, deterministic quality/readiness/routing,
-  task cockpit, local skill map, provider observability, lifecycle, guided cleanup,
+  task preflight, local skill map, provider observability, lifecycle, guided cleanup,
   and app-local history surfaces are implemented.
 - Agent Copilot rollout status:
-  displayed product name, Lineup default surface, Agent Profile surface,
-  sorted decision queue, default-off local session preview, and default-off MCP
-  server preview are implemented. V2.90 migrated the primary packaged app to
-  `dist/AgentCopilot.app`, changed the primary bundle/default app-data id to
-  `dev.agent-copilot.native`, and retained compatibility for Swift/Rust module
-  names, the `skills-copilot-service` sidecar, `skills-copilot.*` AX ids,
-  `SKILLS_COPILOT_*` env vars, legacy `dev.skills-copilot.native` app data,
-  and the legacy Keychain service.
+  displayed product name and current app IA start from a selected Agent
+  Workspace that combines Agent Profile, Task Preflight, MCP Sources preview, and
+  final current-agent local report export. The compact agent selector now lives in the selected workspace row,
+  the project title row combines directory picking and recent projects, and the
+  sidebar Work section is removed; Provider Observability now lives in Settings
+  with Dashboard and Logs tabs. Safe Batch now opens from the current
+  skill-list header as a multi-select preview/apply sheet rather than a
+  persistent sidebar card. Selected-skill Intelligent Analysis renders
+  copy-only provider output as Markdown, folds tables in compact previews, and
+  uses card-style detail rendering for long quality-score tables while keeping
+  provider recommendations copy-only. The
+  previous Lineup, standalone Agent Profile, standalone Task Cockpit, Guided
+  Cleanup, Validation Workbench, Skill Map, and global Review work entries are
+  no longer current top-level app surfaces; selected-skill Review remains
+  available from the skill detail switcher. Default-off local session preview
+  and default-off MCP Sources preview remain implemented. V2.90
+  migrated the primary packaged app to `dist/AgentCopilot.app`, changed the
+  primary bundle/default app-data id to `dev.agent-copilot.native`, and retained
+  compatibility for Swift/Rust module names, the `skills-copilot-service`
+  sidecar, `skills-copilot.*` AX ids, `SKILLS_COPILOT_*` env vars, legacy
+  `dev.skills-copilot.native` app data, and the legacy Keychain service.
 - V2.91 model-task history status:
   the service protocol includes `llm.listModelTaskMatches`,
   `llm.recordModelTaskMatch`, and `llm.deleteModelTaskMatch`.
@@ -216,7 +229,7 @@ V2.82 closeout evidence lives in [`v2.82-verification-checklist.md`](./v2.82-ver
 
 V2.83 closeout evidence lives in [`v2.83-verification-checklist.md`](./v2.83-verification-checklist.md) and is guarded by `pnpm verify:v2.83-docs`. The checklist records completed continued module splitting, split protocol/detail/test fixture modules, focused Rust protocol tests, Swift tests, shared gate evidence, no-new-UI screenshot decision, no-capture fixture smoke, and the current `locked-session` blocker for `pnpm check:macos` UI evidence capture. Boundary: no service protocol method or payload changes, protocol version bump, new UI surface, provider default calls, write/apply paths, hidden task state, scanner/catalog fact mutation, script execution, credential reads, raw prompt/response/trace persistence, cloud sync, telemetry, public distribution/signing/notarization/DMG/ZIP.
 
-V2.84 closeout evidence lives in [`v2.84-verification-checklist.md`](./v2.84-verification-checklist.md) and is guarded by `pnpm verify:v2.84-docs`. It records completed Swift Detail section splitting: `DetailView.swift` is a small router/composer, `DetailGuidedCleanupFlowPanel.swift`, `DetailProviderObservabilityPanel.swift`, `DetailReviewCoreSection.swift`, and peer Detail section files preserve existing UI semantics, `TaskCockpitPanel.swift` and `ValidationWorkbenchPanel.swift` remain dedicated, and `verify:module-size` plus native layout aggregation guard the split files.
+V2.84 closeout evidence lives in [`v2.84-verification-checklist.md`](./v2.84-verification-checklist.md) and is guarded by `pnpm verify:v2.84-docs`. It records completed Swift Detail section splitting: `DetailView.swift` is a small router/composer, `DetailGuidedCleanupFlowPanel.swift`, `DetailProviderObservabilityPanel.swift`, `DetailReviewCoreSection.swift`, and peer Detail section files preserved then-current UI semantics; `verify:module-size` plus native layout aggregation guard the split files. The former validation workbench UI was later retired from current app IA.
 
 V2.85 closeout evidence lives in [`v2.85-verification-checklist.md`](./v2.85-verification-checklist.md) and is guarded by `pnpm verify:v2.85-docs`. It records completed Rust RPC domain module splitting across `service_host.rs`, `service_cleanup.rs`, `service_knowledge.rs`, `service_llm.rs`, `service_remediation.rs`, and `service_task.rs`; protocol drift verification scans split service files while preserving the then-current 88-method service protocol.
 
@@ -683,7 +696,7 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 | P1 | V2.50 Cross-agent task readiness | Completed | Keep completed V2.50 comparison aligned with V2.47 regression, V2.48 trace import, and V2.49 routing accuracy evidence | Users can compare expected vs actual skill selection and choose the best agent/skill route for a task |
 | P1 | V2.51-V2.60 Knowledge / remediation workflow | Completed | Keep completed `analysis.detectStaleDrift`, local knowledge index, similar skill grouping, capability taxonomy, workspace readiness, AI remediation planner, fix drafts, impact preview, batch review, and app-local remediation history stable | Users can find, prioritize, and safely work through skill quality/routing issues |
 | P1 | V2.64 Provider Observability | Completed | Keep `llm.providerObservability` aligned with focused protocol/Swift/UI checks, `pnpm check:macos`, real local Computer Use attempts, and privacy scan | Users can inspect provider usage/cost/failures from app-local redacted metadata without raw prompt/response JSON, credentials, unredacted paths, writes, provider requests, cloud sync, or telemetry |
-| P1 | V2.65-V2.77 Cockpit / lifecycle / guided cleanup / IA / privacy / modularization / safe links / validation / recovery / launch targeting / input resilience / progressive feedback / validation workbench | V2.65 completed; V2.66 completed; V2.67 completed; V2.68 completed; V2.69 completed; V2.70 completed; V2.71 completed; V2.72 completed; V2.73 completed; V2.74 completed; V2.75 completed; V2.76 completed; V2.77 completed | Keep Task-first Cockpit, Skill Lifecycle Timeline, Guided Cleanup Flow, cockpit-first IA, screenshot privacy, module boundaries, safe guided-cleanup navigation, validation blocker taxonomy, bounded timeout recovery, launch/window targeting, task input resilience, progressive Cockpit feedback, and real-local validation workbench stable | Users can work from a task-centered cockpit, see skill change history, clean up issues through safe guided steps, reach major evidence surfaces, produce screenshot evidence without leaking local paths, reject invalid screenshot evidence, recover from slow real-catalog cockpit calls, validate the current app without stale-bundle ambiguity, enter tasks reliably, see staged long-running cockpit progress, inspect validation blocker state in-app, and benefit from safer follow-up maintenance |
+| P1 | V2.65-V2.77 Cockpit / lifecycle / guided cleanup / IA / privacy / modularization / safe links / validation / recovery / launch targeting / input resilience / progressive feedback / validation workbench | V2.65 completed; V2.66 completed; V2.67 completed; V2.68 completed; V2.69 completed; V2.70 completed; V2.71 completed; V2.72 completed; V2.73 completed; V2.74 completed; V2.75 completed; V2.76 completed; V2.77 completed | Keep Task-first Cockpit, Skill Lifecycle Timeline, Guided Cleanup Flow, screenshot privacy, module boundaries, safe guided-cleanup navigation, validation blocker taxonomy, bounded timeout recovery, launch/window targeting, task input resilience, and progressive Cockpit feedback stable; preserve V2.77 validation workbench evidence as historical closeout only | Users can work from a task-centered cockpit, see skill change history, clean up issues through safe guided steps, reach major evidence surfaces, produce screenshot evidence without leaking local paths, reject invalid screenshot evidence, recover from slow real-catalog cockpit calls, enter tasks reliably, see staged long-running cockpit progress, and benefit from safer follow-up maintenance |
 | P0 | V2.69 Privacy / Screenshot Mode + localization polish | Completed | Added screenshot/demo-safe redaction, long-path collapse/reveal-on-demand, localized cockpit/guided/provider labels, app-language propagation, and validation-safe UI evidence flow | Users can produce real-local evidence without leaking local paths or accepting black/locked screenshots |
 | P1 | V2.70 Swift / Rust feature modularization | Completed | Extracted Task Cockpit/detail primitives and cleanup queue modules after capturing current behavior with focused tests | Future feature work touches smaller modules without changing protocol semantics accidentally |
 | P1 | V2.71 Guided Cleanup safe-action links | Completed | Added safe deep links from guided cleanup steps/actions to existing remediation, lifecycle, cockpit, cleanup/detail, safe batch preview, and guided metadata surfaces | Cleanup guidance becomes actionable while all writes remain preview-first and explicit-confirm |
@@ -692,7 +705,7 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 | P0 | V2.74 Real-local launch and window targeting stability | Completed | Current bundle path/PID launch, duplicate bundle fail-closed handling, window restoration, AX/Computer Use targeting, and lock-screen diagnosis are repeatable | Real local validation can target the latest app without stale-bundle or no-window ambiguity |
 | P1 | V2.75 Task input and input-method resilience | Completed | AX-settable task input preserves user task text across Chinese text, paste/automation input, multiline entry, focus/result changes, emoji, and leading/trailing spaces while blocking whitespace-only submit | Users can enter tasks reliably before readiness/routing analysis |
 | P1 | V2.76 Progressive Cockpit feedback | Completed | Keep staged readiness/routing/remediation/provider/session progress, partial results, elapsed time, timeout/fallback/blocked rows, and `pnpm verify:v2.76-docs` docs gate stable | Users can tell whether the app is working, blocked, or safely degraded without adding provider/write/execute/credential/cloud/telemetry semantics |
-| P1 | V2.77 Real-local validation workbench | Completed | Keep lock/window/AX/permission/stale-bundle/duplicate-bundle/screenshot/tool-layer blocker state visible and actionable through `skills-copilot.validation-workbench`; preserve PID `34909` unlocked evidence and `docs/ui-artifacts/v2.77-validation-workbench/completed.png` closeout | Invalid screenshots still remain blockers, not accepted evidence |
+| P1 | V2.77 Real-local validation workbench | Completed | Preserve PID `34909` unlocked evidence and `docs/ui-artifacts/v2.77-validation-workbench/completed.png` as historical closeout. The current app no longer exposes the validation workbench UI surface | Invalid screenshots still remain blockers, not accepted evidence |
 | P0 | V2.78 Protocol / validation gate parity | Completed | Service-protocol docs were synchronized with the then-current 88 supported methods; `pnpm verify:service-protocol-drift`, `pnpm verify:v2.78-docs`, and `pnpm verify:gate-parity` are wired into local/CI gates; V2.46-V2.64 verification history is documented without invented evidence | Future protocol/docs drift is caught automatically, and maintainers have one reliable gate story |
 | P0 | V2.79 Privacy fixture and evidence-surface localization sweep | Completed | Replaced literal local host-port fixtures, extended privacy scanning for host-port fingerprints, and applied path redaction/collapse/reveal plus Chinese localization across evidence surfaces | Real-local screenshots can be visually inspected without exposing local paths, and Chinese users do not hit mixed-language primary workflows |
 | P1 | V2.80 Detail navigation and visual density polish | Completed | Reset Detail scroll to a stable top anchor when switching major surfaces; improve dense evidence-card hierarchy, long-list folding, summary rows, and two-column responsive behavior | PID `82571` real-local evidence and `docs/ui-artifacts/v2.80-detail-density/completed.png` closeout are recorded |

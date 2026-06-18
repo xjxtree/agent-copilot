@@ -10,7 +10,7 @@ struct LocalSkillMapSelectedContext: View {
             Text(UIStrings.localSkillMapSelectedContext)
                 .font(.caption.bold())
                 .foregroundStyle(.secondary)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], alignment: .leading, spacing: 8) {
+            DetailMetricGrid(minColumnWidth: 150, spacing: 8) {
                 SummaryChip(title: UIStrings.text("metadata.name", "Name"), value: selectedSkill?.skillName ?? skill.name, systemImage: "target")
                 SummaryChip(title: UIStrings.agent, value: DisplayText.agent(selectedSkill?.agent ?? skill.agent), systemImage: "person.crop.circle")
                 SummaryChip(title: UIStrings.scope, value: selectedSkill?.scope ?? DisplayText.scope(for: skill), systemImage: "folder")
@@ -35,7 +35,7 @@ struct LocalSkillMapResultView: View {
                     .textSelection(.enabled)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 10)], alignment: .leading, spacing: 10) {
+            DetailMetricGrid {
                 SummaryChip(title: UIStrings.localSkillMapNodes, value: "\(nodeCount)", systemImage: "circle.grid.cross")
                 SummaryChip(title: UIStrings.localSkillMapEdges, value: "\(edgeCount)", systemImage: "arrow.triangle.branch")
                 SummaryChip(title: UIStrings.localSkillMapClusters, value: "\(clusterCount)", systemImage: "square.grid.3x3")

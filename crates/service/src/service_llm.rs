@@ -1571,7 +1571,7 @@ impl ServiceHost {
             }
         }
 
-        sections.push("Required output: concise Markdown draft guidance in the requested output language, with evidence notes, uncertainty, and safe next steps. Mark all suggestions copy-only.".to_string());
+        sections.push("Required output: concise Markdown draft guidance in the requested output language, with evidence notes, uncertainty, and safe next steps. Use narrow, pane-friendly Markdown: prefer bullets and short subsections. Do not use Markdown tables. Do not wrap the answer in fenced code blocks. For score breakdowns, write one bullet per component in the form `component: score - issue - evidence`. Mark all suggestions copy-only.".to_string());
         let estimated_output_tokens = match params.action {
             LlmPromptActionKind::Analyze => 700,
             LlmPromptActionKind::Recommend => 500,

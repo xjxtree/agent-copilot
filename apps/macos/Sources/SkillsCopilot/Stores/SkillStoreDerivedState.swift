@@ -145,7 +145,17 @@ extension SkillStore {
     }
 
     var batchToggleSelectedSkills: [SkillRecord] {
-        filteredSkills
+        guard isBatchToggleSelectionExplicit else { return filteredSkills }
+        return filteredSkills.filter { batchToggleSelectedSkillIDs.contains($0.id) }
+    }
+
+    var batchToggleAllVisibleSkillsSelected: Bool {
+        !filteredSkills.isEmpty && batchToggleSelectedSkills.count == filteredSkills.count
+    }
+
+    func isBatchToggleSkillSelected(_ skill: SkillRecord) -> Bool {
+        guard isBatchToggleSelectionExplicit else { return true }
+        return batchToggleSelectedSkillIDs.contains(skill.id)
     }
 
     var canApplyBatchTogglePreview: Bool {

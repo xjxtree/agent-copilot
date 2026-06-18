@@ -436,7 +436,7 @@ struct AgentSessionSkillReviewRecordView: View {
             }
 
             if !compact {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 10)], alignment: .leading, spacing: 10) {
+                DetailMetricGrid {
                     SummaryChip(title: UIStrings.agentSessionReviewDetectedSkills, value: "\(record.detectedSkills.count)", systemImage: "wrench.and.screwdriver")
                     SummaryChip(title: UIStrings.agentSessionReviewInterference, value: "\(record.interference.count)", systemImage: "exclamationmark.triangle")
                     SummaryChip(title: UIStrings.agentSessionReviewSafeNextSteps, value: "\(record.safeNextSteps.count)", systemImage: "arrow.right.circle")

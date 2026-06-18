@@ -4,7 +4,7 @@ import Foundation
 @MainActor
 struct SkillStoreTests {
     func run() async throws {
-        try defaultNavigationStartsAtLineup()
+        try defaultNavigationStartsAtAgentWorkspace()
         try await reloadKeepsSelectedSkillWhenItStillExists()
         try await reloadFallsBackToFirstSkillWhenSelectionIsMissing()
         try await emptyCatalogKeepsFriendlyEmptyModel()
@@ -26,9 +26,12 @@ struct SkillStoreTests {
         try await opencodeToggleCallsServiceAndRefreshesSelection()
         try await toolGlobalToggleIsPreviewOnlyAndDoesNotCallService()
         try await batchTogglePreviewFiltersReadOnlyAndNoopSkills()
+        try await batchTogglePreviewHonorsExplicitSelection()
         try await batchToggleApplyUsesBatchServiceAndRefreshes()
         try await batchToggleApplyRequiresCurrentPreviewConfirmation()
         try await localReportExportUsesUserTriggeredServiceContract()
+        try await localReportExportCanUseAgentWorkspaceScopeWithoutSelectedSkill()
+        try await localReportExportClearsStaleResultWhenScopeChanges()
         try await localReportExportUnavailableDoesNotPretendFileWasWritten()
         try await reloadLoadsProjectContext()
         try await setProjectStoresContextAndScans()
@@ -89,15 +92,16 @@ struct SkillStoreTests {
         try await previewScriptExecutionSafetyStoresBlockedPreviewWithoutExecute()
     }
 
-    private func defaultNavigationStartsAtLineup() throws {
+    private func defaultNavigationStartsAtAgentWorkspace() throws {
         let store = SkillStore(service: ServiceClient())
-        try expectEqual(store.selectedDetailSection, .lineup, "Agent Copilot should start at the lineup decision overview.")
+        try expectEqual(store.selectedSidebarSelection, .agentWorkspace, "Agent Copilot should start from the selected agent workspace row.")
+        try expectEqual(store.selectedDetailSection, .agentWorkspace, "Agent Copilot should start at the aggregate agent workspace.")
     }
 
     private func reloadKeepsSelectedSkillWhenItStillExists() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
-        fake.activate(scenario: "normal")
+        fake.activate(scenario: "batch-mixed")
 
         let store = SkillStore(service: ServiceClient())
         store.selectedSkillID = "beta"
@@ -113,7 +117,7 @@ struct SkillStoreTests {
     private func reloadFallsBackToFirstSkillWhenSelectionIsMissing() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
-        fake.activate(scenario: "normal")
+        fake.activate(scenario: "batch-mixed")
 
         let store = SkillStore(service: ServiceClient())
         store.selectedSkillID = "missing"
@@ -584,6 +588,37 @@ struct SkillStoreTests {
         try expectFalse(fake.calls().contains("config.toggleSkill"), "Batch preview must not use the single-toggle write path.")
     }
 
+    private func batchTogglePreviewHonorsExplicitSelection() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "batch-mixed")
+
+        let store = SkillStore(service: ServiceClient())
+        store.agentFilter = .all
+        store.batchToggleAction = .disable
+        await store.reload()
+
+        guard let alpha = store.filteredSkills.first(where: { $0.id == "alpha" }) else {
+            throw NativeModelTestFailure(description: "Batch fixture should include alpha.")
+        }
+
+        store.clearBatchToggleSelection()
+        try expectEqual(store.batchToggleSelectedSkills.count, 0, "Clearing batch selection should not fall back to all visible skills.")
+
+        store.setBatchToggleSkill(alpha, selected: true)
+        await store.previewVisibleBatchToggle()
+
+        guard let preview = store.batchTogglePreview else {
+            throw NativeModelTestFailure(description: "Explicit batch selection should produce a preview.")
+        }
+        try expectEqual(store.batchToggleSelectedSkills.map(\.id), ["alpha"], "Store selection should keep only explicitly selected skills.")
+        try expectContains(fake.calls(), #""instance_ids":["alpha"]"#, "Batch preview request should send only explicitly selected skill IDs.")
+        try expectEqual(preview.id, "batch-preview-1", "Fixture preview should still be decoded after explicit selection.")
+
+        store.selectAllVisibleBatchToggleSkills()
+        try expectEqual(store.batchToggleSelectedSkills.count, store.filteredSkills.count, "Select All should restore the full visible skill set.")
+    }
+
     private func batchToggleApplyUsesBatchServiceAndRefreshes() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
@@ -656,6 +691,50 @@ struct SkillStoreTests {
         try expectFalse(fake.calls().contains("llm.prepare"), "Export must not trigger AI provider preparation.")
         try expectFalse(fake.calls().contains("script.previewExecution"), "Export must not trigger script execution preview.")
         try expectFalse(fake.calls().contains("config.toggleSkill"), "Export must not mutate agent config.")
+    }
+
+    private func localReportExportCanUseAgentWorkspaceScopeWithoutSelectedSkill() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "report-export")
+
+        let store = SkillStore(service: ServiceClient())
+        store.agentFilter = .claudeCode
+        store.localReportFormat = .json
+        await store.reload()
+
+        guard store.selectedSkill != nil else {
+            throw NativeModelTestFailure(description: "Fixture reload should select a visible skill.")
+        }
+
+        await store.exportLocalReport(includeSelectedSkill: false)
+
+        guard let reportCall = fake.calls()
+            .split(separator: "\n")
+            .last(where: { $0.contains(#""method":"report.exportLocal""#) }) else {
+            throw NativeModelTestFailure(description: "Agent workspace export should call report.exportLocal.")
+        }
+        try expectContains(String(reportCall), #""agent":"claude-code""#, "Agent workspace export should retain the current agent scope.")
+        try expectFalse(reportCall.contains(#""instance_id""#), "Agent workspace export should not silently narrow to the previously selected skill.")
+    }
+
+    private func localReportExportClearsStaleResultWhenScopeChanges() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "report-export")
+
+        let store = SkillStore(service: ServiceClient())
+        store.agentFilter = .claudeCode
+        await store.reload()
+        await store.exportLocalReport(includeSelectedSkill: false)
+
+        try expectEqual(store.localReportExportResult?.filename, "report.json", "Export should store the current report before scope changes.")
+        try expectContains(store.lastMutationMessage, "report.json", "Export should show the current report filename before scope changes.")
+
+        store.agentFilter = .codex
+
+        try expectNil(store.localReportExportResult, "Changing agent scope should hide the stale report export result.")
+        try expectNil(store.lastMutationMessage, "Changing report scope should clear the stale report success message.")
     }
 
     private func localReportExportUnavailableDoesNotPretendFileWasWritten() async throws {
@@ -1684,11 +1763,11 @@ struct SkillStoreTests {
         try expectContains(calls, "\"project_root\":\"\\/tmp\\/project\"", "Task cockpit should pass active project root.")
         try expectContains(calls, "\"current_cwd\":\"\\/tmp\\/project\"", "Task cockpit should pass active project cwd.")
         try expectContains(calls, "\"workspace\":\"Fixture Project\"", "Task cockpit should pass active workspace name.")
-        try expectContains(calls, "\"limit\":8", "Task cockpit should pass cockpit limit.")
-        try expectContains(calls, "\"include_session_review\":true", "Task cockpit should request session-review context.")
-        try expectContains(calls, "\"include_provider_observability\":true", "Task cockpit should request provider-observability context.")
-        try expectContains(calls, "\"include_remediation_context\":true", "Task cockpit should request remediation context.")
-        try expectContains(calls, "\"include_evidence\":true", "Task cockpit should request evidence rows.")
+        try expectContains(calls, "\"limit\":5", "Task cockpit should pass the compact preflight limit.")
+        try expectContains(calls, "\"include_session_review\":false", "Task cockpit should skip session-review context by default.")
+        try expectContains(calls, "\"include_provider_observability\":false", "Task cockpit should skip provider-observability context by default.")
+        try expectContains(calls, "\"include_remediation_context\":false", "Task cockpit should skip remediation context by default.")
+        try expectContains(calls, "\"include_evidence\":false", "Task cockpit should skip raw evidence rows by default.")
         try expectContains(calls, "\"app_language\":\"en\"", "Task cockpit should pass app language for localized service rows.")
         try expectFalse(calls.contains("llm.previewPrompt"), "Task cockpit must not prepare provider prompts.")
         try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Task cockpit must not send to provider.")

@@ -2133,6 +2133,22 @@ fn analysis_score_skill_quality_returns_local_read_only_score() {
         .get("components")
         .and_then(Value::as_array)
         .is_some_and(|components| components.len() == 5));
+    let components = result
+        .get("components")
+        .and_then(Value::as_array)
+        .expect("quality score components");
+    assert!(components.iter().any(|component| {
+        component
+            .get("id")
+            .and_then(Value::as_str)
+            .is_some_and(|id| id == "same_agent_conflicts")
+    }));
+    assert!(!components.iter().any(|component| {
+        component
+            .get("id")
+            .and_then(Value::as_str)
+            .is_some_and(|id| id == "conflict_and_overlap")
+    }));
     assert!(result
         .get("evidence_references")
         .and_then(Value::as_array)
@@ -2163,6 +2179,8 @@ fn analysis_score_skill_quality_returns_local_read_only_score() {
     assert!(!user_home.join(".codex/config.toml").exists());
 
     let serialized = serde_json::to_string(&result).expect("serialize quality result");
+    assert!(!serialized.contains("cross-agent overlap"));
+    assert!(!serialized.contains("cross-agent analysis group"));
     assert!(!serialized.contains("OPENAI_API_KEY=<redacted>"));
     assert!(!serialized.contains("Analyze local skill posture"));
     assert!(!serialized.contains("fixture-redacted-value"));

@@ -68,6 +68,13 @@ struct SettingsView: View {
                     Label(UIStrings.aiProviderSettings, systemImage: "key")
                 }
 
+            ScrollView {
+                ProviderObservabilitySettingsPanel()
+            }
+            .tabItem {
+                Label(UIStrings.providerObservabilityTitle, systemImage: "waveform.path.ecg.rectangle")
+            }
+
             editorSection
                 .tabItem {
                     Label(UIStrings.claudeSettings, systemImage: "curlybraces")
@@ -86,6 +93,9 @@ struct SettingsView: View {
             }
             await store.loadAIProviderStatus()
             await store.loadClaudeSettings()
+            if store.providerObservabilityResult == nil {
+                await store.loadProviderObservability()
+            }
             resetDraftFromStore()
             resetProviderDraftFromStore()
         }

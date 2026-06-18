@@ -3,11 +3,9 @@ import SwiftUI
 
 struct HeaderView: View {
     let skill: SkillRecord
-    let detail: SkillDetailRecord?
-    let findingCount: Int
-    let conflictCount: Int
+    let adoptingAgentSummary: String
+    let issueCount: Int
     let isWriting: Bool
-    let llmStatus: LLMStatus
     let adapterCapability: AdapterCapabilityRecord?
     let onSelectSection: (DetailSection) -> Void
     let onToggle: (Bool) -> Void
@@ -52,10 +50,10 @@ struct HeaderView: View {
                     Button {
                         onToggle(!isEffectivelyEnabled)
                     } label: {
-                    Label(
-                        isEffectivelyEnabled ? UIStrings.disable : UIStrings.enable,
-                        systemImage: isEffectivelyEnabled ? "pause.circle" : "play.circle"
-                    )
+                        Label(
+                            isEffectivelyEnabled ? UIStrings.disable : UIStrings.enable,
+                            systemImage: isEffectivelyEnabled ? "pause.circle" : "play.circle"
+                        )
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(disabledReason != nil)
@@ -74,25 +72,17 @@ struct HeaderView: View {
                     .foregroundStyle(.secondary)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 155), spacing: 10)], alignment: .leading, spacing: 10) {
+            DetailMetricGrid(maxColumns: 4) {
                 SummaryChip(title: UIStrings.agent, value: DisplayText.agent(skill.agent), systemImage: "person.crop.circle")
+                SummaryChip(title: UIStrings.text("detail.adoptingAgents", "Using agents"), value: adoptingAgentSummary, systemImage: "person.2")
                 SummaryChip(title: UIStrings.scope, value: DisplayText.scope(for: skill), systemImage: "folder")
-                SummaryChip(title: UIStrings.state, value: DisplayText.state(skill.state, enabled: skill.enabled), systemImage: DisplayText.stateSystemImage(skill.state, enabled: skill.enabled))
                 CountBadge(
                     label: UIStrings.text("detail.issueGroups", "Issue groups"),
-                    value: findingCount,
+                    value: issueCount,
                     systemImage: "exclamationmark.triangle",
                     tint: .orange,
                     action: { onSelectSection(.findings) }
                 )
-                CountBadge(
-                    label: UIStrings.text("detail.sameAgentConflicts", "Same-agent conflicts"),
-                    value: conflictCount,
-                    systemImage: "rectangle.2.swap",
-                    tint: .red,
-                    action: { onSelectSection(.conflicts) }
-                )
-                SummaryChip(title: UIStrings.text("detail.riskAnalysis", "Risk / analysis"), value: riskAnalysisStatus, systemImage: riskAnalysisImage)
             }
         }
         .padding()
@@ -125,36 +115,6 @@ struct HeaderView: View {
         DisplayText.isReadOnlyPreview(skill) && !isPiGuardedToggleAvailable
     }
 
-    private var riskAnalysisStatus: String {
-        if findingCount > 0 || conflictCount > 0 {
-            return UIStrings.text("detail.reviewQueued", "Review queued")
-        }
-        if permissionRiskCount > 0 {
-            return UIStrings.text("detail.riskDeclared", "Risk declared")
-        }
-        return llmStatus.enabled ? UIStrings.text("detail.aiReady", "AI ready") : UIStrings.text("detail.offlineReady", "Offline ready")
-    }
-
-    private var riskAnalysisImage: String {
-        if findingCount > 0 || conflictCount > 0 || permissionRiskCount > 0 {
-            return "exclamationmark.triangle"
-        }
-        return llmStatus.enabled ? "sparkles" : "checkmark.seal"
-    }
-
-    private var permissionRiskCount: Int {
-        guard let detail, case .object(let object) = detail.permissions else {
-            return 0
-        }
-        var count = 0
-        if case .bool(true)? = object["exec"] {
-            count += 1
-        }
-        if case .string(let network)? = object["network"], network == "full" {
-            count += 1
-        }
-        return count
-    }
 }
 
 struct RecentActivityCard: View {
@@ -265,21 +225,31 @@ struct CountBadge: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 7) {
+            HStack(alignment: .center, spacing: 10) {
                 Image(systemName: systemImage)
+                    .font(.title3)
                     .foregroundStyle(value > 0 ? tint : .secondary)
-                Text("\(value)")
-                    .font(.headline)
-                    .foregroundStyle(value > 0 ? .primary : .secondary)
-                Text(label)
-                    .foregroundStyle(.secondary)
+                    .frame(width: 24)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(label)
+                        .font(.caption2.bold())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Text("\(value)")
+                        .font(.callout.bold())
+                        .foregroundStyle(value > 0 ? .primary : .secondary)
+                        .monospacedDigit()
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .adaptiveMaterialSurface()
+            .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+            .background(.quaternary.opacity(0.26), in: RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
         .help(UIStrings.text("detail.countBadge.help", "Show \(label)"))
+        .accessibilityElement(children: .combine)
     }
 }
 

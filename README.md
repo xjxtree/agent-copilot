@@ -10,8 +10,8 @@ opencode, Pi, Hermes, and OpenClaw.
 | --- | --- |
 | Current phase | V2.96 OpenClaw native/workspace install completed |
 | Completed baseline | V2.1-V2.96 |
-| Recent product line | V2.41-V2.96 AI-native analysis, task cockpit, validation hardening, module splitting, read-only Agent Copilot surfaces, per-surface evidence closeout, brand asset refresh, compatibility-first identifier migration, local model-task history, Codex expanded root diagnostics, opencode configured local roots, Pi install/compat writes, Hermes native-root install, and OpenClaw native/workspace install |
-| Agent Copilot line | M1-M4 completed; unlocked app-window evidence captured |
+| Recent product line | V2.41-V2.96 AI-native analysis, task preflight, validation hardening, module splitting, read-only Agent Copilot surfaces, per-surface evidence closeout, brand asset refresh, compatibility-first identifier migration, local model-task history, Codex expanded root diagnostics, opencode configured local roots, Pi install/compat writes, Hermes native-root install, and OpenClaw native/workspace install |
+| Agent Copilot line | M1-M4 completed; current app starts from an Agent Workspace aggregate page; unlocked app-window evidence captured |
 | Maintained UI | Native macOS app in `apps/macos` |
 | Service boundary | Rust typed JSON stdio sidecar in `crates/service` |
 | Next version | Not scheduled; open a new scoped version before expanding adapter config writes, network-backed installs, script execution, signing, or packaging |
@@ -116,9 +116,10 @@ V2.96 completes OpenClaw native/workspace install:
 - Scans and compares skills by agent, scope, source, state, and risk.
 - Shows findings, conflicts, provenance, adapter diagnostics, lifecycle, and task-readiness evidence.
 - Provides guarded enable/disable flows only for verified writable scopes.
-- Supports local report export, cleanup queue, guided cleanup, and task-first cockpit views.
+- Supports local report export, cleanup queue, provider observability, and task preflight views.
 - Supports user-configured provider-backed explanations only after prompt preview, redaction, destination visibility, and explicit confirmation.
-- Starts from an Agent Copilot lineup overview and Agent Profile surface for read-only, evidence-backed navigation across task, cleanup, observability, and review workflows.
+- Renders copy-only provider output as readable Markdown in compact previews and detail sheets.
+- Starts from a selected Agent Workspace that combines Agent Profile, Task Preflight, MCP Sources preview, and final current-agent local report export; the compact agent selector lives in the selected workspace row, the project menu combines directory picking and recent projects, Safe Batch opens as a skill-list multi-select sheet, and Provider Observability now lives in Settings with a dashboard-first view plus filterable logs.
 
 ## What It Does Not Do
 

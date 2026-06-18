@@ -16,7 +16,7 @@ struct TaskCockpitPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
-                Label(UIStrings.taskCockpitTitle, systemImage: "rectangle.grid.2x2")
+                Label(UIStrings.taskCockpitTitle, systemImage: "checklist")
                     .font(.headline)
                 Spacer()
                 Label(UIStrings.readOnlyPreview, systemImage: "lock.shield")
@@ -29,21 +29,25 @@ struct TaskCockpitPanel: View {
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
 
-            HStack(alignment: .top, spacing: 10) {
-                TaskInputTextEditor(
-                    text: $taskText,
-                    placeholder: UIStrings.taskCockpitTaskPlaceholder
-                )
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .bottom, spacing: 12) {
+                    TaskInputTextEditor(
+                        text: $taskText,
+                        placeholder: UIStrings.taskCockpitTaskPlaceholder
+                    )
+                    .frame(maxWidth: .infinity)
 
-                Button {
-                    onBuild()
-                } label: {
-                    Label(actionTitle, systemImage: actionSystemImage)
+                    buildButton
                 }
-                .disabled(isBuilding || !inputModel.canSubmit)
-                .help(UIStrings.taskCockpitBoundary)
-                .accessibilityIdentifier(AppAccessibilityID.taskCockpitBuildButton)
-                .accessibilityLabel(actionTitle)
+
+                VStack(alignment: .trailing, spacing: 8) {
+                    TaskInputTextEditor(
+                        text: $taskText,
+                        placeholder: UIStrings.taskCockpitTaskPlaceholder
+                    )
+
+                    buildButton
+                }
             }
 
             TaskCockpitOperationStatusView(
@@ -53,14 +57,12 @@ struct TaskCockpitPanel: View {
                 onRetry: onBuild
             )
 
-            TaskCockpitStageProgressView(
-                state: operationState,
-                isBuilding: isBuilding,
-                result: result
-            )
-
             if let result {
-                TaskCockpitResultView(result: result)
+                TaskCockpitResultView(
+                    result: result,
+                    operationState: operationState,
+                    isBuilding: isBuilding
+                )
             } else if !isBuilding {
                 Label(UIStrings.taskCockpitNoResult, systemImage: "info.circle")
                     .font(.callout)
@@ -84,7 +86,22 @@ struct TaskCockpitPanel: View {
     }
 
     private var actionSystemImage: String {
-        operationState.canRetry ? "arrow.clockwise" : "rectangle.grid.2x2"
+        operationState.canRetry ? "arrow.clockwise" : "checklist"
+    }
+
+    private var buildButton: some View {
+        Button {
+            onBuild()
+        } label: {
+            Label(actionTitle, systemImage: actionSystemImage)
+                .frame(minWidth: 132)
+        }
+        .controlSize(.regular)
+        .buttonStyle(.borderedProminent)
+        .disabled(isBuilding || !inputModel.canSubmit)
+        .help(UIStrings.taskCockpitBoundary)
+        .accessibilityIdentifier(AppAccessibilityID.taskCockpitBuildButton)
+        .accessibilityLabel(actionTitle)
     }
 }
 
@@ -467,17 +484,514 @@ private struct TaskCockpitStageTile: View {
 
 private struct TaskCockpitResultView: View {
     let result: TaskCockpitResult
+    let operationState: TaskCockpitOperationState
+    let isBuilding: Bool
+    @State private var diagnosticsExpanded = false
+
+    private var model: TaskCockpitDecisionModel {
+        TaskCockpitDecisionModel(result: result)
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if let fallbackReason = result.fallbackReason, !fallbackReason.isEmpty {
-                Label(fallbackReason, systemImage: "info.circle")
+        VStack(alignment: .leading, spacing: 14) {
+            if model.showsPartialNotice {
+                Label(UIStrings.taskCockpitPartialNotice, systemImage: "info.circle")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], alignment: .leading, spacing: 10) {
+            TaskCockpitVerdictCard(model: model)
+            TaskCockpitRecommendationCard(model: model)
+
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 12) {
+                    TaskCockpitReasonCard(model: model)
+                    TaskCockpitAttentionCard(model: model)
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    TaskCockpitReasonCard(model: model)
+                    TaskCockpitAttentionCard(model: model)
+                }
+            }
+
+            TaskCockpitNextStepCard(model: model)
+
+            DisclosureGroup(isExpanded: $diagnosticsExpanded) {
+                TaskCockpitTechnicalDiagnosticsView(
+                    result: result,
+                    operationState: operationState,
+                    isBuilding: isBuilding
+                )
+                .padding(.top, 8)
+            } label: {
+                Label(UIStrings.taskCockpitDiagnosticsTitle, systemImage: "stethoscope")
+                    .font(.callout.bold())
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 6))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(AppAccessibilityID.taskCockpitResult)
+        .accessibilityLabel(UIStrings.taskCockpitTitle)
+    }
+}
+
+private enum TaskCockpitVerdict {
+    case ready
+    case needsReview
+    case blocked
+    case unavailable
+
+    var title: String {
+        switch self {
+        case .ready:
+            return UIStrings.taskCockpitVerdictReady
+        case .needsReview:
+            return UIStrings.taskCockpitVerdictNeedsReview
+        case .blocked:
+            return UIStrings.taskCockpitVerdictBlocked
+        case .unavailable:
+            return UIStrings.taskCockpitVerdictUnavailable
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .ready:
+            return UIStrings.taskCockpitVerdictReadyMessage
+        case .needsReview:
+            return UIStrings.taskCockpitVerdictNeedsReviewMessage
+        case .blocked:
+            return UIStrings.taskCockpitVerdictBlockedMessage
+        case .unavailable:
+            return UIStrings.taskCockpitVerdictUnavailableMessage
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .ready:
+            return "checkmark.seal"
+        case .needsReview:
+            return "exclamationmark.triangle"
+        case .blocked:
+            return "octagon"
+        case .unavailable:
+            return "questionmark.circle"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .ready:
+            return .green
+        case .needsReview:
+            return .orange
+        case .blocked:
+            return .red
+        case .unavailable:
+            return .gray
+        }
+    }
+}
+
+private struct TaskCockpitDecisionModel {
+    let result: TaskCockpitResult
+
+    var verdict: TaskCockpitVerdict {
+        if result.isUnavailable {
+            return .unavailable
+        }
+        if userBlockerCount > 0 || scoreIsBlocked(readinessScore) {
+            return .blocked
+        }
+        if gapCount > 0 || scoreNeedsReview(readinessScore) || scoreNeedsReview(routingScore) {
+            return .needsReview
+        }
+        return .ready
+    }
+
+    var taskLabel: String {
+        if !result.filters.taskText.isEmpty {
+            return result.filters.taskText
+        }
+        if !result.summary.taskText.isEmpty {
+            return result.summary.taskText
+        }
+        return UIStrings.unknown
+    }
+
+    var recommendedAgent: String {
+        let raw = result.summary.recommendedAgent ?? topRoute?.agent ?? topSkill?.agent ?? topAgent?.agent
+        return raw.map(DisplayText.agent) ?? UIStrings.unknown
+    }
+
+    var recommendedSkill: String {
+        result.summary.recommendedSkillName
+            ?? topRoute?.skill?.name
+            ?? topSkill?.skill?.name
+            ?? topSkill?.title
+            ?? topRoute?.title
+            ?? UIStrings.unknown
+    }
+
+    var readinessScore: Int? {
+        result.summary.readinessScore ?? topRoute?.readinessScore ?? topSkill?.readinessScore
+    }
+
+    var routingScore: Int? {
+        result.summary.routingScore ?? topRoute?.routingScore ?? topSkill?.routingScore ?? topRoute?.score
+    }
+
+    var routeCount: Int {
+        max(result.summary.routeCandidateCount, result.routeCandidates.count)
+    }
+
+    var skillCount: Int {
+        max(result.summary.skillCandidateCount, result.skillCandidates.count)
+    }
+
+    var gapCount: Int {
+        result.gapRows.isEmpty ? result.summary.gapCount : result.gapRows.count
+    }
+
+    var userBlockerCount: Int {
+        if result.blockerRows.isEmpty {
+            return result.summary.blockerCount
+        }
+        return userBlockerRows.count
+    }
+
+    var showsPartialNotice: Bool {
+        result.recoveryDiagnosticReason != nil && !result.isUnavailable
+    }
+
+    var reasons: [String] {
+        var values: [String] = []
+        values.append(result.summary.summaryText)
+        if let topRoute {
+            values.append(topRoute.summary)
+            values.append(contentsOf: topRoute.reasons)
+        }
+        values.append(contentsOf: result.readinessSignals.map(\.detail))
+        values.append(contentsOf: result.agentCandidates.prefix(1).flatMap(\.reasons))
+        return Self.uniqueMeaningful(values)
+    }
+
+    var attentionRows: [TaskCockpitContextRow] {
+        Array((userBlockerRows + result.gapRows).prefix(5))
+    }
+
+    var nextStep: String {
+        switch verdict {
+        case .ready:
+            return UIStrings.taskCockpitNextStepReady
+        case .needsReview:
+            return UIStrings.taskCockpitNextStepNeedsReview
+        case .blocked:
+            return UIStrings.taskCockpitNextStepBlocked
+        case .unavailable:
+            return UIStrings.taskCockpitNextStepUnavailable
+        }
+    }
+
+    private var topRoute: TaskCockpitCandidateRow? {
+        result.routeCandidates.first
+    }
+
+    private var topSkill: TaskCockpitCandidateRow? {
+        result.skillCandidates.first
+    }
+
+    private var topAgent: TaskCockpitCandidateRow? {
+        result.agentCandidates.first
+    }
+
+    private var userBlockerRows: [TaskCockpitContextRow] {
+        result.blockerRows.filter { row in
+            !Self.isInternalBoundary(row.title) && !Self.isInternalBoundary(row.detail)
+        }
+    }
+
+    private func scoreIsBlocked(_ score: Int?) -> Bool {
+        guard let score else { return false }
+        return score < 40
+    }
+
+    private func scoreNeedsReview(_ score: Int?) -> Bool {
+        guard let score else { return false }
+        return score < 70
+    }
+
+    private static func uniqueMeaningful(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for value in values {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let display = displayText(trimmed) else { continue }
+            guard seen.insert(display.lowercased()).inserted else { continue }
+            result.append(display)
+        }
+        return result
+    }
+
+    fileprivate static func displayText(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !isInternalBoundary(trimmed) else { return nil }
+
+        let normalized = trimmed.lowercased()
+        if normalized.contains("task readiness is blocked") {
+            return UIStrings.taskCockpitReasonReadinessBlocked
+        }
+        if normalized.contains("routing confidence is blocked") {
+            return UIStrings.taskCockpitReasonRoutingBlocked
+        }
+        if normalized.contains("task wording did not clearly map") {
+            return UIStrings.taskCockpitReasonTaskWordingWeak
+        }
+        if normalized.contains("permissions.exec-needs-human") {
+            return UIStrings.taskCockpitReasonExecNeedsHuman
+        }
+        if normalized.contains("permissions.network-declared") {
+            return UIStrings.taskCockpitReasonNetworkDeclared
+        }
+        if normalized.contains("close or overlapping alternatives") {
+            return UIStrings.taskCockpitReasonRouteAmbiguous
+        }
+        if normalized.contains("duplicate_name") || normalized.contains("cross-agent analysis") {
+            return UIStrings.taskCockpitReasonCrossAgentDuplicate
+        }
+        if normalized.contains("task fit is weak") {
+            return UIStrings.taskCockpitReasonTaskFitWeak
+        }
+        return trimmed
+    }
+
+    fileprivate static func isInternalBoundary(_ value: String) -> Bool {
+        let normalized = value.lowercased()
+        return normalized.contains("no apply path")
+            || normalized.contains("read-only")
+            || normalized.contains("readonly")
+            || normalized.contains("provider not sent")
+            || normalized.contains("task cockpit combined")
+            || normalized.contains("evaluated the top")
+            || normalized.contains("skipped by the cockpit request filters")
+            || normalized.contains("session review row")
+            || normalized.contains("provider observability row")
+            || normalized.contains("provider-observability context was skipped")
+            || normalized.contains("remediation context was skipped")
+            || normalized.contains("session-review context was skipped")
+            || normalized.contains("remediation next step")
+            || normalized.contains("write action")
+            || normalized.contains("script execution")
+            || normalized.contains("snapshot")
+            || normalized.contains("telemetry")
+            || normalized.contains("cockpit only")
+            || normalized.contains("仅预览")
+            || normalized.contains("只读")
+            || normalized.contains("未启动提供方")
+            || normalized.contains("不会发送提供方")
+            || normalized.contains("不暴露应用")
+    }
+}
+
+private struct TaskCockpitVerdictCard: View {
+    let model: TaskCockpitDecisionModel
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: model.verdict.systemImage)
+                .font(.title3)
+                .foregroundStyle(model.verdict.tint)
+                .frame(width: 26, alignment: .center)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(model.verdict.title)
+                    .font(.headline)
+                Text(model.verdict.message)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: 8) {
+                TaskCockpitScorePill(label: UIStrings.taskCockpitReadinessShort, score: model.readinessScore)
+                TaskCockpitScorePill(label: UIStrings.taskCockpitRoutingShort, score: model.routingScore)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(model.verdict.tint.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct TaskCockpitScorePill: View {
+    let label: String
+    let score: Int?
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 1) {
+            Text(label)
+                .font(.caption2.bold())
+                .foregroundStyle(.secondary)
+            Text(score.map(String.init) ?? UIStrings.unknown)
+                .font(.callout.monospacedDigit().bold())
+        }
+        .frame(minWidth: 58, alignment: .trailing)
+    }
+}
+
+private struct TaskCockpitRecommendationCard: View {
+    let model: TaskCockpitDecisionModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(UIStrings.taskCockpitRecommendationTitle, systemImage: "point.3.connected.trianglepath.dotted")
+                .font(.callout.bold())
+
+            DetailMetricGrid(maxColumns: 4, minColumnWidth: 138, spacing: 8) {
+                SummaryChip(title: UIStrings.taskCockpitRecommendedAgent, value: model.recommendedAgent, systemImage: "person.crop.circle")
+                SummaryChip(title: UIStrings.taskCockpitRecommendedSkill, value: model.recommendedSkill, systemImage: "doc.text")
+                SummaryChip(title: UIStrings.taskCockpitRoutes, value: "\(model.routeCount)", systemImage: "arrow.triangle.branch")
+                SummaryChip(title: UIStrings.taskCockpitSkills, value: "\(model.skillCount)", systemImage: "square.stack.3d.up")
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.24), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct TaskCockpitReasonCard: View {
+    let model: TaskCockpitDecisionModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(UIStrings.taskCockpitReasonsTitle, systemImage: "text.bubble")
+                .font(.callout.bold())
+
+            if model.reasons.isEmpty {
+                Text(UIStrings.taskCockpitNoReasons)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(Array(model.reasons.prefix(5).enumerated()), id: \.offset) { _, reason in
+                    PrivacyEvidenceLabel(value: reason, systemImage: "checkmark.circle", font: .callout, lineLimit: 2)
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.22), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct TaskCockpitAttentionCard: View {
+    let model: TaskCockpitDecisionModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(UIStrings.taskCockpitAttentionTitle, systemImage: "exclamationmark.triangle")
+                .font(.callout.bold())
+
+            if model.attentionRows.isEmpty {
+                Label(UIStrings.taskCockpitNoAttentionItems, systemImage: "checkmark.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(model.attentionRows) { row in
+                    TaskCockpitAttentionRow(row: row)
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.22), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct TaskCockpitAttentionRow: View {
+    let row: TaskCockpitContextRow
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Image(systemName: "circle.fill")
+                    .font(.system(size: 6))
+                    .foregroundStyle(.orange)
+                Text(title)
+                    .font(.callout.bold())
+                    .lineLimit(2)
+            }
+            if let detail {
+                PrivacyEvidenceText(value: detail, font: .caption, lineLimit: 2)
+                    .padding(.leading, 14)
+            }
+        }
+    }
+
+    private var title: String {
+        TaskCockpitDecisionModel.displayText(row.title) ?? row.title
+    }
+
+    private var detail: String? {
+        guard let display = TaskCockpitDecisionModel.displayText(row.detail) else {
+            return nil
+        }
+        return display == title ? nil : display
+    }
+}
+
+private struct TaskCockpitNextStepCard: View {
+    let model: TaskCockpitDecisionModel
+
+    var body: some View {
+        Label(model.nextStep, systemImage: "arrow.forward.circle")
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quaternary.opacity(0.18), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct TaskCockpitTechnicalDiagnosticsView: View {
+    let result: TaskCockpitResult
+    let operationState: TaskCockpitOperationState
+    let isBuilding: Bool
+
+    private var taskLabel: String {
+        if !result.filters.taskText.isEmpty {
+            return result.filters.taskText
+        }
+        if !result.summary.taskText.isEmpty {
+            return result.summary.taskText
+        }
+        return UIStrings.unknown
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(UIStrings.taskCockpitDiagnosticsSummary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            TaskCockpitStageProgressView(
+                state: operationState,
+                isBuilding: isBuilding,
+                result: result
+            )
+
+            if let fallbackReason = result.fallbackReason, !fallbackReason.isEmpty {
+                PrivacyEvidenceLabel(value: fallbackReason, systemImage: "info.circle", font: .callout, lineLimit: 3)
+            }
+
+            DetailMetricGrid {
                 SummaryChip(title: UIStrings.taskCockpitRoutes, value: "\(routeCount)", systemImage: "point.3.connected.trianglepath.dotted")
                 SummaryChip(title: UIStrings.taskCockpitAgents, value: "\(agentCount)", systemImage: "person.3")
                 SummaryChip(title: UIStrings.taskCockpitSkills, value: "\(skillCount)", systemImage: "doc.text")
@@ -499,14 +1013,7 @@ private struct TaskCockpitResultView: View {
                 }
             }
 
-            if !result.summary.summaryText.isEmpty {
-                Text(result.summary.summaryText)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            }
-
-            TaskCockpitContextList(title: UIStrings.taskCockpitSections, empty: UIStrings.taskCockpitNoRows, rows: result.cockpitSections, systemImage: "rectangle.grid.2x2")
+            TaskCockpitContextList(title: UIStrings.taskCockpitSections, empty: UIStrings.taskCockpitNoRows, rows: result.cockpitSections, systemImage: "checklist")
             TaskCockpitCandidateList(title: UIStrings.taskCockpitTasks, empty: UIStrings.taskCockpitNoRows, rows: result.taskRows, systemImage: "text.badge.checkmark")
             TaskCockpitCandidateList(title: UIStrings.taskCockpitRoutes, empty: UIStrings.taskCockpitNoRows, rows: result.routeCandidates, systemImage: "point.3.connected.trianglepath.dotted")
             TaskCockpitCandidateList(title: UIStrings.taskCockpitAgents, empty: UIStrings.taskCockpitNoRows, rows: result.agentCandidates, systemImage: "person.3")
@@ -520,22 +1027,6 @@ private struct TaskCockpitResultView: View {
             TaskCockpitEvidenceList(evidence: result.evidenceReferences)
             TaskCockpitSafetyList(safety: result.safetyFlags)
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 6))
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier(AppAccessibilityID.taskCockpitResult)
-        .accessibilityLabel(UIStrings.taskCockpitTitle)
-    }
-
-    private var taskLabel: String {
-        if !result.filters.taskText.isEmpty {
-            return result.filters.taskText
-        }
-        if !result.summary.taskText.isEmpty {
-            return result.summary.taskText
-        }
-        return UIStrings.unknown
     }
 
     private var routeCount: Int {

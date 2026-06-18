@@ -18,8 +18,16 @@ struct LLMModelTests {
         try promptPreviewDecodesV242Payload()
         try promptPreviewDecodesServiceArrayScopePayload()
         try promptSendResultDecodesCopyOnlyAuditPayload()
+        try promptSendResultDecodesServiceDraftOutput()
         try promptSendResultUsesAuditErrorMessage()
         try promptRunListDecodesPersistedCopyOnlyResult()
+        try longTextReviewBlockDefaultsToMarkdown()
+        try markdownRenderDocumentParsesModelOutputBlocks()
+        try markdownRenderDocumentUnwrapsWholeMarkdownFence()
+        try markdownRenderDocumentNormalizesCollapsedModelMarkdown()
+        try markdownTableDisplayModelKeepsReadableColumns()
+        try markdownWideTableDisplayModelUsesCardLayout()
+        try markdownThreeColumnQualityTableUsesCardLayoutWhenCellsAreLong()
     }
 
     private struct ServiceEnvelope<ResultPayload: Decodable>: Decodable {
@@ -352,9 +360,9 @@ struct LLMModelTests {
               "suggested_improvements": [
                 {
                   "priority": "medium",
-                  "title": "Compare cross-agent overlap",
-                  "detail": "Use read-only comparison before changing routing.",
-                  "evidence_refs": ["analysis:fixture-analysis-id"]
+                  "title": "Review same-agent conflicts",
+                  "detail": "Use the existing issue review flow before changing routing.",
+                  "evidence_refs": ["conflict:fixture-conflict-id"]
                 }
               ],
               "safety_flags": {
@@ -379,7 +387,7 @@ struct LLMModelTests {
         try expectEqual(result.components.first?.evidence, ["adapter_diagnostics:codex"], "V2.43 components should decode evidence refs.")
         try expectEqual(result.evidence.first?.detail, "Codex adapter diagnostics: status=blocked", "V2.43 evidence references should decode labels.")
         try expectEqual(result.evidence.first?.source, "codex", "V2.43 evidence references should decode source ids.")
-        try expectEqual(result.suggestedImprovements, ["Use read-only comparison before changing routing."], "V2.43 suggestions should decode object details.")
+        try expectEqual(result.suggestedImprovements, ["Use the existing issue review flow before changing routing."], "V2.43 suggestions should decode object details.")
         try expectFalse(result.safety.providerRequestSent, "V2.43 local score must not send provider requests.")
         try expectFalse(result.safety.configMutationAllowed, "V2.43 local score must not mutate config.")
         try expectFalse(result.safety.rawSecretReturned, "V2.43 local score must not return secrets.")
@@ -967,6 +975,36 @@ struct LLMModelTests {
         try expectEqual(result.audit?.errorMessage, "timed out reading response", "Prompt send should decode audit error message.")
     }
 
+    private func promptSendResultDecodesServiceDraftOutput() throws {
+        let data = Data(
+            """
+            {
+              "preview_id": "preview-draft-output",
+              "status": "succeeded",
+              "output_text": "",
+              "draft_output": "Copy-only provider analysis.",
+              "draft_copy_only": true,
+              "raw_prompt_persisted": false,
+              "raw_response_persisted": false,
+              "write_back_allowed": false,
+              "script_execution_allowed": false
+            }
+            """.utf8
+        )
+
+        let result = try JSONDecoder().decode(LLMPromptSendResult.self, from: data)
+
+        try expectEqual(result.success, true, "Prompt send should decode service success status.")
+        try expectEqual(
+            result.outputText,
+            "Copy-only provider analysis.",
+            "Prompt send should expose service draft_output as visible copy-only output."
+        )
+        try expectEqual(result.draftCopyOnly, true, "Prompt send draft_output should remain copy-only.")
+        try expectFalse(result.rawPromptPersisted, "Prompt send must not persist raw prompts.")
+        try expectFalse(result.rawResponsePersisted, "Prompt send must not persist raw responses.")
+    }
+
     private func promptRunListDecodesPersistedCopyOnlyResult() throws {
         let data = Data(
             """
@@ -1043,6 +1081,254 @@ struct LLMModelTests {
         try expectFalse(sendResult.rawPromptPersisted, "Prompt run must not persist raw prompts.")
         try expectFalse(sendResult.rawResponsePersisted, "Prompt run must not persist raw responses.")
         try expectFalse(run.rawSecretReturned, "Prompt run must not return raw secrets.")
+    }
+
+    private func markdownRenderDocumentParsesModelOutputBlocks() throws {
+        let document = MarkdownRenderDocument(
+            text: """
+            ## Result
+
+            - First finding
+            > Keep this copy-only.
+
+            | Field | Value |
+            | --- | --- |
+            | Score | **High** |
+
+            ```text
+            raw-id
+            ```
+            """,
+            maxBlocks: nil
+        )
+
+        try expectFalse(document.isTruncated, "Full Markdown details should not be truncated.")
+        try expectEqual(
+            document.blocks.contains { block in
+                if case let .heading(level, value) = block {
+                    return level == 2 && value == "Result"
+                }
+                return false
+            },
+            true,
+            "Markdown renderer should parse model headings."
+        )
+        try expectEqual(
+            document.blocks.contains { block in
+                if case let .bullet(value) = block {
+                    return value == "First finding"
+                }
+                return false
+            },
+            true,
+            "Markdown renderer should parse model bullet lists."
+        )
+        try expectEqual(
+            document.blocks.contains { block in
+                if case let .quote(value) = block {
+                    return value == "Keep this copy-only."
+                }
+                return false
+            },
+            true,
+            "Markdown renderer should parse model block quotes."
+        )
+        try expectEqual(
+            document.blocks.contains { block in
+                if case let .table(rows) = block {
+                    return rows.first == ["Field", "Value"] && rows.last == ["Score", "**High**"]
+                }
+                return false
+            },
+            true,
+            "Markdown renderer should parse model tables."
+        )
+        try expectEqual(
+            document.blocks.contains { block in
+                if case let .code(value) = block {
+                    return value == "raw-id"
+                }
+                return false
+            },
+            true,
+            "Markdown renderer should parse model fenced code blocks."
+        )
+    }
+
+    private func longTextReviewBlockDefaultsToMarkdown() throws {
+        let block = LongTextReviewBlock(
+            title: "Model output",
+            text: "## Result",
+            emptyText: "No output",
+            systemImage: "doc.on.doc"
+        )
+        let isMarkdown: Bool
+        if case .markdown = block.renderMode {
+            isMarkdown = true
+        } else {
+            isMarkdown = false
+        }
+        try expectEqual(isMarkdown, true, "Model long-text previews should render Markdown by default.")
+    }
+
+    private func markdownRenderDocumentUnwrapsWholeMarkdownFence() throws {
+        let output = """
+        ```markdown
+        ## 结论
+        ce:compound 当前质量评分 51/100。
+
+        | 组件 | 得分 | 关键问题 | 证据 |
+        | --- | --- | --- | --- |
+        | 权限元数据 | 5/20 | 权限元数据为空。 | finding:permissions |
+        ```
+        """
+
+        let document = MarkdownRenderDocument(text: output, maxBlocks: nil)
+
+        try expectEqual(
+            MarkdownRenderDocument.renderableText(from: output).contains("```markdown"),
+            false,
+            "Whole-response Markdown fences should be removed before rendering provider output."
+        )
+        try expectEqual(
+            document.blocks.contains { block in
+                if case let .heading(_, value) = block {
+                    return value == "结论"
+                }
+                return false
+            },
+            true,
+            "Unwrapped provider Markdown should render headings instead of one giant code block."
+        )
+        try expectEqual(
+            document.blocks.contains { block in
+                if case let .table(rows) = block {
+                    return rows.first == ["组件", "得分", "关键问题", "证据"]
+                }
+                return false
+            },
+            true,
+            "Unwrapped provider Markdown tables should remain parseable for card fallback."
+        )
+
+        let code = """
+        ```swift
+        print("keep as code")
+        ```
+        """
+        let codeDocument = MarkdownRenderDocument(text: code, maxBlocks: nil)
+        try expectEqual(
+            codeDocument.blocks.contains { block in
+                if case let .code(value) = block {
+                    return value.contains("print")
+                }
+                return false
+            },
+            true,
+            "Real language code fences should stay code blocks."
+        )
+    }
+
+    private func markdownRenderDocumentNormalizesCollapsedModelMarkdown() throws {
+        let output = "# 技能质量评估草稿指导 ## 概述 技能 `ce:compound` 当前质量评分 **51 / 100**。 ## 组件分析 | 组件 | 得分 | 关键问题 | |------|------|----------| | 元数据完整性 | 25/25 | 本地名称、描述、frontmatter 和正文指导均符合预期，无扣分项。 | | 权限清晰度 | 5/20 | 权限元数据为空或不可用；未找到显式工具允许列表；网络访问意图未知。 | ## 证据说明 - **发现 `name.canonical-case`**：技能名称不是规范形式。 - **适配器诊断**：状态 verified。"
+
+        let document = MarkdownRenderDocument(text: output, maxBlocks: nil)
+
+        try expectEqual(
+            document.blocks.contains { block in
+                if case let .heading(level, value) = block {
+                    return level == 1 && value == "技能质量评估草稿指导"
+                }
+                return false
+            },
+            true,
+            "Collapsed model Markdown should recover the top-level heading."
+        )
+        try expectEqual(
+            document.blocks.contains { block in
+                if case let .heading(level, value) = block {
+                    return level == 2 && value == "组件分析"
+                }
+                return false
+            },
+            true,
+            "Collapsed model Markdown should split inline section headings before tables."
+        )
+        try expectEqual(
+            document.blocks.contains { block in
+                if case let .table(rows) = block {
+                    return rows.count == 3
+                        && rows.first == ["组件", "得分", "关键问题"]
+                        && rows.dropFirst().contains(["权限清晰度", "5/20", "权限元数据为空或不可用；未找到显式工具允许列表；网络访问意图未知。"])
+                        && !rows.contains(["------", "------", "----------"])
+                }
+                return false
+            },
+            true,
+            "Collapsed model Markdown tables should recover row boundaries."
+        )
+        try expectEqual(
+            document.blocks.contains { block in
+                if case let .bullet(value) = block {
+                    return value.contains("name.canonical-case")
+                }
+                return false
+            },
+            true,
+            "Collapsed model Markdown should recover bullets after a table."
+        )
+    }
+
+    private func markdownTableDisplayModelKeepsReadableColumns() throws {
+        let rows = [
+            ["Field", "Value"],
+            ["Score", "**High**"],
+            ["Reason", "Local evidence is clear."],
+        ]
+
+        let model = MarkdownTableDisplayModel(rows: rows, maxVisibleRows: nil)
+
+        try expectEqual(model.usesCardLayout, false, "Compact two-column AI output tables should keep the normal table layout.")
+        try expectEqual(model.displayRows.count, rows.count, "Two-column AI output tables should preserve visible rows.")
+        try expectFalse(
+            model.columnWidth(at: 0) < MarkdownTableDisplayModel.minimumColumnWidth,
+            "AI output table columns should keep a readable minimum width instead of collapsing into vertical text."
+        )
+    }
+
+    private func markdownWideTableDisplayModelUsesCardLayout() throws {
+        let rows = [
+            ["组件", "得分", "关键问题", "元数据完整性", "权限清晰度", "风险发现"],
+            ["整体", "51/100", "主要集中在权限声明缺失、风险发现未充分处理以及跨代理重复问题。", "25/25", "5/20", "4/25"],
+            ["本地名称", "25/25", "描述、frontmatter 和文档导向符合预期。", "25/25", "5/20", "4/25"],
+            ["权限元数据", "5/20", "权限元数据为空或不可用。", "25/25", "5/20", "4/25"],
+            ["风险发现", "4/25", "存在 2 条相关发现，本地文本信号进一步降低风险得分。", "25/25", "5/20", "4/25"],
+            ["适配器状态", "12/15", "适配器状态为 verified，读写、安装均正常。", "25/25", "5/20", "4/25"],
+        ]
+
+        let compact = MarkdownTableDisplayModel(rows: rows, maxVisibleRows: 4)
+        let full = MarkdownTableDisplayModel(rows: rows, maxVisibleRows: nil)
+
+        try expectEqual(compact.usesCardLayout, true, "Wide AI output tables should render as readable cards instead of a horizontal grid.")
+        try expectEqual(compact.bodyRowCount, 5, "AI output table summaries should count body rows separately from the header.")
+        try expectEqual(compact.displayCardRows.count, 3, "Compact AI output table cards should reserve one row for headers and show bounded body rows.")
+        try expectEqual(compact.hiddenRowCount, 2, "Compact AI output tables should report hidden rows for the details sheet.")
+        try expectEqual(compact.columnCount, 6, "Table layout should preserve all model-returned columns.")
+        try expectEqual(full.displayCardRows.count, rows.count - 1, "Full AI output details should keep every table body row as cards.")
+        try expectEqual(full.hiddenRowCount, 0, "Full AI output details should not hide rows.")
+    }
+
+    private func markdownThreeColumnQualityTableUsesCardLayoutWhenCellsAreLong() throws {
+        let rows = [
+            ["组件", "得分", "关键问题"],
+            ["权限清晰度", "5/20", "权限元数据为空或不可用；未找到显式工具允许列表；网络访问意图未知。"],
+            ["风险发现", "4/25", "存在 2 条相关发现，本地文本信号进一步降低了风险得分。"],
+        ]
+
+        let model = MarkdownTableDisplayModel(rows: rows, maxVisibleRows: nil)
+
+        try expectEqual(model.usesCardLayout, true, "Three-column quality-score tables with long issue text should render as cards.")
+        try expectEqual(model.displayCardRows.count, 2, "Quality-score table cards should include all body rows in details.")
     }
 
 }

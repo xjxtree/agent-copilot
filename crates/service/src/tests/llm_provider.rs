@@ -194,6 +194,9 @@ fn llm_preview_prompt_accepts_quality_score_action_without_sending_provider_requ
     assert!(serialized.contains("Quality score evidence"));
     assert!(serialized.contains("Output language: Simplified Chinese (zh-Hans)"));
     assert!(serialized.contains("Write all prose"));
+    assert!(serialized.contains("Do not use Markdown tables"));
+    assert!(serialized.contains("Do not wrap the answer in fenced code blocks"));
+    assert!(serialized.contains("Required quality-score response shape"));
     assert!(serialized.contains("<redacted>"));
     assert!(!serialized.contains("fixture-redacted-value"));
     assert!(!serialized.contains("OPENAI_API_KEY"));

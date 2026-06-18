@@ -31,6 +31,56 @@ Current release-readiness guardrails:
 Entries are ordered newest first. Add new version entries directly below this
 heading.
 
+### Unreleased - Agent Workspace IA adjustment
+
+Product changes:
+
+- Removed the user-facing Lineup surface from the current app IA.
+- Replaced standalone sidebar work entries for Agent Profile and Task Preflight
+  with a default selected Agent Workspace row at the top of the sidebar.
+- Moved the agent selector into the right side of the selected Agent Workspace
+  sidebar row and removed the duplicate selector from the detail page.
+- Merged Choose Project and Recent Projects into one project menu in the
+  Project sidebar title row, with project actions kept beside it.
+- Reworked Agent Profile metrics into a white agent summary container with
+  the selected agent icon/name and aligned metric cells.
+- The Agent Workspace detail page now orders Agent Profile, Adapter
+  capability, Task Preflight, MCP Sources, and final Local Report Export.
+- Adapter capability/diagnostic presentation now lives only inside the Agent
+  Workspace detail page instead of being duplicated in the sidebar.
+- The sidebar Work section has been removed; Provider Observability moved to
+  Settings with Dashboard and Logs tabs.
+- Guided Cleanup, Validation Workbench, Skill Map, and global Review are
+  retired from the current user-facing app IA; selected-skill Review remains in
+  the skill detail switcher.
+- Local Report Export moved from the sidebar skill-list controls into the Agent
+  Workspace detail page, uses the current agent/filter scope without silently
+  narrowing to a previously selected skill, and exposes Open, Reveal in Finder,
+  and Copy Path actions after export.
+- Safe Batch changed from a persistent sidebar card to a skill-list Batch
+  button with a multi-select sheet; it still previews selected current-list
+  skills first and applies only after explicit confirmation.
+- Provider Observability now defaults to a chart-first dashboard for call
+  status, model token use, destination cost, model latency, and model-task fit;
+  the Logs tab supports status, provider, model, destination, issue-only, and
+  search filtering over detailed evidence rows.
+- UI polish pass aligned the Task Preflight icon/copy with a preflight mental
+  model, renamed the MCP preview surface to MCP Sources in the app UI, and
+  tightened Settings log filters into labeled menu controls.
+- Selected-skill Intelligent Analysis now renders copy-only provider output as
+  pane-friendly Markdown: compact previews fold tables, detail views recover
+  collapsed historical Markdown and render long quality-score tables as cards,
+  and prompt instructions ask providers for section/bullet output instead of
+  wide tables or whole-answer code fences.
+
+Risk/security notes:
+
+- UI routing only; no service protocol, provider, write, script, credential,
+  cloud sync, telemetry, signing, packaging, or release automation expansion.
+- Provider output remains untrusted and copy-only; the rendering change does
+  not add write-back, script execution, raw prompt/response persistence, or
+  automatic application of LLM recommendations.
+
 ### V2.96 - 2026-06-18
 
 Status:

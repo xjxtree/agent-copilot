@@ -3735,7 +3735,7 @@ fn llm_output_language_instruction(app_language: Option<&str>) -> String {
         _ => ("English", "en"),
     };
     format!(
-        "Output language: {language_name} ({language_code}). Write all prose, Markdown headings, evidence notes, uncertainty, and safe next steps in {language_name}. Keep skill names, agent names, rule IDs, paths, code, commands, quoted evidence, and placeholders unchanged."
+        "Output language: {language_name} ({language_code}). Write all prose, Markdown headings, evidence notes, uncertainty, and safe next steps in {language_name}. Use narrow Markdown that reads well in a macOS detail pane: prefer short sections and bullets. Do not use Markdown tables. Do not wrap the answer in fenced code blocks. Keep skill names, agent names, rule IDs, paths, code, commands, quoted evidence, and placeholders unchanged."
     )
 }
 

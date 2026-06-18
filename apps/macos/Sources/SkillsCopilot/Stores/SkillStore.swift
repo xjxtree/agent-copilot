@@ -131,13 +131,25 @@ final class SkillStore: ObservableObject {
     @Published private(set) var settingsErrorMessage: String?
     @Published private(set) var aiProviderMessage: String?
     @Published private(set) var aiProviderErrorMessage: String?
-    @Published var selectedSkillID: SkillRecord.ID?
-    @Published var selectedDetailSection: DetailSection = .lineup
+    @Published var selectedSidebarSelection: SidebarSelection? = .agentWorkspace {
+        didSet { handleSidebarSelectionChanged() }
+    }
+    @Published var selectedSkillID: SkillRecord.ID? {
+        didSet {
+            clearLocalReportExportState()
+            synchronizeSidebarSelectionWithSelectedSkill()
+        }
+    }
+    @Published var selectedDetailSection: DetailSection = .agentWorkspace
     @Published var searchText = "" {
-        didSet { handleListCriteriaChanged() }
+        didSet {
+            clearLocalReportExportState()
+            handleListCriteriaChanged()
+        }
     }
     @Published var agentFilter: SkillAgentFilter = .claudeCode {
         didSet {
+            clearLocalReportExportState()
             handleListCriteriaChanged()
             routingAccuracyDashboard = nil
             staleDriftDetection = nil
@@ -167,16 +179,32 @@ final class SkillStore: ObservableObject {
         }
     }
     @Published var stateFilter: SkillStateFilter = .all {
-        didSet { handleListCriteriaChanged() }
+        didSet {
+            clearLocalReportExportState()
+            handleListCriteriaChanged()
+        }
     }
     @Published var cleanupKindFilter: CleanupQueueKindFilter = .all
     @Published var cleanupPriorityFilter: CleanupQueuePriorityFilter = .all
     @Published var batchToggleAction: BatchToggleAction = .disable {
         didSet { batchTogglePreview = nil }
     }
-    @Published var localReportFormat: LocalReportFormat = .markdown
+    @Published private(set) var isBatchToggleSelectionExplicit = false
+    @Published private(set) var batchToggleSelectedSkillIDs: Set<SkillRecord.ID> = [] {
+        didSet {
+            if oldValue != batchToggleSelectedSkillIDs {
+                batchTogglePreview = nil
+            }
+        }
+    }
+    @Published var localReportFormat: LocalReportFormat = .markdown {
+        didSet { clearLocalReportExportState() }
+    }
     @Published var sortOrder: SkillSortOrder = .name {
-        didSet { handleListCriteriaChanged() }
+        didSet {
+            clearLocalReportExportState()
+            handleListCriteriaChanged()
+        }
     }
     @Published var taskReadinessText = "" {
         didSet {
@@ -249,6 +277,7 @@ final class SkillStore: ObservableObject {
     private var taskCockpitOperationID: UUID?
     private var taskCockpitTimeoutTask: Task<Void, Never>?
     private var taskCockpitServiceTask: Task<TaskCockpitResult, Error>?
+    private var isSynchronizingSidebarSelection = false
     private let taskCockpitTimeoutSeconds: TimeInterval
 
     init(service: ServiceClient, taskCockpitTimeoutSeconds: TimeInterval = 15) {
@@ -635,6 +664,31 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func resetBatchToggleSelectionToVisibleSkills() {
+        isBatchToggleSelectionExplicit = true
+        batchToggleSelectedSkillIDs = Set(filteredSkills.map(\.id))
+    }
+
+    func selectAllVisibleBatchToggleSkills() {
+        resetBatchToggleSelectionToVisibleSkills()
+    }
+
+    func clearBatchToggleSelection() {
+        isBatchToggleSelectionExplicit = true
+        batchToggleSelectedSkillIDs = []
+    }
+
+    func setBatchToggleSkill(_ skill: SkillRecord, selected: Bool) {
+        isBatchToggleSelectionExplicit = true
+        var selection = batchToggleSelectedSkillIDs
+        if selected {
+            selection.insert(skill.id)
+        } else {
+            selection.remove(skill.id)
+        }
+        batchToggleSelectedSkillIDs = selection
+    }
+
     func applyVisibleBatchTogglePreview(confirmingPreviewID: String? = nil) async {
         guard let preview = batchTogglePreview else { return }
         if let confirmingPreviewID, confirmingPreviewID != preview.id {
@@ -689,7 +743,7 @@ final class SkillStore: ObservableObject {
         }
     }
 
-    func exportLocalReport() async {
+    func exportLocalReport(includeSelectedSkill: Bool = true) async {
         guard !isRefreshBusy else {
             errorMessage = UIStrings.operationUnavailableBusy
             lastMutationMessage = nil
@@ -708,7 +762,7 @@ final class SkillStore: ObservableObject {
             let result = try await service.exportLocalReport(
                 format: localReportFormat,
                 agent: agent,
-                instanceID: selectedSkill?.id,
+                instanceID: includeSelectedSkill ? selectedSkill?.id : nil,
                 stateFilter: state,
                 search: trimmedSearch.isEmpty ? nil : trimmedSearch
             )
@@ -1424,11 +1478,11 @@ final class SkillStore: ObservableObject {
                 agent: agent,
                 project: project,
                 selectedSkill: selectedSkill,
-                limit: 8,
-                includeSessionReview: true,
-                includeProviderObservability: true,
-                includeRemediationContext: true,
-                includeEvidence: true
+                limit: 5,
+                includeSessionReview: false,
+                includeProviderObservability: false,
+                includeRemediationContext: false,
+                includeEvidence: false
             )
         }
         taskCockpitServiceTask = serviceTask
@@ -2529,6 +2583,14 @@ final class SkillStore: ObservableObject {
         taskCockpitText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private func clearLocalReportExportState() {
+        let hadLocalReportExportResult = localReportExportResult != nil
+        localReportExportResult = nil
+        if hadLocalReportExportResult {
+            lastMutationMessage = nil
+        }
+    }
+
     private func clearTaskCockpitTransientState() {
         taskCockpitResult = nil
         if isBuildingTaskCockpit {
@@ -2812,6 +2874,7 @@ final class SkillStore: ObservableObject {
     private func handleListCriteriaChanged() {
         let previousID = selectedSkillID
         batchTogglePreview = nil
+        pruneBatchToggleSelectionToVisibleSkills()
         normalizeSelectionToVisibleSkills()
         guard previousID != selectedSkillID else { return }
         taskReadinessResult = nil
@@ -2836,6 +2899,15 @@ final class SkillStore: ObservableObject {
         Task { @MainActor [weak self] in
             await self?.loadSelectedDetail()
             await self?.loadCrossAgentComparisons()
+        }
+    }
+
+    private func pruneBatchToggleSelectionToVisibleSkills() {
+        guard isBatchToggleSelectionExplicit else { return }
+        let visibleIDs = Set(filteredSkills.map(\.id))
+        let prunedSelection = batchToggleSelectedSkillIDs.intersection(visibleIDs)
+        if prunedSelection != batchToggleSelectedSkillIDs {
+            batchToggleSelectedSkillIDs = prunedSelection
         }
     }
 
@@ -2881,7 +2953,60 @@ final class SkillStore: ObservableObject {
         if let selectedSkillID, visibleSkills.contains(where: { $0.id == selectedSkillID }) {
             return
         }
-        selectedSkillID = visibleSkills.first?.id
+        setSelectedSkillID(visibleSkills.first?.id, syncSidebar: selectedSidebarSelection?.isSkill == true)
+    }
+
+    private func handleSidebarSelectionChanged() {
+        guard !isSynchronizingSidebarSelection else { return }
+
+        switch selectedSidebarSelection ?? .agentWorkspace {
+        case .agentWorkspace:
+            if selectedSidebarSelection == nil {
+                setSidebarSelection(.agentWorkspace)
+            }
+            selectedDetailSection = .agentWorkspace
+        case .work(let section):
+            if section.requiresSelectedSkill, selectedSkillID == nil {
+                setSelectedSkillID(filteredSkills.first?.id ?? skills.first?.id, syncSidebar: false)
+            }
+            selectedDetailSection = section
+        case .skill(let id):
+            setSelectedSkillID(id, syncSidebar: false)
+            if selectedDetailSection.isAgentWorkspaceSurface {
+                selectedDetailSection = .overview
+            }
+        }
+    }
+
+    private func synchronizeSidebarSelectionWithSelectedSkill() {
+        guard !isSynchronizingSidebarSelection else { return }
+
+        if let selectedSkillID {
+            guard selectedSidebarSelection != .skill(selectedSkillID) else { return }
+            setSidebarSelection(.skill(selectedSkillID))
+            if selectedDetailSection.isAgentWorkspaceSurface {
+                selectedDetailSection = .overview
+            }
+        } else if selectedSidebarSelection?.isSkill == true {
+            setSidebarSelection(.agentWorkspace)
+            selectedDetailSection = .agentWorkspace
+        }
+    }
+
+    private func setSelectedSkillID(_ id: SkillRecord.ID?, syncSidebar: Bool) {
+        if syncSidebar {
+            selectedSkillID = id
+        } else {
+            isSynchronizingSidebarSelection = true
+            selectedSkillID = id
+            isSynchronizingSidebarSelection = false
+        }
+    }
+
+    private func setSidebarSelection(_ selection: SidebarSelection) {
+        isSynchronizingSidebarSelection = true
+        selectedSidebarSelection = selection
+        isSynchronizingSidebarSelection = false
     }
 
     private func canStartScan(allowDuringProjectUpdate: Bool) -> Bool {

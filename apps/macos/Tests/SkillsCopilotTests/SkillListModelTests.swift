@@ -18,20 +18,17 @@ struct SkillListModelTests {
     private func detailWorkbenchSectionsExposeDiagnostics() throws {
         try expectEqual(
             DetailSection.visibleCases,
-            [.lineup, .agentProfile, .taskCockpit, .validationWorkbench, .overview, .skillMap, .cleanup, .guidedCleanup, .observability, .findings, .conflicts, .history, .analysis],
-            "Skill detail should expose the full diagnostic workbench section order."
+            [.overview, .findings, .history, .analysis],
+            "Skill detail switcher should omit Agent Workspace, same-agent conflicts, retired cleanup/guided cleanup/workbench/map surfaces, and settings-owned provider observability."
         )
-        try expectEqual(DetailSection.primaryWorkCases, [.lineup, .agentProfile, .taskCockpit, .validationWorkbench, .skillMap, .guidedCleanup, .observability, .analysis], "Primary work surfaces should start from Agent Copilot object-level surfaces.")
-        try expectEqual(DetailSection.lineup.title, "Lineup", "Lineup should be the default decision overview surface.")
-        try expectEqual(DetailSection.agentProfile.title, "Agent Profile", "Agent Profile section title")
-        try expectEqual(DetailSection.taskCockpit.title, "Task-first Cockpit", "Task Cockpit should remain a primary work surface.")
-        try expectEqual(DetailSection.validationWorkbench.title, "Validation Workbench", "Validation Workbench section title")
-        try expectEqual(DetailSection.skillMap.title, "Skill Map", "Skill Map section title")
+        try expectEqual(DetailSection.primaryWorkCases, [], "Sidebar Work surfaces should remain retired; Provider Observability lives in Settings.")
+        try expectEqual(DetailSection.agentWorkspace.title, "Agent Workspace", "Agent Workspace should be the default aggregate surface.")
         try expectEqual(DetailSection.guidedCleanup.title, "Guided Cleanup Flow", "Guided Cleanup section title")
         try expectEqual(DetailSection.observability.title, "Provider Observability", "Provider Observability section title")
-        try expectEqual(DetailSection.conflicts.title, "Same-agent Conflicts", "Conflicts tab should advertise same-agent scope.")
+        try expectEqual(DetailSection.findings.title, "Issues", "Findings tab should be renamed for user-facing issue review.")
+        try expectEqual(DetailSection.conflicts.title, "Issues", "Legacy conflicts route should resolve to the user-facing issue review.")
         try expectEqual(DetailSection.history.title, "History", "History section title")
-        try expectEqual(DetailSection.analysis.title, "Review", "Review section title")
+        try expectEqual(DetailSection.analysis.title, "Smart Analysis", "Smart Analysis section title")
     }
 
     private func findingIssueGroupsPreserveRemediationAndImpactCounts() throws {
