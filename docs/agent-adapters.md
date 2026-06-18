@@ -10,7 +10,7 @@
 >
 > 上层 scanner / catalog / UI 不直接处理 agent 特有配置语义。
 >
-> V2.41-V2.93 的 provider/task/validation/module-splitting/Agent Copilot/Codex expanded root/opencode configured-root work is tracked in README, roadmap, development tasks, and verification checklists. V2.92 expands Codex read-only roots and V2.93 adds opencode configured local roots while preserving the writable capability matrix below.
+> V2.41-V2.94 的 provider/task/validation/module-splitting/Agent Copilot/Codex expanded root/opencode configured-root/Pi guarded write work is tracked in README, roadmap, development tasks, and verification checklists. V2.92 expands Codex read-only roots, V2.93 adds opencode configured local roots, and V2.94 adds Pi compatibility-root toggles plus native-root installs while preserving the explicit capability matrix below.
 
 ## V2.40 Adapter diagnostics
 
@@ -99,7 +99,7 @@ pub struct AdapterFeatureCapability {
 | Claude Code | `verified` | 支持（settings、project roots） | 支持（verified） | 支持（tool-global install） | 支持（verified） | `project-local` settings 与非 verified 目标 blocked |
 | Codex | `verified` | 支持（native user/project roots + read-only `$CODEX_HOME/skills`、plugin marketplace、`/etc/codex/skills` diagnostics） | 支持（仅用户 `config.toml`，且仅 native `.agents/skills` 实例） | 支持（tool-global install to native roots） | 支持（native-root allowlist） | 项目级 `.codex/config.toml`、plugin/admin/system/compat roots writable blocked |
 | opencode | `verified` | 支持 native roots + 官方 `.claude` / `.agents` compatibility roots + configured local `skills.paths` roots | 支持（exact `permission.skill` deny/re-enable） | 支持（native-root 安装） | 支持（managed permission overrides） | `skills.urls` metadata-only/no-fetch；configured/compat roots 不作为 install/write target |
-| Pi | `guarded` | 支持 Pi-native roots | 支持 guarded native toggle（仅 global/project/package，基于证据） | blocked | limited | V2.37 已实现 preview/snapshot/rollback 与 disabled-state rescan；install、兼容 root 写入、脚本执行、AI 自动写回、credentials 仍 blocked |
+| Pi | `guarded` | 支持 Pi-native roots + `.agents/skills` compatibility roots | 支持 guarded native / `.agents` compatibility toggle（基于证据） | 支持 native-root tool-global install | limited | package install/remove、`.agents` direct install、脚本执行、AI 自动写回、credentials 仍 blocked |
 | Hermes | `read-only` | 支持 active/profile Hermes home | blocked（read-only 扫描） | blocked | blocked | 外部目录仅按 `skills.external_dirs` 显式 external roots 处理；generic project scan / toggle / install / writable blocked |
 | OpenClaw | `read-only` | 支持文档化 filesystem roots | blocked（read-only scan only） | blocked | blocked | project scope 仅 workspace，toggle/install/writable blocked |
 
@@ -170,18 +170,18 @@ Codex 当前实现边界：
 | 项 | 值 |
 | --- | --- |
 | AgentId | `pi` |
-| 状态 | **Read-only implemented; guarded toggle complete** —— P0 evidence 证据已完成：global/project/package toggle、rollback、trust gate、invalid JSON/config、re-enable；V2.37 最小写入切片已完成，Pi install 与兼容根写入仍 blocked |
+| 状态 | **Guarded writable with native install and compatibility toggles** —— P0 evidence 证据已完成：global/project/package toggle、rollback、trust gate、invalid JSON/config、re-enable；V2.94 完成 `.agents/skills` compatibility scanning/toggles 与 native-root install；package install/remove 与 `.agents` direct install 仍 blocked |
 | Spec 工作单 | [`docs/pi-adapter-spec.md`](./pi-adapter-spec.md) |
 | 统一工作单 | [`docs/agent-adapter-spec-worklists.md`](./agent-adapter-spec-worklists.md#pi-coding-agent) |
 | 本地观测 | 2026-06-08 本机 `pi --version` 为 `0.78.1`；`~/.pi/agent/skills/` 和 `~/.pi/agent/settings.json` 存在；未读取或修改真实 settings 内容 |
-| Skill roots | 官方 Pi docs：全局 `~/.pi/agent/skills/`、`~/.agents/skills/`；项目 `.pi/skills/`、从 `cwd`/父级到 repo root 的 `.agents/skills/`；settings/package 也可添加 skill paths。V2.37 writable 切片只走 native/global-project-package 最小写入，不对 `.agents/skills` 等兼容根提供可写能力。 |
+| Skill roots | 官方 Pi docs：全局 `~/.pi/agent/skills/`、`~/.agents/skills/`；项目 `.pi/skills/`、从 `cwd`/父级到 repo root 的 `.agents/skills/`；settings/package 也可添加 skill paths。V2.94 支持 native roots 与 `.agents/skills` compatibility roots 扫描和 settings toggle；tool-global install 仅写 native Pi roots。 |
 | Skill 格式 | Skills Copilot 当前只 catalog 目录型 `SKILL.md`；Pi-native root `.md` 可能被 Pi agent 识别，但真实本机验证显示会混入大量普通资源文档，暂不展示；frontmatter `name`/`description` 必填 |
-| 配置文件 | 全局 Pi settings 与项目 `.pi/settings.json`；project settings override/merge global settings。V2.37 产品写入只使用服务验证后的 global/project settings target，不写兼容 roots。 |
-| 启用控制 | V2.37 guarded toggle 支持 local disabled-skill collection（`skills.disabled` / `disabledSkills`）的 disable/re-enable；project/package toggle 需要 trusted project settings；install 仍 blocked。 |
+| 配置文件 | 全局 Pi settings 与项目 `.pi/settings.json`；project settings override/merge global settings。V2.94 产品写入只使用服务验证后的 global/project settings target；`.agents` compatibility toggle 也通过 Pi settings，不直接写 `.agents` skill files。 |
+| 启用控制 | V2.94 guarded toggle 支持 local disabled-skill collection（`skills.disabled` / `disabledSkills`）的 disable/re-enable；project/package toggle 需要 trusted project settings；native-root install 支持 `~/.pi/agent/skills` 与 project `.pi/skills`。 |
 | Fixture | 最小 evidence fixtures 位于 `fixtures/pi/` |
-| 行动项 | 保持 V2.37 切片严格限制为 global/project/package minimal toggle 且无 install、无脚本执行、无 AI 自动写回、无凭据持久化、无任意兼容根写入；任何 Pi install、兼容根写入或更广 package mutation 都必须重新走 evidence gate。 |
+| 行动项 | 保持 V2.94 切片严格限制为 guarded settings toggle 与 native-root install；package install/remove、`.agents` direct install、脚本执行、AI 自动写回、凭据持久化、任意兼容根写入都必须重新走 evidence gate。 |
 
-> V2.37 只允许基于已验证证据写 Pi guarded native toggle；不要扩展到 Pi install、兼容 root 写入或未验证 package mutation，直到 exact mutation 和回滚语义另行完成本地验证。
+> V2.94 只允许基于已验证证据写 Pi guarded settings toggle 和 native-root direct install；不要扩展到 package install/remove、`.agents` direct install 或未验证 package mutation，直到 exact mutation 和回滚语义另行完成本地验证。
 
 ### 2.3.1 Pi `.md` 去噪与可解释性边界（V2.27）
 

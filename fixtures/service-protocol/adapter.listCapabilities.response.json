@@ -108,40 +108,41 @@
     {
       "agent": "pi",
       "display_name": "Pi",
-      "status": "read-only",
+      "status": "guarded",
       "scan": {
         "supported": true,
-        "status": "verified-read-only",
-        "reason": "V2.13 scans Pi-native global ~/.pi/agent/skills and project .pi/skills roots without reading or writing Pi settings."
+        "status": "verified",
+        "reason": "V2.94 scans Pi-native global/project roots and .agents/skills compatibility roots without reading secrets or fetching remote package indexes."
       },
       "project_scan": {
         "supported": true,
-        "status": "verified-read-only",
-        "reason": "Project scan walks .pi/skills from cwd up to the selected project root; .agents compatibility roots remain out of scope to avoid duplicate records."
+        "status": "verified-compatibility-roots",
+        "reason": "Project scan walks .pi/skills and .agents/skills compatibility roots from cwd up to the selected project root."
       },
       "config_toggle": {
-        "supported": false,
-        "status": "blocked",
-        "reason": "Pi enable/disable JSON mutation and rollback semantics are not verified."
+        "supported": true,
+        "status": "guarded-v2.94",
+        "reason": "V2.94 enables guarded Pi-native and .agents compatibility toggles through settings JSON, pre-toggle snapshots, atomic write verification, and rollback; project/package toggles require explicit project trust."
       },
       "config_snapshot": {
-        "supported": false,
-        "status": "blocked",
-        "reason": "No verified Pi config write target is available yet."
+        "supported": true,
+        "status": "guarded-v2.94",
+        "reason": "Pi toggle snapshots use the existing config snapshot and rollback path; redacted snapshots are not directly rollbackable."
       },
       "install": {
-        "supported": false,
-        "status": "blocked",
-        "reason": "Pi install target roots are not enabled until writable evidence is complete."
+        "supported": true,
+        "status": "verified-native-roots",
+        "reason": "Tool-global skills can be installed to Pi native ~/.pi/agent/skills and project .pi/skills roots after confirmation; .agents compatibility roots are scanned/toggleable but not install targets."
       },
       "writable": {
-        "supported": false,
-        "status": "blocked",
-        "reason": "Pi writes are blocked until the disposable local round-trip is complete."
+        "supported": true,
+        "status": "guarded-v2.94",
+        "reason": "Writable support covers guarded enable/disable settings updates for Pi-native and .agents compatibility roots plus native-root installs; script execution, AI writes, credentials, package install/remove, and compatibility-root skill-file installs remain blocked."
       },
       "blockers": [
-        "Verify Pi settings schema and enable/disable semantics.",
-        "Verify rollback-safe global/project config writes."
+        "Pi package install/remove remains blocked.",
+        "Project/package toggles require trusted Pi project settings.",
+        ".agents compatibility roots are not direct install targets."
       ]
     },
     {

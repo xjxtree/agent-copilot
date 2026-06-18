@@ -2145,7 +2145,7 @@ fn scan_all_returns_multi_agent_refresh_activity() {
 
     assert!(response.ok);
     let result = response.result.expect("scan all result");
-    assert_eq!(result.get("scanned_count").and_then(Value::as_u64), Some(4));
+    assert_eq!(result.get("scanned_count").and_then(Value::as_u64), Some(5));
     let activity = result
         .get("activity")
         .and_then(Value::as_object)
@@ -2218,6 +2218,11 @@ fn scan_all_returns_multi_agent_refresh_activity() {
     );
     assert_eq!(codex.get("scanned_count").and_then(Value::as_u64), Some(1));
     assert_eq!(codex.get("catalog_count").and_then(Value::as_u64), Some(1));
+    let pi = summaries
+        .iter()
+        .find(|summary| summary.get("agent").and_then(Value::as_str) == Some("pi"))
+        .expect("Pi summary");
+    assert_eq!(pi.get("scanned_count").and_then(Value::as_u64), Some(1));
 
     let _ = fs::remove_dir_all(&host.app_data_dir);
 }
@@ -2321,9 +2326,9 @@ fn adapter_list_diagnostics_reports_roots_config_and_blockers() {
     assert!(pi
         .get("blockers")
         .and_then(Value::as_array)
-        .is_some_and(|blockers| blockers
-            .iter()
-            .any(|blocker| { blocker.as_str() == Some("Pi install remains blocked.") })));
+        .is_some_and(|blockers| blockers.iter().any(|blocker| {
+            blocker.as_str() == Some("Pi package install/remove remains blocked.")
+        })));
     let hermes = records
         .iter()
         .find(|record| record.get("agent").and_then(Value::as_str) == Some("hermes"))
@@ -2423,7 +2428,10 @@ fn scan_all_uses_stored_project_context_when_env_context_is_absent() {
 
     assert!(scan_response.ok);
     let result = scan_response.result.expect("scan all result");
-    assert_eq!(result.get("scanned_count").and_then(Value::as_u64), Some(8));
+    assert_eq!(
+        result.get("scanned_count").and_then(Value::as_u64),
+        Some(11)
+    );
     let skills = result
         .get("skills")
         .and_then(Value::as_array)
@@ -2449,6 +2457,16 @@ fn scan_all_uses_stored_project_context_when_env_context_is_absent() {
         .get("roots_considered")
         .and_then(Value::as_array)
         .is_some_and(|roots| roots.len() >= 3));
+    let pi = result
+        .pointer("/activity/agent_summaries")
+        .and_then(Value::as_array)
+        .and_then(|summaries| {
+            summaries
+                .iter()
+                .find(|summary| summary.get("agent").and_then(Value::as_str) == Some("pi"))
+        })
+        .expect("Pi summary");
+    assert_eq!(pi.get("scanned_count").and_then(Value::as_u64), Some(3));
 
     let clear_response = host.handle(ServiceRequest {
         id: Some("clear-context".to_string()),

@@ -5,9 +5,9 @@
     "preview_token": "fixture-preview-token-v233",
     "target_enabled": false,
     "requested_count": 2,
-    "writable_count": 1,
-    "skipped_count": 1,
-    "applied_count": 1,
+    "writable_count": 2,
+    "skipped_count": 0,
+    "applied_count": 2,
     "writes_allowed": true,
     "affected_items": [
       {
@@ -22,24 +22,28 @@
         "capability_label": "Claude Code verified config toggle",
         "snapshot_plan": "Create a pre-batch-toggle agent config snapshot before writing.",
         "rollback_plan": "Rollback remains available through snapshot.previewRollback and snapshot.rollback."
-      }
-    ],
-    "skipped_items": [
+      },
       {
         "instance_id": "pi-global-fixture",
         "name": "fixture-pi",
         "agent": "pi",
         "scope": "agent-global",
-        "reason": "Pi is read-only in V2.33; enable/disable mutation and rollback semantics are not verified.",
-        "capability_label": "Pi read-only scanner; writable blocked"
+        "current_enabled": true,
+        "target_enabled": false,
+        "config_scope": "agent-global",
+        "config_target": "/tmp/skills-copilot-home/.pi/settings.json",
+        "capability_label": "Pi guarded config toggle",
+        "snapshot_plan": "Create a pre-batch-toggle agent config snapshot before writing.",
+        "rollback_plan": "Rollback remains available through snapshot.previewRollback and snapshot.rollback."
       }
     ],
+    "skipped_items": [],
     "capability_labels": [
       "Claude Code verified config toggle",
-      "Pi read-only scanner; writable blocked"
+      "Pi guarded config toggle"
     ],
     "snapshot_rollback_notes": [
-      "Will create one pre-batch-toggle config snapshot for each affected config target (1 target(s)).",
+      "Will create one pre-batch-toggle config snapshot for each affected config target (2 target(s)).",
       "Each write uses the existing config lock, atomic write, readback verification, and rollback-safe snapshot path.",
       "No skill files, scripts, credentials, AI providers, cloud sync, telemetry, or release artifacts are touched."
     ],
@@ -52,6 +56,17 @@
         "display_path": "/tmp/skills-copilot-home/.claude/skills/fixture-claude/SKILL.md",
         "definition_id": "fixture-claude",
         "name": "fixture-claude",
+        "state": "disabled",
+        "enabled": false
+      },
+      {
+        "id": "pi-global-fixture",
+        "agent": "pi",
+        "scope": "agent-global",
+        "path": "/tmp/skills-copilot-home/.pi/agent/skills/fixture-pi/SKILL.md",
+        "display_path": "/tmp/skills-copilot-home/.pi/agent/skills/fixture-pi/SKILL.md",
+        "definition_id": "fixture-pi",
+        "name": "fixture-pi",
         "state": "disabled",
         "enabled": false
       }

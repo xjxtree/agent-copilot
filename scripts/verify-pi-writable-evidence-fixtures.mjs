@@ -67,8 +67,9 @@ try {
   assertUnderTemp(workRoot);
 
   const manifest = readJson("manifest.json");
-  assert(manifest.notice.includes("V2.37 guarded Pi native toggle support is implemented"), "manifest must keep guarded toggle status explicit");
-  assert(manifest.notice.includes("install and compatibility-root writes remain blocked"), "manifest must keep blocked write scope explicit");
+  assert(manifest.notice.includes("guarded Pi native/compatibility toggle support"), "manifest must keep guarded toggle status explicit");
+  assert(manifest.notice.includes("native-root direct install are implemented"), "manifest must keep native direct install status explicit");
+  assert(manifest.notice.includes("package install/remove and .agents direct installs remain blocked"), "manifest must keep blocked write scope explicit");
 
   for (const skill of manifest.skills) {
     const skillPath = join(workRoot, skill.path);
@@ -76,7 +77,8 @@ try {
     const content = readFileSync(skillPath, "utf8");
     assert(content.includes(`name: ${skill.name}`), `skill name mismatch for ${skill.name}`);
     assert(content.includes("guarded_toggle: implemented"), `missing guarded toggle marker for ${skill.name}`);
-    assert(content.includes("install_writable: blocked"), `missing install blocked marker for ${skill.name}`);
+    assert(content.includes("package_install_writable: blocked"), `missing package install blocked marker for ${skill.name}`);
+    assert(content.includes("agents_direct_install_writable: blocked"), `missing agents direct install blocked marker for ${skill.name}`);
   }
 
   const enabled = readJson(manifest.cases.enabled);

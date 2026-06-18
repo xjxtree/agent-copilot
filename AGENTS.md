@@ -15,11 +15,11 @@ coding agents working in this repository.
 
 ## Current State
 
-- Current phase: **V2.93 opencode custom roots completed**.
-- Completed baseline: V2.1-V2.93. V2.87 unlocked validation passed on 2026-06-17 via `pnpm check:macos`; V2.88 added Computer Use per-surface evidence under `docs/ui-artifacts/v2.88-handoff-evidence/`; V2.89 refreshed the app icon assets; V2.90 migrated the packaged app identity and default app-data id with compatibility; V2.91 added local model-task matching history; V2.92 added Codex read-only expanded roots and a native-root write allowlist; V2.93 added opencode configured local `skills.paths` scanning.
+- Current phase: **V2.94 Pi install and compatibility writes completed**.
+- Completed baseline: V2.1-V2.94. V2.87 unlocked validation passed on 2026-06-17 via `pnpm check:macos`; V2.88 added Computer Use per-surface evidence under `docs/ui-artifacts/v2.88-handoff-evidence/`; V2.89 refreshed the app icon assets; V2.90 migrated the packaged app identity and default app-data id with compatibility; V2.91 added local model-task matching history; V2.92 added Codex read-only expanded roots and a native-root write allowlist; V2.93 added opencode configured local `skills.paths` scanning; V2.94 added Pi `.agents/skills` compatibility scanning/toggles and native-root installs.
 - Completed product slice: Agent Copilot M1-M4. The displayed product name and primary packaged app identity are Agent Copilot; Swift module/source names, Rust crate names, sidecar name, AX ids, env vars, and legacy Keychain service intentionally retain `SkillsCopilot` / `skills-copilot` compatibility.
 - Current Agent Copilot surfaces: Lineup default surface, Agent Profile, sorted read-only decision queue, default-off local session preview, and default-off MCP server preview.
-- Near-term post-V2.93 planning: V2.94-V2.96 cover Pi install/compat writes and Hermes/OpenClaw writable/install evidence slices.
+- Near-term post-V2.94 planning: V2.95-V2.96 cover Hermes/OpenClaw writable/install evidence slices.
 - Maintained product UI: native macOS app in `apps/macos`.
 - Service boundary: Rust typed JSON stdio sidecar in `crates/service`.
 - Current app bundle path: `dist/AgentCopilot.app`.
@@ -55,7 +55,7 @@ coding agents working in this repository.
 - Claude Code, Codex, opencode, Pi, Hermes, and OpenClaw are the current adapter families.
 - Codex scans verified user/project `.agents/skills`, `$CODEX_HOME/skills`, local plugin marketplace roots, and `/etc/codex/skills` when present. `$CODEX_HOME/skills`, plugin/admin/system roots, and project `.codex/config.toml` are read-only diagnostics; writable toggles remain limited to user/project `.agents/skills` instances through the user config override.
 - Opencode scans native roots, official `.claude` / `.agents` compatibility roots, and configured local `skills.paths` roots. `skills.urls` is metadata-only: do not fetch network skill indexes unless a future explicit confirmation flow is scoped. Writable support remains limited to exact managed `permission.skill` overrides; installs remain limited to native opencode roots.
-- Pi writable support is limited to the V2.37 evidence-backed guarded native global/project/package toggle slice. Pi install and compatibility-root writes are scheduled for V2.94 and remain blocked until disposable evidence closes.
+- Pi scans native `~/.pi/agent/skills` / project `.pi/skills` roots plus `.agents/skills` compatibility roots. Guarded toggles may update Pi settings for native and `.agents` compatibility instances after trust/snapshot checks. Tool-global installs are limited to native `~/.pi/agent/skills` and project `.pi/skills`; Pi package install/remove and `.agents` direct skill-file installs remain blocked.
 - Hermes external roots are explicit read-only roots. Do not infer generic project roots. Hermes writable/install is scheduled for V2.95 and remains blocked until verified.
 - OpenClaw workspace scope is read-only and limited to `<workspace>/skills` and `<workspace>/.agents/skills`. OpenClaw writable/install is scheduled for V2.96 and remains blocked until verified.
 
@@ -181,3 +181,8 @@ This section keeps compact machine-checked milestone anchors. Full details live 
   canonicalization/dedupe, opencode configured provenance labels, and
   `skills.urls` metadata-only/no-fetch boundary; installs remain native-root
   only.
+- V2.94 Pi install and compatibility writes: `RootSource::Compatibility` for
+  Pi `.agents/skills`, guarded native/compat toggles through Pi settings,
+  native-root tool-global installs to `~/.pi/agent/skills` and project
+  `.pi/skills`, project trust gating, and package install/remove plus
+  `.agents` direct installs remain blocked.

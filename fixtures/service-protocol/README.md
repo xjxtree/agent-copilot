@@ -31,13 +31,16 @@ V2.11 adapter capability matrix note:
 
 - `adapter.listCapabilities.response.json` is the direct capability matrix fixture for Claude Code, Codex, opencode, Pi, Hermes, and OpenClaw.
 - `service.status.response.json` and `app.stateSnapshot.response.json` include `adapter_capabilities` so native UI shells can render adapter status without guessing from agent names.
-- The matrix is descriptive for unsupported write paths: opencode is writable for native roots after V2.12 validation, Pi is read-only after V2.13 validation, OpenClaw is read-only after V2.16 validation, and Hermes is read-only after V2.17 validation while unsupported write/install paths stay blocked.
+- The matrix is descriptive for unsupported write paths: opencode is writable for native roots after V2.12 validation, Pi is guarded after V2.94 validation, OpenClaw is read-only after V2.16 validation, and Hermes is read-only after V2.17 validation while unsupported write/install paths stay blocked.
 
-V2.13 Pi blocker note:
+V2.13 / V2.94 Pi note:
 
-- `adapter.listCapabilities` and `service.status` fixtures keep Pi as read-only scan and blocked config/snapshot/install; no Pi writable claim is made.
-- Pi fixtures under `fixtures/pi/` are read-only parser/scan contract samples until disposable local `agentDir` + project round-trip verifies mutation, rollback, and trust behavior.
-- `config.toggleSkill` and install UX for Pi must remain disabled in the matrix until Pi write evidence is completed.
+- V2.13 kept Pi read-only. V2.37 added guarded native toggles, and V2.94
+  adds `.agents/skills` compatibility toggles plus native-root direct install.
+- `adapter.listCapabilities`, `service.status`, and `app.stateSnapshot`
+  fixtures expose Pi as guarded with native-root install support.
+- Pi package install/remove, `.agents` direct skill-file installs, scripts,
+  provider writes, credentials, cloud sync, and telemetry remain blocked.
 
 V2.17 Hermes read-only note:
 

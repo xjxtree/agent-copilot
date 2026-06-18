@@ -8,13 +8,13 @@ opencode, Pi, Hermes, and OpenClaw.
 
 | Area | Status |
 | --- | --- |
-| Current phase | V2.93 opencode custom roots completed |
-| Completed baseline | V2.1-V2.93 |
-| Recent product line | V2.41-V2.93 AI-native analysis, task cockpit, validation hardening, module splitting, read-only Agent Copilot surfaces, per-surface evidence closeout, brand asset refresh, compatibility-first identifier migration, local model-task history, Codex expanded root diagnostics, and opencode configured local roots |
+| Current phase | V2.94 Pi install and compatibility writes completed |
+| Completed baseline | V2.1-V2.94 |
+| Recent product line | V2.41-V2.94 AI-native analysis, task cockpit, validation hardening, module splitting, read-only Agent Copilot surfaces, per-surface evidence closeout, brand asset refresh, compatibility-first identifier migration, local model-task history, Codex expanded root diagnostics, opencode configured local roots, and Pi install/compat writes |
 | Agent Copilot line | M1-M4 completed; unlocked app-window evidence captured |
 | Maintained UI | Native macOS app in `apps/macos` |
 | Service boundary | Rust typed JSON stdio sidecar in `crates/service` |
-| Next version | V2.94 Pi install and compatibility writes; V2.94-V2.96 near-term plan is tracked in `docs/roadmap.md` and `docs/development-tasks.md` |
+| Next version | V2.95 Hermes writable/install; V2.95-V2.96 near-term plan is tracked in `docs/roadmap.md` and `docs/development-tasks.md` |
 
 V2.84-V2.86 completed the post-V2.83 module-splitting line:
 
@@ -83,6 +83,18 @@ V2.93 completes opencode custom local roots:
   network skill indexes by default.
 - Keeps opencode installs limited to native roots and config toggles limited to
   exact managed `permission.skill` overrides.
+
+V2.94 completes Pi install and compatibility writes:
+
+- Adds Pi `.agents/skills` compatibility roots to the scanner as
+  `RootSource::Compatibility` while keeping direct `.md` noise filtered.
+- Allows guarded Pi toggles for Pi-native and `.agents` compatibility instances
+  through `~/.pi/agent/settings.json` / project `.pi/settings.json`, including
+  `project.trusted` gating.
+- Allows tool-global installs only to native Pi roots:
+  `~/.pi/agent/skills` and project `.pi/skills`.
+- Keeps Pi package install/remove and `.agents` direct skill-file installs
+  blocked.
 
 ## What It Does
 
@@ -166,7 +178,7 @@ This section only keeps machine-checked status anchors. Detailed evidence lives
 in `docs/v2.*-verification-checklist.md` and `docs/development-tasks.md`.
 
 Baseline phrase used by docs gates:
-V2.93 opencode custom roots completed.
+V2.94 Pi install and compatibility writes completed.
 
 ### V2.74-V2.78
 
@@ -239,7 +251,7 @@ V2.93 opencode custom roots completed.
   `docs/ui-artifacts/native-macos-shell/completed.png`, screenshot artifact
   verification, and privacy check.
 
-### V2.88-V2.93
+### V2.88-V2.94
 
 - V2.88 handoff/evidence closeout:
   [`docs/v2.88-verification-checklist.md`](./docs/v2.88-verification-checklist.md),
@@ -265,6 +277,11 @@ V2.93 opencode custom roots completed.
   `RootSource::Configured`, configured local `skills.paths` scanning,
   canonicalization/dedupe, metadata-only `skills.urls`, and no uncontrolled
   network fetch.
+- V2.94 Pi install and compatibility writes:
+  [`docs/v2.94-verification-checklist.md`](./docs/v2.94-verification-checklist.md),
+  `RootSource::Compatibility`, Pi `.agents/skills` scan/toggle support,
+  native-root install targets, project trust gating, and package install/remove
+  blocked.
 
 ## Development Notes
 

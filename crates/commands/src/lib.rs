@@ -815,31 +815,32 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
             status: "guarded",
             scan: AdapterFeatureCapability::supported_with_reason(
                 "verified",
-                "V2.13 scans Pi-native global ~/.pi/agent/skills and project .pi/skills roots without reading or writing Pi settings.",
+                "V2.94 scans Pi-native global/project roots and .agents/skills compatibility roots without reading secrets or fetching remote package indexes.",
             ),
             project_scan: AdapterFeatureCapability::supported_with_reason(
-                "verified",
-                "Project scan walks .pi/skills from cwd up to the selected project root; .agents compatibility roots remain out of scope to avoid duplicate records.",
+                "verified-compatibility-roots",
+                "Project scan walks .pi/skills and .agents/skills compatibility roots from cwd up to the selected project root.",
             ),
             config_toggle: AdapterFeatureCapability::supported_with_reason(
-                "guarded-v2.37",
-                "V2.37 enables minimal Pi native toggles through settings JSON, pre-toggle snapshots, atomic write verification, and rollback; project/package toggles require explicit project trust.",
+                "guarded-v2.94",
+                "V2.94 enables guarded Pi-native and .agents compatibility toggles through settings JSON, pre-toggle snapshots, atomic write verification, and rollback; project/package toggles require explicit project trust.",
             ),
             config_snapshot: AdapterFeatureCapability::supported_with_reason(
-                "guarded-v2.37",
+                "guarded-v2.94",
                 "Pi toggle snapshots use the existing config snapshot and rollback path; redacted snapshots are not directly rollbackable.",
             ),
-            install: AdapterFeatureCapability::blocked(
-                "blocked",
-                "Pi install target roots remain blocked; V2.37 only enables guarded config toggles.",
+            install: AdapterFeatureCapability::supported_with_reason(
+                "verified-native-roots",
+                "Tool-global skills can be installed to Pi native ~/.pi/agent/skills and project .pi/skills roots after confirmation; .agents compatibility roots are scanned/toggleable but not install targets.",
             ),
             writable: AdapterFeatureCapability::supported_with_reason(
-                "guarded-toggle-only",
-                "Writable support is limited to enable/disable settings updates for Pi-native roots; installs, script execution, AI writes, credentials, and compatibility-root writes remain blocked.",
+                "guarded-v2.94",
+                "Writable support covers guarded enable/disable settings updates for Pi-native and .agents compatibility roots plus native-root installs; script execution, AI writes, credentials, package install/remove, and compatibility-root skill-file installs remain blocked.",
             ),
             blockers: vec![
-                "Pi install remains blocked.",
+                "Pi package install/remove remains blocked.",
                 "Project/package toggles require trusted Pi project settings.",
+                ".agents compatibility roots are not direct install targets.",
             ],
         },
         AdapterCapabilityRecord {
@@ -1056,7 +1057,10 @@ fn adapter_root_reason(
             "Confirmed OpenClaw workspace root; arbitrary repository roots are not inferred or scanned.".to_string()
         }
         (AgentId::Pi, RootSource::Project) => {
-            "Pi project/package root is scan-capable; writable toggles remain guarded by trusted project settings and install remains blocked.".to_string()
+            "Pi native project/package root is scan-capable; writable toggles remain guarded by trusted project settings, and tool-global direct install may target native Pi roots after confirmation.".to_string()
+        }
+        (AgentId::Pi, RootSource::Compatibility) => {
+            "Pi .agents compatibility root is scan-capable and toggleable through guarded Pi settings, but is never a direct skill-file install target.".to_string()
         }
         (AgentId::Codex, RootSource::Compatibility) => {
             "Codex compatibility/system-observed skills root; scanned read-only and never used as a toggle, install, snapshot, rollback, or config-write target.".to_string()
@@ -2111,7 +2115,7 @@ fn preview_skill_install_from_tool_global(
 ) -> Result<SkillInstallPreviewRecord, CommandError> {
     if !matches!(
         target_agent,
-        AgentId::ClaudeCode | AgentId::Codex | AgentId::Opencode
+        AgentId::ClaudeCode | AgentId::Codex | AgentId::Opencode | AgentId::Pi
     ) {
         return Err(CommandError::InstallUnsupported(format!(
             "{} skills are not writable by install commands",
@@ -3667,6 +3671,10 @@ fn skill_install_root(
         (AgentId::Opencode, Scope::AgentProject) => {
             Ok(target_project_root(ctx, project_path)?.join(".opencode/skills"))
         }
+        (AgentId::Pi, Scope::AgentGlobal) => Ok(ctx.user_home.join(".pi/agent/skills")),
+        (AgentId::Pi, Scope::AgentProject) => {
+            Ok(target_project_root(ctx, project_path)?.join(".pi/skills"))
+        }
         (_, Scope::ToolGlobal) => Err(CommandError::UnsupportedScope(scope)),
         (agent, _) => Err(CommandError::InstallUnsupported(format!(
             "{} skills are not writable by install commands",
@@ -3812,34 +3820,60 @@ fn pi_config_path_for_instance(
     ctx: &AdapterContext,
     meta: &SkillInstanceMeta,
 ) -> Result<PathBuf, CommandError> {
-    match meta.scope {
+    pi_config_path_for_skill_path(ctx, meta.scope, &meta.path)
+}
+
+fn pi_config_path_for_skill_path(
+    ctx: &AdapterContext,
+    scope: Scope,
+    skill_path: &Path,
+) -> Result<PathBuf, CommandError> {
+    match scope {
         Scope::AgentGlobal => Ok(ctx.user_home.join(".pi/settings.json")),
         Scope::AgentProject => {
-            let skill_root = meta
-                .path
-                .ancestors()
-                .find(|ancestor| {
-                    ancestor.file_name().and_then(|name| name.to_str()) == Some("skills")
-                        && ancestor
-                            .parent()
-                            .and_then(Path::file_name)
-                            .and_then(|name| name.to_str())
-                            == Some(".pi")
-                })
-                .ok_or_else(|| {
-                    CommandError::UnsafeConfigPath(format!(
-                        "Pi project skill {} is not under a .pi/skills root",
-                        meta.path.display()
-                    ))
+            if let Some(pi_skill_root) = pi_project_native_skill_root(skill_path) {
+                let pi_dir = pi_skill_root.parent().ok_or_else(|| {
+                    CommandError::UnsafeConfigPath("Pi skill root has no .pi parent".to_string())
                 })?;
-            let pi_dir = skill_root.parent().ok_or_else(|| {
-                CommandError::UnsafeConfigPath("Pi skill root has no .pi parent".to_string())
-            })?;
-            Ok(pi_dir.join("settings.json"))
+                return Ok(pi_dir.join("settings.json"));
+            }
+            if pi_project_compatibility_skill_root(skill_path).is_some() {
+                return ctx
+                    .project_root
+                    .as_ref()
+                    .map(|root| root.join(".pi/settings.json"))
+                    .ok_or(CommandError::UnsupportedScope(scope));
+            }
+            Err(CommandError::UnsafeConfigPath(format!(
+                "Pi project skill {} is not under a .pi/skills or .agents/skills root",
+                skill_path.display()
+            )))
         }
-        Scope::ToolGlobal => Err(CommandError::UnsupportedScope(meta.scope)),
-        _ => Err(CommandError::UnsupportedScope(meta.scope)),
+        Scope::ToolGlobal => Err(CommandError::UnsupportedScope(scope)),
+        _ => Err(CommandError::UnsupportedScope(scope)),
     }
+}
+
+fn pi_project_native_skill_root(skill_path: &Path) -> Option<&Path> {
+    skill_path.ancestors().find(|ancestor| {
+        ancestor.file_name().and_then(|name| name.to_str()) == Some("skills")
+            && ancestor
+                .parent()
+                .and_then(Path::file_name)
+                .and_then(|name| name.to_str())
+                == Some(".pi")
+    })
+}
+
+fn pi_project_compatibility_skill_root(skill_path: &Path) -> Option<&Path> {
+    skill_path.ancestors().find(|ancestor| {
+        ancestor.file_name().and_then(|name| name.to_str()) == Some("skills")
+            && ancestor
+                .parent()
+                .and_then(Path::file_name)
+                .and_then(|name| name.to_str())
+                == Some(".agents")
+    })
 }
 
 fn validate_pi_config_write_target(
@@ -4672,34 +4706,7 @@ fn pi_config_path_for_skill_instance(
     ctx: &AdapterContext,
     instance: &SkillInstance,
 ) -> Result<PathBuf, CommandError> {
-    match instance.scope {
-        Scope::AgentGlobal => Ok(ctx.user_home.join(".pi/settings.json")),
-        Scope::AgentProject => {
-            let skill_root = instance
-                .path
-                .ancestors()
-                .find(|ancestor| {
-                    ancestor.file_name().and_then(|name| name.to_str()) == Some("skills")
-                        && ancestor
-                            .parent()
-                            .and_then(Path::file_name)
-                            .and_then(|name| name.to_str())
-                            == Some(".pi")
-                })
-                .ok_or_else(|| {
-                    CommandError::UnsafeConfigPath(format!(
-                        "Pi project skill {} is not under a .pi/skills root",
-                        instance.path.display()
-                    ))
-                })?;
-            let pi_dir = skill_root.parent().ok_or_else(|| {
-                CommandError::UnsafeConfigPath("Pi skill root has no .pi parent".to_string())
-            })?;
-            Ok(pi_dir.join("settings.json"))
-        }
-        Scope::ToolGlobal => Err(CommandError::UnsupportedScope(instance.scope)),
-        _ => Err(CommandError::UnsupportedScope(instance.scope)),
-    }
+    pi_config_path_for_skill_path(ctx, instance.scope, &instance.path)
 }
 
 fn codex_disabled_skill_paths(path: &Path) -> Result<Vec<PathBuf>, CommandError> {

@@ -384,7 +384,7 @@ fn scan_all_includes_claude_and_codex_fixtures() {
     let count = scan_all_to_catalog(&ctx, &catalog).expect("scan all succeeds");
     let records = catalog.list_skill_records().expect("records list");
 
-    assert_eq!(count, 8);
+    assert_eq!(count, 11);
     assert!(
         records
             .iter()
@@ -433,6 +433,24 @@ fn scan_all_includes_claude_and_codex_fixtures() {
             .any(|record| record.agent == "opencode" && record.name == "nested-gamma"),
         "opencode should include nested project .agents/skills compatibility roots"
     );
+    assert!(
+        records
+            .iter()
+            .any(|record| record.agent == "pi" && record.name == "user-alpha"),
+        "Pi should include documented shared ~/.agents/skills user roots"
+    );
+    assert!(
+        records
+            .iter()
+            .any(|record| record.agent == "pi" && record.name == "repo-beta"),
+        "Pi should include documented project .agents/skills compatibility roots"
+    );
+    assert!(
+        records
+            .iter()
+            .any(|record| record.agent == "pi" && record.name == "nested-gamma"),
+        "Pi should include nested project .agents/skills compatibility roots"
+    );
 }
 
 #[test]
@@ -452,7 +470,7 @@ fn scan_all_report_splits_agent_counts_and_roots() {
 
     let report = scan_all_catalog_report(&ctx, &catalog).expect("scan all succeeds");
 
-    assert_eq!(report.scanned_count, 8);
+    assert_eq!(report.scanned_count, 11);
     let claude = report
         .agents
         .iter()
@@ -495,6 +513,18 @@ fn scan_all_report_splits_agent_counts_and_roots() {
         .expect("OpenClaw report");
     assert_eq!(openclaw.display_name, "OpenClaw");
     assert_eq!(openclaw.scanned_count, 1);
+    let pi = report
+        .agents
+        .iter()
+        .find(|agent| agent.agent == AgentId::Pi)
+        .expect("Pi report");
+    assert_eq!(pi.display_name, "Pi");
+    assert_eq!(pi.scanned_count, 3);
+    assert_eq!(
+        pi.scanned_roots.len(),
+        3,
+        "Pi scans user, repo, and nested cwd .agents compatibility roots"
+    );
 }
 
 #[test]
@@ -673,7 +703,7 @@ fn scan_all_includes_openclaw_and_hermes_after_pi() {
     let report = scan_all_catalog_report(&ctx, &catalog).expect("scan all succeeds");
     let records = catalog.list_skill_records().expect("records list");
 
-    assert_eq!(report.scanned_count, 8);
+    assert_eq!(report.scanned_count, 9);
     assert_eq!(
         report
             .agents
@@ -1679,6 +1709,64 @@ fn toggle_pi_project_skill_requires_trusted_project_settings() {
 }
 
 #[test]
+fn toggle_pi_project_compatibility_skill_requires_trust_and_writes_pi_settings() {
+    let temp_root = temp_test_dir("pi-toggle-project-compat");
+    let home = temp_root.join("home");
+    let project = temp_root.join("project");
+    write_pi_project_compatibility_skill(&project, "pi-agent-compat");
+    let settings_path = project.join(".pi/settings.json");
+    std::fs::create_dir_all(settings_path.parent().expect("settings parent"))
+        .expect("create Pi settings dir");
+    std::fs::write(
+        &settings_path,
+        "{\n  \"project\": { \"trusted\": false },\n  \"skills\": { \"disabled\": [] }\n}\n",
+    )
+    .expect("write untrusted Pi settings");
+
+    let catalog = Catalog::in_memory().expect("catalog opens");
+    catalog.init().expect("catalog initializes");
+    let ctx = AdapterContext {
+        user_home: home,
+        project_root: Some(project.clone()),
+        project_cwd: Some(project.clone()),
+        extra_roots: vec![],
+    };
+    scan_all_to_catalog(&ctx, &catalog).expect("scan all");
+    let pi_id = catalog
+        .list_skill_records()
+        .expect("records")
+        .into_iter()
+        .find(|record| record.agent == "pi" && record.name == "pi-agent-compat")
+        .expect("Pi compatibility project record")
+        .id;
+
+    let blocked = toggle_skill(&catalog, &ctx, &pi_id, false)
+        .expect_err("untrusted Pi compatibility writes are blocked");
+    assert!(matches!(blocked, CommandError::Adapter(_)));
+
+    std::fs::write(
+        &settings_path,
+        "{\n  \"project\": { \"trusted\": true },\n  \"skills\": { \"disabled\": [] }\n}\n",
+    )
+    .expect("write trusted Pi settings");
+    let record = toggle_skill(&catalog, &ctx, &pi_id, false)
+        .expect("trusted Pi compatibility toggle succeeds");
+    assert!(!record.enabled);
+    let content = std::fs::read_to_string(&settings_path).expect("read Pi settings");
+    assert!(content.contains("\"pi-agent-compat\""));
+
+    scan_all_to_catalog(&ctx, &catalog).expect("rescan all");
+    let rescanned = catalog
+        .get_skill_record(&pi_id)
+        .expect("catalog lookup")
+        .expect("Pi compatibility record remains");
+    assert!(!rescanned.enabled);
+    assert_eq!(rescanned.state, "disabled");
+
+    let _ = std::fs::remove_dir_all(&temp_root);
+}
+
+#[test]
 fn batch_toggle_preview_blocks_apply_when_selection_has_no_writable_items() {
     let temp_root = temp_test_dir("batch-toggle-read-only");
     let home = temp_root.join("home");
@@ -2221,15 +2309,15 @@ fn scan_records_v2_8_local_content_rule_findings() {
     let findings = catalog.list_rule_findings().expect("findings list");
     assert_eq!(
         records.len(),
-        18,
-        "Codex, OpenClaw, and opencode scan the documented shared ~/.agents/skills root"
+        24,
+        "Codex, OpenClaw, opencode, and Pi scan the documented shared ~/.agents/skills root"
     );
     assert_eq!(
         findings
             .iter()
             .filter(|finding| finding.rule_id == "frontmatter.tools-not-empty")
             .count(),
-        6,
+        8,
         "empty array and blank string tools fields are reported for all shared-root agents"
     );
     assert!(
@@ -2735,6 +2823,85 @@ fn install_to_opencode_writes_native_user_skill_root() {
 }
 
 #[test]
+fn install_to_pi_writes_native_user_skill_root() {
+    let temp_root =
+        std::env::temp_dir().join(format!("skills-copilot-install-pi-{}", std::process::id()));
+    let home = temp_root.join("home");
+    std::fs::create_dir_all(&home).expect("create home");
+    let source_path = write_tool_global_skill(&temp_root, "portable-pi");
+    let catalog = Catalog::in_memory().expect("catalog opens");
+    catalog.init().expect("catalog initializes");
+    catalog
+        .upsert_skill_instance(&install_tool_global_instance(
+            "tool-global-pi",
+            source_path,
+            "portable-pi",
+        ))
+        .expect("upsert tool-global");
+    let ctx = AdapterContext {
+        user_home: home.clone(),
+        project_root: None,
+        project_cwd: None,
+        extra_roots: vec![],
+    };
+
+    let result = install_skill_from_tool_global(
+        &catalog,
+        &ctx,
+        "tool-global-pi",
+        AgentId::Pi,
+        Scope::AgentGlobal,
+        None,
+        true,
+    )
+    .expect("Pi install succeeds");
+
+    let target = home.join(".pi/agent/skills/portable-pi/SKILL.md");
+    assert!(result.wrote);
+    assert_eq!(result.target_path, target.to_string_lossy());
+    assert!(target.exists());
+    assert!(catalog
+        .list_skill_records()
+        .expect("records")
+        .iter()
+        .any(|record| record.agent == "pi" && record.name == "portable-pi"));
+
+    let _ = std::fs::remove_dir_all(&temp_root);
+}
+
+#[test]
+fn pi_v294_capability_matrix_exposes_native_install_and_compatibility_toggles() {
+    let ctx = AdapterContext {
+        user_home: PathBuf::from("/tmp/home"),
+        project_root: Some(PathBuf::from("/tmp/project")),
+        project_cwd: Some(PathBuf::from("/tmp/project")),
+        extra_roots: vec![],
+    };
+    let pi = list_adapter_capabilities(&ctx)
+        .into_iter()
+        .find(|record| record.agent == AgentId::Pi.as_str())
+        .expect("Pi capability record");
+
+    assert_eq!(pi.status, "guarded");
+    assert!(pi.project_scan.supported);
+    assert_eq!(pi.project_scan.status, "verified-compatibility-roots");
+    assert!(pi.config_toggle.supported);
+    assert_eq!(pi.config_toggle.status, "guarded-v2.94");
+    assert!(pi.install.supported);
+    assert_eq!(pi.install.status, "verified-native-roots");
+    assert!(pi.writable.supported);
+    assert_eq!(pi.writable.status, "guarded-v2.94");
+    assert!(pi
+        .blockers
+        .iter()
+        .any(|blocker| blocker.contains("package install/remove")));
+    assert!(pi
+        .blockers
+        .iter()
+        .any(|blocker| blocker.contains(".agents compatibility roots")));
+}
+
+#[test]
 fn install_project_target_outside_current_root_is_rejected() {
     let temp_root = std::env::temp_dir().join(format!(
         "skills-copilot-install-project-boundary-{}",
@@ -3172,6 +3339,18 @@ fn write_pi_global_skill(root: &Path, name: &str) -> PathBuf {
     )
     .expect("write pi skill");
     skill_path.canonicalize().expect("canonicalize skill path")
+}
+
+fn write_pi_project_compatibility_skill(root: &Path, name: &str) -> PathBuf {
+    let skill_dir = root.join(".agents/skills").join(name);
+    std::fs::create_dir_all(&skill_dir).expect("create pi compatibility skill dir");
+    let path = skill_dir.join("SKILL.md");
+    std::fs::write(
+        &path,
+        format!("---\nname: {name}\ndescription: Pi compatibility fixture\n---\nbody"),
+    )
+    .expect("write pi compatibility skill");
+    path
 }
 
 fn write_hermes_global_skill(root: &Path, name: &str) -> PathBuf {

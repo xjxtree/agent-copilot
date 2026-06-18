@@ -1,5 +1,5 @@
 {
-  "notice": "V2.36 evidence harness promoted by V2.37: V2.37 guarded Pi native toggle support is implemented for global/project/package flows; install and compatibility-root writes remain blocked.",
+  "notice": "V2.36 evidence harness promoted by V2.37 and superseded by V2.94: guarded Pi native/compatibility toggle support and native-root direct install are implemented; package install/remove and .agents direct installs remain blocked.",
   "configFile": "config/pi-settings.enabled.json",
   "skills": [
     {

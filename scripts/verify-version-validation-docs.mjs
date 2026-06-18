@@ -255,6 +255,21 @@ const versions = {
       "Final status decision: completed",
     ],
   },
+  "v2.94": {
+    title: "# V2.94 Verification Checklist",
+    required: [
+      "Pi install and compatibility-root writes",
+      "RootSource::Compatibility",
+      ".agents/skills",
+      "~/.pi/agent/skills",
+      ".pi/skills",
+      "project.trusted",
+      "native-root install",
+      "package install/remove remains blocked",
+      "docs/ui-artifacts/v2.94-pi-install-compat-writes",
+      "Final status decision: completed",
+    ],
+  },
 };
 
 const staleStatus = [

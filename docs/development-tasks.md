@@ -1,11 +1,11 @@
 # Development Tasks
 
-> Status: V2.93 opencode custom local roots is complete.
+> Status: V2.94 Pi install and compatibility writes is complete.
 > V2.84 Swift Detail section splitting, V2.85 Rust RPC domain module splitting,
 > and V2.86 Rust helper/test split completed.
-> V2.1 through V2.93 are the synchronized completed baseline; V2.87 unlocked `pnpm check:macos` passed on 2026-06-17, V2.88 captured per-surface Computer Use evidence, V2.89 refreshed app icon assets, V2.90 migrated packaged app identity/default app-data id with compatibility, V2.91 added local model-task matching history, V2.92 completed Codex expanded roots with read-only diagnostics plus a native-root write allowlist, and V2.93 completed opencode configured local `skills.paths` scanning while keeping `skills.urls` metadata-only/no-fetch.
+> V2.1 through V2.94 are the synchronized completed baseline; V2.87 unlocked `pnpm check:macos` passed on 2026-06-17, V2.88 captured per-surface Computer Use evidence, V2.89 refreshed app icon assets, V2.90 migrated packaged app identity/default app-data id with compatibility, V2.91 added local model-task matching history, V2.92 completed Codex expanded roots with read-only diagnostics plus a native-root write allowlist, V2.93 completed opencode configured local `skills.paths` scanning while keeping `skills.urls` metadata-only/no-fetch, and V2.94 completed Pi `.agents/skills` compatibility scanning/toggles plus native-root installs.
 > Agent Copilot M1-M4 first implementation pass is integrated; near-term
-> post-V2.93 work is scheduled below and in [`roadmap.md`](./roadmap.md).
+> post-V2.94 work is scheduled below and in [`roadmap.md`](./roadmap.md).
 >
 > Document role: this is the agent-facing implementation task ledger.
 > Keep concrete task routing, current baseline, closeout links, and validation handoff notes here.
@@ -16,10 +16,10 @@
 ## Current Baseline
 
 - Product boundary: native macOS SwiftUI/AppKit shell plus Rust service protocol.
-- Completed V2 milestones: first Codex slice, V2.1 through V2.93.
-- Current completed milestone: V2.93 opencode custom local roots; unlocked macOS validation passed on 2026-06-17.
+- Completed V2 milestones: first Codex slice, V2.1 through V2.94.
+- Current completed milestone: V2.94 Pi install and compatibility writes; latest unlocked macOS validation baseline passed on 2026-06-17.
 - Current priority:
-  preserve the V2.26-V2.93 completed behavior while keeping future work
+  preserve the V2.26-V2.94 completed behavior while keeping future work
   focused on task-centered skill review, local evidence, safe cleanup,
   and maintainable module boundaries.
 - Current implementation status:
@@ -54,6 +54,13 @@
   project-boundary checks. `skills.urls` is recognized only as a metadata
   boundary and is not fetched; installs remain native-root-only and writes
   remain exact managed `permission.skill` overrides.
+- V2.94 Pi install and compatibility writes status:
+  Pi scans native `~/.pi/agent/skills` / project `.pi/skills` roots plus
+  `.agents/skills` compatibility roots. Guarded toggles may update Pi settings
+  for native and `.agents` compatibility instances after trust/snapshot checks.
+  Tool-global installs are limited to native `~/.pi/agent/skills` and project
+  `.pi/skills`; Pi package install/remove and `.agents` direct skill-file
+  installs remain blocked.
 - UI validation baseline:
   latest Agent Copilot app-window evidence is 2026-06-17:
   `pnpm check:macos` passed, `./script/build_and_run.sh --verify` launched
@@ -78,7 +85,7 @@ rescheduled.
 | V2.91 | Completed | Model-task matching history: added a local evidence domain for historical model/task fit, protocol fixtures, app-local record/delete methods, and read-only Provider Observability display rows. | [`v2.91-verification-checklist.md`](./v2.91-verification-checklist.md), focused Rust/Swift tests, service protocol drift, app-window evidence, privacy gate |
 | V2.92 | Completed | Codex expanded roots: implemented read-only `$CODEX_HOME/skills`, local plugin marketplace roots, `/etc/codex/skills`, project `.codex/config.toml` diagnostics, and a native `.agents/skills` write allowlist. | [`v2.92-verification-checklist.md`](./v2.92-verification-checklist.md), official docs evidence, root allowlist tests, app-window evidence, privacy gate |
 | V2.93 | Completed | opencode custom roots: implemented safe configured local `skills.paths` scanning with `RootSource::Configured`, canonicalization/dedupe, project-boundary checks, and metadata-only/no-fetch `skills.urls` handling. | [`v2.93-verification-checklist.md`](./v2.93-verification-checklist.md), OpenCode docs/source evidence, duplicate/root tests, canonical `locked-session` UI blocker, privacy gate |
-| V2.94 | Planned | Pi install and compatibility-root writes: extend beyond V2.37 guarded native toggles only with disposable install/compat-root evidence. | Disposable round-trip, snapshot/rollback, trust gate, invalid config handling, no script execution |
+| V2.94 | Completed | Pi install and compatibility-root writes: extended beyond V2.37 guarded native toggles with `.agents/skills` compatibility scanning/toggles and native-root tool-global installs. | [`v2.94-verification-checklist.md`](./v2.94-verification-checklist.md), Pi docs evidence, compatibility-root tests, native install tests, trust gate, canonical `locked-session` UI blocker, privacy gate |
 | V2.95 | Planned | Hermes writable/install: verify schema, credential preservation, external-root semantics, and rollback-safe writes before enabling. | Hermes disposable evidence, credential filtering, rollback proof, capability matrix update |
 | V2.96 | Planned | OpenClaw writable/install: verify workspace-scope writes, precedence, install behavior, and rollback before enabling. | OpenClaw disposable evidence, workspace-bound write tests, rollback proof, capability matrix update |
 
@@ -215,6 +222,8 @@ V2.92 closeout evidence lives in [`v2.92-verification-checklist.md`](./v2.92-ver
 
 V2.93 closeout evidence lives in [`v2.93-verification-checklist.md`](./v2.93-verification-checklist.md) and is guarded by `pnpm verify:v2.93-docs`. It records completed opencode custom local roots: `RootSource::Configured`, JSON/JSONC `skills.paths` local directory scanning, configured-root canonicalization/dedupe, project-boundary checks, opencode configured provenance labels, metadata-only/no-fetch `skills.urls`, focused Rust/Swift coverage, the canonical `locked-session` app-window evidence blocker, and unchanged no-provider/default-write/script/credential/cloud/telemetry boundary.
 
+V2.94 closeout evidence lives in [`v2.94-verification-checklist.md`](./v2.94-verification-checklist.md) and is guarded by `pnpm verify:v2.94-docs`. It records completed Pi install and compatibility-root writes: `RootSource::Compatibility` for Pi `.agents/skills`, native/compat toggle coverage through Pi settings, `project.trusted` gating, native-root install targets, focused Rust/smoke coverage, the canonical `locked-session` app-window evidence blocker, and unchanged no-provider/script/credential/cloud/telemetry boundary.
+
 ## Post-V2.78 Version Plan
 
 The remaining 2026-06-15 Minimax-m3 and GLM-5.1 review findings are assigned into the regular version sequence below. Do not mark any version completed until code/docs, focused tests, shared gates, and real-local validation requirements are satisfied where applicable.
@@ -261,7 +270,7 @@ The remaining 2026-06-15 Minimax-m3 and GLM-5.1 review findings are assigned int
 | V2.34 | Cross-agent comparison view | Completed | Compare same-name/similar skills across agents by state, source, risk, writable capability, and differences; read-only by default |
 | V2.35 | Local report export | Completed | Export redacted Markdown/JSON local audit reports for agent coverage, health summary, open findings, triage state, cleanup queue, and comparison insights |
 | V2.36 | Pi writable evidence harness | Complete | Disposable agentDir/fixture project validates Pi global/project/package toggle, rollback, trust gate, invalid JSON/config handling, and re-enable behavior; production writable remains blocked |
-| V2.37 | Pi writable guarded slice | Completed | Evidence-backed minimal Pi native toggle (global / project / package) with preview/snapshot/rollback/disabled-state rescan; Pi install remains blocked, no script execution, no AI automatic writes, no credential persistence, and no arbitrary compatibility write roots |
+| V2.37 | Pi writable guarded slice | Completed | Evidence-backed minimal Pi native toggle (global / project / package) with preview/snapshot/rollback/disabled-state rescan; at the V2.37 boundary install remained blocked, with no script execution, no AI automatic writes, no credential persistence, and no arbitrary compatibility write roots |
 | V2.38 | Hermes external roots | Completed | Explicit `skills.external_dirs` are modeled as read-only external roots in adapter/scanner/UI provenance; no generic project scan, writable toggle, install, scripts, AI write-back, or credentials |
 | V2.39 | OpenClaw workspace deepening | Completed | Tightened workspace-scope detection and skipped/blocked root explanations without arbitrary repo inference or writes |
 | V2.40 | Adapter diagnostics | Completed | Surface discovered/skipped/blocked roots, config detected, read-only/writable reason, and last scan activity per agent via read-only protocol/status/state fields and sidebar UI; no new writes, execution, provider calls, credentials, or telemetry |
@@ -458,7 +467,7 @@ See [`v2.77-verification-checklist.md`](./v2.77-verification-checklist.md). V2.7
 - Keep triage state in app-local storage only; never hide unresolved high-risk findings by default.
 - Keep optional AI analysis user-triggered and separated from all write/config/script paths. Starting V2.41, provider calls are allowed only when the user explicitly configures an OpenAI-compatible or Claude-compatible endpoint/key/model and confirms a redacted prompt preview; AI output remains untrusted and cannot directly write, execute, or change triage/config state.
 - Keep Hermes/OpenClaw writable/install blocked until the scheduled V2.95/V2.96 evidence slices verify individual skill disable schema, credential preservation, and rollback-safe writes.
-- Keep Pi install and compatibility-root writes blocked until the scheduled V2.94 evidence slice closes; Pi toggle support is limited to the V2.37 guarded native global/project/package scope with snapshot/rollback.
+- Keep Pi V2.94 writes inside the completed guarded scope: native and `.agents/skills` compatibility toggles through Pi settings with trust/snapshot checks, native-root installs only, and package install/remove plus `.agents` direct skill-file installs blocked.
 - Keep every new write path behind service protocol, snapshot, audit, permission, and privacy boundaries.
 - Update native macOS UI only as needed to expose clearer explanations, statuses, filters, finding groups, and guarded writable actions.
 
@@ -675,7 +684,7 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 | P2 | V2.85 Rust RPC domain module splitting | Completed | Split `ServiceHost` RPC handling across `service_host.rs`, `service_cleanup.rs`, `service_knowledge.rs`, `service_llm.rs`, `service_remediation.rs`, and `service_task.rs` | Protocol drift verification covers split files without changing methods or payloads |
 | P2 | V2.86 Rust helper/test split and module-size gate | Completed | Split helpers such as `service_support_helpers.rs` and service tests under `crates/service/src/tests/`; add `verify:module-size` to gate parity | Single-file <= 5000-line target is now automated |
 | P0 | V2.11 Adapter Capability Matrix | Completed and in use | Run focused protocol/UI checks when needed, then use the matrix as the gate for future Pi/opencode/Hermes/OpenClaw work | macOS UI shows precise scan/toggle/install status and blockers for all six agents |
-| P0 | Pi comprehensive adapter support | Read-only scanner complete; V2.37 guarded native toggle complete; install and compatibility-root writes blocked | Keep Pi toggle limited to global/project/package write scope and keep install/AI auto-write/script execution credentials-unsafe paths blocked; exclude arbitrary compatibility roots from write path | Guarded native toggle preserves preview/snapshot/rollback, trust gate, invalid JSON/config handling, re-enable behavior, and disabled-state rescan |
+| P0 | Pi comprehensive adapter support | Read-only scanner complete; V2.37 guarded native toggle complete; V2.94 native install and `.agents/skills` compatibility toggles complete | Keep Pi writes limited to guarded settings toggles and native-root installs; keep package install/remove, `.agents` direct skill-file installs, AI auto-write, script execution, and credential-unsafe paths blocked | Guarded Pi behavior preserves preview/snapshot/rollback, trust gate, invalid JSON/config handling, native install target checks, re-enable behavior, and disabled-state rescan |
 | P0 | opencode support | Native and official compatibility roots are scanned; configured local `skills.paths` roots are scanned read-only; guarded `permission.skill` writes are implemented; install targets remain native roots | Keep compatibility/configured-root scan coverage, managed permission/write tests, and no-fetch `skills.urls` boundary current; do not add URL fetch or configured-root install/write targets without a new explicit evidence gate | opencode-visible skills match current official discovery and configured local path roots without enabling unsafe file writes or uncontrolled network access |
 | P0 | Hermes adapter support | Read-only scanner implemented; writable/install blocked | Keep scoped read-only scan of active Hermes home `skills/**/SKILL.md`; treat `skills.external_dirs` as explicit external roots only (not generic project-scope inference); keep `.env`/`auth.json`/`logs`/cron content filtered and CLI-only scan read-only | Hermes skills appear in catalog read-only; generic project scan and writes remain blocked |
 | P0 | OpenClaw adapter support | Read-only scanner implemented; writable/install blocked | Keep scoped read-only filesystem scan over documented roots; project scan only for confirmed OpenClaw workspace roots; no OpenClaw CLI calls during ordinary scan | OpenClaw skills appear in catalog read-only; arbitrary repo roots and writes/install remain blocked |
@@ -707,7 +716,7 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 - If the task improves finding explanations, skill identity/provenance, conflict semantics, triage persistence, or read-only AI analysis workflow, use V2.26-V2.30.
 - If the task builds cleanup queue, policy tuning, safe batch actions, cross-agent comparison, or local report export, use V2.31-V2.35.
 - If the task is Pi writable evidence, Hermes external roots, OpenClaw workspace deepening, or adapter diagnostics, use V2.36-V2.40.
-- If the task is AI provider foundation, prompt safety, AI quality/readiness/routing, task benchmark/regression, trace analysis, knowledge index, remediation, Agent Session Skill Review, Local Skill Map, provider observability, task cockpit, skill lifecycle, guided cleanup, cockpit-first IA, screenshot/privacy-safe UI presentation, completed Swift/Rust feature modularization, guided-cleanup safe-action links, validation harness hardening, completed Task/remediation timeout recovery, completed launch/window targeting stability, completed task input resilience, completed progressive Cockpit feedback, completed real-local validation workbench, completed protocol/docs/gate parity, completed privacy fixture/evidence localization, completed detail navigation/visual density polish, completed Swift service IPC cancellation cleanup, completed test isolation/core model floor, completed continued module splitting, completed Swift Detail section splitting, completed Rust RPC domain module splitting, completed Rust helper/test split and module-size gate, completed Agent Copilot first pass, completed Agent Copilot per-surface evidence closeout, completed brand asset refresh, completed identifier migration, completed model-task matching history, completed Codex expanded root diagnostics, or completed opencode configured local root diagnostics, use V2.41-V2.93.
+- If the task is AI provider foundation, prompt safety, AI quality/readiness/routing, task benchmark/regression, trace analysis, knowledge index, remediation, Agent Session Skill Review, Local Skill Map, provider observability, task cockpit, skill lifecycle, guided cleanup, cockpit-first IA, screenshot/privacy-safe UI presentation, completed Swift/Rust feature modularization, guided-cleanup safe-action links, validation harness hardening, completed Task/remediation timeout recovery, completed launch/window targeting stability, completed task input resilience, completed progressive Cockpit feedback, completed real-local validation workbench, completed protocol/docs/gate parity, completed privacy fixture/evidence localization, completed detail navigation/visual density polish, completed Swift service IPC cancellation cleanup, completed test isolation/core model floor, completed continued module splitting, completed Swift Detail section splitting, completed Rust RPC domain module splitting, completed Rust helper/test split and module-size gate, completed Agent Copilot first pass, completed Agent Copilot per-surface evidence closeout, completed brand asset refresh, completed identifier migration, completed model-task matching history, completed Codex expanded root diagnostics, completed opencode configured local root diagnostics, or completed Pi install/compatibility-root writes, use V2.41-V2.94.
 - If the task is post-V2.71 product consolidation or validation harness hardening, use V2.72.
 - If the task is privacy fixture hardening or evidence-surface privacy/localization sweep after V2.77, use completed V2.79 and preserve its no credential/network/scanner/provider/write/script/cloud/telemetry boundary.
 - If the task is detail navigation or visual density polish, use V2.80.

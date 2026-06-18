@@ -1104,6 +1104,61 @@ mod tests {
     }
 
     #[test]
+    fn pi_scans_agent_compatibility_roots_without_markdown_noise() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "skills-copilot-pi-compat-scan-{}",
+            std::process::id()
+        ));
+        let home = temp_root.join("home");
+        let project = temp_root.join("project");
+        let global_root = home.join(".agents/skills");
+        let project_root = project.join(".agents/skills");
+        let global_skill = global_root.join("pi-agent-global");
+        let project_skill = project_root.join("pi-agent-project");
+        std::fs::create_dir_all(&global_skill).expect("create global compat skill");
+        std::fs::create_dir_all(&project_skill).expect("create project compat skill");
+        std::fs::write(
+            global_skill.join("SKILL.md"),
+            "---\nname: pi-agent-global\ndescription: Pi global compatibility fixture\n---\nBody.",
+        )
+        .expect("write global compat skill");
+        std::fs::write(
+            project_skill.join("SKILL.md"),
+            "---\nname: pi-agent-project\ndescription: Pi project compatibility fixture\n---\nBody.",
+        )
+        .expect("write project compat skill");
+        std::fs::write(
+            global_root.join("root-noise.md"),
+            "---\nname: root-noise\ndescription: ignored compatibility markdown\n---\nBody.",
+        )
+        .expect("write root markdown");
+
+        let ctx = AdapterContext {
+            user_home: home,
+            project_root: Some(project.clone()),
+            project_cwd: Some(project),
+            extra_roots: vec![],
+        };
+
+        let report = scan_agent(&PiAdapter, &ctx).expect("scan succeeds");
+        let names: HashSet<_> = report
+            .instances
+            .iter()
+            .map(|skill| skill.name.as_str())
+            .collect();
+
+        assert!(names.contains("pi-agent-global"));
+        assert!(names.contains("pi-agent-project"));
+        assert!(!names.contains("root-noise"));
+        assert!(report
+            .scanned_roots
+            .iter()
+            .any(|root| root.ends_with(".agents/skills")));
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
     fn openclaw_scans_documented_global_and_selected_home_workspace_roots() {
         let temp_root = std::env::temp_dir().join(format!(
             "skills-copilot-openclaw-scan-{}",

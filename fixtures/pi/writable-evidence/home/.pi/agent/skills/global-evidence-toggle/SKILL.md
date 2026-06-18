@@ -4,7 +4,8 @@ description: Evidence-only global Pi skill used by disposable writable harness t
 metadata:
   fixture: v2-36-pi-writable-evidence-only
   guarded_toggle: implemented
-  install_writable: blocked
+  package_install_writable: blocked
+  agents_direct_install_writable: blocked
 ---
 
 # Global Evidence Toggle

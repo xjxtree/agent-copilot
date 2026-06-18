@@ -21,11 +21,18 @@ impl AgentAdapter for PiAdapter {
     }
 
     fn roots(&self, ctx: &AdapterContext) -> Vec<AdapterRoot> {
-        let mut roots = vec![AdapterRoot {
-            scope: Scope::AgentGlobal,
-            path: ctx.user_home.join(".pi/agent/skills"),
-            source: RootSource::UserHome,
-        }];
+        let mut roots = vec![
+            AdapterRoot {
+                scope: Scope::AgentGlobal,
+                path: ctx.user_home.join(".pi/agent/skills"),
+                source: RootSource::UserHome,
+            },
+            AdapterRoot {
+                scope: Scope::AgentGlobal,
+                path: ctx.user_home.join(".agents/skills"),
+                source: RootSource::Compatibility,
+            },
+        ];
 
         if let Some(project_root) = &ctx.project_root {
             roots.extend(pi_project_skill_roots(
@@ -150,6 +157,11 @@ fn pi_project_skill_roots(project_root: &Path, project_cwd: Option<&Path>) -> Ve
             scope: Scope::AgentProject,
             path: dir.join(".pi/skills"),
             source: RootSource::Project,
+        });
+        roots.push(AdapterRoot {
+            scope: Scope::AgentProject,
+            path: dir.join(".agents/skills"),
+            source: RootSource::Compatibility,
         });
         if dir == project_root {
             break;
@@ -285,7 +297,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn exposes_native_user_and_project_roots_only() {
+    fn exposes_native_and_agent_compatibility_roots() {
         let adapter = PiAdapter;
         let ctx = AdapterContext {
             user_home: PathBuf::from("/tmp/home"),
@@ -301,16 +313,30 @@ mod tests {
         let roots = adapter.roots(&ctx);
 
         assert_eq!(roots[0].path, PathBuf::from("/tmp/home/.pi/agent/skills"));
-        assert_eq!(
-            roots[1].path,
-            PathBuf::from("/tmp/project/nested/deeper/.pi/skills")
-        );
+        assert_eq!(roots[0].source, RootSource::UserHome);
+        assert_eq!(roots[1].path, PathBuf::from("/tmp/home/.agents/skills"));
+        assert_eq!(roots[1].source, RootSource::Compatibility);
         assert_eq!(
             roots[2].path,
+            PathBuf::from("/tmp/project/nested/deeper/.pi/skills")
+        );
+        assert_eq!(roots[2].source, RootSource::Project);
+        assert_eq!(
+            roots[3].path,
+            PathBuf::from("/tmp/project/nested/deeper/.agents/skills")
+        );
+        assert_eq!(roots[3].source, RootSource::Compatibility);
+        assert_eq!(
+            roots[4].path,
             PathBuf::from("/tmp/project/nested/.pi/skills")
         );
-        assert_eq!(roots[3].path, PathBuf::from("/tmp/project/.pi/skills"));
-        assert_eq!(roots.len(), 4);
+        assert_eq!(
+            roots[5].path,
+            PathBuf::from("/tmp/project/nested/.agents/skills")
+        );
+        assert_eq!(roots[6].path, PathBuf::from("/tmp/project/.pi/skills"));
+        assert_eq!(roots[7].path, PathBuf::from("/tmp/project/.agents/skills"));
+        assert_eq!(roots.len(), 8);
     }
 
     #[test]

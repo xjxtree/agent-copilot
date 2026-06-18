@@ -292,10 +292,13 @@ function createFixtureEnvironment() {
   const codexSkillsRoot = join(home, ".agents", "skills");
   const opencodeSkillsRoot = join(home, ".config", "opencode", "skills");
   const opencodeConfiguredSkillsRoot = join(root, "opencode-configured-skills");
+  const piSkillsRoot = join(home, ".pi", "agent", "skills");
   const projectRoot = join(root, "fixture-project");
   const projectCwd = join(projectRoot, "nested", "workspace");
   const projectCodexSkillsRoot = join(projectRoot, ".agents", "skills");
   const projectOpencodeSkillsRoot = join(projectRoot, ".opencode", "skills");
+  const projectPiSkillsRoot = join(projectRoot, ".pi", "skills");
+  const projectPiSettings = join(projectRoot, ".pi", "settings.json");
   const codexUserConfig = join(home, ".codex", "config.toml");
   const projectCodexConfig = join(projectRoot, ".codex", "config.toml");
   const projectOpencodeConfig = join(projectRoot, "opencode.json");
@@ -303,8 +306,10 @@ function createFixtureEnvironment() {
   mkdirSync(codexSkillsRoot, { recursive: true });
   mkdirSync(opencodeSkillsRoot, { recursive: true });
   mkdirSync(opencodeConfiguredSkillsRoot, { recursive: true });
+  mkdirSync(piSkillsRoot, { recursive: true });
   mkdirSync(projectCodexSkillsRoot, { recursive: true });
   mkdirSync(projectOpencodeSkillsRoot, { recursive: true });
+  mkdirSync(projectPiSkillsRoot, { recursive: true });
   mkdirSync(join(projectRoot, ".git"), { recursive: true });
   mkdirSync(projectCwd, { recursive: true });
   mkdirSync(appData, { recursive: true });
@@ -333,9 +338,33 @@ function createFixtureEnvironment() {
     "---\nname: codex-user-smoke\ndescription: User Codex fixture for native smoke.\n---\nUser Codex body.\n",
   );
   writeSkill(
+    piSkillsRoot,
+    "pi-global-smoke",
+    "---\nname: pi-global-smoke\ndescription: Global Pi native fixture for native smoke.\n---\nGlobal Pi body.\n",
+  );
+  writeSkill(
+    codexSkillsRoot,
+    "pi-agent-global-smoke",
+    "---\nname: pi-agent-global-smoke\ndescription: Global Pi compatibility fixture for native smoke.\n---\nGlobal Pi compatibility body.\n",
+  );
+  writeSkill(
     projectCodexSkillsRoot,
     "codex-project-smoke",
     "---\nname: codex-project-smoke\ndescription: Project Codex fixture for native smoke.\n---\nProject Codex body.\n",
+  );
+  writeSkill(
+    projectPiSkillsRoot,
+    "pi-project-smoke",
+    "---\nname: pi-project-smoke\ndescription: Project Pi native fixture for native smoke.\n---\nProject Pi body.\n",
+  );
+  writeSkill(
+    projectCodexSkillsRoot,
+    "pi-agent-project-smoke",
+    "---\nname: pi-agent-project-smoke\ndescription: Project Pi compatibility fixture for native smoke.\n---\nProject Pi compatibility body.\n",
+  );
+  writeFileSync(
+    projectPiSettings,
+    JSON.stringify({ project: { trusted: true }, skills: { disabled: [] } }, null, 2) + "\n",
   );
   writeSkill(
     opencodeSkillsRoot,
@@ -405,6 +434,7 @@ function createFixtureEnvironment() {
     projectCodexConfig,
     projectCwd,
     projectOpencodeConfig,
+    projectPiSettings,
     projectRoot,
     realOpencodeConfigSnapshot,
     root,
@@ -816,6 +846,7 @@ function runFixtureProjectContextSmoke(env, fixture, status) {
     "project Codex fixture should not be visible before project context is active",
   );
   assertFixtureOpencodeGlobalSmoke(baseScan.skills);
+  assertFixturePiGlobalSmoke(baseScan.skills);
 
   const methods = new Set(status.supported_methods ?? []);
   const hasProjectContextApi =
@@ -837,6 +868,7 @@ function runFixtureProjectContextSmoke(env, fixture, status) {
       "project Codex fixture missing from env project scanAll fallback",
     );
     runFixtureOpencodeReadOnlySmoke(projectScan.skills, projectEnv);
+    runFixturePiCompatibilitySmoke(projectScan.skills, projectEnv, fixture);
     runFixtureCodexConfigHardeningSmoke(projectEnv, fixture, projectScan.skills);
     note(
       "project context API unavailable; verified env project scanAll fallback only " +
@@ -870,6 +902,7 @@ function runFixtureProjectContextSmoke(env, fixture, status) {
     "project Codex fixture missing after project.setContext -> scanAll",
   );
   runFixtureOpencodeWritableSmoke(projectScan.skills, env, fixture);
+  runFixturePiCompatibilitySmoke(projectScan.skills, env, fixture);
   runFixtureCodexConfigHardeningSmoke(env, fixture, projectScan.skills);
 
   const clearContext = callService("project.clearContext", {}, env);
@@ -890,7 +923,35 @@ function runFixtureProjectContextSmoke(env, fixture, status) {
     "codex-project-smoke",
     "project Codex fixture remained current/visible after project.clearContext -> scanAll",
   );
+  assertSkillNotCurrentVisible(
+    clearedScan.skills,
+    "pi-project-smoke",
+    "project Pi fixture remained current/visible after project.clearContext -> scanAll",
+    "pi",
+  );
   note("fixture project context smoke passed: setContext, scanAll project visibility, clearContext");
+}
+
+function assertFixturePiGlobalSmoke(skills) {
+  assertSkillPresent(
+    skills,
+    "pi",
+    "pi-global-smoke",
+    "global Pi native fixture missing from no-project scanAll",
+  );
+  assertSkillPresent(
+    skills,
+    "pi",
+    "pi-agent-global-smoke",
+    "global Pi compatibility fixture missing from no-project scanAll",
+  );
+  assertSkillNotCurrentVisible(
+    skills,
+    "pi-project-smoke",
+    "project Pi fixture should not be visible before project context is active",
+    "pi",
+  );
+  note("fixture Pi global smoke passed: native and .agents compatibility roots visible without project context");
 }
 
 function assertFixtureOpencodeGlobalSmoke(skills) {
@@ -913,6 +974,47 @@ function assertFixtureOpencodeGlobalSmoke(skills) {
     "opencode",
   );
   note("fixture opencode global smoke passed: native and configured local roots visible without project context");
+}
+
+function runFixturePiCompatibilitySmoke(skills, env, fixture) {
+  assertSkillPresent(
+    skills,
+    "pi",
+    "pi-project-smoke",
+    "project Pi native fixture missing after project context scanAll",
+  );
+  const compatSkill = assertSkillPresent(
+    skills,
+    "pi",
+    "pi-agent-project-smoke",
+    "project Pi compatibility fixture missing after project context scanAll",
+  );
+
+  const disabled = callService(
+    "config.toggleSkill",
+    { instance_id: compatSkill.id, on: false },
+    env,
+  );
+  if (disabled.agent !== "pi" || disabled.enabled !== false) {
+    fail("Pi compatibility toggle did not return a disabled Pi skill");
+  }
+  const settings = JSON.parse(readFileSync(fixture.projectPiSettings, "utf8"));
+  const disabledSkills = settings?.skills?.disabled ?? settings?.disabledSkills ?? [];
+  if (!disabledSkills.some((entry) => String(entry).includes("pi-agent-project-smoke"))) {
+    fail("Pi project settings missing disabled compatibility skill entry");
+  }
+  const rescanned = callService("catalog.scanAll", {}, env);
+  const rescannedSkill = assertSkillPresent(
+    rescanned.skills,
+    "pi",
+    "pi-agent-project-smoke",
+    "project Pi compatibility fixture missing after toggle rescan",
+    { allowDisabled: true },
+  );
+  if (rescannedSkill.enabled !== false || rescannedSkill.state !== "disabled") {
+    fail("Pi compatibility rescan did not preserve disabled state");
+  }
+  note("fixture Pi smoke passed: project compatibility root visible, toggle wrote .pi/settings.json, rescan preserved disabled state");
 }
 
 function runFixtureOpencodeWritableSmoke(skills, env, fixture) {

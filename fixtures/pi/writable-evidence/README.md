@@ -1,6 +1,6 @@
 # Pi Writable Evidence Harness Fixtures
 
-These fixtures began as V2.36 disposable Pi writable research inputs and were promoted by V2.37 into the guarded native global/project/package toggle slice. They intentionally do **not** define Pi install support, compatibility-root writes, arbitrary package mutation, script execution, AI auto-write, or credential persistence.
+These fixtures began as V2.36 disposable Pi writable research inputs and were promoted by V2.37 into the guarded native global/project/package toggle slice. V2.94 later added guarded compatibility toggles and native-root direct install in code/tests. These fixtures still intentionally do **not** define Pi package install/remove, `.agents` direct skill-file installs, arbitrary package mutation, script execution, AI auto-write, or credential persistence.
 
 The harness models guarded toggle cases using temp-dir copies only:
 

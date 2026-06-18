@@ -15,12 +15,12 @@ Current usage:
 
 Current release-readiness guardrails:
 
-- V2.1-V2.93 are the synchronized completed baseline.
+- V2.1-V2.94 are the synchronized completed baseline.
 - Real local validation evidence is version-specific. Use the matching verification checklist for exact screenshots, blockers, and commands.
 - Fixture smoke screenshots still do not replace required real local validation for user-visible changes.
 - Tool-global import/export/install is integrated. Local directory import writes only app-controlled staging/catalog, export creates reproducible local bundles, and confirmed install routes through verified write paths.
 - Opencode support includes native roots, official compatibility roots, and configured local `skills.paths` roots. Writable support remains guarded and limited to verified managed `permission.skill` behavior; install targets remain native roots.
-- Pi production toggle is guarded and limited to the V2.37 evidence-backed global/project/package slice; Pi install remains blocked until the planned V2.94 disposable evidence slice closes.
+- Pi production writes are guarded: native and `.agents/skills` compatibility toggles use Pi settings with trust/snapshot checks, and tool-global install targets are limited to native `~/.pi/agent/skills` / project `.pi/skills`; Pi package install/remove and `.agents` direct skill-file installs remain blocked.
 - Hermes and OpenClaw remain read-only; writable/install support remains blocked until the planned V2.95/V2.96 evidence slices close.
 - No cloud sync, accounts, telemetry, anonymous crash reports, or uncontrolled outbound network calls.
 - Signing, notarization, DMG/ZIP packaging, updater work, and release artifact automation are deferred until public release work resumes.
@@ -29,6 +29,56 @@ Current release-readiness guardrails:
 
 Entries are ordered newest first. Add new version entries directly below this
 heading.
+
+### V2.94 - 2026-06-18
+
+Status:
+
+- Complete.
+- Pi install and compatibility-root writes completed within a guarded,
+  evidence-backed slice.
+
+Adapter behavior changes:
+
+- Pi now scans global/project `.agents/skills` compatibility roots as
+  `RootSource::Compatibility` in addition to native `~/.pi/agent/skills` and
+  project `.pi/skills`.
+- Pi toggles can disable/re-enable native and `.agents` compatibility skill
+  instances through Pi settings JSON with snapshot/read-back/rollback behavior.
+- Project compatibility toggles write through project `.pi/settings.json` and
+  require `project.trusted`.
+- Tool-global install now supports Pi native roots only:
+  `~/.pi/agent/skills` and project `.pi/skills`.
+
+Product/protocol changes:
+
+- Updated adapter capability fixtures and fixture smoke to expose Pi native
+  install and compatibility-root toggles.
+- No service protocol method count changed; `SUPPORTED_METHODS` remains 93.
+
+Risk/security notes:
+
+- Pi package install/remove remains blocked.
+- `.agents/skills` compatibility roots are scan/toggleable but are not direct
+  install targets.
+- Direct root `.md` files remain filtered for Pi to avoid ordinary resource
+  document noise.
+- No provider request, credential read, raw prompt/response/trace persistence,
+  script execution, cloud sync, telemetry, uncontrolled network fetch, signing,
+  notarization, DMG, ZIP, or release automation was added.
+
+Validation posture:
+
+- Focused Pi adapter, scanner, commands, service fixture, protocol drift, docs
+  gate, gate parity, and privacy checks are tracked in
+  `docs/v2.94-verification-checklist.md`.
+- V2.94 app-window evidence notes are under
+  `docs/ui-artifacts/v2.94-pi-install-compat-writes/`; current capture is
+  recorded behind canonical `locked-session` if the local session is locked.
+
+Near-term follow-up plan:
+
+- V2.95-V2.96 cover Hermes writable/install and OpenClaw writable/install.
 
 ### V2.93 - 2026-06-17
 
@@ -77,7 +127,7 @@ Validation posture:
 
 Near-term follow-up plan:
 
-- V2.94 covers Pi install and compatibility writes.
+- V2.94 later completed Pi install and compatibility writes.
 - V2.95-V2.96 cover Hermes writable/install and OpenClaw writable/install.
 
 ### V2.92 - 2026-06-17
@@ -130,8 +180,8 @@ Near-term follow-up plan:
 
 - V2.93 later completed opencode configured local `skills.paths` scanning while
   keeping `skills.urls` metadata-only/no-fetch.
-- V2.94-V2.96 cover Pi install/compat writes, Hermes writable/install, and
-  OpenClaw writable/install.
+- V2.94 later completed Pi install/compat writes; V2.95-V2.96 cover Hermes
+  writable/install and OpenClaw writable/install.
 
 ### V2.91 - 2026-06-17
 
@@ -144,8 +194,9 @@ Adapter behavior changes:
 
 - No adapter scan roots, writable scopes, install scopes, or config schemas changed.
 - Codex expanded-root diagnostics completed in V2.92; opencode configured local
-  roots completed in V2.93; Pi/Hermes/OpenClaw write/install expansion remains
-  deferred to V2.94-V2.96 evidence slices.
+  roots completed in V2.93; Pi install/compat writes completed in V2.94;
+  Hermes/OpenClaw write/install expansion remains deferred to V2.95-V2.96
+  evidence slices.
 
 Product/protocol changes:
 
@@ -179,8 +230,9 @@ Near-term follow-up plan:
 
 - V2.92 completed Codex expanded roots/project config/plugin/admin/system-root
   read-only diagnostics.
-- V2.93 later completed opencode custom local roots; V2.94-V2.96 cover Pi
-  install/compat writes, Hermes writable/install, and OpenClaw writable/install.
+- V2.93 later completed opencode custom local roots; V2.94 later completed Pi
+  install/compat writes; V2.95-V2.96 cover Hermes writable/install and
+  OpenClaw writable/install.
 
 ### V2.90 - 2026-06-17
 
@@ -288,7 +340,7 @@ Status:
 Adapter behavior changes:
 
 - No adapter scan roots, writable scopes, install scopes, or config schemas changed.
-- Pi install/compatibility-root writes, Hermes writable/install, and OpenClaw writable/install remain blocked until their planned evidence slices close; opencode custom local roots completed in V2.93 with `skills.urls` metadata-only/no-fetch.
+- Pi install/compatibility-root writes later completed in V2.94; Hermes writable/install and OpenClaw writable/install remain blocked until their planned evidence slices close; opencode custom local roots completed in V2.93 with `skills.urls` metadata-only/no-fetch.
 
 Product/protocol changes:
 
