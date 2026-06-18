@@ -8,13 +8,13 @@ opencode, Pi, Hermes, and OpenClaw.
 
 | Area | Status |
 | --- | --- |
-| Current phase | V2.95 Hermes native-root install completed |
-| Completed baseline | V2.1-V2.95 |
-| Recent product line | V2.41-V2.95 AI-native analysis, task cockpit, validation hardening, module splitting, read-only Agent Copilot surfaces, per-surface evidence closeout, brand asset refresh, compatibility-first identifier migration, local model-task history, Codex expanded root diagnostics, opencode configured local roots, Pi install/compat writes, and Hermes native-root install |
+| Current phase | V2.96 OpenClaw native/workspace install completed |
+| Completed baseline | V2.1-V2.96 |
+| Recent product line | V2.41-V2.96 AI-native analysis, task cockpit, validation hardening, module splitting, read-only Agent Copilot surfaces, per-surface evidence closeout, brand asset refresh, compatibility-first identifier migration, local model-task history, Codex expanded root diagnostics, opencode configured local roots, Pi install/compat writes, Hermes native-root install, and OpenClaw native/workspace install |
 | Agent Copilot line | M1-M4 completed; unlocked app-window evidence captured |
 | Maintained UI | Native macOS app in `apps/macos` |
 | Service boundary | Rust typed JSON stdio sidecar in `crates/service` |
-| Next version | V2.96 OpenClaw writable/install; near-term plan is tracked in `docs/roadmap.md` and `docs/development-tasks.md` |
+| Next version | Not scheduled; open a new scoped version before expanding adapter config writes, network-backed installs, script execution, signing, or packaging |
 
 V2.84-V2.86 completed the post-V2.83 module-splitting line:
 
@@ -95,6 +95,21 @@ V2.94 completes Pi install and compatibility writes:
   `~/.pi/agent/skills` and project `.pi/skills`.
 - Keeps Pi package install/remove and `.agents` direct skill-file installs
   blocked.
+
+V2.95 completes Hermes native-root install:
+
+- Allows confirmed local ToolGlobal `SKILL.md` copies only into
+  `~/.hermes/skills`.
+- Keeps Hermes project installs, config toggles, external_dirs writes,
+  hub/URL/tap/update/uninstall/reset, and network-backed operations blocked.
+
+V2.96 completes OpenClaw native/workspace install:
+
+- Allows confirmed local ToolGlobal `SKILL.md` copies into
+  `~/.openclaw/skills` and confirmed OpenClaw workspace `<workspace>/skills`.
+- Keeps OpenClaw `.agents` roots scan-only.
+- Keeps OpenClaw config toggles, `skills.entries` writes, ClawHub, Git,
+  update, verify, workshop, and network-backed operations blocked.
 
 ## What It Does
 
@@ -178,7 +193,7 @@ This section only keeps machine-checked status anchors. Detailed evidence lives
 in `docs/v2.*-verification-checklist.md` and `docs/development-tasks.md`.
 
 Baseline phrase used by docs gates:
-V2.94 Pi install and compatibility writes completed.
+V2.96 OpenClaw native/workspace install completed.
 
 ### V2.74-V2.78
 
@@ -251,7 +266,7 @@ V2.94 Pi install and compatibility writes completed.
   `docs/ui-artifacts/native-macos-shell/completed.png`, screenshot artifact
   verification, and privacy check.
 
-### V2.88-V2.94
+### V2.88-V2.96
 
 - V2.88 handoff/evidence closeout:
   [`docs/v2.88-verification-checklist.md`](./docs/v2.88-verification-checklist.md),
@@ -281,6 +296,17 @@ V2.94 Pi install and compatibility writes completed.
   [`docs/v2.94-verification-checklist.md`](./docs/v2.94-verification-checklist.md),
   `RootSource::Compatibility`, Pi `.agents/skills` scan/toggle support,
   native-root install targets, project trust gating, and package install/remove
+  blocked.
+- V2.95 Hermes native-root install:
+  [`docs/v2.95-verification-checklist.md`](./docs/v2.95-verification-checklist.md),
+  confirmed local ToolGlobal installs to `~/.hermes/skills`, with config
+  toggles, project installs, external_dirs writes, and hub/network operations
+  blocked.
+- V2.96 OpenClaw native/workspace install:
+  [`docs/v2.96-verification-checklist.md`](./docs/v2.96-verification-checklist.md),
+  confirmed local ToolGlobal installs to `~/.openclaw/skills` and confirmed
+  OpenClaw workspace `<workspace>/skills`, with `.agents` direct installs,
+  config toggles, `skills.entries` writes, and ClawHub/Git/network operations
   blocked.
 
 ## Development Notes

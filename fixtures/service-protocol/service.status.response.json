@@ -314,16 +314,16 @@
       {
         "agent": "openclaw",
         "display_name": "OpenClaw",
-        "status": "blocked",
+        "status": "install-only",
         "scan": {
-          "supported": false,
-          "status": "blocked",
-          "reason": "P0 evidence confirmed OpenClaw SKILL.md roots and schema; read-only filesystem scanner is planned but not implemented."
+          "supported": true,
+          "status": "verified-read-only",
+          "reason": "V2.39 scans documented OpenClaw filesystem roots without calling the OpenClaw CLI; workspace project roots are read-only and scoped to confirmed OpenClaw workspaces."
         },
         "project_scan": {
-          "supported": false,
-          "status": "blocked",
-          "reason": "OpenClaw project scan is limited to confirmed OpenClaw workspace roots; arbitrary repo roots are not treated as OpenClaw projects."
+          "supported": true,
+          "status": "verified-read-only",
+          "reason": "Project scan is limited to confirmed OpenClaw home workspace roots, including selected paths inside those workspaces, and only reads <workspace>/skills plus <workspace>/.agents/skills; arbitrary repo roots are skipped."
         },
         "config_toggle": {
           "supported": false,
@@ -336,19 +336,20 @@
           "reason": "No verified OpenClaw rollback-safe skill config target exists."
         },
         "install": {
-          "supported": false,
-          "status": "blocked",
-          "reason": "OpenClaw install semantics are not confirmed."
+          "supported": true,
+          "status": "verified-native-workspace-v2.96",
+          "reason": "V2.96 supports confirmed local tool-global SKILL.md copy into OpenClaw native ~/.openclaw/skills and confirmed OpenClaw workspace <workspace>/skills roots only; .agents direct installs and ClawHub/Git/network-backed operations remain out of scope."
         },
         "writable": {
-          "supported": false,
-          "status": "blocked",
-          "reason": "OpenClaw writable toggle/install remains blocked until disposable config mutation and credential-safe rollback are verified."
+          "supported": true,
+          "status": "install-only-v2.96",
+          "reason": "Writable support is limited to confirmed local skill-file installs into native OpenClaw skill roots; config toggles, skills.entries writes, .agents direct installs, ClawHub, Git, update, verify, workshop, scripts, credentials, cloud sync, and telemetry remain blocked."
         },
         "blockers": [
-          "Implement a scoped read-only filesystem scanner before enabling UI support.",
-          "Confirm malformed/conflict behavior with fixtures before production scan.",
-          "Verify config mutation, credential preservation, and rollback before writable/install support."
+          "Arbitrary repository roots are not OpenClaw projects and are not scanned as project roots.",
+          "OpenClaw .agents roots are scan-only and are not direct install targets.",
+          "OpenClaw plugin/config evidence is not a verified credential-safe skill toggle contract.",
+          "OpenClaw ClawHub, Git, update, verify, workshop, and network-backed operations remain blocked."
         ]
       }
     ],

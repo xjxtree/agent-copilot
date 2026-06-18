@@ -31,7 +31,7 @@ V2.11 adapter capability matrix note:
 
 - `adapter.listCapabilities.response.json` is the direct capability matrix fixture for Claude Code, Codex, opencode, Pi, Hermes, and OpenClaw.
 - `service.status.response.json` and `app.stateSnapshot.response.json` include `adapter_capabilities` so native UI shells can render adapter status without guessing from agent names.
-- The matrix is descriptive for unsupported write paths: opencode is writable for native roots after V2.12 validation, Pi is guarded after V2.94 validation, Hermes is install-only after V2.95 validation, and OpenClaw is read-only after V2.16 validation while unsupported write/install paths stay blocked.
+- The matrix is descriptive for unsupported write paths: opencode is writable for native roots after V2.12 validation, Pi is guarded after V2.94 validation, Hermes is install-only after V2.95 validation, and OpenClaw is install-only after V2.96 validation while unsupported config/network paths stay blocked.
 
 V2.13 / V2.94 Pi note:
 
@@ -51,10 +51,13 @@ V2.95 Hermes native install note:
 - The Hermes fixture directory contains active-home scanner contract fixtures plus evidence-only cron samples.
 - `catalog.scanAll` includes Hermes after the read-only scanner implementation lands.
 
-OpenClaw read-only scanner note:
+OpenClaw native/workspace install note:
 
-- OpenClaw is `read-only` / supported scan in `adapter.listCapabilities`, `service.status`, and `app.stateSnapshot`.
+- OpenClaw is `install-only` / supported scan in `adapter.listCapabilities`, `service.status`, and `app.stateSnapshot`.
 - OpenClaw project scan is workspace-scoped only for confirmed OpenClaw workspace roots; arbitrary repo roots must not be inferred as OpenClaw projects.
+- V2.96 allows confirmed local ToolGlobal `SKILL.md` copies into `~/.openclaw/skills` and confirmed OpenClaw workspace `<workspace>/skills` only.
+- OpenClaw `.agents` roots remain scan-only and are not direct install targets.
+- OpenClaw config toggles, `skills.entries` writes, ClawHub, Git, update, verify, workshop, and network-backed operations remain blocked.
 - The OpenClaw fixture directory contains read-only scanner contract fixtures plus evidence samples.
 - `catalog.scanAll` includes OpenClaw after V2.16.
 

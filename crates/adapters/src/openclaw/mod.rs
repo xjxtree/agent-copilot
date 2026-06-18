@@ -141,14 +141,20 @@ fn parse_skill_content(content: &str, fallback_name: &str) -> Result<ParsedSkill
 }
 
 fn openclaw_selected_workspace_root(ctx: &AdapterContext) -> Option<PathBuf> {
-    let selected_paths = [ctx.project_root.as_ref(), ctx.project_cwd.as_ref()];
+    let selected_paths = [ctx.project_root.as_ref(), ctx.project_cwd.as_ref()]
+        .into_iter()
+        .flatten()
+        .flat_map(|selected| normalized_path_variants(selected))
+        .collect::<Vec<_>>();
     openclaw_home_workspace_candidates(ctx)
         .into_iter()
         .find(|candidate| {
-            selected_paths
-                .iter()
-                .flatten()
-                .any(|selected| selected == &candidate || selected.starts_with(candidate))
+            let candidate_paths = normalized_path_variants(candidate);
+            selected_paths.iter().any(|selected| {
+                candidate_paths
+                    .iter()
+                    .any(|candidate| selected == candidate || selected.starts_with(candidate))
+            })
         })
 }
 
@@ -180,6 +186,34 @@ fn containing_dir_name(path: &Path) -> String {
         .and_then(|name| name.to_str())
         .unwrap_or("unknown")
         .to_string()
+}
+
+fn normalized_path_variants(path: &Path) -> Vec<PathBuf> {
+    let lexical = normalize_path_lexically(path);
+    match path.canonicalize() {
+        Ok(canonical) if canonical != lexical => vec![lexical, canonical],
+        Ok(_) | Err(_) => vec![lexical],
+    }
+}
+
+fn normalize_path_lexically(path: &Path) -> PathBuf {
+    use std::path::Component;
+
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if !normalized.pop() {
+                    normalized.push(component.as_os_str());
+                }
+            }
+            Component::Prefix(_) | Component::RootDir | Component::Normal(_) => {
+                normalized.push(component.as_os_str());
+            }
+        }
+    }
+    normalized
 }
 
 #[cfg(test)]

@@ -284,6 +284,20 @@ const versions = {
       "Final status decision: completed",
     ],
   },
+  "v2.96": {
+    title: "# V2.96 Verification Checklist",
+    required: [
+      "OpenClaw native/workspace install",
+      "~/.openclaw/skills",
+      "<workspace>/skills",
+      "install-only-v2.96",
+      "verified-native-workspace-v2.96",
+      ".agents roots remain scan-only",
+      "ClawHub, Git, update, verify, workshop",
+      "docs/ui-artifacts/v2.96-openclaw-native-workspace-install",
+      "Final status decision: completed",
+    ],
+  },
 };
 
 const staleStatus = [

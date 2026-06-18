@@ -882,7 +882,7 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
         AdapterCapabilityRecord {
             agent: AgentId::Openclaw.as_str(),
             display_name: "OpenClaw",
-            status: "read-only",
+            status: "install-only",
             scan: AdapterFeatureCapability::supported_with_reason(
                 "verified-read-only",
                 "V2.39 scans documented OpenClaw filesystem roots without calling the OpenClaw CLI; workspace project roots are read-only and scoped to confirmed OpenClaw workspaces.",
@@ -899,17 +899,19 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
                 "blocked",
                 "No verified OpenClaw rollback-safe skill config target exists.",
             ),
-            install: AdapterFeatureCapability::blocked(
-                "blocked",
-                "OpenClaw install semantics are not confirmed.",
+            install: AdapterFeatureCapability::supported_with_reason(
+                "verified-native-workspace-v2.96",
+                "V2.96 supports confirmed local tool-global SKILL.md copy into OpenClaw native ~/.openclaw/skills and confirmed OpenClaw workspace <workspace>/skills roots only; .agents direct installs and ClawHub/Git/network-backed operations remain out of scope.",
             ),
-            writable: AdapterFeatureCapability::blocked(
-                "blocked",
-                "OpenClaw writable toggle/install remains blocked until disposable config mutation and credential-safe rollback are verified.",
+            writable: AdapterFeatureCapability::supported_with_reason(
+                "install-only-v2.96",
+                "Writable support is limited to confirmed local skill-file installs into native OpenClaw skill roots; config toggles, skills.entries writes, .agents direct installs, ClawHub, Git, update, verify, workshop, scripts, credentials, cloud sync, and telemetry remain blocked.",
             ),
             blockers: vec![
                 "Arbitrary repository roots are not OpenClaw projects and are not scanned as project roots.",
-                "Verify config mutation, credential preservation, and rollback before writable/install support.",
+                "OpenClaw .agents roots are scan-only and are not direct install targets.",
+                "OpenClaw plugin/config evidence is not a verified credential-safe skill toggle contract.",
+                "OpenClaw ClawHub, Git, update, verify, workshop, and network-backed operations remain blocked.",
             ],
         },
     ]
@@ -2091,7 +2093,7 @@ pub fn install_skill_from_tool_global(
     lock_file.unlock()?;
     write_result?;
 
-    let scan_ctx = install_scan_context(ctx, target_scope, project_path)?;
+    let scan_ctx = install_scan_context(ctx, target_agent, target_scope, project_path)?;
     scan_agent_id_to_catalog(target_agent, &scan_ctx, catalog)?;
 
     Ok(SkillInstallPreviewRecord {
@@ -2116,7 +2118,12 @@ fn preview_skill_install_from_tool_global(
 ) -> Result<SkillInstallPreviewRecord, CommandError> {
     if !matches!(
         target_agent,
-        AgentId::ClaudeCode | AgentId::Codex | AgentId::Opencode | AgentId::Pi | AgentId::Hermes
+        AgentId::ClaudeCode
+            | AgentId::Codex
+            | AgentId::Opencode
+            | AgentId::Pi
+            | AgentId::Hermes
+            | AgentId::Openclaw
     ) {
         return Err(CommandError::InstallUnsupported(format!(
             "{} skills are not writable by install commands",
@@ -3390,7 +3397,7 @@ fn batch_capability_label(agent: AgentId) -> &'static str {
         AgentId::Opencode => "opencode verified exact permission.skill toggle",
         AgentId::Pi => "Pi guarded config toggle",
         AgentId::Hermes => "Hermes native install only; config toggle blocked",
-        AgentId::Openclaw => "OpenClaw read-only scanner; writable blocked",
+        AgentId::Openclaw => "OpenClaw native/workspace install only; config toggle blocked",
         AgentId::ToolGlobal => "Tool-global preview; direct toggle blocked",
     }
 }
@@ -3399,7 +3406,7 @@ fn batch_skip_reason(agent: AgentId, error: &CommandError) -> String {
     match agent {
         AgentId::Pi => error.to_string(),
         AgentId::Hermes => "Hermes config toggles remain blocked in V2.95; native skill-file install is supported, but individual skill toggle semantics and rollback-safe config writes are not confirmed.".to_string(),
-        AgentId::Openclaw => "OpenClaw is read-only in V2.39; workspace scanning is filesystem-only and plugin config evidence is not a verified skill toggle contract.".to_string(),
+        AgentId::Openclaw => "OpenClaw config toggles remain blocked in V2.96; native and confirmed workspace skill-file installs are supported, but skills.entries writes and rollback-safe config toggles are not confirmed.".to_string(),
         AgentId::ToolGlobal => "Tool-global staging records are preview/import sources and do not have agent config toggles.".to_string(),
         _ => error.to_string(),
     }
@@ -3677,6 +3684,10 @@ fn skill_install_root(
             Ok(target_project_root(ctx, project_path)?.join(".pi/skills"))
         }
         (AgentId::Hermes, Scope::AgentGlobal) => Ok(ctx.user_home.join(".hermes/skills")),
+        (AgentId::Openclaw, Scope::AgentGlobal) => Ok(ctx.user_home.join(".openclaw/skills")),
+        (AgentId::Openclaw, Scope::AgentProject) => {
+            Ok(openclaw_install_workspace_root(ctx, project_path)?.join("skills"))
+        }
         (_, Scope::ToolGlobal) => Err(CommandError::UnsupportedScope(scope)),
         (agent, _) => Err(CommandError::InstallUnsupported(format!(
             "{} skills are not writable by install commands",
@@ -3718,15 +3729,91 @@ fn target_project_root(
     Ok(canonical_project)
 }
 
+fn openclaw_install_workspace_root(
+    ctx: &AdapterContext,
+    project_path: Option<&Path>,
+) -> Result<PathBuf, CommandError> {
+    let selected_path = project_path
+        .map(Path::to_path_buf)
+        .or_else(|| ctx.project_root.clone())
+        .or_else(|| ctx.project_cwd.clone())
+        .ok_or(CommandError::UnsupportedScope(Scope::AgentProject))?;
+    let canonical_selected = selected_path.canonicalize().map_err(|err| {
+        CommandError::UnsafeConfigPath(format!(
+            "OpenClaw project path {} cannot be canonicalized: {err}",
+            selected_path.display()
+        ))
+    })?;
+    if !canonical_selected.is_dir() {
+        return Err(CommandError::UnsafeConfigPath(format!(
+            "OpenClaw project path {} is not a directory",
+            canonical_selected.display()
+        )));
+    }
+
+    let workspace = openclaw_home_workspace_candidates(ctx)
+        .into_iter()
+        .filter(|candidate| candidate.exists())
+        .find_map(|candidate| {
+            let canonical_candidate = candidate.canonicalize().ok()?;
+            if canonical_selected == canonical_candidate
+                || canonical_selected.starts_with(&canonical_candidate)
+            {
+                Some(canonical_candidate)
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| {
+            CommandError::UnsafeConfigPath(format!(
+                "OpenClaw project installs must target a confirmed OpenClaw workspace under {}",
+                ctx.user_home.display()
+            ))
+        })?;
+
+    for selected_context in [ctx.project_root.as_ref(), ctx.project_cwd.as_ref()]
+        .into_iter()
+        .flatten()
+    {
+        let canonical_context = selected_context.canonicalize().map_err(|err| {
+            CommandError::UnsafeConfigPath(format!(
+                "OpenClaw context path {} cannot be canonicalized: {err}",
+                selected_context.display()
+            ))
+        })?;
+        if canonical_context != workspace && !canonical_context.starts_with(&workspace) {
+            return Err(CommandError::UnsafeConfigPath(format!(
+                "OpenClaw context {} is outside confirmed workspace {}",
+                canonical_context.display(),
+                workspace.display()
+            )));
+        }
+    }
+
+    Ok(workspace)
+}
+
+fn openclaw_home_workspace_candidates(ctx: &AdapterContext) -> [PathBuf; 2] {
+    [
+        ctx.user_home.join(".openclaw/workspace"),
+        ctx.user_home.join("openclaw/workspace"),
+    ]
+}
+
 fn install_scan_context(
     ctx: &AdapterContext,
+    agent: AgentId,
     scope: Scope,
     project_path: Option<&Path>,
 ) -> Result<AdapterContext, CommandError> {
     if scope != Scope::AgentProject {
         return Ok(ctx.clone());
     }
-    let project_root = target_project_root(ctx, project_path)?;
+    let project_root = if agent == AgentId::Openclaw {
+        openclaw_install_workspace_root(ctx, project_path)?
+    } else {
+        target_project_root(ctx, project_path)?
+    };
     Ok(AdapterContext {
         user_home: ctx.user_home.clone(),
         project_cwd: Some(project_root.clone()),
@@ -3778,6 +3865,16 @@ fn install_preview_risks(agent: AgentId, scope: Scope, target_exists: bool) -> V
         );
         risks.push(
             "Hermes hub, URL, tap, update, uninstall, and external_dirs writes are not part of this install path."
+                .to_string(),
+        );
+    }
+    if agent == AgentId::Openclaw {
+        risks.push(
+            "OpenClaw may need a new session or watcher reload before it reads newly installed local skills."
+                .to_string(),
+        );
+        risks.push(
+            "OpenClaw .agents direct installs, skills.entries writes, ClawHub, Git, update, verify, workshop, and network-backed operations are not part of this install path."
                 .to_string(),
         );
     }
@@ -4396,10 +4493,13 @@ fn validate_skill_install_target(
         )));
     }
 
-    let allowed_root = match scope {
-        Scope::AgentGlobal => ctx.user_home.clone(),
-        Scope::AgentProject => target_project_root(ctx, project_path)?,
-        Scope::ToolGlobal => return Err(CommandError::UnsupportedScope(scope)),
+    let allowed_root = match (agent, scope) {
+        (AgentId::Openclaw, Scope::AgentProject) => {
+            openclaw_install_workspace_root(ctx, project_path)?
+        }
+        (_, Scope::AgentGlobal) => ctx.user_home.clone(),
+        (_, Scope::AgentProject) => target_project_root(ctx, project_path)?,
+        (_, Scope::ToolGlobal) => return Err(CommandError::UnsupportedScope(scope)),
         _ => return Err(CommandError::UnsupportedScope(scope)),
     };
     if create_dirs {

@@ -243,7 +243,7 @@ pub enum ExecutionAttemptStatus {
   - `writable_targets`
   - `skipped_targets`（含 `skip_reason`）
   - `preview_plan`（预期变更与 snapshot/rollback 条件）
-- read-only adapter 与不可写 root（Pi/Hermes/OpenClaw，及 capability 限制实例）必须进入 `skipped_targets`，并保留可解释跳过原因用于 UI 展示。
+- read-only adapter、install-only adapter 与不可写 root（Hermes/OpenClaw config-toggle、Pi 非 guarded scope，及 capability 限制实例）必须进入 `skipped_targets`，并保留可解释跳过原因用于 UI 展示。
 - 当前阶段不新增数据库 schema；批量预览/计划为执行前计算出的临时结果，不持久化到现有 catalog/app data 结构外。
 - 批量写入仍不涉及 skill-content snapshot，不执行脚本，不写凭据/telemetry，不调用 AI provider。
 

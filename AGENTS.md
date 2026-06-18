@@ -15,11 +15,11 @@ coding agents working in this repository.
 
 ## Current State
 
-- Current phase: **V2.95 Hermes native-root install completed**.
-- Completed baseline: V2.1-V2.95. V2.87 unlocked validation passed on 2026-06-17 via `pnpm check:macos`; V2.88 added Computer Use per-surface evidence under `docs/ui-artifacts/v2.88-handoff-evidence/`; V2.89 refreshed the app icon assets; V2.90 migrated the packaged app identity and default app-data id with compatibility; V2.91 added local model-task matching history; V2.92 added Codex read-only expanded roots and a native-root write allowlist; V2.93 added opencode configured local `skills.paths` scanning; V2.94 added Pi `.agents/skills` compatibility scanning/toggles and native-root installs; V2.95 added Hermes native `~/.hermes/skills` tool-global installs.
+- Current phase: **V2.96 OpenClaw native/workspace install completed**.
+- Completed baseline: V2.1-V2.96. V2.87 unlocked validation passed on 2026-06-17 via `pnpm check:macos`; V2.88 added Computer Use per-surface evidence under `docs/ui-artifacts/v2.88-handoff-evidence/`; V2.89 refreshed the app icon assets; V2.90 migrated the packaged app identity and default app-data id with compatibility; V2.91 added local model-task matching history; V2.92 added Codex read-only expanded roots and a native-root write allowlist; V2.93 added opencode configured local `skills.paths` scanning; V2.94 added Pi `.agents/skills` compatibility scanning/toggles and native-root installs; V2.95 added Hermes native `~/.hermes/skills` tool-global installs; V2.96 added OpenClaw native `~/.openclaw/skills` and confirmed workspace `<workspace>/skills` tool-global installs.
 - Completed product slice: Agent Copilot M1-M4. The displayed product name and primary packaged app identity are Agent Copilot; Swift module/source names, Rust crate names, sidecar name, AX ids, env vars, and legacy Keychain service intentionally retain `SkillsCopilot` / `skills-copilot` compatibility.
 - Current Agent Copilot surfaces: Lineup default surface, Agent Profile, sorted read-only decision queue, default-off local session preview, and default-off MCP server preview.
-- Near-term post-V2.95 planning: V2.96 covers the OpenClaw writable/install evidence slice.
+- Near-term post-V2.96 planning: open a new scoped version before expanding adapter config writes, network-backed installs, script execution, signing, packaging, or release automation.
 - Maintained product UI: native macOS app in `apps/macos`.
 - Service boundary: Rust typed JSON stdio sidecar in `crates/service`.
 - Current app bundle path: `dist/AgentCopilot.app`.
@@ -57,7 +57,7 @@ coding agents working in this repository.
 - Opencode scans native roots, official `.claude` / `.agents` compatibility roots, and configured local `skills.paths` roots. `skills.urls` is metadata-only: do not fetch network skill indexes unless a future explicit confirmation flow is scoped. Writable support remains limited to exact managed `permission.skill` overrides; installs remain limited to native opencode roots.
 - Pi scans native `~/.pi/agent/skills` / project `.pi/skills` roots plus `.agents/skills` compatibility roots. Guarded toggles may update Pi settings for native and `.agents` compatibility instances after trust/snapshot checks. Tool-global installs are limited to native `~/.pi/agent/skills` and project `.pi/skills`; Pi package install/remove and `.agents` direct skill-file installs remain blocked.
 - Hermes native-root install is limited to confirmed local ToolGlobal `SKILL.md` copies into `~/.hermes/skills`. Hermes external roots are explicit read-only roots. Do not infer generic project roots. Hermes config toggles, per-platform enablement writes, external_dirs writes, hub/URL/tap/update/uninstall/reset operations, and uncontrolled network fetch remain blocked.
-- OpenClaw workspace scope is read-only and limited to `<workspace>/skills` and `<workspace>/.agents/skills`. OpenClaw writable/install is scheduled for V2.96 and remains blocked until verified.
+- OpenClaw scans native `~/.openclaw/skills`, shared `~/.agents/skills`, bundled roots, and confirmed workspace `<workspace>/skills` / `<workspace>/.agents/skills` roots. Tool-global installs are limited to native `~/.openclaw/skills` and confirmed workspace `<workspace>/skills`; `.agents` roots remain scan-only. OpenClaw config toggles, `skills.entries` writes, ClawHub, Git, update, verify, workshop, network-backed operations, scripts, credentials, cloud sync, and telemetry remain blocked.
 
 ## Safety Boundaries
 
@@ -189,8 +189,9 @@ This section keeps compact machine-checked milestone anchors. Full details live 
   installs, config toggles, external_dirs writes, hub/URL/tap/update/uninstall/
   reset operations, scripts, credentials, cloud sync, telemetry, and
   uncontrolled network fetch remain blocked.
-- V2.94 Pi install and compatibility writes: `RootSource::Compatibility` for
-  Pi `.agents/skills`, guarded native/compat toggles through Pi settings,
-  native-root tool-global installs to `~/.pi/agent/skills` and project
-  `.pi/skills`, project trust gating, and package install/remove plus
-  `.agents` direct installs remain blocked.
+- V2.96 OpenClaw native/workspace install: `skill.install` can copy confirmed
+  local ToolGlobal `SKILL.md` records into `~/.openclaw/skills` and confirmed
+  OpenClaw workspace `<workspace>/skills`; `.agents` direct installs, config
+  toggles, `skills.entries` writes, ClawHub, Git, update, verify, workshop,
+  network-backed operations, scripts, credentials, cloud sync, telemetry, and
+  uncontrolled network fetch remain blocked.

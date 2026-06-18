@@ -195,7 +195,7 @@ For UI changes:
 ## 17. V2.33: Safe batch actions（已完成）
 
 - 任何 batch 写操作必须是 preview-first：先展示批量变更明细、受影响实例、不可写跳过项与原因、snapshot 预览与 rollback 计划，用户确认后才允许写入。
-- 仅展示已验证可写 adapter 的实例可进入“可执行”集合；Pi 仅在 guarded settings scope 内参与，Hermes 仅支持 native-root install 而不参与 config-toggle batch，OpenClaw 以及 capability 为 blocked/read-only 的实例必须在列表和计数中明确标注为 skipped。
+- 仅展示已验证可写 config-toggle adapter 的实例可进入“可执行”集合；Pi 仅在 guarded settings scope 内参与，Hermes 和 OpenClaw 仅支持 install-only 路径而不参与 config-toggle batch，capability 为 blocked/read-only/install-only 的实例必须在列表和计数中明确标注为 skipped。
 - 执行入口仍走已有安全链路（`config.toggleSkill` + snapshot/rollback），不得新增自动清理、自动执行或新凭据/telemetry 路径。
 - 完成 UI 改动时应补齐 app-window-only 完整窗口截图与最小窗口/键盘/可访问性自检记录；纯文档更新可免此项。
 

@@ -10,7 +10,7 @@
 >
 > 上层 scanner / catalog / UI 不直接处理 agent 特有配置语义。
 >
-> V2.41-V2.95 的 provider/task/validation/module-splitting/Agent Copilot/Codex expanded root/opencode configured-root/Pi guarded write/Hermes native install work is tracked in README, roadmap, development tasks, and verification checklists. V2.92 expands Codex read-only roots, V2.93 adds opencode configured local roots, V2.94 adds Pi compatibility-root toggles plus native-root installs, and V2.95 adds Hermes native-root installs while preserving the explicit capability matrix below.
+> V2.41-V2.96 的 provider/task/validation/module-splitting/Agent Copilot/Codex expanded root/opencode configured-root/Pi guarded write/Hermes native install/OpenClaw native-workspace install work is tracked in README, roadmap, development tasks, and verification checklists. V2.92 expands Codex read-only roots, V2.93 adds opencode configured local roots, V2.94 adds Pi compatibility-root toggles plus native-root installs, V2.95 adds Hermes native-root installs, and V2.96 adds OpenClaw native/workspace installs while preserving the explicit capability matrix below.
 
 ## V2.40 Adapter diagnostics
 
@@ -101,7 +101,7 @@ pub struct AdapterFeatureCapability {
 | opencode | `verified` | 支持 native roots + 官方 `.claude` / `.agents` compatibility roots + configured local `skills.paths` roots | 支持（exact `permission.skill` deny/re-enable） | 支持（native-root 安装） | 支持（managed permission overrides） | `skills.urls` metadata-only/no-fetch；configured/compat roots 不作为 install/write target |
 | Pi | `guarded` | 支持 Pi-native roots + `.agents/skills` compatibility roots | 支持 guarded native / `.agents` compatibility toggle（基于证据） | 支持 native-root tool-global install | limited | package install/remove、`.agents` direct install、脚本执行、AI 自动写回、credentials 仍 blocked |
 | Hermes | `install-only` | 支持 active/profile Hermes home + explicit `skills.external_dirs` read-only roots | blocked（config toggle schema 未验证） | 支持 native `~/.hermes/skills` tool-global install | install-only | 外部目录仅按 `skills.external_dirs` 显式 external roots 处理；generic project scan / project install / external_dirs write / hub or URL install / toggle blocked |
-| OpenClaw | `read-only` | 支持文档化 filesystem roots | blocked（read-only scan only） | blocked | blocked | project scope 仅 workspace，toggle/install/writable blocked |
+| OpenClaw | `install-only` | 支持文档化 filesystem roots + confirmed workspace roots | blocked（config toggle schema 未验证） | 支持 native `~/.openclaw/skills` 与 confirmed `<workspace>/skills` tool-global install | install-only | `.agents` direct install、config toggle、`skills.entries` write、ClawHub/Git/update/verify/workshop/network-backed operations blocked |
 
 > **实现要求**：所有适配器**无状态**。
 >
@@ -211,17 +211,18 @@ V2.95 只补 native-root local install；project discovery、config toggle、ext
 | 项 | 值 |
 | --- | --- |
 | AgentId | `openclaw` |
-| 状态 | **Read-only scanner implemented / writable blocked** |
+| 状态 | **V2.96 native/workspace install implemented / config toggles blocked** |
 | Spec 工作单 | [`docs/openclaw-adapter-spec.md`](./openclaw-adapter-spec.md) |
 | 统一工作单 | [`docs/agent-adapter-spec-worklists.md`](./agent-adapter-spec-worklists.md#openclaw) |
-| Candidate roots | `<workspace>/skills`、`<workspace>/.agents/skills`、`~/.agents/skills`、`~/.openclaw/skills`、bundled skills、`skills.load.extraDirs`；第一版只做 filesystem scan |
+| Candidate roots | `<workspace>/skills`、`<workspace>/.agents/skills`、`~/.agents/skills`、`~/.openclaw/skills`、bundled skills、`skills.load.extraDirs`；扫描保持 filesystem-only |
 | Config evidence | plugin docs 使用 `openclaw config file` 定位 `openclaw.json`，并 patch `.plugins.entries[*].enabled` / `.plugins.allow`；这只证明 plugin 配置线索，不证明 skill toggle |
-| Evidence fixture | `fixtures/openclaw/` 保存 read-only evidence 样例和 redacted plugin config 样例，不是 writable toggle contract |
-| 行动项 | ① 保持 filesystem-only read-only scan；② 继续确认技能启停语义、权限模型和 rollback-safe 配置写入路径；③ 不调用 OpenClaw CLI |
+| Evidence fixture | `fixtures/openclaw/` 保存 read-only evidence 样例、V2.96 install-only 边界和 redacted plugin config 样例，不是 writable toggle contract |
+| 写入范围 | 仅允许 confirmed local ToolGlobal `SKILL.md` copy into native `~/.openclaw/skills` 和 confirmed workspace `<workspace>/skills`；`.agents` direct install、config toggle、`skills.entries` write、ClawHub/Git/update/verify/workshop/network-backed operations blocked |
+| 行动项 | ① 保持 filesystem-only scan；② 保持 install-only local file-copy；③ 继续确认技能启停语义、权限模型和 rollback-safe 配置写入路径；④ 不调用 OpenClaw CLI 做 ordinary scan |
 
 OpenClaw P0 evidence 已确认官方 `SKILL.md` roots、frontmatter schema、loading order、precedence、`skills list --json` 和 config override 语义。Project-like scope 只按 OpenClaw workspace 处理：`<workspace>/skills` 和 `<workspace>/.agents/skills`；不把任意 repo root 推断为 OpenClaw project。
 
-V2.16 第一版只做 read-only filesystem scanner；toggle/install/writable 继续 blocked，直到 disposable config mutation 证明 credential-safe rollback。
+V2.96 只补 native/workspace local install；`.agents` direct install、config toggle、`skills.entries` write、ClawHub/Git/update/verify/workshop 和 network-backed install 继续 blocked，直到 disposable config mutation 证明 credential-safe rollback。
 
 ### 2.6 opencode
 ### 2.6.1 opencode provenance 口径（V2.27）
@@ -314,10 +315,16 @@ Claude Code MVP 的 toggle 写 `skillOverrides`：项目 skill 写 `<project>/.c
 
 非 Claude adapter 的详细证据清单维护在 [`agent-adapter-spec-worklists.md`](./agent-adapter-spec-worklists.md)。
 
-## OpenClaw scope note (V2.39, completed)
+## OpenClaw scope note (V2.39/V2.96, completed)
 
-- OpenClaw support is workspace-scoped and read-only.
-- Confirmed roots: `<workspace>/skills` and `<workspace>/.agents/skills`.
+- OpenClaw support is workspace-scoped and install-only.
+- Confirmed scan roots: `<workspace>/skills` and `<workspace>/.agents/skills`.
+- Confirmed install roots: `~/.openclaw/skills` and `<workspace>/skills`.
 - Do not infer arbitrary repository/project roots for OpenClaw scanning.
-- OpenClaw writable/install features remain blocked; no script execution, AI auto-write, credential persistence, or public distribution for this milestone.
-- This section reflects the completed V2.39 implementation and validation boundary.
+- OpenClaw `.agents` direct installs, config toggles, `skills.entries` writes,
+  ClawHub, Git, update, verify, workshop, and network-backed operations remain
+  blocked.
+- No script execution, AI auto-write, credential persistence, or public
+  distribution for this milestone.
+- This section reflects the completed V2.39 scanner and V2.96 install-only
+  validation boundaries.

@@ -12,9 +12,9 @@
 > 非 Claude adapter、发布安全 checklist 和 PR checklist 的未勾选项是后续阶段或模板项，
 > 不代表当前 MVP/V1 进度遗漏。
 >
-> 当前阶段：**V2.95 Hermes native-root install completed**。
-> V2.1-V2.95 是当前 completed baseline；V2.87 于 2026-06-17 解锁后通过 `pnpm check:macos`，V2.88 补齐 Lineup / Agent Profile / Local Session Preview / MCP Preview 的 Computer Use app-window evidence，V2.89 刷新 Agent Copilot display brand app icon assets，V2.90 完成兼容优先的 packaged app identity / default app-data id 迁移，V2.91 新增本地模型-任务匹配历史证据域，V2.92 完成 Codex expanded roots 只读诊断和 native-root write allowlist，V2.93 完成 opencode configured local `skills.paths` scanning 并保持 `skills.urls` metadata-only/no-fetch，V2.94 完成 Pi `.agents/skills` compatibility scanning/toggles 与 native-root installs，V2.95 完成 Hermes native `~/.hermes/skills` tool-global installs。
-> Agent Copilot M1-M4 decision-first IA / local evidence previews 已实现为只读感知层，显示层品牌和主要 macOS bundle 为 Agent Copilot；Swift/Rust 模块、sidecar、AX ids、env vars 和 legacy Keychain service 保持兼容。Remaining near-term follow-up is scheduled as the V2.96 slice below and in [`development-tasks.md`](./development-tasks.md).
+> 当前阶段：**V2.96 OpenClaw native/workspace install completed**。
+> V2.1-V2.96 是当前 completed baseline；V2.87 于 2026-06-17 解锁后通过 `pnpm check:macos`，V2.88 补齐 Lineup / Agent Profile / Local Session Preview / MCP Preview 的 Computer Use app-window evidence，V2.89 刷新 Agent Copilot display brand app icon assets，V2.90 完成兼容优先的 packaged app identity / default app-data id 迁移，V2.91 新增本地模型-任务匹配历史证据域，V2.92 完成 Codex expanded roots 只读诊断和 native-root write allowlist，V2.93 完成 opencode configured local `skills.paths` scanning 并保持 `skills.urls` metadata-only/no-fetch，V2.94 完成 Pi `.agents/skills` compatibility scanning/toggles 与 native-root installs，V2.95 完成 Hermes native `~/.hermes/skills` tool-global installs，V2.96 完成 OpenClaw native `~/.openclaw/skills` 与确认 workspace `<workspace>/skills` tool-global installs。
+> Agent Copilot M1-M4 decision-first IA / local evidence previews 已实现为只读感知层，显示层品牌和主要 macOS bundle 为 Agent Copilot；Swift/Rust 模块、sidecar、AX ids、env vars 和 legacy Keychain service 保持兼容。新的 adapter config writes、network-backed installs、script execution、signing、packaging 或 release automation 必须另起 scoped version。
 
 ## Current Milestone Snapshot
 
@@ -24,7 +24,7 @@
 | V2.65-V2.77 | Task-first cockpit, lifecycle, guided cleanup, validation hardening, real-local workbench | Completed |
 | V2.78-V2.83 | Protocol/gate parity, privacy/localization, Detail density, IPC cancellation, test floor, continued module splitting | Completed |
 | V2.84-V2.86 | Swift Detail section splitting, Rust RPC domain module splitting, Rust helper/test split and module-size gate | Completed |
-| Agent Copilot M1-M4 + V2.88-V2.95 closeout | Decision-first Lineup, Agent Profile, sorted decision queue, default-off local session preview, default-off MCP server preview, per-surface evidence closeout, brand asset refresh, compatibility-first identifier migration, local model-task history, Codex expanded root diagnostics, opencode configured local roots, Pi install/compat writes, and Hermes native-root install | Completed; unlocked app-window evidence captured |
+| Agent Copilot M1-M4 + V2.88-V2.96 closeout | Decision-first Lineup, Agent Profile, sorted decision queue, default-off local session preview, default-off MCP server preview, per-surface evidence closeout, brand asset refresh, compatibility-first identifier migration, local model-task history, Codex expanded root diagnostics, opencode configured local roots, Pi install/compat writes, Hermes native-root install, and OpenClaw native/workspace install | Completed; unlocked app-window evidence captured |
 
 ## Near-Term V2.88-V2.96 Plan
 
@@ -41,7 +41,7 @@ design/validation closeout before the next write-capability slice starts.
 | V2.93 | opencode custom roots | Completed: added read-only configured local `skills.paths` scanning with canonicalization/dedupe and project-boundary checks; kept `skills.urls` metadata-only/no-fetch. | [`v2.93-verification-checklist.md`](./v2.93-verification-checklist.md), OpenCode docs/source evidence, no uncontrolled network, privacy gate |
 | V2.94 | Pi install and compatibility writes | Completed: extended beyond V2.37 guarded native toggles with `.agents/skills` compatibility scanning/toggles and native-root tool-global installs. | [`v2.94-verification-checklist.md`](./v2.94-verification-checklist.md), compatibility-root tests, native install tests, trust gate, no script execution |
 | V2.95 | Hermes native-root install | Completed: supports confirmed local ToolGlobal `SKILL.md` copy into native `~/.hermes/skills`; config toggles, project installs, external_dirs writes, hub/URL/tap/update/uninstall/reset, and network-backed operations remain blocked. | [`v2.95-verification-checklist.md`](./v2.95-verification-checklist.md), Hermes docs evidence, native install tests, capability matrix update, privacy gate |
-| V2.96 | OpenClaw writable/install | Implement OpenClaw writable/install only after workspace-scope write semantics, precedence, rollback, and install behavior are verified. | OpenClaw disposable evidence, workspace-bound writes, rollback proof |
+| V2.96 | OpenClaw native/workspace install | Completed: supports confirmed local ToolGlobal `SKILL.md` copy into native `~/.openclaw/skills` and confirmed workspace `<workspace>/skills`; `.agents` direct installs, config toggles, `skills.entries` writes, ClawHub/Git/update/verify/workshop, and network-backed operations remain blocked. | [`v2.96-verification-checklist.md`](./v2.96-verification-checklist.md), OpenClaw docs evidence, native/workspace install tests, capability matrix update, privacy gate |
 
 Current planning boundary:
 
@@ -103,6 +103,8 @@ Current planning boundary:
   [`v2.94-verification-checklist.md`](./v2.94-verification-checklist.md).
 - V2.95 Hermes native-root install is tracked in
   [`v2.95-verification-checklist.md`](./v2.95-verification-checklist.md).
+- V2.96 OpenClaw native/workspace install is tracked in
+  [`v2.96-verification-checklist.md`](./v2.96-verification-checklist.md).
 
 ## 0. 设计阶段（已完成）
 
@@ -330,7 +332,7 @@ Current planning boundary:
 - 非 Claude adapter 证据收集：Codex / Pi / Hermes / OpenClaw / opencode 的目录布局、配置 schema、启停语义和最小 fixture。
   - 2026-06-08 Codex evidence 切片：官方 docs + 本地 `codex-cli 0.137.0` disposable HOME/CODEX_HOME 验证已确认 user/project `.agents/skills` read-only roots、`SKILL.md` 格式、用户级 `$CODEX_HOME/config.toml` / `~/.codex/config.toml` 写入禁用/恢复语义。第一版 Codex adapter 决策为 user-config writable；项目级 `.codex/config.toml` toggle、plugin/admin roots、`$CODEX_HOME/skills` compatibility root 仍不进入首版能力。
   - 2026-06-08 Pi / opencode evidence 切片：官方资料足够规划 read-only scanner/parser，但 writable adapter 仍 blocked，需 disposable local round-trip 和重复 root 策略。
-  - 2026-06-08 Hermes / OpenClaw evidence 切片：已记录本地线索和 fixtures；2026-06-10 P0 evidence 进一步确认二者可进入 read-only scanner scope，后续已由 V2.16/V2.17 实现只读扫描，writable/install 继续 blocked。
+  - 2026-06-08 Hermes / OpenClaw evidence 切片：已记录本地线索和 fixtures；2026-06-10 P0 evidence 进一步确认二者可进入 read-only scanner scope，后续已由 V2.16/V2.17 实现只读扫描；V2.95 later added Hermes native-root install and V2.96 later added OpenClaw native/workspace install while config/network operations remain blocked.
 - Native test hardening：把适合长期维护的 Swift list/model 行为沉淀为 SwiftPM test target。
   - 2026-06-08 Native test hardening 切片：SwiftPM `SkillsCopilotTests` 已补 `SkillStore` model 行为，覆盖 reload 后选中稳定性、缺失选中回退、空 catalog 友好模型、service error/loading 复位，以及 toggle 写操作 in-flight / success refresh 状态；`swift test --package-path apps/macos` 本地通过。
 
@@ -345,7 +347,7 @@ Current planning boundary:
 **历史 V2 状态快照（2026-06-11）**：Codex adapter 首个实现切片、V2.1 Claude/Codex adapter experience、V2.2 project context、V2.3 adapter hardening、V2.4 opencode read-only adapter、V2.5 audit hardening、V2.6 manual readiness docs、V2.7 LLM local assist gate、V2.8 rules/permissions governance implementation、V2.9 Tool-global skill pool、V2.10 skill execution safety docs/release consistency、V2.11-V2.20 adapter/management/analysis line 已完成 closeout，且之前 mainline app 的真实本机 Computer Use 操作验证已在 2026-06-10 通过。产品重心保持在 skills 的管理、检查、分析和配置审计；真实 sandbox runner、GitHub clone import、script-file install 已从活动 backlog 删除。可执行任务清单见 [`development-tasks.md`](./development-tasks.md)。V2.10 已完成安全边界文档同步：default-deny，不真实执行；blocked/cancelled/failure attempt audit；LLM 不可触发执行。当前产品方向不规划 successful execution output log。V2.8 已完成 LLM status protocol compatibility、permissions roundtrip for V2.8 rules、explicit severity ordering、findings filtering/grouping UI、`app.stateSnapshot` refresh optimization，以及七条新本地规则：`frontmatter.tools-not-empty`、`permissions.network-declared`、`permissions.exec-needs-human`、`name.canonical-case`、`script.no-shebang`、`body.too-long`、`dependency.unknown`。Codex adapter core、commands/service、cwd→repo-root project discovery、macOS UI scan-all、agent filter、restart note、project context、config patch hardening、状态表达、安全回归、opencode native + compatibility root 扫描、guarded opencode permission writes、scanner/config/snapshot/service/UI/docs audit hardening、adapter changelog tracking、默认关闭的 LLM service/UI gate 和 request prepare/estimate 均已落地。V2.38 explicit external roots 已完成：`skills.external_dirs` 与 generic project roots 区分明确；Hermes writable/install 继续 blocked。V2.44 任务可用性评估已完成：`task.checkReadiness` 与 native Analysis readiness UI 均保持 read-only/user-triggered。
 
 **V2 剩余开发判定**
-- 当前 adapter baseline：Pi guarded native/global/project/package toggles、`.agents/skills` compatibility toggles、native-root installs 已完成，Pi package install/remove 与 `.agents` direct install 继续 blocked；opencode guarded `permission.skill` writes、native install 和 configured local `skills.paths` read-only scanning 已完成，`skills.urls` 保持 metadata-only/no-fetch；Hermes native-root install 已完成但 config toggles / project installs / external_dirs writes / hub-URL-tap-update-uninstall-reset 继续 blocked；OpenClaw 保持 read-only，writable/install 排入 V2.96 前继续 blocked。
+- 当前 adapter baseline：Pi guarded native/global/project/package toggles、`.agents/skills` compatibility toggles、native-root installs 已完成，Pi package install/remove 与 `.agents` direct install 继续 blocked；opencode guarded `permission.skill` writes、native install 和 configured local `skills.paths` read-only scanning 已完成，`skills.urls` 保持 metadata-only/no-fetch；Hermes native-root install 已完成但 config toggles / project installs / external_dirs writes / hub-URL-tap-update-uninstall-reset 继续 blocked；OpenClaw native/workspace install 已完成但 `.agents` direct installs、config toggles、`skills.entries` writes、ClawHub/Git/update/verify/workshop 和 network-backed operations 继续 blocked。
 - 跨版本 backlog：不改变 V2.1-V2.10 closeout 状态，按 [`development-tasks.md`](./development-tasks.md) 的优先级单独推进。
 - 验证口径：代码/UI/协议变更继续跑 `pnpm check:macos`；用户可见、UI 或 service protocol 变更继续重跑真实本机 Computer Use。若未来 macOS/AX 无法解析窗口，必须重新记录 blocker，不能用 smoke 截图替代。
 
@@ -923,7 +925,7 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 | 项 | 风险 | 缓解 |
 | --- | --- | --- |
 | Codex skills spec 仍在演化 | adapter 频繁 breaking | doc 里维护 spec 版本号；spec 一变先升 catalog schema |
-| Pi / Hermes / OpenClaw 的真实写入语义未知 | 适配器猜错 | adapter capability matrix 必须展示 blocker；opencode writable 已在 V2.12 限定为 managed `permission.skill` writes 和 native install targets；Pi production writable 与 Hermes native-root install 已按 evidence-backed scope 落地；Hermes config toggles 与 OpenClaw writable/install 未完成 disposable rollback evidence 前继续 blocked |
+| Pi / Hermes / OpenClaw 的真实写入语义未知 | 适配器猜错 | adapter capability matrix 必须展示 blocker；opencode writable 已在 V2.12 限定为 managed `permission.skill` writes 和 native install targets；Pi production writable、Hermes native-root install、OpenClaw native/workspace install 已按 evidence-backed scope 落地；Hermes config toggles 与 OpenClaw config toggles / network-backed operations 未完成 disposable rollback evidence 前继续 blocked |
 | Codex evidence 被误读成完整运行时支持 | 用户或 agent 误以为所有 Codex roots / project config / plugin skills 均可写 | roadmap / AGENTS / adapter docs 明确：V2.92 只扩展 read-only diagnostics；写入仍限 native `.agents/skills` + user-config override，project config、plugin/admin/system/compat writes 继续 blocked |
 | 贡献者门槛（Rust） | 社区贡献慢 | doc 写明"轻量贡献（rule / UI）只需 TS / Rust 单语言"；提供 good first issue |
 | LLM 成本失控 | 用户被烧钱 | 月度上限 + 单次上限 + 默认 LLM 关闭 |
@@ -1056,7 +1058,7 @@ Full-platform UI adaptation, Windows/Linux shell work, local team sharing, signi
 | --- | --- | --- |
 | V2.31 | Cleanup Queue | 将 open findings、integrity issues、analysis insights 汇总成默认 read-only 的可处理队列；提供可复核的查看、跳转、清理建议和现有安全动作入口；不新增自动清理、脚本执行、provider 调用或 agent-config/snapshot 写入。 |
 | V2.32 | Rule tuning / suppression | 已完成：支持本地 rule severity override 与 suppression，所有操作可审计、可撤销；仅 app-local 元数据持久化，不改 skill 或 agent config，不新增 snapshot，不调用 AI provider，不读写凭据，且无 telemetry 与 release 自动化耦合。 |
-| V2.33 | Safe batch actions | 已完成：仅对 verified writable agent/roots 支持 preview-first 批量 enable/disable；预览返回受影响技能、不可写跳过项与原因、snapshot/rollback 计划；Apply 必须显式确认且确认 preview id 必须仍匹配当前 preview；Pi 后续按 guarded settings scope 参与，Hermes native install-only 不参与 config-toggle batch，OpenClaw 保持 read-only。 |
+| V2.33 | Safe batch actions | 已完成：仅对 verified writable config-toggle agent/roots 支持 preview-first 批量 enable/disable；预览返回受影响技能、不可写跳过项与原因、snapshot/rollback 计划；Apply 必须显式确认且确认 preview id 必须仍匹配当前 preview；Pi 后续按 guarded settings scope 参与，Hermes / OpenClaw install-only 不参与 config-toggle batch。 |
 | V2.34 | Cross-agent comparison view | 已完成：横向比较同名/相似 skills 在 Claude/Codex/opencode/Pi/Hermes/OpenClaw 中的状态、来源、风险、可写能力与差异。Read-only，默认不新增写入/执行/AI/provider/credential/snapshot 路径。 |
 | V2.35 | Local report export | 已完成：导出脱敏 Markdown/JSON 本地审计报告，覆盖 agent coverage、health summary、open findings、triage 状态、cleanup queue 和 comparison insights；输出位于 app data，且不新增 public distribution/provider/credential/script/自动写回路径。 |
 
@@ -1533,6 +1535,6 @@ Closeout status: completed. V2.43 integrates protocol + service + UI closeout an
 - V2.39 is scoped to read-only OpenClaw workspace deepening.
 - Confirmed scan roots: `<workspace>/skills` and `<workspace>/.agents/skills` only.
 - No inference of arbitrary repository, parent, or generic roots for OpenClaw.
-- Maintain existing OpenClaw blockers: write/install blocked, no script execution, no AI auto-write, no credential writes, no public distribution workflow.
+- Maintain existing OpenClaw V2.39 blockers for config/network/script paths; V2.96 later added install-only native/workspace local ToolGlobal copies while keeping no script execution, no AI auto-write, no credential writes, and no public distribution workflow.
 - V2.39 is complete after implementation, focused checks, `pnpm check:macos`, and explicit real-app Computer Use/window blocker documentation.
  - `docs/v2.45-verification-checklist.md` 记录 V2.45 的 completed closeout 条件。

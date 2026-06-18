@@ -1,11 +1,12 @@
 # Development Tasks
 
-> Status: V2.95 Hermes native-root install is complete.
+> Status: V2.96 OpenClaw native/workspace install is complete.
 > V2.84 Swift Detail section splitting, V2.85 Rust RPC domain module splitting,
 > and V2.86 Rust helper/test split completed.
-> V2.1 through V2.95 are the synchronized completed baseline; V2.87 unlocked `pnpm check:macos` passed on 2026-06-17, V2.88 captured per-surface Computer Use evidence, V2.89 refreshed app icon assets, V2.90 migrated packaged app identity/default app-data id with compatibility, V2.91 added local model-task matching history, V2.92 completed Codex expanded roots with read-only diagnostics plus a native-root write allowlist, V2.93 completed opencode configured local `skills.paths` scanning while keeping `skills.urls` metadata-only/no-fetch, V2.94 completed Pi `.agents/skills` compatibility scanning/toggles plus native-root installs, and V2.95 completed Hermes native `~/.hermes/skills` tool-global installs.
+> V2.1 through V2.96 are the synchronized completed baseline; V2.87 unlocked `pnpm check:macos` passed on 2026-06-17, V2.88 captured per-surface Computer Use evidence, V2.89 refreshed app icon assets, V2.90 migrated packaged app identity/default app-data id with compatibility, V2.91 added local model-task matching history, V2.92 completed Codex expanded roots with read-only diagnostics plus a native-root write allowlist, V2.93 completed opencode configured local `skills.paths` scanning while keeping `skills.urls` metadata-only/no-fetch, V2.94 completed Pi `.agents/skills` compatibility scanning/toggles plus native-root installs, V2.95 completed Hermes native `~/.hermes/skills` tool-global installs, and V2.96 completed OpenClaw native `~/.openclaw/skills` plus confirmed workspace `<workspace>/skills` tool-global installs.
 > Agent Copilot M1-M4 first implementation pass is integrated; near-term
-> post-V2.95 work is scheduled below and in [`roadmap.md`](./roadmap.md).
+> post-V2.96 work requires a new scoped version before widening config writes,
+> network-backed installs, script execution, signing, packaging, or release automation.
 >
 > Document role: this is the agent-facing implementation task ledger.
 > Keep concrete task routing, current baseline, closeout links, and validation handoff notes here.
@@ -16,10 +17,10 @@
 ## Current Baseline
 
 - Product boundary: native macOS SwiftUI/AppKit shell plus Rust service protocol.
-- Completed V2 milestones: first Codex slice, V2.1 through V2.95.
-- Current completed milestone: V2.95 Hermes native-root install; latest unlocked macOS validation baseline passed on 2026-06-17.
+- Completed V2 milestones: first Codex slice, V2.1 through V2.96.
+- Current completed milestone: V2.96 OpenClaw native/workspace install; latest unlocked macOS validation baseline passed on 2026-06-17.
 - Current priority:
-  preserve the V2.26-V2.95 completed behavior while keeping future work
+  preserve the V2.26-V2.96 completed behavior while keeping future work
   focused on task-centered skill review, local evidence, safe cleanup,
   and maintainable module boundaries.
 - Current implementation status:
@@ -67,6 +68,13 @@
   enablement writes, project installs, `skills.external_dirs` writes,
   hub/URL/tap/update/uninstall/reset operations, scripts, credentials,
   uncontrolled network fetch, cloud sync, and telemetry remain blocked.
+- V2.96 OpenClaw native/workspace install status:
+  OpenClaw tool-global installs are limited to confirmed local `SKILL.md`
+  copies into native `~/.openclaw/skills` and confirmed OpenClaw workspace
+  `<workspace>/skills`. OpenClaw `.agents` roots remain scan-only. OpenClaw
+  config toggles, `skills.entries` writes, ClawHub, Git, update, verify,
+  workshop, scripts, credentials, uncontrolled network fetch, cloud sync, and
+  telemetry remain blocked.
 - UI validation baseline:
   latest Agent Copilot app-window evidence is 2026-06-17:
   `pnpm check:macos` passed, `./script/build_and_run.sh --verify` launched
@@ -93,7 +101,7 @@ rescheduled.
 | V2.93 | Completed | opencode custom roots: implemented safe configured local `skills.paths` scanning with `RootSource::Configured`, canonicalization/dedupe, project-boundary checks, and metadata-only/no-fetch `skills.urls` handling. | [`v2.93-verification-checklist.md`](./v2.93-verification-checklist.md), OpenCode docs/source evidence, duplicate/root tests, canonical `locked-session` UI blocker, privacy gate |
 | V2.94 | Completed | Pi install and compatibility-root writes: extended beyond V2.37 guarded native toggles with `.agents/skills` compatibility scanning/toggles and native-root tool-global installs. | [`v2.94-verification-checklist.md`](./v2.94-verification-checklist.md), Pi docs evidence, compatibility-root tests, native install tests, trust gate, app-window evidence, privacy gate |
 | V2.95 | Completed | Hermes native-root install: enabled confirmed local ToolGlobal `SKILL.md` copy into native `~/.hermes/skills` only; kept config toggles, project installs, external_dirs writes, hub/URL/tap/update/uninstall/reset, and network-backed operations blocked. | [`v2.95-verification-checklist.md`](./v2.95-verification-checklist.md), Hermes docs evidence, native install tests, capability matrix update, app-window evidence, privacy gate |
-| V2.96 | Planned | OpenClaw writable/install: verify workspace-scope writes, precedence, install behavior, and rollback before enabling. | OpenClaw disposable evidence, workspace-bound write tests, rollback proof, capability matrix update |
+| V2.96 | Completed | OpenClaw native/workspace install: enabled confirmed local ToolGlobal `SKILL.md` copy into native `~/.openclaw/skills` and confirmed workspace `<workspace>/skills`; kept `.agents` direct installs, config toggles, `skills.entries` writes, ClawHub/Git/update/verify/workshop, and network-backed operations blocked. | [`v2.96-verification-checklist.md`](./v2.96-verification-checklist.md), OpenClaw docs evidence, native/workspace install tests, capability matrix update, app-window evidence, privacy gate |
 
 - 2026-06-16 review triage:
   V2.84-V2.86 module-splitting follow-up is complete.
@@ -253,8 +261,8 @@ The remaining 2026-06-15 Minimax-m3 and GLM-5.1 review findings are assigned int
 | V2.11 | Adapter Capability Matrix | Completed | Service protocol and macOS UI expose scan/toggle/install status and blockers for Claude Code, Codex, opencode, Pi, Hermes, and OpenClaw |
 | V2.12 | opencode writable support | Complete | Disposable local evidence verifies `permission.skill` writes, then guarded toggle/install is implemented and validated, or blocker remains explicit |
 | V2.13 | Pi adapter support | Complete | Pi-native global/project scanner/parser is implemented read-only; writable toggle/install remains blocked pending settings mutation/rollback evidence |
-| V2.14 | Hermes adapter support | Complete evidence-gate closeout; read-only later implemented in V2.17 | P0 evidence later confirmed first-class Hermes skills; writable/install remains blocked |
-| V2.15 | OpenClaw adapter support | Complete evidence-gate closeout; read-only later implemented in V2.16 | P0 evidence later confirmed OpenClaw roots/schema for read-only scan; writable/install remains blocked |
+| V2.14 | Hermes adapter support | Complete evidence-gate closeout; read-only later implemented in V2.17 | P0 evidence later confirmed first-class Hermes skills; V2.95 later added native-root install while config toggles remain blocked |
+| V2.15 | OpenClaw adapter support | Complete evidence-gate closeout; read-only later implemented in V2.16 | P0 evidence later confirmed OpenClaw roots/schema for read-only scan; V2.96 later added native/workspace install while config/network operations remain blocked |
 | V2.16 | OpenClaw read-only scanner | Completed | OpenClaw documented roots appear in catalog read-only; scan is filesystem-only; project scan is workspace-scoped only (`<workspace>/skills`, `<workspace>/.agents/skills`); no arbitrary repo roots, CLI calls, writes, or installs |
 | V2.17 | Hermes read-only scanner | Completed | Active/profile Hermes home `skills/**/SKILL.md` appears in catalog read-only; no generic project scan, cron mapping, writes, installs, CLI calls, or `.env`/`auth.json`/`logs`/`cron` mapping |
 | V2.18 | Cross-agent skill analysis | Completed | Duplicate names, shadowing, precedence conflicts, malformed skills, disabled states, and source overlap are grouped across agents |
@@ -472,11 +480,12 @@ See [`v2.77-verification-checklist.md`](./v2.77-verification-checklist.md). V2.7
 - Keep skill identity deterministic across all adapters and expose provenance labels in UI where user confusion is likely.
 - Keep triage state in app-local storage only; never hide unresolved high-risk findings by default.
 - Keep optional AI analysis user-triggered and separated from all write/config/script paths. Starting V2.41, provider calls are allowed only when the user explicitly configures an OpenAI-compatible or Claude-compatible endpoint/key/model and confirms a redacted prompt preview; AI output remains untrusted and cannot directly write, execute, or change triage/config state.
-- Keep Hermes config toggles and OpenClaw writable/install blocked until their
-  scheduled evidence slices verify individual skill disable schema, credential
-  preservation, and rollback-safe writes. Hermes native-root install is already
-  limited to confirmed local ToolGlobal `SKILL.md` copies into
-  `~/.hermes/skills`.
+- Keep Hermes and OpenClaw config toggles blocked until future evidence slices
+  verify individual skill disable schema, credential preservation, and
+  rollback-safe writes. Hermes native-root install is limited to confirmed
+  local ToolGlobal `SKILL.md` copies into `~/.hermes/skills`; OpenClaw
+  native/workspace install is limited to `~/.openclaw/skills` and confirmed
+  `<workspace>/skills`.
 - Keep Pi V2.94 writes inside the completed guarded scope: native and `.agents/skills` compatibility toggles through Pi settings with trust/snapshot checks, native-root installs only, and package install/remove plus `.agents` direct skill-file installs blocked.
 - Keep every new write path behind service protocol, snapshot, audit, permission, and privacy boundaries.
 - Update native macOS UI only as needed to expose clearer explanations, statuses, filters, finding groups, and guarded writable actions.
@@ -697,7 +706,7 @@ These items keep the product focused on managing, inspecting, and analyzing skil
 | P0 | Pi comprehensive adapter support | Read-only scanner complete; V2.37 guarded native toggle complete; V2.94 native install and `.agents/skills` compatibility toggles complete | Keep Pi writes limited to guarded settings toggles and native-root installs; keep package install/remove, `.agents` direct skill-file installs, AI auto-write, script execution, and credential-unsafe paths blocked | Guarded Pi behavior preserves preview/snapshot/rollback, trust gate, invalid JSON/config handling, native install target checks, re-enable behavior, and disabled-state rescan |
 | P0 | opencode support | Native and official compatibility roots are scanned; configured local `skills.paths` roots are scanned read-only; guarded `permission.skill` writes are implemented; install targets remain native roots | Keep compatibility/configured-root scan coverage, managed permission/write tests, and no-fetch `skills.urls` boundary current; do not add URL fetch or configured-root install/write targets without a new explicit evidence gate | opencode-visible skills match current official discovery and configured local path roots without enabling unsafe file writes or uncontrolled network access |
 | P0 | Hermes adapter support | Native-root install implemented; config toggles blocked | Keep scoped scan of active Hermes home `skills/**/SKILL.md`; treat `skills.external_dirs` as explicit read-only external roots only (not generic project-scope inference); allow only confirmed local ToolGlobal `SKILL.md` copy into `~/.hermes/skills`; keep `.env`/`auth.json`/`logs`/cron content filtered and CLI-only scan read-only | Hermes skills appear in catalog; native-root install works after confirmation; generic project scan, config toggles, external_dirs writes, hub/URL/tap/update/uninstall/reset remain blocked |
-| P0 | OpenClaw adapter support | Read-only scanner implemented; writable/install blocked | Keep scoped read-only filesystem scan over documented roots; project scan only for confirmed OpenClaw workspace roots; no OpenClaw CLI calls during ordinary scan | OpenClaw skills appear in catalog read-only; arbitrary repo roots and writes/install remain blocked |
+| P0 | OpenClaw adapter support | Native/workspace install implemented; config toggles blocked | Keep scoped filesystem scan over documented roots; project scan only for confirmed OpenClaw workspace roots; allow only confirmed local ToolGlobal installs to `~/.openclaw/skills` and confirmed `<workspace>/skills`; no OpenClaw CLI calls during ordinary scan | OpenClaw skills appear in catalog; arbitrary repo roots, `.agents` direct installs, config toggles, `skills.entries` writes, and ClawHub/Git/network-backed operations remain blocked |
 | P0 | Cross-agent skill analysis | Implemented read-only | Keep catalog summaries for duplicate/conflict/precedence/source-overlap groups aligned with fixtures and UI needs | Users can identify conflicting or duplicated skills across agents without manually comparing lists |
 | P0 | Skill health dashboard | Implemented read-only | Keep dashboard summary cards and actionable filters for findings, conflicts, disabled skills, malformed metadata, risky scripts, and permission issues aligned with service health payload | Users can prioritize cleanup from a single management view |
 | P0 | V2.21 scan accuracy / dedupe / agent metrics | Completed | Add scan contract coverage for canonical path/id collision handling, source overlap handling, and per-agent stats consistency checks across scan activity + health payloads | Duplicate and overlap records are deterministic; per-agent counts in scan/activity and health payloads are documented and testable |

@@ -2969,6 +2969,164 @@ fn install_to_hermes_project_scope_remains_blocked() {
 }
 
 #[test]
+fn install_to_openclaw_writes_native_user_skill_root() {
+    let temp_root = std::env::temp_dir().join(format!(
+        "skills-copilot-install-openclaw-{}",
+        std::process::id()
+    ));
+    let home = temp_root.join("home");
+    std::fs::create_dir_all(&home).expect("create home");
+    let source_path = write_tool_global_skill(&temp_root, "portable-openclaw");
+    let catalog = Catalog::in_memory().expect("catalog opens");
+    catalog.init().expect("catalog initializes");
+    catalog
+        .upsert_skill_instance(&install_tool_global_instance(
+            "tool-global-openclaw",
+            source_path,
+            "portable-openclaw",
+        ))
+        .expect("upsert tool-global");
+    let ctx = AdapterContext {
+        user_home: home.clone(),
+        project_root: None,
+        project_cwd: None,
+        extra_roots: vec![],
+    };
+
+    let result = install_skill_from_tool_global(
+        &catalog,
+        &ctx,
+        "tool-global-openclaw",
+        AgentId::Openclaw,
+        Scope::AgentGlobal,
+        None,
+        true,
+    )
+    .expect("OpenClaw install succeeds");
+
+    let target = home.join(".openclaw/skills/portable-openclaw/SKILL.md");
+    assert!(result.wrote);
+    assert_eq!(result.target_path, target.to_string_lossy());
+    assert!(target.exists());
+    assert!(result
+        .risks
+        .iter()
+        .any(|risk| risk.contains("ClawHub, Git, update, verify, workshop")));
+    assert!(catalog
+        .list_skill_records()
+        .expect("records")
+        .iter()
+        .any(|record| record.agent == "openclaw" && record.name == "portable-openclaw"));
+
+    let _ = std::fs::remove_dir_all(&temp_root);
+}
+
+#[test]
+fn install_to_openclaw_writes_confirmed_workspace_skill_root() {
+    let temp_root = std::env::temp_dir().join(format!(
+        "skills-copilot-install-openclaw-workspace-{}",
+        std::process::id()
+    ));
+    let home = temp_root.join("home");
+    let workspace = home.join(".openclaw/workspace");
+    let repo = workspace.join("repo");
+    let nested = repo.join("nested");
+    std::fs::create_dir_all(&nested).expect("create workspace repo");
+    let source_path = write_tool_global_skill(&temp_root, "workspace-openclaw");
+    let catalog = Catalog::in_memory().expect("catalog opens");
+    catalog.init().expect("catalog initializes");
+    catalog
+        .upsert_skill_instance(&install_tool_global_instance(
+            "tool-global-openclaw-workspace",
+            source_path,
+            "workspace-openclaw",
+        ))
+        .expect("upsert tool-global");
+    let ctx = AdapterContext {
+        user_home: home.clone(),
+        project_root: Some(repo.clone()),
+        project_cwd: Some(nested),
+        extra_roots: vec![],
+    };
+
+    let result = install_skill_from_tool_global(
+        &catalog,
+        &ctx,
+        "tool-global-openclaw-workspace",
+        AgentId::Openclaw,
+        Scope::AgentProject,
+        Some(&repo),
+        true,
+    )
+    .expect("OpenClaw workspace install succeeds");
+
+    let target = workspace.join("skills/workspace-openclaw/SKILL.md");
+    assert!(result.wrote);
+    assert!(target.exists());
+    assert_eq!(
+        result.target_path,
+        target
+            .canonicalize()
+            .expect("canonical target")
+            .to_string_lossy()
+    );
+    assert!(catalog
+        .list_skill_records()
+        .expect("records")
+        .iter()
+        .any(|record| record.agent == "openclaw" && record.name == "workspace-openclaw"));
+    assert!(!workspace
+        .join(".agents/skills/workspace-openclaw/SKILL.md")
+        .exists());
+
+    let _ = std::fs::remove_dir_all(&temp_root);
+}
+
+#[test]
+fn install_to_openclaw_project_scope_outside_workspace_is_rejected() {
+    let temp_root = std::env::temp_dir().join(format!(
+        "skills-copilot-install-openclaw-outside-{}",
+        std::process::id()
+    ));
+    let home = temp_root.join("home");
+    let project = temp_root.join("project");
+    std::fs::create_dir_all(&home).expect("create home");
+    std::fs::create_dir_all(&project).expect("create project");
+    let source_path = write_tool_global_skill(&temp_root, "outside-openclaw");
+    let catalog = Catalog::in_memory().expect("catalog opens");
+    catalog.init().expect("catalog initializes");
+    catalog
+        .upsert_skill_instance(&install_tool_global_instance(
+            "tool-global-openclaw-outside",
+            source_path,
+            "outside-openclaw",
+        ))
+        .expect("upsert tool-global");
+    let ctx = AdapterContext {
+        user_home: home,
+        project_root: Some(project.clone()),
+        project_cwd: Some(project.clone()),
+        extra_roots: vec![],
+    };
+
+    let err = install_skill_from_tool_global(
+        &catalog,
+        &ctx,
+        "tool-global-openclaw-outside",
+        AgentId::Openclaw,
+        Scope::AgentProject,
+        Some(&project),
+        false,
+    )
+    .expect_err("OpenClaw project install outside workspace must be rejected");
+
+    assert!(err.to_string().contains("confirmed OpenClaw workspace"));
+    assert!(!project.join("skills/outside-openclaw/SKILL.md").exists());
+
+    let _ = std::fs::remove_dir_all(&temp_root);
+}
+
+#[test]
 fn pi_v294_capability_matrix_exposes_native_install_and_compatibility_toggles() {
     let ctx = AdapterContext {
         user_home: PathBuf::from("/tmp/home"),
@@ -3030,6 +3188,38 @@ fn hermes_v295_capability_matrix_exposes_native_install_only() {
         .blockers
         .iter()
         .any(|blocker| blocker.contains("hub, URL, tap")));
+}
+
+#[test]
+fn openclaw_v296_capability_matrix_exposes_native_workspace_install_only() {
+    let ctx = AdapterContext {
+        user_home: PathBuf::from("/tmp/home"),
+        project_root: Some(PathBuf::from("/tmp/home/.openclaw/workspace/repo")),
+        project_cwd: Some(PathBuf::from("/tmp/home/.openclaw/workspace/repo")),
+        extra_roots: vec![],
+    };
+    let openclaw = list_adapter_capabilities(&ctx)
+        .into_iter()
+        .find(|record| record.agent == AgentId::Openclaw.as_str())
+        .expect("OpenClaw capability record");
+
+    assert_eq!(openclaw.status, "install-only");
+    assert!(openclaw.scan.supported);
+    assert!(openclaw.project_scan.supported);
+    assert!(!openclaw.config_toggle.supported);
+    assert!(!openclaw.config_snapshot.supported);
+    assert!(openclaw.install.supported);
+    assert_eq!(openclaw.install.status, "verified-native-workspace-v2.96");
+    assert!(openclaw.writable.supported);
+    assert_eq!(openclaw.writable.status, "install-only-v2.96");
+    assert!(openclaw
+        .blockers
+        .iter()
+        .any(|blocker| blocker.contains(".agents roots")));
+    assert!(openclaw
+        .blockers
+        .iter()
+        .any(|blocker| blocker.contains("ClawHub, Git")));
 }
 
 #[test]
@@ -4021,7 +4211,8 @@ mod v219_skill_health_tests {
         assert!(group.source_summary.has_difference);
         assert!(group.risk_summary.has_risk);
         assert_eq!(group.risk_summary.finding_count, 1);
-        assert!(group.writable_summary.has_mixed_capability);
+        assert!(!group.writable_summary.has_mixed_capability);
+        assert!(group.writable_summary.writable_agent_count >= 3);
         assert!(group.analysis_kinds.contains(&"duplicate_name".to_string()));
         assert!(group.members.iter().any(|member| {
             member.instance_id == "codex-review"

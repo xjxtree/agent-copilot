@@ -108,7 +108,7 @@ flowchart TD
 ## 4. 数据流：一次"扫描 + 展示"的生命周期
 
 ```
-1. macOS 原生 UI 触发 service method `catalog.scanAll` 扫描当前已实现的 Claude Code、Codex、guarded writable opencode、guarded Pi、install-only Hermes 和 read-only OpenClaw adapters；`catalog.scanClaude` 保留为 Claude-only 兼容方法。未来文件 watcher 收到 `SKILL.md` / agent config 变更后可自动触发重扫。
+1. macOS 原生 UI 触发 service method `catalog.scanAll` 扫描当前已实现的 Claude Code、Codex、guarded writable opencode、guarded Pi、install-only Hermes 和 install-only OpenClaw adapters；`catalog.scanClaude` 保留为 Claude-only 兼容方法。未来文件 watcher 收到 `SKILL.md` / agent config 变更后可自动触发重扫。
 2. service facade / commands 调 scanner
 3. scanner 对每个 agent 调用对应 adapter.roots(ctx) → 拿到允许扫描根
 4. scanner 在允许根内枚举候选 `SKILL.md`，再调 adapter.parse(path) → 拿到 SkillInstance 候选

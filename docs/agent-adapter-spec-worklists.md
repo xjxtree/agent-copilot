@@ -1,6 +1,6 @@
 # Agent Adapter Spec Worklists
 
-> Status: V2.1-V2.95 is the synchronized completed baseline.
+> Status: V2.1-V2.96 is the synchronized completed baseline.
 > V2.92 expands Codex read-only roots and diagnostics without expanding writes.
 > V2.93 adds opencode configured local `skills.paths` scanning without URL
 > fetching or configured-root writes.
@@ -9,10 +9,15 @@
 > V2.95 adds Hermes native `~/.hermes/skills` tool-global installs without
 > config toggles, project installs, external_dirs writes, hub/URL/tap/update/
 > uninstall/reset, or uncontrolled network fetch.
+> V2.96 adds OpenClaw native `~/.openclaw/skills` and confirmed workspace
+> `<workspace>/skills` tool-global installs without `.agents` direct installs,
+> config toggles, `skills.entries` writes, ClawHub/Git/update/verify/workshop,
+> or network-backed operations.
 > opencode writable, Pi read-only scan, Pi guarded native toggle,
-> OpenClaw read-only scan, Hermes read-only scan,
-> and Hermes explicit external-root scan are implemented.
-> Pi package install/remove, Hermes config toggles, and OpenClaw writable
+> OpenClaw read-only scan plus install-only native/workspace support,
+> Hermes read-only scan, and Hermes explicit external-root scan are
+> implemented.
+> Pi package install/remove, Hermes config toggles, and OpenClaw config-toggle
 > support remain blocked.
 > Real local UI validation is version-specific and recorded in the matching verification checklist.
 > Future user-visible, UI, or service-protocol candidates still require a fresh real local pass
@@ -35,8 +40,8 @@ project `.pi/skills` roots. Production toggle supports V2.37 native roots and
 V2.94 `.agents/skills` compatibility roots through guarded Pi settings writes
 after V2.36/V2.94 disposable evidence passed.
 Hermes is install-only for confirmed native-root local ToolGlobal `SKILL.md`
-copies. OpenClaw remains a read-only scanner scope; writable/install stays
-blocked.
+copies. OpenClaw is install-only for confirmed native/workspace local
+ToolGlobal `SKILL.md` copies; config toggles stay blocked.
 
 V2.95 的 Hermes 写入约束：
 
@@ -45,6 +50,15 @@ V2.95 的 Hermes 写入约束：
   仍 blocked。
 - hub / URL / tap / update / uninstall / reset / network-backed package
   operation 仍 blocked。
+- 不执行脚本，不进行 AI 自动写回，不读取或保存 credentials。
+
+V2.96 的 OpenClaw 写入约束：
+
+- tool-global install 仅写 native `~/.openclaw/skills` 和 confirmed
+  workspace `<workspace>/skills`。
+- `.agents` roots 仅扫描，不作为 direct install target。
+- config toggle、`skills.entries` write、ClawHub / Git / update / verify /
+  workshop / network-backed operation 仍 blocked。
 - 不执行脚本，不进行 AI 自动写回，不读取或保存 credentials。
 
 The macOS app uses the service/UI adapter capability matrix as the front-door
@@ -173,16 +187,16 @@ Project scope decision: OpenClaw project semantics are workspace-scoped only. Tr
 | Area | Status |
 | --- | --- |
 | Public product identity | Partially observed from local OpenClaw-related skill docs: OpenClaw is described as an AI assistant and automation platform with plugins, gateway restart, and skill/package scanning workflows. |
-| Skill discovery roots | Confirmed read-only scope from official docs and read-only macmini evidence: workspace roots `<workspace>/skills` and `<workspace>/.agents/skills` only, with no arbitrary repository/global/shared inference. Project scope is workspace-scoped only. |
+| Skill discovery roots | Confirmed read-only scope from official docs and read-only macmini evidence: native `~/.openclaw/skills`, shared `~/.agents/skills`, bundled roots, and workspace roots `<workspace>/skills` / `<workspace>/.agents/skills`, with no arbitrary repository inference. Project scope is workspace-scoped only. |
 | Skill file/directory format | Partial read-only evidence: the local security-scan skill expects skill directories containing `SKILL.md`, extracts `name:` from YAML frontmatter, and falls back to the directory basename. This is script input evidence, not a full product spec. |
 | Config path/schema | Partial evidence only: local plugin docs use `openclaw config file` to locate `openclaw.json`; a user-local `~/.openclaw/openclaw.json` exists on this machine but is JSONC/non-strict JSON and was not copied because it may contain credentials. |
 | Enable/disable semantics | Plugin evidence only: local Tablestore Mem0 docs patch `.plugins.entries["openclaw-mem0"].enabled = true`, `.plugins.slots.memory`, and `.plugins.allow`. This does not verify skill enable/disable semantics. |
-| Fixture requirement | Minimal evidence fixtures added under `fixtures/openclaw/`, marked as read-only evidence samples and not writable toggle contract. |
-| Implementation decision | Read-only filesystem scanner over documented roots is implemented. Writable adapter and install remain blocked until config mutation, credential preservation, and rollback behavior are verified. |
+| Fixture requirement | Minimal evidence fixtures added under `fixtures/openclaw/`, marked as read-only evidence samples plus V2.96 install-only boundary; config samples remain not writable toggle contract. |
+| Implementation decision | Read-only filesystem scanner over documented roots is implemented. V2.96 supports confirmed local ToolGlobal installs into native `~/.openclaw/skills` and confirmed workspace `<workspace>/skills`. Config toggles, `skills.entries` writes, `.agents` direct installs, ClawHub/Git/update/verify/workshop, and network-backed operations remain blocked until config mutation, credential preservation, and rollback behavior are verified. |
 
 Required next evidence:
 
-- Maintainer-provided docs or config samples for OpenClaw skill discovery and `openclaw.json`.
+- Maintainer-provided docs or config samples for credential-safe `openclaw.json` / `skills.entries` patching.
 - Exact meaning of `openclaw skills list --eligible`, including whether it is authoritative, whether it includes disabled skills, and whether it returns machine-readable output.
 - Skill package format, root layout, metadata/frontmatter requirements, malformed-case behavior, and conflict behavior.
 - Permission model, if any, and whether plugin permissions differ from skill permissions.
@@ -223,8 +237,12 @@ Before any non-Claude adapter PR:
 
 - V2.39 OpenClaw deepening is limited to confirmed workspace roots only: `<workspace>/skills` and `<workspace>/.agents/skills`.
 - No inference of arbitrary repo roots or additional workspace roots should be used.
-- OpenClaw remains read-only: no writable/install actions, no script execution, no AI auto-write, and no credential writes.
-- This scope is the completed V2.39 implementation boundary.
+- V2.96 adds install-only support for native `~/.openclaw/skills` and
+  confirmed workspace `<workspace>/skills`.
+- OpenClaw remains config-toggle blocked: no `.agents` direct install,
+  `skills.entries` write, ClawHub/Git/update/verify/workshop/network-backed
+  operation, script execution, AI auto-write, or credential write.
+- This scope is the completed V2.39 scanner and V2.96 install-only boundary.
 
 ## 2.5 V2.40 Adapter diagnostics
 

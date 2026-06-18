@@ -15,14 +15,14 @@ Current usage:
 
 Current release-readiness guardrails:
 
-- V2.1-V2.95 are the synchronized completed baseline.
+- V2.1-V2.96 are the synchronized completed baseline.
 - Real local validation evidence is version-specific. Use the matching verification checklist for exact screenshots, blockers, and commands.
 - Fixture smoke screenshots still do not replace required real local validation for user-visible changes.
 - Tool-global import/export/install is integrated. Local directory import writes only app-controlled staging/catalog, export creates reproducible local bundles, and confirmed install routes through verified write paths.
 - Opencode support includes native roots, official compatibility roots, and configured local `skills.paths` roots. Writable support remains guarded and limited to verified managed `permission.skill` behavior; install targets remain native roots.
 - Pi production writes are guarded: native and `.agents/skills` compatibility toggles use Pi settings with trust/snapshot checks, and tool-global install targets are limited to native `~/.pi/agent/skills` / project `.pi/skills`; Pi package install/remove and `.agents` direct skill-file installs remain blocked.
 - Hermes native-root install is supported for confirmed local ToolGlobal `SKILL.md` copies into `~/.hermes/skills`; Hermes config toggles, project installs, external_dirs writes, hub/URL/tap/update/uninstall/reset, and network-backed operations remain blocked.
-- OpenClaw remains read-only; writable/install support remains blocked until the planned V2.96 evidence slice closes.
+- OpenClaw native/workspace install is supported for confirmed local ToolGlobal `SKILL.md` copies into `~/.openclaw/skills` and confirmed workspace `<workspace>/skills`; `.agents` direct installs, config toggles, `skills.entries` writes, ClawHub, Git, update, verify, workshop, and network-backed operations remain blocked.
 - No cloud sync, accounts, telemetry, anonymous crash reports, or uncontrolled outbound network calls.
 - Signing, notarization, DMG/ZIP packaging, updater work, and release artifact automation are deferred until public release work resumes.
 
@@ -30,6 +30,47 @@ Current release-readiness guardrails:
 
 Entries are ordered newest first. Add new version entries directly below this
 heading.
+
+### V2.96 - 2026-06-18
+
+Status:
+
+- Complete.
+- OpenClaw native/workspace install completed within an install-only,
+  evidence-backed slice.
+
+Adapter behavior changes:
+
+- `skill.install` can now copy a confirmed local ToolGlobal `SKILL.md` into
+  OpenClaw native `~/.openclaw/skills/<name>/SKILL.md`.
+- `skill.install` can also copy into confirmed OpenClaw workspace
+  `<workspace>/skills/<name>/SKILL.md` when the selected project is the
+  confirmed workspace or inside it.
+- OpenClaw capability status is now `install-only` with
+  `verified-native-workspace-v2.96` install and `install-only-v2.96` writable
+  status.
+
+Product/protocol changes:
+
+- Updated adapter capability fixtures and command tests to expose OpenClaw
+  native/workspace install support.
+- Hardened OpenClaw workspace path matching for canonical macOS paths.
+- No service protocol method count changed; `SUPPORTED_METHODS` remains 93.
+
+Risk/security notes:
+
+- OpenClaw `.agents` roots remain scan-only and are not direct install
+  targets.
+- OpenClaw config toggles, `skills.entries` writes, ClawHub, Git, update,
+  verify, workshop, and network-backed operations remain blocked.
+- No provider request, credential read, raw prompt/response/trace persistence,
+  script execution, cloud sync, telemetry, signing, notarization, DMG, ZIP, or
+  release automation was added.
+
+Validation posture:
+
+- Closeout evidence is tracked in
+  [`docs/v2.96-verification-checklist.md`](docs/v2.96-verification-checklist.md).
 
 ### V2.95 - 2026-06-18
 
@@ -224,8 +265,9 @@ Near-term follow-up plan:
 
 - V2.93 later completed opencode configured local `skills.paths` scanning while
   keeping `skills.urls` metadata-only/no-fetch.
-- V2.94 later completed Pi install/compat writes; V2.95-V2.96 cover Hermes
-  writable/install and OpenClaw writable/install.
+- V2.94 later completed Pi install/compat writes, V2.95 later completed Hermes
+  native-root install, and V2.96 later completed OpenClaw native/workspace
+  install.
 
 ### V2.91 - 2026-06-17
 
@@ -239,8 +281,8 @@ Adapter behavior changes:
 - No adapter scan roots, writable scopes, install scopes, or config schemas changed.
 - Codex expanded-root diagnostics completed in V2.92; opencode configured local
   roots completed in V2.93; Pi install/compat writes completed in V2.94;
-  Hermes/OpenClaw write/install expansion remains deferred to V2.95-V2.96
-  evidence slices.
+  Hermes native-root install later completed in V2.95, and OpenClaw
+  native/workspace install later completed in V2.96.
 
 Product/protocol changes:
 
@@ -275,8 +317,8 @@ Near-term follow-up plan:
 - V2.92 completed Codex expanded roots/project config/plugin/admin/system-root
   read-only diagnostics.
 - V2.93 later completed opencode custom local roots; V2.94 later completed Pi
-  install/compat writes; V2.95-V2.96 cover Hermes writable/install and
-  OpenClaw writable/install.
+  install/compat writes; V2.95 later completed Hermes native-root install; and
+  V2.96 later completed OpenClaw native/workspace install.
 
 ### V2.90 - 2026-06-17
 
@@ -332,8 +374,8 @@ Near-term follow-up plan:
 
 - V2.91 covers model-task matching history as a new evidence domain.
 - At the time, V2.92-V2.96 were planned for Codex/opencode/Pi/Hermes/OpenClaw
-  adapter unblock slices; V2.92 and V2.93 are now complete, and later
-  write/install slices still require disposable evidence and rollback gates.
+  adapter unblock slices; V2.92-V2.96 are now complete, with Hermes and
+  OpenClaw config/network expansions still requiring separate evidence gates.
 
 ### V2.89 - 2026-06-17
 
@@ -372,7 +414,7 @@ Near-term follow-up plan:
 
 - V2.90 covers internal identifier migration with data/validation migration.
 - V2.91 covers model-task matching history as a new evidence domain.
-- At the time, V2.92-V2.96 were planned for Codex/opencode/Pi/Hermes/OpenClaw adapter unblock slices; V2.92 and V2.93 are now complete, and later write/install slices still require disposable evidence and rollback gates.
+- At the time, V2.92-V2.96 were planned for Codex/opencode/Pi/Hermes/OpenClaw adapter unblock slices; V2.92-V2.96 are now complete, with Hermes and OpenClaw config/network expansions still requiring separate evidence gates.
 
 ### V2.88 - 2026-06-17
 
@@ -384,7 +426,7 @@ Status:
 Adapter behavior changes:
 
 - No adapter scan roots, writable scopes, install scopes, or config schemas changed.
-- Pi install/compatibility-root writes later completed in V2.94; Hermes native-root install later completed in V2.95 while config toggles remain blocked; OpenClaw writable/install remains blocked until its planned evidence slice closes; opencode custom local roots completed in V2.93 with `skills.urls` metadata-only/no-fetch.
+- Pi install/compatibility-root writes later completed in V2.94; Hermes native-root install later completed in V2.95 while config toggles remain blocked; OpenClaw native/workspace install later completed in V2.96 while config/network operations remain blocked; opencode custom local roots completed in V2.93 with `skills.urls` metadata-only/no-fetch.
 
 Product/protocol changes:
 
@@ -412,7 +454,7 @@ Near-term follow-up plan:
 - V2.89 covers brand assets.
 - V2.90 covers internal identifier migration with data/validation migration.
 - V2.91 covers model-task matching history as a new evidence domain.
-- At the time, V2.92-V2.96 were planned for Codex/opencode/Pi/Hermes/OpenClaw adapter unblock slices; V2.92 and V2.93 are now complete, and later write/install slices still require disposable evidence and rollback gates.
+- At the time, V2.92-V2.96 were planned for Codex/opencode/Pi/Hermes/OpenClaw adapter unblock slices; V2.92-V2.96 are now complete, with Hermes and OpenClaw config/network expansions still requiring separate evidence gates.
 
 ### V2.87 - 2026-06-17
 
@@ -453,7 +495,7 @@ Near-term follow-up plan:
 - V2.89 covers brand assets.
 - V2.90 covers internal identifier migration with data/validation migration.
 - V2.91 covers model-task matching history as a new evidence domain.
-- At the time, V2.92-V2.96 were planned for Codex/opencode/Pi/Hermes/OpenClaw adapter unblock slices; V2.92 and V2.93 are now complete, and later write/install slices still require disposable evidence and rollback gates.
+- At the time, V2.92-V2.96 were planned for Codex/opencode/Pi/Hermes/OpenClaw adapter unblock slices; V2.92-V2.96 are now complete, with Hermes and OpenClaw config/network expansions still requiring separate evidence gates.
 
 ### 2026-06-16 Review Remediation
 

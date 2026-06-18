@@ -1,6 +1,9 @@
 # OpenClaw Adapter Spec Worklist
 
-> Status: P0 evidence update on 2026-06-10. OpenClaw is now a read-only scanner candidate. Writable toggle/install remain blocked.
+> Status: V2.96 native/workspace install implemented on 2026-06-18.
+> OpenClaw remains config-toggle blocked; install support is limited to
+> confirmed local ToolGlobal `SKILL.md` copies into `~/.openclaw/skills` and
+> confirmed OpenClaw workspace `<workspace>/skills`.
 
 ## 1. Evidence Summary
 
@@ -22,8 +25,9 @@ V2.16 adds a read-only filesystem scanner. P0 evidence used official docs plus r
 | Skill package format | Partial script-input evidence | The security-scan skill expects each skill path to be a directory containing `SKILL.md`; it reads the YAML `name:` field and falls back to the directory basename. This is evidence for one script workflow, not a complete OpenClaw adapter spec. |
 | Config path/schema | Partial plugin evidence | The Tablestore Mem0 skill detects config with `openclaw config file` and patches `openclaw.json`. It writes plugin fields under `.plugins.slots`, `.plugins.entries`, `.plugins.entries["openclaw-mem0"].enabled`, and `.plugins.allow`. |
 | Enable/disable semantics | Blocked | Plugin `enabled: true` evidence does not prove OpenClaw skill enable/disable behavior. It is unknown whether skills can be disabled without deleting files, whether `.plugins.allow` is an allow-list, and whether a CLI command is required. |
-| Read-only catalog feasibility | Candidate after P0 evidence | Official docs confirm roots, `SKILL.md` schema, loading order, precedence, and JSON list commands. |
-| Writable adapter feasibility | Blocked | Config mutation, credential preservation, and rollback-safe writes are not verified. |
+| Read-only catalog feasibility | Implemented | Official docs confirm roots, `SKILL.md` schema, loading order, precedence, and JSON list commands. |
+| Native/workspace install feasibility | Implemented in V2.96 | Official CLI docs describe local directory installs to workspace skills and global managed roots; product support is limited to confirmed local ToolGlobal `SKILL.md` copies into `~/.openclaw/skills` and confirmed `<workspace>/skills`. |
+| Writable config/toggle feasibility | Blocked | Config mutation, credential preservation, JSON/JSON5 patching, and rollback-safe `skills.entries` writes are not verified. |
 
 ## 2. Fixture Scope
 
@@ -37,21 +41,24 @@ The `SKILL.md` fixtures cover parser and root-scope behavior for the read-only s
 
 ## 3. Adapter Mapping Status
 
-Read-only filesystem mapping is approved for V2.16. Writable mapping remains blocked.
+Read-only filesystem mapping is approved for V2.16. V2.96 adds local
+native/workspace install-only support. Writable config/toggle mapping remains
+blocked.
 
 | Shared field | Status |
 | --- | --- |
 | `AgentId` | Implemented as `openclaw`. |
-| `Scope::AgentGlobal` | Implemented read-only for documented roots such as `~/.openclaw/skills`, `~/.agents/skills`, and bundled package skill roots. |
-| `Scope::AgentProject` | Implemented read-only only for confirmed OpenClaw home workspace roots: `<workspace>/skills` and `<workspace>/.agents/skills`; arbitrary repo roots are not OpenClaw projects. |
+| `Scope::AgentGlobal` | Implemented read-only for documented roots such as `~/.openclaw/skills`, `~/.agents/skills`, and bundled package skill roots; V2.96 install target is only `~/.openclaw/skills`. |
+| `Scope::AgentProject` | Implemented read-only only for confirmed OpenClaw home workspace roots: `<workspace>/skills` and `<workspace>/.agents/skills`; V2.96 install target is only `<workspace>/skills`; arbitrary repo roots are not OpenClaw projects. |
 | `SkillInstance.name` | Implemented as YAML frontmatter `name:` with directory basename fallback. |
 | `SkillInstance.description` | Implemented as optional YAML frontmatter `description`; missing descriptions stay visible with an empty description. |
 | `SkillInstance.enabled` | Blocked: plugin `enabled` is not verified as skill enabled state. |
-| Config writes | Blocked: `openclaw.json` can contain credentials and may be JSONC; no safe patch contract is verified. |
+| Install writes | Implemented in V2.96 for confirmed local ToolGlobal `SKILL.md` copies into `~/.openclaw/skills` and confirmed `<workspace>/skills`; `.agents` direct installs, ClawHub, Git, update, verify, workshop, and network-backed operations remain blocked. |
+| Config writes | Blocked: `openclaw.json` can contain credentials and may be JSON/JSON5; no safe patch contract is verified. |
 
 ## 4. Required Maintainer Evidence
 
-- Official or maintainer-provided docs for OpenClaw skills, root discovery, and `openclaw.json`.
+- Additional maintainer-provided docs for credential-safe `openclaw.json` / `skills.entries` patching.
 - Whether `openclaw skills list --eligible` is authoritative and whether it has machine-readable output.
 - Confirmed global/project roots, plus whether workspace/extensions roots should be scanned.
 - Required `SKILL.md` frontmatter fields, malformed-case behavior, and conflict behavior.
@@ -61,9 +68,18 @@ Read-only filesystem mapping is approved for V2.16. Writable mapping remains blo
 
 Ordinary skills-copilot scans must not run OpenClaw cloud intelligence, cloud deep analysis, security audit, plugin install, gateway restart, or Alibaba Cloud CLI workflows.
 
-Until writable evidence exists, OpenClaw should be implemented only as a scoped read-only filesystem scanner. Install, toggle, and writable actions must stay disabled.
+Until writable config evidence exists, OpenClaw should remain install-only.
+Only confirmed local ToolGlobal `SKILL.md` copies into native
+`~/.openclaw/skills` and confirmed workspace `<workspace>/skills` are allowed.
+Config toggles, `skills.entries` writes, `.agents` direct installs, ClawHub,
+Git, update, verify, workshop, and network-backed operations must stay disabled.
 
-Project/workspace scope decision: OpenClaw's project-like layer is workspace-scoped. The first read-only scanner may treat a selected directory as `Scope::AgentProject` only when it is the confirmed OpenClaw workspace or inside one, and then only scan `<workspace>/skills` and `<workspace>/.agents/skills`. Do not invent `.openclaw/skills` project roots and do not scan arbitrary repository roots as OpenClaw projects.
+Project/workspace scope decision: OpenClaw's project-like layer is
+workspace-scoped. A selected directory may be treated as `Scope::AgentProject`
+only when it is the confirmed OpenClaw workspace or inside one. Scans read
+`<workspace>/skills` and `<workspace>/.agents/skills`; installs write only
+`<workspace>/skills`. Do not invent `.openclaw/skills` project roots and do not
+scan arbitrary repository roots as OpenClaw projects.
 
 ## 5. 2026-06-10 P0 Evidence Update
 
@@ -88,4 +104,5 @@ Implementation policy:
 - First scanner slice must be filesystem-only and must not call OpenClaw CLI during ordinary scans.
 - Parse documented `SKILL.md` directories and frontmatter.
 - Add fixtures for documented roots, missing-name fallback, missing description, duplicate name precedence, and bundled-vs-workspace override.
-- Keep writable/install blocked until disposable config mutation proves credential-safe rollback.
+- Keep config toggles and network-backed install/update flows blocked until
+  disposable config mutation proves credential-safe rollback.
