@@ -2176,12 +2176,12 @@ fn scan_all_returns_multi_agent_refresh_activity() {
         .expect("Hermes summary");
     assert_eq!(
         hermes.get("writable_status").and_then(Value::as_str),
-        Some("blocked")
+        Some("install-only-v2.95")
     );
     assert!(hermes
         .get("read_only_reason")
         .and_then(Value::as_str)
-        .is_some_and(|reason| reason.contains("Hermes writable toggle/install remains blocked")));
+        .is_some_and(|reason| reason.contains("config toggles")));
     let log_messages: Vec<&str> = activity
         .get("log_entries")
         .and_then(Value::as_array)
@@ -2341,7 +2341,7 @@ fn adapter_list_diagnostics_reports_roots_config_and_blockers() {
         hermes
             .pointer("/access/writable_status")
             .and_then(Value::as_str),
-        Some("blocked")
+        Some("install-only-v2.95")
     );
 
     let _ = fs::remove_dir_all(temp_root);

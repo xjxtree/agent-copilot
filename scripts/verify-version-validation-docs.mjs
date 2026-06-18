@@ -270,6 +270,20 @@ const versions = {
       "Final status decision: completed",
     ],
   },
+  "v2.95": {
+    title: "# V2.95 Verification Checklist",
+    required: [
+      "Hermes native-root install",
+      "~/.hermes/skills",
+      "install-only-v2.95",
+      "verified-native-root-v2.95",
+      "config toggles remain blocked",
+      "external_dirs remain read-only",
+      "hub, URL, tap, update, uninstall",
+      "docs/ui-artifacts/v2.95-hermes-native-install",
+      "Final status decision: completed",
+    ],
+  },
 };
 
 const staleStatus = [

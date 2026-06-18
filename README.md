@@ -8,13 +8,13 @@ opencode, Pi, Hermes, and OpenClaw.
 
 | Area | Status |
 | --- | --- |
-| Current phase | V2.94 Pi install and compatibility writes completed |
-| Completed baseline | V2.1-V2.94 |
-| Recent product line | V2.41-V2.94 AI-native analysis, task cockpit, validation hardening, module splitting, read-only Agent Copilot surfaces, per-surface evidence closeout, brand asset refresh, compatibility-first identifier migration, local model-task history, Codex expanded root diagnostics, opencode configured local roots, and Pi install/compat writes |
+| Current phase | V2.95 Hermes native-root install completed |
+| Completed baseline | V2.1-V2.95 |
+| Recent product line | V2.41-V2.95 AI-native analysis, task cockpit, validation hardening, module splitting, read-only Agent Copilot surfaces, per-surface evidence closeout, brand asset refresh, compatibility-first identifier migration, local model-task history, Codex expanded root diagnostics, opencode configured local roots, Pi install/compat writes, and Hermes native-root install |
 | Agent Copilot line | M1-M4 completed; unlocked app-window evidence captured |
 | Maintained UI | Native macOS app in `apps/macos` |
 | Service boundary | Rust typed JSON stdio sidecar in `crates/service` |
-| Next version | V2.95 Hermes writable/install; V2.95-V2.96 near-term plan is tracked in `docs/roadmap.md` and `docs/development-tasks.md` |
+| Next version | V2.96 OpenClaw writable/install; near-term plan is tracked in `docs/roadmap.md` and `docs/development-tasks.md` |
 
 V2.84-V2.86 completed the post-V2.83 module-splitting line:
 

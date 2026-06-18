@@ -846,7 +846,7 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
         AdapterCapabilityRecord {
             agent: AgentId::Hermes.as_str(),
             display_name: "Hermes",
-            status: "read-only",
+            status: "install-only",
             scan: AdapterFeatureCapability::supported_with_reason(
                 "verified-read-only",
                 "V2.38 scans active Hermes home ~/.hermes/skills/**/SKILL.md plus explicit skills.external_dirs as read-only external roots without reading Hermes secrets, cron content, or logs.",
@@ -861,20 +861,21 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
             ),
             config_snapshot: AdapterFeatureCapability::blocked(
                 "blocked",
-                "No verified Hermes rollback-safe config target exists.",
+                "No verified Hermes rollback-safe toggle config target exists.",
             ),
-            install: AdapterFeatureCapability::blocked(
-                "blocked",
-                "Hermes install semantics are not confirmed.",
+            install: AdapterFeatureCapability::supported_with_reason(
+                "verified-native-root-v2.95",
+                "V2.95 supports confirmed local tool-global SKILL.md copy into the Hermes native ~/.hermes/skills root only; Hermes hub, URL, tap, update, uninstall, and external_dirs writes remain out of scope.",
             ),
-            writable: AdapterFeatureCapability::blocked(
-                "blocked",
-                "Hermes writable toggle/install remains blocked until individual skill disable schema and rollback-safe writes are verified.",
+            writable: AdapterFeatureCapability::supported_with_reason(
+                "install-only-v2.95",
+                "Writable support is limited to confirmed local skill-file installs into ~/.hermes/skills; config toggles, per-platform enablement, external_dirs writes, hub/network installs, scripts, credentials, cloud sync, and telemetry remain blocked.",
             ),
             blockers: vec![
                 "Generic Hermes project-local skill discovery is not confirmed and remains disabled.",
                 "Hermes external_dirs are scan-only external roots, not writable or install targets.",
                 "Confirm individual skill disable/re-enable schema and rollback semantics before writable support.",
+                "Hermes hub, URL, tap, update, uninstall, and reset operations remain blocked.",
                 "Do not map Hermes cron jobs to SkillInstance.",
             ],
         },
@@ -2115,7 +2116,7 @@ fn preview_skill_install_from_tool_global(
 ) -> Result<SkillInstallPreviewRecord, CommandError> {
     if !matches!(
         target_agent,
-        AgentId::ClaudeCode | AgentId::Codex | AgentId::Opencode | AgentId::Pi
+        AgentId::ClaudeCode | AgentId::Codex | AgentId::Opencode | AgentId::Pi | AgentId::Hermes
     ) {
         return Err(CommandError::InstallUnsupported(format!(
             "{} skills are not writable by install commands",
@@ -3388,7 +3389,7 @@ fn batch_capability_label(agent: AgentId) -> &'static str {
         AgentId::Codex => "Codex verified native-root user-config toggle",
         AgentId::Opencode => "opencode verified exact permission.skill toggle",
         AgentId::Pi => "Pi guarded config toggle",
-        AgentId::Hermes => "Hermes read-only scanner; writable blocked",
+        AgentId::Hermes => "Hermes native install only; config toggle blocked",
         AgentId::Openclaw => "OpenClaw read-only scanner; writable blocked",
         AgentId::ToolGlobal => "Tool-global preview; direct toggle blocked",
     }
@@ -3397,7 +3398,7 @@ fn batch_capability_label(agent: AgentId) -> &'static str {
 fn batch_skip_reason(agent: AgentId, error: &CommandError) -> String {
     match agent {
         AgentId::Pi => error.to_string(),
-        AgentId::Hermes => "Hermes is read-only in V2.33; individual skill toggle semantics and rollback-safe config writes are not confirmed.".to_string(),
+        AgentId::Hermes => "Hermes config toggles remain blocked in V2.95; native skill-file install is supported, but individual skill toggle semantics and rollback-safe config writes are not confirmed.".to_string(),
         AgentId::Openclaw => "OpenClaw is read-only in V2.39; workspace scanning is filesystem-only and plugin config evidence is not a verified skill toggle contract.".to_string(),
         AgentId::ToolGlobal => "Tool-global staging records are preview/import sources and do not have agent config toggles.".to_string(),
         _ => error.to_string(),
@@ -3675,6 +3676,7 @@ fn skill_install_root(
         (AgentId::Pi, Scope::AgentProject) => {
             Ok(target_project_root(ctx, project_path)?.join(".pi/skills"))
         }
+        (AgentId::Hermes, Scope::AgentGlobal) => Ok(ctx.user_home.join(".hermes/skills")),
         (_, Scope::ToolGlobal) => Err(CommandError::UnsupportedScope(scope)),
         (agent, _) => Err(CommandError::InstallUnsupported(format!(
             "{} skills are not writable by install commands",
@@ -3766,6 +3768,16 @@ fn install_preview_risks(agent: AgentId, scope: Scope, target_exists: bool) -> V
     if agent == AgentId::Codex {
         risks.push(
             "Codex may need to be restarted before it reads newly installed user/project skills."
+                .to_string(),
+        );
+    }
+    if agent == AgentId::Hermes {
+        risks.push(
+            "Hermes may need a reload or restart before it reads newly installed local skills."
+                .to_string(),
+        );
+        risks.push(
+            "Hermes hub, URL, tap, update, uninstall, and external_dirs writes are not part of this install path."
                 .to_string(),
         );
     }

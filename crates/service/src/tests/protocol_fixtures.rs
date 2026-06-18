@@ -276,9 +276,12 @@ pub(super) fn decode_response_fixture(method: &str, result: &Value, path: &Path)
         "adapter.listDiagnostics" => {
             let diagnostics: Vec<WireAdapterDiagnosticsRecord> =
                 decode_fixture_result(method, result, path);
-            assert!(diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.access.writable_status == "blocked"));
+            assert!(diagnostics.iter().any(|diagnostic| {
+                diagnostic.agent == "hermes"
+                    && diagnostic.status == "install-only"
+                    && diagnostic.config.status == "blocked"
+                    && diagnostic.access.writable_status == "install-only-v2.95"
+            }));
         }
         "evidence.previewMcpServers" => {
             let preview: WireMcpServerPreviewResult = decode_fixture_result(method, result, path);

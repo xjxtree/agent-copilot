@@ -151,10 +151,12 @@ fn status_request_returns_supported_methods() {
         .expect("adapter diagnostics");
     assert!(diagnostics.iter().any(|diagnostic| {
         diagnostic.get("agent").and_then(Value::as_str) == Some("hermes")
+            && diagnostic.get("status").and_then(Value::as_str) == Some("install-only")
             && diagnostic
                 .pointer("/access/writable_status")
                 .and_then(Value::as_str)
-                == Some("blocked")
+                == Some("install-only-v2.95")
+            && diagnostic.pointer("/config/status").and_then(Value::as_str) == Some("blocked")
     }));
     let project_context = result
         .get("project_context")

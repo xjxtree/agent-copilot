@@ -1,15 +1,19 @@
 # Agent Adapter Spec Worklists
 
-> Status: V2.1-V2.94 is the synchronized completed baseline.
+> Status: V2.1-V2.95 is the synchronized completed baseline.
 > V2.92 expands Codex read-only roots and diagnostics without expanding writes.
 > V2.93 adds opencode configured local `skills.paths` scanning without URL
 > fetching or configured-root writes.
 > V2.94 adds Pi `.agents/skills` compatibility scanning/toggles and native-root
 > installs without package install/remove or `.agents` direct installs.
+> V2.95 adds Hermes native `~/.hermes/skills` tool-global installs without
+> config toggles, project installs, external_dirs writes, hub/URL/tap/update/
+> uninstall/reset, or uncontrolled network fetch.
 > opencode writable, Pi read-only scan, Pi guarded native toggle,
 > OpenClaw read-only scan, Hermes read-only scan,
 > and Hermes explicit external-root scan are implemented.
-> Pi package install/remove and Hermes/OpenClaw writable support remain blocked.
+> Pi package install/remove, Hermes config toggles, and OpenClaw writable
+> support remain blocked.
 > Real local UI validation is version-specific and recorded in the matching verification checklist.
 > Future user-visible, UI, or service-protocol candidates still require a fresh real local pass
 > or explicit tool/session blocker.
@@ -30,11 +34,23 @@ Pi production direct install is limited to native `~/.pi/agent/skills` and
 project `.pi/skills` roots. Production toggle supports V2.37 native roots and
 V2.94 `.agents/skills` compatibility roots through guarded Pi settings writes
 after V2.36/V2.94 disposable evidence passed.
-OpenClaw and Hermes are read-only scanner scopes; writable/install stay blocked.
+Hermes is install-only for confirmed native-root local ToolGlobal `SKILL.md`
+copies. OpenClaw remains a read-only scanner scope; writable/install stays
+blocked.
+
+V2.95 的 Hermes 写入约束：
+
+- tool-global install 仅写 native `~/.hermes/skills`。
+- config toggle、per-platform enablement、project install、external_dirs write
+  仍 blocked。
+- hub / URL / tap / update / uninstall / reset / network-backed package
+  operation 仍 blocked。
+- 不执行脚本，不进行 AI 自动写回，不读取或保存 credentials。
 
 The macOS app uses the service/UI adapter capability matrix as the front-door
-status surface for all six agents. The matrix must make read-only, planned,
-and blocked states explicit before any future write affordance is exposed.
+status surface for all six agents. The matrix must make read-only,
+install-only, planned, and blocked states explicit before any future write
+affordance is exposed.
 
 V2.94 的 Pi 写入约束：
 
@@ -137,10 +153,10 @@ V2.17 verifier checklist for this read-only phase:
 | --- | --- |
 | Public product identity | Confirmed by official Nous Hermes Agent docs and read-only macmini evidence. |
 | Skill discovery roots | Implemented read-only: active/profile Hermes home `skills/**/SKILL.md`. Generic project-local discovery is not confirmed; `skills.external_dirs` is an explicit external-root concept, not automatic project scope. |
-| Config path/schema | Service evidence only: local docs mention `<hermes-home>/cron/jobs.json`, `<hermes-home>/logs/`, a Hermes repository under `<hermes-home>/`, and `hermes config validate`; no schema or user-local config path is verified for this product. |
+| Config path/schema | Service evidence only: public docs describe `config.yaml` skill settings and per-platform management through Hermes UI/CLI, but no rollback-safe individual skill enable/disable schema is verified for this app. |
 | Enable/disable semantics | Service cron evidence only: docs say cron jobs may be disabled with `enabled: false` rather than deleted. This is not verified as Hermes skill enable/disable behavior. |
 | Fixture requirement | Scanner fixtures added under `fixtures/hermes/active-home/`; cron fixture remains evidence-only and not a parser contract. |
-| Implementation decision | V2.17 implements read-only scanning for active Hermes home `skills/**/SKILL.md`. Writable toggle/install remains blocked until individual skill disable schema and rollback-safe writes are verified. |
+| Implementation decision | V2.17 implements read-only scanning for active Hermes home `skills/**/SKILL.md`; V2.38 models explicit `skills.external_dirs` as read-only external roots; V2.95 supports confirmed local ToolGlobal `SKILL.md` copy into native `~/.hermes/skills`. Config toggles, project installs, external_dirs writes, hub/URL/tap/update/uninstall/reset, and network-backed operations remain blocked. |
 
 Required next evidence:
 
@@ -148,7 +164,7 @@ Required next evidence:
 - Whether Hermes exposes local skills, service tasks, commands, cron jobs, or another unit that should map to `SkillInstance`.
 - If cron jobs are in scope, a documented `jobs.json` schema, stable ID/name fields, enable/disable semantics, and rollback-safe config path.
 - If skills are in scope, exact skill package format, root discovery behavior, malformed-case behavior, and fixture data.
-- Writable toggle policy: whether disabling means patching config, patching cron jobs, calling a CLI, or read-only display only.
+- Writable toggle policy: whether disabling means patching config, patching cron jobs, calling a CLI/TUI state, or read-only display only.
 
 ## OpenClaw
 

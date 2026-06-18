@@ -31,7 +31,7 @@ V2.11 adapter capability matrix note:
 
 - `adapter.listCapabilities.response.json` is the direct capability matrix fixture for Claude Code, Codex, opencode, Pi, Hermes, and OpenClaw.
 - `service.status.response.json` and `app.stateSnapshot.response.json` include `adapter_capabilities` so native UI shells can render adapter status without guessing from agent names.
-- The matrix is descriptive for unsupported write paths: opencode is writable for native roots after V2.12 validation, Pi is guarded after V2.94 validation, OpenClaw is read-only after V2.16 validation, and Hermes is read-only after V2.17 validation while unsupported write/install paths stay blocked.
+- The matrix is descriptive for unsupported write paths: opencode is writable for native roots after V2.12 validation, Pi is guarded after V2.94 validation, Hermes is install-only after V2.95 validation, and OpenClaw is read-only after V2.16 validation while unsupported write/install paths stay blocked.
 
 V2.13 / V2.94 Pi note:
 
@@ -42,10 +42,12 @@ V2.13 / V2.94 Pi note:
 - Pi package install/remove, `.agents` direct skill-file installs, scripts,
   provider writes, credentials, cloud sync, and telemetry remain blocked.
 
-V2.17 Hermes read-only note:
+V2.95 Hermes native install note:
 
-- Hermes is `read-only` / `verified-read-only` in `adapter.listCapabilities`, `service.status`, and `app.stateSnapshot`.
-- Hermes generic project scan remains blocked; active/profile home is the only first-slice scope, with `skills.external_dirs` reserved for future explicit external roots.
+- Hermes is `install-only` in `adapter.listCapabilities`, `service.status`, and `app.stateSnapshot`.
+- Hermes native skill-file install may copy a local ToolGlobal `SKILL.md` into `~/.hermes/skills` after confirmation.
+- Hermes generic project scan remains blocked; `skills.external_dirs` are explicit read-only external roots and not project or install targets.
+- Hermes config toggles, per-platform enable/disable, hub/URL/tap/update/uninstall/reset operations, scripts, credentials, cloud sync, telemetry, and uncontrolled network fetch remain blocked.
 - The Hermes fixture directory contains active-home scanner contract fixtures plus evidence-only cron samples.
 - `catalog.scanAll` includes Hermes after the read-only scanner implementation lands.
 

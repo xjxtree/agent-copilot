@@ -273,16 +273,16 @@
         {
           "agent": "hermes",
           "display_name": "Hermes",
-          "status": "read-only",
+          "status": "install-only",
           "scan": {
             "supported": true,
             "status": "verified-read-only",
-            "reason": "V2.17 scans active Hermes home ~/.hermes/skills/**/SKILL.md without reading Hermes secrets, cron content, logs, or config files."
+            "reason": "V2.38 scans active Hermes home ~/.hermes/skills/**/SKILL.md plus explicit skills.external_dirs as read-only external roots without reading Hermes secrets, cron content, or logs."
           },
           "project_scan": {
             "supported": false,
             "status": "blocked",
-            "reason": "Hermes has no generic project-local skill discovery; project scan remains disabled unless explicit external_dirs policy is implemented."
+            "reason": "Hermes has no generic project-local skill discovery; explicit skills.external_dirs are read-only external roots, not project roots."
           },
           "config_toggle": {
             "supported": false,
@@ -292,21 +292,23 @@
           "config_snapshot": {
             "supported": false,
             "status": "blocked",
-            "reason": "No verified Hermes rollback-safe config target exists."
+            "reason": "No verified Hermes rollback-safe toggle config target exists."
           },
           "install": {
-            "supported": false,
-            "status": "blocked",
-            "reason": "Hermes install semantics are not confirmed."
+            "supported": true,
+            "status": "verified-native-root-v2.95",
+            "reason": "V2.95 supports confirmed local tool-global SKILL.md copy into the Hermes native ~/.hermes/skills root only; Hermes hub, URL, tap, update, uninstall, and external_dirs writes remain out of scope."
           },
           "writable": {
-            "supported": false,
-            "status": "blocked",
-            "reason": "Hermes writable toggle/install remains blocked until individual skill disable schema and rollback-safe writes are verified."
+            "supported": true,
+            "status": "install-only-v2.95",
+            "reason": "Writable support is limited to confirmed local skill-file installs into ~/.hermes/skills; config toggles, per-platform enablement, external_dirs writes, hub/network installs, scripts, credentials, cloud sync, and telemetry remain blocked."
           },
           "blockers": [
             "Generic Hermes project-local skill discovery is not confirmed and remains disabled.",
+            "Hermes external_dirs are scan-only external roots, not writable or install targets.",
             "Confirm individual skill disable/re-enable schema and rollback semantics before writable support.",
+            "Hermes hub, URL, tap, update, uninstall, and reset operations remain blocked.",
             "Do not map Hermes cron jobs to SkillInstance in the first adapter slice."
           ]
         },

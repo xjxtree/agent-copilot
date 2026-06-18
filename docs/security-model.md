@@ -159,7 +159,7 @@ V2.4 把 opencode 作为第三个 adapter 接入 catalog；当前实现按官方
 
 ### 2.2.4 Hermes external roots（V2.38 completed）
 
-V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit external roots，不推断为 generic project roots；实现与安全边界继续保持 Hermes 只读扫描。Hermes writable/install 及写回路径（包含脚本执行、AI 自动写回、credentials 持久化、public distribution）均保持 blocked。
+V2.38 的 Hermes 口径已完成：`skills.external_dirs` 定义为 explicit external roots，不推断为 generic project roots。V2.95 只允许 confirmed local ToolGlobal `SKILL.md` copy into native `~/.hermes/skills`；Hermes config toggle、per-platform enablement、project install、external_dirs write、hub/URL/tap/update/uninstall/reset、脚本执行、AI 自动写回、credentials 持久化、public distribution 和 uncontrolled network fetch 均保持 blocked。
 
 ### 2.3 监听事件的拒绝服务
 

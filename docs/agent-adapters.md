@@ -10,7 +10,7 @@
 >
 > 上层 scanner / catalog / UI 不直接处理 agent 特有配置语义。
 >
-> V2.41-V2.94 的 provider/task/validation/module-splitting/Agent Copilot/Codex expanded root/opencode configured-root/Pi guarded write work is tracked in README, roadmap, development tasks, and verification checklists. V2.92 expands Codex read-only roots, V2.93 adds opencode configured local roots, and V2.94 adds Pi compatibility-root toggles plus native-root installs while preserving the explicit capability matrix below.
+> V2.41-V2.95 的 provider/task/validation/module-splitting/Agent Copilot/Codex expanded root/opencode configured-root/Pi guarded write/Hermes native install work is tracked in README, roadmap, development tasks, and verification checklists. V2.92 expands Codex read-only roots, V2.93 adds opencode configured local roots, V2.94 adds Pi compatibility-root toggles plus native-root installs, and V2.95 adds Hermes native-root installs while preserving the explicit capability matrix below.
 
 ## V2.40 Adapter diagnostics
 
@@ -100,7 +100,7 @@ pub struct AdapterFeatureCapability {
 | Codex | `verified` | 支持（native user/project roots + read-only `$CODEX_HOME/skills`、plugin marketplace、`/etc/codex/skills` diagnostics） | 支持（仅用户 `config.toml`，且仅 native `.agents/skills` 实例） | 支持（tool-global install to native roots） | 支持（native-root allowlist） | 项目级 `.codex/config.toml`、plugin/admin/system/compat roots writable blocked |
 | opencode | `verified` | 支持 native roots + 官方 `.claude` / `.agents` compatibility roots + configured local `skills.paths` roots | 支持（exact `permission.skill` deny/re-enable） | 支持（native-root 安装） | 支持（managed permission overrides） | `skills.urls` metadata-only/no-fetch；configured/compat roots 不作为 install/write target |
 | Pi | `guarded` | 支持 Pi-native roots + `.agents/skills` compatibility roots | 支持 guarded native / `.agents` compatibility toggle（基于证据） | 支持 native-root tool-global install | limited | package install/remove、`.agents` direct install、脚本执行、AI 自动写回、credentials 仍 blocked |
-| Hermes | `read-only` | 支持 active/profile Hermes home | blocked（read-only 扫描） | blocked | blocked | 外部目录仅按 `skills.external_dirs` 显式 external roots 处理；generic project scan / toggle / install / writable blocked |
+| Hermes | `install-only` | 支持 active/profile Hermes home + explicit `skills.external_dirs` read-only roots | blocked（config toggle schema 未验证） | 支持 native `~/.hermes/skills` tool-global install | install-only | 外部目录仅按 `skills.external_dirs` 显式 external roots 处理；generic project scan / project install / external_dirs write / hub or URL install / toggle blocked |
 | OpenClaw | `read-only` | 支持文档化 filesystem roots | blocked（read-only scan only） | blocked | blocked | project scope 仅 workspace，toggle/install/writable blocked |
 
 > **实现要求**：所有适配器**无状态**。
@@ -194,17 +194,17 @@ Codex 当前实现边界：
 | 项 | 值 |
 | --- | --- |
 | AgentId | `hermes` |
-| 状态 | **V2.17 read-only scanner implemented / writable blocked** |
+| 状态 | **V2.95 native-root install implemented / config toggles blocked** |
 | Spec 工作单 | [`docs/hermes-adapter-spec.md`](./hermes-adapter-spec.md) |
 | 统一工作单 | [`docs/agent-adapter-spec-worklists.md`](./agent-adapter-spec-worklists.md#hermes) |
 | Evidence fixture | `fixtures/hermes/` 只保存 service evidence 样例，不是 parser contract |
 | 只读范围 | 扫描 active Hermes home 的 `skills/**/SKILL.md` 和 V2.38 explicit `skills.external_dirs`；不做 generic project scan；不把 cron jobs 映射为 `SkillInstance` |
-| 写入范围 | 禁止写 Hermes 配置；individual skill disable schema 和 rollback-safe writes 未验证 |
-| 行动项 | ① 保持 scoped read-only scanner；② `skills.external_dirs` 在实现中只作为 explicit external roots，不推断为 project scope；③ 继续确认 individual skill disable/re-enable schema |
+| 写入范围 | 仅允许 confirmed local ToolGlobal `SKILL.md` copy into native `~/.hermes/skills`；禁止写 Hermes 配置、project install、external_dirs write、hub/URL/tap/update/uninstall/reset |
+| 行动项 | ① 保持 scoped scanner 与 explicit external roots；② `skills.external_dirs` 只作为 read-only explicit external roots，不推断为 project scope；③ 继续确认 individual skill disable/re-enable schema |
 
 Hermes P0 evidence 已确认它是 Nous Research Hermes Agent，且有 first-class skills 和 active Hermes home `skills/**/SKILL.md`。
 
-第一版只做 read-only scanner；project discovery、toggle、install 和 writable 继续 blocked。
+V2.95 只补 native-root local install；project discovery、config toggle、external_dirs write、hub/URL/tap/update/uninstall/reset 和 network-backed install 继续 blocked。
 
 ### 2.5 openclaw
 
