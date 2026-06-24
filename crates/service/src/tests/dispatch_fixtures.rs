@@ -545,7 +545,7 @@ pub(super) struct WirePiWritableHarnessScenario {
     pub(super) reenabled_after_toggle: bool,
     pub(super) rollback_restored: bool,
     pub(super) invalid_json_blocked: bool,
-    pub(super) trust_gate_blocked: bool,
+    pub(super) explicit_untrusted_blocked: bool,
     pub(super) writes_confined_to_disposable_root: bool,
     pub(super) snapshot_content: String,
     pub(super) notes: Vec<String>,
@@ -2924,55 +2924,60 @@ pub(super) struct WireAgentSessionSkillReviewSafetyFlags {
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(super) struct WireLocalSessionPreviewRoot {
-    pub(super) root: String,
-    pub(super) status: String,
-    pub(super) candidate_count: usize,
-    pub(super) blocker: Option<String>,
+#[rustfmt::skip]
+pub(super) struct WireLocalSessionPreviewRoot { pub(super) root: String, pub(super) status: String, pub(super) candidate_count: usize, pub(super) blocker: Option<String> }
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[rustfmt::skip]
+pub(super) struct WireLocalSessionContentItem { pub(super) id: String, pub(super) kind: String, pub(super) title: String, pub(super) text: String, pub(super) char_count: usize, pub(super) evidence_refs: Vec<String> }
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[rustfmt::skip]
+pub(super) struct WireLocalSessionPreviewRow {
+    pub(super) id: String, pub(super) title: String, pub(super) source_kind: String,
+    pub(super) agent: Option<String>, pub(super) redacted_path: String,
+    pub(super) modified_at: Option<i64>, pub(super) excerpt: String,
+    pub(super) excerpt_char_count: usize, pub(super) user_message_count: usize,
+    pub(super) total_message_count: usize, pub(super) tool_call_count: usize,
+    pub(super) skill_call_count: usize, pub(super) content_hash: String,
+    pub(super) evidence_refs: Vec<String>, pub(super) content_items: Vec<WireLocalSessionContentItem>,
 }
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(super) struct WireLocalSessionPreviewRow {
-    pub(super) id: String,
-    pub(super) title: String,
-    pub(super) source_kind: String,
-    pub(super) agent: Option<String>,
-    pub(super) redacted_path: String,
-    pub(super) modified_at: Option<i64>,
-    pub(super) excerpt: String,
-    pub(super) excerpt_char_count: usize,
-    pub(super) content_hash: String,
+#[rustfmt::skip]
+pub(super) struct WireLocalSessionSkillUsageRow {
+    pub(super) skill_id: String, pub(super) skill_name: String,
+    pub(super) agent: String, pub(super) call_count: usize,
+    pub(super) session_count: usize, pub(super) latest_modified_at: Option<i64>,
     pub(super) evidence_refs: Vec<String>,
 }
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[rustfmt::skip]
 pub(super) struct WireLocalSessionPreviewResult {
-    pub(super) generated_by: String,
-    pub(super) authorized: bool,
-    pub(super) authorization_required: bool,
-    pub(super) roots: Vec<WireLocalSessionPreviewRoot>,
-    pub(super) count: usize,
-    pub(super) total_candidate_count: usize,
-    pub(super) session_rows: Vec<WireLocalSessionPreviewRow>,
-    pub(super) gap_notes: Vec<String>,
+    pub(super) generated_by: String, pub(super) authorized: bool,
+    pub(super) authorization_required: bool, pub(super) roots: Vec<WireLocalSessionPreviewRoot>,
+    pub(super) count: usize, pub(super) total_candidate_count: usize,
+    pub(super) user_message_count: usize, pub(super) total_message_count: usize,
+    pub(super) tool_call_count: usize, pub(super) skill_call_count: usize,
+    pub(super) skill_usage_rows: Vec<WireLocalSessionSkillUsageRow>,
+    pub(super) session_rows: Vec<WireLocalSessionPreviewRow>, pub(super) gap_notes: Vec<String>,
     pub(super) blocker_notes: Vec<String>,
     pub(super) redaction_summary: WireAgentSessionSkillReviewRedactionSummary,
-    pub(super) safety_flags: WireAgentSessionSkillReviewSafetyFlags,
-    pub(super) read_only: bool,
-    pub(super) provider_request_sent: bool,
-    pub(super) skill_files_mutated: bool,
-    pub(super) agent_config_mutated: bool,
-    pub(super) snapshot_created: bool,
-    pub(super) triage_mutated: bool,
-    pub(super) raw_prompt_persisted: bool,
-    pub(super) raw_response_persisted: bool,
-    pub(super) raw_trace_persisted: bool,
+    pub(super) safety_flags: WireAgentSessionSkillReviewSafetyFlags, pub(super) read_only: bool,
+    pub(super) provider_request_sent: bool, pub(super) skill_files_mutated: bool,
+    pub(super) agent_config_mutated: bool, pub(super) snapshot_created: bool,
+    pub(super) triage_mutated: bool, pub(super) raw_prompt_persisted: bool,
+    pub(super) raw_response_persisted: bool, pub(super) raw_trace_persisted: bool,
 }
-
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -4416,6 +4421,7 @@ pub(super) struct WireReportExportLocalResult {
     pub(super) files: Vec<WireReportExportedFile>,
     pub(super) catalog_available: bool,
     pub(super) summary: WireReportExportSummary,
+    pub(super) sections: Vec<WireReportExportSection>,
     pub(super) redaction: WireReportExportRedaction,
     pub(super) read_only: bool,
     pub(super) writes_allowed: bool,
@@ -4430,6 +4436,14 @@ pub(super) struct WireReportExportLocalResult {
 pub(super) struct WireReportExportedFile {
     pub(super) format: String,
     pub(super) path: String,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct WireReportExportSection {
+    pub(super) name: String,
+    pub(super) count: usize,
 }
 
 #[allow(dead_code)]

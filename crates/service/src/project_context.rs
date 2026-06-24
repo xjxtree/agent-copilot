@@ -1,12 +1,11 @@
 use std::{
     fs,
-    io::Write,
     path::{Path, PathBuf},
 };
 
 use serde::{Deserialize, Serialize};
 
-use crate::{display_path, unix_timestamp_millis, ServiceError};
+use crate::{display_path, unix_timestamp_millis, write_private_bytes_file, ServiceError};
 
 const PROJECT_CONTEXT_SCHEMA_VERSION: u32 = 1;
 const PROJECT_CONTEXT_FILE: &str = "project-context.json";
@@ -291,21 +290,10 @@ fn load_store(app_data_dir: &Path) -> Result<ProjectContextStore, ServiceError> 
 }
 
 fn save_store(app_data_dir: &Path, store: &ProjectContextStore) -> Result<(), ServiceError> {
-    fs::create_dir_all(app_data_dir)?;
     let path = project_context_path(app_data_dir);
-    let tmp = app_data_dir.join(format!(
-        ".project-context.json.tmp-{}-{}",
-        std::process::id(),
-        unix_timestamp_millis()
-    ));
-    let content = serde_json::to_vec_pretty(store)?;
-    {
-        let mut file = fs::File::create(&tmp)?;
-        file.write_all(&content)?;
-        file.write_all(b"\n")?;
-        file.sync_all()?;
-    }
-    fs::rename(&tmp, path)?;
+    let mut content = serde_json::to_vec_pretty(store)?;
+    content.push(b'\n');
+    write_private_bytes_file(&path, &content)?;
     Ok(())
 }
 

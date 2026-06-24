@@ -98,7 +98,7 @@ impl AgentAdapter for PiAdapter {
     }
 
     fn config_paths(&self, ctx: &AdapterContext) -> Vec<PathBuf> {
-        let mut paths = vec![ctx.user_home.join(".pi/settings.json")];
+        let mut paths = vec![ctx.user_home.join(".pi/agent/settings.json")];
         if let Some(project_root) = &ctx.project_root {
             paths.push(project_root.join(".pi/settings.json"));
         }
@@ -197,9 +197,6 @@ fn patch_pi_config(
 ) -> Result<String, AdapterError> {
     let mut value = if content.trim().is_empty() {
         serde_json::json!({
-            "project": {
-                "trusted": scope == Scope::AgentGlobal
-            },
             "skills": {
                 "disabled": []
             }
@@ -209,9 +206,9 @@ fn patch_pi_config(
             .map_err(|err| AdapterError::new(format!("invalid Pi settings JSON: {err}")))?
     };
 
-    if scope == Scope::AgentProject && !pi_project_trusted(&value) {
+    if scope == Scope::AgentProject && pi_project_explicitly_untrusted(&value) {
         return Err(AdapterError::new(
-            "Pi project settings must explicitly set project.trusted or trust.projectRootTrusted before project/package toggles are allowed",
+            "Pi project settings explicitly mark this project untrusted; project/package toggles are blocked",
         ));
     }
 
@@ -231,17 +228,17 @@ fn patch_pi_config(
     Ok(text)
 }
 
-fn pi_project_trusted(value: &serde_json::Value) -> bool {
+fn pi_project_explicitly_untrusted(value: &serde_json::Value) -> bool {
     value
         .get("project")
         .and_then(|project| project.get("trusted"))
         .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false)
+        == Some(false)
         || value
             .get("trust")
             .and_then(|trust| trust.get("projectRootTrusted"))
             .and_then(serde_json::Value::as_bool)
-            .unwrap_or(false)
+            == Some(false)
 }
 
 fn pi_disabled_array_mut(

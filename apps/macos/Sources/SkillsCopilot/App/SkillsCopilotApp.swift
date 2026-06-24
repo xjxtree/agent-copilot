@@ -54,8 +54,13 @@ struct SkillsCopilotApp: App {
             }
 
             CommandMenu(UIStrings.menuSkills) {
-                Button(UIStrings.text("menu.showAgentWorkspace", "Show Agent Workspace")) {
-                    store.selectedSidebarSelection = .agentWorkspace
+                Button(UIStrings.text("menu.showSessions", "Show Sessions")) {
+                    store.sidebarContentMode = .sessions
+                    if let session = store.selectedLocalSession ?? store.localSessionPreviewResult.sessionRows.first {
+                        store.selectLocalSession(session)
+                    } else {
+                        store.selectedSidebarSelection = nil
+                    }
                 }
                 .keyboardShortcut("1", modifiers: [.command])
 

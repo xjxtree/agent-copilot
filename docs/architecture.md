@@ -1,175 +1,71 @@
-# Agent Copilot — 架构总览
+# Architecture
 
-> Workspace / crate / bundle internals still use `skills-copilot` / `SkillsCopilot`
-> identifiers. Agent Copilot is the displayed product name; identifier migration
-> requires a separate data/validation migration plan.
+Agent Copilot uses a native macOS shell over a typed Rust service. Product logic
+belongs in Rust crates; the UI presents state and sends typed requests.
 
-> 状态：**V2.87 Agent Copilot first implementation pass completed with unlocked macOS app-window evidence**。
-> V2.1-V2.87 是当前同步完成基线；V2.87 unlocked validation passed on 2026-06-17 via `pnpm check:macos`，并捕获完整 app-window smoke evidence。
-> 产品方向是 **Rust 跨平台核心 + service protocol + macOS SwiftUI/AppKit 原生壳**。
-> `crates/service` stdio sidecar 和 `apps/macos` SwiftUI 壳是当前产品边界。
-> macOS 原生 UI 是唯一维护的产品 UI；旧 Tauri + React UI / Tauri IPC 壳已删除。
-> 所有 provider-backed 行为仍必须经过 prompt preview/redaction/destination visibility/explicit confirmation。
-> 详细版本任务见 [development-tasks.md](./development-tasks.md)，
-> 版本里程碑见 [roadmap.md](./roadmap.md)，协议边界见 [service-protocol.md](./service-protocol.md)。
+## Goals
 
-## 1. 目标与非目标
+- Inspect local agent sessions, skills, config snapshots, and validation
+  evidence.
+- Keep deterministic local analysis useful without default provider calls.
+- Keep write, script, credential, cloud, telemetry, and release automation
+  surfaces narrow and explicit.
+- Share the same Rust service contract across current and future UI shells.
 
-**目标**
-- 把分散在多个 agent（Claude Code / Codex / pi / hermes / openclaw / opencode）的 skills 统一到一个视图。
-- 提供安全的启用/禁用、配置读写、来源校验、版本追踪能力。
-- 用本地 scanner/rules/catalog 完成事实获取、元数据检测、配置审计和可验证证据生成。
-- 把任务可用性、routing 置信度、trace 判断、remediation、
-  local skill map、provider observability、task-first cockpit、
-  skill lifecycle timeline 与 guided cleanup 提升为 AI-native 能力。
-- 用户可显式配置 OpenAI-compatible / Claude-compatible provider；
-  deterministic local surfaces 本身不发送 provider request。
-- Guided cleanup 只能聚合 existing local evidence；
-  `cleanup.recordGuidedStep` 只允许写 app-local redacted metadata。
-- V2.71 safe-action links 只导航到既有安全入口，
-  不触发 hidden apply/write/provider/script path。
-- V2.72 validation harness hardening 只影响验证脚本/文档，
-  不影响运行时产品架构。
-- V2.87 Agent Copilot first pass adds Lineup, Agent Profile, sorted read-only
-  decision queue, default-off local session preview, and default-off MCP server
-  preview. These are local evidence surfaces and do not add provider defaults,
-  write/apply paths, script execution, credential reads, cloud sync, or telemetry.
+## Non-Goals
 
-**非目标（首版）**
-- 不替代各 agent 的运行时（不解析它们的 prompt，不代理它们的工具调用）。
-- 不做云端同步、不做账号系统、不收集任何使用数据 —— 隐私约束集中定义在 [security-model.md §5](./security-model.md#5-隐私--数据收集)，其它文档不再重复
-- 不做 plugin marketplace（可作为后续阶段）。
+- Do not replace agent runtimes or proxy their tool calls.
+- Do not parse private prompts beyond explicitly authorized local preview
+  flows.
+- Do not add cloud sync, accounts, telemetry, or marketplace behavior by
+  default.
+- Do not reintroduce the removed Web/Tauri shell.
 
-## 2. 技术栈决策
+## Layers
 
-| 层 | 选型 | 理由 |
+| Layer | Owner | Notes |
 | --- | --- | --- |
-| macOS 产品壳 | **SwiftUI + AppKit interop** | 唯一维护的当前产品 UI；半年内优先 macOS 桌面版；原生 `NavigationSplitView`、`Toolbar`、Settings、菜单、可访问性、窗口行为和 Liquid Glass 适配更符合产品目标。 |
-| 核心逻辑 | **Rust**（crates） | 多目录扫描、YAML 解析、冲突图计算、文件监听：性能、内存安全、依赖少，都是 Rust 强项。 |
-| UI 协议 | **JSON-RPC / typed JSON service boundary** | `crates/service` 已提供 stdio sidecar；让 macOS 原生壳和未来 Windows/Linux shell 调同一套 Rust service；避免把业务逻辑绑死在任何 UI 框架。 |
-| 持久化 | **SQLite**（catalog）+ JSON（运行时 UI 状态） | SQLite 存 skills 目录快照、基础元数据、原始 frontmatter、冲突分组；标准化 frontmatter 索引留到后续。UI 状态用本地 JSON 即可。 |
-| LLM / AI Analysis | **AI-native 判断层**，通过用户配置的 provider profile 接入 | V2.41+ provider foundation 已完成：OpenAI-compatible / Claude-compatible endpoint、API key、model、Keychain-first storage、Test Connection、预算字段和最小 redacted call metadata。调用前必须 prompt preview/redaction/destination visibility/explicit confirmation，启用时只发往用户指定 endpoint。 |
-| 当前 app 运行 | **Local App Run + Smoke App Run** | 当前阶段只使用 `dist/AgentCopilot.app`；Local App Run 走真实本机环境，Smoke App Run 走 fixture 环境。正式分发、签名、公证留到后续阶段。 |
+| macOS app | `apps/macos` | SwiftUI/AppKit shell, view models, service client |
+| Service boundary | `crates/service` | Typed JSON stdio request/response protocol |
+| Command orchestration | `crates/commands` | Scans, toggles, snapshots, reports, provider gates |
+| Core model | `crates/core` | Pure types and traits; no I/O |
+| Adapters | `crates/adapters` | Agent root/config semantics |
+| Scanner | `crates/scanner` | Root walking, symlink guards, skill parsing |
+| Catalog | `crates/catalog` | Local SQLite catalog and app-local metadata |
+| AI core | `crates/ai-core` | Deterministic rules and local analysis contracts |
 
-**备选：Electron + Node** —— 仅在团队完全无 Rust 经验时考虑。代价是包体、安全模型、内存占用。
+## Dependency Direction
 
-> **贡献者门槛说明**：仓库默认要求懂 Rust 写核心。macOS 产品壳贡献需要 SwiftUI/AppKit。轻量规则、fixture、文档和 adapter spec 仍可单语言贡献。
+- `core` does not depend on higher crates.
+- `adapters` and `scanner` depend on `core`.
+- `catalog` and `ai-core` depend on `core`.
+- `commands` composes scanner/catalog/adapter/AI behavior.
+- `service` exposes the UI-independent protocol boundary.
+- UI code must not call scanner/catalog internals directly.
 
-**UI 外观路线**
-- macOS 产品壳使用 SwiftUI/AppKit 原生组件；这是唯一当前维护的产品 UI。
-- 旧 Tauri Web UI / Tauri IPC 壳已删除；当前产品能力只进入 native macOS shell。
-- V2 adapter 主线已接入 Codex writable-user-config adapter、V2.12 guarded writable opencode config/native-install adapter 和 V2.13 read-only Pi adapter。Codex 实现边界继续遵守 `docs/codex-adapter-spec.md` 的 verified roots 和 user-config writable 写入规则；opencode 扫描 native roots 与官方 `.claude` / `.agents` compatibility roots，写入通过 managed `permission.skill`，install 仍限 native opencode roots；Pi 只扫描 Pi-native roots，写入仍 blocked。签名、公证、DMG/ZIP 和 release artifact 自动化等公开发布事务先保留 runbook，等产品更成熟后再执行。
-- Liquid Glass 优先通过系统标准组件获得；`apps/macos/Package.swift` 继续以 macOS 13 作为最低部署目标，自定义 macOS 26+ glass API 必须 availability gate 并提供旧系统 fallback。
-- SwiftUI 壳不得重写 Rust core。
+## Data Flow
 
-## 3. 顶层模块
+1. The app calls a typed service method such as `catalog.scanAll`.
+2. Commands resolve project context and adapter roots.
+3. Scanner enumerates candidate `SKILL.md` files inside allowed roots.
+4. Adapters parse agent-specific metadata and enabled state.
+5. Commands update the local catalog and derived findings.
+6. The app reads typed service results for list, detail, config, session, and
+   report surfaces.
 
-```mermaid
-flowchart TD
-  subgraph ProductUI["Current Product UI"]
-    MacApp["macOS Native App<br/>SwiftUI + AppKit<br/>NavigationSplitView · Toolbar · Settings · Inspector · Liquid Glass"]
-    MacVM["macOS UI Adapter<br/>View models · commands · state mapping"]
-    MacApp --> MacVM
-  end
+## Extension Points
 
-  subgraph FutureUI["Future Platform UIs"]
-    WinUI["Windows shell<br/>WinUI / Qt / Tauri TBD"]
-    LinuxUI["Linux shell<br/>GTK / Qt / Tauri TBD"]
-    SharedUX["Shared UX contracts<br/>IA · design tokens · prototypes · completed screenshots"]
-    WinUI --> SharedUX
-    LinuxUI --> SharedUX
-  end
-
-  MacVM --> Protocol["Service Protocol<br/>JSON-RPC / typed JSON<br/>schemas · fixtures · stable errors · events"]
-  SharedUX --> Protocol
-
-  Protocol --> Service["Rust Service Facade<br/>scan · list · detail · toggle · config · snapshots · analyze"]
-
-  Service --> Core["core<br/>types · traits · no I/O"]
-  Service --> Adapters["adapters<br/>Claude Code · Codex · opencode · Pi · Hermes · OpenClaw"]
-  Service --> Scanner["scanner<br/>roots · discovery · symlink guard"]
-  Service --> Catalog["catalog<br/>SQLite · snapshots · conflicts · findings"]
-  Service --> AiCore["ai-core<br/>rules · AI-native analysis contracts"]
-
-  Catalog --> SQLite["Local SQLite catalog"]
-  Adapters --> AgentFiles["Agent skill/config files<br/>SKILL.md · settings.json · future config"]
-  AiCore --> Providers["User-configured LLM providers<br/>OpenAI-compatible · Claude-compatible"]
-```
-
-**模块依赖方向（强约束）**：
-- `core` 不依赖任何其它 crate（只放纯类型与 trait）
-- `adapters` 依赖 `core`
-- `scanner` 依赖 `core` + `adapters`
-- `catalog` / `ai-core` 依赖 `core`；当前 `ai-core` 不依赖 `adapters`
-- `commands` 是业务命令编排层，把上面几块组合起来
-- `service` 是 UI 无关的协议边界，当前提供 stdio request/response sidecar
-- **禁止反向依赖**：`core` 永远不导入 `adapters` / `scanner` / …
-
-## 4. 数据流：一次"扫描 + 展示"的生命周期
-
-```
-1. macOS 原生 UI 触发 service method `catalog.scanAll` 扫描当前已实现的 Claude Code、Codex、guarded writable opencode、guarded Pi、install-only Hermes 和 install-only OpenClaw adapters；`catalog.scanClaude` 保留为 Claude-only 兼容方法。未来文件 watcher 收到 `SKILL.md` / agent config 变更后可自动触发重扫。
-2. service facade / commands 调 scanner
-3. scanner 对每个 agent 调用对应 adapter.roots(ctx) → 拿到允许扫描根
-4. scanner 在允许根内枚举候选 `SKILL.md`，再调 adapter.parse(path) → 拿到 SkillInstance 候选
-5. commands 在 upsert 前读取旧 fingerprint，扫描后将 SkillInstance 写入 catalog
-6. ai-core 运行 MVP 规则，catalog 刷新 rule findings / skill definitions / conflict groups
-7. macOS UI 通过 service methods 拉取当前视图；未来 Windows/Linux UI 只能通过同一协议访问
-8. watcher 重扫完成后广播 `catalog-changed`，UI 订阅事件并刷新列表、详情、诊断、冲突与快照
-```
-
-## 5. 进程模型
-
-- **当前 V2.86**：`crates/service` 提供 typed JSON stdio sidecar；`apps/macos` SwiftUI 壳把该 sidecar 打包进 `.app/Contents/Resources` 并通过 `Process` 调用。Swift `ServiceClient` 支持取消/超时清理、stdio handle 关闭和 TERM→SIGKILL escalation；`Task Cockpit` cancel/timeout 会取消 active service task。
-- **模块边界**：service facade 已按 domain/helper 拆分，包含 `service_host.rs`、`service_cleanup.rs`、`service_knowledge.rs`、`service_llm.rs`、`service_remediation.rs`、`service_task.rs`、`service_support_helpers.rs`、`protocol.rs` 以及 `crates/service/src/tests/` 下的 split test chunks；`pnpm verify:module-size` 约束单文件体量。
-- **下一阶段**：如需要 streaming，再评估 local socket；不要默认引入常驻 daemon 或 socket redesign。
-- **无常驻后台 daemon**：开应用时启动 service，关应用即退出。若未来需要菜单栏常驻，再单独做权限、生命周期和资源预算设计。
-
-## 6. 扩展点
-
-| 想做的事 | 加在哪 |
+| Change | Add it here |
 | --- | --- |
-| 支持新 agent | 在 `crates/adapters/src/<agent_id>/` 新建模块，实现 `AgentAdapter` trait，scanner/catalog 自动接入 |
-| 加新规则检查 | 当前在 `crates/ai-core/src/lib.rs` 添加 `Rule` 实现并注册到 `evaluate_mvp_rules()`；后续规则增多再拆 `rules/` registry |
-| 接入新 LLM provider | 在 V2.41+ provider profile 层扩展 OpenAI-compatible / Claude-compatible 兼容配置；必须沿用 Keychain-first credential storage、Test Connection、prompt preview/redaction/destination visibility/explicit confirmation、最小 redacted metadata 和 copy-only 输出边界 |
-| macOS 原生 UI 新面板 | 在 `apps/macos/` SwiftUI shell 新增 view/model，调用同一 service method |
-| 新 shell | 只接 service protocol，不直接引用 scanner/catalog internals |
-| 配置编辑器 | commands 层新增 typed 读写 command；写前 snapshot、校验、原子写、写后 rescan 仍在 Rust service 层 |
+| New agent | `crates/adapters/src/<agent>/`, scanner/catalog tests, adapter docs |
+| New service method | `crates/service`, fixtures, `docs/service-protocol.md` |
+| New local rule | `crates/ai-core` |
+| New macOS surface | `apps/macos` view/model/service patterns |
+| New provider behavior | Provider profile gate with preview/redaction/confirmation |
 
-新增 agent 的关键约束（参见 [`agent-adapters.md`](./agent-adapters.md)）：
-- 适配器必须是无状态的（不要缓存文件内容）
-- 解析失败不能让整个 scan 崩，要降级为 `state=broken` 并记日志
-- 任何写操作（toggle、edit config）必须走"原子写 + 回滚"路径
-- Codex adapter scans verified user/project `.agents/skills` plus V2.92 read-only `$CODEX_HOME/skills`, local plugin marketplace roots, and `/etc/codex/skills` diagnostics. Toggle writes still only patch the user `config.toml` override for native `.agents/skills` instances; never write `<repo>/.codex/config.toml`, compatibility, plugin, admin, or system roots.
-- Opencode adapter 扫描官方 roots：`~/.config/opencode/skills`、active project `.opencode/skills`、全局/项目 `.claude/skills`、全局/项目 `.agents/skills`，并以 `RootSource::Configured` 只读扫描 JSON/JSONC `skills.paths` configured local roots；`skills.urls` 仅 metadata-only/no-fetch。Writes 只能走 managed `permission.skill` config override，install 只能写 native opencode roots
+## Compatibility
 
-## 7. 错误与日志
-
-- 所有 adapter/scanner 错误用 `thiserror` 定义 `Error` 枚举，不抛 `anyhow!` 顶层。
-- 日志走 `tracing` + `tracing-subscriber`，默认 level = `info`，`--debug` 时 `debug`。
-- 用户可见的错误：UI 用 toast + 详情折叠；非阻塞类（某个 skill 解析失败）只在该 skill 行内显示，不阻断全局扫描。
-
-## 8. 国际化 (i18n)
-
-- **当前产品状态**：macOS 原生壳通过 `UIStrings` + Swift `Localizable.strings` 管理平台内 i18n，当前支持 English (`en`) 与简体中文 (`zh-Hans`)
-- **语言设置**：`Settings` scene 提供 app-local 语言偏好；偏好只写入 `UserDefaults`，不会写 agent config、skill 文件、provider 设置、凭据、报告或 prompt artifact
-- **文案 key**：用户可见字符串应集中到 `UIStrings`，并复用稳定错误码 / 文案 key；带运行时值的文案优先使用 `format` 路径，避免本地化资源吞掉动态数量或名称
-- **LLM prompt**：始终英文 —— 多数模型在英文下指令遵循更稳
-- **错误码**：稳定不变；用户可见消息文案走 i18n；内部日志保持英文
-- 进度安排见 [roadmap.md](./roadmap.md)
-
-## 9. 文档地图
-
-- [agent-adapters.md](./agent-adapters.md) — 6 个 agent 的目录约定与适配要点
-- [codex-adapter-spec.md](./codex-adapter-spec.md) — Codex adapter 证据、实现边界与 fixture 工作单
-- [macos-native-plan.md](./macos-native-plan.md) — macOS SwiftUI/AppKit 原生壳与跨平台 service protocol 计划
-- [service-protocol.md](./service-protocol.md) — native shell / future platform shell 的 typed JSON request-response 边界
-- [ui-delivery-standards.md](./ui-delivery-standards.md) — UI 原型、完成截图和 macOS Computer Use 验证标准
-- [macos-app-runbook.md](./macos-app-runbook.md) — macOS Local App Run / Smoke App Run 规范
-- [ai-agent-workflow.md](./ai-agent-workflow.md) — Codex / Claude Code / Pi / opencode 等 coding agent 共享入口、验证和文档同步规则
-- [deprecated-web-ui-removal.md](./deprecated-web-ui-removal.md) — 旧 Web UI 删除记录
-- [data-model.md](./data-model.md) — 统一 Skill 数据模型
-- [ai-layer.md](./ai-layer.md) — 规则引擎 + LLM 层
-- [security-model.md](./security-model.md) — 权限、白名单、注入面、回滚
-- [mvp-implementation-plan.md](./mvp-implementation-plan.md) — MVP 施工图与 Claude Code toggle 语义
-- [roadmap.md](./roadmap.md) — MVP / Product UI/UX Hardening / V1 / macOS Native Productization / V2 路线图
+The displayed product name is Agent Copilot. Some module names, crate names,
+sidecar names, AX identifiers, environment variables, or legacy app-data ids may
+retain `SkillsCopilot` / `skills-copilot` compatibility where migration or
+fixtures require it.

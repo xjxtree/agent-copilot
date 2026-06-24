@@ -11,6 +11,7 @@ struct FindingDisplayModelTests {
         try remediationUsesSuggestionThenRuleFallback()
         try triageDefaultsToOpenAndUpdatesFromServiceState()
         try triageFilterDistinguishesLocalStates()
+        try triageFilterOptionsOnlyExposeMeaningfulStates()
         try permissionSummaryLabelsUnknownAndUndeclaredValues()
     }
 
@@ -253,6 +254,24 @@ struct FindingDisplayModelTests {
         try expectEqual(FindingTriageFilter.reviewed.includes(.reviewed), true, "Reviewed filter should show reviewed findings.")
         try expectEqual(FindingTriageFilter.ignored.includes(.ignored), true, "Ignored filter should show ignored findings.")
         try expectEqual(FindingTriageFilter.all.includes(.ignored), true, "All triage should include ignored findings.")
+    }
+
+    private func triageFilterOptionsOnlyExposeMeaningfulStates() throws {
+        try expectEqual(
+            FindingTriageFilter.availableFilters(for: FindingTriageCounts(open: 2)),
+            [.open],
+            "Only open issues should not expose duplicate active/all status filters."
+        )
+        try expectEqual(
+            FindingTriageFilter.availableFilters(for: FindingTriageCounts(open: 2, reviewed: 1)),
+            [.open, .reviewed, .all],
+            "Status filters should include all only when multiple real states exist."
+        )
+        try expectEqual(
+            FindingTriageFilter.availableFilters(for: FindingTriageCounts(open: 2, needsFollowUp: 1)),
+            [.open, .needsFollowUp, .all],
+            "Open plus follow-up should expose concrete states and an all option without the duplicate active filter."
+        )
     }
 
     private func permissionSummaryLabelsUnknownAndUndeclaredValues() throws {

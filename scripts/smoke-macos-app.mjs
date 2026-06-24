@@ -26,7 +26,7 @@ const appBinary = join(appPath, "Contents", "MacOS", appName);
 const serviceBinary = join(appPath, "Contents", "Resources", "skills-copilot-service");
 const screenshotPath = resolve(
   process.env.SKILLS_COPILOT_SMOKE_SCREENSHOT ??
-    "docs/ui-artifacts/native-macos-shell/completed.png",
+    join(tmpdir(), "agent-copilot-smoke-completed.png"),
 );
 const bundleOnly = process.argv.includes("--bundle-only");
 const fixtureData = process.argv.includes("--fixture-data");

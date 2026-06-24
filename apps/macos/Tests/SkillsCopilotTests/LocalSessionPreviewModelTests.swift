@@ -10,12 +10,25 @@ struct LocalSessionPreviewModelTests {
     private func previewDecodesRedactedRowsAndSafety() throws {
         let payload = """
         {
-          "generated_by": "local-v2.87",
+          "generated_by": "local-v2.98",
           "authorized": true,
           "authorization_required": false,
           "roots": [{"root":"$HOME/.codex/sessions","status":"authorized-read-only","candidate_count":1}],
           "count": 1,
           "total_candidate_count": 1,
+          "user_message_count": 1,
+          "total_message_count": 2,
+          "tool_call_count": 1,
+          "skill_call_count": 2,
+          "skill_usage_rows": [{
+            "skill_id": "fixture-skill-id",
+            "skill_name": "fixture-skill",
+            "agent": "codex",
+            "call_count": 2,
+            "session_count": 1,
+            "latest_modified_at": 1781600000000,
+            "evidence_refs": ["session.content_hash:fixturehash"]
+          }],
           "session_rows": [{
             "id": "local-session-fixture",
             "title": "fixture",
@@ -24,8 +37,38 @@ struct LocalSessionPreviewModelTests {
             "redacted_path": "$HOME/.codex/sessions/fixture.jsonl",
             "excerpt": "Used fixture-skill-id with <redacted>.",
             "excerpt_char_count": 38,
+            "user_message_count": 1,
+            "total_message_count": 2,
+            "tool_call_count": 1,
+            "skill_call_count": 2,
             "content_hash": "fixturehash",
-            "evidence_refs": ["session.path:$HOME/.codex/sessions/fixture.jsonl"]
+            "evidence_refs": ["session.path:$HOME/.codex/sessions/fixture.jsonl"],
+            "content_items": [
+              {
+                "id": "session-item-fixture-0",
+                "kind": "user_message",
+                "title": "User",
+                "text": "Run skill:fixture-skill.",
+                "char_count": 24,
+                "evidence_refs": []
+              },
+              {
+                "id": "session-item-fixture-1",
+                "kind": "tool_call",
+                "title": "fixture-tool",
+                "text": "fixture tool call",
+                "char_count": 17,
+                "evidence_refs": []
+              },
+              {
+                "id": "session-item-fixture-2",
+                "kind": "skill_call",
+                "title": "Skill: fixture-skill",
+                "text": "fixture-skill (2 calls)",
+                "char_count": 23,
+                "evidence_refs": ["session.content_hash:fixturehash"]
+              }
+            ]
           }],
           "gap_notes": [],
           "blocker_notes": [],
@@ -63,10 +106,21 @@ struct LocalSessionPreviewModelTests {
         """
 
         let result = try JSONDecoder().decode(LocalSessionPreviewResult.self, from: Data(payload.utf8))
-        try expectEqual(result.generatedBy, "local-v2.87", "Local session preview generator")
+        try expectEqual(result.generatedBy, "local-v2.98", "Local session preview generator")
         try expectEqual(result.authorizationRequired, false, "Authorized preview should not require more authorization.")
+        try expectEqual(result.skillUsageRows.first?.skillName, "fixture-skill", "Skill usage row should decode.")
+        try expectEqual(result.skillUsageRows.first?.callCount, 2, "Skill usage count should decode.")
         try expectEqual(result.sessionRows.first?.agent, "codex", "Agent should decode from preview row.")
         try expectEqual(result.sessionRows.first?.evidenceRefs.count, 1, "Evidence refs should decode.")
+        try expectEqual(result.sessionRows.first?.contentItems.count, 3, "Session content items should decode.")
+        try expectEqual(result.sessionRows.first?.contentItems.first?.kind, .userMessage, "Session content kind should decode.")
+        try expectEqual(result.sessionRows.first?.contentItems[1].title, "fixture-tool", "Session content title should decode.")
+        try expectEqual(result.sessionRows.first?.contentItems.last?.kind, .skillCall, "Skill call content kind should decode.")
+        try expectEqual(result.userMessageCount, 1, "Preview should decode user message count.")
+        try expectEqual(result.totalMessageCount, 2, "Preview should decode total message count.")
+        try expectEqual(result.toolCallCount, 1, "Preview should decode tool call count.")
+        try expectEqual(result.skillCallCount, 2, "Preview should decode skill call count.")
+        try expectEqual(result.sessionRows.first?.skillCallCount, 2, "Row should decode skill call count.")
         try expectFalse(result.safetyFlags.providerRequestSent, "Preview should not send provider requests.")
         try expectFalse(result.safetyFlags.writeBackAllowed, "Preview should not enable writes.")
         try expectFalse(result.redactionSummary.rawTracePersisted, "Preview redaction summary should forbid raw trace persistence.")
@@ -74,7 +128,7 @@ struct LocalSessionPreviewModelTests {
 
     private func unavailableKeepsAuthorizationRequired() throws {
         let result = LocalSessionPreviewResult.unavailable(reason: "missing method")
-        try expectEqual(result.authorizationRequired, true, "Unavailable preview should remain default-off.")
+        try expectEqual(result.authorizationRequired, false, "Unavailable preview should not request manual roots.")
         try expectEqual(result.sessionRows.count, 0, "Unavailable preview should not synthesize rows.")
     }
 }

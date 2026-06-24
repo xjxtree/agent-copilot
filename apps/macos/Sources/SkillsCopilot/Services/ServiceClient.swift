@@ -796,14 +796,24 @@ struct AgentSessionSkillReviewDeleteParams: Encodable {
 
 struct LocalSessionPreviewParams: Encodable {
     let authorizedRoots: [String]
+    let autoDiscover: Bool?
     let agent: String?
+    let scope: String?
+    let search: String?
+    let projectRoot: String?
+    let currentCWD: String?
     let limit: Int?
     let maxFiles: Int?
     let maxExcerptChars: Int?
 
     enum CodingKeys: String, CodingKey {
         case authorizedRoots = "authorized_roots"
+        case autoDiscover = "auto_discover"
         case agent
+        case scope
+        case search
+        case projectRoot = "project_root"
+        case currentCWD = "current_cwd"
         case limit
         case maxFiles = "max_files"
         case maxExcerptChars = "max_excerpt_chars"

@@ -71,13 +71,22 @@ extension ServiceClient {
     func previewLocalSessions(
         authorizedRoots: [String],
         agent: String? = nil,
+        scope: LocalSessionScopeFilter = .project,
+        search: String? = nil,
+        project: ProjectContext? = nil,
         limit: Int = 20
     ) async throws -> LocalSessionPreviewResult {
+        let normalizedSearch = search?.trimmingCharacters(in: .whitespacesAndNewlines)
         let params = LocalSessionPreviewParams(
             authorizedRoots: authorizedRoots,
+            autoDiscover: authorizedRoots.isEmpty,
             agent: agent,
+            scope: scope.rawValue,
+            search: normalizedSearch?.isEmpty == true ? nil : normalizedSearch,
+            projectRoot: project?.rootPath,
+            currentCWD: project?.currentCWD,
             limit: limit,
-            maxFiles: 200,
+            maxFiles: 800,
             maxExcerptChars: 1000
         )
         do {

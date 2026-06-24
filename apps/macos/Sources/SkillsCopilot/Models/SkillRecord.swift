@@ -186,7 +186,12 @@ extension SkillRecord {
                 return .native
             }
         case "pi":
-            return isCatalogedSkillIdentity ? .native : .unknown
+            if normalizedPathContains(".agents/skills/") {
+                return .compatibility
+            }
+            if normalizedPathContains(".pi/agent/skills/") || normalizedPathContains(".pi/skills/") {
+                return .native
+            }
         case "hermes", "openclaw":
             return .readOnly
         default:
@@ -212,7 +217,7 @@ extension SkillRecord {
     }
 
     private var isReadOnlyProvenance: Bool {
-        normalizedAgent == "pi" || normalizedAgent == "hermes" || normalizedAgent == "openclaw"
+        normalizedAgent == "hermes" || normalizedAgent == "openclaw"
     }
 
     private var stableDisplayName: String {
@@ -1028,14 +1033,6 @@ struct SkillHealthSummary: Codable, Hashable {
 
     var riskCount: Int {
         riskyScriptCount + riskyPermissionCount
-    }
-
-    var needsTriageCount: Int {
-        findingsBySeverity.errorCount
-            + findingsBySeverity.warningCount
-            + conflictCount
-            + malformedCount
-            + riskCount
     }
 
     static let empty = SkillHealthSummary(

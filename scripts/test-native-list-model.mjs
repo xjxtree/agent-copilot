@@ -108,13 +108,8 @@ struct NativeListModelTest {
         )
         assertEqual(
             filter(stateFilter: .withFindings).map(\.id),
-            ["gamma"],
-            "findings filter"
-        )
-        assertEqual(
-            filter(stateFilter: .withConflicts).map(\.id),
-            ["epsilon", "gamma"],
-            "conflicts filter"
+            ["delta", "epsilon", "gamma", "theta"],
+            "problem items filter"
         )
 
         assertEqual(

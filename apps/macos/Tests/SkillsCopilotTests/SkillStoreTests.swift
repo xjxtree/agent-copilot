@@ -4,7 +4,9 @@ import Foundation
 @MainActor
 struct SkillStoreTests {
     func run() async throws {
-        try defaultNavigationStartsAtAgentWorkspace()
+        try defaultNavigationStartsAtSessionsWithoutAgentProfile()
+        try selectedAgentSessionRefreshKeyFollowsAgentOutsideSessionMode()
+        try await localSessionSearchNormalizesSelectionAndDetail()
         try await reloadKeepsSelectedSkillWhenItStillExists()
         try await reloadFallsBackToFirstSkillWhenSelectionIsMissing()
         try await emptyCatalogKeepsFriendlyEmptyModel()
@@ -92,10 +94,54 @@ struct SkillStoreTests {
         try await previewScriptExecutionSafetyStoresBlockedPreviewWithoutExecute()
     }
 
-    private func defaultNavigationStartsAtAgentWorkspace() throws {
+    private func defaultNavigationStartsAtSessionsWithoutAgentProfile() throws {
         let store = SkillStore(service: ServiceClient())
-        try expectEqual(store.selectedSidebarSelection, .agentWorkspace, "Agent Copilot should start from the selected agent workspace row.")
-        try expectEqual(store.selectedDetailSection, .agentWorkspace, "Agent Copilot should start at the aggregate agent workspace.")
+        try expectNil(store.selectedSidebarSelection, "Agent Copilot should not expose a default Agent Profile detail selection.")
+        try expectEqual(store.sidebarContentMode, .sessions, "Agent Copilot should start from the Sessions primary navigation.")
+        try expectEqual(store.selectedDetailSection, .overview, "Default detail section should stay neutral until a session, skill, report, or Preflight is selected.")
+    }
+
+    private func selectedAgentSessionRefreshKeyFollowsAgentOutsideSessionMode() throws {
+        let store = SkillStore(service: ServiceClient())
+        store.sidebarContentMode = .skills
+        let claudeKey = store.selectedAgentLocalSessionRefreshKey
+
+        store.agentFilter = .codex
+
+        try expectEqual(store.sidebarContentMode, .skills, "Switching agent should not require the Sessions sidebar to be active.")
+        try expectContains(store.selectedAgentLocalSessionRefreshKey, SkillAgentFilter.codex.rawValue, "Selected-agent session refresh key should include the selected agent.")
+        try expectFalse(store.selectedAgentLocalSessionRefreshKey == claudeKey, "Switching agent should trigger a new selected-agent session refresh key.")
+    }
+
+    private func localSessionSearchNormalizesSelectionAndDetail() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "sessions")
+
+        let store = SkillStore(service: ServiceClient())
+        await store.previewLocalSessions()
+
+        try expectEqual(store.filteredLocalSessionRows.map(\.id), ["session-alpha", "session-develop"], "Session preview should load the fake rows.")
+        try expectEqual(store.selectedLocalSessionID, "session-alpha", "Initial session selection should use the first visible row.")
+        try expectEqual(store.selectedSidebarSelection, .session("session-alpha"), "Initial detail selection should point at the first session.")
+
+        store.localSessionSearchText = "develop"
+
+        try expectEqual(store.filteredLocalSessionRows.map(\.id), ["session-develop"], "Session search should narrow visible rows.")
+        try expectEqual(store.selectedLocalSessionID, "session-develop", "Search should move selection to the visible session.")
+        try expectEqual(store.selectedSidebarSelection, .session("session-develop"), "Detail selection should follow the searched session.")
+        try expectEqual(store.selectedLocalSession?.title, "Switch to develop branch", "Detail model should expose the searched session.")
+
+        store.localSessionSearchText = "missing"
+
+        try expectEqual(store.filteredLocalSessionRows.count, 0, "No-match search should show an empty session list.")
+        try expectNil(store.selectedLocalSessionID, "No-match search should clear stale session selection.")
+        try expectNil(store.selectedSidebarSelection, "No-match search should clear stale session detail.")
+
+        store.localSessionSearchText = ""
+
+        try expectEqual(store.selectedLocalSessionID, "session-alpha", "Clearing search should restore the first visible session.")
+        try expectEqual(store.selectedSidebarSelection, .session("session-alpha"), "Clearing search should restore session detail.")
     }
 
     private func reloadKeepsSelectedSkillWhenItStillExists() async throws {

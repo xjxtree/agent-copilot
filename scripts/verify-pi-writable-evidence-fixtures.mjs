@@ -41,8 +41,8 @@ function isDisabled(config, skillName) {
 }
 
 function disableSkill(config, skill) {
-  if ((skill.scope === "project" || skill.scope === "package") && config.trust?.projectRootTrusted !== true) {
-    return { changed: false, blocked: true, reason: "project trust gate is not satisfied" };
+  if ((skill.scope === "project" || skill.scope === "package") && config.trust?.projectRootTrusted === false) {
+    return { changed: false, blocked: true, reason: "project is explicitly marked untrusted" };
   }
   const disabledSkills = Array.isArray(config.disabledSkills) ? [...config.disabledSkills] : [];
   if (!disabledSkills.includes(skill.name)) disabledSkills.push(skill.name);

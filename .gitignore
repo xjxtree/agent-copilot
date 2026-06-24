@@ -6,3 +6,8 @@ dist/
 .DS_Store
 *.log
 *.tmp
+DerivedData/
+.swiftpm/
+*.xcuserdata/
+Package.resolved
+.claude/*.local.json

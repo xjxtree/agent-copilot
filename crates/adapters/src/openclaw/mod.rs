@@ -2,8 +2,8 @@ use std::path::{Path, PathBuf};
 
 use crate::shared::{optional_frontmatter_string, split_yaml_frontmatter, stable_path_id};
 use skills_copilot_core::{
-    AdapterContext, AdapterError, AdapterRoot, AgentAdapter, AgentId, PermissionRequest,
-    RootSource, Scope, SkillInstance, SkillState,
+    AdapterContext, AdapterError, AdapterRoot, AgentAdapter, AgentConfigAdapter,
+    AgentConfigDocument, AgentId, PermissionRequest, RootSource, Scope, SkillInstance, SkillState,
 };
 
 #[derive(Debug, Default)]
@@ -105,8 +105,21 @@ impl AgentAdapter for OpenclawAdapter {
         instance.enabled
     }
 
-    fn config_paths(&self, _ctx: &AdapterContext) -> Vec<PathBuf> {
-        Vec::new()
+    fn config_paths(&self, ctx: &AdapterContext) -> Vec<PathBuf> {
+        vec![openclaw_config_path(ctx)]
+    }
+}
+
+impl AgentConfigAdapter for OpenclawAdapter {
+    fn patch_enabled(
+        &self,
+        doc: &mut AgentConfigDocument,
+        instance: &SkillInstance,
+        on: bool,
+    ) -> Result<(), AdapterError> {
+        let key = openclaw_config_key_for_instance(instance);
+        doc.text = patch_openclaw_config(&doc.text, &key, on)?;
+        Ok(())
     }
 }
 
@@ -138,6 +151,127 @@ fn parse_skill_content(content: &str, fallback_name: &str) -> Result<ParsedSkill
         description,
         version,
     })
+}
+
+fn openclaw_config_path(ctx: &AdapterContext) -> PathBuf {
+    ctx.user_home.join(".openclaw/openclaw.json")
+}
+
+pub fn openclaw_disabled_skill_keys(config_text: &str) -> Vec<String> {
+    openclaw_config_json(config_text)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("skills")
+                .and_then(|skills| skills.get("entries"))
+                .and_then(serde_json::Value::as_object)
+                .map(|entries| {
+                    entries
+                        .iter()
+                        .filter(|(_, entry)| {
+                            entry.get("enabled").and_then(serde_json::Value::as_bool) == Some(false)
+                        })
+                        .map(|(key, _)| key.clone())
+                        .collect::<Vec<_>>()
+                })
+        })
+        .unwrap_or_default()
+}
+
+fn patch_openclaw_config(
+    config_text: &str,
+    skill_key: &str,
+    enabled: bool,
+) -> Result<String, AdapterError> {
+    let mut value = openclaw_config_json(config_text)?;
+    let entries = openclaw_entries_object_mut(&mut value)?;
+    let entry = entries
+        .entry(skill_key.to_string())
+        .or_insert_with(|| serde_json::json!({}));
+    let Some(entry) = entry.as_object_mut() else {
+        return Err(AdapterError::new(format!(
+            "OpenClaw config `skills.entries.{skill_key}` must be an object before it can be patched"
+        )));
+    };
+    entry.insert("enabled".to_string(), serde_json::Value::Bool(enabled));
+
+    let mut text = serde_json::to_string_pretty(&value)
+        .map_err(|err| AdapterError::new(format!("failed to serialize OpenClaw config: {err}")))?;
+    text.push('\n');
+    Ok(text)
+}
+
+fn openclaw_config_json(config_text: &str) -> Result<serde_json::Value, AdapterError> {
+    if config_text.trim().is_empty() {
+        return Ok(serde_json::json!({
+            "skills": {
+                "entries": {}
+            }
+        }));
+    }
+    json5::from_str(config_text)
+        .map_err(|err| AdapterError::new(format!("invalid OpenClaw JSON5 config: {err}")))
+}
+
+fn openclaw_entries_object_mut(
+    value: &mut serde_json::Value,
+) -> Result<&mut serde_json::Map<String, serde_json::Value>, AdapterError> {
+    let Some(root) = value.as_object_mut() else {
+        return Err(AdapterError::new(
+            "OpenClaw config must be an object before it can be patched",
+        ));
+    };
+    let skills = root
+        .entry("skills".to_string())
+        .or_insert_with(|| serde_json::json!({}));
+    let Some(skills) = skills.as_object_mut() else {
+        return Err(AdapterError::new(
+            "OpenClaw config `skills` must be an object before it can be patched",
+        ));
+    };
+    let entries = skills
+        .entry("entries".to_string())
+        .or_insert_with(|| serde_json::json!({}));
+    entries.as_object_mut().ok_or_else(|| {
+        AdapterError::new(
+            "OpenClaw config `skills.entries` must be an object before it can be patched",
+        )
+    })
+}
+
+pub fn openclaw_config_key_from_frontmatter(frontmatter_raw: &str, fallback_name: &str) -> String {
+    serde_yaml::from_str::<serde_yaml::Value>(frontmatter_raw)
+        .ok()
+        .and_then(|frontmatter| {
+            frontmatter
+                .get("metadata")
+                .and_then(|metadata| metadata.get("openclaw"))
+                .and_then(|openclaw| openclaw.get("skillKey"))
+                .and_then(serde_yaml::Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToString::to_string)
+        })
+        .unwrap_or_else(|| fallback_name.to_string())
+}
+
+fn openclaw_config_key_for_instance(instance: &SkillInstance) -> String {
+    if !instance.frontmatter_raw.is_empty() {
+        return openclaw_config_key_from_frontmatter(&instance.frontmatter_raw, &instance.name);
+    }
+    let Ok(content) = std::fs::read_to_string(&instance.path) else {
+        return instance.name.clone();
+    };
+    let rest = content
+        .strip_prefix("---\n")
+        .or_else(|| content.strip_prefix("---\r\n"));
+    let Some(rest) = rest else {
+        return instance.name.clone();
+    };
+    let Ok((frontmatter_raw, _)) = split_yaml_frontmatter(rest) else {
+        return instance.name.clone();
+    };
+    openclaw_config_key_from_frontmatter(frontmatter_raw, &instance.name)
 }
 
 fn openclaw_selected_workspace_root(ctx: &AdapterContext) -> Option<PathBuf> {
@@ -352,6 +486,58 @@ mod tests {
         assert_eq!(skill.description, "");
         assert_eq!(skill.state, SkillState::Loaded);
         assert!(skill.enabled);
+    }
+
+    #[test]
+    fn patch_enabled_accepts_json5_and_writes_entries_enabled() {
+        let mut doc = AgentConfigDocument {
+            path: PathBuf::from("/tmp/home/.openclaw/openclaw.json"),
+            format: skills_copilot_core::ConfigFormat::Json,
+            text: "{\n  skills: {\n    entries: {\n      \"image-lab\": { enabled: true, apiKey: { source: \"env\", id: \"KEY\" } },\n    },\n  },\n}\n".to_string(),
+        };
+        let skill = SkillInstance {
+            id: "openclaw:test".to_string(),
+            agent: AgentId::Openclaw,
+            scope: Scope::AgentGlobal,
+            project_root: None,
+            path: PathBuf::from("/tmp/home/.openclaw/skills/image-lab/SKILL.md"),
+            display_path: PathBuf::from("/tmp/home/.openclaw/skills/image-lab/SKILL.md"),
+            definition_id: "image-lab".to_string(),
+            name: "image-lab".to_string(),
+            display_name: "image-lab".to_string(),
+            description: String::new(),
+            version: None,
+            state: SkillState::Loaded,
+            enabled: true,
+            frontmatter_raw: String::new(),
+            body: String::new(),
+            scripts: Vec::new(),
+            permissions: PermissionRequest::default(),
+            fingerprint: String::new(),
+            mtime: 0,
+            first_seen: 0,
+            last_seen: 0,
+        };
+
+        OpenclawAdapter
+            .patch_enabled(&mut doc, &skill, false)
+            .expect("disable succeeds");
+        assert!(openclaw_disabled_skill_keys(&doc.text).contains(&"image-lab".to_string()));
+        assert!(doc.text.contains("\"apiKey\""));
+
+        OpenclawAdapter
+            .patch_enabled(&mut doc, &skill, true)
+            .expect("enable succeeds");
+        assert!(!openclaw_disabled_skill_keys(&doc.text).contains(&"image-lab".to_string()));
+    }
+
+    #[test]
+    fn config_key_prefers_openclaw_skill_key_metadata() {
+        let frontmatter = "name: visible-name\nmetadata:\n  openclaw:\n    skillKey: routed-key\n";
+        assert_eq!(
+            openclaw_config_key_from_frontmatter(frontmatter, "visible-name"),
+            "routed-key"
+        );
     }
 
     fn fixture_path(relative: &str) -> PathBuf {

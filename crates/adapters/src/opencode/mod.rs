@@ -3,9 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::shared::{
-    required_frontmatter_string, split_yaml_frontmatter, stable_path_id, validate_kebab_skill_name,
-};
+use crate::shared::{required_frontmatter_string, split_yaml_frontmatter, stable_path_id};
 use skills_copilot_core::{
     AdapterContext, AdapterError, AdapterRoot, AgentAdapter, AgentConfigAdapter,
     AgentConfigDocument, AgentId, PermissionRequest, RootSource, Scope, SkillInstance, SkillState,
@@ -142,10 +140,10 @@ fn parse_skill_content(content: &str, directory_name: &str) -> Result<ParsedSkil
     let frontmatter: serde_yaml::Value =
         serde_yaml::from_str(frontmatter_raw).map_err(|err| err.to_string())?;
     let name = required_frontmatter_string(&frontmatter, "name", "opencode")?;
-    validate_kebab_skill_name(&name, "opencode")?;
-    if name != directory_name {
+    validate_opencode_skill_name(&name)?;
+    if !opencode_skill_name_matches_directory(&name, directory_name) {
         return Err(format!(
-            "opencode skill name `{name}` must match containing directory `{directory_name}`"
+            "opencode skill name `{name}` must match containing directory `{directory_name}` or its colon-normalized form"
         ));
     }
     let description = required_frontmatter_string(&frontmatter, "description", "opencode")?;
@@ -486,12 +484,58 @@ fn containing_dir_name(path: &Path) -> String {
         .to_string()
 }
 
+fn validate_opencode_skill_name(name: &str) -> Result<(), String> {
+    if name.is_empty() || name.len() > 64 {
+        return Err(format!(
+            "invalid opencode skill name `{name}`: expected 1-64 characters"
+        ));
+    }
+
+    if name.starts_with('-')
+        || name.ends_with('-')
+        || name.starts_with(':')
+        || name.ends_with(':')
+        || name.contains("--")
+        || name.contains("::")
+    {
+        return Err(format!(
+            "invalid opencode skill name `{name}`: use non-empty lowercase segments separated by single colons; segment characters may be alphanumeric or hyphen"
+        ));
+    }
+
+    if !name.bytes().all(|byte| {
+        byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-' || byte == b':'
+    }) {
+        return Err(format!(
+            "invalid opencode skill name `{name}`: use lowercase alphanumeric characters, hyphens, and optional colon namespaces"
+        ));
+    }
+
+    for segment in name.split(':') {
+        if segment.is_empty()
+            || segment.starts_with('-')
+            || segment.ends_with('-')
+            || segment.contains("--")
+        {
+            return Err(format!(
+                "invalid opencode skill name `{name}`: use non-empty lowercase segments separated by single colons; segment characters may be alphanumeric or hyphen"
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn opencode_skill_name_matches_directory(name: &str, directory_name: &str) -> bool {
+    name == directory_name || name.replace(':', "-") == directory_name
+}
+
 fn patch_opencode_config(
     content: &str,
     skill_name: &str,
     on: bool,
 ) -> Result<String, AdapterError> {
-    validate_kebab_skill_name(skill_name, "opencode").map_err(AdapterError::new)?;
+    validate_opencode_skill_name(skill_name).map_err(AdapterError::new)?;
     let mut value = parse_opencode_config(content)?;
     let root = object_mut(&mut value, "opencode config root")?;
     let permission = root
@@ -740,6 +784,22 @@ mod tests {
     }
 
     #[test]
+    fn accepts_runtime_colon_skill_names_from_compat_roots() {
+        let adapter = OpencodeAdapter;
+        let fixture = write_skill(
+            "ce-compound",
+            "---\nname: ce:compound\ndescription: Document recent work.\n---\nBody.\n",
+        );
+
+        let skill = adapter.parse(&fixture).expect("skill parses");
+
+        assert_eq!(skill.name, "ce:compound");
+        assert_eq!(skill.definition_id, "ce:compound");
+        assert_eq!(skill.state, SkillState::Loaded);
+        assert!(skill.enabled);
+    }
+
+    #[test]
     fn marks_name_mismatch_as_broken() {
         let adapter = OpencodeAdapter;
         let fixture = fixture_path("fixtures/opencode/broken/name-mismatch/SKILL.md");
@@ -783,7 +843,7 @@ mod tests {
         assert_eq!(skill.name, "bad--name");
         assert_eq!(skill.state, SkillState::Broken);
         assert!(!skill.enabled);
-        assert!(skill.description.contains("single hyphen separators"));
+        assert!(skill.description.contains("non-empty lowercase segments"));
     }
 
     #[test]
@@ -803,6 +863,24 @@ mod tests {
         assert_eq!(value["permission"]["skill"]["*"], "allow");
         assert_eq!(value["permission"]["skill"]["internal-*"], "deny");
         assert_eq!(value["permission"]["skill"]["global-review"], "deny");
+    }
+
+    #[test]
+    fn patch_enabled_adds_exact_colon_skill_deny() {
+        let mut doc = AgentConfigDocument {
+            path: PathBuf::from("/tmp/opencode.json"),
+            format: skills_copilot_core::ConfigFormat::Json,
+            text: r#"{"permission":{"skill":{"*":"allow"}}}"#.to_string(),
+        };
+        let skill = minimal_skill("ce:compound");
+
+        OpencodeAdapter
+            .patch_enabled(&mut doc, &skill, false)
+            .expect("disable patch");
+
+        let value: serde_json::Value = serde_json::from_str(&doc.text).expect("patched json");
+        assert_eq!(value["permission"]["skill"]["*"], "allow");
+        assert_eq!(value["permission"]["skill"]["ce:compound"], "deny");
     }
 
     #[test]

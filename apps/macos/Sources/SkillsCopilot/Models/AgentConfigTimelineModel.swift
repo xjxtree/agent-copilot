@@ -72,10 +72,6 @@ struct AgentConfigTimelineItem: Identifiable, Hashable {
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return UIStrings.unknown }
 
-        let parts = trimmed
-            .split(separator: "/", omittingEmptySubsequences: true)
-            .map(String.init)
-        guard parts.count > 2 else { return trimmed }
-        return ".../" + parts.suffix(2).joined(separator: "/")
+        return DisplayText.configPathSummary(trimmed)
     }
 }

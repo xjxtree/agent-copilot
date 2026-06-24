@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const repoRoot = resolve(new URL("..", import.meta.url).pathname);
-const trendsPath = join(repoRoot, "docs", "benchmark-trends.md");
+const trendsPath = join(repoRoot, "docs", "verification", "benchmark-trends.md");
 const packageJsonPath = join(repoRoot, "package.json");
 
 function fail(message) {
@@ -41,7 +41,7 @@ for (const snippet of [
   "Maintenance",
 ]) {
   if (!trends.includes(snippet)) {
-    fail(`docs/benchmark-trends.md missing required benchmark trend text: ${snippet}`);
+    fail(`docs/verification/benchmark-trends.md missing required benchmark trend text: ${snippet}`);
   }
 }
 
@@ -59,7 +59,7 @@ for (const scriptName of [
 }
 
 if (trends.includes("Pending reproducible fixture benchmark")) {
-  fail("docs/benchmark-trends.md still contains pending benchmark placeholders");
+  fail("docs/verification/benchmark-trends.md still contains pending benchmark placeholders");
 }
 
 console.log("benchmark trend verification passed");

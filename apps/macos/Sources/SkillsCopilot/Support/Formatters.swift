@@ -182,6 +182,10 @@ enum DisplayText {
             return catalogReason
         }
 
+        if requiresGuardedToggleCapability(skill.agent) {
+            return guardedToggleBoundary(for: skill.agent)
+        }
+
         if isReadOnlyAdapter(skill.agent) {
             return UIStrings.toggleUnavailableReadOnlyAdapter(agent(skill.agent))
         }
@@ -190,7 +194,24 @@ enum DisplayText {
     }
 
     static func isReadOnlyAdapter(_ agent: String) -> Bool {
-        !["claude-code", "codex", "opencode"].contains(agent)
+        !["claude-code", "codex", "opencode", "pi", "hermes", "openclaw"].contains(normalizedAgent(agent))
+    }
+
+    static func requiresGuardedToggleCapability(_ agent: String) -> Bool {
+        ["pi", "hermes", "openclaw"].contains(normalizedAgent(agent))
+    }
+
+    static func guardedToggleBoundary(for agent: String) -> String {
+        switch normalizedAgent(agent) {
+        case "hermes":
+            return UIStrings.hermesGuardedToggleBoundary
+        case "openclaw":
+            return UIStrings.openClawGuardedToggleBoundary
+        case "pi":
+            return UIStrings.piGuardedToggleBoundary
+        default:
+            return UIStrings.guardedToggleBoundary(DisplayText.agent(agent))
+        }
     }
 
     static func isToolGlobal(_ skill: SkillRecord) -> Bool {
@@ -199,6 +220,13 @@ enum DisplayText {
 
     static func isReadOnlyPreview(_ skill: SkillRecord) -> Bool {
         isToolGlobal(skill) || isReadOnlyAdapter(skill.agent)
+    }
+
+    private static func normalizedAgent(_ agent: String) -> String {
+        agent
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "_", with: "-")
     }
 
     static func timestamp(_ milliseconds: Int64) -> String {
@@ -219,6 +247,24 @@ enum DisplayText {
         }
 
         return collapsePath(trimmed, limit: 96)
+    }
+
+    static func configPathSummary(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return value }
+
+        let redacted = redactLocalPath(trimmed)
+        if redacted.hasPrefix("$HOME")
+            || redacted.hasPrefix("~")
+            || redacted.hasPrefix("<") {
+            return collapsePath(redacted, limit: 84)
+        }
+
+        let parts = redacted
+            .split(separator: "/", omittingEmptySubsequences: true)
+            .map(String.init)
+        guard parts.count > 2 else { return redacted }
+        return ".../" + parts.suffix(2).joined(separator: "/")
     }
 
     static func redactLocalPath(_ value: String) -> String {

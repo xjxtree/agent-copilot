@@ -157,7 +157,6 @@ struct AgentSessionSkillReviewPanel: View {
                 .foregroundStyle(.secondary)
 
             LocalSessionPreviewPanel(
-                roots: $localSessionRoots,
                 result: localSessionPreviewResult,
                 isPreviewing: isPreviewingLocalSessions,
                 onPreview: onPreviewLocalSessions
@@ -244,7 +243,6 @@ struct AgentSessionSkillReviewPanel: View {
 }
 
 struct LocalSessionPreviewPanel: View {
-    @Binding var roots: String
     let result: LocalSessionPreviewResult
     let isPreviewing: Bool
     let onPreview: () -> Void
@@ -255,25 +253,21 @@ struct LocalSessionPreviewPanel: View {
                 Label(UIStrings.text("localSessionPreview.title", "Local Session Sources"), systemImage: "folder.badge.gearshape")
                     .font(.callout.bold())
                 Spacer()
-                Text(UIStrings.text("localSessionPreview.mode", "Explicit authorization"))
+                Text(UIStrings.text("localSessionPreview.mode", "Auto discovery"))
                     .font(.caption2.bold())
                     .foregroundStyle(.secondary)
             }
 
-            Text(UIStrings.text("localSessionPreview.boundary", "Preview is default-off: enter authorized local session directories explicitly. The preview reads redacted metadata/excerpts only and does not create trace or review records."))
+            Text(UIStrings.text("localSessionPreview.boundary", "Automatically scans supported local agent session stores for the selected agent. The preview reads redacted metadata/excerpts only and does not create trace or review records."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-
-            TextField(UIStrings.text("localSessionPreview.placeholder", "One authorized directory per line"), text: $roots, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
-                .lineLimit(1...3)
 
             HStack(spacing: 8) {
                 Button {
                     onPreview()
                 } label: {
-                    Label(UIStrings.text("localSessionPreview.action", "Preview Sessions"), systemImage: "eye")
+                    Label(UIStrings.text("localSessionPreview.action", "Refresh Sessions"), systemImage: "arrow.clockwise")
                 }
                 .disabled(isPreviewing)
 
@@ -287,7 +281,7 @@ struct LocalSessionPreviewPanel: View {
             }
 
             if result.authorizationRequired {
-                Label(UIStrings.text("localSessionPreview.authorizationRequired", "No directory is authorized, so no default agent session store was scanned."), systemImage: "lock")
+                Label(UIStrings.text("localSessionPreview.authorizationRequired", "No supported local session store was found for the selected agent."), systemImage: "folder.badge.questionmark")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -307,6 +301,33 @@ struct LocalSessionPreviewPanel: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
+                if !result.skillUsageRows.isEmpty {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(UIStrings.text("localSessionPreview.skillUsage", "Skill usage from sessions"))
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 8)], alignment: .leading, spacing: 8) {
+                            ForEach(result.skillUsageRows.prefix(6)) { row in
+                                HStack(spacing: 8) {
+                                    Image(systemName: "square.stack.3d.up")
+                                        .foregroundStyle(.secondary)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(row.skillName)
+                                            .font(.caption.bold())
+                                            .lineLimit(1)
+                                        Text("\(row.callCount) · \(row.sessionCount)")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                .padding(8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(.quaternary.opacity(0.22), in: RoundedRectangle(cornerRadius: 8))
+                            }
+                        }
+                    }
+                }
+
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 8)], alignment: .leading, spacing: 8) {
                     ForEach(result.sessionRows.prefix(6)) { row in
                         VStack(alignment: .leading, spacing: 6) {

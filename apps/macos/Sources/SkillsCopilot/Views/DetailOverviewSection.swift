@@ -110,9 +110,9 @@ enum DetailSection: String, CaseIterable, Identifiable {
         case .observability:
             return UIStrings.text("detail.section.observability.summary", "Inspect redacted app-local provider call and prompt-run metadata without sending provider requests.")
         case .findings:
-            return UIStrings.text("detail.section.findings.summary", "Explain selected-skill issue groups with rules, affected instances, remediation text, and evidence.")
+            return UIStrings.text("detail.section.findings.summary", "Explain selected-skill issues with rules, suggestions, and evidence.")
         case .conflicts:
-            return UIStrings.text("detail.section.findings.summary", "Explain selected-skill issue groups with rules, affected instances, remediation text, and evidence.")
+            return UIStrings.text("detail.section.findings.summary", "Explain selected-skill issues with rules, suggestions, and evidence.")
         case .history:
             return UIStrings.text("detail.section.history.summary", "Review selected-skill toggle and config history.")
         case .analysis:
@@ -439,19 +439,28 @@ struct DetailSectionSwitcher: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
                 Label(UIStrings.detailSection, systemImage: selection.systemImage)
                     .font(.caption.bold())
                     .foregroundStyle(.secondary)
 
-                Picker(UIStrings.detailSection, selection: $selection) {
-                    ForEach(DetailSection.visibleCases) { item in
-                        Label(item.title, systemImage: item.systemImage).tag(item)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(DetailSection.visibleCases) { item in
+                            DetailSectionTagButton(
+                                item: item,
+                                isSelected: selection == item,
+                                action: {
+                                    withAnimation(.easeInOut(duration: 0.16)) {
+                                        selection = item
+                                    }
+                                }
+                            )
+                        }
                     }
+                    .padding(.vertical, 1)
                 }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(width: 240, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 Spacer()
             }
@@ -464,5 +473,34 @@ struct DetailSectionSwitcher: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .adaptiveMaterialSurface()
+    }
+}
+
+private struct DetailSectionTagButton: View {
+    let item: DetailSection
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(item.title, systemImage: item.systemImage)
+                .font(.caption.bold())
+                .lineLimit(1)
+                .foregroundStyle(isSelected ? Color.white : Color.primary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(background, in: Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(isSelected ? Color.clear : Color.secondary.opacity(0.16), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(item.title)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var background: some ShapeStyle {
+        isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quaternary.opacity(0.35))
     }
 }

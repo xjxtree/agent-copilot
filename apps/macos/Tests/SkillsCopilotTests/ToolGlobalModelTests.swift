@@ -4,7 +4,7 @@ import Foundation
 struct ToolGlobalModelTests {
     func run() throws {
         try toolGlobalScopeDisplaysAsReadOnlyPreview()
-        try piNativeSkillsStayReadOnlyWithoutServiceCapabilityButCatalogStateDoesNotBlockGuardedToggle()
+        try piNativeSkillsRequireGuardedToggleCapabilityButDoNotDisplayAsReadOnly()
         try piInstallTargetRemainsBlockedEvenIfCapabilityPayloadClaimsSupport()
         try installPreviewRequiresConfirmationWithoutWriteBack()
         try backendInstallPreviewDecodesAsConfirmable()
@@ -33,26 +33,41 @@ struct ToolGlobalModelTests {
         try expectContains(preview.confirmationMessage, UIStrings.claudeCode, "Install preview confirmation should name the target agent.")
     }
 
-    private func piNativeSkillsStayReadOnlyWithoutServiceCapabilityButCatalogStateDoesNotBlockGuardedToggle() throws {
+    private func piNativeSkillsRequireGuardedToggleCapabilityButDoNotDisplayAsReadOnly() throws {
         let record = skill(
             id: "pi-one",
             agent: "pi",
             scope: "agent-global",
-            path: "$HOME/.pi/skills/pi-one/SKILL.md",
+            path: "$HOME/.pi/agent/skills/pi-one/SKILL.md",
             definitionId: "pi:one",
             name: "Pi One",
             state: "loaded",
             enabled: true
         )
 
+        try expectEqual(
+            DisplayText.isReadOnlyPreview(record),
+            false,
+            "Pi native skill rows should not display as read-only previews; guarded writes are enforced by service capability checks."
+        )
+        try expectEqual(
+            record.provenance.rootKind,
+            .native,
+            "Pi native roots should be classified as native provenance, not read-only provenance."
+        )
+        try expectEqual(
+            record.provenance.isReadOnly,
+            false,
+            "Pi provenance should not be marked read-only when the skill comes from a native Pi root."
+        )
         try expectNil(
             DisplayText.catalogToggleDisabledReason(for: record, isWriting: false),
             "Loaded Pi catalog state should not block the guarded toggle when service capability allows it."
         )
         try expectEqual(
             DisplayText.toggleDisabledReason(for: record, isWriting: false),
-            UIStrings.toggleUnavailableReadOnlyAdapter(UIStrings.pi),
-            "Pi should still be read-only without explicit service config-toggle capability."
+            UIStrings.piGuardedToggleBoundary,
+            "Pi should stay disabled without explicit service config-toggle capability instead of being treated as a read-only adapter."
         )
     }
 

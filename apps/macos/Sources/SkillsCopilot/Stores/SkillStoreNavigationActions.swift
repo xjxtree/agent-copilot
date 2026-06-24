@@ -32,8 +32,10 @@ extension SkillStore {
 
         if let section = detailSection(forGuidedCleanupLink: link) {
             selectedDetailSection = section
-            if section.isAgentWorkspaceSurface {
-                selectedSidebarSelection = .agentWorkspace
+            if section == .taskCockpit {
+                selectedSidebarSelection = nil
+            } else if section.isAgentWorkspaceSurface {
+                selectedSidebarSelection = nil
             } else if DetailSection.primaryWorkCases.contains(section) {
                 selectedSidebarSelection = .work(section)
             } else if let selectedSkillID {
@@ -45,7 +47,7 @@ extension SkillStore {
         case "selectDetailSection", "openSafeBatchPreviewPanel":
             return
         case "buildTaskCockpit":
-            selectedSidebarSelection = .agentWorkspace
+            selectedSidebarSelection = nil
             await buildTaskCockpit()
         case "loadSkillLifecycleTimeline":
             selectedDetailSection = .analysis
@@ -78,7 +80,7 @@ extension SkillStore {
                 return .analysis
             }
             if detailSection == "validationWorkbench" {
-                return .agentWorkspace
+                return .taskCockpit
             }
             if let section = DetailSection(rawValue: detailSection) {
                 if section == .cleanup || section == .conflicts {
@@ -93,7 +95,7 @@ extension SkillStore {
         case "skill.lifecycleTimeline":
             return .analysis
         case "task.buildCockpit":
-            return .agentWorkspace
+            return .taskCockpit
         case "cleanup.recordGuidedStep":
             return .guidedCleanup
         case "remediation.plan", "remediation.previewDrafts", "remediation.previewImpact", "remediation.batchReview":

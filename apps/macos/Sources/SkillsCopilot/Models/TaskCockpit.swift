@@ -73,6 +73,40 @@ struct TaskCockpitOperationState: Hashable {
     }
 }
 
+struct TaskCockpitHistoryRecord: Identifiable, Hashable {
+    let id: UUID
+    let createdAt: Date
+    let taskText: String
+    let result: TaskCockpitResult
+    let operationState: TaskCockpitOperationState
+
+    init(
+        taskText: String,
+        result: TaskCockpitResult,
+        operationState: TaskCockpitOperationState,
+        createdAt: Date = Date()
+    ) {
+        id = UUID()
+        self.createdAt = createdAt
+        self.taskText = taskText
+        self.result = result
+        self.operationState = operationState
+    }
+
+    var displayTask: String {
+        let values = [
+            taskText,
+            result.filters.taskText,
+            result.summary.taskText,
+            result.summary.summaryText
+        ]
+        return values
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty }
+            ?? UIStrings.unknown
+    }
+}
+
 struct TaskCockpitFilters: Decodable, Hashable {
     let taskText: String
     let agent: String?

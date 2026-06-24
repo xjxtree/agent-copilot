@@ -1,6 +1,7 @@
 # AI Agent Workflow
 
-> Status: current shared workflow for Codex, Claude Code, Pi, opencode, and other coding agents used on this repository.
+Shared workflow for Codex, Claude Code, Pi, opencode, and other coding agents
+used on this repository.
 
 ## Instruction File Layout
 
@@ -16,7 +17,7 @@ Current layout:
 AGENTS.md                         # Shared agent entrypoint
 CLAUDE.md                         # Claude Code compatibility layer
 docs/ai-agent-workflow.md         # Multi-agent workflow and validation rules
-docs/macos-app-runbook.md         # macOS app run, smoke, and bundle freshness rules
+docs/runbooks/macos-app-runbook.md # macOS app run, smoke, and bundle freshness rules
 docs/ui-delivery-standards.md     # UI prototype, screenshot, and Computer Use rules
 ```
 
@@ -65,10 +66,10 @@ the same file.
 | `AGENTS.md` | AI coding agents | Shared rules, current hard boundaries, validation expectations, compact gate anchors | Long changelog entries, full roadmap history, release notes |
 | `CLAUDE.md` | Claude Code | Claude-specific behavior, Computer Use defaults | Shared project rules already in `AGENTS.md` |
 | `README.md` | Humans | Product overview, current status, document map, common commands | Version-by-version evidence dumps or task ledgers |
-| `docs/roadmap.md` | Humans + agents | Version milestones, planned/completed scope, non-goals | Per-command validation logs or implementation scratch notes |
-| `docs/development-tasks.md` | Agents + maintainers | Active task queue, version task routing, closeout links, current implementation ledger | Marketing copy, full release notes |
+| `docs/plans/roadmap.md` | Humans + agents | Future work, deferred scope, and non-goals | Per-command validation logs or implementation scratch notes |
+| `docs/plans/development-tasks.md` | Agents + maintainers | Active task rules and task routing | Marketing copy, full release notes |
 | `CHANGELOG.md` | Humans + agents | Release-readiness notes, externally meaningful behavior/risk changes, manual validation summary | Future planning, detailed task checklists |
-| `docs/v2.*-verification-checklist.md` | Agents + reviewers | Version-specific evidence snapshots and command results | Product overview or future planning |
+| `docs/verification/v2.*-verification-checklist.md` | Agents + reviewers | Version-specific evidence snapshots and command results | Product overview or future planning |
 | Focused specs (`docs/service-protocol.md`, adapter specs, security/data/AI docs) | Implementers | Durable contracts and domain-specific rules | General project status unless directly relevant |
 
 ## Validation Rules
@@ -98,7 +99,7 @@ Smoke App Run is an automated fixture-data regression check:
 pnpm smoke:macos-app -- --fixture-data --capture-window
 ```
 
-It validates the existing `dist/SkillsCopilot.app` with temporary HOME, temporary app data, synthetic Claude skills/settings, and window-only screenshot capture. It must not touch real user config.
+It validates the existing `dist/AgentCopilot.app` with temporary HOME, temporary app data, synthetic Claude skills/settings, and window-only screenshot capture. It must not touch real user config.
 
 Local App Run is the real environment check:
 
@@ -106,7 +107,7 @@ Local App Run is the real environment check:
 pnpm dev:macos
 ```
 
-It rebuilds and launches `dist/SkillsCopilot.app` with the developer's real local HOME, app data, and Claude config. Use this to inspect actual product behavior and visual quality.
+It rebuilds and launches `dist/AgentCopilot.app` with the developer's real local HOME, app data, and Claude config. Use this to inspect actual product behavior and visual quality.
 
 For major, user-visible, UI, service protocol, or milestone work, run both in this order:
 
@@ -138,8 +139,10 @@ pnpm capture:macos-window
 or:
 
 ```sh
-script/capture_app_window.sh SkillsCopilot docs/ui-artifacts/native-macos-shell/completed.png
+script/capture_app_window.sh AgentCopilot docs/ui-artifacts/native-macos-shell/completed.png
 ```
+
+The no-argument capture helper and fixture smoke write to `/tmp`; pass a repository artifact path only when deliberately refreshing completed evidence.
 
 Only complete app-window captures are allowed. Full desktop screenshots are forbidden.
 
@@ -188,13 +191,13 @@ git worktree list --porcelain
 3. Create the branch and worktree in the coordinator shell before assigning the task:
 
 ```sh
-git worktree add -b gd-ops/<task-name> /path/to/skills-copilot-<task-name> main
+git worktree add -b gd-ops/<task-name> /path/to/agent-copilot-<task-name> main
 ```
 
 Use an existing branch instead of `-b` only when intentionally resuming that branch:
 
 ```sh
-git worktree add /path/to/skills-copilot-<task-name> gd-ops/<task-name>
+git worktree add /path/to/agent-copilot-<task-name> gd-ops/<task-name>
 ```
 
 4. Put the assigned worktree path, branch, allowed write set, and validation command in the agent prompt. Explicitly say:
@@ -239,7 +242,7 @@ Docs updated:
 Commit hash, if committed:
 ```
 
-For adapter research or implementation, the agent must also cite the relevant section of `docs/agent-adapter-spec-worklists.md` and state whether the adapter is still blocked, read-only, or writable.
+For adapter research or implementation, cite the relevant section of `docs/adapters/agent-adapters.md` or the adapter-specific spec and state whether the adapter is blocked, read-only, guarded writable, or install-only.
 
 ## Documentation Sync
 
@@ -249,7 +252,7 @@ Update docs when any of the following changes:
 - Architecture boundaries.
 - Service protocol behavior.
 - UI implementation state or completed screenshots.
-- Roadmap milestone status.
+- Roadmap scope.
 - Adapter scope or verified external agent specs.
 
 Keep README focused on human navigation. Keep `AGENTS.md` focused on rules that every coding agent must follow. Keep detailed procedures in `docs/`.

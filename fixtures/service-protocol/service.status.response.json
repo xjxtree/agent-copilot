@@ -246,7 +246,7 @@
         "config_toggle": {
           "supported": true,
           "status": "guarded-v2.94",
-          "reason": "V2.94 enables guarded Pi-native and .agents compatibility toggles through settings JSON, pre-toggle snapshots, atomic write verification, and rollback; project/package toggles require explicit project trust."
+          "reason": "V2.94 enables guarded Pi-native and .agents compatibility toggles through settings JSON, pre-toggle snapshots, atomic write verification, and rollback; project/package toggles do not require a positive trust marker, but explicit untrusted project markers block writes."
         },
         "config_snapshot": {
           "supported": true,
@@ -265,14 +265,14 @@
         },
         "blockers": [
           "Pi package install/remove remains blocked.",
-          "Project/package toggles require trusted Pi project settings.",
+          "Explicit untrusted Pi project settings block project/package toggles.",
           ".agents compatibility roots are not direct install targets."
         ]
       },
       {
         "agent": "hermes",
         "display_name": "Hermes",
-        "status": "install-only",
+        "status": "guarded",
         "scan": {
           "supported": true,
           "status": "verified-read-only",
@@ -284,14 +284,14 @@
           "reason": "Hermes has no generic project-local skill discovery; explicit skills.external_dirs are read-only external roots, not project roots."
         },
         "config_toggle": {
-          "supported": false,
-          "status": "blocked",
-          "reason": "Hermes toggle semantics and config schema are not confirmed."
+          "supported": true,
+          "status": "verified-skills-disabled-v2.97",
+          "reason": "V2.97 writes the documented global skills.disabled list in ~/.hermes/config.yaml with pre-toggle snapshots, atomic write verification, and rollback."
         },
         "config_snapshot": {
-          "supported": false,
-          "status": "blocked",
-          "reason": "No verified Hermes rollback-safe toggle config target exists."
+          "supported": true,
+          "status": "verified-v2.97",
+          "reason": "Hermes config toggle snapshots use the existing redacted config snapshot and rollback path."
         },
         "install": {
           "supported": true,
@@ -300,21 +300,21 @@
         },
         "writable": {
           "supported": true,
-          "status": "install-only-v2.95",
-          "reason": "Writable support is limited to confirmed local skill-file installs into ~/.hermes/skills; config toggles, per-platform enablement, external_dirs writes, hub/network installs, scripts, credentials, cloud sync, and telemetry remain blocked."
+          "status": "guarded-v2.97",
+          "reason": "Writable support covers global skills.disabled toggles and confirmed local skill-file installs into ~/.hermes/skills; per-platform enablement, external_dirs writes, hub/network installs, scripts, credentials, cloud sync, and telemetry remain blocked."
         },
         "blockers": [
           "Generic Hermes project-local skill discovery is not confirmed and remains disabled.",
           "Hermes external_dirs are scan-only external roots, not writable or install targets.",
-          "Confirm individual skill disable/re-enable schema and rollback semantics before writable support.",
+          "V2.97 only writes global skills.disabled; platform_disabled and other Hermes config keys remain read-only.",
           "Hermes hub, URL, tap, update, uninstall, and reset operations remain blocked.",
-          "Do not map Hermes cron jobs to SkillInstance in the first adapter slice."
+          "Do not map Hermes cron jobs to SkillInstance."
         ]
       },
       {
         "agent": "openclaw",
         "display_name": "OpenClaw",
-        "status": "install-only",
+        "status": "guarded",
         "scan": {
           "supported": true,
           "status": "verified-read-only",
@@ -326,14 +326,14 @@
           "reason": "Project scan is limited to confirmed OpenClaw home workspace roots, including selected paths inside those workspaces, and only reads <workspace>/skills plus <workspace>/.agents/skills; arbitrary repo roots are skipped."
         },
         "config_toggle": {
-          "supported": false,
-          "status": "blocked",
-          "reason": "OpenClaw plugin config evidence is not a verified skill toggle contract."
+          "supported": true,
+          "status": "verified-skills-entries-v2.97",
+          "reason": "V2.97 writes the documented skills.entries.<key>.enabled boolean in ~/.openclaw/openclaw.json with pre-toggle snapshots, atomic write verification, and rollback."
         },
         "config_snapshot": {
-          "supported": false,
-          "status": "blocked",
-          "reason": "No verified OpenClaw rollback-safe skill config target exists."
+          "supported": true,
+          "status": "verified-v2.97",
+          "reason": "OpenClaw config toggle snapshots use the existing redacted config snapshot and rollback path; JSON5 input is parsed and rewritten as strict JSON."
         },
         "install": {
           "supported": true,
@@ -342,13 +342,13 @@
         },
         "writable": {
           "supported": true,
-          "status": "install-only-v2.96",
-          "reason": "Writable support is limited to confirmed local skill-file installs into native OpenClaw skill roots; config toggles, skills.entries writes, .agents direct installs, ClawHub, Git, update, verify, workshop, scripts, credentials, cloud sync, and telemetry remain blocked."
+          "status": "guarded-v2.97",
+          "reason": "Writable support covers skills.entries enabled toggles plus confirmed local skill-file installs into native OpenClaw skill roots; .agents direct installs, ClawHub, Git, update, verify, workshop, scripts, credentials, cloud sync, and telemetry remain blocked."
         },
         "blockers": [
           "Arbitrary repository roots are not OpenClaw projects and are not scanned as project roots.",
           "OpenClaw .agents roots are scan-only and are not direct install targets.",
-          "OpenClaw plugin/config evidence is not a verified credential-safe skill toggle contract.",
+          "V2.97 only writes skills.entries.<key>.enabled; agent allowlists, env/apiKey, install policy, workshop, and load roots remain read-only.",
           "OpenClaw ClawHub, Git, update, verify, workshop, and network-backed operations remain blocked."
         ]
       }

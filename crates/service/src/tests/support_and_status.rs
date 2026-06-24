@@ -151,12 +151,12 @@ fn status_request_returns_supported_methods() {
         .expect("adapter diagnostics");
     assert!(diagnostics.iter().any(|diagnostic| {
         diagnostic.get("agent").and_then(Value::as_str) == Some("hermes")
-            && diagnostic.get("status").and_then(Value::as_str) == Some("install-only")
+            && diagnostic.get("status").and_then(Value::as_str) == Some("guarded")
             && diagnostic
                 .pointer("/access/writable_status")
                 .and_then(Value::as_str)
-                == Some("install-only-v2.95")
-            && diagnostic.pointer("/config/status").and_then(Value::as_str) == Some("blocked")
+                == Some("guarded-v2.97")
+            && diagnostic.pointer("/config/status").and_then(Value::as_str) == Some("not-detected")
     }));
     let project_context = result
         .get("project_context")
@@ -1218,6 +1218,8 @@ fn llm_provider_profile_save_persists_metadata_without_secret_file() {
     let profile_content = fs::read_to_string(&profiles_path).expect("profile metadata");
     assert!(profile_content.contains("fixture-openai"));
     assert!(!profile_content.contains("api_key"));
+    assert_private_path_mode(&profiles_path, 0o600);
+    assert_private_path_mode(profiles_path.parent().expect("profile parent"), 0o700);
     assert!(!app_data_dir.join("llm-credentials.json").exists());
     assert!(!app_data_dir.join("llm.yaml").exists());
 
@@ -1264,6 +1266,105 @@ fn llm_provider_profile_save_persists_metadata_without_secret_file() {
             .and_then(Value::as_str),
         Some("keychain")
     );
+
+    let _ = fs::remove_dir_all(app_data_dir);
+}
+
+#[test]
+fn llm_provider_profile_rejects_unsafe_base_urls() {
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-provider-url-reject-test-{}-{}",
+        std::process::id(),
+        unique_suffix(),
+    ));
+    let host = test_host(app_data_dir.clone());
+    let unsafe_base_urls = [
+        "http://localhost.evil.invalid/v1".to_string(),
+        "http://localhost@evil.invalid/v1".to_string(),
+        "http://localhostevil.invalid/v1".to_string(),
+        "http://127.0.0.2/v1".to_string(),
+        "https://user:pass@example.invalid/v1".to_string(),
+        format!("https://api.example.invalid/v1?{}=value", "api_key"),
+        format!("https://api.example.invalid/v1#{}=value", "token"),
+    ];
+
+    for (index, base_url) in unsafe_base_urls.iter().enumerate() {
+        let response = host.handle(ServiceRequest {
+            id: Some(format!("provider-save-{index}")),
+            method: "llm.saveProviderProfile".to_string(),
+            params: json!({
+                "id": format!("unsafe-{index}"),
+                "display_name": format!("Unsafe {index}"),
+                "provider_type": "openai-compatible",
+                "base_url": base_url,
+                "model": "fixture-model",
+                "enabled": true
+            }),
+        });
+
+        assert!(!response.ok, "{base_url} should be rejected");
+        let error = response.error.expect("provider error");
+        assert_eq!(error.code, "provider_error");
+        assert!(
+            error.message.contains("base_url"),
+            "{base_url} should fail with a base_url validation error, got {}",
+            error.message
+        );
+    }
+
+    assert!(
+        !app_data_dir.exists(),
+        "rejected provider URLs must not initialize app data"
+    );
+}
+
+#[test]
+fn llm_provider_profile_accepts_https_and_exact_loopback_http_urls() {
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-provider-url-accept-test-{}-{}",
+        std::process::id(),
+        unique_suffix(),
+    ));
+    let host = test_host(app_data_dir.clone());
+    let safe_base_urls = [
+        "https://api.example.invalid/v1",
+        "http://localhost/v1",
+        "http://127.0.0.1/v1",
+        "http://[::1]/v1",
+    ];
+
+    for (index, base_url) in safe_base_urls.iter().enumerate() {
+        let response = host.handle(ServiceRequest {
+            id: Some(format!("provider-save-{index}")),
+            method: "llm.saveProviderProfile".to_string(),
+            params: json!({
+                "id": format!("safe-{index}"),
+                "display_name": format!("Safe {index}"),
+                "provider_type": "openai-compatible",
+                "base_url": base_url,
+                "model": "fixture-model",
+                "enabled": true
+            }),
+        });
+
+        assert!(
+            response.ok,
+            "{base_url} should be accepted: {:?}",
+            response.error
+        );
+        assert_eq!(
+            response
+                .result
+                .as_ref()
+                .and_then(|result| result.pointer("/profile/base_url"))
+                .and_then(Value::as_str),
+            Some(*base_url)
+        );
+    }
+
+    let profiles_path = provider_profiles_path(&app_data_dir);
+    assert_private_path_mode(&profiles_path, 0o600);
+    assert_private_path_mode(profiles_path.parent().expect("profile parent"), 0o700);
 
     let _ = fs::remove_dir_all(app_data_dir);
 }

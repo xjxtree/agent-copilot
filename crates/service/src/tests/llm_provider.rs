@@ -416,8 +416,8 @@ fn llm_confirm_prompt_blocks_without_credential_and_writes_metadata_only() {
         Some(false)
     );
 
-    let audit_content =
-        fs::read_to_string(provider_call_metadata_path(&app_data_dir)).expect("audit content");
+    let audit_path = provider_call_metadata_path(&app_data_dir);
+    let audit_content = fs::read_to_string(&audit_path).expect("audit content");
     assert!(audit_content.contains("\"action_type\":\"recommend\""));
     assert!(audit_content.contains("\"status\":\"blocked\""));
     assert!(!audit_content.contains("fixture-redacted-value"));
@@ -545,14 +545,16 @@ fn llm_confirm_prompt_sends_redacted_prompt_to_mock_provider_and_audits_metadata
     assert!(!request_text.contains("fixture-redacted-value"));
     assert!(!request_text.contains(&skill_path.to_string_lossy().to_string()));
 
-    let audit_content =
-        fs::read_to_string(provider_call_metadata_path(&app_data_dir)).expect("audit content");
+    let audit_path = provider_call_metadata_path(&app_data_dir);
+    let audit_content = fs::read_to_string(&audit_path).expect("audit content");
     assert!(audit_content.contains("\"action_type\":\"analyze\""));
     assert!(audit_content.contains("\"status\":\"succeeded\""));
     assert!(audit_content.contains("\"provider_request_sent\":true"));
     assert!(!audit_content.contains("Draft-only review from mock provider."));
     assert!(!audit_content.contains("OPENAI_API_KEY"));
     assert!(!audit_content.contains("test-secret-key"));
+    assert_private_path_mode(&audit_path, 0o600);
+    assert_private_path_mode(audit_path.parent().expect("audit parent"), 0o700);
 
     let list_runs = host.handle(ServiceRequest {
         id: Some("runs".to_string()),
@@ -586,14 +588,16 @@ fn llm_confirm_prompt_sends_redacted_prompt_to_mock_provider_and_audits_metadata
         Some(false)
     );
 
-    let prompt_run_content =
-        fs::read_to_string(host.llm_prompt_runs_path()).expect("prompt run content");
+    let prompt_runs_path = host.llm_prompt_runs_path();
+    let prompt_run_content = fs::read_to_string(&prompt_runs_path).expect("prompt run content");
     assert!(prompt_run_content.contains("Draft-only review from mock provider."));
     assert!(prompt_run_content.contains("\"request_kind\": \"analyze\""));
     assert!(!prompt_run_content.contains("test-secret-key"));
     assert!(!prompt_run_content.contains("fixture-redacted-value"));
     assert!(!prompt_run_content.contains(&skill_path.to_string_lossy().to_string()));
     assert!(!prompt_run_content.contains("\"choices\""));
+    assert_private_path_mode(&prompt_runs_path, 0o600);
+    assert_private_path_mode(prompt_runs_path.parent().expect("prompt run parent"), 0o700);
 
     let _ = fs::remove_dir_all(app_data_dir);
 }
@@ -2179,12 +2183,12 @@ fn scan_all_returns_multi_agent_refresh_activity() {
         .expect("Hermes summary");
     assert_eq!(
         hermes.get("writable_status").and_then(Value::as_str),
-        Some("install-only-v2.95")
+        Some("guarded-v2.97")
     );
     assert!(hermes
         .get("read_only_reason")
         .and_then(Value::as_str)
-        .is_some_and(|reason| reason.contains("config toggles")));
+        .is_some_and(|reason| reason.contains("skills.disabled")));
     let log_messages: Vec<&str> = activity
         .get("log_entries")
         .and_then(Value::as_array)
@@ -2338,13 +2342,13 @@ fn adapter_list_diagnostics_reports_roots_config_and_blockers() {
         .expect("Hermes diagnostics");
     assert_eq!(
         hermes.pointer("/config/status").and_then(Value::as_str),
-        Some("blocked")
+        Some("not-detected")
     );
     assert_eq!(
         hermes
             .pointer("/access/writable_status")
             .and_then(Value::as_str),
-        Some("install-only-v2.95")
+        Some("guarded-v2.97")
     );
 
     let _ = fs::remove_dir_all(temp_root);
@@ -2605,6 +2609,10 @@ fn report_export_local_writes_redacted_reports_and_keeps_catalog_read_only() {
     assert!(!export.script_execution_allowed);
     assert!(!export.credential_accessed);
     assert_eq!(export.files.len(), 2);
+    assert!(export
+        .sections
+        .iter()
+        .any(|section| section.name == "installed_skills"));
     assert_eq!(export.summary.skill_count, before_visible_records.len());
     assert_eq!(export.summary.finding_count, before_findings.len());
     assert!(export
@@ -2642,7 +2650,12 @@ fn report_export_local_writes_redacted_reports_and_keeps_catalog_read_only() {
     assert!(json_content.contains("<app-data-dir>"));
     assert!(json_content.contains("$HOME"));
     assert!(json_content.contains("<project-root>"));
-    assert!(markdown_content.contains("Skills Copilot Local Report"));
+    assert!(json_content.contains("\"schema_version\": 2"));
+    assert!(json_content.contains("\"recommended_usage\""));
+    assert!(json_content.contains("\"task_preflight\""));
+    assert!(markdown_content.contains("Agent Copilot Agent Usage Report"));
+    assert!(markdown_content.contains("## 2. Installed Skills"));
+    assert!(markdown_content.contains("## 5. Task Preflight"));
 
     let after_catalog = Catalog::open(&host.catalog_path()).expect("open catalog after");
     assert_eq!(

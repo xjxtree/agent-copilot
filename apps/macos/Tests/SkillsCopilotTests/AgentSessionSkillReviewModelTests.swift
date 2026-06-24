@@ -5,6 +5,7 @@ struct AgentSessionSkillReviewModelTests {
     func run() throws {
         try decodesFlexibleSessionReviewPayload()
         try decodesServiceWireSessionReviewPayload()
+        try decodesStringAliasesWithControlCharactersWithoutCrashing()
         try decodesListAndDeletePayloads()
     }
 
@@ -277,5 +278,33 @@ struct AgentSessionSkillReviewModelTests {
         let delete = try JSONDecoder().decode(AgentSessionSkillReviewDeleteResult.self, from: Data(deleteJSON.utf8))
         try expectEqual(delete.deleted, true, "Delete success alias should decode.")
         try expectEqual(delete.reviewID, "review-a", "Delete review id alias should decode.")
+    }
+
+    private func decodesStringAliasesWithControlCharactersWithoutCrashing() throws {
+        let json = """
+        {
+          "generated_by": "local-v2.62",
+          "interference": ["same-name\\nwith-control-character"],
+          "evidence": ["session:review\\nwith-control-character"],
+          "safety_flags": {
+            "provider_request_sent": false,
+            "write_back_allowed": false,
+            "script_execution_allowed": false
+          }
+        }
+        """
+
+        let result = try JSONDecoder().decode(AgentSessionSkillReviewResult.self, from: Data(json.utf8))
+        try expectEqual(
+            result.interference.first?.title,
+            "same-name\nwith-control-character",
+            "String interference aliases should tolerate control characters."
+        )
+        try expectEqual(
+            result.evidenceReferences.first?.detail,
+            "session:review\nwith-control-character",
+            "String evidence aliases should tolerate control characters."
+        )
+        try expectFalse(result.safetyFlags.providerRequestSent, "Control-character aliases must not change safety flags.")
     }
 }

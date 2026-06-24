@@ -580,6 +580,14 @@ struct CrossAgentReadinessEvidenceReference: Decodable, Hashable, Identifiable {
     let source: String?
     let agent: String?
 
+    init(stringValue value: String) {
+        id = value
+        title = value
+        detail = value
+        source = nil
+        agent = nil
+    }
+
     enum CodingKeys: String, CodingKey {
         case id
         case title

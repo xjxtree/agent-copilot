@@ -1,215 +1,298 @@
+import AppKit
 import SwiftUI
 
-struct AgentWorkspacePanel: View {
-    var body: some View {
-        AgentProfilePanel()
-    }
-}
-
-struct AgentProfilePanel: View {
+struct AgentSessionDetailPanel: View {
     @EnvironmentObject private var store: SkillStore
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Label(UIStrings.text("agentCopilot.agentProfile.title", "Agent Profile"), systemImage: "person.crop.rectangle.stack")
-                    .font(.title3.bold())
-                Spacer()
-            }
-
-            Text(UIStrings.text("agentCopilot.agentProfile.summary", "A focused read-only profile for the selected agent's catalog coverage, capability status, scan state, and MCP context."))
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            AgentProfileSummaryCard(agent: store.agentFilter, metrics: [
-                AgentProfileMetric(title: UIStrings.skills, value: "\(agentSkillCount)", systemImage: "square.stack.3d.up"),
-                AgentProfileMetric(title: UIStrings.text("agentCopilot.metric.enabled", "Enabled"), value: "\(agentEnabledCount)", systemImage: "checkmark.circle"),
-                AgentProfileMetric(title: UIStrings.text("agentCopilot.metric.findings", "Issues"), value: "\(agentFindingCount)", systemImage: "exclamationmark.triangle"),
-                AgentProfileMetric(title: UIStrings.text("agentCopilot.metric.risk", "Risk"), value: "\(agentRiskCount)", systemImage: "shield.lefthalf.filled"),
-                AgentProfileMetric(title: UIStrings.text("agentCopilot.metric.conflicts", "Conflicts"), value: "\(agentConflictCount)", systemImage: "rectangle.2.swap")
-            ])
-
-            if let capability = store.selectedAdapterCapability {
-                AgentCapabilitySummaryCard(capability: capability)
-            }
-
-            TaskCockpitPanel(
-                taskText: $store.taskCockpitText,
-                currentTaskText: store.selectedTaskCockpitInput,
-                result: store.taskCockpitResult,
-                isBuilding: store.isBuildingTaskCockpit,
-                operationState: store.taskCockpitOperationState,
-                onBuild: {
-                    Task {
-                        await store.buildTaskCockpit()
-                    }
-                },
-                onCancel: {
-                    store.cancelTaskCockpitBuild()
+        AgentSessionContentPanel(
+            session: store.selectedLocalSession,
+            result: store.localSessionPreviewResult,
+            isRefreshing: store.isPreviewingLocalSessions,
+            onRefresh: {
+                Task {
+                    await store.previewLocalSessions()
                 }
-            )
-
-            if let summary = store.selectedAgentRefreshSummary {
-                AgentScanSummaryCard(summary: summary)
             }
-
-            McpServerPreviewPanel(
-                paths: $store.mcpServerPreviewPaths,
-                result: store.mcpServerPreviewResult,
-                isPreviewing: store.isPreviewingMcpServers
-            ) {
-                Task { await store.previewMcpServers() }
-            }
-
-            LocalReportExportPanel(includeSelectedSkill: false)
-        }
-    }
-
-    private var agentSkills: [SkillRecord] {
-        store.skills.filter { store.agentFilter.includes($0) }
-    }
-
-    private var agentSkillCount: Int {
-        store.selectedAgentHealthSummary?.totalCount ?? agentSkills.count
-    }
-
-    private var agentEnabledCount: Int {
-        store.selectedAgentHealthSummary?.enabledCount ?? agentSkills.filter(\.enabled).count
-    }
-
-    private var agentFindingCount: Int {
-        store.selectedAgentHealthSummary?.findingCount ?? 0
-    }
-
-    private var agentConflictCount: Int {
-        store.selectedAgentHealthSummary?.conflictCount ?? 0
-    }
-
-    private var agentRiskCount: Int {
-        store.selectedAgentHealthSummary?.riskCount ?? 0
-    }
-}
-
-private struct AgentProfileMetric: Identifiable {
-    let title: String
-    let value: String
-    let systemImage: String
-
-    var id: String { title }
-}
-
-private struct AgentProfileSummaryCard: View {
-    let agent: SkillAgentFilter
-    let metrics: [AgentProfileMetric]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center, spacing: 8) {
-                AgentProfileIconBadge(filter: agent)
-                Text(agent.title)
-                    .font(.headline)
-                    .lineLimit(1)
-                Spacer()
-            }
-
-            AgentProfileMetricGrid(metrics: metrics)
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(.quaternary.opacity(0.35), lineWidth: 1)
         )
     }
 }
 
-private struct AgentProfileIconBadge: View {
-    let filter: SkillAgentFilter
+private struct AgentSessionContentPanel: View {
+    let session: LocalSessionPreviewRow?
+    let result: LocalSessionPreviewResult
+    let isRefreshing: Bool
+    let onRefresh: () -> Void
+
+    @State private var selectedKinds = Set(LocalSessionContentKind.allCases)
+
+    private let columns = [GridItem(.adaptive(minimum: 132), spacing: 8)]
 
     var body: some View {
-        ZStack {
-            if let image = AgentIconProvider.image(for: filter) {
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 24, height: 24)
-                    .clipShape(RoundedRectangle(cornerRadius: 5))
-                    .accessibilityLabel(DisplayText.agent(filter.rawValue))
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Label(UIStrings.text("agentCopilot.sessions.title", "Sessions"), systemImage: "bubble.left.and.text.bubble.right")
+                    .font(.headline)
+                Spacer()
+                Button {
+                    onRefresh()
+                } label: {
+                    Label(UIStrings.text("sidebar.sessions.preview", "Refresh Sessions"), systemImage: "arrow.clockwise")
+                }
+                .controlSize(.small)
+                .disabled(isRefreshing)
+            }
+
+            if let session {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(session.title)
+                                .font(.callout.bold())
+                                .lineLimit(1)
+                            PrivacyEvidenceText(value: session.redactedPath, font: .caption2, lineLimit: 1)
+                        }
+                        Spacer()
+                        if let agent = session.agent, !agent.isEmpty {
+                            Text(DisplayText.agent(agent))
+                                .font(.caption.bold())
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+                        SummaryChip(title: UIStrings.text("sidebar.sessions.userMessages", "User messages"), value: "\(session.userMessageCount)", systemImage: "person.text.rectangle")
+                        SummaryChip(title: UIStrings.text("sidebar.sessions.totalMessages", "Total messages"), value: "\(session.totalMessageCount)", systemImage: "text.bubble")
+                        SummaryChip(title: UIStrings.text("sidebar.sessions.toolCalls", "Tool calls"), value: "\(session.toolCallCount)", systemImage: "wrench.and.screwdriver")
+                        SummaryChip(title: UIStrings.text("sidebar.sessions.skillCalls", "Skill calls"), value: "\(session.skillCallCount)", systemImage: "square.stack.3d.up")
+                    }
+
+                    LocalSessionContentFilterBar(items: session.contentItems, selectedKinds: $selectedKinds)
+
+                    let visibleItems = session.contentItems.filter { selectedKinds.contains($0.kind) }
+                    if visibleItems.isEmpty {
+                        Text(emptyFilteredContentMessage)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(visibleItems) { item in
+                                LocalSessionContentItemRow(item: item)
+                            }
+                        }
+                    }
+                }
             } else {
-                Image(systemName: fallbackSystemImage)
-                    .font(.title3)
-                    .foregroundStyle(Color.accentColor)
-                    .accessibilityLabel(DisplayText.agent(filter.rawValue))
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(emptySessionMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if !result.gapNotes.isEmpty {
+                        Text(result.gapNotes.prefix(2).joined(separator: " "))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }
         }
-        .frame(width: 28, height: 28)
-        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
     }
 
-    private var fallbackSystemImage: String {
-        switch filter {
-        case .claudeCode:
-            return "sparkles"
-        case .codex:
-            return "chevron.left.forwardslash.chevron.right"
-        case .opencode:
-            return "curlybraces"
-        case .pi:
-            return "p.circle"
-        case .hermes:
-            return "h.circle"
-        case .openclaw:
-            return "pawprint"
-        case .all:
-            return "square.grid.2x2"
+    private var emptySessionMessage: String {
+        if isRefreshing {
+            return UIStrings.loading
         }
+        return UIStrings.text("agentCopilot.sessions.empty", "No local sessions are loaded for the selected agent.")
+    }
+
+    private var emptyFilteredContentMessage: String {
+        if selectedKinds.isEmpty {
+            return UIStrings.text("agentCopilot.sessions.noSelectedFilters", "Select at least one content filter.")
+        }
+        return UIStrings.text("agentCopilot.sessions.noFilteredContent", "No session content matches the selected filters.")
     }
 }
 
-private struct AgentProfileMetricGrid: View {
-    let metrics: [AgentProfileMetric]
-
-    private let columns = [GridItem(.adaptive(minimum: 150), spacing: 8)]
+private struct LocalSessionContentFilterBar: View {
+    let items: [LocalSessionContentItem]
+    @Binding var selectedKinds: Set<LocalSessionContentKind>
 
     var body: some View {
-        LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
-            ForEach(metrics) { metric in
-                AgentProfileMetricCard(metric: metric)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                Button {
+                    selectedKinds = Set(LocalSessionContentKind.allCases)
+                } label: {
+                    filterLabel(
+                        title: UIStrings.text("agentCopilot.sessions.filterAll", "All"),
+                        count: items.count,
+                        systemImage: "line.3.horizontal.decrease.circle",
+                        isSelected: selectedKinds.count == LocalSessionContentKind.allCases.count,
+                        isDisabled: false
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selectedKinds.count == LocalSessionContentKind.allCases.count ? .isSelected : [])
+
+                ForEach(LocalSessionContentKind.allCases) { kind in
+                    let count = contentCount(for: kind)
+                    let isSelected = selectedKinds.contains(kind)
+                    Button {
+                        toggle(kind)
+                    } label: {
+                        filterLabel(
+                            title: kind.title,
+                            count: count,
+                            systemImage: kind.systemImage,
+                            isSelected: isSelected,
+                            isDisabled: count == 0
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(count == 0)
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
+                }
             }
         }
     }
-}
 
-private struct AgentProfileMetricCard: View {
-    let metric: AgentProfileMetric
+    private func contentCount(for kind: LocalSessionContentKind) -> Int {
+        items.filter { $0.kind == kind }.count
+    }
 
-    var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            Image(systemName: metric.systemImage)
-                .font(.title3)
-                .foregroundStyle(.secondary)
-                .frame(width: 24)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(metric.title)
+    private func filterLabel(
+        title: String,
+        count: Int,
+        systemImage: String,
+        isSelected: Bool,
+        isDisabled: Bool
+    ) -> some View {
+        Label {
+            HStack(spacing: 4) {
+                Text(title)
                     .font(.caption.bold())
-                    .foregroundStyle(.secondary)
                     .lineLimit(1)
-                Text(metric.value)
-                    .font(.callout.bold())
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .monospacedDigit()
+                Text("\(count)")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+        } icon: {
+            Image(systemName: systemImage)
         }
-        .padding(.horizontal, 10)
-        .frame(maxWidth: .infinity, minHeight: 54, maxHeight: 54, alignment: .leading)
-        .background(.quaternary.opacity(0.2), in: RoundedRectangle(cornerRadius: 8))
-        .accessibilityElement(children: .combine)
+        .foregroundStyle(filterForeground(isSelected: isSelected, isDisabled: isDisabled))
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+        .background(
+            isSelected ? Color.accentColor.opacity(0.16) : Color.secondary.opacity(0.08),
+            in: RoundedRectangle(cornerRadius: 6)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(isSelected ? Color.accentColor.opacity(0.45) : Color.secondary.opacity(0.14), lineWidth: 1)
+        )
+    }
+
+    private func filterForeground(isSelected: Bool, isDisabled: Bool) -> Color {
+        if isDisabled {
+            return Color.secondary.opacity(0.55)
+        }
+        if isSelected {
+            return .accentColor
+        }
+        return .secondary
+    }
+
+    private func toggle(_ kind: LocalSessionContentKind) {
+        if selectedKinds.contains(kind) {
+            selectedKinds.remove(kind)
+        } else {
+            selectedKinds.insert(kind)
+        }
+    }
+}
+
+private struct LocalSessionContentItemRow: View {
+    let item: LocalSessionContentItem
+
+    @State private var isShowingFullText = false
+
+    private var isLongMessage: Bool {
+        item.charCount > 600 || item.text.split(whereSeparator: \.isNewline).count > 8
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Label(item.title.isEmpty ? item.kind.title : item.title, systemImage: item.kind.systemImage)
+                    .font(.caption.bold())
+                    .foregroundStyle(item.kind == .skillCall ? Color.accentColor : .secondary)
+                Spacer(minLength: 8)
+                Text(UIStrings.localSessionContentCharacters(item.charCount))
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                if isLongMessage {
+                    Button {
+                        isShowingFullText = true
+                    } label: {
+                        Label(UIStrings.llmPromptViewDetails, systemImage: "arrow.up.left.and.arrow.down.right")
+                    }
+                    .controlSize(.small)
+                    .buttonStyle(.borderless)
+                    .help(UIStrings.llmPromptViewDetails)
+                }
+                Button {
+                    copyToPasteboard(item.text)
+                } label: {
+                    if isLongMessage {
+                        Label(UIStrings.llmPromptCopyFullText, systemImage: "doc.on.doc")
+                    } else {
+                        Image(systemName: "doc.on.doc")
+                    }
+                }
+                .controlSize(.small)
+                .buttonStyle(.borderless)
+                .help(UIStrings.llmPromptCopyFullText)
+            }
+            RenderedLongText(
+                text: item.text,
+                renderMode: .plain,
+                isEmpty: item.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                lineLimit: isLongMessage ? 6 : 8
+            )
+            if !item.evidenceRefs.isEmpty {
+                RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: item.evidenceRefs, systemImage: "checklist")
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.16), in: RoundedRectangle(cornerRadius: 8))
+        .contextMenu {
+            Button {
+                copyToPasteboard(item.text)
+            } label: {
+                Label(UIStrings.llmPromptCopyFullText, systemImage: "doc.on.doc")
+            }
+            Button {
+                isShowingFullText = true
+            } label: {
+                Label(UIStrings.llmPromptViewDetails, systemImage: "arrow.up.left.and.arrow.down.right")
+            }
+        }
+        .sheet(isPresented: $isShowingFullText) {
+            LongTextDetailSheet(
+                title: item.title.isEmpty ? item.kind.title : item.title,
+                text: item.text,
+                renderMode: .plain
+            )
+        }
+    }
+
+    private func copyToPasteboard(_ value: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
     }
 }
 
@@ -319,61 +402,6 @@ private struct McpServerPreviewPanel: View {
             return "\(path.path) · \(path.status) · \(blocker)"
         }
         return "\(path.path) · \(path.status) · \(path.serverCount)"
-    }
-}
-
-private struct AgentCapabilitySummaryCard: View {
-    let capability: AdapterCapabilityRecord
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Label(UIStrings.text("agentCopilot.capability.title", "Capability"), systemImage: "switch.2")
-                    .font(.headline)
-                Spacer()
-                Text(capability.status)
-                    .font(.caption2.bold())
-                    .foregroundStyle(.secondary)
-            }
-
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 8)], alignment: .leading, spacing: 8) {
-                CapabilityPill(title: UIStrings.scan, capability: capability.scan)
-                CapabilityPill(title: UIStrings.text("agentCopilot.projectScan", "Project Scan"), capability: capability.projectScan)
-                CapabilityPill(title: UIStrings.text("agentCopilot.toggle", "Toggle"), capability: capability.configToggle)
-                CapabilityPill(title: UIStrings.text("agentCopilot.install", "Install"), capability: capability.install)
-                CapabilityPill(title: UIStrings.text("agentCopilot.writable", "Writable"), capability: capability.writable)
-            }
-
-            if !capability.blockers.isEmpty {
-                Text(capability.blockers.prefix(3).joined(separator: " · "))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
-            }
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .adaptiveMaterialSurface()
-    }
-}
-
-private struct CapabilityPill: View {
-    let title: String
-    let capability: AdapterFeatureCapability
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Label(capability.supported ? UIStrings.text("agentCopilot.supported", "Supported") : UIStrings.text("agentCopilot.blocked", "Blocked"), systemImage: capability.supported ? "checkmark.circle.fill" : "lock.fill")
-                .font(.caption.bold())
-                .foregroundStyle(capability.supported ? Color.green : Color.secondary)
-        }
-        .padding(8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary.opacity(0.2), in: RoundedRectangle(cornerRadius: 8))
-        .help(capability.reason ?? capability.status)
     }
 }
 

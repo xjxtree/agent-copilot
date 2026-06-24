@@ -7,7 +7,7 @@ This file provides Claude Code-specific guidance for this repository. Shared pro
 ## Claude Code Specific Rules
 
 - Treat `AGENTS.md` as the canonical shared instruction entrypoint.
-- Treat Agent Copilot as the displayed product name. Internal paths, bundle names, modules, and AX identifiers may still use `SkillsCopilot` / `skills-copilot`.
+- Treat Agent Copilot as the displayed product name, app bundle, and repository identity. Swift/Rust module names, sidecar names, AX identifiers, env vars, and legacy data ids may still use `SkillsCopilot` / `skills-copilot` for compatibility.
 - Do not duplicate project history, roadmap status, or task ledgers in this file.
 - Read the relevant `docs/` file before architecture, UI, validation, or adapter changes.
 - Use macOS Computer Use for real app validation when the macOS session is unlocked and the app window can be resolved.
@@ -25,6 +25,6 @@ pnpm check:macos
 pnpm dev:macos
 ```
 
-Then operate the real local `dist/SkillsCopilot.app` with Computer Use when available.
+Then operate the real local `dist/AgentCopilot.app` with Computer Use when available.
 
 For docs-only planning changes, do not run app validation unless the docs assert current implementation state, validation results, or completed UI screenshots.

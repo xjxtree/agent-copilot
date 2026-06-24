@@ -65,7 +65,10 @@ extension SkillStore {
             return UIStrings.toggleUnavailableBusy
         }
         guard let capability = adapterCapabilities.first(where: { $0.agent == skill.agent }) else {
-            return DisplayText.isReadOnlyAdapter(skill.agent) ? UIStrings.toggleUnavailableReadOnlyAdapter(DisplayText.agent(skill.agent)) : nil
+            if DisplayText.isReadOnlyAdapter(skill.agent) {
+                return UIStrings.toggleUnavailableReadOnlyAdapter(DisplayText.agent(skill.agent))
+            }
+            return DisplayText.requiresGuardedToggleCapability(skill.agent) ? DisplayText.guardedToggleBoundary(for: skill.agent) : nil
         }
         guard !capability.configToggle.supported else { return nil }
         return capability.configToggle.reason ?? UIStrings.readOnlyAdapterStatus(capability.displayName)
@@ -121,6 +124,14 @@ extension SkillStore {
         }
     }
 
+    var selectedAgentLocalSessionRefreshKey: String {
+        [
+            agentFilter.rawValue,
+            activeProjectContext?.rootPath ?? "",
+            activeProjectContext?.currentCWD ?? ""
+        ].joined(separator: "|")
+    }
+
     var projectValidationMessage: String? {
         guard let message = activeProjectContext?.validationError, !message.isEmpty else {
             return nil
@@ -136,7 +147,9 @@ extension SkillStore {
             searchText: searchText,
             agentFilter: agentFilter,
             stateFilter: stateFilter,
-            sortOrder: sortOrder
+            scopeFilter: skillScopeFilter,
+            sortOrder: sortOrder,
+            sortDirection: sortDirection
         )
     }
 

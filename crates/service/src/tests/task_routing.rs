@@ -2539,7 +2539,7 @@ fn trace_import_rejects_empty_content_without_writing() {
 }
 
 #[test]
-fn local_session_preview_requires_explicit_authorized_roots() {
+fn local_session_preview_auto_discovery_returns_empty_when_no_store_exists() {
     let app_data_dir = env::temp_dir().join(format!(
         "skills-copilot-local-session-preview-empty-test-{}-{}",
         std::process::id(),
@@ -2559,9 +2559,29 @@ fn local_session_preview_requires_explicit_authorized_roots() {
         result
             .get("authorization_required")
             .and_then(Value::as_bool),
-        Some(true)
+        Some(false)
     );
     assert_eq!(result.get("count").and_then(Value::as_u64), Some(0));
+    assert_eq!(
+        result.get("user_message_count").and_then(Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        result.get("total_message_count").and_then(Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        result.get("tool_call_count").and_then(Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        result.get("skill_call_count").and_then(Value::as_u64),
+        Some(0)
+    );
+    assert!(result
+        .get("gap_notes")
+        .and_then(Value::as_array)
+        .is_some_and(|notes| !notes.is_empty()));
     assert_eq!(
         result.get("raw_trace_persisted").and_then(Value::as_bool),
         Some(false)
@@ -2571,6 +2591,1407 @@ fn local_session_preview_requires_explicit_authorized_roots() {
     assert!(!provider_call_metadata_path(&app_data_dir).exists());
 
     let _ = fs::remove_dir_all(app_data_dir);
+}
+
+#[test]
+fn local_session_preview_auto_discovers_codex_sessions() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-local-session-preview-auto-test-{}-{unique}",
+        std::process::id(),
+    ));
+    let user_home = env::temp_dir().join(format!(
+        "skills-copilot-local-session-preview-auto-home-{}-{unique}",
+        std::process::id(),
+    ));
+    let session_root = user_home.join(".codex/sessions/2026/06/20");
+    fs::create_dir_all(&session_root).expect("create codex session root");
+    fs::write(
+        session_root.join("rollout-2026-06-20T08-00-00-fixture.jsonl"),
+        "{\"role\":\"user\",\"content\":\"Use skill:fixture-session-skill for ECS diagnosis\"}\n{\"role\":\"assistant\",\"content\":\"Called /skill fixture-session-skill\",\"tool_calls\":[{\"name\":\"shell\"}]}\n",
+    )
+    .expect("write codex session");
+    let host = ServiceHost {
+        app_data_dir: app_data_dir.clone(),
+        adapter_ctx: AdapterContext {
+            user_home: user_home.clone(),
+            project_root: None,
+            project_cwd: None,
+            extra_roots: Vec::new(),
+        },
+    };
+
+    let response = host.handle(ServiceRequest {
+        id: Some("session-preview-auto".to_string()),
+        method: "session.previewLocalSessions".to_string(),
+        params: json!({
+            "agent": "codex",
+            "limit": 10,
+            "max_excerpt_chars": 800
+        }),
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("local session preview result");
+    assert_eq!(
+        result.get("generated_by").and_then(Value::as_str),
+        Some("local-v2.98")
+    );
+    assert_eq!(
+        result.get("authorized").and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        result
+            .get("authorization_required")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(result.get("count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        result.pointer("/roots/0/status").and_then(Value::as_str),
+        Some("auto-discovered-read-only")
+    );
+    assert_eq!(
+        result
+            .pointer("/session_rows/0/source_kind")
+            .and_then(Value::as_str),
+        Some("auto-local-session")
+    );
+    assert_eq!(
+        result
+            .pointer("/session_rows/0/agent")
+            .and_then(Value::as_str),
+        Some("codex")
+    );
+    assert_eq!(
+        result.get("user_message_count").and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        result.get("total_message_count").and_then(Value::as_u64),
+        Some(2)
+    );
+    assert_eq!(
+        result.get("tool_call_count").and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        result.get("skill_call_count").and_then(Value::as_u64),
+        Some(2)
+    );
+    assert!(result
+        .pointer("/session_rows/0/content_items")
+        .and_then(Value::as_array)
+        .is_some_and(|items| items
+            .iter()
+            .any(|item| item.get("kind").and_then(Value::as_str) == Some("skill_call"))));
+    assert!(!host.trace_imports_path().exists());
+    assert!(!host.agent_session_reviews_path().exists());
+    assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+    let _ = fs::remove_dir_all(app_data_dir);
+    let _ = fs::remove_dir_all(user_home);
+}
+
+#[test]
+fn local_session_preview_handles_non_ascii_skill_invocation_text() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-local-session-preview-non-ascii-skill-test-{}-{unique}",
+        std::process::id(),
+    ));
+    let user_home = env::temp_dir().join(format!(
+        "skills-copilot-local-session-preview-non-ascii-skill-home-{}-{unique}",
+        std::process::id(),
+    ));
+    let session_root = user_home.join(".codex/sessions/2026/06/22");
+    fs::create_dir_all(&session_root).expect("create codex session root");
+    fs::write(
+        session_root.join("rollout-2026-06-22T08-00-00-non-ascii-skill-fixture.jsonl"),
+        "{\"role\":\"user\",\"content\":\"Use skill:配置检查 then skill:fixture-session-skill for diagnostics\"}\n",
+    )
+    .expect("write codex session");
+    let host = ServiceHost {
+        app_data_dir: app_data_dir.clone(),
+        adapter_ctx: AdapterContext {
+            user_home: user_home.clone(),
+            project_root: None,
+            project_cwd: None,
+            extra_roots: Vec::new(),
+        },
+    };
+
+    let response = host.handle(ServiceRequest {
+        id: Some("session-preview-non-ascii-skill".to_string()),
+        method: "session.previewLocalSessions".to_string(),
+        params: json!({
+            "agent": "codex",
+            "limit": 10,
+            "max_excerpt_chars": 800
+        }),
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("local session preview result");
+    assert_eq!(result.get("count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        result.get("skill_call_count").and_then(Value::as_u64),
+        Some(1)
+    );
+    assert!(result
+        .pointer("/session_rows/0/content_items")
+        .and_then(Value::as_array)
+        .is_some_and(|items| items.iter().any(|item| {
+            item.get("kind").and_then(Value::as_str) == Some("skill_call")
+                && item
+                    .get("text")
+                    .and_then(Value::as_str)
+                    .is_some_and(|text| text.contains("fixture-session-skill"))
+        })));
+    assert!(!provider_call_metadata_path(&app_data_dir).exists());
+
+    let _ = fs::remove_dir_all(app_data_dir);
+    let _ = fs::remove_dir_all(user_home);
+}
+
+#[test]
+fn local_session_preview_redacts_unix_listing_owners() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-local-session-preview-owner-redaction-test-{}-{unique}",
+        std::process::id(),
+    ));
+    let user_home = env::temp_dir().join(format!(
+        "skills-copilot-local-session-preview-owner-redaction-home-{}-{unique}",
+        std::process::id(),
+    ));
+    let session_root = user_home.join(".codex/sessions/2026/06/21");
+    fs::create_dir_all(&session_root).expect("create codex session root");
+    let user_line = json!({
+        "role": "user",
+        "content": "show repository files"
+    });
+    let assistant_line = json!({
+        "role": "assistant",
+        "content": "total 8\n-rw-r--r--@ 1 localuser staff 234 Jun 21 16:34 README.md\ndrwxr-xr-x 12 localuser staff 384 Jun 21 16:35 docs",
+        "tool_calls": [{ "name": "shell" }]
+    });
+    fs::write(
+        session_root.join("rollout-2026-06-21T08-00-00-owner-fixture.jsonl"),
+        format!("{user_line}\n{assistant_line}\n"),
+    )
+    .expect("write codex session");
+    let host = ServiceHost {
+        app_data_dir: app_data_dir.clone(),
+        adapter_ctx: AdapterContext {
+            user_home: user_home.clone(),
+            project_root: None,
+            project_cwd: None,
+            extra_roots: Vec::new(),
+        },
+    };
+
+    let response = host.handle(ServiceRequest {
+        id: Some("session-preview-owner-redaction".to_string()),
+        method: "session.previewLocalSessions".to_string(),
+        params: json!({
+            "agent": "codex",
+            "limit": 10,
+            "max_excerpt_chars": 1200
+        }),
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("local session preview result");
+    let serialized = serde_json::to_string(&result).expect("serialize local session result");
+    assert!(!serialized.contains("localuser staff"), "{serialized}");
+    assert!(serialized.contains("<user> <group>"));
+
+    let _ = fs::remove_dir_all(app_data_dir);
+    let _ = fs::remove_dir_all(user_home);
+}
+
+#[test]
+fn local_session_preview_ignores_claude_skill_listing_descriptions_as_calls() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-local-session-skill-listing-test-{}-{unique}",
+        std::process::id(),
+    ));
+    let user_home = env::temp_dir().join(format!(
+        "skills-copilot-local-session-skill-listing-home-{}-{unique}",
+        std::process::id(),
+    ));
+    let project_root = app_data_dir.join("project-root");
+    let session_root = user_home
+        .join(".claude/projects")
+        .join(project_root.to_string_lossy().replace('/', "-"));
+    fs::create_dir_all(&session_root).expect("create claude session root");
+    let user_line = json!({
+        "type": "user",
+        "message": {
+            "role": "user",
+            "content": "调查蓝盒子价格"
+        },
+        "cwd": project_root.to_string_lossy(),
+        "sessionId": "claude-skill-listing-session"
+    });
+    let assistant_line = json!({
+        "type": "assistant",
+        "message": {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "attachment",
+                    "content": "- alibabacloud-data-agent-skill: Invoke Alibaba Cloud Apsara Data Agent.\n- alibabacloud-find-skills: Find matching skills."
+                }
+            ]
+        },
+        "sessionId": "claude-skill-listing-session"
+    });
+    fs::write(
+        session_root.join("session-skill-listing.jsonl"),
+        format!("{user_line}\n{assistant_line}\n"),
+    )
+    .expect("write claude session");
+    let host = ServiceHost {
+        app_data_dir: app_data_dir.clone(),
+        adapter_ctx: AdapterContext {
+            user_home: user_home.clone(),
+            project_root: Some(project_root.clone()),
+            project_cwd: Some(project_root.clone()),
+            extra_roots: Vec::new(),
+        },
+    };
+
+    let response = host.handle(ServiceRequest {
+        id: Some("session-preview-skill-listing".to_string()),
+        method: "session.previewLocalSessions".to_string(),
+        params: json!({
+            "agent": "claude-code",
+            "scope": "project",
+            "limit": 10,
+            "max_excerpt_chars": 800
+        }),
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("local session preview result");
+    assert_eq!(result.get("count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        result.get("skill_call_count").and_then(Value::as_u64),
+        Some(0)
+    );
+    let content_items = result
+        .pointer("/session_rows/0/content_items")
+        .and_then(Value::as_array)
+        .expect("session content items");
+    assert!(content_items
+        .iter()
+        .all(|item| item.get("kind").and_then(Value::as_str) != Some("skill_call")));
+    let serialized = serde_json::to_string(&result).expect("serialize result");
+    assert!(!serialized.contains("Skill: invoke"));
+
+    let _ = fs::remove_dir_all(app_data_dir);
+    let _ = fs::remove_dir_all(user_home);
+}
+
+#[test]
+fn local_session_preview_filters_project_scope_and_uses_agent_titles() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-local-session-title-test-{}-{unique}",
+        std::process::id(),
+    ));
+    let user_home = env::temp_dir().join(format!(
+        "skills-copilot-local-session-title-home-{}-{unique}",
+        std::process::id(),
+    ));
+    let project_root = app_data_dir.join("project-root");
+    let other_root = app_data_dir.join("other-root");
+    let project_session_root = user_home
+        .join(".claude/projects")
+        .join(project_root.to_string_lossy().replace('/', "-"));
+    let other_session_root = user_home
+        .join(".claude/projects")
+        .join(other_root.to_string_lossy().replace('/', "-"));
+    fs::create_dir_all(&project_session_root).expect("create project session root");
+    fs::create_dir_all(&other_session_root).expect("create other session root");
+    fs::write(
+        project_session_root.join("session-project.jsonl"),
+        format!(
+            "{{\"type\":\"user\",\"message\":{{\"role\":\"user\",\"content\":\"调查蓝盒子价格\"}},\"cwd\":\"{}\",\"sessionId\":\"claude-project-session\"}}\n{{\"type\":\"ai-title\",\"aiTitle\":\"调查蓝盒子Z1 Pro床垫价格\",\"sessionId\":\"claude-project-session\"}}\n",
+            project_root.display()
+        ),
+    )
+    .expect("write project session");
+    fs::write(
+        other_session_root.join("session-other.jsonl"),
+        format!(
+            "{{\"type\":\"user\",\"message\":{{\"role\":\"user\",\"content\":\"其他项目\"}},\"cwd\":\"{}\",\"sessionId\":\"claude-other-session\"}}\n",
+            other_root.display()
+        ),
+    )
+    .expect("write other session");
+    fs::create_dir_all(project_session_root.join("memory")).expect("create memory directory");
+    fs::create_dir_all(project_session_root.join("session-project/subagents"))
+        .expect("create subagent directory");
+    fs::write(
+        project_session_root.join("memory/MEMORY.md"),
+        "# Project memory\nThis is not a resumable agent session.\n",
+    )
+    .expect("write ignored memory");
+    fs::write(
+        project_session_root.join("session-project/subagents/agent-fixture.jsonl"),
+        "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"subagent helper\"}}\n",
+    )
+    .expect("write ignored subagent session");
+    let host = ServiceHost {
+        app_data_dir: app_data_dir.clone(),
+        adapter_ctx: AdapterContext {
+            user_home: user_home.clone(),
+            project_root: Some(project_root.clone()),
+            project_cwd: Some(project_root.clone()),
+            extra_roots: Vec::new(),
+        },
+    };
+
+    let response = host.handle(ServiceRequest {
+        id: Some("session-preview-title".to_string()),
+        method: "session.previewLocalSessions".to_string(),
+        params: json!({
+            "agent": "claude-code",
+            "scope": "project",
+            "search": "蓝盒子",
+            "limit": 10,
+            "max_excerpt_chars": 800
+        }),
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("local session preview result");
+    assert_eq!(result.get("count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        result
+            .pointer("/session_rows/0/title")
+            .and_then(Value::as_str),
+        Some("调查蓝盒子Z1 Pro床垫价格")
+    );
+    assert_eq!(
+        result
+            .pointer("/session_rows/0/scope")
+            .and_then(Value::as_str),
+        Some("project")
+    );
+    assert_eq!(
+        result
+            .pointer("/session_rows/0/user_message_count")
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    let serialized = serde_json::to_string(&result).expect("serialize result");
+    assert!(serialized.contains("<project-root>"));
+    assert!(!serialized.contains(&project_root.to_string_lossy().to_string()));
+    assert!(!serialized.contains(&other_root.to_string_lossy().to_string()));
+
+    let _ = fs::remove_dir_all(app_data_dir);
+    let _ = fs::remove_dir_all(user_home);
+}
+
+#[test]
+fn local_session_preview_classifies_claude_tool_results_by_payload_not_role() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-local-session-claude-tool-result-test-{}-{unique}",
+        std::process::id(),
+    ));
+    let user_home = env::temp_dir().join(format!(
+        "skills-copilot-local-session-claude-tool-result-home-{}-{unique}",
+        std::process::id(),
+    ));
+    let project_root = app_data_dir.join("project-root");
+    let project_session_root = user_home
+        .join(".claude/projects")
+        .join(project_root.to_string_lossy().replace('/', "-"));
+    fs::create_dir_all(&project_root).expect("create project root");
+    fs::create_dir_all(&project_session_root).expect("create claude project session root");
+    let project_root_text = project_root.to_string_lossy().to_string();
+    let lines = [
+        json!({
+            "type": "user",
+            "message": {"role": "user", "content": "调查蓝盒子价格"},
+            "cwd": project_root_text.clone(),
+            "sessionId": "claude-tool-result-session"
+        })
+        .to_string(),
+        json!({
+            "type": "user",
+            "message": {
+                "role": "user",
+                "content": [{
+                    "type": "tool_result",
+                    "content": "<tool_use_error>InputValidationError: ToolSearch failed because query is missing</tool_use_error>"
+                }]
+            },
+            "cwd": project_root_text.clone(),
+            "sessionId": "claude-tool-result-session"
+        })
+        .to_string(),
+        json!({
+            "message": {
+                "role": "user",
+                "content": "<tool_use_error>Secondary validation error</tool_use_error>"
+            },
+            "cwd": project_root_text.clone(),
+            "sessionId": "claude-tool-result-session"
+        })
+        .to_string(),
+        json!({
+            "type": "assistant",
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "text", "text": "我会继续处理"}]
+            },
+            "cwd": project_root_text,
+            "sessionId": "claude-tool-result-session"
+        })
+        .to_string(),
+    ]
+    .join("\n");
+    fs::write(
+        project_session_root.join("session-tool-result.jsonl"),
+        lines,
+    )
+    .expect("write claude tool result session");
+    let host = ServiceHost {
+        app_data_dir: app_data_dir.clone(),
+        adapter_ctx: AdapterContext {
+            user_home: user_home.clone(),
+            project_root: Some(project_root.clone()),
+            project_cwd: Some(project_root.clone()),
+            extra_roots: Vec::new(),
+        },
+    };
+
+    let response = host.handle(ServiceRequest {
+        id: Some("session-preview-claude-tool-result".to_string()),
+        method: "session.previewLocalSessions".to_string(),
+        params: json!({
+            "agent": "claude-code",
+            "scope": "project",
+            "limit": 10,
+            "max_excerpt_chars": 1200
+        }),
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("local session preview result");
+    assert_eq!(result.get("count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        result.get("user_message_count").and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        result.get("total_message_count").and_then(Value::as_u64),
+        Some(2)
+    );
+    assert_eq!(
+        result.get("tool_call_count").and_then(Value::as_u64),
+        Some(2)
+    );
+    let content_items = result
+        .pointer("/session_rows/0/content_items")
+        .and_then(Value::as_array)
+        .expect("content items");
+    assert_eq!(
+        content_items
+            .iter()
+            .filter(|item| item.get("kind").and_then(Value::as_str) == Some("user_message"))
+            .count(),
+        1
+    );
+    assert_eq!(
+        content_items
+            .iter()
+            .filter(|item| item.get("kind").and_then(Value::as_str) == Some("tool_call"))
+            .count(),
+        2
+    );
+    assert!(content_items.iter().any(|item| {
+        item.get("kind").and_then(Value::as_str) == Some("tool_call")
+            && item
+                .get("text")
+                .and_then(Value::as_str)
+                .is_some_and(|text| text.contains("ToolSearch failed"))
+    }));
+    assert!(!content_items.iter().any(|item| {
+        item.get("kind").and_then(Value::as_str) == Some("user_message")
+            && item
+                .get("text")
+                .and_then(Value::as_str)
+                .is_some_and(|text| text.contains("tool_use_error") || text.contains("ToolSearch"))
+    }));
+
+    let _ = fs::remove_dir_all(app_data_dir);
+    let _ = fs::remove_dir_all(user_home);
+}
+
+#[test]
+fn local_session_preview_separates_agent_replies_from_tool_process_notes() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-local-session-agent-process-test-{}-{unique}",
+        std::process::id(),
+    ));
+    let user_home = env::temp_dir().join(format!(
+        "skills-copilot-local-session-agent-process-home-{}-{unique}",
+        std::process::id(),
+    ));
+    let project_root = app_data_dir.join("project-root");
+    let project_session_root = user_home
+        .join(".claude/projects")
+        .join(project_root.to_string_lossy().replace('/', "-"));
+    fs::create_dir_all(&project_root).expect("create project root");
+    fs::create_dir_all(&project_session_root).expect("create claude project session root");
+    let project_root_text = project_root.to_string_lossy().to_string();
+    let lines = [
+        json!({
+            "type": "user",
+            "message": {"role": "user", "content": "调查蓝盒子 Z1 Pro 床垫价格"},
+            "cwd": project_root_text.clone(),
+            "sessionId": "claude-process-session"
+        })
+        .to_string(),
+        json!({
+            "type": "assistant",
+            "message": {
+                "role": "assistant",
+                "content": [{
+                    "type": "text",
+                    "text": "I apologize for the tool errors. Let me load the WebSearch and WebFetch tools properly."
+                }],
+                "stop_reason": "tool_use"
+            },
+            "cwd": project_root_text.clone(),
+            "sessionId": "claude-process-session"
+        })
+        .to_string(),
+        json!({
+            "type": "assistant",
+            "message": {
+                "role": "assistant",
+                "content": [{
+                    "type": "text",
+                    "text": "I'll research the 蓝盒子 Z1Pro 28mm 床垫 prices across e-commerce platforms and compile an HTML report with evidence."
+                }],
+                "stop_reason": "tool_use"
+            },
+            "cwd": project_root_text.clone(),
+            "sessionId": "claude-process-session"
+        })
+        .to_string(),
+        json!({
+            "type": "assistant",
+            "message": {
+                "role": "assistant",
+                "content": [{
+                    "type": "tool_use",
+                    "id": "toolu_process_1",
+                    "name": "ToolSearch",
+                    "input": {}
+                }]
+            },
+            "cwd": project_root_text.clone(),
+            "sessionId": "claude-process-session"
+        })
+        .to_string(),
+        json!({
+            "type": "user",
+            "message": {
+                "role": "user",
+                "content": [{
+                    "type": "tool_result",
+                    "tool_use_id": "toolu_process_1",
+                    "content": "<tool_use_error>InputValidationError: ToolSearch failed because query is missing</tool_use_error>"
+                }]
+            },
+            "cwd": project_root_text.clone(),
+            "sessionId": "claude-process-session"
+        })
+        .to_string(),
+        json!({
+            "type": "assistant",
+            "message": {
+                "role": "assistant",
+                "content": [{
+                    "type": "text",
+                    "text": "我已整理好价格对比结论。"
+                }]
+            },
+            "cwd": project_root_text,
+            "sessionId": "claude-process-session"
+        })
+        .to_string(),
+    ]
+    .join("\n");
+    fs::write(project_session_root.join("session-process.jsonl"), lines)
+        .expect("write claude process session");
+    let host = ServiceHost {
+        app_data_dir: app_data_dir.clone(),
+        adapter_ctx: AdapterContext {
+            user_home: user_home.clone(),
+            project_root: Some(project_root.clone()),
+            project_cwd: Some(project_root.clone()),
+            extra_roots: Vec::new(),
+        },
+    };
+
+    let response = host.handle(ServiceRequest {
+        id: Some("session-preview-claude-agent-process".to_string()),
+        method: "session.previewLocalSessions".to_string(),
+        params: json!({
+            "agent": "claude-code",
+            "scope": "project",
+            "limit": 10,
+            "max_excerpt_chars": 1200
+        }),
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("local session preview result");
+    let content_items = result
+        .pointer("/session_rows/0/content_items")
+        .and_then(Value::as_array)
+        .expect("content items");
+    assert!(content_items.iter().any(|item| {
+        item.get("kind").and_then(Value::as_str) == Some("thinking")
+            && item
+                .get("text")
+                .and_then(Value::as_str)
+                .is_some_and(|text| text.contains("I'll research"))
+    }));
+    assert!(content_items.iter().any(|item| {
+        item.get("kind").and_then(Value::as_str) == Some("thinking")
+            && item
+                .get("text")
+                .and_then(Value::as_str)
+                .is_some_and(|text| text.contains("tool errors"))
+    }));
+    assert!(content_items.iter().any(|item| {
+        item.get("kind").and_then(Value::as_str) == Some("tool_call")
+            && item
+                .get("title")
+                .and_then(Value::as_str)
+                .is_some_and(|title| title == "ToolSearch")
+    }));
+    assert!(content_items.iter().any(|item| {
+        item.get("kind").and_then(Value::as_str) == Some("agent_reply")
+            && item
+                .get("text")
+                .and_then(Value::as_str)
+                .is_some_and(|text| text.contains("价格对比结论"))
+    }));
+    assert!(!content_items.iter().any(|item| {
+        item.get("kind").and_then(Value::as_str) == Some("agent_reply")
+            && item
+                .get("text")
+                .and_then(Value::as_str)
+                .is_some_and(|text| {
+                    text == "ToolSearch"
+                        || text.contains("I'll research")
+                        || text.contains("tool errors")
+                })
+    }));
+
+    let _ = fs::remove_dir_all(app_data_dir);
+    let _ = fs::remove_dir_all(user_home);
+}
+
+#[test]
+fn local_session_preview_splits_inline_think_tags_from_agent_reply() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-local-session-inline-think-test-{}-{unique}",
+        std::process::id(),
+    ));
+    let user_home = env::temp_dir().join(format!(
+        "skills-copilot-local-session-inline-think-home-{}-{unique}",
+        std::process::id(),
+    ));
+    let project_root = app_data_dir.join("project-root");
+    let project_session_root = user_home
+        .join(".claude/projects")
+        .join(project_root.to_string_lossy().replace('/', "-"));
+    fs::create_dir_all(&project_root).expect("create project root");
+    fs::create_dir_all(&project_session_root).expect("create claude project session root");
+    let project_root_text = project_root.to_string_lossy().to_string();
+    let lines = [
+        json!({
+            "type": "user",
+            "message": {"role": "user", "content": "评审这个设计"},
+            "cwd": project_root_text.clone(),
+            "sessionId": "inline-think-session"
+        })
+        .to_string(),
+        json!({
+            "type": "assistant",
+            "message": {
+                "role": "assistant",
+                "content": [{
+                    "type": "text",
+                    "text": "<think>The review file is created. Now I need to finalize my response.</think>## Review Complete\n报告已写入。"
+                }],
+                "stop_reason": "end_turn"
+            },
+            "cwd": project_root_text,
+            "sessionId": "inline-think-session"
+        })
+        .to_string(),
+    ]
+    .join("\n");
+    fs::write(
+        project_session_root.join("session-inline-think.jsonl"),
+        lines,
+    )
+    .expect("write claude inline think session");
+    let host = ServiceHost {
+        app_data_dir: app_data_dir.clone(),
+        adapter_ctx: AdapterContext {
+            user_home: user_home.clone(),
+            project_root: Some(project_root.clone()),
+            project_cwd: Some(project_root.clone()),
+            extra_roots: Vec::new(),
+        },
+    };
+
+    let response = host.handle(ServiceRequest {
+        id: Some("session-preview-inline-think".to_string()),
+        method: "session.previewLocalSessions".to_string(),
+        params: json!({
+            "agent": "claude-code",
+            "scope": "project",
+            "limit": 10,
+            "max_excerpt_chars": 1200
+        }),
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("local session preview result");
+    let content_items = result
+        .pointer("/session_rows/0/content_items")
+        .and_then(Value::as_array)
+        .expect("content items");
+    assert!(content_items.iter().any(|item| {
+        item.get("kind").and_then(Value::as_str) == Some("thinking")
+            && item
+                .get("text")
+                .and_then(Value::as_str)
+                .is_some_and(|text| text.contains("finalize my response"))
+    }));
+    assert!(content_items.iter().any(|item| {
+        item.get("kind").and_then(Value::as_str) == Some("agent_reply")
+            && item
+                .get("text")
+                .and_then(Value::as_str)
+                .is_some_and(|text| text.contains("Review Complete"))
+    }));
+    assert!(!content_items.iter().any(|item| {
+        item.get("kind").and_then(Value::as_str) == Some("agent_reply")
+            && item
+                .get("text")
+                .and_then(Value::as_str)
+                .is_some_and(|text| text.contains("<think>") || text.contains("</think>"))
+    }));
+
+    let _ = fs::remove_dir_all(app_data_dir);
+    let _ = fs::remove_dir_all(user_home);
+}
+
+#[test]
+fn local_session_preview_classifies_thinking_parts_before_agent_role() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-local-session-thinking-test-{}-{unique}",
+        std::process::id(),
+    ));
+    let user_home = env::temp_dir().join(format!(
+        "skills-copilot-local-session-thinking-home-{}-{unique}",
+        std::process::id(),
+    ));
+    let project_root = app_data_dir.join("project-root");
+    let claude_session_root = user_home
+        .join(".claude/projects")
+        .join(project_root.to_string_lossy().replace('/', "-"));
+    let codex_session_root = user_home.join(".codex/sessions/2026/06/22");
+    fs::create_dir_all(&project_root).expect("create project root");
+    fs::create_dir_all(&claude_session_root).expect("create claude project session root");
+    fs::create_dir_all(&codex_session_root).expect("create codex session root");
+    let project_root_text = project_root.to_string_lossy().to_string();
+    let claude_lines = [
+        json!({
+            "type": "user",
+            "message": {"role": "user", "content": "你好"},
+            "cwd": project_root_text.clone(),
+            "sessionId": "claude-thinking-session"
+        })
+        .to_string(),
+        json!({
+            "type": "assistant",
+            "message": {
+                "role": "assistant",
+                "content": [{
+                    "type": "thinking",
+                    "thinking": "The user is greeting me in Chinese."
+                }]
+            },
+            "cwd": project_root_text.clone(),
+            "sessionId": "claude-thinking-session"
+        })
+        .to_string(),
+        json!({
+            "type": "assistant",
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "text", "text": "你好！有什么我可以帮你的吗？"}]
+            },
+            "cwd": project_root_text.clone(),
+            "sessionId": "claude-thinking-session"
+        })
+        .to_string(),
+    ]
+    .join("\n");
+    fs::write(
+        claude_session_root.join("session-thinking.jsonl"),
+        claude_lines,
+    )
+    .expect("write claude thinking session");
+    let codex_lines = [
+        json!({
+            "type": "session_meta",
+            "payload": {"id": "codex-thinking-session", "cwd": project_root_text}
+        })
+        .to_string(),
+        json!({
+            "type": "response_item",
+            "payload": {
+                "type": "reasoning",
+                "summary": [{"type": "summary_text", "text": "Need answer briefly."}]
+            }
+        })
+        .to_string(),
+    ]
+    .join("\n");
+    fs::write(
+        codex_session_root.join("rollout-2026-06-22T11-00-00-thinking.jsonl"),
+        codex_lines,
+    )
+    .expect("write codex thinking session");
+    let host = ServiceHost {
+        app_data_dir: app_data_dir.clone(),
+        adapter_ctx: AdapterContext {
+            user_home: user_home.clone(),
+            project_root: Some(project_root.clone()),
+            project_cwd: Some(project_root.clone()),
+            extra_roots: Vec::new(),
+        },
+    };
+
+    let claude_response = host.handle(ServiceRequest {
+        id: Some("session-preview-claude-thinking".to_string()),
+        method: "session.previewLocalSessions".to_string(),
+        params: json!({
+            "agent": "claude-code",
+            "scope": "project",
+            "limit": 10,
+            "max_excerpt_chars": 1200
+        }),
+    });
+
+    assert!(claude_response.ok, "{:?}", claude_response.error);
+    let claude_result = claude_response
+        .result
+        .expect("claude local session preview result");
+    assert_eq!(
+        claude_result
+            .get("user_message_count")
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        claude_result
+            .get("total_message_count")
+            .and_then(Value::as_u64),
+        Some(3)
+    );
+    let claude_items = claude_result
+        .pointer("/session_rows/0/content_items")
+        .and_then(Value::as_array)
+        .expect("claude content items");
+    assert!(claude_items.iter().any(|item| {
+        item.get("kind").and_then(Value::as_str) == Some("thinking")
+            && item
+                .get("text")
+                .and_then(Value::as_str)
+                .is_some_and(|text| text.contains("greeting me in Chinese"))
+    }));
+    assert!(!claude_items.iter().any(|item| {
+        item.get("kind").and_then(Value::as_str) == Some("agent_reply")
+            && item
+                .get("text")
+                .and_then(Value::as_str)
+                .is_some_and(|text| text.contains("greeting me in Chinese"))
+    }));
+
+    let codex_response = host.handle(ServiceRequest {
+        id: Some("session-preview-codex-thinking".to_string()),
+        method: "session.previewLocalSessions".to_string(),
+        params: json!({
+            "agent": "codex",
+            "scope": "project",
+            "project_root": project_root.to_string_lossy().to_string(),
+            "current_cwd": project_root.to_string_lossy().to_string(),
+            "limit": 10,
+            "max_excerpt_chars": 1200
+        }),
+    });
+
+    assert!(codex_response.ok, "{:?}", codex_response.error);
+    let codex_result = codex_response
+        .result
+        .expect("codex local session preview result");
+    let codex_items = codex_result
+        .pointer("/session_rows/0/content_items")
+        .and_then(Value::as_array)
+        .expect("codex content items");
+    assert_eq!(
+        codex_items
+            .iter()
+            .filter(|item| item.get("kind").and_then(Value::as_str) == Some("thinking"))
+            .count(),
+        1
+    );
+    assert!(codex_items.iter().any(|item| {
+        item.get("kind").and_then(Value::as_str) == Some("thinking")
+            && item
+                .get("text")
+                .and_then(Value::as_str)
+                .is_some_and(|text| text.contains("Need answer briefly"))
+    }));
+
+    let _ = fs::remove_dir_all(app_data_dir);
+    let _ = fs::remove_dir_all(user_home);
+}
+
+#[test]
+fn local_session_preview_all_scope_dedupes_overlapping_claude_project_roots() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-local-session-all-dedupe-test-{}-{unique}",
+        std::process::id(),
+    ));
+    let user_home = env::temp_dir().join(format!(
+        "skills-copilot-local-session-all-dedupe-home-{}-{unique}",
+        std::process::id(),
+    ));
+    let project_root = app_data_dir.join("project-root");
+    fs::create_dir_all(&project_root).expect("create project root");
+    let project_session_root = user_home
+        .join(".claude/projects")
+        .join(project_root.to_string_lossy().replace('/', "-"));
+    fs::create_dir_all(&project_session_root).expect("create claude project session root");
+    fs::write(
+        project_session_root.join("session-project.jsonl"),
+        format!(
+            "{{\"type\":\"user\",\"message\":{{\"role\":\"user\",\"content\":\"需要整理会话列表\"}},\"cwd\":\"{}\",\"sessionId\":\"claude-overlap-session\"}}\n{{\"type\":\"ai-title\",\"aiTitle\":\"整理会话列表\",\"sessionId\":\"claude-overlap-session\"}}\n",
+            project_root.display()
+        ),
+    )
+    .expect("write claude project session");
+    let host = ServiceHost {
+        app_data_dir: app_data_dir.clone(),
+        adapter_ctx: AdapterContext {
+            user_home: user_home.clone(),
+            project_root: Some(project_root.clone()),
+            project_cwd: Some(project_root.clone()),
+            extra_roots: Vec::new(),
+        },
+    };
+
+    let response = host.handle(ServiceRequest {
+        id: Some("session-preview-all-dedupe".to_string()),
+        method: "session.previewLocalSessions".to_string(),
+        params: json!({
+            "agent": "claude-code",
+            "scope": "all",
+            "limit": 10,
+            "max_excerpt_chars": 800
+        }),
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("local session preview result");
+    assert_eq!(result.get("count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        result
+            .pointer("/session_rows/0/title")
+            .and_then(Value::as_str),
+        Some("整理会话列表")
+    );
+    assert_ne!(
+        result.pointer("/session_rows/0/id").and_then(Value::as_str),
+        Some("local-session-claude-overlap-session"),
+        "Session row identity must be file-scoped, not the agent's internal session id."
+    );
+
+    let _ = fs::remove_dir_all(app_data_dir);
+    let _ = fs::remove_dir_all(user_home);
+}
+
+#[test]
+fn local_session_preview_keeps_codex_project_scope_strict_and_uses_user_titles() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-local-session-codex-scope-test-{}-{unique}",
+        std::process::id(),
+    ));
+    let user_home = env::temp_dir().join(format!(
+        "skills-copilot-local-session-codex-scope-home-{}-{unique}",
+        std::process::id(),
+    ));
+    let project_root = app_data_dir.join("project-root");
+    let other_root = app_data_dir.join("other-root");
+    let session_root = user_home.join(".codex/sessions/2026/06/22");
+    fs::create_dir_all(&project_root).expect("create project root");
+    fs::create_dir_all(&other_root).expect("create other root");
+    fs::create_dir_all(&session_root).expect("create codex session root");
+    fs::write(
+        session_root.join("rollout-2026-06-22T10-00-00-project.jsonl"),
+        format!(
+            "{{\"type\":\"session_meta\",\"payload\":{{\"id\":\"codex-project-session\",\"cwd\":\"{}\",\"cli_version\":\"0.142.0-alpha.6\"}}}}\n{{\"type\":\"response_item\",\"payload\":{{\"type\":\"message\",\"role\":\"user\",\"content\":[{{\"type\":\"input_text\",\"text\":\"# AGENTS.md instructions for fixture\\nInjected project instructions.\"}}]}}}}\n{{\"type\":\"response_item\",\"payload\":{{\"type\":\"message\",\"role\":\"user\",\"content\":[{{\"type\":\"input_text\",\"text\":\"Plan upcoming versions and tasks\"}}]}}}}\n",
+            project_root.display()
+        ),
+    )
+    .expect("write project codex session");
+    fs::write(
+        session_root.join("rollout-2026-06-22T10-00-01-other.jsonl"),
+        format!(
+            "{{\"type\":\"session_meta\",\"payload\":{{\"id\":\"codex-other-session\",\"cwd\":\"{}\",\"cli_version\":\"0.142.0-alpha.6\"}}}}\n{{\"type\":\"response_item\",\"payload\":{{\"type\":\"message\",\"role\":\"user\",\"content\":[{{\"type\":\"input_text\",\"text\":\"Review filmcore rendering\"}}]}}}}\n",
+            other_root.display()
+        ),
+    )
+    .expect("write other codex session");
+    let host = ServiceHost {
+        app_data_dir: app_data_dir.clone(),
+        adapter_ctx: AdapterContext {
+            user_home: user_home.clone(),
+            project_root: Some(app_data_dir.clone()),
+            project_cwd: Some(app_data_dir.clone()),
+            extra_roots: Vec::new(),
+        },
+    };
+
+    let response = host.handle(ServiceRequest {
+        id: Some("session-preview-codex-project".to_string()),
+        method: "session.previewLocalSessions".to_string(),
+        params: json!({
+            "agent": "codex",
+            "scope": "project",
+            "project_root": project_root.to_string_lossy().to_string(),
+            "current_cwd": project_root.to_string_lossy().to_string(),
+            "limit": 10,
+            "max_excerpt_chars": 800
+        }),
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("local session preview result");
+    assert_eq!(result.get("count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        result
+            .pointer("/session_rows/0/title")
+            .and_then(Value::as_str),
+        Some("Plan upcoming versions and tasks")
+    );
+    assert_eq!(
+        result
+            .pointer("/session_rows/0/user_message_count")
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    let serialized = serde_json::to_string(&result).expect("serialize result");
+    assert!(serialized.contains("<project-root>"));
+    assert!(!serialized.contains(&other_root.to_string_lossy().to_string()));
+    assert!(!serialized.contains("filmcore"));
+
+    let search_response = host.handle(ServiceRequest {
+        id: Some("session-preview-codex-project-search".to_string()),
+        method: "session.previewLocalSessions".to_string(),
+        params: json!({
+            "agent": "codex",
+            "scope": "project",
+            "search": "filmcore",
+            "project_root": project_root.to_string_lossy().to_string(),
+            "current_cwd": project_root.to_string_lossy().to_string(),
+            "limit": 10,
+            "max_excerpt_chars": 800
+        }),
+    });
+
+    assert!(search_response.ok, "{:?}", search_response.error);
+    let search_result = search_response.result.expect("search result");
+    assert_eq!(search_result.get("count").and_then(Value::as_u64), Some(0));
+
+    let _ = fs::remove_dir_all(app_data_dir);
+    let _ = fs::remove_dir_all(user_home);
+}
+
+#[test]
+fn local_session_preview_uses_pi_user_message_titles_not_cwd() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-local-session-pi-title-test-{}-{unique}",
+        std::process::id(),
+    ));
+    let user_home = env::temp_dir().join(format!(
+        "skills-copilot-local-session-pi-title-home-{}-{unique}",
+        std::process::id(),
+    ));
+    let project_root = app_data_dir.join("project-root");
+    let encoded_project = project_root.to_string_lossy().replace('/', "-");
+    let session_root = user_home.join(".pi/agent/sessions").join(encoded_project);
+    fs::create_dir_all(&project_root).expect("create project root");
+    fs::create_dir_all(&session_root).expect("create pi session root");
+    fs::write(
+        session_root.join("pi-session.jsonl"),
+        format!(
+            "{{\"type\":\"session\",\"id\":\"pi-session\",\"cwd\":\"{}\"}}\n{{\"type\":\"message\",\"message\":{{\"role\":\"user\",\"content\":[{{\"type\":\"text\",\"text\":\"检查当前项目情况\"}}]}}}}\n",
+            project_root.display()
+        ),
+    )
+    .expect("write pi session");
+    let host = ServiceHost {
+        app_data_dir: app_data_dir.clone(),
+        adapter_ctx: AdapterContext {
+            user_home: user_home.clone(),
+            project_root: Some(project_root.clone()),
+            project_cwd: Some(project_root.clone()),
+            extra_roots: Vec::new(),
+        },
+    };
+
+    let response = host.handle(ServiceRequest {
+        id: Some("session-preview-pi-title".to_string()),
+        method: "session.previewLocalSessions".to_string(),
+        params: json!({
+            "agent": "pi",
+            "scope": "project",
+            "project_root": project_root.to_string_lossy().to_string(),
+            "current_cwd": project_root.to_string_lossy().to_string(),
+            "limit": 10,
+            "max_excerpt_chars": 800
+        }),
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("local session preview result");
+    assert_eq!(result.get("count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        result
+            .pointer("/session_rows/0/title")
+            .and_then(Value::as_str),
+        Some("检查当前项目情况")
+    );
+    let serialized = serde_json::to_string(&result).expect("serialize result");
+    assert!(!serialized.contains(&project_root.to_string_lossy().to_string()));
+
+    let _ = fs::remove_dir_all(app_data_dir);
+    let _ = fs::remove_dir_all(user_home);
+}
+
+#[test]
+fn local_session_preview_opencode_joins_message_parts() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-local-session-opencode-test-{}-{unique}",
+        std::process::id(),
+    ));
+    let user_home = env::temp_dir().join(format!(
+        "skills-copilot-local-session-opencode-home-{}-{unique}",
+        std::process::id(),
+    ));
+    let project_root = app_data_dir.join("project-root");
+    let storage_root = user_home.join(".local/share/opencode/storage");
+    let session_root = storage_root.join("session/global");
+    let message_root = storage_root.join("message/ses_fixture");
+    let user_part_root = storage_root.join("part/msg_user");
+    let assistant_part_root = storage_root.join("part/msg_assistant");
+    fs::create_dir_all(&session_root).expect("create opencode session root");
+    fs::create_dir_all(&message_root).expect("create opencode message root");
+    fs::create_dir_all(&user_part_root).expect("create opencode user part root");
+    fs::create_dir_all(&assistant_part_root).expect("create opencode assistant part root");
+    fs::write(
+        session_root.join("ses_fixture.json"),
+        format!(
+            r#"{{"id":"ses_fixture","title":"Review project docs","directory":"{}","projectID":"global"}}"#,
+            project_root.display()
+        ),
+    )
+    .expect("write opencode session");
+    fs::write(
+        message_root.join("msg_user.json"),
+        r#"{"id":"msg_user","sessionID":"ses_fixture","role":"user","summary":"Review project docs"}"#,
+    )
+    .expect("write user message");
+    fs::write(
+        user_part_root.join("part_user.json"),
+        r#"{"id":"part_user","sessionID":"ses_fixture","messageID":"msg_user","type":"text","text":"Run skill:fixture-session-skill"}"#,
+    )
+    .expect("write user part");
+    fs::write(
+        message_root.join("msg_assistant.json"),
+        r#"{"id":"msg_assistant","sessionID":"ses_fixture","role":"assistant"}"#,
+    )
+    .expect("write assistant message");
+    fs::write(
+        assistant_part_root.join("part_tool.json"),
+        r#"{"id":"part_tool","sessionID":"ses_fixture","messageID":"msg_assistant","type":"tool-call","name":"shell"}"#,
+    )
+    .expect("write assistant part");
+    let host = ServiceHost {
+        app_data_dir: app_data_dir.clone(),
+        adapter_ctx: AdapterContext {
+            user_home: user_home.clone(),
+            project_root: Some(project_root.clone()),
+            project_cwd: Some(project_root.clone()),
+            extra_roots: Vec::new(),
+        },
+    };
+
+    let response = host.handle(ServiceRequest {
+        id: Some("session-preview-opencode".to_string()),
+        method: "session.previewLocalSessions".to_string(),
+        params: json!({
+            "agent": "opencode",
+            "scope": "project",
+            "limit": 10,
+            "max_excerpt_chars": 800
+        }),
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("local session preview result");
+    assert_eq!(result.get("count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        result
+            .pointer("/session_rows/0/title")
+            .and_then(Value::as_str),
+        Some("Review project docs")
+    );
+    assert_eq!(
+        result.get("user_message_count").and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        result.get("tool_call_count").and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        result.get("skill_call_count").and_then(Value::as_u64),
+        Some(1)
+    );
+    assert!(result
+        .pointer("/session_rows/0/content_items")
+        .and_then(Value::as_array)
+        .is_some_and(|items| items
+            .iter()
+            .any(|item| item.get("kind").and_then(Value::as_str) == Some("tool_call"))));
+
+    let _ = fs::remove_dir_all(app_data_dir);
+    let _ = fs::remove_dir_all(user_home);
+}
+
+#[test]
+fn local_session_preview_opencode_explicit_session_root_does_not_read_sibling_parts() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-local-session-opencode-boundary-test-{}-{unique}",
+        std::process::id(),
+    ));
+    let user_home = env::temp_dir().join(format!(
+        "skills-copilot-local-session-opencode-boundary-home-{}-{unique}",
+        std::process::id(),
+    ));
+    let project_root = app_data_dir.join("project-root");
+    let storage_root = user_home.join(".local/share/opencode/storage");
+    let session_root = storage_root.join("session/global");
+    let message_root = storage_root.join("message/ses_fixture");
+    let user_part_root = storage_root.join("part/msg_user");
+    fs::create_dir_all(&session_root).expect("create opencode session root");
+    fs::create_dir_all(&message_root).expect("create opencode message root");
+    fs::create_dir_all(&user_part_root).expect("create opencode user part root");
+    fs::write(
+        session_root.join("ses_fixture.json"),
+        format!(
+            r#"{{"id":"ses_fixture","title":"Review project docs","directory":"{}","projectID":"global"}}"#,
+            project_root.display()
+        ),
+    )
+    .expect("write opencode session");
+    fs::write(
+        message_root.join("msg_user.json"),
+        r#"{"id":"msg_user","sessionID":"ses_fixture","role":"user"}"#,
+    )
+    .expect("write user message");
+    fs::write(
+        user_part_root.join("part_user.json"),
+        r#"{"id":"part_user","sessionID":"ses_fixture","messageID":"msg_user","type":"text","text":"Run skill:fixture-session-skill"}"#,
+    )
+    .expect("write user part");
+    let host = ServiceHost {
+        app_data_dir: app_data_dir.clone(),
+        adapter_ctx: AdapterContext {
+            user_home: user_home.clone(),
+            project_root: Some(project_root.clone()),
+            project_cwd: Some(project_root.clone()),
+            extra_roots: Vec::new(),
+        },
+    };
+
+    let response = host.handle(ServiceRequest {
+        id: Some("session-preview-opencode-boundary".to_string()),
+        method: "session.previewLocalSessions".to_string(),
+        params: json!({
+            "agent": "opencode",
+            "authorized_roots": [session_root.to_string_lossy().to_string()],
+            "limit": 10,
+            "max_excerpt_chars": 800
+        }),
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("local session preview result");
+    assert_eq!(result.get("count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        result.get("skill_call_count").and_then(Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        result.get("tool_call_count").and_then(Value::as_u64),
+        Some(0)
+    );
+    let content_items = result
+        .pointer("/session_rows/0/content_items")
+        .and_then(Value::as_array)
+        .expect("content items");
+    assert!(!content_items.iter().any(|item| {
+        item.get("text")
+            .and_then(Value::as_str)
+            .is_some_and(|text| text.contains("fixture-session-skill"))
+    }));
+
+    let _ = fs::remove_dir_all(app_data_dir);
+    let _ = fs::remove_dir_all(user_home);
 }
 
 #[test]
@@ -2593,7 +4014,7 @@ fn local_session_preview_reads_authorized_roots_with_redaction_only() {
     fs::write(
         &session_path,
         format!(
-            "{{\"role\":\"assistant\",\"content\":\"Used llm-skill-id for local task at {} with {key_label}={raw_secret}\"}}\n",
+            "{{\"role\":\"user\",\"content\":\"Please run skill:llm-skill-id for local task at {}\"}}\n{{\"role\":\"assistant\",\"content\":\"Used /skill llm-skill-id with {key_label}={raw_secret}\",\"tool_calls\":[{{\"name\":\"fixture-tool\"}}]}}\n",
             project_root.display()
         ),
     )
@@ -2623,7 +4044,7 @@ fn local_session_preview_reads_authorized_roots_with_redaction_only() {
     let result = response.result.expect("local session preview result");
     assert_eq!(
         result.get("generated_by").and_then(Value::as_str),
-        Some("local-v2.87")
+        Some("local-v2.98")
     );
     assert_eq!(
         result.get("authorized").and_then(Value::as_bool),
@@ -2636,6 +4057,40 @@ fn local_session_preview_reads_authorized_roots_with_redaction_only() {
         Some(false)
     );
     assert_eq!(result.get("count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        result.get("user_message_count").and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        result.get("total_message_count").and_then(Value::as_u64),
+        Some(2)
+    );
+    assert_eq!(
+        result.get("tool_call_count").and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        result.get("skill_call_count").and_then(Value::as_u64),
+        Some(2)
+    );
+    let content_items = result
+        .pointer("/session_rows/0/content_items")
+        .and_then(Value::as_array)
+        .expect("session content items");
+    assert_eq!(
+        content_items
+            .iter()
+            .filter(|item| item.get("kind").and_then(Value::as_str) == Some("tool_call"))
+            .count(),
+        1
+    );
+    assert_eq!(
+        content_items
+            .iter()
+            .filter(|item| item.get("kind").and_then(Value::as_str) == Some("skill_call"))
+            .count(),
+        1
+    );
     assert_eq!(
         result
             .pointer("/session_rows/0/agent")

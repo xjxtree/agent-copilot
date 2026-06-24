@@ -24,6 +24,11 @@ ICON_SOURCE="$MACOS_DIR/Sources/SkillsCopilot/Resources/AppIcon.icns"
 ICON_TARGET="$APP_RESOURCES/AppIcon.icns"
 SWIFT_RESOURCES="$MACOS_DIR/Sources/SkillsCopilot/Resources"
 LAUNCHED_PID=""
+SWIFT_BUILD_ARGS=(--package-path "$MACOS_DIR")
+if [[ -n "${SWIFTPM_SCRATCH_PATH:-}" ]]; then
+  SWIFT_BUILD_ARGS+=(--scratch-path "$SWIFTPM_SCRATCH_PATH")
+fi
+CARGO_TARGET_ROOT="${CARGO_TARGET_DIR:-$ROOT_DIR/target}"
 
 canonical_app_bundle() {
   if [[ -d "$APP_BUNDLE" ]]; then
@@ -234,10 +239,10 @@ print(matches[0])
 terminate_existing_app_instances
 
 cargo build -p skills-copilot-service
-swift build --package-path "$MACOS_DIR"
+swift build "${SWIFT_BUILD_ARGS[@]}"
 
-SWIFT_BIN_DIR="$(swift build --package-path "$MACOS_DIR" --show-bin-path)"
-RUST_SERVICE="$ROOT_DIR/target/debug/skills-copilot-service"
+SWIFT_BIN_DIR="$(swift build "${SWIFT_BUILD_ARGS[@]}" --show-bin-path)"
+RUST_SERVICE="$CARGO_TARGET_ROOT/debug/skills-copilot-service"
 
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES"

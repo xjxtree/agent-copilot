@@ -7,6 +7,9 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             SidebarView()
+                .navigationSplitViewColumnWidth(min: 260, ideal: 300, max: 340)
+        } content: {
+            SecondarySidebarView()
                 .navigationSplitViewColumnWidth(min: 300, ideal: 340, max: 430)
         } detail: {
             DetailView(skill: store.selectedSkill)
@@ -15,6 +18,9 @@ struct ContentView: View {
             if store.status == nil && store.skills.isEmpty {
                 await store.reload()
             }
+        }
+        .task(id: store.selectedAgentLocalSessionRefreshKey) {
+            await store.refreshSelectedAgentLocalSessions()
         }
         .onChange(of: store.selectedSkillID) { _ in
             Task { await store.loadSelectedDetail() }

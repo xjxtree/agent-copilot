@@ -78,9 +78,6 @@ struct NativeListModelBench {
             ("filter:findings", {
                 _ = runModel(searchText: "", agentFilter: .all, stateFilter: .withFindings, sortOrder: .name)
             }),
-            ("filter:conflicts", {
-                _ = runModel(searchText: "", agentFilter: .all, stateFilter: .withConflicts, sortOrder: .name)
-            }),
             ("sort:path", {
                 _ = runModel(searchText: "", agentFilter: .all, stateFilter: .all, sortOrder: .path)
             }),

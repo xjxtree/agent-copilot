@@ -1210,7 +1210,11 @@ struct PromptPreviewControls: View {
             }
 
             if let sendResult {
-                LLMPromptSendResultView(result: sendResult)
+                if let preview, sendResult.previewID == preview.previewID {
+                    LLMPromptSendResultView(result: sendResult)
+                } else {
+                    LLMPromptSendResultView(result: sendResult, isHistorical: true)
+                }
             }
         }
     }
@@ -1332,12 +1336,19 @@ struct RedactionSummaryView: View {
 
 struct LLMPromptSendResultView: View {
     let result: LLMPromptSendResult
+    var isHistorical = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if isHistorical {
+                Label(UIStrings.llmPromptHistoricalResponse, systemImage: "clock.arrow.circlepath")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+
             Label(result.message, systemImage: result.success ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                 .font(.subheadline.bold())
-                .foregroundStyle(result.success ? .green : .orange)
+                .foregroundStyle(resultTint)
 
             Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
                 MetadataRow(label: UIStrings.aiProviderTestResult, value: result.status)
@@ -1375,6 +1386,13 @@ struct LLMPromptSendResultView: View {
         }
         .padding(10)
         .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var resultTint: Color {
+        if isHistorical {
+            return .secondary
+        }
+        return result.success ? .green : .orange
     }
 }
 

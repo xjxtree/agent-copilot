@@ -556,7 +556,7 @@ fn scan_all_includes_opencode_configured_local_paths_and_preserves_config_on_tog
     let catalog = Catalog::in_memory().expect("catalog opens");
     catalog.init().expect("catalog initializes");
     let ctx = AdapterContext {
-        user_home: home,
+        user_home: home.clone(),
         project_root: None,
         project_cwd: None,
         extra_roots: vec![],
@@ -856,7 +856,7 @@ fn scan_all_preserves_tool_global_record() {
     let catalog = Catalog::in_memory().expect("catalog opens");
     catalog.init().expect("catalog initializes");
     let ctx = AdapterContext {
-        user_home: home,
+        user_home: home.clone(),
         project_root: None,
         project_cwd: None,
         extra_roots: vec![],
@@ -1526,7 +1526,7 @@ fn batch_toggle_preview_filters_read_only_and_apply_uses_snapshot_path() {
     let content = std::fs::read_to_string(&settings_path).expect("read settings");
     assert!(content.contains("\"batch-claude\""));
     assert!(content.contains("\"off\""));
-    let pi_settings_path = home.join(".pi/settings.json");
+    let pi_settings_path = home.join(".pi/agent/settings.json");
     let pi_content = std::fs::read_to_string(&pi_settings_path).expect("read Pi settings");
     assert!(pi_content.contains("\"batch-pi\""));
 
@@ -1579,7 +1579,7 @@ fn pi_writable_harness_writes_only_disposable_evidence_and_keeps_production_bloc
     assert!(report
         .scenarios
         .iter()
-        .any(|scenario| scenario.layer == "project" && scenario.trust_gate_blocked));
+        .any(|scenario| scenario.layer == "project" && scenario.explicit_untrusted_blocked));
     assert!(temp_root.join("pi-writable-harness-report.json").exists());
     assert!(!temp_root.join("global-home/.pi/agent/skills").exists());
     assert!(!temp_root.join("global-home/.pi/settings.json").exists());
@@ -1627,7 +1627,7 @@ fn toggle_pi_global_skill_writes_settings_rescans_and_rolls_back() {
     assert!(!record.enabled);
     assert_eq!(record.state, "disabled");
 
-    let settings_path = home.join(".pi/settings.json");
+    let settings_path = home.join(".pi/agent/settings.json");
     let content = std::fs::read_to_string(&settings_path).expect("read Pi settings");
     assert!(content.contains("\"pi-toggle\""));
 
@@ -1655,7 +1655,7 @@ fn toggle_pi_global_skill_writes_settings_rescans_and_rolls_back() {
 }
 
 #[test]
-fn toggle_pi_project_skill_requires_trusted_project_settings() {
+fn toggle_pi_project_skill_allows_default_project_settings_and_blocks_explicit_untrusted() {
     let temp_root = temp_test_dir("pi-toggle-project");
     let home = temp_root.join("home");
     let project = temp_root.join("project");
@@ -1667,11 +1667,6 @@ fn toggle_pi_project_skill_requires_trusted_project_settings() {
     )
     .expect("write Pi project skill");
     let settings_path = project.join(".pi/settings.json");
-    std::fs::write(
-        &settings_path,
-        "{\n  \"project\": { \"trusted\": false },\n  \"skills\": { \"disabled\": [] }\n}\n",
-    )
-    .expect("write untrusted Pi settings");
 
     let catalog = Catalog::in_memory().expect("catalog opens");
     catalog.init().expect("catalog initializes");
@@ -1690,26 +1685,26 @@ fn toggle_pi_project_skill_requires_trusted_project_settings() {
         .expect("Pi project record")
         .id;
 
-    let blocked = toggle_skill(&catalog, &ctx, &pi_id, false)
-        .expect_err("untrusted Pi project writes are blocked");
-    assert!(matches!(blocked, CommandError::Adapter(_)));
-
-    std::fs::write(
-        &settings_path,
-        "{\n  \"project\": { \"trusted\": true },\n  \"skills\": { \"disabled\": [] }\n}\n",
-    )
-    .expect("write trusted Pi settings");
     let record =
-        toggle_skill(&catalog, &ctx, &pi_id, false).expect("trusted Pi project toggle succeeds");
+        toggle_skill(&catalog, &ctx, &pi_id, false).expect("default Pi project toggle succeeds");
     assert!(!record.enabled);
     let content = std::fs::read_to_string(&settings_path).expect("read Pi settings");
     assert!(content.contains("\"pi-project-toggle\""));
+
+    std::fs::write(
+        &settings_path,
+        "{\n  \"project\": { \"trusted\": false },\n  \"skills\": { \"disabled\": [\"pi-project-toggle\"] }\n}\n",
+    )
+    .expect("write explicitly untrusted Pi settings");
+    let blocked = toggle_skill(&catalog, &ctx, &pi_id, true)
+        .expect_err("explicitly untrusted Pi project writes are blocked");
+    assert!(matches!(blocked, CommandError::Adapter(_)));
 
     let _ = std::fs::remove_dir_all(&temp_root);
 }
 
 #[test]
-fn toggle_pi_project_compatibility_skill_requires_trust_and_writes_pi_settings() {
+fn toggle_pi_project_compatibility_skill_allows_default_project_settings() {
     let temp_root = temp_test_dir("pi-toggle-project-compat");
     let home = temp_root.join("home");
     let project = temp_root.join("project");
@@ -1717,11 +1712,8 @@ fn toggle_pi_project_compatibility_skill_requires_trust_and_writes_pi_settings()
     let settings_path = project.join(".pi/settings.json");
     std::fs::create_dir_all(settings_path.parent().expect("settings parent"))
         .expect("create Pi settings dir");
-    std::fs::write(
-        &settings_path,
-        "{\n  \"project\": { \"trusted\": false },\n  \"skills\": { \"disabled\": [] }\n}\n",
-    )
-    .expect("write untrusted Pi settings");
+    std::fs::write(&settings_path, "{\n  \"skills\": { \"disabled\": [] }\n}\n")
+        .expect("write default Pi settings");
 
     let catalog = Catalog::in_memory().expect("catalog opens");
     catalog.init().expect("catalog initializes");
@@ -1740,17 +1732,8 @@ fn toggle_pi_project_compatibility_skill_requires_trust_and_writes_pi_settings()
         .expect("Pi compatibility project record")
         .id;
 
-    let blocked = toggle_skill(&catalog, &ctx, &pi_id, false)
-        .expect_err("untrusted Pi compatibility writes are blocked");
-    assert!(matches!(blocked, CommandError::Adapter(_)));
-
-    std::fs::write(
-        &settings_path,
-        "{\n  \"project\": { \"trusted\": true },\n  \"skills\": { \"disabled\": [] }\n}\n",
-    )
-    .expect("write trusted Pi settings");
     let record = toggle_skill(&catalog, &ctx, &pi_id, false)
-        .expect("trusted Pi compatibility toggle succeeds");
+        .expect("default Pi compatibility toggle succeeds");
     assert!(!record.enabled);
     let content = std::fs::read_to_string(&settings_path).expect("read Pi settings");
     assert!(content.contains("\"pi-agent-compat\""));
@@ -1763,19 +1746,137 @@ fn toggle_pi_project_compatibility_skill_requires_trust_and_writes_pi_settings()
     assert!(!rescanned.enabled);
     assert_eq!(rescanned.state, "disabled");
 
+    std::fs::write(
+        &settings_path,
+        "{\n  \"trust\": { \"projectRootTrusted\": false },\n  \"skills\": { \"disabled\": [\"pi-agent-compat\"] }\n}\n",
+    )
+    .expect("write explicitly untrusted Pi compatibility settings");
+    let blocked = toggle_skill(&catalog, &ctx, &pi_id, true)
+        .expect_err("explicitly untrusted Pi compatibility writes are blocked");
+    assert!(matches!(blocked, CommandError::Adapter(_)));
+
     let _ = std::fs::remove_dir_all(&temp_root);
 }
 
 #[test]
-fn batch_toggle_preview_blocks_apply_when_selection_has_no_writable_items() {
-    let temp_root = temp_test_dir("batch-toggle-read-only");
+fn toggle_hermes_global_skill_writes_config_rescans_and_rolls_back() {
+    let temp_root = temp_test_dir("hermes-toggle-global");
+    let home = temp_root.join("home");
+    write_hermes_global_skill(&home, "hermes-toggle");
+
+    let catalog = Catalog::in_memory().expect("catalog opens");
+    catalog.init().expect("catalog initializes");
+    let ctx = AdapterContext {
+        user_home: home.clone(),
+        project_root: None,
+        project_cwd: None,
+        extra_roots: vec![],
+    };
+    scan_all_to_catalog(&ctx, &catalog).expect("scan all");
+    let hermes_id = catalog
+        .list_skill_records()
+        .expect("records")
+        .into_iter()
+        .find(|record| record.agent == "hermes" && record.name == "hermes-toggle")
+        .expect("Hermes record")
+        .id;
+
+    let record =
+        toggle_skill(&catalog, &ctx, &hermes_id, false).expect("toggle Hermes off succeeds");
+    assert!(!record.enabled);
+    assert_eq!(record.state, "disabled");
+    let config_path = home.join(".hermes/config.yaml");
+    let content = std::fs::read_to_string(&config_path).expect("read Hermes config");
+    assert!(content.contains("hermes-toggle"));
+
+    scan_all_to_catalog(&ctx, &catalog).expect("rescan all");
+    let rescanned = catalog
+        .get_skill_record(&hermes_id)
+        .expect("catalog lookup")
+        .expect("Hermes record remains");
+    assert!(!rescanned.enabled);
+    assert_eq!(rescanned.state, "disabled");
+
+    let snapshots = catalog
+        .list_config_snapshots("hermes", &config_path.to_string_lossy())
+        .expect("list Hermes snapshots");
+    assert_eq!(snapshots.len(), 1);
+    rollback_snapshot(&catalog, &ctx, &snapshots[0].id).expect("Hermes rollback succeeds");
+    let rolled_back = std::fs::read_to_string(&config_path).unwrap_or_default();
+    assert!(!rolled_back.contains("hermes-toggle"));
+
+    let _ = std::fs::remove_dir_all(&temp_root);
+}
+
+#[test]
+fn toggle_openclaw_skill_writes_json5_entries_rescans_and_rolls_back() {
+    let temp_root = temp_test_dir("openclaw-toggle-global");
+    let home = temp_root.join("home");
+    write_openclaw_global_skill_with_metadata(&home, "visible-openclaw", Some("routed-openclaw"));
+    let config_path = home.join(".openclaw/openclaw.json");
+    std::fs::create_dir_all(config_path.parent().expect("OpenClaw config parent"))
+        .expect("create OpenClaw config dir");
+    std::fs::write(
+        &config_path,
+        "{\n  skills: { entries: { \"other-skill\": { enabled: true } } },\n}\n",
+    )
+    .expect("write OpenClaw JSON5 config");
+
+    let catalog = Catalog::in_memory().expect("catalog opens");
+    catalog.init().expect("catalog initializes");
+    let ctx = AdapterContext {
+        user_home: home.clone(),
+        project_root: None,
+        project_cwd: None,
+        extra_roots: vec![],
+    };
+    scan_all_to_catalog(&ctx, &catalog).expect("scan all");
+    let openclaw_id = catalog
+        .list_skill_records()
+        .expect("records")
+        .into_iter()
+        .find(|record| record.agent == "openclaw" && record.name == "visible-openclaw")
+        .expect("OpenClaw record")
+        .id;
+
+    let record =
+        toggle_skill(&catalog, &ctx, &openclaw_id, false).expect("toggle OpenClaw off succeeds");
+    assert!(!record.enabled);
+    assert_eq!(record.state, "disabled");
+    let content = std::fs::read_to_string(&config_path).expect("read OpenClaw config");
+    assert!(content.contains("\"routed-openclaw\""));
+    assert!(content.contains("\"enabled\": false"));
+
+    scan_all_to_catalog(&ctx, &catalog).expect("rescan all");
+    let rescanned = catalog
+        .get_skill_record(&openclaw_id)
+        .expect("catalog lookup")
+        .expect("OpenClaw record remains");
+    assert!(!rescanned.enabled);
+    assert_eq!(rescanned.state, "disabled");
+
+    let snapshots = catalog
+        .list_config_snapshots("openclaw", &config_path.to_string_lossy())
+        .expect("list OpenClaw snapshots");
+    assert_eq!(snapshots.len(), 1);
+    rollback_snapshot(&catalog, &ctx, &snapshots[0].id).expect("OpenClaw rollback succeeds");
+    let rolled_back = std::fs::read_to_string(&config_path).unwrap_or_default();
+    assert!(!rolled_back.contains("routed-openclaw"));
+    assert!(rolled_back.contains("other-skill"));
+
+    let _ = std::fs::remove_dir_all(&temp_root);
+}
+
+#[test]
+fn batch_toggle_preview_applies_hermes_config_writes() {
+    let temp_root = temp_test_dir("batch-toggle-hermes");
     let home = temp_root.join("home");
     write_hermes_global_skill(&home, "batch-hermes-only");
 
     let catalog = Catalog::in_memory().expect("catalog opens");
     catalog.init().expect("catalog initializes");
     let ctx = AdapterContext {
-        user_home: home,
+        user_home: home.clone(),
         project_root: None,
         project_cwd: None,
         extra_roots: vec![],
@@ -1791,12 +1892,15 @@ fn batch_toggle_preview_blocks_apply_when_selection_has_no_writable_items() {
 
     let selection = vec![hermes_id];
     let preview = preview_skill_toggles(&catalog, &ctx, &selection, false).expect("batch preview");
-    assert_eq!(preview.writable_count, 0);
-    assert_eq!(preview.skipped_count, 1);
-    assert!(!preview.writes_allowed);
+    assert_eq!(preview.writable_count, 1);
+    assert_eq!(preview.skipped_count, 0);
+    assert!(preview.writes_allowed);
     let apply = apply_skill_toggles(&catalog, &ctx, &selection, false, &preview.preview_token)
-        .expect_err("read-only-only batch apply must be blocked");
-    assert!(matches!(apply, CommandError::InvalidBatchAction(_)));
+        .expect("Hermes batch apply succeeds");
+    assert_eq!(apply.applied_count, 1);
+    let content =
+        std::fs::read_to_string(home.join(".hermes/config.yaml")).expect("read Hermes config");
+    assert!(content.contains("batch-hermes-only"));
 
     let _ = std::fs::remove_dir_all(&temp_root);
 }
@@ -3159,7 +3263,7 @@ fn pi_v294_capability_matrix_exposes_native_install_and_compatibility_toggles() 
 }
 
 #[test]
-fn hermes_v295_capability_matrix_exposes_native_install_only() {
+fn hermes_v297_capability_matrix_exposes_guarded_config_toggle() {
     let ctx = AdapterContext {
         user_home: PathBuf::from("/tmp/home"),
         project_root: Some(PathBuf::from("/tmp/project")),
@@ -3171,15 +3275,20 @@ fn hermes_v295_capability_matrix_exposes_native_install_only() {
         .find(|record| record.agent == AgentId::Hermes.as_str())
         .expect("Hermes capability record");
 
-    assert_eq!(hermes.status, "install-only");
+    assert_eq!(hermes.status, "guarded");
     assert!(hermes.scan.supported);
     assert!(!hermes.project_scan.supported);
-    assert!(!hermes.config_toggle.supported);
-    assert!(!hermes.config_snapshot.supported);
+    assert!(hermes.config_toggle.supported);
+    assert_eq!(
+        hermes.config_toggle.status,
+        "verified-skills-disabled-v2.97"
+    );
+    assert!(hermes.config_snapshot.supported);
+    assert_eq!(hermes.config_snapshot.status, "verified-v2.97");
     assert!(hermes.install.supported);
     assert_eq!(hermes.install.status, "verified-native-root-v2.95");
     assert!(hermes.writable.supported);
-    assert_eq!(hermes.writable.status, "install-only-v2.95");
+    assert_eq!(hermes.writable.status, "guarded-v2.97");
     assert!(hermes
         .blockers
         .iter()
@@ -3191,7 +3300,7 @@ fn hermes_v295_capability_matrix_exposes_native_install_only() {
 }
 
 #[test]
-fn openclaw_v296_capability_matrix_exposes_native_workspace_install_only() {
+fn openclaw_v297_capability_matrix_exposes_guarded_config_toggle() {
     let ctx = AdapterContext {
         user_home: PathBuf::from("/tmp/home"),
         project_root: Some(PathBuf::from("/tmp/home/.openclaw/workspace/repo")),
@@ -3203,15 +3312,20 @@ fn openclaw_v296_capability_matrix_exposes_native_workspace_install_only() {
         .find(|record| record.agent == AgentId::Openclaw.as_str())
         .expect("OpenClaw capability record");
 
-    assert_eq!(openclaw.status, "install-only");
+    assert_eq!(openclaw.status, "guarded");
     assert!(openclaw.scan.supported);
     assert!(openclaw.project_scan.supported);
-    assert!(!openclaw.config_toggle.supported);
-    assert!(!openclaw.config_snapshot.supported);
+    assert!(openclaw.config_toggle.supported);
+    assert_eq!(
+        openclaw.config_toggle.status,
+        "verified-skills-entries-v2.97"
+    );
+    assert!(openclaw.config_snapshot.supported);
+    assert_eq!(openclaw.config_snapshot.status, "verified-v2.97");
     assert!(openclaw.install.supported);
     assert_eq!(openclaw.install.status, "verified-native-workspace-v2.96");
     assert!(openclaw.writable.supported);
-    assert_eq!(openclaw.writable.status, "install-only-v2.96");
+    assert_eq!(openclaw.writable.status, "guarded-v2.97");
     assert!(openclaw
         .blockers
         .iter()
@@ -3283,7 +3397,7 @@ fn save_claude_settings_redacts_sensitive_snapshot_content() {
         .expect("create settings dir");
     std::fs::write(
         &settings_path,
-        "{\n  \"apiKey\": \"sk-live-secret\",\n  \"nested\": { \"access_token\": \"tok\" }\n}\n",
+        "{\n  \"apiKey\": \"sk-live-secret\",\n  \"OPENAI_API_KEY\": \"sk-openai-secret\",\n  \"nested\": { \"access_token\": \"tok\" }\n}\n",
     )
     .expect("write sensitive settings");
     let catalog = Catalog::in_memory().expect("catalog opens");
@@ -3303,6 +3417,7 @@ fn save_claude_settings_redacts_sensitive_snapshot_content() {
     assert_eq!(snapshots.len(), 1);
     assert!(snapshots[0].content.starts_with(REDACTED_SNAPSHOT_PREFIX));
     assert!(!snapshots[0].content.contains("sk-live-secret"));
+    assert!(!snapshots[0].content.contains("sk-openai-secret"));
     assert!(!snapshots[0].content.contains("\"tok\""));
     assert!(snapshots[0].content.contains(REDACTED_VALUE));
 
@@ -3683,6 +3798,25 @@ fn write_hermes_global_skill(root: &Path, name: &str) -> PathBuf {
         format!("---\nname: {name}\ndescription: {name} fixture\n---\nbody"),
     )
     .expect("write hermes skill");
+    skill_path.canonicalize().expect("canonicalize skill path")
+}
+
+fn write_openclaw_global_skill_with_metadata(
+    root: &Path,
+    name: &str,
+    skill_key: Option<&str>,
+) -> PathBuf {
+    let skill_dir = root.join(".openclaw/skills").join(name);
+    std::fs::create_dir_all(&skill_dir).expect("create openclaw skill dir");
+    let skill_path = skill_dir.join("SKILL.md");
+    let metadata = skill_key
+        .map(|key| format!("metadata:\n  openclaw:\n    skillKey: {key}\n"))
+        .unwrap_or_default();
+    std::fs::write(
+        &skill_path,
+        format!("---\nname: {name}\ndescription: {name} fixture\n{metadata}---\nbody"),
+    )
+    .expect("write openclaw skill");
     skill_path.canonicalize().expect("canonicalize skill path")
 }
 

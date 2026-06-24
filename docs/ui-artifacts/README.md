@@ -1,41 +1,43 @@
 # UI Artifacts
 
-This directory stores UI prototypes, completed screenshots, and verification notes.
-
-Use one folder per major version or major feature:
-
-```text
-docs/ui-artifacts/
-└── <feature-or-version>/
-    ├── brief.md
-    ├── prototype.png
-    ├── prototype-notes.md
-    ├── completed.png
-    └── verification.md
-```
+This directory stores durable UI evidence: completed app-window screenshots and
+verification notes.
 
 Rules:
 
-- Create or update prototype artifacts before implementation starts.
-- Update completed screenshots after development and validation.
-- Completed screenshots must be complete app-window-only captures. Use `script/capture_app_window.sh` for macOS artifacts. Do not use full-desktop screenshots.
-- Run `pnpm verify:screenshot-artifacts` after adding or regenerating PNG evidence. It rejects unreadable, near-black, mostly transparent, near-flat, or binary-string-sensitive screenshots, but it does not perform OCR.
-- App screenshots should be taken with screenshot privacy mode enabled unless a maintainer explicitly needs full paths for local debugging; do not commit screenshots with raw local paths.
-- Record macOS Computer Use verification for every code change that affects runtime behavior.
-- Future Windows/Linux shells should keep their own completed screenshots while sharing the same service fixtures and UX contracts.
+- Completed screenshots must be complete app-window-only captures.
+- Use `script/capture_app_window.sh` for macOS artifacts when a real window is
+  available.
+- Do not commit full-desktop screenshots.
+- Run `pnpm verify:screenshot-artifacts` after adding, regenerating, deleting,
+  or reorganizing PNG evidence.
+- App screenshots should be taken with screenshot privacy mode enabled unless a
+  maintainer explicitly needs full paths for local debugging.
+- If a session is locked or app-window capture is blocked, record the canonical
+  blocker in the relevant verification record.
 
 Current artifacts:
 
-- `service-protocol/brief.md`: first typed JSON service boundary brief.
-- `native-macos-shell/brief.md`: first native macOS shell brief.
-- `native-macos-shell/prototype-notes.md`: first split-view prototype notes.
-- `native-macos-shell/completed.png`: completed screenshot after launch and interaction validation.
-- `native-macos-shell/verification.md`: macOS Computer Use verification record.
-- `v2.68-task-cockpit-ia/brief.md`: cockpit-first IA feature brief.
-- `v2.68-task-cockpit-ia/completed.png`: fixture app-window screenshot for V2.68.
-- `v2.68-task-cockpit-ia/prototype-notes.md`: V2.68 IA notes.
-- `v2.68-task-cockpit-ia/verification.md`: V2.68 command and screenshot verification record.
-- `v2.69-privacy-screenshot-mode/brief.md`: V2.69 screenshot privacy and localization brief.
-- `v2.69-privacy-screenshot-mode/completed.png`: pending; V2.69 locked-session capture failed closed and no fresh screenshot was committed.
-- `v2.69-privacy-screenshot-mode/prototype-notes.md`: V2.69 implementation notes.
-- `v2.69-privacy-screenshot-mode/verification.md`: V2.69 command and screenshot verification record.
+| Artifact | Contents |
+| --- | --- |
+| `native-macos-shell/` | Initial native macOS completed screenshot and verification record |
+| `service-protocol/` | Historical service-boundary artifact directory |
+| `v2.68-task-cockpit-ia/` | V2.68 task cockpit IA screenshot and verification |
+| `v2.69-privacy-screenshot-mode/` | V2.69 privacy screenshot verification record |
+| `v2.73-task-cockpit-timeout-recovery/` | V2.73 timeout recovery app-window evidence |
+| `v2.74-launch-window-targeting/` | V2.74 launch/window targeting app-window evidence |
+| `v2.75-task-input-resilience/` | V2.75 task input resilience app-window evidence |
+| `v2.76-progressive-cockpit-feedback/` | V2.76 progressive feedback app-window evidence |
+| `v2.77-validation-workbench/` | V2.77 validation workbench app-window evidence |
+| `v2.79-privacy-localization/` | V2.79 privacy/localization app-window evidence |
+| `v2.80-detail-density/` | V2.80 detail density app-window evidence |
+| `v2.86-real-local-2026-06-16/` | V2.86 real-local window capture evidence |
+| `v2.88-handoff-evidence/` | V2.88 per-surface handoff evidence |
+| `v2.89-brand-assets/` | V2.89 brand asset evidence |
+| `v2.90-identifier-migration/` | V2.90 identifier migration evidence |
+| `v2.91-model-task-history/` | V2.91 model-task history evidence |
+| `v2.92-codex-expanded-roots/` | V2.92 Codex expanded roots evidence |
+| `v2.93-opencode-custom-roots/` | V2.93 opencode custom roots verification notes |
+| `v2.94-pi-install-compat-writes/` | V2.94 Pi install/compat write evidence |
+| `v2.95-hermes-native-install/` | V2.95 Hermes native install evidence |
+| `v2.96-openclaw-native-workspace-install/` | V2.96 OpenClaw native/workspace install evidence |

@@ -18,6 +18,22 @@ struct SummaryChip: View {
     let title: String
     let value: String
     let systemImage: String
+    let valueLineLimit: Int?
+    let valueTruncationMode: Text.TruncationMode
+
+    init(
+        title: String,
+        value: String,
+        systemImage: String,
+        valueLineLimit: Int? = 2,
+        valueTruncationMode: Text.TruncationMode = .middle
+    ) {
+        self.title = title
+        self.value = value
+        self.systemImage = systemImage
+        self.valueLineLimit = valueLineLimit
+        self.valueTruncationMode = valueTruncationMode
+    }
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
@@ -33,8 +49,9 @@ struct SummaryChip: View {
                     .lineLimit(1)
                 Text(value)
                     .font(.callout.bold())
-                    .lineLimit(2)
-                    .truncationMode(.middle)
+                    .lineLimit(valueLineLimit)
+                    .truncationMode(valueTruncationMode)
+                    .fixedSize(horizontal: false, vertical: valueLineLimit == nil)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }

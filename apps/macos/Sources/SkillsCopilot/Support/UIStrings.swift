@@ -139,20 +139,38 @@ enum UIStrings {
     static var batchToggleNoSkippedSkills: String { text("batchToggle.noSkippedSkills", "No skipped skills in this preview.") }
     static var batchTogglePreviewChanged: String { text("batchToggle.previewChanged", "Batch preview changed before confirmation. Preview again before applying.") }
     static var batchToggleNoSelection: String { text("batchToggle.noSelection", "Select at least one visible skill to prepare a batch preview.") }
-    static var localReportTitle: String { text("localReport.title", "Local Report Export") }
-    static var localReportBoundary: String { text("localReport.boundary", "User-triggered local redacted audit export only. No public distribution, provider calls, credentials, script execution, config mutation, or background sync.") }
+    static var localReportTitle: String { text("localReport.title", "Agent Usage Report Export") }
+    static var localReportBoundary: String { text("localReport.boundary", "User-triggered local redacted agent and skill usage report only. No public distribution, provider calls, credentials, script execution, config mutation, or background sync.") }
     static var localReportFormat: String { text("localReport.format", "Format") }
     static var localReportFormatMarkdown: String { text("localReport.format.markdown", "Markdown") }
     static var localReportFormatJSON: String { text("localReport.format.json", "JSON") }
     static var localReportExport: String { text("localReport.export", "Export") }
-    static var localReportExporting: String { text("localReport.exporting", "Exporting local report...") }
+    static var localReportExporting: String { text("localReport.exporting", "Exporting usage report...") }
     static var localReportUnavailableFallback: String { text("localReport.unavailableFallback", "Local report export is unavailable in this service build. No file was written.") }
     static var localReportNoFile: String { text("localReport.noFile", "No local file") }
     static var localReportNoSections: String { text("localReport.noSections", "No section list returned") }
-    static var localReportExportedSummary: String { text("localReport.exportedSummary", "Local redacted report exported.") }
+    static var localReportExportedSummary: String { text("localReport.exportedSummary", "Local redacted agent usage report exported.") }
     static var localReportSections: String { text("localReport.sections", "Sections") }
     static var localReportRedacted: String { text("localReport.redacted", "Redacted") }
     static var localReportNotRedactedWarning: String { text("localReport.notRedactedWarning", "Service did not mark this report as redacted. Review before sharing.") }
+    static func localReportSectionTitle(_ key: String) -> String {
+        switch key {
+        case "current_state":
+            text("localReport.section.currentState", "Current state")
+        case "installed_skills":
+            text("localReport.section.installedSkills", "Installed skills")
+        case "issues":
+            text("localReport.section.issues", "Issues")
+        case "task_preflight":
+            text("localReport.section.taskPreflight", "Task Preflight")
+        case "analysis_results":
+            text("localReport.section.analysisResults", "Intelligent analysis")
+        case "safety":
+            text("localReport.section.safety", "Safety")
+        default:
+            key
+        }
+    }
     static var noSkillsInCatalog: String { text("empty.noSkillsInCatalog", "No skills in catalog") }
     static var noSkillsMatchSearch: String { text("empty.noSkillsMatchSearch", "No skills match this search") }
     static var noProjectSelected: String { text("project.none", "No Project") }
@@ -186,10 +204,14 @@ enum UIStrings {
     static var catalogNotLoaded: String { text("state.catalogNotLoaded", "Catalog not loaded") }
     static var noSkillSelected: String { text("empty.noSkillSelected", "No Skill Selected") }
     static var noSkillSelectedMessage: String { text("empty.noSkillSelected.message", "Reload the catalog or select a skill from the sidebar.") }
+    static var noSessionSelected: String { text("empty.noSessionSelected", "No Session Selected") }
+    static var noSessionSelectedMessage: String { text("empty.noSessionSelected.message", "Refresh sessions or select a session from the secondary sidebar.") }
+    static var noConfigSelected: String { text("empty.noConfigSelected", "No Config History Selected") }
+    static var noConfigSelectedMessage: String { text("empty.noConfigSelected.message", "Select Config in the primary sidebar, then choose a config history item to inspect.") }
     static var noFindings: String { text("empty.noFindings", "No Issues") }
     static var noFindingsMessage: String { text("empty.noFindings.message", "No rule issues are associated with this skill.") }
     static var noMatchingFindings: String { text("empty.noMatchingFindings", "No Matching Issues") }
-    static var noMatchingFindingsMessage: String { text("empty.noMatchingFindings.message", "Adjust the triage, severity, or rule filter to show issues.") }
+    static var noMatchingFindingsMessage: String { text("empty.noMatchingFindings.message", "Adjust the severity or rule filter to show issues.") }
     static var noConflicts: String { text("empty.noConflicts", "No Conflicts") }
     static var noConflictsMessage: String { text("empty.noConflicts.message", "No same-agent conflict currently references this skill in the current agent. Cross-agent duplicates are not shown as conflicts.") }
     static var noSnapshots: String { text("empty.noSnapshots", "No Agent Config History") }
@@ -249,18 +271,18 @@ enum UIStrings {
     static var findingTriageFilter: String { text("findings.filter.triage", "Triage") }
     static var allSeverities: String { text("findings.filter.allSeverities", "All Severities") }
     static var allRuleIDs: String { text("findings.filter.allRules", "All Rule IDs") }
-    static var findingTriageOpen: String { text("findings.triage.open", "Open") }
+    static var findingTriageOpen: String { text("findings.triage.open", "Unmarked") }
     static var findingTriageReviewed: String { text("findings.triage.reviewed", "Reviewed") }
     static var findingTriageIgnored: String { text("findings.triage.ignored", "Ignored") }
     static var findingTriageNeedsFollowUp: String { text("findings.triage.needsFollowUp", "Needs follow-up") }
-    static var findingTriageFilterActive: String { text("findings.triage.filter.active", "Active") }
+    static var findingTriageFilterActive: String { text("findings.triage.filter.active", "Unmarked + follow-up") }
     static var findingTriageFilterAll: String { text("findings.triage.filter.all", "All triage") }
     static var findingTriageNoticeTitle: String { text("findings.triage.notice.title", "Local finding triage") }
-    static var findingTriageNoticeBody: String { text("findings.triage.notice.body", "Triage labels are stored only in Agent Copilot app data. They do not write agent config, skill content, toggle snapshots, scripts, or AI output. If a finding changes after rescan, it reopens as Open.") }
+    static var findingTriageNoticeBody: String { text("findings.triage.notice.body", "Issue labels are stored only in Agent Copilot app data. They do not write agent config, skill content, toggle snapshots, scripts, or AI output. If an issue changes after rescan, its local label is cleared and it returns to Unmarked.") }
     static var findingTriageActionReviewed: String { text("findings.triage.action.reviewed", "Mark reviewed") }
     static var findingTriageActionIgnored: String { text("findings.triage.action.ignored", "Ignore") }
     static var findingTriageActionFollowUp: String { text("findings.triage.action.followUp", "Needs follow-up") }
-    static var findingTriageActionReopen: String { text("findings.triage.action.reopen", "Reopen") }
+    static var findingTriageActionReopen: String { text("findings.triage.action.reopen", "Clear label") }
     static var ruleTuningTitle: String { text("rules.tuning.title", "Rule Tuning / Suppression") }
     static var ruleTuningBoundary: String { text("rules.tuning.boundary", "App-local review state only. These controls never edit skill files, write agent config, create snapshots, execute scripts, call an AI provider, or store credentials.") }
     static var ruleTuningEffectiveState: String { text("rules.tuning.effectiveState", "Effective rule state") }
@@ -282,6 +304,17 @@ enum UIStrings {
     static var findingImpact: String { text("findings.impact", "Impact") }
     static var findingRiskRelated: String { text("findings.riskRelated", "Risk-related") }
     static var findingRiskRelatedHelp: String { text("findings.riskRelated.help", "This rule is part of the permission, script, dependency, or tool-risk subset.") }
+    static var findingsCompactNotice: String { text("findings.notice.compact", "Local scan issues are read-only reminders. They do not write agent config or skill files.") }
+    static var findingsSummaryOverview: String { text("findings.summary.overview", "Issue overview") }
+    static func findingsIssueSummary(_ visible: Int, _ total: Int) -> String {
+        format("findings.summary.issueValue", "%d / %d issues", visible, total)
+    }
+    static func findingsImpactedSummary(_ count: Int) -> String {
+        format("findings.summary.impactedValue", "%d affected instances", count)
+    }
+    static func findingsScanEntrySummary(_ count: Int) -> String {
+        format("findings.summary.scanEntryValue", "%d scan entries", count)
+    }
     static var findingRemediation: String { text("findings.remediation", "Suggested remediation") }
     static var currentAgentConflictsOnly: String { text("conflicts.currentAgentOnly", "Current agent only. Cross-agent duplicates are omitted from conflicts.") }
     static var findingSourceFrontmatter: String { text("findings.source.frontmatter", "Frontmatter validation") }
@@ -379,6 +412,27 @@ enum UIStrings {
     static var aiProviderModelRequired: String { text("settings.aiProvider.validation.modelRequired", "Model is required.") }
     static var aiProviderBudgetInvalid: String { text("settings.aiProvider.validation.budgetInvalid", "Monthly budget must be a number.") }
     static var aiProviderTokenLimitInvalid: String { text("settings.aiProvider.validation.tokenLimitInvalid", "Single-request token limit must be a whole number.") }
+    static var agentConfigSettings: String { text("settings.agentConfig.title", "Agent Config") }
+    static var agentConfigSettingsSubtitle: String { text("settings.agentConfig.subtitle", "Review each agent's verified config write paths, current target, and rollback history.") }
+    static var projectScan: String { text("settings.agentConfig.projectScan", "Project scan") }
+    static var configToggle: String { text("settings.agentConfig.configToggle", "Skill toggles") }
+    static var configSnapshot: String { text("settings.agentConfig.configSnapshot", "Snapshots") }
+    static var writableConfig: String { text("settings.agentConfig.writableConfig", "Writable config") }
+    static var agentConfigBlockedScope: String { text("settings.agentConfig.blockedScope", "Still blocked") }
+    static var agentConfigSettingsHistory: String { text("settings.agentConfig.history", "Config History") }
+    static var currentConfigFile: String { text("settings.agentConfig.currentFile", "Current Config File") }
+    static var agentConfigSensitiveValuesHidden: String { text("settings.agentConfig.sensitiveValuesHidden", "Sensitive values hidden") }
+    static var agentConfigSensitiveValuesVisible: String { text("settings.agentConfig.sensitiveValuesVisible", "Sensitive values visible") }
+    static var agentConfigShowSensitive: String { text("settings.agentConfig.showSensitive", "Show & Edit") }
+    static var agentConfigHideSensitive: String { text("settings.agentConfig.hideSensitive", "Hide") }
+    static var supported: String { text("value.supported", "Supported") }
+    static var notSupported: String { text("value.notSupported", "Not supported") }
+    static func agentConfigHistoryEmpty(_ agent: String) -> String {
+        format("settings.agentConfig.historyEmpty", "No %@ config snapshots yet.", agent)
+    }
+    static func agentConfigRawEditorBoundary(_ agent: String) -> String {
+        format("settings.agentConfig.rawEditorBoundary", "%@ config is managed only through verified skill toggle paths for now. Raw editing is intentionally limited to Claude settings.", agent)
+    }
     static var claudeSettings: String { text("settings.claudeSettings", "Claude Settings") }
     static var existingFile: String { text("settings.existingFile", "Existing file") }
     static var willCreateFile: String { text("settings.willCreateFile", "Will create file") }
@@ -706,13 +760,14 @@ enum UIStrings {
     static var providerObservabilityChartModelTaskConfidence: String { text("providerObservability.chart.modelTaskConfidence", "Model-task fit") }
     static var providerObservabilityChartEmpty: String { text("providerObservability.chart.empty", "No chart data") }
     static var taskCockpitTitle: String { text("taskCockpit.title", "Task Preflight") }
-    static var taskCockpitBoundary: String { text("taskCockpit.boundary", "Read-only local preflight for whether this task can proceed, which agent/skill should handle it, why, and what must be fixed first. It cannot send provider requests, write skill files, mutate agent config, create snapshots, execute scripts, read credentials, sync cloud data, or emit telemetry.") }
+    static var taskCockpitBoundary: String { text("taskCockpit.boundary", "Read-only local preflight: decide whether the task is ready to hand off, which agent/skill fits, and what must be clarified first.") }
+    static var taskCockpitReadOnlyFootnote: String { text("taskCockpit.readOnlyFootnote", "Read-only preflight: no provider call, config write, or script execution.") }
     static var taskCockpitAction: String { text("taskCockpit.action.build", "Build Preflight") }
     static var taskCockpitRetry: String { text("taskCockpit.action.retry", "Retry") }
     static var taskCockpitUnavailable: String { text("taskCockpit.unavailable", "Task preflight is unavailable in this service build.") }
-    static var taskCockpitTaskRequired: String { text("taskCockpit.taskRequired", "Enter a task before building preflight.") }
-    static var taskCockpitTaskPlaceholder: String { text("taskCockpit.task.placeholder", "Describe the task, or leave blank to reuse the current readiness/routing task") }
-    static var taskCockpitInputReady: String { text("taskCockpit.input.ready", "Ready for explicit submit.") }
+    static var taskCockpitTaskRequired: String { text("taskCockpit.taskRequired", "Enter a task.") }
+    static var taskCockpitTaskPlaceholder: String { text("taskCockpit.task.placeholder", "Describe the task to hand off to an agent") }
+    static var taskCockpitInputReady: String { text("taskCockpit.input.ready", "Ready to build preflight.") }
     static var taskCockpitNoResult: String { text("taskCockpit.empty.result", "No task preflight loaded.") }
     static var taskCockpitLoaded: String { text("taskCockpit.loaded", "Task preflight loaded from local evidence.") }
     static var taskCockpitCancelled: String { text("taskCockpit.cancelled", "Task preflight build was cancelled. No provider or write action was started.") }
@@ -730,36 +785,37 @@ enum UIStrings {
     static var taskCockpitNoRows: String { text("taskCockpit.empty.rows", "No rows returned.") }
     static var taskCockpitRecommendedAgent: String { text("taskCockpit.recommendedAgent", "Recommended agent") }
     static var taskCockpitRecommendedSkill: String { text("taskCockpit.recommendedSkill", "Recommended skill") }
-    static var taskCockpitPartialNotice: String { text("taskCockpit.partialNotice", "Core preflight completed, but part of the optional diagnostics did not return. The recommendation below is still based on local catalog evidence.") }
+    static var taskCockpitNoReliableRecommendation: String { text("taskCockpit.recommendation.none", "No reliable recommendation yet") }
+    static var taskCockpitPartialNotice: String { text("taskCockpit.partialNotice", "Some technical diagnostics did not return; the core recommendation is still usable.") }
     static var taskCockpitVerdictReady: String { text("taskCockpit.verdict.ready", "Ready to proceed") }
-    static var taskCockpitVerdictNeedsReview: String { text("taskCockpit.verdict.needsReview", "Needs review first") }
-    static var taskCockpitVerdictBlocked: String { text("taskCockpit.verdict.blocked", "Do not run yet") }
+    static var taskCockpitVerdictNeedsReview: String { text("taskCockpit.verdict.needsReview", "Clarify before handoff") }
+    static var taskCockpitVerdictBlocked: String { text("taskCockpit.verdict.blocked", "Do not hand off yet") }
     static var taskCockpitVerdictUnavailable: String { text("taskCockpit.verdict.unavailable", "Preflight unavailable") }
-    static var taskCockpitVerdictReadyMessage: String { text("taskCockpit.verdict.ready.message", "A local route and usable skill were found. Continue in the recommended agent after a normal human check.") }
-    static var taskCockpitVerdictNeedsReviewMessage: String { text("taskCockpit.verdict.needsReview.message", "A likely route exists, but the task has gaps or lower confidence that should be reviewed before execution.") }
-    static var taskCockpitVerdictBlockedMessage: String { text("taskCockpit.verdict.blocked.message", "The task is missing required readiness, routing, or safety signals. Resolve the issues below and run preflight again.") }
-    static var taskCockpitVerdictUnavailableMessage: String { text("taskCockpit.verdict.unavailable.message", "The service did not return enough local metadata to make a recommendation.") }
+    static var taskCockpitVerdictReadyMessage: String { text("taskCockpit.verdict.ready.message", "A local route was found. After human confirmation, hand off to the recommended agent.") }
+    static var taskCockpitVerdictNeedsReviewMessage: String { text("taskCockpit.verdict.needsReview.message", "A candidate route exists, but the task or safety boundary is still unclear.") }
+    static var taskCockpitVerdictBlockedMessage: String { text("taskCockpit.verdict.blocked.message", "There is not enough evidence yet. Clarify the task or address the risk first.") }
+    static var taskCockpitVerdictUnavailableMessage: String { text("taskCockpit.verdict.unavailable.message", "Not enough local data was returned to make a recommendation.") }
     static var taskCockpitReadinessShort: String { text("taskCockpit.score.readiness", "Readiness") }
     static var taskCockpitRoutingShort: String { text("taskCockpit.score.routing", "Routing") }
-    static var taskCockpitRecommendationTitle: String { text("taskCockpit.recommendation.title", "Recommended path") }
-    static var taskCockpitReasonsTitle: String { text("taskCockpit.reasons.title", "Why this route") }
+    static var taskCockpitRecommendationTitle: String { text("taskCockpit.recommendation.title", "Candidate path") }
+    static var taskCockpitReasonsTitle: String { text("taskCockpit.reasons.title", "Key reasons") }
     static var taskCockpitNoReasons: String { text("taskCockpit.reasons.empty", "No readable route reasons were returned.") }
-    static var taskCockpitReasonReadinessBlocked: String { text("taskCockpit.reason.readinessBlocked", "Readiness is blocked: the task does not currently have enough local fit evidence for a confident handoff.") }
-    static var taskCockpitReasonRoutingBlocked: String { text("taskCockpit.reason.routingBlocked", "Routing confidence is blocked: the task did not map cleanly to a stable skill route.") }
-    static var taskCockpitReasonTaskWordingWeak: String { text("taskCockpit.reason.taskWordingWeak", "The task wording is too broad for the selected skill. Add concrete product, system, or action keywords if this route is intended.") }
-    static var taskCockpitReasonExecNeedsHuman: String { text("taskCockpit.reason.execNeedsHuman", "The candidate skill may require command execution. Confirm the exact action manually before using it.") }
-    static var taskCockpitReasonNetworkDeclared: String { text("taskCockpit.reason.networkDeclared", "The candidate skill declares network access. Confirm the destination and permission boundary before using it.") }
-    static var taskCockpitReasonRouteAmbiguous: String { text("taskCockpit.reason.routeAmbiguous", "There are close alternative routes, so the current task wording is not specific enough.") }
-    static var taskCockpitReasonCrossAgentDuplicate: String { text("taskCockpit.reason.crossAgentDuplicate", "There are cross-agent duplicate or overlap signals that may affect routing clarity.") }
-    static var taskCockpitReasonTaskFitWeak: String { text("taskCockpit.reason.taskFitWeak", "Task fit is weak, so directly choosing this skill may be inaccurate.") }
+    static var taskCockpitReasonReadinessBlocked: String { text("taskCockpit.reason.readinessBlocked", "There is not enough local fit evidence for a confident handoff.") }
+    static var taskCockpitReasonRoutingBlocked: String { text("taskCockpit.reason.routingBlocked", "No stable skill route matched the task.") }
+    static var taskCockpitReasonTaskWordingWeak: String { text("taskCockpit.reason.taskWordingWeak", "The task is too broad; add product, system, or action details.") }
+    static var taskCockpitReasonExecNeedsHuman: String { text("taskCockpit.reason.execNeedsHuman", "The candidate skill may execute commands; confirm the action first.") }
+    static var taskCockpitReasonNetworkDeclared: String { text("taskCockpit.reason.networkDeclared", "The candidate skill declares network access; confirm destination and permissions.") }
+    static var taskCockpitReasonRouteAmbiguous: String { text("taskCockpit.reason.routeAmbiguous", "Nearby routes exist; make the task more specific.") }
+    static var taskCockpitReasonCrossAgentDuplicate: String { text("taskCockpit.reason.crossAgentDuplicate", "Cross-agent duplicate or overlap signals may affect routing.") }
+    static var taskCockpitReasonTaskFitWeak: String { text("taskCockpit.reason.taskFitWeak", "Task fit is weak, so choosing this skill may be inaccurate.") }
     static var taskCockpitAttentionTitle: String { text("taskCockpit.attention.title", "Needs attention") }
-    static var taskCockpitNoAttentionItems: String { text("taskCockpit.attention.empty", "No blocking issue was found in the user-facing preflight.") }
-    static var taskCockpitNextStepReady: String { text("taskCockpit.next.ready", "Next: continue with the recommended agent and skill. This page will not run the task for you.") }
-    static var taskCockpitNextStepNeedsReview: String { text("taskCockpit.next.needsReview", "Next: review the gaps, adjust the task wording or selected skill, then regenerate Preflight.") }
-    static var taskCockpitNextStepBlocked: String { text("taskCockpit.next.blocked", "Next: fix the blocking items first, then regenerate Preflight before handing the task to an agent.") }
-    static var taskCockpitNextStepUnavailable: String { text("taskCockpit.next.unavailable", "Next: refresh the catalog or choose a project/agent, then try Preflight again.") }
+    static var taskCockpitNoAttentionItems: String { text("taskCockpit.attention.empty", "No issue needs attention.") }
+    static var taskCockpitNextStepReady: String { text("taskCockpit.next.ready", "Next: after human confirmation, hand off to the recommended agent.") }
+    static var taskCockpitNextStepNeedsReview: String { text("taskCockpit.next.needsReview", "Next: clarify the task or adjust the skill, then regenerate.") }
+    static var taskCockpitNextStepBlocked: String { text("taskCockpit.next.blocked", "Next: clarify the task or address the risk, then regenerate.") }
+    static var taskCockpitNextStepUnavailable: String { text("taskCockpit.next.unavailable", "Next: refresh the catalog, or choose a project/agent and retry.") }
     static var taskCockpitDiagnosticsTitle: String { text("taskCockpit.diagnostics.title", "Technical diagnostics") }
-    static var taskCockpitDiagnosticsSummary: String { text("taskCockpit.diagnostics.summary", "Internal stage rows, raw evidence references, provider/session/remediation context, and safety flags are kept here for debugging and reviewer evidence.") }
+    static var taskCockpitDiagnosticsSummary: String { text("taskCockpit.diagnostics.summary", "For troubleshooting only: stage progress, raw evidence, context, and safety flags.") }
     static var taskCockpitProgressTitle: String { text("taskCockpit.progress.title", "Progressive feedback") }
     static var taskCockpitProgressPending: String { text("taskCockpit.progress.pending", "Pending") }
     static var taskCockpitProgressChecking: String { text("taskCockpit.progress.checking", "Checking") }
@@ -774,11 +830,11 @@ enum UIStrings {
     static var taskCockpitProgressFailed: String { text("taskCockpit.progress.failed", "Stopped") }
 
     static func taskCockpitPreparingStatus(elapsedSeconds: Int, timeoutSeconds: Int) -> String {
-        format("taskCockpit.preparingStatus", "Preparing local preflight... %d/%d seconds before timeout.", elapsedSeconds, timeoutSeconds)
+        format("taskCockpit.preparingStatus", "Building preflight... %d/%d seconds.", elapsedSeconds, timeoutSeconds)
     }
 
     static func taskCockpitTimedOut(_ timeoutSeconds: Int) -> String {
-        format("taskCockpit.timedOut", "Task preflight did not finish within %d seconds. No provider or write action was started; retry when the service is responsive.", timeoutSeconds)
+        format("taskCockpit.timedOut", "Preflight did not finish within %d seconds; retry later.", timeoutSeconds)
     }
 
     static func taskCockpitFailed(_ reason: String) -> String {
@@ -786,7 +842,7 @@ enum UIStrings {
     }
 
     static func taskCockpitLoadedWithFallback(_ _: String) -> String {
-        text("taskCockpit.loadedWithFallback", "Task preflight completed with partial diagnostics. Core recommendation is shown below.")
+        text("taskCockpit.loadedWithFallback", "Core recommendation is ready; some diagnostics did not return.")
     }
 
     static func taskCockpitElapsedSeconds(_ elapsedSeconds: Int) -> String {
@@ -1060,7 +1116,7 @@ enum UIStrings {
     static var agentSessionReviewTaskPlaceholder: String { text("sessionReview.placeholder.task", "Optional task text") }
     static var agentSessionReviewExpectedPlaceholder: String { text("sessionReview.placeholder.expected", "Optional expected skill names, separated by commas") }
     static var agentSessionReviewAction: String { text("sessionReview.action.review", "Review Session") }
-    static var agentSessionReviewLoadAction: String { text("sessionReview.action.load", "Load Reviews") }
+    static var agentSessionReviewLoadAction: String { text("sessionReview.action.load", "Load Analysis History") }
     static var agentSessionReviewDeleteAction: String { text("sessionReview.action.delete", "Delete review") }
     static var agentSessionReviewInputRequired: String { text("sessionReview.inputRequired", "Paste a session transcript before reviewing.") }
     static var agentSessionReviewUnavailable: String { text("sessionReview.unavailable", "Agent session skill review is unavailable in this service build.") }
@@ -1126,6 +1182,7 @@ enum UIStrings {
     static var llmPromptCopyFullText: String { text("llm.promptPreview.copyFullText", "Copy Full Text") }
     static var llmPromptCloseDetails: String { text("llm.promptPreview.closeDetails", "Close") }
     static var llmPromptHistoryNote: String { text("llm.promptPreview.historyNote", "Latest provider output is shown here and saved in local prompt run history.") }
+    static var llmPromptHistoricalResponse: String { text("llm.promptPreview.historicalResponse", "Previous provider response") }
     static var llmPromptNoOutput: String { text("llm.promptPreview.noOutput", "Provider response did not include copy-only output text.") }
     static func markdownTableHiddenRows(_ count: Int) -> String {
         format("llm.markdown.table.hiddenRows", "%d more rows in full details", count)
@@ -1156,16 +1213,22 @@ enum UIStrings {
     static var toggleUnavailableShadowed: String { text("detail.toggleUnavailable.shadowed", "Shadowed skills are read-only here; resolve the active copy before toggling.") }
     static var toggleUnavailableUnknown: String { text("detail.toggleUnavailable.unknown", "This skill has an unknown catalog state and is read-only in this build.") }
     static var toggleUnavailableToolGlobal: String { text("detail.toggleUnavailable.toolGlobal", "Tool-global skills are read-only previews. Install or copy to an agent requires a separate confirmed action.") }
+    static var guardedToggle: String { text("detail.guardedToggle", "Guarded toggle") }
     static var piGuardedToggle: String { text("detail.pi.guardedToggle", "Guarded toggle") }
-    static var piGuardedToggleBoundary: String { text("detail.pi.guardedToggle.boundary", "Pi toggle is experimental and guarded by preview, config snapshot, and rollback. Install stays blocked; no AI, scripts, or credentials are used.") }
+    static var piGuardedToggleBoundary: String { text("detail.pi.guardedToggle.boundary", "Pi toggle is guarded by preview, trust checks, config snapshot, and rollback. Native installs use the separate confirmed install flow; package installs and compatibility-root file writes stay blocked.") }
+    static var hermesGuardedToggleBoundary: String { text("detail.hermes.guardedToggle.boundary", "Hermes toggle is guarded by preview, config snapshot, read-back, and rollback. It only edits skills.disabled; platform_disabled and external_dirs writes stay blocked.") }
+    static var openClawGuardedToggleBoundary: String { text("detail.openClaw.guardedToggle.boundary", "OpenClaw toggle is guarded by preview, config snapshot, read-back, and rollback. It only edits skills.entries.<key>.enabled; other config keys stay blocked.") }
+    static func guardedToggleBoundary(_ agent: String) -> String {
+        format("detail.guardedToggle.boundary", "%@ toggle is guarded by preview, config snapshot, read-back, and rollback.", agent)
+    }
     static var operationUnavailableBusy: String { text("detail.operationUnavailable.busy", "Another catalog operation is already in progress.") }
     static var readOnly: String { text("detail.readOnly", "Read-only") }
-    static var hermesHomeProfileAccess: String { text("detail.hermes.homeProfileAccess", "Hermes home/profile skills are read-only in this build. Toggle and install stay blocked.") }
-    static var hermesExternalAccess: String { text("detail.hermes.externalAccess", "Hermes external dirs are explicit read-only roots, not project roots. Toggle and install stay blocked.") }
+    static var hermesHomeProfileAccess: String { text("detail.hermes.homeProfileAccess", "Hermes home/profile skills support guarded toggles through skills.disabled. Installs remain limited to the native Hermes skills root.") }
+    static var hermesExternalAccess: String { text("detail.hermes.externalAccess", "Hermes external_dirs are explicit read-only roots, not project roots or install targets. Guarded toggles still write only global skills.disabled.") }
     static var openClawWorkspaceScope: String { text("scope.openClawWorkspace", "Workspace") }
     static var openClawWorkspaceBoundary: String { text("openClaw.workspace.boundary", "OpenClaw scans only workspace skill roots (<workspace>/skills and <workspace>/.agents/skills). Generic repository roots are skipped rather than shown as missing skills.") }
-    static var openClawReadOnlyAccess: String { text("detail.openClaw.readOnlyAccess", "OpenClaw skills are read-only and workspace-scoped in this build. Toggle and install stay blocked; generic repo roots are skipped, not treated as missing skills.") }
-    static var openClawToggleBlocked: String { text("detail.openClaw.toggleBlocked", "OpenClaw workspace skills are read-only in this build. Toggle and install remain blocked.") }
+    static var openClawReadOnlyAccess: String { text("detail.openClaw.readOnlyAccess", "OpenClaw skills support guarded toggles through skills.entries.<key>.enabled. Workspace installs remain limited to confirmed workspace skills roots.") }
+    static var openClawToggleBlocked: String { text("detail.openClaw.toggleBlocked", "OpenClaw toggle needs the guarded config capability; unsupported OpenClaw config keys remain blocked.") }
     static var currentMatchesSnapshot: String { text("snapshot.matches", "Current agent config already matches this snapshot.") }
     static var currentDiffersFromSnapshot: String { text("snapshot.differs", "Current agent config differs from this snapshot.") }
     static var menuScanSkills: String { text("menu.scanSkills", "Scan Skills") }
@@ -1182,6 +1245,10 @@ enum UIStrings {
 
     static func visibleSummary(_ count: Int) -> String {
         format("sidebar.visibleSummary", "%d visible", count)
+    }
+
+    static func localSessionContentCharacters(_ count: Int) -> String {
+        format("localSessionContent.characters", "Chars: %d", count)
     }
 
     static func crossAgentComparisonFilterContext(_ agent: String) -> String {
@@ -1206,6 +1273,10 @@ enum UIStrings {
 
     static func agentConfigTimelineRollbackConfirm(_ target: String) -> String {
         format("sidebar.agentConfigTimeline.rollbackConfirm", "Rollback restores this agent config file only after confirmation. Skill content snapshots are not included. Target: %@", target)
+    }
+
+    static func agentProfileRiskSubsetInline(_ count: Int) -> String {
+        format("agentCopilot.agentProfile.riskSubset.inline", "Risk-related %d", count)
     }
 
     static func visibleFindingsSummary(_ visible: Int, _ total: Int) -> String {

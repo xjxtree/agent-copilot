@@ -1,0 +1,27 @@
+# Development Tasks
+
+This file is for active task routing. Completed version history belongs in
+`CHANGELOG.md` and version verification checklists.
+
+## Active Task Rules
+
+- Create a scoped task before changing user-visible behavior, protocol methods,
+  adapter scope, validation policy, packaging, signing, or safety boundaries.
+- Keep documentation-only cleanup unversioned when it does not claim new product
+  capability or new validation evidence.
+- If documentation claims completion, screenshot evidence, or verifier results,
+  run the relevant command and record the real outcome.
+- Keep work items close to the owning architecture boundary.
+
+## Backlog
+
+- Reduce duplicated historical prose in active documentation.
+- Add focused tests for view models and RPC wrappers when they gain behavior.
+- Keep adapter capability text aligned with `docs/adapters/agent-adapters.md`.
+- Keep runbooks focused on commands and decision rules, not closeout history.
+
+## Done Elsewhere
+
+- Versioned release-impact notes live in `CHANGELOG.md`.
+- Version-specific evidence lives in `docs/verification/v2.*-verification-checklist.md`.
+- UI artifact evidence lives under `docs/ui-artifacts/`.

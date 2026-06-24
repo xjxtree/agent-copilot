@@ -263,7 +263,7 @@ const versions = {
       ".agents/skills",
       "~/.pi/agent/skills",
       ".pi/skills",
-      "project.trusted",
+      "explicit untrusted",
       "native-root install",
       "package install/remove remains blocked",
       "docs/ui-artifacts/v2.94-pi-install-compat-writes",
@@ -295,6 +295,35 @@ const versions = {
       ".agents roots remain scan-only",
       "ClawHub, Git, update, verify, workshop",
       "docs/ui-artifacts/v2.96-openclaw-native-workspace-install",
+      "Final status decision: completed",
+    ],
+  },
+  "v2.97": {
+    title: "# V2.97 Verification Checklist",
+    required: [
+      "Agent Config center",
+      "primary sidebar Config workflow",
+      "skills.disabled",
+      "skills.entries.<key>.enabled",
+      "JSON5 input",
+      "strict JSON write-back",
+      "snapshot/read-back/rollback",
+      "Safe Batch",
+      "Final status decision: completed",
+    ],
+  },
+  "v2.98": {
+    title: "# V2.98 Verification Checklist",
+    required: [
+      "Automatic local session discovery",
+      "session.previewLocalSessions",
+      "Claude Code, Codex, opencode, and Pi",
+      "content_items",
+      "skill_usage_rows",
+      "explicit local invocation markers",
+      "Hermes/OpenClaw session parsing remains deferred",
+      "pnpm check:macos",
+      "pnpm check:privacy",
       "Final status decision: completed",
     ],
   },
@@ -356,12 +385,9 @@ function verifyVersion(version) {
   }
 
   const versionNumber = version.replace("v", "").toUpperCase();
-  const checklistPath = `docs/${version}-verification-checklist.md`;
+  const checklistPath = `docs/verification/${version}-verification-checklist.md`;
   const checklist = readRequired(checklistPath);
   const packageJson = readRequired("package.json");
-  const developmentTasks = readRequired("docs/development-tasks.md");
-  const roadmap = readRequired("docs/roadmap.md");
-
   requireText(checklist, checklistPath, config.title);
   requireText(checklist, checklistPath, "Status: completed");
   requireText(checklist, checklistPath, "pnpm check:privacy");
@@ -390,9 +416,6 @@ function verifyVersion(version) {
     "package.json",
     `pnpm verify:${version}-docs`,
   );
-
-  requireText(developmentTasks, "docs/development-tasks.md", `${version}-verification-checklist.md`);
-  requireText(roadmap, "docs/roadmap.md", `${version}-verification-checklist.md`);
 
   console.log(`${versionNumber} validation docs verification passed`);
 }

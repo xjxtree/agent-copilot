@@ -1,9 +1,89 @@
 import Foundation
 
+enum SidebarContentMode: String, CaseIterable, Identifiable {
+    case sessions
+    case skills
+    case config
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .sessions:
+            return UIStrings.text("sidebar.mode.sessions", "Sessions")
+        case .skills:
+            return UIStrings.skills
+        case .config:
+            return UIStrings.text("sidebar.mode.config", "Config")
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .sessions:
+            return "bubble.left.and.text.bubble.right"
+        case .skills:
+            return "square.stack.3d.up"
+        case .config:
+            return "slider.horizontal.3"
+        }
+    }
+}
+
+enum AgentConfigScopeFilter: String, CaseIterable, Identifiable {
+    case all
+    case global
+    case project
+    case other
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all:
+            return UIStrings.text("filter.allScopes", "All scopes")
+        case .global:
+            return UIStrings.text("filter.globalConfig", "Global config")
+        case .project:
+            return UIStrings.text("filter.projectConfig", "Project config")
+        case .other:
+            return UIStrings.text("filter.otherConfig", "Other supported")
+        }
+    }
+
+    func includes(_ snapshot: ConfigSnapshotRecord) -> Bool {
+        let scope = snapshot.scope.lowercased()
+        switch self {
+        case .all:
+            return true
+        case .global:
+            return scope.contains("global")
+        case .project:
+            return scope.contains("project")
+        case .other:
+            return !scope.contains("global") && !scope.contains("project")
+        }
+    }
+}
+
+enum LocalSessionScopeFilter: String, CaseIterable, Identifiable {
+    case project
+    case all
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .project:
+            return UIStrings.text("sidebar.sessions.scope.project", "Project")
+        case .all:
+            return UIStrings.text("sidebar.sessions.scope.all", "All")
+        }
+    }
+}
+
 enum SkillStateFilter: String, CaseIterable, Identifiable {
     case all
-    case needsTriage
-    case brokenOrMissing
     case risky
     case enabled
     case disabled
@@ -12,18 +92,21 @@ enum SkillStateFilter: String, CaseIterable, Identifiable {
     case shadowed
     case unknown
     case withFindings
-    case withConflicts
 
     var id: String { rawValue }
+
+    static let sidebarCases: [SkillStateFilter] = [
+        .all,
+        .enabled,
+        .disabled,
+        .withFindings,
+        .risky
+    ]
 
     var title: String {
         switch self {
         case .all:
             return UIStrings.text("filter.all", "All")
-        case .needsTriage:
-            return UIStrings.text("filter.needsTriage", "Needs Triage")
-        case .brokenOrMissing:
-            return UIStrings.text("filter.brokenOrMissing", "Broken / Missing")
         case .risky:
             return UIStrings.text("filter.risky", "Risky")
         case .enabled:
@@ -40,8 +123,36 @@ enum SkillStateFilter: String, CaseIterable, Identifiable {
             return UIStrings.stateUnknown
         case .withFindings:
             return UIStrings.findings
-        case .withConflicts:
-            return UIStrings.text("filter.sameAgentConflicts", "Same-agent Conflicts")
+        }
+    }
+}
+
+enum SkillScopeFilter: String, CaseIterable, Identifiable {
+    case all
+    case project
+    case global
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all:
+            return UIStrings.text("filter.allScopes", "All scopes")
+        case .project:
+            return UIStrings.text("filter.projectSkills", "Project skills")
+        case .global:
+            return UIStrings.text("filter.globalSkills", "Global skills")
+        }
+    }
+
+    func includes(_ skill: SkillRecord) -> Bool {
+        switch self {
+        case .all:
+            return true
+        case .project:
+            return skill.provenance.scopeKind == .project
+        case .global:
+            return skill.provenance.scopeKind == .global || skill.provenance.scopeKind == .toolGlobal
         }
     }
 }
@@ -95,6 +206,22 @@ enum SkillAgentFilter: String, CaseIterable, Identifiable {
     }
 }
 
+enum SkillSortDirection: String, CaseIterable, Identifiable {
+    case ascending
+    case descending
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .ascending:
+            return UIStrings.text("sort.ascending", "Ascending")
+        case .descending:
+            return UIStrings.text("sort.descending", "Descending")
+        }
+    }
+}
+
 enum SkillSortOrder: String, CaseIterable, Identifiable {
     case name
     case scope
@@ -133,7 +260,9 @@ enum SkillListModel {
         searchText: String,
         agentFilter: SkillAgentFilter,
         stateFilter: SkillStateFilter,
-        sortOrder: SkillSortOrder
+        scopeFilter: SkillScopeFilter = .all,
+        sortOrder: SkillSortOrder,
+        sortDirection: SkillSortDirection = .ascending
     ) -> [SkillRecord] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         let findingInstanceIDs = Set(findings.compactMap(\.instanceId))
@@ -151,19 +280,12 @@ enum SkillListModel {
             guard agentFilter.includes(skill) else {
                 return false
             }
+            guard scopeFilter.includes(skill) else {
+                return false
+            }
             switch stateFilter {
             case .all:
                 return true
-            case .needsTriage:
-                let status = DisplayText.statusKind(skill.state, enabled: skill.enabled)
-                return findingInstanceIDs.contains(skill.id)
-                    || sameAgentConflictInstanceIDs.contains(skill.id)
-                    || status == .broken
-                    || status == .missing
-                    || status == .unknown
-            case .brokenOrMissing:
-                let status = DisplayText.statusKind(skill.state, enabled: skill.enabled)
-                return status == .broken || status == .missing
             case .risky:
                 return riskyFindingInstanceIDs.contains(skill.id)
             case .enabled:
@@ -179,12 +301,15 @@ enum SkillListModel {
             case .unknown:
                 return DisplayText.statusKind(skill.state, enabled: skill.enabled) == .unknown
             case .withFindings:
+                let status = DisplayText.statusKind(skill.state, enabled: skill.enabled)
                 return findingInstanceIDs.contains(skill.id)
-            case .withConflicts:
-                return sameAgentConflictInstanceIDs.contains(skill.id)
+                    || sameAgentConflictInstanceIDs.contains(skill.id)
+                    || status == .broken
+                    || status == .missing
+                    || status == .unknown
             }
         }
-        return filtered.sorted { lhs, rhs in
+        let sorted = filtered.sorted { lhs, rhs in
             switch sortOrder {
             case .name:
                 return compare(lhs.name, rhs.name)
@@ -206,6 +331,12 @@ enum SkillListModel {
             case .path:
                 return compare(lhs.displayPath, rhs.displayPath)
             }
+        }
+        switch sortDirection {
+        case .ascending:
+            return sorted
+        case .descending:
+            return Array(sorted.reversed())
         }
     }
 

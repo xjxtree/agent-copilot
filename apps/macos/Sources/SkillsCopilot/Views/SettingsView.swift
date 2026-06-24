@@ -6,27 +6,9 @@ struct SettingsView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(AppLanguage.storageKey) private var appLanguageRawValue = AppLanguage.defaultLanguage.rawValue
     @AppStorage(DisplayText.screenshotPrivacyModeStorageKey) private var screenshotPrivacyModeEnabled = true
-    @State private var draft = ""
-    @State private var hasEditedDraft = false
     @State private var providerDraft = AIProviderSettingsDraft(status: .unavailable())
     @State private var hasEditedProviderDraft = false
     @State private var showsServiceDiagnostics = false
-
-    private var validationMessage: String? {
-        guard let data = draft.data(using: .utf8) else {
-            return UIStrings.settingsInvalidUTF8
-        }
-        do {
-            _ = try JSONSerialization.jsonObject(with: data)
-            return nil
-        } catch {
-            return error.localizedDescription
-        }
-    }
-
-    private var canSave: Bool {
-        hasEditedDraft && validationMessage == nil && !store.isSavingSettings
-    }
 
     private var providerValidationMessage: String? {
         providerDraft.validationMessage
@@ -75,11 +57,6 @@ struct SettingsView: View {
                 Label(UIStrings.providerObservabilityTitle, systemImage: "waveform.path.ecg.rectangle")
             }
 
-            editorSection
-                .tabItem {
-                    Label(UIStrings.claudeSettings, systemImage: "curlybraces")
-                }
-
             serviceSection
                 .tabItem {
                     Label(UIStrings.service, systemImage: "wrench.and.screwdriver")
@@ -92,17 +69,10 @@ struct SettingsView: View {
                 await store.reload()
             }
             await store.loadAIProviderStatus()
-            await store.loadClaudeSettings()
             if store.providerObservabilityResult == nil {
                 await store.loadProviderObservability()
             }
-            resetDraftFromStore()
             resetProviderDraftFromStore()
-        }
-        .onChange(of: store.claudeSettings) { _ in
-            if !hasEditedDraft {
-                resetDraftFromStore()
-            }
         }
         .onChange(of: store.aiProviderStatus) { _ in
             if !hasEditedProviderDraft {
@@ -386,85 +356,6 @@ struct SettingsView: View {
             }
             .padding(4)
         }
-    }
-
-    private var editorSection: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(UIStrings.claudeSettings)
-                            .font(.headline)
-                        Text(store.claudeSettings?.target ?? "~/.claude/settings.json")
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                    }
-                    Spacer()
-                    if let settings = store.claudeSettings {
-                        Label(settings.exists ? UIStrings.existingFile : UIStrings.willCreateFile, systemImage: settings.exists ? "doc.text" : "doc.badge.plus")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                TextEditor(text: $draft)
-                    .font(.system(.body, design: .monospaced))
-                    .frame(minHeight: 300)
-                    .padding(6)
-                    .adaptiveMaterialSurface()
-                    .onChange(of: draft) { _ in
-                        hasEditedDraft = draft != (store.claudeSettings?.content ?? "")
-                    }
-
-                if let validationMessage {
-                    SettingsBanner(message: validationMessage, systemImage: "exclamationmark.triangle.fill", color: .red)
-                } else if hasEditedDraft {
-                    SettingsBanner(message: UIStrings.jsonValidSettingsWrite, systemImage: "checkmark.circle.fill", color: .green)
-                }
-
-                if let message = store.settingsMessage {
-                    SettingsBanner(message: message, systemImage: "checkmark.circle.fill", color: .green)
-                }
-
-                if let error = store.settingsErrorMessage {
-                    SettingsBanner(message: error, systemImage: "exclamationmark.triangle.fill", color: .red)
-                }
-
-                HStack {
-                    Button {
-                        Task {
-                            hasEditedDraft = false
-                            await store.loadClaudeSettings()
-                            resetDraftFromStore()
-                        }
-                    } label: {
-                        Label(UIStrings.reload, systemImage: "arrow.clockwise")
-                    }
-                    .disabled(store.isLoadingSettings || store.isSavingSettings)
-
-                    Spacer()
-
-                    Button {
-                        Task {
-                            let saved = await store.saveClaudeSettings(content: draft)
-                            if saved {
-                                hasEditedDraft = false
-                                resetDraftFromStore()
-                            }
-                        }
-                    } label: {
-                        Label(UIStrings.save, systemImage: "square.and.arrow.down")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!canSave)
-                }
-            }
-            .padding(4)
-        }
-    }
-
-    private func resetDraftFromStore() {
-        draft = store.claudeSettings?.content ?? ""
-        hasEditedDraft = false
     }
 
     private func resetProviderDraftFromStore() {

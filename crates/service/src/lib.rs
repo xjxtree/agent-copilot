@@ -475,6 +475,14 @@ pub struct ListCrossAgentComparisonParams {
 pub struct ReportExportLocalParams {
     #[serde(default)]
     pub formats: Vec<ReportExportFormat>,
+    #[serde(default, alias = "agentFilter")]
+    pub agent: Option<String>,
+    #[serde(default, alias = "instanceId", alias = "skill_instance_id")]
+    pub instance_id: Option<String>,
+    #[serde(default, alias = "stateFilter")]
+    pub state_filter: Option<String>,
+    #[serde(default)]
+    pub search: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize)]
@@ -508,6 +516,7 @@ pub struct ReportExportLocalResult {
     pub files: Vec<ReportExportedFile>,
     pub catalog_available: bool,
     pub summary: ReportExportSummary,
+    pub sections: Vec<ReportExportSection>,
     pub redaction: ReportExportRedaction,
     pub read_only: bool,
     pub writes_allowed: bool,
@@ -520,6 +529,12 @@ pub struct ReportExportLocalResult {
 pub struct ReportExportedFile {
     pub format: &'static str,
     pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ReportExportSection {
+    pub name: &'static str,
+    pub count: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -3090,7 +3105,17 @@ pub struct LocalSessionPreviewParams {
     #[serde(default, alias = "authorized_dirs", alias = "authorized_paths")]
     pub authorized_roots: Vec<String>,
     #[serde(default)]
+    pub auto_discover: Option<bool>,
+    #[serde(default)]
     pub agent: Option<String>,
+    #[serde(default)]
+    pub scope: Option<String>,
+    #[serde(default)]
+    pub search: Option<String>,
+    #[serde(default)]
+    pub project_root: Option<String>,
+    #[serde(default)]
+    pub current_cwd: Option<String>,
     #[serde(default)]
     pub limit: Option<usize>,
     #[serde(default)]
@@ -3113,12 +3138,41 @@ pub struct LocalSessionPreviewRow {
     pub id: String,
     pub title: String,
     pub source_kind: String,
+    pub scope: String,
     pub agent: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_root: Option<String>,
     pub redacted_path: String,
     pub modified_at: Option<i64>,
     pub excerpt: String,
     pub excerpt_char_count: usize,
+    pub user_message_count: usize,
+    pub total_message_count: usize,
+    pub tool_call_count: usize,
+    pub skill_call_count: usize,
     pub content_hash: String,
+    pub evidence_refs: Vec<String>,
+    pub content_items: Vec<LocalSessionContentItem>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LocalSessionContentItem {
+    pub id: String,
+    pub kind: String,
+    pub title: String,
+    pub text: String,
+    pub char_count: usize,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LocalSessionSkillUsageRow {
+    pub skill_id: String,
+    pub skill_name: String,
+    pub agent: String,
+    pub call_count: usize,
+    pub session_count: usize,
+    pub latest_modified_at: Option<i64>,
     pub evidence_refs: Vec<String>,
 }
 
@@ -3130,6 +3184,11 @@ pub struct LocalSessionPreviewResult {
     pub roots: Vec<LocalSessionPreviewRoot>,
     pub count: usize,
     pub total_candidate_count: usize,
+    pub user_message_count: usize,
+    pub total_message_count: usize,
+    pub tool_call_count: usize,
+    pub skill_call_count: usize,
+    pub skill_usage_rows: Vec<LocalSessionSkillUsageRow>,
     pub session_rows: Vec<LocalSessionPreviewRow>,
     pub gap_notes: Vec<String>,
     pub blocker_notes: Vec<String>,

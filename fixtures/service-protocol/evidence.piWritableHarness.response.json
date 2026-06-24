@@ -17,7 +17,7 @@
         "reenabled_after_toggle": true,
         "rollback_restored": true,
         "invalid_json_blocked": true,
-        "trust_gate_blocked": false,
+        "explicit_untrusted_blocked": false,
         "writes_confined_to_disposable_root": true,
         "snapshot_content": "{\"packages\":{\"fixture\":{\"skills\":{\"disabled\":[]}}},\"project\":{\"trusted\":true},\"skills\":{\"disabled\":[]}}",
         "notes": [
@@ -27,7 +27,7 @@
         ]
       },
       {
-        "name": "project-toggle-trust-gate",
+        "name": "project-toggle-explicit-untrusted-block",
         "layer": "project",
         "config_path": "<app-data-dir>/evidence/pi-writable-harness/fixture/project/.pi/settings.json",
         "skill_name": "project-review",
@@ -36,7 +36,7 @@
         "reenabled_after_toggle": true,
         "rollback_restored": true,
         "invalid_json_blocked": true,
-        "trust_gate_blocked": true,
+        "explicit_untrusted_blocked": true,
         "writes_confined_to_disposable_root": true,
         "snapshot_content": "{\"packages\":{\"fixture\":{\"skills\":{\"disabled\":[]}}},\"project\":{\"trusted\":true},\"skills\":{\"disabled\":[]}}",
         "notes": [
@@ -55,7 +55,7 @@
         "reenabled_after_toggle": true,
         "rollback_restored": true,
         "invalid_json_blocked": true,
-        "trust_gate_blocked": false,
+        "explicit_untrusted_blocked": false,
         "writes_confined_to_disposable_root": true,
         "snapshot_content": "{\"packages\":{\"fixture\":{\"skills\":{\"disabled\":[]}}},\"project\":{\"trusted\":true},\"skills\":{\"disabled\":[]}}",
         "notes": [

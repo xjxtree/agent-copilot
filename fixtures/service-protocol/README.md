@@ -31,7 +31,7 @@ V2.11 adapter capability matrix note:
 
 - `adapter.listCapabilities.response.json` is the direct capability matrix fixture for Claude Code, Codex, opencode, Pi, Hermes, and OpenClaw.
 - `service.status.response.json` and `app.stateSnapshot.response.json` include `adapter_capabilities` so native UI shells can render adapter status without guessing from agent names.
-- The matrix is descriptive for unsupported write paths: opencode is writable for native roots after V2.12 validation, Pi is guarded after V2.94 validation, Hermes is install-only after V2.95 validation, and OpenClaw is install-only after V2.96 validation while unsupported config/network paths stay blocked.
+- The matrix is descriptive for unsupported write paths: opencode is writable for native roots after V2.12 validation, Pi is guarded after V2.94 validation, Hermes native install landed in V2.95 and guarded config toggles landed in V2.97, and OpenClaw native/workspace install landed in V2.96 with guarded config toggles in V2.97 while unsupported config/network paths stay blocked.
 
 V2.13 / V2.94 Pi note:
 
@@ -42,22 +42,24 @@ V2.13 / V2.94 Pi note:
 - Pi package install/remove, `.agents` direct skill-file installs, scripts,
   provider writes, credentials, cloud sync, and telemetry remain blocked.
 
-V2.95 Hermes native install note:
+V2.95 / V2.97 Hermes native install and config-toggle note:
 
-- Hermes is `install-only` in `adapter.listCapabilities`, `service.status`, and `app.stateSnapshot`.
+- Hermes is guarded in `adapter.listCapabilities`, `service.status`, and `app.stateSnapshot`.
 - Hermes native skill-file install may copy a local ToolGlobal `SKILL.md` into `~/.hermes/skills` after confirmation.
+- V2.97 allows guarded skill toggles by patching only the documented global `skills.disabled` list in `~/.hermes/config.yaml` with snapshot/read-back/rollback.
 - Hermes generic project scan remains blocked; `skills.external_dirs` are explicit read-only external roots and not project or install targets.
-- Hermes config toggles, per-platform enable/disable, hub/URL/tap/update/uninstall/reset operations, scripts, credentials, cloud sync, telemetry, and uncontrolled network fetch remain blocked.
+- Hermes `platform_disabled`, `skills.external_dirs` writes, hub/URL/tap/update/uninstall/reset operations, scripts, credentials, cloud sync, telemetry, and uncontrolled network fetch remain blocked.
 - The Hermes fixture directory contains active-home scanner contract fixtures plus evidence-only cron samples.
 - `catalog.scanAll` includes Hermes after the read-only scanner implementation lands.
 
-OpenClaw native/workspace install note:
+V2.96 / V2.97 OpenClaw native/workspace install and config-toggle note:
 
-- OpenClaw is `install-only` / supported scan in `adapter.listCapabilities`, `service.status`, and `app.stateSnapshot`.
+- OpenClaw is guarded in `adapter.listCapabilities`, `service.status`, and `app.stateSnapshot`.
 - OpenClaw project scan is workspace-scoped only for confirmed OpenClaw workspace roots; arbitrary repo roots must not be inferred as OpenClaw projects.
 - V2.96 allows confirmed local ToolGlobal `SKILL.md` copies into `~/.openclaw/skills` and confirmed OpenClaw workspace `<workspace>/skills` only.
+- V2.97 allows guarded skill toggles by patching only documented `skills.entries.<key>.enabled` in `~/.openclaw/openclaw.json`; JSON5 input is parsed and rewritten as strict JSON.
 - OpenClaw `.agents` roots remain scan-only and are not direct install targets.
-- OpenClaw config toggles, `skills.entries` writes, ClawHub, Git, update, verify, workshop, and network-backed operations remain blocked.
+- OpenClaw agent allowlists, env/apiKey, install policy, load roots, ClawHub, Git, update, verify, workshop, and network-backed operations remain blocked.
 - The OpenClaw fixture directory contains read-only scanner contract fixtures plus evidence samples.
 - `catalog.scanAll` includes OpenClaw after V2.16.
 

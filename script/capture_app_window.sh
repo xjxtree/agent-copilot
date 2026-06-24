@@ -2,7 +2,7 @@
 set -euo pipefail
 
 APP_TARGET="${1:-AgentCopilot}"
-OUTPUT_PATH="${2:-docs/ui-artifacts/native-macos-shell/completed.png}"
+OUTPUT_PATH="${2:-/tmp/agent-copilot-window-capture.png}"
 TARGET_PID="${SKILLS_COPILOT_TARGET_PID:-${3:-}}"
 TARGET_WINDOW_ID="${SKILLS_COPILOT_TARGET_WINDOW_ID:-${4:-}}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

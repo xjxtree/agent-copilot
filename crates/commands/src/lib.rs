@@ -21,8 +21,8 @@ use skills_copilot_catalog::{
     SkillInstanceMeta, SkillRecord,
 };
 use skills_copilot_core::{
-    AdapterContext, AgentAdapter, AgentConfigAdapter, AgentConfigDocument, AgentId, ConfigFormat,
-    NetworkAccess, PermissionRequest, RootSource, Scope, SkillInstance, SkillState,
+    AdapterContext, AgentAdapter, AgentConfigDocument, AgentId, ConfigFormat, NetworkAccess,
+    PermissionRequest, RootSource, Scope, SkillInstance, SkillState,
 };
 use skills_copilot_scanner::{scan_agent, ScannerError};
 use thiserror::Error;
@@ -31,12 +31,18 @@ use thiserror::Error;
 use skills_copilot_core::SkillScript;
 
 mod analysis;
+mod config_support;
 mod script_execution;
 
 use analysis::{
     dedupe_rule_finding_records, dedupe_rule_findings, validate_finding_triage_status,
     validate_rule_scope, validate_rule_severity_override, validate_rule_suppression_reason,
     validate_rule_tuning_key,
+};
+use config_support::{
+    agent_from_snapshot, batch_capability_label, batch_capability_labels, batch_skip_reason,
+    batch_snapshot_rollback_notes, minimal_skill_instance, normalize_initial_config_text,
+    patch_enabled_for_agent, scope_from_snapshot,
 };
 
 pub use analysis::*;
@@ -217,7 +223,7 @@ pub struct PiWritableHarnessScenario {
     pub reenabled_after_toggle: bool,
     pub rollback_restored: bool,
     pub invalid_json_blocked: bool,
-    pub trust_gate_blocked: bool,
+    pub explicit_untrusted_blocked: bool,
     pub writes_confined_to_disposable_root: bool,
     pub snapshot_content: String,
     pub notes: Vec<&'static str>,
@@ -288,7 +294,7 @@ pub fn run_pi_writable_evidence_harness(
         )?,
         run_pi_harness_scenario(
             disposable_root,
-            "project-toggle-trust-gate",
+            "project-toggle-explicit-untrusted-block",
             "project",
             &project_path,
             "project-review",
@@ -340,17 +346,17 @@ fn run_pi_harness_scenario(
     let initial_enabled = !pi_harness_skill_disabled(&original, skill_name)?;
 
     let invalid_json_blocked =
-        pi_harness_patch_enabled("{ not valid json", skill_name, false, true).is_err();
-    let trust_gate_blocked = layer == "project"
-        && pi_harness_patch_enabled(&original, skill_name, false, false).is_err();
+        pi_harness_patch_enabled("{ not valid json", skill_name, false, false).is_err();
+    let explicit_untrusted_blocked =
+        layer == "project" && pi_harness_patch_enabled(&original, skill_name, false, true).is_err();
 
-    let disabled_text = pi_harness_patch_enabled(&original, skill_name, false, true)?;
+    let disabled_text = pi_harness_patch_enabled(&original, skill_name, false, false)?;
     write_pi_harness_file(disposable_root, config_path, &disabled_text)?;
     let disabled_after_toggle =
         pi_harness_skill_disabled(&fs::read_to_string(config_path)?, skill_name)?;
 
     let reenabled_text =
-        pi_harness_patch_enabled(&fs::read_to_string(config_path)?, skill_name, true, true)?;
+        pi_harness_patch_enabled(&fs::read_to_string(config_path)?, skill_name, true, false)?;
     write_pi_harness_file(disposable_root, config_path, &reenabled_text)?;
     let reenabled_after_toggle =
         !pi_harness_skill_disabled(&fs::read_to_string(config_path)?, skill_name)?;
@@ -368,7 +374,7 @@ fn run_pi_harness_scenario(
         reenabled_after_toggle,
         rollback_restored,
         invalid_json_blocked,
-        trust_gate_blocked,
+        explicit_untrusted_blocked,
         writes_confined_to_disposable_root: config_path.starts_with(disposable_root),
         snapshot_content: original,
         notes: vec![
@@ -435,11 +441,11 @@ fn pi_harness_patch_enabled(
     content: &str,
     skill_name: &str,
     enabled: bool,
-    project_trusted: bool,
+    project_explicitly_untrusted: bool,
 ) -> Result<String, CommandError> {
-    if !project_trusted {
+    if project_explicitly_untrusted {
         return Err(CommandError::UnsafeConfigPath(
-            "Pi project fixture is not trusted; project-local toggle evidence write blocked"
+            "Pi project fixture is explicitly untrusted; project-local toggle evidence write blocked"
                 .to_string(),
         ));
     }
@@ -823,7 +829,7 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
             ),
             config_toggle: AdapterFeatureCapability::supported_with_reason(
                 "guarded-v2.94",
-                "V2.94 enables guarded Pi-native and .agents compatibility toggles through settings JSON, pre-toggle snapshots, atomic write verification, and rollback; project/package toggles require explicit project trust.",
+                "V2.94 enables guarded Pi-native and .agents compatibility toggles through settings JSON, pre-toggle snapshots, atomic write verification, and rollback; project/package toggles do not require a positive trust marker, but explicit untrusted project markers block writes.",
             ),
             config_snapshot: AdapterFeatureCapability::supported_with_reason(
                 "guarded-v2.94",
@@ -839,14 +845,14 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
             ),
             blockers: vec![
                 "Pi package install/remove remains blocked.",
-                "Project/package toggles require trusted Pi project settings.",
+                "Explicit untrusted Pi project settings block project/package toggles.",
                 ".agents compatibility roots are not direct install targets.",
             ],
         },
         AdapterCapabilityRecord {
             agent: AgentId::Hermes.as_str(),
             display_name: "Hermes",
-            status: "install-only",
+            status: "guarded",
             scan: AdapterFeatureCapability::supported_with_reason(
                 "verified-read-only",
                 "V2.38 scans active Hermes home ~/.hermes/skills/**/SKILL.md plus explicit skills.external_dirs as read-only external roots without reading Hermes secrets, cron content, or logs.",
@@ -855,26 +861,26 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
                 "blocked",
                 "Hermes has no generic project-local skill discovery; explicit skills.external_dirs are read-only external roots, not project roots.",
             ),
-            config_toggle: AdapterFeatureCapability::blocked(
-                "blocked",
-                "Hermes toggle semantics and config schema are not confirmed.",
+            config_toggle: AdapterFeatureCapability::supported_with_reason(
+                "verified-skills-disabled-v2.97",
+                "V2.97 writes the documented global skills.disabled list in ~/.hermes/config.yaml with pre-toggle snapshots, atomic write verification, and rollback.",
             ),
-            config_snapshot: AdapterFeatureCapability::blocked(
-                "blocked",
-                "No verified Hermes rollback-safe toggle config target exists.",
+            config_snapshot: AdapterFeatureCapability::supported_with_reason(
+                "verified-v2.97",
+                "Hermes config toggle snapshots use the existing redacted config snapshot and rollback path.",
             ),
             install: AdapterFeatureCapability::supported_with_reason(
                 "verified-native-root-v2.95",
                 "V2.95 supports confirmed local tool-global SKILL.md copy into the Hermes native ~/.hermes/skills root only; Hermes hub, URL, tap, update, uninstall, and external_dirs writes remain out of scope.",
             ),
             writable: AdapterFeatureCapability::supported_with_reason(
-                "install-only-v2.95",
-                "Writable support is limited to confirmed local skill-file installs into ~/.hermes/skills; config toggles, per-platform enablement, external_dirs writes, hub/network installs, scripts, credentials, cloud sync, and telemetry remain blocked.",
+                "guarded-v2.97",
+                "Writable support covers global skills.disabled toggles and confirmed local skill-file installs into ~/.hermes/skills; per-platform enablement, external_dirs writes, hub/network installs, scripts, credentials, cloud sync, and telemetry remain blocked.",
             ),
             blockers: vec![
                 "Generic Hermes project-local skill discovery is not confirmed and remains disabled.",
                 "Hermes external_dirs are scan-only external roots, not writable or install targets.",
-                "Confirm individual skill disable/re-enable schema and rollback semantics before writable support.",
+                "V2.97 only writes global skills.disabled; platform_disabled and other Hermes config keys remain read-only.",
                 "Hermes hub, URL, tap, update, uninstall, and reset operations remain blocked.",
                 "Do not map Hermes cron jobs to SkillInstance.",
             ],
@@ -882,7 +888,7 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
         AdapterCapabilityRecord {
             agent: AgentId::Openclaw.as_str(),
             display_name: "OpenClaw",
-            status: "install-only",
+            status: "guarded",
             scan: AdapterFeatureCapability::supported_with_reason(
                 "verified-read-only",
                 "V2.39 scans documented OpenClaw filesystem roots without calling the OpenClaw CLI; workspace project roots are read-only and scoped to confirmed OpenClaw workspaces.",
@@ -891,26 +897,26 @@ pub fn list_adapter_capabilities(_ctx: &AdapterContext) -> Vec<AdapterCapability
                 "verified-read-only",
                 "Project scan is limited to confirmed OpenClaw home workspace roots, including selected paths inside those workspaces, and only reads <workspace>/skills plus <workspace>/.agents/skills; arbitrary repo roots are skipped.",
             ),
-            config_toggle: AdapterFeatureCapability::blocked(
-                "blocked",
-                "OpenClaw plugin config evidence is not a verified skill toggle contract.",
+            config_toggle: AdapterFeatureCapability::supported_with_reason(
+                "verified-skills-entries-v2.97",
+                "V2.97 writes the documented skills.entries.<key>.enabled boolean in ~/.openclaw/openclaw.json with pre-toggle snapshots, atomic write verification, and rollback.",
             ),
-            config_snapshot: AdapterFeatureCapability::blocked(
-                "blocked",
-                "No verified OpenClaw rollback-safe skill config target exists.",
+            config_snapshot: AdapterFeatureCapability::supported_with_reason(
+                "verified-v2.97",
+                "OpenClaw config toggle snapshots use the existing redacted config snapshot and rollback path; JSON5 input is parsed and rewritten as strict JSON.",
             ),
             install: AdapterFeatureCapability::supported_with_reason(
                 "verified-native-workspace-v2.96",
                 "V2.96 supports confirmed local tool-global SKILL.md copy into OpenClaw native ~/.openclaw/skills and confirmed OpenClaw workspace <workspace>/skills roots only; .agents direct installs and ClawHub/Git/network-backed operations remain out of scope.",
             ),
             writable: AdapterFeatureCapability::supported_with_reason(
-                "install-only-v2.96",
-                "Writable support is limited to confirmed local skill-file installs into native OpenClaw skill roots; config toggles, skills.entries writes, .agents direct installs, ClawHub, Git, update, verify, workshop, scripts, credentials, cloud sync, and telemetry remain blocked.",
+                "guarded-v2.97",
+                "Writable support covers skills.entries enabled toggles plus confirmed local skill-file installs into native OpenClaw skill roots; .agents direct installs, ClawHub, Git, update, verify, workshop, scripts, credentials, cloud sync, and telemetry remain blocked.",
             ),
             blockers: vec![
                 "Arbitrary repository roots are not OpenClaw projects and are not scanned as project roots.",
                 "OpenClaw .agents roots are scan-only and are not direct install targets.",
-                "OpenClaw plugin/config evidence is not a verified credential-safe skill toggle contract.",
+                "V2.97 only writes skills.entries.<key>.enabled; agent allowlists, env/apiKey, install policy, workshop, and load roots remain read-only.",
                 "OpenClaw ClawHub, Git, update, verify, workshop, and network-backed operations remain blocked.",
             ],
         },
@@ -1060,7 +1066,7 @@ fn adapter_root_reason(
             "Confirmed OpenClaw workspace root; arbitrary repository roots are not inferred or scanned.".to_string()
         }
         (AgentId::Pi, RootSource::Project) => {
-            "Pi native project/package root is scan-capable; writable toggles remain guarded by trusted project settings, and tool-global direct install may target native Pi roots after confirmation.".to_string()
+            "Pi native project/package root is scan-capable; writable toggles use project-bound settings snapshots and are blocked by explicit untrusted markers; tool-global direct install may target native Pi roots after confirmation.".to_string()
         }
         (AgentId::Pi, RootSource::Compatibility) => {
             "Pi .agents compatibility root is scan-capable and toggleable through guarded Pi settings, but is never a direct skill-file install target.".to_string()
@@ -2351,7 +2357,12 @@ pub fn rollback_snapshot(
     let agent = agent_from_snapshot(&snapshot.agent)?;
     if !matches!(
         agent,
-        AgentId::ClaudeCode | AgentId::Codex | AgentId::Opencode | AgentId::Pi
+        AgentId::ClaudeCode
+            | AgentId::Codex
+            | AgentId::Opencode
+            | AgentId::Pi
+            | AgentId::Hermes
+            | AgentId::Openclaw
     ) {
         return Err(CommandError::UnsafeConfigPath(format!(
             "snapshot agent {} is not writable by config rollback commands",
@@ -3332,86 +3343,6 @@ fn batch_preview_token(
     ))
 }
 
-fn normalize_initial_config_text(config_target: &ConfigTarget, text: String) -> String {
-    if config_target.agent == AgentId::Pi && text.trim().is_empty() {
-        return pi_default_settings_text(config_target.scope);
-    }
-    text
-}
-
-fn pi_default_settings_text(scope: Scope) -> String {
-    let trusted = scope == Scope::AgentGlobal;
-    let mut text = serde_json::json!({
-        "project": {
-            "trusted": trusted
-        },
-        "skills": {
-            "disabled": []
-        }
-    })
-    .to_string();
-    text.push('\n');
-    text
-}
-
-fn batch_capability_labels(
-    affected_items: &[BatchToggleAffectedItem],
-    skipped_items: &[BatchToggleSkippedItem],
-) -> Vec<String> {
-    let mut labels = BTreeSet::new();
-    for item in affected_items {
-        labels.insert(item.capability_label.clone());
-    }
-    for item in skipped_items {
-        if let Some(label) = &item.capability_label {
-            labels.insert(label.clone());
-        }
-    }
-    labels.into_iter().collect()
-}
-
-fn batch_snapshot_rollback_notes(affected_items: &[BatchToggleAffectedItem]) -> Vec<String> {
-    let targets = affected_items
-        .iter()
-        .map(|item| item.config_target.clone())
-        .collect::<BTreeSet<_>>();
-    if targets.is_empty() {
-        return vec![
-            "No agent config writes are allowed for this selection after filtering.".to_string(),
-        ];
-    }
-    vec![
-        format!(
-            "Will create one pre-batch-toggle config snapshot for each affected config target ({} target(s)).",
-            targets.len()
-        ),
-        "Each write uses the existing config lock, atomic write, readback verification, and rollback-safe snapshot path.".to_string(),
-        "No skill files, scripts, credentials, AI providers, cloud sync, telemetry, or release artifacts are touched.".to_string(),
-    ]
-}
-
-fn batch_capability_label(agent: AgentId) -> &'static str {
-    match agent {
-        AgentId::ClaudeCode => "Claude Code verified config toggle",
-        AgentId::Codex => "Codex verified native-root user-config toggle",
-        AgentId::Opencode => "opencode verified exact permission.skill toggle",
-        AgentId::Pi => "Pi guarded config toggle",
-        AgentId::Hermes => "Hermes native install only; config toggle blocked",
-        AgentId::Openclaw => "OpenClaw native/workspace install only; config toggle blocked",
-        AgentId::ToolGlobal => "Tool-global preview; direct toggle blocked",
-    }
-}
-
-fn batch_skip_reason(agent: AgentId, error: &CommandError) -> String {
-    match agent {
-        AgentId::Pi => error.to_string(),
-        AgentId::Hermes => "Hermes config toggles remain blocked in V2.95; native skill-file install is supported, but individual skill toggle semantics and rollback-safe config writes are not confirmed.".to_string(),
-        AgentId::Openclaw => "OpenClaw config toggles remain blocked in V2.96; native and confirmed workspace skill-file installs are supported, but skills.entries writes and rollback-safe config toggles are not confirmed.".to_string(),
-        AgentId::ToolGlobal => "Tool-global staging records are preview/import sources and do not have agent config toggles.".to_string(),
-        _ => error.to_string(),
-    }
-}
-
 #[derive(Debug, Clone)]
 struct ConfigTarget {
     agent: AgentId,
@@ -3425,7 +3356,8 @@ fn config_target_for_instance(
     meta: &SkillInstanceMeta,
 ) -> Result<ConfigTarget, CommandError> {
     if meta.scope == Scope::AgentProject
-        && !project_record_matches_context(
+        && !project_record_matches_context_for_agent(
+            meta.agent,
             meta.project_root.as_deref(),
             ctx.project_root.as_deref(),
         )
@@ -3465,6 +3397,28 @@ fn config_target_for_instance(
                 agent: AgentId::Pi,
                 scope: meta.scope,
                 path: pi_config_path_for_instance(ctx, meta)?,
+                format: ConfigFormat::Json,
+            }),
+            Scope::ToolGlobal => Err(CommandError::UnsupportedScope(meta.scope)),
+            _ => Err(CommandError::UnsupportedScope(meta.scope)),
+        },
+        AgentId::Hermes => match meta.scope {
+            Scope::AgentGlobal => Ok(ConfigTarget {
+                agent: AgentId::Hermes,
+                scope: Scope::AgentGlobal,
+                path: ctx.user_home.join(".hermes/config.yaml"),
+                format: ConfigFormat::Yaml,
+            }),
+            Scope::ToolGlobal | Scope::AgentProject => {
+                Err(CommandError::UnsupportedScope(meta.scope))
+            }
+            _ => Err(CommandError::UnsupportedScope(meta.scope)),
+        },
+        AgentId::Openclaw => match meta.scope {
+            Scope::AgentGlobal | Scope::AgentProject => Ok(ConfigTarget {
+                agent: AgentId::Openclaw,
+                scope: Scope::AgentGlobal,
+                path: ctx.user_home.join(".openclaw/openclaw.json"),
                 format: ConfigFormat::Json,
             }),
             Scope::ToolGlobal => Err(CommandError::UnsupportedScope(meta.scope)),
@@ -3619,6 +3573,35 @@ fn project_record_matches_context(
     ) {
         (Ok(record), Ok(current)) => record == current,
         _ => false,
+    }
+}
+
+fn project_record_matches_context_for_agent(
+    agent: AgentId,
+    record_project_root: Option<&Path>,
+    current_project_root: Option<&Path>,
+) -> bool {
+    if project_record_matches_context(record_project_root, current_project_root) {
+        return true;
+    }
+    if agent != AgentId::Openclaw {
+        return false;
+    }
+    let (Some(record_project_root), Some(current_project_root)) =
+        (record_project_root, current_project_root)
+    else {
+        return false;
+    };
+    match (
+        record_project_root.canonicalize(),
+        current_project_root.canonicalize(),
+    ) {
+        (Ok(record), Ok(current)) => current.starts_with(record),
+        _ => {
+            let record = normalize_path_lexically(record_project_root);
+            let current = normalize_path_lexically(current_project_root);
+            current.starts_with(record)
+        }
     }
 }
 
@@ -3914,7 +3897,7 @@ fn opencode_config_path(ctx: &AdapterContext, scope: Scope) -> Result<PathBuf, C
 
 fn pi_expected_config_path(ctx: &AdapterContext, scope: Scope) -> Result<PathBuf, CommandError> {
     match scope {
-        Scope::AgentGlobal => Ok(ctx.user_home.join(".pi/settings.json")),
+        Scope::AgentGlobal => Ok(ctx.user_home.join(".pi/agent/settings.json")),
         Scope::AgentProject => ctx
             .project_root
             .as_ref()
@@ -3938,7 +3921,7 @@ fn pi_config_path_for_skill_path(
     skill_path: &Path,
 ) -> Result<PathBuf, CommandError> {
     match scope {
-        Scope::AgentGlobal => Ok(ctx.user_home.join(".pi/settings.json")),
+        Scope::AgentGlobal => Ok(ctx.user_home.join(".pi/agent/settings.json")),
         Scope::AgentProject => {
             if let Some(pi_skill_root) = pi_project_native_skill_root(skill_path) {
                 let pi_dir = pi_skill_root.parent().ok_or_else(|| {
@@ -3992,7 +3975,7 @@ fn validate_pi_config_write_target(
 ) -> Result<(), CommandError> {
     match scope {
         Scope::AgentGlobal => {
-            let expected = ctx.user_home.join(".pi/settings.json");
+            let expected = ctx.user_home.join(".pi/agent/settings.json");
             if path != expected.as_path() {
                 return Err(CommandError::UnsafeConfigPath(format!(
                     "{} does not match expected Pi global config path {}",
@@ -4090,58 +4073,6 @@ fn scan_agent_id_to_catalog(
             "{} skills are not supported by scan commands",
             agent.as_str()
         ))),
-    }
-}
-
-fn patch_enabled_for_agent(
-    agent: AgentId,
-    doc: &mut AgentConfigDocument,
-    instance: &SkillInstance,
-    on: bool,
-) -> Result<(), CommandError> {
-    match agent {
-        AgentId::ClaudeCode => ClaudeCodeAdapter
-            .patch_enabled(doc, instance, on)
-            .map_err(|err| CommandError::Adapter(err.message)),
-        AgentId::Codex => CodexAdapter
-            .patch_enabled(doc, instance, on)
-            .map_err(|err| CommandError::Adapter(err.message)),
-        AgentId::Opencode => OpencodeAdapter
-            .patch_enabled(doc, instance, on)
-            .map_err(|err| CommandError::Adapter(err.message)),
-        AgentId::Pi => PiAdapter
-            .patch_enabled(doc, instance, on)
-            .map_err(|err| CommandError::Adapter(err.message)),
-        agent => Err(CommandError::UnsafeConfigPath(format!(
-            "{} skills are not writable by config.toggleSkill",
-            agent.as_str()
-        ))),
-    }
-}
-
-fn minimal_skill_instance(meta: &SkillInstanceMeta) -> SkillInstance {
-    SkillInstance {
-        id: meta.id.clone(),
-        agent: meta.agent,
-        scope: meta.scope,
-        project_root: meta.project_root.clone(),
-        path: meta.path.clone(),
-        display_path: meta.path.clone(),
-        definition_id: String::new(),
-        name: meta.name.clone(),
-        display_name: meta.name.clone(),
-        description: String::new(),
-        version: None,
-        state: SkillState::Loaded,
-        enabled: meta.enabled,
-        frontmatter_raw: String::new(),
-        body: String::new(),
-        scripts: Vec::new(),
-        permissions: PermissionRequest::default(),
-        fingerprint: String::new(),
-        mtime: 0,
-        first_seen: 0,
-        last_seen: 0,
     }
 }
 
@@ -4325,33 +4256,57 @@ fn preview_context_from_snapshot(
                 extra_roots: vec![],
             })
         }
+        (AgentId::Hermes, Scope::AgentGlobal) => {
+            if target.file_name().and_then(|name| name.to_str()) != Some("config.yaml")
+                || parent.file_name().and_then(|name| name.to_str()) != Some(".hermes")
+            {
+                return Err(CommandError::UnsafeConfigPath(format!(
+                    "snapshot target {} is not a Hermes global config path",
+                    target.display()
+                )));
+            }
+            let user_home = parent
+                .parent()
+                .ok_or_else(|| {
+                    CommandError::UnsafeConfigPath(
+                        "Hermes global config target has no user home".to_string(),
+                    )
+                })?
+                .to_path_buf();
+            Ok(AdapterContext {
+                user_home,
+                project_root: None,
+                project_cwd: None,
+                extra_roots: vec![],
+            })
+        }
+        (AgentId::Openclaw, Scope::AgentGlobal) => {
+            if target.file_name().and_then(|name| name.to_str()) != Some("openclaw.json")
+                || parent.file_name().and_then(|name| name.to_str()) != Some(".openclaw")
+            {
+                return Err(CommandError::UnsafeConfigPath(format!(
+                    "snapshot target {} is not an OpenClaw global config path",
+                    target.display()
+                )));
+            }
+            let user_home = parent
+                .parent()
+                .ok_or_else(|| {
+                    CommandError::UnsafeConfigPath(
+                        "OpenClaw global config target has no user home".to_string(),
+                    )
+                })?
+                .to_path_buf();
+            Ok(AdapterContext {
+                user_home,
+                project_root: None,
+                project_cwd: None,
+                extra_roots: vec![],
+            })
+        }
         _ => Err(CommandError::UnsafeConfigPath(format!(
             "snapshot agent {} scope {} is not previewable",
             snapshot.agent, snapshot.scope
-        ))),
-    }
-}
-
-fn scope_from_snapshot(scope: &str) -> Result<Scope, CommandError> {
-    if scope == Scope::AgentGlobal.as_str() {
-        Ok(Scope::AgentGlobal)
-    } else if scope == Scope::AgentProject.as_str() {
-        Ok(Scope::AgentProject)
-    } else {
-        Err(CommandError::UnsafeConfigPath(format!(
-            "snapshot scope {scope} is not writable"
-        )))
-    }
-}
-
-fn agent_from_snapshot(agent: &str) -> Result<AgentId, CommandError> {
-    match agent {
-        "claude-code" => Ok(AgentId::ClaudeCode),
-        "codex" => Ok(AgentId::Codex),
-        "opencode" => Ok(AgentId::Opencode),
-        "pi" => Ok(AgentId::Pi),
-        other => Err(CommandError::UnsafeConfigPath(format!(
-            "snapshot agent {other} is not writable by config rollback commands"
         ))),
     }
 }
@@ -4389,6 +4344,34 @@ fn expected_config_target(
             path: pi_expected_config_path(ctx, scope)?,
             format: ConfigFormat::Json,
         }),
+        AgentId::Hermes => {
+            if scope != Scope::AgentGlobal {
+                return Err(CommandError::UnsafeConfigPath(format!(
+                    "Hermes config writes use global config scope only; snapshot scope {} is not writable",
+                    scope.as_str()
+                )));
+            }
+            Ok(ConfigTarget {
+                agent,
+                scope,
+                path: ctx.user_home.join(".hermes/config.yaml"),
+                format: ConfigFormat::Yaml,
+            })
+        }
+        AgentId::Openclaw => {
+            if scope != Scope::AgentGlobal {
+                return Err(CommandError::UnsafeConfigPath(format!(
+                    "OpenClaw config writes use global openclaw.json only; snapshot scope {} is not writable",
+                    scope.as_str()
+                )));
+            }
+            Ok(ConfigTarget {
+                agent,
+                scope,
+                path: ctx.user_home.join(".openclaw/openclaw.json"),
+                format: ConfigFormat::Json,
+            })
+        }
         agent => Err(CommandError::UnsafeConfigPath(format!(
             "{} config writes are not supported",
             agent.as_str()
@@ -4851,6 +4834,15 @@ fn redact_snapshot_content(content: &str) -> String {
         return content.to_string();
     }
 
+    if let Ok(mut value) = json5::from_str::<serde_json::Value>(content) {
+        if redact_json_value(&mut value) {
+            let rendered =
+                serde_json::to_string_pretty(&value).unwrap_or_else(|_| content.to_string());
+            return format!("{REDACTED_SNAPSHOT_PREFIX}{rendered}\n");
+        }
+        return content.to_string();
+    }
+
     let redacted = content
         .lines()
         .map(redact_simple_secret_line)
@@ -4945,6 +4937,7 @@ fn is_sensitive_key(key: &str) -> bool {
             | "password"
             | "passwd"
     ) || normalized.ends_with("token")
+        || normalized.ends_with("apikey")
         || normalized.ends_with("secret")
         || normalized.ends_with("password")
 }

@@ -1,6 +1,5 @@
 use std::{
-    fs,
-    io::{self, Write},
+    fs, io,
     path::{Path, PathBuf},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -10,6 +9,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use thiserror::Error;
 use ureq::Error as UreqError;
+use url::Url;
+
+use crate::{append_private_line, write_private_text_file};
 
 const KEYCHAIN_SERVICE: &str = "dev.skills-copilot.native.llm";
 const PROFILE_STORE_VERSION: u32 = 1;
@@ -895,22 +897,8 @@ fn load_store(app_data_dir: &Path) -> Result<ProviderProfileStore, ProviderError
 
 fn save_store(app_data_dir: &Path, store: &ProviderProfileStore) -> Result<(), ProviderError> {
     let path = provider_profiles_path(app_data_dir);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let tmp_path = path.with_extension("json.tmp");
     let content = serde_json::to_string_pretty(store)?;
-    {
-        let mut file = fs::OpenOptions::new()
-            .create(true)
-            .truncate(true)
-            .write(true)
-            .open(&tmp_path)?;
-        file.write_all(content.as_bytes())?;
-        file.write_all(b"\n")?;
-        file.sync_all()?;
-    }
-    fs::rename(tmp_path, path)?;
+    write_private_text_file(&path, &format!("{content}\n"))?;
     Ok(())
 }
 
@@ -919,15 +907,8 @@ fn append_call_metadata(
     metadata: &ProviderCallMetadata,
 ) -> Result<(), ProviderError> {
     let path = provider_call_metadata_path(app_data_dir);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let mut file = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)?;
     let line = serde_json::to_string(metadata)?;
-    writeln!(file, "{line}")?;
+    append_private_line(&path, &line)?;
     Ok(())
 }
 
@@ -1252,12 +1233,45 @@ fn estimated_provider_cost(provider_type: ProviderType, tokens: u32) -> f64 {
 
 fn validate_base_url(value: &str) -> Result<String, ProviderError> {
     let value = require_non_empty("base_url", value)?;
-    if !(value.starts_with("https://") || value.starts_with("http://localhost")) {
+    let url = Url::parse(&value).map_err(|_| {
+        ProviderError::InvalidProfile("base_url must be an absolute http(s) URL".to_string())
+    })?;
+    let scheme = url.scheme();
+    if !matches!(scheme, "https" | "http") {
         return Err(ProviderError::InvalidProfile(
-            "base_url must use https:// or http://localhost".to_string(),
+            "base_url must use https://, or http:// for exact local loopback hosts".to_string(),
         ));
     }
-    Ok(value.trim_end_matches('/').to_string())
+    let Some(host) = url.host_str() else {
+        return Err(ProviderError::InvalidProfile(
+            "base_url must include a host".to_string(),
+        ));
+    };
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err(ProviderError::InvalidProfile(
+            "base_url must not include username or password credentials".to_string(),
+        ));
+    }
+    if url.query().is_some() || url.fragment().is_some() {
+        return Err(ProviderError::InvalidProfile(
+            "base_url must not include query strings or fragments".to_string(),
+        ));
+    }
+    if scheme == "http" && !is_loopback_provider_host(host) {
+        return Err(ProviderError::InvalidProfile(
+            "base_url may use http only for exact localhost, 127.0.0.1, or ::1 hosts".to_string(),
+        ));
+    }
+    Ok(url.as_str().trim_end_matches('/').to_string())
+}
+
+fn is_loopback_provider_host(host: &str) -> bool {
+    let normalized = host
+        .strip_prefix('[')
+        .and_then(|value| value.strip_suffix(']'))
+        .unwrap_or(host)
+        .to_ascii_lowercase();
+    matches!(normalized.as_str(), "localhost" | "127.0.0.1" | "::1")
 }
 
 fn require_non_empty(field: &str, value: &str) -> Result<String, ProviderError> {
@@ -1306,15 +1320,21 @@ fn sanitize_profile_id(value: &str) -> String {
 }
 
 fn destination_host(base_url: &str) -> String {
-    let without_scheme = base_url
-        .strip_prefix("https://")
-        .or_else(|| base_url.strip_prefix("http://"))
-        .unwrap_or(base_url);
-    without_scheme
-        .split('/')
-        .next()
-        .unwrap_or("<unknown>")
-        .to_string()
+    let Ok(url) = Url::parse(base_url) else {
+        return "<unknown>".to_string();
+    };
+    let Some(host) = url.host_str() else {
+        return "<unknown>".to_string();
+    };
+    let host = if host.contains(':') {
+        format!("[{host}]")
+    } else {
+        host.to_string()
+    };
+    match url.port() {
+        Some(port) => format!("{host}:{port}"),
+        None => host,
+    }
 }
 
 fn redact_error(error: &UreqError) -> String {

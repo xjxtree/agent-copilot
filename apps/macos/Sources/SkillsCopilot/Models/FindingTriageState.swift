@@ -95,6 +95,26 @@ enum FindingTriageFilter: String, CaseIterable, Identifiable, Equatable, Hashabl
             return true
         }
     }
+
+    static func availableFilters(for counts: FindingTriageCounts) -> [FindingTriageFilter] {
+        var filters: [FindingTriageFilter] = []
+        if counts.open > 0 {
+            filters.append(.open)
+        }
+        if counts.needsFollowUp > 0 {
+            filters.append(.needsFollowUp)
+        }
+        if counts.reviewed > 0 {
+            filters.append(.reviewed)
+        }
+        if counts.ignored > 0 {
+            filters.append(.ignored)
+        }
+        if filters.count > 1 {
+            filters.append(.all)
+        }
+        return filters.isEmpty ? [.all] : filters
+    }
 }
 
 struct FindingTriageRecord: Codable, Identifiable, Hashable {

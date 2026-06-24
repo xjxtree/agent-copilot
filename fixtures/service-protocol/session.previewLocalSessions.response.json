@@ -2,7 +2,7 @@
   "id": "fixture-session-preview-local",
   "ok": true,
   "result": {
-    "generated_by": "local-v2.87",
+    "generated_by": "local-v2.98",
     "authorized": true,
     "authorization_required": false,
     "roots": [
@@ -14,6 +14,23 @@
     ],
     "count": 1,
     "total_candidate_count": 1,
+    "user_message_count": 1,
+    "total_message_count": 2,
+    "tool_call_count": 1,
+    "skill_call_count": 2,
+    "skill_usage_rows": [
+      {
+        "skill_id": "fixture-skill-id",
+        "skill_name": "fixture-skill",
+        "agent": "codex",
+        "call_count": 2,
+        "session_count": 1,
+        "latest_modified_at": 1781600000000,
+        "evidence_refs": [
+          "session.content_hash:fixturehash"
+        ]
+      }
+    ],
     "session_rows": [
       {
         "id": "local-session-fixturehash",
@@ -24,10 +41,50 @@
         "modified_at": 1781600000000,
         "excerpt": "{\"role\":\"assistant\",\"content\":\"Used fixture-skill-id for local task with <redacted>.\"}",
         "excerpt_char_count": 82,
+        "user_message_count": 1,
+        "total_message_count": 2,
+        "tool_call_count": 1,
+        "skill_call_count": 2,
         "content_hash": "fixturehash",
         "evidence_refs": [
           "session.path:$HOME/.codex/sessions/fixture-session.jsonl",
           "session.content_hash:fixturehash"
+        ],
+        "content_items": [
+          {
+            "id": "session-item-fixturehash-0",
+            "kind": "user_message",
+            "title": "User",
+            "text": "Run skill:fixture-skill for local task.",
+            "char_count": 39,
+            "evidence_refs": []
+          },
+          {
+            "id": "session-item-fixturehash-1",
+            "kind": "agent_reply",
+            "title": "Agent",
+            "text": "Used skill:fixture-skill for local task with <redacted>.",
+            "char_count": 56,
+            "evidence_refs": []
+          },
+          {
+            "id": "session-item-fixturehash-2",
+            "kind": "tool_call",
+            "title": "Tool",
+            "text": "fixture tool call",
+            "char_count": 17,
+            "evidence_refs": []
+          },
+          {
+            "id": "session-item-fixturehash-3",
+            "kind": "skill_call",
+            "title": "Skill: fixture-skill",
+            "text": "fixture-skill (2 calls)",
+            "char_count": 23,
+            "evidence_refs": [
+              "session.content_hash:fixturehash"
+            ]
+          }
         ]
       }
     ],

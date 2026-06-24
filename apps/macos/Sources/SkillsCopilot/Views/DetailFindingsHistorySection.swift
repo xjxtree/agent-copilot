@@ -2,19 +2,12 @@ import AppKit
 import SwiftUI
 
 struct FindingsSection: View {
-    @EnvironmentObject private var store: SkillStore
     let skill: SkillRecord
     let findings: [RuleFindingRecord]
     let conflicts: [ConflictGroupRecord]
     let selectedSkillID: String
     let currentAgentSkillIDs: Set<String>
-    @State private var severityFilter = FindingDisplayModel.allFilterValue
     @State private var ruleFilter = FindingDisplayModel.allFilterValue
-    @State private var triageFilter: FindingTriageFilter = .active
-
-    private var severityOptions: [String] {
-        FindingDisplayModel.severityOptions(for: findings)
-    }
 
     private var ruleIDOptions: [String] {
         FindingDisplayModel.ruleIDOptions(for: findings)
@@ -23,72 +16,9 @@ struct FindingsSection: View {
     private var visibleGroups: [FindingSeverityGroup] {
         FindingDisplayModel.grouped(
             findings: findings,
-            severityFilter: severityFilter,
-            ruleFilter: ruleFilter
-        ).compactMap { group in
-            let visibleIssues = group.issues.filter { issue in
-                issue.matchesTriageFilter(triageFilter)
-            }
-            guard !visibleIssues.isEmpty else { return nil }
-            return FindingSeverityGroup(severityKey: group.severityKey, issues: visibleIssues)
-        }
-    }
-
-    private var visibleIssueCount: Int {
-        visibleGroups.reduce(0) { $0 + $1.issues.count }
-    }
-
-    private var visibleEntryCount: Int {
-        visibleGroups.reduce(0) { total, severityGroup in
-            total + severityGroup.issues.reduce(0) { $0 + $1.entryCount }
-        }
-    }
-
-    private var allIssueGroups: [FindingIssueGroup] {
-        FindingDisplayModel.issueGroups(
-            findings: findings,
             severityFilter: FindingDisplayModel.allFilterValue,
-            ruleFilter: FindingDisplayModel.allFilterValue
+            ruleFilter: ruleFilter
         )
-    }
-
-    private var totalIssueCount: Int {
-        allIssueGroups.count
-    }
-
-    private var visibleImpactedCount: Int {
-        let ids = visibleFindingInstanceIDs.union(visibleConflictInstanceIDs)
-        return max(ids.count, combinedVisibleEntryCount == 0 ? 0 : 1)
-    }
-
-    private var visibleFindingInstanceIDs: Set<String> {
-        Set(visibleGroups.flatMap { group in
-            group.issues.flatMap { issue in
-                issue.findings.compactMap(\.instanceId)
-            }
-        })
-    }
-
-    private var visibleConflictInstanceIDs: Set<String> {
-        Set(conflicts.flatMap { conflict in
-            conflict.instanceIds.filter { currentAgentSkillIDs.contains($0) }
-        })
-    }
-
-    private var totalIssueAndConflictCount: Int {
-        totalIssueCount + conflicts.count
-    }
-
-    private var visibleIssueAndConflictCount: Int {
-        visibleIssueCount + conflicts.count
-    }
-
-    private var combinedVisibleEntryCount: Int {
-        visibleEntryCount + conflicts.count
-    }
-
-    private var triageCounts: FindingTriageCounts {
-        FindingTriageModel.counts(for: allIssueGroups.map(\.triageStatus))
     }
 
     var body: some View {
@@ -100,19 +30,11 @@ struct FindingsSection: View {
                     message: UIStrings.noFindingsForSkillMessage(DisplayText.agent(skill.agent))
                 )
             } else {
-                FindingTriageNotice()
-
-                FindingsSummaryStrip(
-                    visibleIssueCount: visibleIssueAndConflictCount,
-                    totalIssueCount: totalIssueAndConflictCount,
-                    visibleEntryCount: combinedVisibleEntryCount,
-                    visibleImpactedCount: visibleImpactedCount,
-                    triageCounts: triageCounts
+                FindingsControlPanel(
+                    showsFilters: !findings.isEmpty,
+                    ruleFilter: $ruleFilter,
+                    ruleIDOptions: ruleIDOptions
                 )
-
-                if !findings.isEmpty {
-                    findingFilters
-                }
 
                 if visibleGroups.isEmpty && conflicts.isEmpty {
                     EmptyState(
@@ -128,26 +50,7 @@ struct FindingsSection: View {
                             ForEach(group.issues) { issue in
                                 FindingIssueCard(
                                     issue: issue,
-                                    severityTitle: group.title,
-                                    triageStatus: issue.triageStatus,
-                                    ruleTuning: store.ruleTuningRecord(ruleId: issue.ruleId),
-                                    groupTuning: store.ruleTuningRecord(ruleId: issue.ruleId, findingGroupID: issue.id),
-                                    isUpdatingRuleTuning: store.isWriting,
-                                    onSetTriageStatus: { status in
-                                        store.setFindingTriageStatus(status, for: issue.triageKeys)
-                                    },
-                                    onSetSeverityOverride: { severity in
-                                        store.setRuleSeverityOverride(severity, for: issue.ruleId)
-                                    },
-                                    onClearSeverityOverride: {
-                                        store.clearRuleSeverityOverride(for: issue.ruleId)
-                                    },
-                                    onSetSuppression: { scope in
-                                        store.setRuleSuppression(ruleId: issue.ruleId, findingGroupID: issue.id, scope: scope)
-                                    },
-                                    onClearSuppression: { scope in
-                                        store.clearRuleSuppression(ruleId: issue.ruleId, findingGroupID: issue.id, scope: scope)
-                                    }
+                                    severityTitle: group.title
                                 )
                             }
                         }
@@ -162,115 +65,70 @@ struct FindingsSection: View {
                 }
             }
         }
+        .onAppear {
+            clampFilters()
+        }
         .onChange(of: findings) { _ in
             clampFilters()
         }
     }
 
-    private var findingFilters: some View {
-        HStack(spacing: 10) {
-            Picker(UIStrings.findingTriageFilter, selection: $triageFilter) {
-                ForEach(FindingTriageFilter.allCases) { filter in
-                    Text(filter.title).tag(filter)
-                }
-            }
-            .pickerStyle(.menu)
-            .frame(width: 150)
-            .help(UIStrings.findingTriageFilter)
-
-            Picker(UIStrings.findingSeverityFilter, selection: $severityFilter) {
-                Text(UIStrings.allSeverities).tag(FindingDisplayModel.allFilterValue)
-                ForEach(severityOptions, id: \.self) { severity in
-                    Text(FindingDisplayModel.severityTitle(severity)).tag(severity)
-                }
-            }
-            .pickerStyle(.menu)
-            .frame(width: 170)
-            .help(UIStrings.findingSeverityFilter)
-
-            Picker(UIStrings.findingRuleFilter, selection: $ruleFilter) {
-                Text(UIStrings.allRuleIDs).tag(FindingDisplayModel.allFilterValue)
-                ForEach(ruleIDOptions, id: \.self) { ruleID in
-                    Text(ruleID).tag(ruleID)
-                }
-            }
-            .pickerStyle(.menu)
-            .frame(width: 260)
-            .help(UIStrings.findingRuleFilter)
-
-            Spacer(minLength: 0)
-
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(UIStrings.visibleFindingGroupsSummary(visibleIssueAndConflictCount, totalIssueAndConflictCount, combinedVisibleEntryCount))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(UIStrings.findingScopeSummary(skill.name, DisplayText.agent(skill.agent)))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
     private func clampFilters() {
-        if severityFilter != FindingDisplayModel.allFilterValue && !severityOptions.contains(severityFilter) {
-            severityFilter = FindingDisplayModel.allFilterValue
-        }
         if ruleFilter != FindingDisplayModel.allFilterValue && !ruleIDOptions.contains(ruleFilter) {
             ruleFilter = FindingDisplayModel.allFilterValue
         }
     }
 }
 
-struct FindingTriageNotice: View {
+struct FindingsControlPanel: View {
+    let showsFilters: Bool
+    @Binding var ruleFilter: String
+    let ruleIDOptions: [String]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(UIStrings.findingTriageNoticeTitle, systemImage: "tray.full")
-                .font(.headline)
-            Text(UIStrings.findingTriageNoticeBody)
-                .font(.callout)
-                .foregroundStyle(.secondary)
+        if showsFilters {
+            filterControls
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .adaptiveMaterialSurface()
     }
-}
 
-struct FindingsSummaryStrip: View {
-    let visibleIssueCount: Int
-    let totalIssueCount: Int
-    let visibleEntryCount: Int
-    let visibleImpactedCount: Int
-    let triageCounts: FindingTriageCounts
-
-    var body: some View {
-        DetailMetricGrid {
-            SummaryChip(title: UIStrings.text("findings.summary.issueGroups", "Issue groups"), value: "\(visibleIssueCount) / \(totalIssueCount)", systemImage: "rectangle.stack.badge.exclamationmark")
-            SummaryChip(title: UIStrings.text("findings.summary.impacted", "Impacted"), value: "\(visibleImpactedCount)", systemImage: "target")
-            SummaryChip(title: UIStrings.text("findings.summary.entries", "Scan entries"), value: "\(visibleEntryCount)", systemImage: "list.bullet.rectangle")
-            SummaryChip(title: UIStrings.findingTriageFilter, value: "\(UIStrings.findingTriageOpen) \(triageCounts.open) · \(UIStrings.findingTriageNeedsFollowUp) \(triageCounts.needsFollowUp)", systemImage: "tray.full")
-            SummaryChip(title: UIStrings.findingRemediation, value: UIStrings.text("findings.summary.remediation", "Grouped below"), systemImage: "wrench.and.screwdriver")
+    private var filterControls: some View {
+        HStack(spacing: 10) {
+            filterControl(label: UIStrings.findingRuleFilter) {
+                rulePicker.frame(width: 250)
+            }
+            Spacer(minLength: 0)
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .adaptiveMaterialSurface()
+    }
+
+    private func filterControl<Control: View>(
+        label: String,
+        @ViewBuilder control: () -> Control
+    ) -> some View {
+        HStack(spacing: 6) {
+            Text(label)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            control()
+        }
+    }
+
+    private var rulePicker: some View {
+        Picker(UIStrings.findingRuleFilter, selection: $ruleFilter) {
+            Text(UIStrings.allRuleIDs).tag(FindingDisplayModel.allFilterValue)
+            ForEach(ruleIDOptions, id: \.self) { ruleID in
+                Text(ruleID).tag(ruleID)
+            }
+        }
+        .labelsHidden()
+        .pickerStyle(.menu)
+        .help(UIStrings.findingRuleFilter)
     }
 }
 
 struct FindingIssueCard: View {
     let issue: FindingIssueGroup
     let severityTitle: String
-    let triageStatus: FindingTriageStatus
-    let ruleTuning: RuleTuningRecord?
-    let groupTuning: RuleTuningRecord?
-    let isUpdatingRuleTuning: Bool
-    let onSetTriageStatus: (FindingTriageStatus) -> Void
-    let onSetSeverityOverride: (String) -> Void
-    let onClearSeverityOverride: () -> Void
-    let onSetSuppression: (RuleTuningScope) -> Void
-    let onClearSuppression: (RuleTuningScope) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -288,12 +146,6 @@ struct FindingIssueCard: View {
                         .background(.orange.opacity(0.14), in: Capsule())
                         .help(UIStrings.findingRiskRelatedHelp)
                 }
-                Label(triageStatus.title, systemImage: triageStatus.systemImage)
-                    .font(.caption.bold())
-                    .foregroundStyle(triageStatus.tint)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(triageStatus.tint.opacity(0.14), in: Capsule())
                 Text(severityTitle)
                     .font(.caption.bold())
                     .foregroundStyle(.secondary)
@@ -314,8 +166,6 @@ struct FindingIssueCard: View {
                 DetailMetricGrid(maxColumns: 4, minColumnWidth: 190, spacing: 8) {
                     FindingExplanationField(title: UIStrings.findingRuleID, value: issue.ruleId, systemImage: "number")
                     FindingExplanationField(title: UIStrings.findingRuleSource, value: issue.ruleSource, systemImage: "scope")
-                    FindingExplanationField(title: UIStrings.findingCatalogTarget, value: issue.catalogTarget, systemImage: "shippingbox")
-                    FindingExplanationField(title: UIStrings.findingImpact, value: UIStrings.findingIssueImpact(issue.impactedInstanceCount, issue.entryCount), systemImage: "target")
                 }
             }
             .padding(10)
@@ -332,189 +182,10 @@ struct FindingIssueCard: View {
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
-
-            RuleTuningActionPanel(
-                issue: issue,
-                ruleTuning: ruleTuning,
-                groupTuning: groupTuning,
-                isUpdating: isUpdatingRuleTuning,
-                onSetSeverityOverride: onSetSeverityOverride,
-                onClearSeverityOverride: onClearSeverityOverride,
-                onSetSuppression: onSetSuppression,
-                onClearSuppression: onClearSuppression
-            )
-
-            FindingTriageActionBar(status: triageStatus, onSet: onSetTriageStatus)
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
         .adaptiveMaterialSurface()
-    }
-}
-
-struct RuleTuningActionPanel: View {
-    let issue: FindingIssueGroup
-    let ruleTuning: RuleTuningRecord?
-    let groupTuning: RuleTuningRecord?
-    let isUpdating: Bool
-    let onSetSeverityOverride: (String) -> Void
-    let onClearSeverityOverride: () -> Void
-    let onSetSuppression: (RuleTuningScope) -> Void
-    let onClearSuppression: (RuleTuningScope) -> Void
-
-    private var effectiveSeverity: String {
-        groupTuning?.effectiveSeverity ?? ruleTuning?.effectiveSeverity ?? issue.severityKey
-    }
-
-    private var ruleSuppressed: Bool {
-        ruleTuning?.suppressed == true
-    }
-
-    private var groupSuppressed: Bool {
-        groupTuning?.suppressed == true
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Label(UIStrings.ruleTuningTitle, systemImage: "slider.horizontal.3")
-                    .font(.caption.bold())
-                    .foregroundStyle(.secondary)
-                Spacer()
-                RuleTuningStateChip(
-                    title: UIStrings.ruleTuningEffectiveState,
-                    value: FindingDisplayModel.severityTitle(effectiveSeverity),
-                    systemImage: "gauge.with.dots.needle.67percent"
-                )
-                if ruleTuning?.severityOverride != nil {
-                    RuleTuningStateChip(
-                        title: UIStrings.ruleTuningSeverityOverride,
-                        value: FindingDisplayModel.severityTitle(ruleTuning?.severityOverride ?? effectiveSeverity),
-                        systemImage: "arrow.up.arrow.down.circle"
-                    )
-                }
-                if ruleSuppressed || groupSuppressed {
-                    RuleTuningStateChip(
-                        title: groupSuppressed ? UIStrings.ruleTuningFindingGroup : UIStrings.ruleTuningRuleWide,
-                        value: UIStrings.ruleTuningSuppressed,
-                        systemImage: "eye.slash"
-                    )
-                }
-            }
-
-            Text(UIStrings.ruleTuningBoundary)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: 8) {
-                Menu(UIStrings.ruleTuningSeverityOverride) {
-                    ForEach(RuleTuningModel.overrideSeverities, id: \.self) { severity in
-                        Button(UIStrings.ruleTuningSetSeverity(FindingDisplayModel.severityTitle(severity))) {
-                            onSetSeverityOverride(severity)
-                        }
-                    }
-                    if ruleTuning?.severityOverride != nil {
-                        Divider()
-                        Button(UIStrings.ruleTuningClearSeverity) {
-                            onClearSeverityOverride()
-                        }
-                    }
-                }
-
-                Button(groupSuppressed ? UIStrings.ruleTuningUnsuppressGroup : UIStrings.ruleTuningSuppressGroup) {
-                    groupSuppressed ? onClearSuppression(.findingGroup) : onSetSuppression(.findingGroup)
-                }
-
-                Button(ruleSuppressed ? UIStrings.ruleTuningUnsuppressRule : UIStrings.ruleTuningSuppressRule) {
-                    ruleSuppressed ? onClearSuppression(.rule) : onSetSuppression(.rule)
-                }
-
-                Spacer(minLength: 0)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .disabled(isUpdating)
-            .help(UIStrings.ruleTuningBoundary)
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary.opacity(0.22), in: RoundedRectangle(cornerRadius: 8))
-    }
-}
-
-struct RuleTuningStateChip: View {
-    let title: String
-    let value: String
-    let systemImage: String
-
-    var body: some View {
-        Label {
-            Text("\(title): \(value)")
-        } icon: {
-            Image(systemName: systemImage)
-        }
-        .font(.caption2.bold())
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 4)
-        .background(.quaternary.opacity(0.35), in: Capsule())
-    }
-}
-
-struct FindingTriageActionBar: View {
-    let status: FindingTriageStatus
-    let onSet: (FindingTriageStatus) -> Void
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Label(UIStrings.findingTriageFilter, systemImage: "tray.full")
-                .font(.caption.bold())
-                .foregroundStyle(.secondary)
-
-            if status != .reviewed {
-                Button(UIStrings.findingTriageActionReviewed) {
-                    onSet(.reviewed)
-                }
-            }
-
-            if status != .needsFollowUp {
-                Button(UIStrings.findingTriageActionFollowUp) {
-                    onSet(.needsFollowUp)
-                }
-            }
-
-            if status != .ignored {
-                Button(UIStrings.findingTriageActionIgnored) {
-                    onSet(.ignored)
-                }
-            }
-
-            if status != .open {
-                Button(UIStrings.findingTriageActionReopen) {
-                    onSet(.open)
-                }
-            }
-
-            Spacer(minLength: 0)
-        }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-    }
-}
-
-extension FindingTriageStatus {
-    var tint: Color {
-        switch self {
-        case .open:
-            return .blue
-        case .reviewed:
-            return .green
-        case .ignored:
-            return .secondary
-        case .needsFollowUp:
-            return .orange
-        }
     }
 }
 

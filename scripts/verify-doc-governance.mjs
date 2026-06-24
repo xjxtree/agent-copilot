@@ -21,26 +21,31 @@ function requireText(text, label, snippet) {
   if (!text.includes(snippet)) fail(`${label} missing required text: ${snippet}`);
 }
 
-const roadmap = read("docs/roadmap.md");
-const tasks = read("docs/development-tasks.md");
-const adapters = read("docs/agent-adapters.md");
+const roadmap = read("docs/plans/roadmap.md");
+const tasks = read("docs/plans/development-tasks.md");
 const agents = read("AGENTS.md");
+const readme = read("README.md");
+const changelog = read("CHANGELOG.md");
 const packageJson = read("package.json");
 const workflow = read("docs/ai-agent-workflow.md");
 
-for (const [text, label] of [
-  [roadmap, "docs/roadmap.md"],
-  [tasks, "docs/development-tasks.md"],
-]) {
-  requireText(text, label, "V2.46-V2.64");
-  requireText(text, label, "no separate checklist files");
-  requireText(text, label, "V2.41-V2.72");
-  requireText(text, label, "no package-level `verify:v2.NN-docs` scripts");
-  requireText(text, label, "V2.73+ docs gates");
+function rejectPattern(text, label, pattern, reason) {
+  if (pattern.test(text)) fail(`${label} contains ${reason}`);
 }
 
-requireText(adapters, "docs/agent-adapters.md", "V2.41-V2.96");
-requireText(agents, "AGENTS.md", "V2.78 completed boundary");
+for (const [text, label] of [
+  [readme, "README.md"],
+  [agents, "AGENTS.md"],
+]) {
+  rejectPattern(text, label, /\bV\d+\.\d+\b/, "version history; use CHANGELOG.md or verification checklists");
+  rejectPattern(text, label, /Current (Status|State|Baseline)|Completed baseline|Current phase/i, "status snapshot wording");
+}
+
+requireText(readme, "README.md", "## What It Does");
+requireText(agents, "AGENTS.md", "## Safety Boundaries");
+requireText(roadmap, "docs/plans/roadmap.md", "## Near-Term Work");
+requireText(tasks, "docs/plans/development-tasks.md", "## Active Task Rules");
+requireText(changelog, "CHANGELOG.md", "## V2.98");
 requireText(packageJson, "package.json", "\"verify:pi-writable-evidence-fixtures\"");
 requireText(packageJson, "package.json", "\"verify:doc-governance\"");
 requireText(

@@ -340,9 +340,7 @@ fn normalize_instance(
     // Agent config overrides are scoped to the current adapter only. Keep the
     // per-scan settings cache outside adapter parsing so one file is not reread
     // for every skill in a root.
-    if matches!(instance.state, SkillState::Loaded)
-        && overrides.is_disabled(ctx, root, &instance.name)
-    {
+    if matches!(instance.state, SkillState::Loaded) && overrides.is_disabled(ctx, root, instance) {
         instance.enabled = false;
         instance.state = SkillState::Disabled;
     }
@@ -381,6 +379,28 @@ impl SkillConfigOverrides {
                     }
                 }
             }
+            AgentId::Hermes => {
+                for settings_path in roots
+                    .iter()
+                    .filter_map(|root| hermes_settings_path_for(ctx, root))
+                    .collect::<HashSet<_>>()
+                {
+                    if let Some(disabled) = read_disabled_hermes_skills(&settings_path) {
+                        disabled_by_settings_path.insert(settings_path, disabled);
+                    }
+                }
+            }
+            AgentId::Openclaw => {
+                for settings_path in roots
+                    .iter()
+                    .filter_map(|root| openclaw_settings_path_for(ctx, root))
+                    .collect::<HashSet<_>>()
+                {
+                    if let Some(disabled) = read_disabled_openclaw_skill_entries(&settings_path) {
+                        disabled_by_settings_path.insert(settings_path, disabled);
+                    }
+                }
+            }
             _ => {}
         }
 
@@ -390,15 +410,28 @@ impl SkillConfigOverrides {
         }
     }
 
-    fn is_disabled(&self, ctx: &AdapterContext, root: &AdapterRoot, skill_name: &str) -> bool {
+    fn is_disabled(
+        &self,
+        ctx: &AdapterContext,
+        root: &AdapterRoot,
+        instance: &SkillInstance,
+    ) -> bool {
         let settings_path = match self.agent {
             AgentId::Opencode => opencode_settings_path_for(ctx, root),
             AgentId::ClaudeCode => claude_settings_path_for(ctx, root),
+            AgentId::Hermes => hermes_settings_path_for(ctx, root),
+            AgentId::Openclaw => openclaw_settings_path_for(ctx, root),
             _ => None,
+        };
+        let skill_key = match self.agent {
+            AgentId::Openclaw => {
+                openclaw_config_key_from_frontmatter(&instance.frontmatter_raw, &instance.name)
+            }
+            _ => instance.name.clone(),
         };
         settings_path
             .and_then(|settings_path| self.disabled_by_settings_path.get(&settings_path))
-            .is_some_and(|disabled| disabled.contains(skill_name))
+            .is_some_and(|disabled| disabled.contains(&skill_key))
     }
 }
 
@@ -419,6 +452,24 @@ fn opencode_settings_path_for(ctx: &AdapterContext, root: &AdapterRoot) -> Optio
     match root.scope {
         Scope::AgentGlobal => Some(ctx.user_home.join(".config/opencode/opencode.json")),
         Scope::AgentProject => ctx.project_root.as_ref().map(|p| p.join("opencode.json")),
+        Scope::ToolGlobal => None,
+        _ => None,
+    }
+}
+
+fn hermes_settings_path_for(ctx: &AdapterContext, root: &AdapterRoot) -> Option<PathBuf> {
+    match root.scope {
+        Scope::AgentGlobal => Some(ctx.user_home.join(".hermes/config.yaml")),
+        Scope::AgentProject | Scope::ToolGlobal => None,
+        _ => None,
+    }
+}
+
+fn openclaw_settings_path_for(ctx: &AdapterContext, root: &AdapterRoot) -> Option<PathBuf> {
+    match root.scope {
+        Scope::AgentGlobal | Scope::AgentProject => {
+            Some(ctx.user_home.join(".openclaw/openclaw.json"))
+        }
         Scope::ToolGlobal => None,
         _ => None,
     }
@@ -463,6 +514,62 @@ fn read_disabled_opencode_skill_permissions(settings_path: &Path) -> Option<Hash
             .map(|(name, _)| name.clone())
             .collect(),
     )
+}
+
+fn read_disabled_hermes_skills(settings_path: &Path) -> Option<HashSet<String>> {
+    let Ok(content) = fs::read_to_string(settings_path) else {
+        return None;
+    };
+    let value = serde_yaml::from_str::<serde_yaml::Value>(&content).ok()?;
+    let disabled = value
+        .get("skills")
+        .and_then(|skills| skills.get("disabled"))
+        .and_then(serde_yaml::Value::as_sequence)?;
+    Some(
+        disabled
+            .iter()
+            .filter_map(serde_yaml::Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToString::to_string)
+            .collect(),
+    )
+}
+
+fn read_disabled_openclaw_skill_entries(settings_path: &Path) -> Option<HashSet<String>> {
+    let Ok(content) = fs::read_to_string(settings_path) else {
+        return None;
+    };
+    let value = json5::from_str::<serde_json::Value>(&content).ok()?;
+    let entries = value
+        .get("skills")
+        .and_then(|skills| skills.get("entries"))
+        .and_then(serde_json::Value::as_object)?;
+    Some(
+        entries
+            .iter()
+            .filter(|(_, entry)| {
+                entry.get("enabled").and_then(serde_json::Value::as_bool) == Some(false)
+            })
+            .map(|(key, _)| key.clone())
+            .collect(),
+    )
+}
+
+fn openclaw_config_key_from_frontmatter(frontmatter_raw: &str, fallback_name: &str) -> String {
+    serde_yaml::from_str::<serde_yaml::Value>(frontmatter_raw)
+        .ok()
+        .and_then(|frontmatter| {
+            frontmatter
+                .get("metadata")
+                .and_then(|metadata| metadata.get("openclaw"))
+                .and_then(|openclaw| openclaw.get("skillKey"))
+                .and_then(serde_yaml::Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToString::to_string)
+        })
+        .unwrap_or_else(|| fallback_name.to_string())
 }
 
 fn strip_json_comments(content: &str) -> String {
@@ -668,6 +775,61 @@ mod tests {
             .all(|skill| skill.name == "same-name"
                 && skill.state == SkillState::Loaded
                 && skill.enabled));
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn hermes_and_openclaw_config_overrides_disable_scanned_skills() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "skills-copilot-hermes-openclaw-overrides-{}",
+            std::process::id()
+        ));
+        let home = temp_root.join("home");
+        let hermes_skill_dir = home.join(".hermes/skills/research-brief");
+        let openclaw_skill_dir = home.join(".openclaw/skills/visible-name");
+        std::fs::create_dir_all(&hermes_skill_dir).expect("create Hermes skill dir");
+        std::fs::create_dir_all(&openclaw_skill_dir).expect("create OpenClaw skill dir");
+        std::fs::write(
+            home.join(".hermes/config.yaml"),
+            "skills:\n  disabled:\n    - research-brief\n",
+        )
+        .expect("write Hermes config");
+        std::fs::write(
+            home.join(".openclaw/openclaw.json"),
+            "{\n  skills: { entries: { \"routed-key\": { enabled: false } } },\n}\n",
+        )
+        .expect("write OpenClaw config");
+        std::fs::write(
+            hermes_skill_dir.join("SKILL.md"),
+            "---\nname: research-brief\ndescription: Hermes skill\n---\nBody.\n",
+        )
+        .expect("write Hermes skill");
+        std::fs::write(
+            openclaw_skill_dir.join("SKILL.md"),
+            "---\nname: visible-name\ndescription: OpenClaw skill\nmetadata:\n  openclaw:\n    skillKey: routed-key\n---\nBody.\n",
+        )
+        .expect("write OpenClaw skill");
+
+        let ctx = AdapterContext {
+            user_home: home,
+            project_root: None,
+            project_cwd: None,
+            extra_roots: vec![],
+        };
+
+        let hermes = scan_agent(&HermesAdapter, &ctx).expect("Hermes scan succeeds");
+        let openclaw = scan_agent(&OpenclawAdapter, &ctx).expect("OpenClaw scan succeeds");
+
+        assert_eq!(hermes.instances.len(), 1);
+        assert_eq!(hermes.instances[0].state, SkillState::Disabled);
+        assert!(!hermes.instances[0].enabled);
+        assert!(openclaw
+            .instances
+            .iter()
+            .any(|skill| skill.name == "visible-name"
+                && skill.state == SkillState::Disabled
+                && !skill.enabled));
 
         let _ = std::fs::remove_dir_all(&temp_root);
     }

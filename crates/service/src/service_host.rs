@@ -856,7 +856,7 @@ impl ServiceHost {
     }
 
     pub(crate) fn open_catalog(&self) -> Result<Catalog, ServiceError> {
-        fs::create_dir_all(&self.app_data_dir)?;
+        create_private_dir_all(&self.app_data_dir)?;
         let catalog = Catalog::open(&self.catalog_path())?;
         catalog.init()?;
         Ok(catalog)
@@ -931,10 +931,9 @@ impl ServiceHost {
         &self,
         benchmarks: &[TaskBenchmarkRecord],
     ) -> Result<(), ServiceError> {
-        fs::create_dir_all(&self.app_data_dir)?;
         let path = self.task_benchmarks_path();
         let content = serde_json::to_string_pretty(benchmarks)?;
-        fs::write(path, content)?;
+        write_private_text_file(&path, &content)?;
         Ok(())
     }
 
@@ -954,10 +953,9 @@ impl ServiceHost {
         &self,
         baseline: &RoutingRegressionBaseline,
     ) -> Result<(), ServiceError> {
-        fs::create_dir_all(&self.app_data_dir)?;
         let path = self.routing_regression_baseline_path();
         let content = serde_json::to_string_pretty(baseline)?;
-        fs::write(path, content)?;
+        write_private_text_file(&path, &content)?;
         Ok(())
     }
 
@@ -982,7 +980,6 @@ impl ServiceHost {
         &self,
         imports: &[TraceImportRecord],
     ) -> Result<(), ServiceError> {
-        fs::create_dir_all(&self.app_data_dir)?;
         let path = self.trace_imports_path();
         let mut sorted = imports.to_vec();
         sorted.sort_by(|left, right| {
@@ -993,7 +990,7 @@ impl ServiceHost {
                 .then_with(|| left.id.cmp(&right.id))
         });
         let content = serde_json::to_string_pretty(&sorted)?;
-        fs::write(path, content)?;
+        write_private_text_file(&path, &content)?;
         Ok(())
     }
 
@@ -1014,12 +1011,11 @@ impl ServiceHost {
         &self,
         reviews: &[AgentSessionSkillReviewRecord],
     ) -> Result<(), ServiceError> {
-        fs::create_dir_all(&self.app_data_dir)?;
         let path = self.agent_session_reviews_path();
         let mut sorted = reviews.to_vec();
         sorted.sort_by(agent_session_review_record_sort);
         let content = serde_json::to_string_pretty(&sorted)?;
-        fs::write(path, content)?;
+        write_private_text_file(&path, &content)?;
         Ok(())
     }
 
@@ -1051,12 +1047,11 @@ impl ServiceHost {
         &self,
         records: &[ModelTaskMatchRecord],
     ) -> Result<(), ServiceError> {
-        fs::create_dir_all(&self.app_data_dir)?;
         let path = self.model_task_matches_path();
         let mut sorted = records.to_vec();
         sorted.sort_by(model_task_match_record_sort);
         let content = serde_json::to_string_pretty(&sorted)?;
-        fs::write(path, content)?;
+        write_private_text_file(&path, &content)?;
         Ok(())
     }
 
@@ -1281,12 +1276,11 @@ impl ServiceHost {
         &self,
         runs: &[LlmPromptRunRecord],
     ) -> Result<(), ServiceError> {
-        fs::create_dir_all(&self.app_data_dir)?;
         let path = self.llm_prompt_runs_path();
         let mut sorted = runs.to_vec();
         sorted.sort_by(llm_prompt_run_record_sort);
         let content = serde_json::to_string_pretty(&sorted)?;
-        fs::write(path, content)?;
+        write_private_text_file(&path, &content)?;
         Ok(())
     }
 
@@ -1407,12 +1401,11 @@ impl ServiceHost {
         &self,
         records: &[RemediationHistoryRecord],
     ) -> Result<(), ServiceError> {
-        fs::create_dir_all(&self.app_data_dir)?;
         let path = self.remediation_history_path();
         let mut sorted = records.to_vec();
         sorted.sort_by(remediation_history_record_sort);
         let content = serde_json::to_string_pretty(&sorted)?;
-        fs::write(path, content)?;
+        write_private_text_file(&path, &content)?;
         Ok(())
     }
 
@@ -1433,12 +1426,11 @@ impl ServiceHost {
         &self,
         records: &[GuidedCleanupStepRecord],
     ) -> Result<(), ServiceError> {
-        fs::create_dir_all(&self.app_data_dir)?;
         let path = self.guided_cleanup_steps_path();
         let mut sorted = records.to_vec();
         sorted.sort_by(guided_cleanup_record_sort);
         let content = serde_json::to_string_pretty(&sorted)?;
-        fs::write(path, content)?;
+        write_private_text_file(&path, &content)?;
         Ok(())
     }
 

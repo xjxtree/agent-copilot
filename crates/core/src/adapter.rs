@@ -60,6 +60,7 @@ pub struct AgentConfigDocument {
 pub enum ConfigFormat {
     Json,
     Toml,
+    Yaml,
     Markdown,
 }
 

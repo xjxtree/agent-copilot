@@ -1,5 +1,45 @@
 import Foundation
 
+enum LocalSessionContentKind: String, CaseIterable, Identifiable, Hashable {
+    case userMessage = "user_message"
+    case agentReply = "agent_reply"
+    case thinking
+    case toolCall = "tool_call"
+    case skillCall = "skill_call"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .userMessage:
+            return UIStrings.text("localSessionContent.user", "User")
+        case .agentReply:
+            return UIStrings.text("localSessionContent.agent", "Agent")
+        case .thinking:
+            return UIStrings.text("localSessionContent.thinking", "Thinking")
+        case .toolCall:
+            return UIStrings.text("localSessionContent.tool", "Tool")
+        case .skillCall:
+            return UIStrings.text("localSessionContent.skill", "Skill")
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .userMessage:
+            return "person"
+        case .agentReply:
+            return "text.bubble"
+        case .thinking:
+            return "brain.head.profile"
+        case .toolCall:
+            return "wrench.and.screwdriver"
+        case .skillCall:
+            return "square.stack.3d.up"
+        }
+    }
+}
+
 struct LocalSessionPreviewRoot: Decodable, Hashable, Identifiable {
     let root: String
     let status: String
@@ -34,24 +74,88 @@ struct LocalSessionPreviewRoot: Decodable, Hashable, Identifiable {
     }
 }
 
+struct LocalSessionContentItem: Decodable, Hashable, Identifiable {
+    let id: String
+    let kind: LocalSessionContentKind
+    let title: String
+    let text: String
+    let charCount: Int
+    let evidenceRefs: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case kind
+        case title
+        case text
+        case charCount = "char_count"
+        case charCountAlt = "charCount"
+        case evidenceRefs = "evidence_refs"
+        case evidenceRefsAlt = "evidenceRefs"
+        case evidence
+    }
+
+    init(
+        id: String,
+        kind: LocalSessionContentKind,
+        title: String,
+        text: String,
+        charCount: Int? = nil,
+        evidenceRefs: [String] = []
+    ) {
+        self.id = id
+        self.kind = kind
+        self.title = title
+        self.text = text
+        self.charCount = charCount ?? text.count
+        self.evidenceRefs = evidenceRefs
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        let rawKind = try container.decodeIfPresent(String.self, forKey: .kind) ?? LocalSessionContentKind.agentReply.rawValue
+        kind = LocalSessionContentKind(rawValue: rawKind) ?? .agentReply
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? kind.title
+        text = try container.decodeIfPresent(String.self, forKey: .text) ?? ""
+        charCount = try container.decodeIfPresent(Int.self, forKey: .charCount)
+            ?? container.decodeIfPresent(Int.self, forKey: .charCountAlt)
+            ?? text.count
+        evidenceRefs = try container.decodeFlexibleLocalSessionStringArray(keys: [
+            .evidenceRefs,
+            .evidenceRefsAlt,
+            .evidence
+        ])
+    }
+}
+
 struct LocalSessionPreviewRow: Decodable, Hashable, Identifiable {
     let id: String
     let title: String
     let sourceKind: String
+    let scope: String
     let agent: String?
+    let projectRoot: String?
     let redactedPath: String
     let modifiedAt: String?
     let excerpt: String
     let excerptCharCount: Int
+    let userMessageCount: Int
+    let totalMessageCount: Int
+    let toolCallCount: Int
+    let skillCallCount: Int
     let contentHash: String
     let evidenceRefs: [String]
+    let contentItems: [LocalSessionContentItem]
 
     enum CodingKeys: String, CodingKey {
         case id
         case title
         case sourceKind = "source_kind"
         case sourceKindAlt = "sourceKind"
+        case scope
         case agent
+        case projectRoot = "project_root"
+        case projectRootAlt = "projectRoot"
         case redactedPath = "redacted_path"
         case redactedPathAlt = "redactedPath"
         case path
@@ -61,11 +165,21 @@ struct LocalSessionPreviewRow: Decodable, Hashable, Identifiable {
         case redactedExcerpt = "redacted_excerpt"
         case excerptCharCount = "excerpt_char_count"
         case excerptCharCountAlt = "excerptCharCount"
+        case userMessageCount = "user_message_count"
+        case userMessageCountAlt = "userMessageCount"
+        case totalMessageCount = "total_message_count"
+        case totalMessageCountAlt = "totalMessageCount"
+        case toolCallCount = "tool_call_count"
+        case toolCallCountAlt = "toolCallCount"
+        case skillCallCount = "skill_call_count"
+        case skillCallCountAlt = "skillCallCount"
         case contentHash = "content_hash"
         case contentHashAlt = "contentHash"
         case evidenceRefs = "evidence_refs"
         case evidenceRefsAlt = "evidenceRefs"
         case evidence
+        case contentItems = "content_items"
+        case contentItemsAlt = "contentItems"
     }
 
     init(from decoder: Decoder) throws {
@@ -78,7 +192,10 @@ struct LocalSessionPreviewRow: Decodable, Hashable, Identifiable {
         sourceKind = try container.decodeIfPresent(String.self, forKey: .sourceKind)
             ?? container.decodeIfPresent(String.self, forKey: .sourceKindAlt)
             ?? "authorized-local-session"
+        scope = try container.decodeIfPresent(String.self, forKey: .scope) ?? "all"
         agent = try container.decodeIfPresent(String.self, forKey: .agent)
+        projectRoot = try container.decodeIfPresent(String.self, forKey: .projectRoot)
+            ?? container.decodeIfPresent(String.self, forKey: .projectRootAlt)
         redactedPath = try container.decodeIfPresent(String.self, forKey: .redactedPath)
             ?? container.decodeIfPresent(String.self, forKey: .redactedPathAlt)
             ?? container.decodeIfPresent(String.self, forKey: .path)
@@ -90,6 +207,18 @@ struct LocalSessionPreviewRow: Decodable, Hashable, Identifiable {
         excerptCharCount = try container.decodeIfPresent(Int.self, forKey: .excerptCharCount)
             ?? container.decodeIfPresent(Int.self, forKey: .excerptCharCountAlt)
             ?? excerpt.count
+        userMessageCount = try container.decodeIfPresent(Int.self, forKey: .userMessageCount)
+            ?? container.decodeIfPresent(Int.self, forKey: .userMessageCountAlt)
+            ?? 0
+        totalMessageCount = try container.decodeIfPresent(Int.self, forKey: .totalMessageCount)
+            ?? container.decodeIfPresent(Int.self, forKey: .totalMessageCountAlt)
+            ?? 0
+        toolCallCount = try container.decodeIfPresent(Int.self, forKey: .toolCallCount)
+            ?? container.decodeIfPresent(Int.self, forKey: .toolCallCountAlt)
+            ?? 0
+        skillCallCount = try container.decodeIfPresent(Int.self, forKey: .skillCallCount)
+            ?? container.decodeIfPresent(Int.self, forKey: .skillCallCountAlt)
+            ?? 0
         contentHash = try container.decodeIfPresent(String.self, forKey: .contentHash)
             ?? container.decodeIfPresent(String.self, forKey: .contentHashAlt)
             ?? ""
@@ -98,6 +227,9 @@ struct LocalSessionPreviewRow: Decodable, Hashable, Identifiable {
             .evidenceRefsAlt,
             .evidence
         ])
+        contentItems = try container.decodeIfPresent([LocalSessionContentItem].self, forKey: .contentItems)
+            ?? container.decodeIfPresent([LocalSessionContentItem].self, forKey: .contentItemsAlt)
+            ?? []
     }
 }
 
@@ -166,14 +298,92 @@ struct LocalSessionPreviewRedactionSummary: Decodable, Hashable {
     }
 }
 
+struct LocalSessionSkillUsageRow: Decodable, Hashable, Identifiable {
+    let skillId: String
+    let skillName: String
+    let agent: String
+    let callCount: Int
+    let sessionCount: Int
+    let latestModifiedAt: String?
+    let evidenceRefs: [String]
+
+    var id: String { skillId }
+
+    enum CodingKeys: String, CodingKey {
+        case skillId = "skill_id"
+        case skillIdAlt = "skillId"
+        case skillName = "skill_name"
+        case skillNameAlt = "skillName"
+        case agent
+        case callCount = "call_count"
+        case callCountAlt = "callCount"
+        case sessionCount = "session_count"
+        case sessionCountAlt = "sessionCount"
+        case latestModifiedAt = "latest_modified_at"
+        case latestModifiedAtAlt = "latestModifiedAt"
+        case evidenceRefs = "evidence_refs"
+        case evidenceRefsAlt = "evidenceRefs"
+        case evidence
+    }
+
+    init(
+        skillId: String,
+        skillName: String,
+        agent: String,
+        callCount: Int,
+        sessionCount: Int,
+        latestModifiedAt: String? = nil,
+        evidenceRefs: [String] = []
+    ) {
+        self.skillId = skillId
+        self.skillName = skillName
+        self.agent = agent
+        self.callCount = callCount
+        self.sessionCount = sessionCount
+        self.latestModifiedAt = latestModifiedAt
+        self.evidenceRefs = evidenceRefs
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        skillId = try container.decodeIfPresent(String.self, forKey: .skillId)
+            ?? container.decodeIfPresent(String.self, forKey: .skillIdAlt)
+            ?? UUID().uuidString
+        skillName = try container.decodeIfPresent(String.self, forKey: .skillName)
+            ?? container.decodeIfPresent(String.self, forKey: .skillNameAlt)
+            ?? skillId
+        agent = try container.decodeIfPresent(String.self, forKey: .agent) ?? ""
+        callCount = try container.decodeIfPresent(Int.self, forKey: .callCount)
+            ?? container.decodeIfPresent(Int.self, forKey: .callCountAlt)
+            ?? 0
+        sessionCount = try container.decodeIfPresent(Int.self, forKey: .sessionCount)
+            ?? container.decodeIfPresent(Int.self, forKey: .sessionCountAlt)
+            ?? 0
+        latestModifiedAt = try container.decodeFlexibleLocalSessionString(keys: [
+            .latestModifiedAt,
+            .latestModifiedAtAlt
+        ])
+        evidenceRefs = try container.decodeFlexibleLocalSessionStringArray(keys: [
+            .evidenceRefs,
+            .evidenceRefsAlt,
+            .evidence
+        ])
+    }
+}
+
 struct LocalSessionPreviewResult: Decodable, Hashable {
     let generatedBy: String
     let authorized: Bool
     let authorizationRequired: Bool
     let roots: [LocalSessionPreviewRoot]
     let sessionRows: [LocalSessionPreviewRow]
+    let skillUsageRows: [LocalSessionSkillUsageRow]
     let count: Int
     let totalCandidateCount: Int
+    let userMessageCount: Int
+    let totalMessageCount: Int
+    let toolCallCount: Int
+    let skillCallCount: Int
     let gapNotes: [String]
     let blockerNotes: [String]
     let redactionSummary: LocalSessionPreviewRedactionSummary
@@ -194,9 +404,19 @@ struct LocalSessionPreviewResult: Decodable, Hashable {
         case sessionRows = "session_rows"
         case sessionRowsAlt = "sessionRows"
         case rows
+        case skillUsageRows = "skill_usage_rows"
+        case skillUsageRowsAlt = "skillUsageRows"
         case count
         case totalCandidateCount = "total_candidate_count"
         case totalCandidateCountAlt = "totalCandidateCount"
+        case userMessageCount = "user_message_count"
+        case userMessageCountAlt = "userMessageCount"
+        case totalMessageCount = "total_message_count"
+        case totalMessageCountAlt = "totalMessageCount"
+        case toolCallCount = "tool_call_count"
+        case toolCallCountAlt = "toolCallCount"
+        case skillCallCount = "skill_call_count"
+        case skillCallCountAlt = "skillCallCount"
         case gapNotes = "gap_notes"
         case gapNotesAlt = "gapNotes"
         case blockerNotes = "blocker_notes"
@@ -210,13 +430,18 @@ struct LocalSessionPreviewResult: Decodable, Hashable {
     }
 
     init(
-        generatedBy: String = "local-v2.87",
+        generatedBy: String = "local-v2.98",
         authorized: Bool = false,
-        authorizationRequired: Bool = true,
+        authorizationRequired: Bool = false,
         roots: [LocalSessionPreviewRoot] = [],
         sessionRows: [LocalSessionPreviewRow] = [],
+        skillUsageRows: [LocalSessionSkillUsageRow] = [],
         count: Int? = nil,
         totalCandidateCount: Int = 0,
+        userMessageCount: Int? = nil,
+        totalMessageCount: Int? = nil,
+        toolCallCount: Int? = nil,
+        skillCallCount: Int? = nil,
         gapNotes: [String] = [],
         blockerNotes: [String] = [],
         redactionSummary: LocalSessionPreviewRedactionSummary = LocalSessionPreviewRedactionSummary(),
@@ -228,8 +453,13 @@ struct LocalSessionPreviewResult: Decodable, Hashable {
         self.authorizationRequired = authorizationRequired
         self.roots = roots
         self.sessionRows = sessionRows
+        self.skillUsageRows = skillUsageRows
         self.count = count ?? sessionRows.count
         self.totalCandidateCount = totalCandidateCount
+        self.userMessageCount = userMessageCount ?? sessionRows.reduce(0) { $0 + $1.userMessageCount }
+        self.totalMessageCount = totalMessageCount ?? sessionRows.reduce(0) { $0 + $1.totalMessageCount }
+        self.toolCallCount = toolCallCount ?? sessionRows.reduce(0) { $0 + $1.toolCallCount }
+        self.skillCallCount = skillCallCount ?? sessionRows.reduce(0) { $0 + $1.skillCallCount }
         self.gapNotes = gapNotes
         self.blockerNotes = blockerNotes
         self.redactionSummary = redactionSummary
@@ -243,20 +473,32 @@ struct LocalSessionPreviewResult: Decodable, Hashable {
             ?? container.decodeIfPresent([LocalSessionPreviewRow].self, forKey: .sessionRowsAlt)
             ?? container.decodeIfPresent([LocalSessionPreviewRow].self, forKey: .rows)
             ?? []
+        let skillUsageRows = try container.decodeIfPresent([LocalSessionSkillUsageRow].self, forKey: .skillUsageRows)
+            ?? container.decodeIfPresent([LocalSessionSkillUsageRow].self, forKey: .skillUsageRowsAlt)
+            ?? []
         self.init(
             generatedBy: try container.decodeIfPresent(String.self, forKey: .generatedBy)
                 ?? container.decodeIfPresent(String.self, forKey: .generatedByAlt)
-                ?? "local-v2.87",
+                ?? "local-v2.98",
             authorized: try container.decodeIfPresent(Bool.self, forKey: .authorized) ?? !rows.isEmpty,
             authorizationRequired: try container.decodeIfPresent(Bool.self, forKey: .authorizationRequired)
                 ?? container.decodeIfPresent(Bool.self, forKey: .authorizationRequiredAlt)
                 ?? false,
             roots: try container.decodeIfPresent([LocalSessionPreviewRoot].self, forKey: .roots) ?? [],
             sessionRows: rows,
+            skillUsageRows: skillUsageRows,
             count: try container.decodeIfPresent(Int.self, forKey: .count),
             totalCandidateCount: try container.decodeIfPresent(Int.self, forKey: .totalCandidateCount)
                 ?? container.decodeIfPresent(Int.self, forKey: .totalCandidateCountAlt)
                 ?? rows.count,
+            userMessageCount: try container.decodeIfPresent(Int.self, forKey: .userMessageCount)
+                ?? container.decodeIfPresent(Int.self, forKey: .userMessageCountAlt),
+            totalMessageCount: try container.decodeIfPresent(Int.self, forKey: .totalMessageCount)
+                ?? container.decodeIfPresent(Int.self, forKey: .totalMessageCountAlt),
+            toolCallCount: try container.decodeIfPresent(Int.self, forKey: .toolCallCount)
+                ?? container.decodeIfPresent(Int.self, forKey: .toolCallCountAlt),
+            skillCallCount: try container.decodeIfPresent(Int.self, forKey: .skillCallCount)
+                ?? container.decodeIfPresent(Int.self, forKey: .skillCallCountAlt),
             gapNotes: try container.decodeFlexibleLocalSessionStringArray(keys: [.gapNotes, .gapNotesAlt]),
             blockerNotes: try container.decodeFlexibleLocalSessionStringArray(keys: [.blockerNotes, .blockerNotesAlt]),
             redactionSummary: try container.decodeIfPresent(LocalSessionPreviewRedactionSummary.self, forKey: .redactionSummary)

@@ -1,6 +1,48 @@
 import AppKit
 import SwiftUI
 
+struct LocalReportPreviewSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var store: SkillStore
+    let includeSelectedSkill: Bool
+
+    init(includeSelectedSkill: Bool = false) {
+        self.includeSelectedSkill = includeSelectedSkill
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 10) {
+                Label(UIStrings.text("localReport.preview.title", "Usage Report Preview"), systemImage: "square.and.arrow.down")
+                    .font(.title3.weight(.semibold))
+                Spacer()
+                Button(UIStrings.done) {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+            }
+
+            HStack(alignment: .top, spacing: 12) {
+                ScrollView {
+                    LocalReportExportPanel(includeSelectedSkill: includeSelectedSkill)
+                }
+                .frame(minWidth: 520, maxWidth: .infinity)
+
+                LocalReportHistoryPanel(
+                    records: store.localReportExportHistory,
+                    selectedID: store.selectedLocalReportHistoryID,
+                    onSelect: { record in
+                        store.selectLocalReportHistoryRecord(record)
+                    }
+                )
+                .frame(width: 250)
+            }
+        }
+        .padding(16)
+        .frame(minWidth: 820, idealWidth: 900, minHeight: 520, alignment: .topLeading)
+    }
+}
+
 struct LocalReportExportPanel: View {
     @EnvironmentObject private var store: SkillStore
     let includeSelectedSkill: Bool
@@ -32,6 +74,13 @@ struct LocalReportExportPanel: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            LocalReportPreviewScopeView(
+                formatTitle: store.localReportFormat.title,
+                scopeSummary: scopeSummary,
+                includeSelectedSkill: includeSelectedSkill,
+                selectedSkillName: store.selectedSkill?.name
+            )
 
             HStack(alignment: .center, spacing: 10) {
                 Picker(UIStrings.localReportFormat, selection: $store.localReportFormat) {
@@ -68,19 +117,94 @@ struct LocalReportExportPanel: View {
     }
 
     private var scopeSummary: String {
-        var parts = [store.agentFilter.title]
-        if store.stateFilter != .all {
-            parts.append(store.stateFilter.title)
-        }
-        let search = store.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !search.isEmpty {
-            parts.append(UIStrings.text("localReport.scope.search", "Search filter active"))
-        }
-        if includeSelectedSkill, let skill = store.selectedSkill {
-            parts.append(skill.name)
-        }
-        return String(format: UIStrings.text("localReport.scope.agent", "Exports the current local audit scope: %@."), parts.joined(separator: " · "))
+        store.localReportScopeSummary(includeSelectedSkill: includeSelectedSkill)
     }
+}
+
+private struct LocalReportHistoryPanel: View {
+    let records: [LocalReportExportHistoryRecord]
+    let selectedID: LocalReportExportHistoryRecord.ID?
+    let onSelect: (LocalReportExportHistoryRecord) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(UIStrings.text("localReport.history.title", "History"), systemImage: "clock.arrow.circlepath")
+                .font(.headline)
+
+            if records.isEmpty {
+                Text(UIStrings.text("localReport.history.empty", "No exported reports yet."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .background(.quaternary.opacity(0.18), in: RoundedRectangle(cornerRadius: 8))
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 8) {
+                        ForEach(records) { record in
+                            LocalReportHistoryRow(
+                                record: record,
+                                isSelected: record.id == selectedID,
+                                onSelect: {
+                                    onSelect(record)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxHeight: .infinity, alignment: .topLeading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct LocalReportHistoryRow: View {
+    let record: LocalReportExportHistoryRecord
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    Image(systemName: record.result.format.systemImage)
+                        .foregroundStyle(isSelected ? .white.opacity(0.9) : .secondary)
+                    Text(record.result.displayName)
+                        .font(.caption.bold())
+                        .foregroundStyle(isSelected ? .white : .primary)
+                        .lineLimit(1)
+                }
+
+                Text(Self.dateFormatter.string(from: record.exportedAt))
+                    .font(.caption2)
+                    .foregroundStyle(isSelected ? .white.opacity(0.82) : .secondary)
+                    .lineLimit(1)
+
+                Text(record.scopeSummary)
+                    .font(.caption2)
+                    .foregroundStyle(isSelected ? .white.opacity(0.76) : .secondary)
+                    .lineLimit(2)
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                isSelected ? Color.accentColor : Color.secondary.opacity(0.08),
+                in: RoundedRectangle(cornerRadius: 8)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(record.result.displayName)
+    }
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter
+    }()
 }
 
 private struct LocalReportExportResultView: View {
@@ -124,8 +248,9 @@ private struct LocalReportExportResultView: View {
                     Button {
                         NSWorkspace.shared.activateFileViewerSelecting([fileURL])
                     } label: {
-                        Label(UIStrings.revealInFinder, systemImage: "finder")
+                        Label(UIStrings.text("localReport.download", "Download"), systemImage: "arrow.down.circle")
                     }
+                    .help(UIStrings.revealInFinder)
 
                     Button {
                         NSPasteboard.general.clearContents()
@@ -145,6 +270,62 @@ private struct LocalReportExportResultView: View {
 
     private var resolvedFileURL: URL? {
         LocalReportFileResolver.fileURL(for: result.path)
+    }
+}
+
+private struct LocalReportPreviewScopeView: View {
+    let formatTitle: String
+    let scopeSummary: String
+    let includeSelectedSkill: Bool
+    let selectedSkillName: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Label(UIStrings.text("localReport.preview.contents", "Preview"), systemImage: "doc.richtext")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(formatTitle)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Color.secondary.opacity(0.1), in: Capsule())
+            }
+
+            Text(scopeSummary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 8) {
+                ReportPreviewPill(text: UIStrings.localReportSectionTitle("current_state"))
+                ReportPreviewPill(text: UIStrings.localReportSectionTitle("installed_skills"))
+                ReportPreviewPill(text: UIStrings.localReportSectionTitle("issues"))
+                ReportPreviewPill(text: UIStrings.localReportSectionTitle("task_preflight"))
+                if includeSelectedSkill, selectedSkillName?.isEmpty == false {
+                    ReportPreviewPill(text: UIStrings.text("localReport.preview.selectedSkill", "Selected skill"))
+                }
+            }
+            .lineLimit(1)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.18), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct ReportPreviewPill: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(Color.secondary.opacity(0.08), in: Capsule())
     }
 }
 

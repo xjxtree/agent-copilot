@@ -847,6 +847,28 @@ pub(super) fn unique_suffix() -> u128 {
         .as_nanos()
 }
 
+#[cfg(unix)]
+pub(super) fn assert_private_path_mode(path: &Path, expected: u32) {
+    use std::os::unix::fs::PermissionsExt;
+
+    let mode = fs::metadata(path)
+        .expect("private path metadata")
+        .permissions()
+        .mode()
+        & 0o777;
+    assert_eq!(
+        mode,
+        expected,
+        "{} should have private mode {:o}, got {:o}",
+        path.display(),
+        expected,
+        mode
+    );
+}
+
+#[cfg(not(unix))]
+pub(super) fn assert_private_path_mode(_path: &Path, _expected: u32) {}
+
 pub(super) fn provider_test_secret_env_name(profile_id: &str) -> String {
     let account = format!("provider:{profile_id}");
     let suffix = account

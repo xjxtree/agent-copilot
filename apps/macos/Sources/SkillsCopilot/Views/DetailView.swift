@@ -26,8 +26,10 @@ struct DetailView: View {
                             SuccessBanner(message: message)
                         }
 
-                        if store.selectedDetailSection.isAgentWorkspaceSurface {
-                            AgentWorkspacePanel()
+                        if store.selectedSidebarSelection?.isSession == true {
+                            AgentSessionDetailPanel()
+                        } else if store.selectedSidebarSelection?.isConfig == true {
+                            AgentConfigDetailPanel()
                         } else if store.selectedDetailSection == .guidedCleanup {
                             DetailSectionSwitcher(selection: $store.selectedDetailSection)
 
@@ -52,7 +54,7 @@ struct DetailView: View {
                                     }
                                 }
                             )
-                        } else if let skill {
+                        } else if store.selectedSidebarSelection?.isSkill == true, let skill {
                             let selectedFindingGroups = FindingDisplayModel.issueGroups(
                                 findings: store.selectedFindings,
                                 severityFilter: FindingDisplayModel.allFilterValue,
@@ -61,6 +63,7 @@ struct DetailView: View {
                             HeaderView(
                                 skill: skill,
                                 adoptingAgentSummary: adoptingAgentSummary(for: skill),
+                                sessionUsage: sessionUsage(for: skill),
                                 issueCount: selectedFindingGroups.count + store.selectedConflicts.count,
                                 isWriting: store.isWriting,
                                 adapterCapability: store.adapterCapabilities.first { $0.agent == skill.agent },
@@ -499,7 +502,11 @@ struct DetailView: View {
                             )
                         }
                         } else {
-                            EmptyDetailView()
+                            EmptyDetailView(
+                                title: emptyDetailTitle,
+                                message: emptyDetailMessage,
+                                systemImage: emptyDetailSystemImage
+                            )
                         }
                     }
                     .padding(28)
@@ -509,12 +516,48 @@ struct DetailView: View {
             .onChange(of: store.selectedDetailSection) { _ in
                 scrollToTop(proxy)
             }
+            .onChange(of: store.selectedSidebarSelection) { _ in
+                scrollToTop(proxy)
+            }
         }
         .navigationTitle(UIStrings.appWindowTitle)
         .transaction { transaction in
             if reduceMotion {
                 transaction.animation = nil
             }
+        }
+    }
+
+    private var emptyDetailTitle: String {
+        switch store.sidebarContentMode {
+        case .sessions:
+            UIStrings.noSessionSelected
+        case .config:
+            UIStrings.noConfigSelected
+        case .skills:
+            UIStrings.noSkillSelected
+        }
+    }
+
+    private var emptyDetailMessage: String {
+        switch store.sidebarContentMode {
+        case .sessions:
+            UIStrings.noSessionSelectedMessage
+        case .config:
+            UIStrings.noConfigSelectedMessage
+        case .skills:
+            UIStrings.noSkillSelectedMessage
+        }
+    }
+
+    private var emptyDetailSystemImage: String {
+        switch store.sidebarContentMode {
+        case .sessions:
+            "bubble.left.and.bubble.right"
+        case .config:
+            "slider.horizontal.3"
+        case .skills:
+            "sparkle.magnifyingglass"
         }
     }
 
@@ -548,12 +591,15 @@ struct DetailView: View {
             }
 
         let displayAgents = agents.isEmpty ? [DisplayText.agent(skill.agent)] : agents
-        let visibleAgents = displayAgents.prefix(2).joined(separator: ", ")
-        let hiddenCount = displayAgents.count - 2
-        guard hiddenCount > 0 else {
-            return visibleAgents
+        return displayAgents.joined(separator: ", ")
+    }
+
+    private func sessionUsage(for skill: SkillRecord) -> LocalSessionSkillUsageRow? {
+        store.localSessionPreviewResult.skillUsageRows.first { row in
+            row.skillId == skill.id
+                || row.skillName == skill.name
+                || row.skillName.caseInsensitiveCompare(skill.name) == .orderedSame
         }
-        return "\(visibleAgents) +\(hiddenCount)"
     }
 
     private func normalizedIdentityValue(_ value: String) -> String {

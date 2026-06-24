@@ -24,6 +24,32 @@
       "cleanup_item_count": 1,
       "comparison_group_count": 0
     },
+    "sections": [
+      {
+        "name": "current_state",
+        "count": 1
+      },
+      {
+        "name": "installed_skills",
+        "count": 1
+      },
+      {
+        "name": "issues",
+        "count": 1
+      },
+      {
+        "name": "task_preflight",
+        "count": 1
+      },
+      {
+        "name": "analysis_results",
+        "count": 4
+      },
+      {
+        "name": "safety",
+        "count": 1
+      }
+    ],
     "redaction": {
       "enabled": true,
       "placeholders": [

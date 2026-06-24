@@ -278,9 +278,9 @@ pub(super) fn decode_response_fixture(method: &str, result: &Value, path: &Path)
                 decode_fixture_result(method, result, path);
             assert!(diagnostics.iter().any(|diagnostic| {
                 diagnostic.agent == "hermes"
-                    && diagnostic.status == "install-only"
-                    && diagnostic.config.status == "blocked"
-                    && diagnostic.access.writable_status == "install-only-v2.95"
+                    && diagnostic.status == "guarded"
+                    && diagnostic.config.status == "not-detected"
+                    && diagnostic.access.writable_status == "guarded-v2.97"
             }));
         }
         "evidence.previewMcpServers" => {
@@ -816,7 +816,7 @@ pub(super) fn decode_response_fixture(method: &str, result: &Value, path: &Path)
         "session.previewLocalSessions" => {
             let preview: WireLocalSessionPreviewResult =
                 decode_fixture_result(method, result, path);
-            assert_eq!(preview.generated_by, "local-v2.87");
+            assert_eq!(preview.generated_by, "local-v2.98");
             assert!(preview.read_only);
             assert!(!preview.provider_request_sent);
             assert!(!preview.skill_files_mutated);
@@ -827,12 +827,54 @@ pub(super) fn decode_response_fixture(method: &str, result: &Value, path: &Path)
             assert!(!preview.raw_response_persisted);
             assert!(!preview.raw_trace_persisted);
             assert_eq!(preview.count, preview.session_rows.len());
+            assert_eq!(
+                preview.user_message_count,
+                preview
+                    .session_rows
+                    .iter()
+                    .map(|row| row.user_message_count)
+                    .sum::<usize>()
+            );
+            assert_eq!(
+                preview.total_message_count,
+                preview
+                    .session_rows
+                    .iter()
+                    .map(|row| row.total_message_count)
+                    .sum::<usize>()
+            );
+            assert_eq!(
+                preview.tool_call_count,
+                preview
+                    .session_rows
+                    .iter()
+                    .map(|row| row.tool_call_count)
+                    .sum::<usize>()
+            );
+            assert_eq!(
+                preview.skill_call_count,
+                preview
+                    .session_rows
+                    .iter()
+                    .map(|row| row.skill_call_count)
+                    .sum::<usize>()
+            );
             assert_agent_session_review_safety(&preview.safety_flags);
             assert!(!preview.redaction_summary.raw_trace_persisted);
+            for row in &preview.skill_usage_rows {
+                assert!(row.call_count >= row.session_count);
+                assert!(!row.skill_name.is_empty());
+                assert!(!row.evidence_refs.is_empty());
+            }
             for row in &preview.session_rows {
                 assert_eq!(row.source_kind, "authorized-local-session");
                 assert!(!row.excerpt.is_empty());
                 assert!(!row.evidence_refs.is_empty());
+                assert!(!row.content_items.is_empty());
+                assert!(row
+                    .content_items
+                    .iter()
+                    .any(|item| item.kind == "skill_call"));
             }
         }
         "task.listBenchmarks" => {

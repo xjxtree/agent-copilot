@@ -5,8 +5,8 @@ use crate::shared::{
     stable_path_id,
 };
 use skills_copilot_core::{
-    AdapterContext, AdapterError, AdapterRoot, AgentAdapter, AgentId, PermissionRequest,
-    RootSource, Scope, SkillInstance, SkillState,
+    AdapterContext, AdapterError, AdapterRoot, AgentAdapter, AgentConfigAdapter,
+    AgentConfigDocument, AgentId, PermissionRequest, RootSource, Scope, SkillInstance, SkillState,
 };
 
 #[derive(Debug, Default)]
@@ -87,8 +87,20 @@ impl AgentAdapter for HermesAdapter {
         instance.enabled
     }
 
-    fn config_paths(&self, _ctx: &AdapterContext) -> Vec<PathBuf> {
-        Vec::new()
+    fn config_paths(&self, ctx: &AdapterContext) -> Vec<PathBuf> {
+        vec![hermes_home(ctx).join("config.yaml")]
+    }
+}
+
+impl AgentConfigAdapter for HermesAdapter {
+    fn patch_enabled(
+        &self,
+        doc: &mut AgentConfigDocument,
+        instance: &SkillInstance,
+        on: bool,
+    ) -> Result<(), AdapterError> {
+        doc.text = patch_hermes_config(&doc.text, &instance.name, on)?;
+        Ok(())
     }
 }
 
@@ -137,6 +149,96 @@ fn parse_external_dirs(config_text: &str, config_dir: &Path, user_home: &Path) -
         }
     }
     dirs
+}
+
+pub fn hermes_disabled_skill_names(config_text: &str) -> Vec<String> {
+    serde_yaml::from_str::<serde_yaml::Value>(config_text)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("skills")
+                .and_then(|skills| skills.get("disabled"))
+                .and_then(serde_yaml::Value::as_sequence)
+                .map(|items| {
+                    items
+                        .iter()
+                        .filter_map(serde_yaml::Value::as_str)
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                })
+        })
+        .unwrap_or_default()
+}
+
+fn patch_hermes_config(
+    config_text: &str,
+    skill_name: &str,
+    enabled: bool,
+) -> Result<String, AdapterError> {
+    let mut value = if config_text.trim().is_empty() {
+        serde_yaml::Value::Mapping(serde_yaml::Mapping::new())
+    } else {
+        serde_yaml::from_str(config_text)
+            .map_err(|err| AdapterError::new(format!("invalid Hermes config YAML: {err}")))?
+    };
+
+    let disabled = hermes_disabled_array_mut(&mut value)?;
+    if enabled {
+        disabled.retain(|value| value.as_str() != Some(skill_name));
+    } else if !disabled
+        .iter()
+        .any(|value| value.as_str() == Some(skill_name))
+    {
+        disabled.push(serde_yaml::Value::String(skill_name.to_string()));
+    }
+
+    let mut text = serde_yaml::to_string(&value)
+        .map_err(|err| AdapterError::new(format!("failed to serialize Hermes config: {err}")))?;
+    if !text.ends_with('\n') {
+        text.push('\n');
+    }
+    Ok(text)
+}
+
+fn hermes_disabled_array_mut(
+    value: &mut serde_yaml::Value,
+) -> Result<&mut Vec<serde_yaml::Value>, AdapterError> {
+    use serde_yaml::{Mapping, Value};
+
+    let Value::Mapping(root) = value else {
+        return Err(AdapterError::new(
+            "Hermes config must be a YAML mapping before it can be patched",
+        ));
+    };
+
+    let skills_key = Value::String("skills".to_string());
+    if !root.contains_key(&skills_key) {
+        root.insert(skills_key.clone(), Value::Mapping(Mapping::new()));
+    }
+    let skills = root
+        .get_mut(&skills_key)
+        .ok_or_else(|| AdapterError::new("failed to create Hermes skills config"))?;
+    let Value::Mapping(skills) = skills else {
+        return Err(AdapterError::new(
+            "Hermes config `skills` must be a mapping before it can be patched",
+        ));
+    };
+
+    let disabled_key = Value::String("disabled".to_string());
+    if !skills.contains_key(&disabled_key) {
+        skills.insert(disabled_key.clone(), Value::Sequence(Vec::new()));
+    }
+    let disabled = skills
+        .get_mut(&disabled_key)
+        .ok_or_else(|| AdapterError::new("failed to create Hermes disabled skills list"))?;
+    let Value::Sequence(disabled) = disabled else {
+        return Err(AdapterError::new(
+            "Hermes config `skills.disabled` must be a sequence before it can be patched",
+        ));
+    };
+    Ok(disabled)
 }
 
 fn external_dir_path(raw_dir: &str, config_dir: &Path, user_home: &Path) -> Option<PathBuf> {
@@ -336,6 +438,54 @@ mod tests {
         assert_eq!(skill.name, "malformed-metadata");
         assert_eq!(skill.state, SkillState::Broken);
         assert!(!skill.enabled);
+    }
+
+    #[test]
+    fn patch_enabled_updates_global_disabled_list_without_touching_external_dirs() {
+        let mut doc = AgentConfigDocument {
+            path: PathBuf::from("/tmp/home/.hermes/config.yaml"),
+            format: skills_copilot_core::ConfigFormat::Yaml,
+            text: "skills:\n  external_dirs:\n    - ~/team-skills\n  disabled:\n    - old-skill\n"
+                .to_string(),
+        };
+        let skill = SkillInstance {
+            id: "hermes:test".to_string(),
+            agent: AgentId::Hermes,
+            scope: Scope::AgentGlobal,
+            project_root: None,
+            path: PathBuf::from("/tmp/home/.hermes/skills/new-skill/SKILL.md"),
+            display_path: PathBuf::from("/tmp/home/.hermes/skills/new-skill/SKILL.md"),
+            definition_id: "new-skill".to_string(),
+            name: "new-skill".to_string(),
+            display_name: "new-skill".to_string(),
+            description: String::new(),
+            version: None,
+            state: SkillState::Loaded,
+            enabled: true,
+            frontmatter_raw: String::new(),
+            body: String::new(),
+            scripts: Vec::new(),
+            permissions: PermissionRequest::default(),
+            fingerprint: String::new(),
+            mtime: 0,
+            first_seen: 0,
+            last_seen: 0,
+        };
+
+        HermesAdapter
+            .patch_enabled(&mut doc, &skill, false)
+            .expect("disable succeeds");
+        let disabled = hermes_disabled_skill_names(&doc.text);
+        assert!(disabled.contains(&"old-skill".to_string()));
+        assert!(disabled.contains(&"new-skill".to_string()));
+        assert!(doc.text.contains("external_dirs"));
+
+        HermesAdapter
+            .patch_enabled(&mut doc, &skill, true)
+            .expect("enable succeeds");
+        let disabled = hermes_disabled_skill_names(&doc.text);
+        assert!(disabled.contains(&"old-skill".to_string()));
+        assert!(!disabled.contains(&"new-skill".to_string()));
     }
 
     fn fixture_path(relative: &str) -> PathBuf {

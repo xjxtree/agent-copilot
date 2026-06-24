@@ -1058,12 +1058,27 @@ private extension KeyedDecodingContainer {
     }
 
     func sessionReviewInterferenceSignal(from value: String) -> AgentSessionInterferenceSignal {
-        let json = "\"\(value.replacingOccurrences(of: "\"", with: "\\\""))\""
-        return try! JSONDecoder().decode(AgentSessionInterferenceSignal.self, from: Data(json.utf8))
+        (try? JSONEncoder().encode(value))
+            .flatMap { try? JSONDecoder().decode(AgentSessionInterferenceSignal.self, from: $0) }
+            ?? AgentSessionInterferenceSignal(stringValue: value)
     }
 
     func sessionReviewEvidenceReference(from value: String) -> AgentSessionSkillReviewEvidenceReference {
-        let json = "\"\(value.replacingOccurrences(of: "\"", with: "\\\""))\""
-        return try! JSONDecoder().decode(AgentSessionSkillReviewEvidenceReference.self, from: Data(json.utf8))
+        (try? JSONEncoder().encode(value))
+            .flatMap { try? JSONDecoder().decode(AgentSessionSkillReviewEvidenceReference.self, from: $0) }
+            ?? AgentSessionSkillReviewEvidenceReference(stringValue: value)
+    }
+}
+
+private extension AgentSessionInterferenceSignal {
+    init(stringValue value: String) {
+        id = value
+        title = value
+        severity = UIStrings.unknown
+        category = UIStrings.unknown
+        detail = value
+        agent = nil
+        skill = nil
+        evidenceRefs = []
     }
 }

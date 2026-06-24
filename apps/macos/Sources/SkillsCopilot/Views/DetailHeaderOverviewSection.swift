@@ -4,6 +4,7 @@ import SwiftUI
 struct HeaderView: View {
     let skill: SkillRecord
     let adoptingAgentSummary: String
+    let sessionUsage: LocalSessionSkillUsageRow?
     let issueCount: Int
     let isWriting: Bool
     let adapterCapability: AdapterCapabilityRecord?
@@ -40,11 +41,11 @@ struct HeaderView: View {
                             .help(disabledReason ?? UIStrings.readOnly)
                     }
 
-                    if isPiGuardedToggleAvailable {
-                        Label(UIStrings.piGuardedToggle, systemImage: "shield.lefthalf.filled")
+                    if isGuardedToggleAvailable {
+                        Label(UIStrings.guardedToggle, systemImage: "shield.lefthalf.filled")
                             .font(.caption.bold())
                             .foregroundStyle(.secondary)
-                            .help(UIStrings.piGuardedToggleBoundary)
+                            .help(guardedToggleBoundary)
                     }
 
                     Button {
@@ -66,28 +67,74 @@ struct HeaderView: View {
                 Label(disabledReason, systemImage: "lock.fill")
                     .font(.callout)
                     .foregroundStyle(.secondary)
-            } else if isPiGuardedToggleAvailable {
-                Label(UIStrings.piGuardedToggleBoundary, systemImage: "shield")
+            } else if isGuardedToggleAvailable {
+                Label(guardedToggleBoundary, systemImage: "shield")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
 
-            DetailMetricGrid(maxColumns: 4) {
-                SummaryChip(title: UIStrings.agent, value: DisplayText.agent(skill.agent), systemImage: "person.crop.circle")
-                SummaryChip(title: UIStrings.text("detail.adoptingAgents", "Using agents"), value: adoptingAgentSummary, systemImage: "person.2")
-                SummaryChip(title: UIStrings.scope, value: DisplayText.scope(for: skill), systemImage: "folder")
-                CountBadge(
-                    label: UIStrings.text("detail.issueGroups", "Issue groups"),
-                    value: issueCount,
-                    systemImage: "exclamationmark.triangle",
-                    tint: .orange,
-                    action: { onSelectSection(.findings) }
-                )
-            }
+            headerMetrics
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
         .adaptiveMaterialSurface()
+    }
+
+    private var headerMetrics: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 10) {
+                adoptingAgentsChip
+                    .frame(minWidth: 360, maxWidth: .infinity)
+                    .layoutPriority(1)
+                if let sessionUsage {
+                    sessionUsageChip(sessionUsage)
+                        .frame(width: 220)
+                }
+                SummaryChip(title: UIStrings.scope, value: DisplayText.scope(for: skill), systemImage: "folder")
+                    .frame(width: 220)
+                issueBadge
+                    .frame(width: 220)
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                adoptingAgentsChip
+                DetailMetricGrid(maxColumns: 2, minColumnWidth: 190) {
+                    if let sessionUsage {
+                        sessionUsageChip(sessionUsage)
+                    }
+                    SummaryChip(title: UIStrings.scope, value: DisplayText.scope(for: skill), systemImage: "folder")
+                    issueBadge
+                }
+            }
+        }
+    }
+
+    private var adoptingAgentsChip: some View {
+        SummaryChip(
+            title: UIStrings.text("detail.adoptingAgents", "Agents with this skill installed"),
+            value: adoptingAgentSummary,
+            systemImage: "person.2",
+            valueLineLimit: nil,
+            valueTruncationMode: .tail
+        )
+    }
+
+    private var issueBadge: some View {
+        CountBadge(
+            label: UIStrings.text("detail.issueGroups", "Issue groups"),
+            value: issueCount,
+            systemImage: "exclamationmark.triangle",
+            tint: .orange,
+            action: { onSelectSection(.findings) }
+        )
+    }
+
+    private func sessionUsageChip(_ row: LocalSessionSkillUsageRow) -> some View {
+        SummaryChip(
+            title: UIStrings.text("detail.sessionSkillUsage", "Session calls"),
+            value: "\(row.callCount) \(UIStrings.text("detail.sessionSkillUsage.calls", "calls")) · \(row.sessionCount) \(UIStrings.text("detail.sessionSkillUsage.sessions", "sessions"))",
+            systemImage: "bubble.left.and.text.bubble.right"
+        )
     }
 
     private var toggleDisabledReason: String? {
@@ -98,7 +145,10 @@ struct HeaderView: View {
             return UIStrings.toggleUnavailableBusy
         }
         guard let adapterCapability else {
-            return DisplayText.isReadOnlyAdapter(skill.agent) ? UIStrings.toggleUnavailableReadOnlyAdapter(DisplayText.agent(skill.agent)) : nil
+            if DisplayText.isReadOnlyAdapter(skill.agent) {
+                return UIStrings.toggleUnavailableReadOnlyAdapter(DisplayText.agent(skill.agent))
+            }
+            return DisplayText.requiresGuardedToggleCapability(skill.agent) ? guardedToggleBoundary : nil
         }
         guard !adapterCapability.configToggle.supported else { return nil }
             if skill.agent == "openclaw" {
@@ -107,12 +157,16 @@ struct HeaderView: View {
             return adapterCapability.configToggle.reason ?? UIStrings.readOnlyAdapterStatus(adapterCapability.displayName)
     }
 
-    private var isPiGuardedToggleAvailable: Bool {
-        skill.agent == "pi" && adapterCapability?.configToggle.supported == true
+    private var isGuardedToggleAvailable: Bool {
+        DisplayText.requiresGuardedToggleCapability(skill.agent) && adapterCapability?.configToggle.supported == true
+    }
+
+    private var guardedToggleBoundary: String {
+        DisplayText.guardedToggleBoundary(for: skill.agent)
     }
 
     private var showsReadOnlyPreviewBadge: Bool {
-        DisplayText.isReadOnlyPreview(skill) && !isPiGuardedToggleAvailable
+        DisplayText.isReadOnlyPreview(skill) && !isGuardedToggleAvailable
     }
 
 }
@@ -254,14 +308,18 @@ struct CountBadge: View {
 }
 
 struct EmptyDetailView: View {
+    let title: String
+    let message: String
+    var systemImage: String = "sparkle.magnifyingglass"
+
     var body: some View {
         VStack(spacing: 12) {
-            Image(systemName: "sparkle.magnifyingglass")
+            Image(systemName: systemImage)
                 .font(.system(size: 42))
                 .foregroundStyle(.secondary)
-            Text(UIStrings.noSkillSelected)
+            Text(title)
                 .font(.title2.bold())
-            Text(UIStrings.noSkillSelectedMessage)
+            Text(message)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -286,8 +344,7 @@ struct SkillDetailCard: View {
                 PrivacyPathRow(label: UIStrings.source, path: skill.displayPath)
                 if DisplayText.isToolGlobal(skill) {
                     MetadataRow(label: UIStrings.access, value: UIStrings.toolGlobalAccessStatus(DisplayText.agent(skill.agent)))
-                }
-                if DisplayText.isReadOnlyAdapter(skill.agent) {
+                } else if DisplayText.isReadOnlyAdapter(skill.agent) || DisplayText.requiresGuardedToggleCapability(skill.agent) {
                     MetadataRow(label: UIStrings.access, value: adapterAccessStatus)
                 }
                 if let detail {
@@ -322,8 +379,8 @@ struct SkillDetailCard: View {
     }
 
     private var adapterAccessStatus: String {
-        if skill.agent == "pi" && adapterCapability?.configToggle.supported == true {
-            return UIStrings.piGuardedToggleBoundary
+        if DisplayText.requiresGuardedToggleCapability(skill.agent) && adapterCapability?.configToggle.supported == true {
+            return DisplayText.guardedToggleBoundary(for: skill.agent)
         }
         if skill.agent == "hermes" {
             if skill.provenance.rootKind == .external || skill.provenance.scopeKind == .external {
@@ -333,6 +390,9 @@ struct SkillDetailCard: View {
         }
         if skill.agent == "openclaw" {
             return UIStrings.openClawReadOnlyAccess
+        }
+        if skill.agent == "pi" {
+            return UIStrings.piGuardedToggleBoundary
         }
         return UIStrings.readOnlyAdapterStatus(DisplayText.agent(skill.agent))
     }

@@ -50,6 +50,7 @@ func runAsyncTest(_ body: @escaping () async throws -> Void) throws {
 public func runNativeModelTests() {
     do {
         try FindingDisplayModelTests().run()
+        try FindingExplainabilityModelTests().run()
         try RuleTuningModelTests().run()
         try CleanupQueueModelTests().run()
         try CrossAgentComparisonModelTests().run()
@@ -76,12 +77,16 @@ public func runNativeModelTests() {
         try ScriptExecutionModelTests().run()
         try ToolGlobalModelTests().run()
         try AgentConfigTimelineModelTests().run()
+        try ConfigContentRedactorTests().run()
         try LocalizationModelTests().run()
         try MainWindowModelTests().run()
         try AgentCopilotDecisionModelTests().run()
         try LocalSessionPreviewModelTests().run()
         try McpServerPreviewModelTests().run()
         try SkillListModelTests().run()
+        try runAsyncTest {
+            try await ServiceClientRPCTests().run()
+        }
         try runAsyncTest {
             try await ServiceClientProcessTests().run()
         }

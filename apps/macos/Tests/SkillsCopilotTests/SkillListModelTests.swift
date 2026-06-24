@@ -7,8 +7,10 @@ struct SkillListModelTests {
         try searchMatchesNameDefinitionAndDisplayPathCaseInsensitively()
         try agentFiltersLimitResultsAndGroupsUseStableAdapterOrder()
         try stateFiltersUseEffectiveStatusFindingsAndConflicts()
-        try conflictFiltersUseCurrentAgentRuntimeSemantics()
+        try problemItemsUseCurrentAgentRuntimeSemantics()
+        try scopeFiltersSeparateProjectAndGlobalSkills()
         try sortOrdersAreStableForCoreListColumns()
+        try sortDirectionCanReverseCoreListColumns()
         try skillProvenanceClassifiesAgentRootsDeterministically()
         try skillIdentitySummaryAndDedupeExplanationAreStable()
         try privacyPathDisplayRedactsAndCollapsesLocalPaths()
@@ -95,35 +97,42 @@ struct SkillListModelTests {
         try expectEqual(filtered(stateFilter: .disabled).map(\.id), ["beta"], "Disabled filter")
         try expectEqual(filtered(stateFilter: .broken).map(\.id), ["delta"], "Broken filter")
         try expectEqual(filtered(stateFilter: .missing).map(\.id), ["epsilon"], "Missing filter")
-        try expectEqual(filtered(stateFilter: .brokenOrMissing).map(\.id), ["delta", "epsilon"], "Broken / Missing filter")
         try expectEqual(filtered(stateFilter: .shadowed).map(\.id), ["zeta"], "Shadowed filter")
         try expectEqual(filtered(stateFilter: .unknown).map(\.id), ["theta"], "Unknown filter")
-        try expectEqual(filtered(stateFilter: .withFindings).map(\.id), ["gamma"], "Findings filter")
-        try expectEqual(filtered(stateFilter: .withConflicts).map(\.id), ["epsilon", "gamma"], "Conflicts filter")
-        try expectEqual(filtered(stateFilter: .needsTriage).map(\.id), ["delta", "epsilon", "gamma", "theta"], "Needs triage filter")
+        try expectEqual(filtered(stateFilter: .withFindings).map(\.id), ["delta", "epsilon", "gamma", "theta"], "Problem item filter")
         try expectEqual(filtered(stateFilter: .risky).map(\.id), ["gamma"], "Risky filter")
     }
 
-    private func conflictFiltersUseCurrentAgentRuntimeSemantics() throws {
+    private func problemItemsUseCurrentAgentRuntimeSemantics() throws {
         try expectEqual(
-            filtered(agentFilter: .claudeCode, stateFilter: .withConflicts).map(\.id),
-            [],
-            "Cross-agent duplicate/source overlap should not appear as a Claude Code runtime conflict."
+            filtered(agentFilter: .claudeCode, stateFilter: .withFindings).map(\.id),
+            ["delta", "theta"],
+            "Problem items should include broken/unknown Claude Code records but not cross-agent duplicate/source-overlap groups."
         )
         try expectEqual(
-            filtered(agentFilter: .codex, stateFilter: .withConflicts).map(\.id),
+            filtered(agentFilter: .codex, stateFilter: .withFindings).map(\.id),
             ["epsilon", "gamma"],
-            "Same-agent Codex runtime conflicts should remain visible for the current agent."
+            "Problem items should include same-agent Codex runtime conflicts and missing/finding records."
         )
         try expectEqual(
-            filtered(agentFilter: .all, stateFilter: .withConflicts).map(\.id),
-            ["epsilon", "gamma"],
-            "All-agent conflict filter should still use same-agent conflict semantics."
+            filtered(agentFilter: .all, stateFilter: .withFindings).map(\.id),
+            ["delta", "epsilon", "gamma", "theta"],
+            "The all-agent Problem Items filter should fold issue groups, same-agent conflicts, and broken/missing/unknown states together."
         )
         try expectEqual(
             SkillListModel.sameAgentConflictGroupCount(skills: Self.skills, conflicts: Self.conflicts),
             1,
             "Presentation conflict count should exclude cross-agent duplicate/source-overlap groups."
+        )
+    }
+
+    private func scopeFiltersSeparateProjectAndGlobalSkills() throws {
+        try expectEqual(filtered(scopeFilter: .project).map(\.id), ["beta"], "Project scope filter")
+        try expectEqual(filtered(scopeFilter: .global).map(\.id), ["alpha", "delta", "epsilon", "gamma", "omega", "theta", "zeta"], "Global scope filter")
+        try expectEqual(
+            filtered(agentFilter: .codex, scopeFilter: .global).map(\.id),
+            ["epsilon", "gamma"],
+            "Scope filter should compose with the selected agent."
         )
     }
 
@@ -143,6 +152,14 @@ struct SkillListModelTests {
         try expectEqual(filtered(sortOrder: .scope).map(\.id), ["alpha", "delta", "epsilon", "gamma", "omega", "theta", "zeta", "beta"], "Scope sort")
         try expectEqual(filtered(sortOrder: .state).map(\.id), ["delta", "epsilon", "beta", "alpha", "gamma", "omega", "zeta", "theta"], "State sort")
         try expectEqual(filtered(sortOrder: .path).map(\.id), ["epsilon", "gamma", "alpha", "zeta", "omega", "beta", "delta", "theta"], "Path sort")
+    }
+
+    private func sortDirectionCanReverseCoreListColumns() throws {
+        try expectEqual(
+            filtered(sortOrder: .name, sortDirection: .descending).map(\.id),
+            ["zeta", "theta", "omega", "gamma", "epsilon", "delta", "beta", "alpha"],
+            "Name descending sort"
+        )
     }
 
     private func skillProvenanceClassifiesAgentRootsDeterministically() throws {
@@ -329,7 +346,9 @@ struct SkillListModelTests {
         searchText: String = "",
         agentFilter: SkillAgentFilter = .all,
         stateFilter: SkillStateFilter = .all,
-        sortOrder: SkillSortOrder = .name
+        scopeFilter: SkillScopeFilter = .all,
+        sortOrder: SkillSortOrder = .name,
+        sortDirection: SkillSortDirection = .ascending
     ) -> [SkillRecord] {
         SkillListModel.filteredAndSorted(
             skills: Self.skills,
@@ -338,7 +357,9 @@ struct SkillListModelTests {
             searchText: searchText,
             agentFilter: agentFilter,
             stateFilter: stateFilter,
-            sortOrder: sortOrder
+            scopeFilter: scopeFilter,
+            sortOrder: sortOrder,
+            sortDirection: sortDirection
         )
     }
 

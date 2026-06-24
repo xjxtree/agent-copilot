@@ -112,10 +112,11 @@ struct LocalReportExportResult: Decodable, Hashable {
             return UIStrings.localReportNoSections
         }
         return sections.map { section in
+            let title = UIStrings.localReportSectionTitle(section.name)
             if let count = section.count {
-                return "\(section.name) (\(count))"
+                return "\(title) (\(count))"
             }
-            return section.name
+            return title
         }.joined(separator: ", ")
     }
 
@@ -173,6 +174,27 @@ struct LocalReportExportResult: Decodable, Hashable {
             ?? UIStrings.localReportExportedSummary
         sections = decodedSections.isEmpty ? summarySections : decodedSections
         unavailableReason = container.decodeString(for: ["unavailable_reason", "unavailableReason", "fallback_reason", "fallbackReason"])
+    }
+}
+
+struct LocalReportExportHistoryRecord: Identifiable, Hashable {
+    let id: String
+    let exportedAt: Date
+    let scopeSummary: String
+    let result: LocalReportExportResult
+
+    init(
+        result: LocalReportExportResult,
+        scopeSummary: String,
+        exportedAt: Date = Date()
+    ) {
+        let stablePath = result.path?.trimmingCharacters(in: .whitespacesAndNewlines)
+        id = stablePath?.isEmpty == false
+            ? stablePath!
+            : "\(result.format.rawValue)-\(exportedAt.timeIntervalSince1970)"
+        self.exportedAt = exportedAt
+        self.scopeSummary = scopeSummary
+        self.result = result
     }
 }
 

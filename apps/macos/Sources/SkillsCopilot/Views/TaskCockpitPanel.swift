@@ -1,4 +1,152 @@
+import Foundation
 import SwiftUI
+
+struct TaskPreflightPreviewSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var store: SkillStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 10) {
+                Label(UIStrings.taskCockpitTitle, systemImage: "checklist")
+                    .font(.title3.weight(.semibold))
+                Spacer()
+                Button(UIStrings.done) {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+            }
+
+            HStack(alignment: .top, spacing: 12) {
+                ScrollView {
+                    TaskCockpitPanel(
+                        taskText: $store.taskCockpitText,
+                        currentTaskText: store.selectedTaskCockpitInput,
+                        result: store.taskCockpitResult,
+                        isBuilding: store.isBuildingTaskCockpit,
+                        operationState: store.taskCockpitOperationState,
+                        onBuild: {
+                            Task {
+                                await store.buildTaskCockpit()
+                            }
+                        },
+                        onCancel: {
+                            store.cancelTaskCockpitBuild()
+                        }
+                    )
+                }
+                .frame(minWidth: 640, maxWidth: .infinity)
+
+                TaskPreflightHistoryPanel(
+                    records: store.taskCockpitHistory,
+                    selectedID: store.selectedTaskCockpitHistoryID,
+                    onSelect: { record in
+                        store.selectTaskCockpitHistoryRecord(record)
+                    }
+                )
+                .frame(width: 270)
+            }
+        }
+        .padding(16)
+        .frame(minWidth: 950, idealWidth: 1_020, minHeight: 620, alignment: .topLeading)
+    }
+}
+
+private struct TaskPreflightHistoryPanel: View {
+    let records: [TaskCockpitHistoryRecord]
+    let selectedID: TaskCockpitHistoryRecord.ID?
+    let onSelect: (TaskCockpitHistoryRecord) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(UIStrings.text("taskCockpit.history.title", "History"), systemImage: "clock.arrow.circlepath")
+                .font(.headline)
+
+            if records.isEmpty {
+                Text(UIStrings.text("taskCockpit.history.empty", "No task preflight history yet."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .background(.quaternary.opacity(0.18), in: RoundedRectangle(cornerRadius: 8))
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 8) {
+                        ForEach(records) { record in
+                            TaskPreflightHistoryRow(
+                                record: record,
+                                isSelected: record.id == selectedID,
+                                onSelect: {
+                                    onSelect(record)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxHeight: .infinity, alignment: .topLeading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct TaskPreflightHistoryRow: View {
+    let record: TaskCockpitHistoryRecord
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    private var model: TaskCockpitDecisionModel {
+        TaskCockpitDecisionModel(result: record.result)
+    }
+
+    var body: some View {
+        Button(action: onSelect) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: model.verdict.systemImage)
+                        .foregroundStyle(isSelected ? .white.opacity(0.9) : model.verdict.tint)
+                    Text(record.displayTask)
+                        .font(.caption.bold())
+                        .foregroundStyle(isSelected ? .white : .primary)
+                        .lineLimit(2)
+                }
+
+                Text(Self.dateFormatter.string(from: record.createdAt))
+                    .font(.caption2)
+                    .foregroundStyle(isSelected ? .white.opacity(0.82) : .secondary)
+                    .lineLimit(1)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(model.verdict.title)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(isSelected ? .white.opacity(0.86) : model.verdict.tint)
+                        .lineLimit(1)
+                    Text(model.recommendationLine)
+                        .font(.caption2)
+                        .foregroundStyle(isSelected ? .white.opacity(0.74) : .secondary)
+                        .lineLimit(2)
+                }
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                isSelected ? Color.accentColor : Color.secondary.opacity(0.08),
+                in: RoundedRectangle(cornerRadius: 8)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(record.displayTask)
+    }
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter
+    }()
+}
 
 struct TaskCockpitPanel: View {
     @Binding var taskText: String
@@ -29,33 +177,24 @@ struct TaskCockpitPanel: View {
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
 
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .bottom, spacing: 12) {
-                    TaskInputTextEditor(
-                        text: $taskText,
-                        placeholder: UIStrings.taskCockpitTaskPlaceholder
-                    )
-                    .frame(maxWidth: .infinity)
+            VStack(alignment: .trailing, spacing: 8) {
+                TaskInputTextEditor(
+                    text: $taskText,
+                    placeholder: UIStrings.taskCockpitTaskPlaceholder
+                )
+                .frame(maxWidth: .infinity)
 
-                    buildButton
-                }
-
-                VStack(alignment: .trailing, spacing: 8) {
-                    TaskInputTextEditor(
-                        text: $taskText,
-                        placeholder: UIStrings.taskCockpitTaskPlaceholder
-                    )
-
-                    buildButton
-                }
+                buildButton
             }
 
-            TaskCockpitOperationStatusView(
-                state: operationState,
-                isBuilding: isBuilding,
-                onCancel: onCancel,
-                onRetry: onBuild
-            )
+            if isBuilding || result == nil {
+                TaskCockpitOperationStatusView(
+                    state: operationState,
+                    isBuilding: isBuilding,
+                    onCancel: onCancel,
+                    onRetry: onBuild
+                )
+            }
 
             if let result {
                 TaskCockpitResultView(
@@ -69,7 +208,7 @@ struct TaskCockpitPanel: View {
                     .foregroundStyle(.secondary)
             }
 
-            Label(UIStrings.llmReviewNoActions, systemImage: "nosign")
+            Label(UIStrings.taskCockpitReadOnlyFootnote, systemImage: "nosign")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -494,29 +633,7 @@ private struct TaskCockpitResultView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if model.showsPartialNotice {
-                Label(UIStrings.taskCockpitPartialNotice, systemImage: "info.circle")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            }
-
-            TaskCockpitVerdictCard(model: model)
-            TaskCockpitRecommendationCard(model: model)
-
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: 12) {
-                    TaskCockpitReasonCard(model: model)
-                    TaskCockpitAttentionCard(model: model)
-                }
-
-                VStack(alignment: .leading, spacing: 12) {
-                    TaskCockpitReasonCard(model: model)
-                    TaskCockpitAttentionCard(model: model)
-                }
-            }
-
-            TaskCockpitNextStepCard(model: model)
+            TaskCockpitDecisionSummaryCard(model: model)
 
             DisclosureGroup(isExpanded: $diagnosticsExpanded) {
                 TaskCockpitTechnicalDiagnosticsView(
@@ -625,6 +742,21 @@ private struct TaskCockpitDecisionModel {
         return UIStrings.unknown
     }
 
+    var hasReliableRecommendation: Bool {
+        switch verdict {
+        case .ready, .needsReview:
+            return recommendedAgent != UIStrings.unknown || recommendedSkill != UIStrings.unknown
+        case .blocked, .unavailable:
+            return false
+        }
+    }
+
+    var recommendationLine: String {
+        hasReliableRecommendation
+            ? "\(recommendedAgent) · \(recommendedSkill)"
+            : UIStrings.taskCockpitNoReliableRecommendation
+    }
+
     var recommendedAgent: String {
         let raw = result.summary.recommendedAgent ?? topRoute?.agent ?? topSkill?.agent ?? topAgent?.agent
         return raw.map(DisplayText.agent) ?? UIStrings.unknown
@@ -683,7 +815,18 @@ private struct TaskCockpitDecisionModel {
     }
 
     var attentionRows: [TaskCockpitContextRow] {
-        Array((userBlockerRows + result.gapRows).prefix(5))
+        Array((userBlockerRows + result.gapRows).prefix(3))
+    }
+
+    var keyReasons: [String] {
+        var values = attentionRows.flatMap { row -> [String] in
+            [
+                Self.displayText(row.title),
+                Self.displayText(row.detail)
+            ].compactMap(\.self)
+        }
+        values.append(contentsOf: reasons)
+        return Array(Self.uniqueMeaningful(values).prefix(3))
     }
 
     var nextStep: String {
@@ -799,37 +942,6 @@ private struct TaskCockpitDecisionModel {
     }
 }
 
-private struct TaskCockpitVerdictCard: View {
-    let model: TaskCockpitDecisionModel
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: model.verdict.systemImage)
-                .font(.title3)
-                .foregroundStyle(model.verdict.tint)
-                .frame(width: 26, alignment: .center)
-
-            VStack(alignment: .leading, spacing: 5) {
-                Text(model.verdict.title)
-                    .font(.headline)
-                Text(model.verdict.message)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            HStack(spacing: 8) {
-                TaskCockpitScorePill(label: UIStrings.taskCockpitReadinessShort, score: model.readinessScore)
-                TaskCockpitScorePill(label: UIStrings.taskCockpitRoutingShort, score: model.routingScore)
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(model.verdict.tint.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
-    }
-}
-
 private struct TaskCockpitScorePill: View {
     let label: String
     let score: Int?
@@ -846,117 +958,85 @@ private struct TaskCockpitScorePill: View {
     }
 }
 
-private struct TaskCockpitRecommendationCard: View {
+private struct TaskCockpitDecisionSummaryCard: View {
     let model: TaskCockpitDecisionModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label(UIStrings.taskCockpitRecommendationTitle, systemImage: "point.3.connected.trianglepath.dotted")
-                .font(.callout.bold())
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: model.verdict.systemImage)
+                    .font(.title3)
+                    .foregroundStyle(model.verdict.tint)
+                    .frame(width: 26, alignment: .center)
 
-            DetailMetricGrid(maxColumns: 4, minColumnWidth: 138, spacing: 8) {
-                SummaryChip(title: UIStrings.taskCockpitRecommendedAgent, value: model.recommendedAgent, systemImage: "person.crop.circle")
-                SummaryChip(title: UIStrings.taskCockpitRecommendedSkill, value: model.recommendedSkill, systemImage: "doc.text")
-                SummaryChip(title: UIStrings.taskCockpitRoutes, value: "\(model.routeCount)", systemImage: "arrow.triangle.branch")
-                SummaryChip(title: UIStrings.taskCockpitSkills, value: "\(model.skillCount)", systemImage: "square.stack.3d.up")
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary.opacity(0.24), in: RoundedRectangle(cornerRadius: 8))
-    }
-}
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(model.verdict.title)
+                        .font(.headline)
+                    Text(model.verdict.message)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-private struct TaskCockpitReasonCard: View {
-    let model: TaskCockpitDecisionModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(UIStrings.taskCockpitReasonsTitle, systemImage: "text.bubble")
-                .font(.callout.bold())
-
-            if model.reasons.isEmpty {
-                Text(UIStrings.taskCockpitNoReasons)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(Array(model.reasons.prefix(5).enumerated()), id: \.offset) { _, reason in
-                    PrivacyEvidenceLabel(value: reason, systemImage: "checkmark.circle", font: .callout, lineLimit: 2)
+                HStack(spacing: 8) {
+                    TaskCockpitScorePill(label: UIStrings.taskCockpitReadinessShort, score: model.readinessScore)
+                    TaskCockpitScorePill(label: UIStrings.taskCockpitRoutingShort, score: model.routingScore)
                 }
             }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary.opacity(0.22), in: RoundedRectangle(cornerRadius: 8))
-    }
-}
 
-private struct TaskCockpitAttentionCard: View {
-    let model: TaskCockpitDecisionModel
+            if model.showsPartialNotice {
+                Label(UIStrings.taskCockpitPartialNotice, systemImage: "info.circle")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(UIStrings.taskCockpitAttentionTitle, systemImage: "exclamationmark.triangle")
-                .font(.callout.bold())
-
-            if model.attentionRows.isEmpty {
-                Label(UIStrings.taskCockpitNoAttentionItems, systemImage: "checkmark.circle")
+            if model.hasReliableRecommendation {
+                DetailMetricGrid(maxColumns: 2, minColumnWidth: 220, spacing: 8) {
+                    SummaryChip(title: UIStrings.taskCockpitRecommendedAgent, value: model.recommendedAgent, systemImage: "person.crop.circle", valueLineLimit: 1)
+                    SummaryChip(title: UIStrings.taskCockpitRecommendedSkill, value: model.recommendedSkill, systemImage: "doc.text", valueLineLimit: 1)
+                }
+            } else {
+                Label(UIStrings.taskCockpitNoReliableRecommendation, systemImage: "hand.raised")
                     .font(.callout)
                     .foregroundStyle(.secondary)
-            } else {
-                ForEach(model.attentionRows) { row in
-                    TaskCockpitAttentionRow(row: row)
+            }
+
+            if !model.keyReasons.isEmpty {
+                VStack(alignment: .leading, spacing: 7) {
+                    Label(UIStrings.taskCockpitReasonsTitle, systemImage: "text.bubble")
+                        .font(.callout.bold())
+
+                    ForEach(Array(model.keyReasons.enumerated()), id: \.offset) { _, reason in
+                        PrivacyEvidenceLabel(value: reason, systemImage: reasonSystemImage, font: .callout, lineLimit: 2)
+                    }
                 }
             }
+
+            Label(model.nextStep, systemImage: "arrow.forward.circle")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary.opacity(0.22), in: RoundedRectangle(cornerRadius: 8))
+        .background(model.verdict.tint.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(model.verdict.title)
+        .accessibilityValue(model.verdict.message)
     }
-}
 
-private struct TaskCockpitAttentionRow: View {
-    let row: TaskCockpitContextRow
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Image(systemName: "circle.fill")
-                    .font(.system(size: 6))
-                    .foregroundStyle(.orange)
-                Text(title)
-                    .font(.callout.bold())
-                    .lineLimit(2)
-            }
-            if let detail {
-                PrivacyEvidenceText(value: detail, font: .caption, lineLimit: 2)
-                    .padding(.leading, 14)
-            }
+    private var reasonSystemImage: String {
+        switch model.verdict {
+        case .ready:
+            return "checkmark.circle"
+        case .needsReview:
+            return "exclamationmark.triangle"
+        case .blocked:
+            return "exclamationmark.circle"
+        case .unavailable:
+            return "questionmark.circle"
         }
-    }
-
-    private var title: String {
-        TaskCockpitDecisionModel.displayText(row.title) ?? row.title
-    }
-
-    private var detail: String? {
-        guard let display = TaskCockpitDecisionModel.displayText(row.detail) else {
-            return nil
-        }
-        return display == title ? nil : display
-    }
-}
-
-private struct TaskCockpitNextStepCard: View {
-    let model: TaskCockpitDecisionModel
-
-    var body: some View {
-        Label(model.nextStep, systemImage: "arrow.forward.circle")
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.quaternary.opacity(0.18), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 

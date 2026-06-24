@@ -1,5 +1,5 @@
 {
-  "notice": "Evidence-only candidate Pi settings. Project/package writes must be blocked when trust is false.",
+  "notice": "Evidence-only candidate Pi settings. Project/package writes must be blocked when projectRootTrusted is explicitly false.",
   "trust": {
     "projectRootTrusted": false
   },

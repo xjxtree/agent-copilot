@@ -1,4 +1,7 @@
 use super::*;
+use std::io::{self, Write};
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
+use url::Url;
 
 pub(crate) fn scan_all_label(agent_reports: &[AgentCatalogScanReport]) -> String {
     let labels: Vec<&str> = agent_reports
@@ -120,7 +123,7 @@ fn migrate_legacy_app_data_dir(source: &Path, target: &Path) -> Result<(), Servi
     }
 
     let result = (|| -> Result<(), ServiceError> {
-        fs::create_dir_all(&staging)?;
+        create_private_dir_all(&staging)?;
         copy_app_data_contents(source, &staging)?;
         let marker = json!({
             "version": 1,
@@ -131,11 +134,12 @@ fn migrate_legacy_app_data_dir(source: &Path, target: &Path) -> Result<(), Servi
             "target_path": display_path(target),
             "migrated_at_unix_ms": unix_timestamp_millis(),
         });
-        fs::write(
-            staging.join("agent-copilot-app-data-migration.json"),
-            serde_json::to_string_pretty(&marker)?,
+        write_private_text_file(
+            &staging.join("agent-copilot-app-data-migration.json"),
+            &serde_json::to_string_pretty(&marker)?,
         )?;
         fs::rename(&staging, target)?;
+        set_private_dir_permissions(target)?;
         Ok(())
     })();
 
@@ -154,10 +158,11 @@ fn copy_app_data_contents(source: &Path, target: &Path) -> Result<(), ServiceErr
             continue;
         }
         if file_type.is_dir() {
-            fs::create_dir_all(&destination)?;
+            create_private_dir_all(&destination)?;
             copy_app_data_contents(&entry.path(), &destination)?;
         } else if file_type.is_file() {
-            fs::copy(entry.path(), destination)?;
+            fs::copy(entry.path(), &destination)?;
+            set_private_path_permissions(&destination)?;
         }
     }
     Ok(())
@@ -189,6 +194,142 @@ pub(crate) fn extra_claude_roots_from_env() -> Vec<AdapterRoot> {
 
 pub(crate) fn display_path(path: &Path) -> String {
     path.to_string_lossy().to_string()
+}
+
+pub(crate) fn create_private_dir_all(path: &Path) -> io::Result<()> {
+    fs::create_dir_all(path)?;
+    set_private_dir_permissions(path)?;
+    Ok(())
+}
+
+pub(crate) fn write_private_text_file(path: &Path, content: &str) -> io::Result<()> {
+    write_private_bytes_file(path, content.as_bytes())
+}
+
+pub(crate) fn write_private_bytes_file(path: &Path, content: &[u8]) -> io::Result<()> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "private file has no parent"))?;
+    create_private_dir_all(parent)?;
+    reject_symlink(path, "private file")?;
+
+    let tmp = private_tmp_path(path)?;
+    reject_symlink(&tmp, "private temp file")?;
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let write_result = (|| -> io::Result<()> {
+        let mut file = options.open(&tmp)?;
+        set_private_file_permissions(&file)?;
+        file.write_all(content)?;
+        file.sync_all()?;
+        drop(file);
+
+        reject_symlink(path, "private file")?;
+        fs::rename(&tmp, path)?;
+        set_private_path_permissions(path)?;
+        sync_parent_dir(parent);
+        Ok(())
+    })();
+    if write_result.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    write_result
+}
+
+pub(crate) fn append_private_line(path: &Path, line: &str) -> io::Result<()> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "private file has no parent"))?;
+    create_private_dir_all(parent)?;
+    reject_symlink(path, "private file")?;
+
+    let mut options = fs::OpenOptions::new();
+    options.create(true).append(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(path)?;
+    set_private_file_permissions(&file)?;
+    writeln!(file, "{line}")?;
+    file.sync_all()?;
+    sync_parent_dir(parent);
+    Ok(())
+}
+
+fn private_tmp_path(path: &Path) -> io::Result<PathBuf> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "private file has no parent"))?;
+    let file_name = path
+        .file_name()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "private file has no name"))?
+        .to_string_lossy();
+    Ok(parent.join(format!(
+        ".{file_name}.{}.{}.tmp",
+        std::process::id(),
+        unix_timestamp_millis()
+    )))
+}
+
+fn reject_symlink(path: &Path, label: &str) -> io::Result<()> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("{label} is a symlink: {}", path.display()),
+        )),
+        Ok(_) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
+#[cfg(unix)]
+fn set_private_dir_permissions(path: &Path) -> io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    fs::set_permissions(path, fs::Permissions::from_mode(0o700))
+}
+
+#[cfg(not(unix))]
+fn set_private_dir_permissions(_path: &Path) -> io::Result<()> {
+    Ok(())
+}
+
+#[cfg(unix)]
+fn set_private_file_permissions(file: &fs::File) -> io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    file.set_permissions(fs::Permissions::from_mode(0o600))
+}
+
+#[cfg(not(unix))]
+fn set_private_file_permissions(_file: &fs::File) -> io::Result<()> {
+    Ok(())
+}
+
+#[cfg(unix)]
+fn set_private_path_permissions(path: &Path) -> io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    fs::set_permissions(path, fs::Permissions::from_mode(0o600))
+}
+
+#[cfg(not(unix))]
+fn set_private_path_permissions(_path: &Path) -> io::Result<()> {
+    Ok(())
+}
+
+fn sync_parent_dir(parent: &Path) {
+    if let Ok(parent_dir) = fs::File::open(parent) {
+        let _ = parent_dir.sync_all();
+    }
 }
 
 pub(crate) fn report_export_formats(
@@ -261,6 +402,390 @@ pub(crate) fn report_export_summary(
             .map(Vec::len)
             .unwrap_or_default(),
     }
+}
+
+pub(crate) fn report_filter_skills(
+    skills: Vec<SkillRecord>,
+    params: &ReportExportLocalParams,
+) -> Vec<SkillRecord> {
+    let agent_filter = normalized_optional_filter(params.agent.as_deref());
+    let instance_filter = normalized_optional_filter(params.instance_id.as_deref());
+    let state_filter = normalized_optional_filter(params.state_filter.as_deref());
+    let search_filter = normalized_optional_filter(params.search.as_deref());
+
+    skills
+        .into_iter()
+        .filter(|skill| {
+            agent_filter
+                .as_ref()
+                .is_none_or(|agent| skill.agent.eq_ignore_ascii_case(agent))
+        })
+        .filter(|skill| {
+            instance_filter
+                .as_ref()
+                .is_none_or(|instance_id| skill.id.eq_ignore_ascii_case(instance_id))
+        })
+        .filter(|skill| {
+            state_filter
+                .as_ref()
+                .is_none_or(|state| report_skill_matches_state(skill, state))
+        })
+        .filter(|skill| {
+            search_filter.as_ref().is_none_or(|query| {
+                let query = query.to_ascii_lowercase();
+                [
+                    skill.id.as_str(),
+                    skill.name.as_str(),
+                    skill.definition_id.as_str(),
+                    skill.agent.as_str(),
+                    skill.scope.as_str(),
+                    &skill.display_path.to_string_lossy(),
+                ]
+                .iter()
+                .any(|value| value.to_ascii_lowercase().contains(&query))
+            })
+        })
+        .collect()
+}
+
+pub(crate) fn report_filter_findings(
+    findings: Vec<RuleFindingRecord>,
+    skills: &[SkillRecord],
+) -> Vec<RuleFindingRecord> {
+    let instance_ids = skills
+        .iter()
+        .map(|skill| skill.id.as_str())
+        .collect::<BTreeSet<_>>();
+    let definition_ids = skills
+        .iter()
+        .map(|skill| skill.definition_id.as_str())
+        .collect::<BTreeSet<_>>();
+    findings
+        .into_iter()
+        .filter(|finding| !finding.suppressed)
+        .filter(|finding| finding.triage_status != "ignored")
+        .filter(|finding| {
+            finding
+                .instance_id
+                .as_deref()
+                .is_some_and(|id| instance_ids.contains(id))
+                || finding
+                    .definition_id
+                    .as_deref()
+                    .is_some_and(|id| definition_ids.contains(id))
+        })
+        .collect()
+}
+
+pub(crate) fn report_filter_conflicts(
+    conflicts: Vec<ConflictGroupRecord>,
+    skills: &[SkillRecord],
+) -> Vec<ConflictGroupRecord> {
+    let instance_ids = skills
+        .iter()
+        .map(|skill| skill.id.as_str())
+        .collect::<BTreeSet<_>>();
+    conflicts
+        .into_iter()
+        .filter(|conflict| {
+            conflict
+                .instance_ids
+                .iter()
+                .any(|id| instance_ids.contains(id.as_str()))
+        })
+        .collect()
+}
+
+pub(crate) fn report_agent_scope(
+    params: &ReportExportLocalParams,
+    skills: &[SkillRecord],
+    catalog_available: bool,
+) -> Value {
+    let agents = skills
+        .iter()
+        .map(|skill| skill.agent.as_str())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    json!({
+        "agent": normalized_optional_filter(params.agent.as_deref()).unwrap_or_else(|| "all".to_string()),
+        "instance_id": normalized_optional_filter(params.instance_id.as_deref()),
+        "state_filter": normalized_optional_filter(params.state_filter.as_deref()).unwrap_or_else(|| "all".to_string()),
+        "search": normalized_optional_filter(params.search.as_deref()),
+        "catalog_available": catalog_available,
+        "active_agents": agents,
+    })
+}
+
+pub(crate) fn report_skill_usage(
+    skills: &[SkillRecord],
+    findings: &[RuleFindingRecord],
+    conflicts: &[ConflictGroupRecord],
+) -> Value {
+    let finding_counts = report_finding_counts_by_instance(findings);
+    let conflict_counts = report_conflict_counts_by_instance(conflicts);
+    let installed = skills
+        .iter()
+        .map(|skill| {
+            let issue_count = finding_counts
+                .get(skill.id.as_str())
+                .copied()
+                .unwrap_or_default()
+                + conflict_counts
+                    .get(skill.id.as_str())
+                    .copied()
+                    .unwrap_or_default();
+            json!({
+                "id": skill.id,
+                "name": skill.name,
+                "agent": skill.agent,
+                "scope": skill.scope,
+                "state": skill.state,
+                "enabled": skill.enabled,
+                "definition_id": skill.definition_id,
+                "source_path": skill.display_path,
+                "issue_count": issue_count,
+                "has_issues": issue_count > 0,
+            })
+        })
+        .collect::<Vec<_>>();
+    let enabled_count = skills.iter().filter(|skill| skill.enabled).count();
+    let disabled_count = skills.len().saturating_sub(enabled_count);
+    let unavailable_count = skills
+        .iter()
+        .filter(|skill| skill.state != "loaded")
+        .count();
+    json!({
+        "summary": {
+            "installed_count": skills.len(),
+            "enabled_count": enabled_count,
+            "disabled_count": disabled_count,
+            "unavailable_count": unavailable_count,
+            "with_issues_count": skills.iter().filter(|skill| {
+                finding_counts.contains_key(skill.id.as_str())
+                    || conflict_counts.contains_key(skill.id.as_str())
+            }).count(),
+        },
+        "installed": installed,
+    })
+}
+
+pub(crate) fn report_issue_rows(
+    findings: &[RuleFindingRecord],
+    conflicts: &[ConflictGroupRecord],
+    skills: &[SkillRecord],
+) -> Value {
+    let skill_by_id = skills
+        .iter()
+        .map(|skill| (skill.id.as_str(), skill))
+        .collect::<BTreeMap<_, _>>();
+    let skill_by_definition = skills
+        .iter()
+        .map(|skill| (skill.definition_id.as_str(), skill))
+        .collect::<BTreeMap<_, _>>();
+    let mut issues = findings
+        .iter()
+        .map(|finding| {
+            let skill = finding
+                .instance_id
+                .as_deref()
+                .and_then(|id| skill_by_id.get(id).copied())
+                .or_else(|| {
+                    finding
+                        .definition_id
+                        .as_deref()
+                        .and_then(|id| skill_by_definition.get(id).copied())
+                });
+            json!({
+                "kind": "finding",
+                "severity": finding.effective_severity,
+                "status": finding.triage_status,
+                "rule_id": finding.rule_id,
+                "title": finding.message,
+                "suggestion": finding.suggestion,
+                "affected_skill": skill.map(|skill| skill.name.clone()),
+                "affected_agent": skill.map(|skill| skill.agent.clone()),
+                "instance_id": finding.instance_id,
+                "definition_id": finding.definition_id,
+            })
+        })
+        .collect::<Vec<_>>();
+
+    issues.extend(conflicts.iter().map(|conflict| {
+        let affected = conflict
+            .instance_ids
+            .iter()
+            .filter_map(|id| skill_by_id.get(id.as_str()).copied())
+            .map(|skill| {
+                json!({
+                    "id": skill.id,
+                    "name": skill.name,
+                    "agent": skill.agent,
+                    "scope": skill.scope,
+                })
+            })
+            .collect::<Vec<_>>();
+        json!({
+            "kind": "same_agent_conflict",
+            "severity": "warn",
+            "status": "open",
+            "rule_id": "same_agent_conflict",
+            "title": format!("Same-agent conflict: {}", conflict.reason),
+            "suggestion": "Review duplicate same-agent instances and keep one active route.",
+            "definition_id": conflict.definition_id,
+            "winner_id": conflict.winner_id,
+            "affected_skills": affected,
+        })
+    }));
+
+    Value::Array(issues)
+}
+
+pub(crate) fn report_recommended_usage(skills: &[SkillRecord], issues: &Value) -> Value {
+    let issue_counts = report_issue_counts_by_instance(issues);
+    let issue_instance_ids = issue_counts
+        .keys()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    let mut ready = Vec::new();
+    let mut review_first = Vec::new();
+    let mut unavailable = Vec::new();
+    for skill in skills {
+        let issue_count = issue_counts
+            .get(skill.id.as_str())
+            .copied()
+            .unwrap_or_default();
+        let item = json!({
+            "id": skill.id,
+            "name": skill.name,
+            "agent": skill.agent,
+            "scope": skill.scope,
+            "state": skill.state,
+            "issue_count": issue_count,
+        });
+        if !skill.enabled || skill.state != "loaded" {
+            unavailable.push(item);
+        } else if issue_instance_ids.contains(skill.id.as_str()) {
+            review_first.push(item);
+        } else {
+            ready.push(item);
+        }
+    }
+    ready.truncate(25);
+    review_first.truncate(25);
+    unavailable.truncate(25);
+    json!({
+        "ready_to_use": ready,
+        "review_before_use": review_first,
+        "not_recommended_now": unavailable,
+        "note": "Recommendations are derived from local catalog state and issue rows only; they do not call a provider or execute skills.",
+    })
+}
+
+fn report_issue_counts_by_instance(issues: &Value) -> BTreeMap<String, usize> {
+    let mut counts = BTreeMap::new();
+    let Some(items) = issues.as_array() else {
+        return counts;
+    };
+    for issue in items {
+        if let Some(instance_id) = issue.get("instance_id").and_then(Value::as_str) {
+            *counts.entry(instance_id.to_string()).or_insert(0) += 1;
+        }
+        if let Some(affected_skills) = issue.get("affected_skills").and_then(Value::as_array) {
+            for skill in affected_skills {
+                if let Some(instance_id) = skill.get("id").and_then(Value::as_str) {
+                    *counts.entry(instance_id.to_string()).or_insert(0) += 1;
+                }
+            }
+        }
+    }
+    counts
+}
+
+pub(crate) fn report_task_preflight() -> Value {
+    json!({
+        "available": false,
+        "status": "not_exported",
+        "summary": "No task Preflight result is persisted into this local report yet. Run Task Preflight in the Agent Workspace to inspect a task-specific route before using an agent or skill.",
+    })
+}
+
+pub(crate) fn report_analysis_results(
+    health: &Value,
+    analysis: &Value,
+    _cleanup: &Value,
+    _comparison: &Value,
+) -> Value {
+    let total_analysis_groups = analysis
+        .pointer("/summary/total_groups")
+        .and_then(Value::as_u64)
+        .unwrap_or_default();
+    Value::Array(vec![
+        json!({
+            "kind": "local_health",
+            "title": "Local skill health",
+            "status": "derived",
+            "summary": {
+                "total": health.get("total_count").cloned().unwrap_or(Value::Null),
+                "enabled": health.get("enabled_count").cloned().unwrap_or(Value::Null),
+                "disabled": health.get("disabled_count").cloned().unwrap_or(Value::Null),
+                "issues": health.get("finding_count").cloned().unwrap_or(Value::Null),
+                "conflicts": health.get("conflict_count").cloned().unwrap_or(Value::Null),
+            }
+        }),
+        json!({
+            "kind": "local_catalog_analysis",
+            "title": "Local catalog analysis",
+            "status": if total_analysis_groups > 0 { "review" } else { "clear" },
+            "summary": format!("{total_analysis_groups} derived analysis group(s).")
+        }),
+    ])
+}
+
+pub(crate) fn report_usage_summary(
+    skills: &[SkillRecord],
+    issues: &Value,
+    conflicts: &[ConflictGroupRecord],
+    analysis_results: &Value,
+) -> Value {
+    let issue_count = issues.as_array().map(Vec::len).unwrap_or_default();
+    json!({
+        "skill_count": skills.len(),
+        "enabled_skill_count": skills.iter().filter(|skill| skill.enabled).count(),
+        "disabled_skill_count": skills.iter().filter(|skill| !skill.enabled).count(),
+        "issue_count": issue_count,
+        "conflict_count": conflicts.len(),
+        "analysis_result_count": analysis_results.as_array().map(Vec::len).unwrap_or_default(),
+    })
+}
+
+pub(crate) fn report_usage_sections(summary: &Value) -> Vec<ReportExportSection> {
+    vec![
+        ReportExportSection {
+            name: "current_state",
+            count: 1,
+        },
+        ReportExportSection {
+            name: "installed_skills",
+            count: report_summary_count(summary, "skill_count"),
+        },
+        ReportExportSection {
+            name: "issues",
+            count: report_summary_count(summary, "issue_count"),
+        },
+        ReportExportSection {
+            name: "task_preflight",
+            count: 1,
+        },
+        ReportExportSection {
+            name: "analysis_results",
+            count: report_summary_count(summary, "analysis_result_count"),
+        },
+        ReportExportSection {
+            name: "safety",
+            count: 1,
+        },
+    ]
 }
 
 pub(crate) fn empty_health_summary_json() -> Value {
@@ -348,74 +873,233 @@ pub(crate) fn redact_string(value: &str, roots: &[(String, &'static str)]) -> St
 pub(crate) fn render_report_markdown(report: &Value) -> String {
     let summary = report.get("summary").unwrap_or(&Value::Null);
     let safety = report.get("safety").unwrap_or(&Value::Null);
-    let health = report.get("health").unwrap_or(&Value::Null);
-    let cleanup = report.get("cleanup_queue").unwrap_or(&Value::Null);
-    let comparison = report
-        .pointer("/cross_agent/comparison/summary")
-        .unwrap_or(&Value::Null);
+    let agent = report.get("agent").unwrap_or(&Value::Null);
+    let skills = report.get("skills").unwrap_or(&Value::Null);
+    let issues = report.get("issues").unwrap_or(&Value::Null);
+    let recommended = report.get("recommended_usage").unwrap_or(&Value::Null);
+    let preflight = report.get("task_preflight").unwrap_or(&Value::Null);
+    let analysis_results = report.get("analysis_results").unwrap_or(&Value::Null);
     let mut markdown = String::new();
-    markdown.push_str("# Skills Copilot Local Report\n\n");
+    markdown.push_str("# Agent Copilot Agent Usage Report\n\n");
     markdown.push_str(&format!(
         "- Export ID: {}\n",
         report_string(report, "/export_id")
     ));
     markdown.push_str(&format!(
         "- Generated at: {}\n",
-        report_string(report, "/generated_at")
+        report_timestamp_label(report.pointer("/generated_at"))
     ));
     markdown.push_str(&format!(
         "- Catalog available: {}\n\n",
         report_string(report, "/catalog_available")
     ));
-    markdown.push_str("## Safety\n\n");
+    markdown.push_str("## 1. Current State\n\n");
     markdown.push_str(&format!(
-        "- Read-only: {}\n- Writes allowed: {}\n- Provider request sent: {}\n- Script execution allowed: {}\n- Credential accessed: {}\n\n",
+        "- Agent scope: {}\n- Active agents in export: {}\n- Skills: {}\n- Enabled skills: {}\n- Skills with issues: {}\n- Issues: {}\n\n",
+        json_field_string(agent, "agent"),
+        markdown_array_label(agent.pointer("/active_agents")),
+        json_field_string(summary, "skill_count"),
+        json_field_string(summary, "enabled_skill_count"),
+        report_string(skills, "/summary/with_issues_count"),
+        json_field_string(summary, "issue_count")
+    ));
+
+    markdown.push_str("## 2. Installed Skills\n\n");
+    markdown.push_str(&format!(
+        "- Installed: {}\n- Enabled: {}\n- Disabled: {}\n- Unavailable: {}\n\n",
+        report_string(skills, "/summary/installed_count"),
+        report_string(skills, "/summary/enabled_count"),
+        report_string(skills, "/summary/disabled_count"),
+        report_string(skills, "/summary/unavailable_count")
+    ));
+    markdown_skill_rows(&mut markdown, skills.pointer("/installed"));
+
+    markdown.push_str("\n## 3. Recommended Use\n\n");
+    markdown.push_str("### Ready to use\n\n");
+    markdown_skill_rows(&mut markdown, recommended.pointer("/ready_to_use"));
+    markdown.push_str("\n### Review before use\n\n");
+    markdown_skill_rows(&mut markdown, recommended.pointer("/review_before_use"));
+    markdown.push_str("\n### Not recommended now\n\n");
+    markdown_skill_rows(&mut markdown, recommended.pointer("/not_recommended_now"));
+
+    markdown.push_str("\n## 4. Issues\n\n");
+    markdown_issue_rows(&mut markdown, issues);
+
+    markdown.push_str("\n## 5. Task Preflight\n\n");
+    markdown.push_str(&format!(
+        "- Status: {}\n- Summary: {}\n\n",
+        json_field_string(preflight, "status"),
+        json_field_string(preflight, "summary")
+    ));
+
+    markdown.push_str("## 6. Intelligent Analysis\n\n");
+    markdown_analysis_rows(&mut markdown, analysis_results);
+
+    markdown.push_str("\n## 7. Local Safety Boundary\n\n");
+    markdown.push_str(&format!(
+        "- Read-only: {}\n- Writes allowed: {}\n- Provider request sent: {}\n- Script execution allowed: {}\n- Credential accessed: {}\n- Redaction: local path prefixes are replaced with `$HOME`, `<project-root>`, `<project-cwd>`, or `<app-data-dir>` before report files are written.\n",
         json_field_string(safety, "read_only"),
         json_field_string(safety, "writes_allowed"),
         json_field_string(safety, "provider_request_sent"),
         json_field_string(safety, "script_execution_allowed"),
         json_field_string(safety, "credential_accessed")
     ));
-    markdown.push_str("## Summary\n\n");
-    for key in [
-        "skill_count",
-        "finding_count",
-        "open_finding_count",
-        "triage_count",
-        "cleanup_item_count",
-        "comparison_group_count",
-    ] {
-        markdown.push_str(&format!("- {}: {}\n", key, json_field_string(summary, key)));
-    }
-    markdown.push_str("\n## Health\n\n");
-    for key in [
-        "total_count",
-        "enabled_count",
-        "disabled_count",
-        "broken_count",
-        "missing_count",
-        "finding_count",
-        "conflict_count",
-    ] {
-        markdown.push_str(&format!("- {}: {}\n", key, json_field_string(health, key)));
-    }
-    markdown.push_str("\n## Cleanup Queue\n\n");
-    markdown.push_str(&format!(
-        "- Total items: {}\n- Read-only: {}\n- Writes allowed: {}\n\n",
-        report_string(cleanup, "/summary/total_count"),
-        report_string(cleanup, "/summary/read_only"),
-        report_string(cleanup, "/summary/writes_allowed")
-    ));
-    markdown.push_str("## Cross-agent Comparison\n\n");
-    markdown.push_str(&format!(
-        "- Total groups: {}\n- Returned groups: {}\n- Compared skill count: {}\n\n",
-        json_field_string(comparison, "total_groups"),
-        json_field_string(comparison, "returned_groups"),
-        json_field_string(comparison, "compared_skill_count")
-    ));
-    markdown.push_str("## Redaction\n\n");
-    markdown.push_str("- Path prefixes are replaced with `$HOME`, `<project-root>`, `<project-cwd>`, or `<app-data-dir>` before report files are written.\n");
     markdown
+}
+
+fn normalized_optional_filter(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .filter(|value| !value.eq_ignore_ascii_case("all"))
+        .map(ToOwned::to_owned)
+}
+
+fn report_skill_matches_state(skill: &SkillRecord, state: &str) -> bool {
+    if state.eq_ignore_ascii_case("enabled") {
+        return skill.enabled;
+    }
+    if state.eq_ignore_ascii_case("disabled") {
+        return !skill.enabled;
+    }
+    skill.state.eq_ignore_ascii_case(state)
+}
+
+fn report_finding_counts_by_instance(findings: &[RuleFindingRecord]) -> BTreeMap<&str, usize> {
+    let mut counts = BTreeMap::new();
+    for finding in findings {
+        if let Some(instance_id) = finding.instance_id.as_deref() {
+            *counts.entry(instance_id).or_insert(0) += 1;
+        }
+    }
+    counts
+}
+
+fn report_conflict_counts_by_instance(conflicts: &[ConflictGroupRecord]) -> BTreeMap<&str, usize> {
+    let mut counts = BTreeMap::new();
+    for conflict in conflicts {
+        for instance_id in &conflict.instance_ids {
+            *counts.entry(instance_id.as_str()).or_insert(0) += 1;
+        }
+    }
+    counts
+}
+
+fn report_summary_count(summary: &Value, key: &str) -> usize {
+    summary
+        .get(key)
+        .and_then(Value::as_u64)
+        .and_then(|value| usize::try_from(value).ok())
+        .unwrap_or_default()
+}
+
+fn markdown_array_label(value: Option<&Value>) -> String {
+    value
+        .and_then(Value::as_array)
+        .map(|items| {
+            if items.is_empty() {
+                "none".to_string()
+            } else {
+                items
+                    .iter()
+                    .map(value_to_markdown_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            }
+        })
+        .unwrap_or_else(|| "none".to_string())
+}
+
+fn markdown_skill_rows(markdown: &mut String, value: Option<&Value>) {
+    let Some(items) = value.and_then(Value::as_array) else {
+        markdown.push_str("- None.\n");
+        return;
+    };
+    if items.is_empty() {
+        markdown.push_str("- None.\n");
+        return;
+    }
+    for item in items.iter().take(25) {
+        let issue_count = item
+            .get("issue_count")
+            .and_then(Value::as_u64)
+            .unwrap_or_default();
+        let issue_note = if issue_count > 0 {
+            format!(", issues: {issue_count}")
+        } else {
+            String::new()
+        };
+        markdown.push_str(&format!(
+            "- {} — {} / {} / {}{}\n",
+            report_string(item, "/name"),
+            report_string(item, "/agent"),
+            report_string(item, "/scope"),
+            report_string(item, "/state"),
+            issue_note
+        ));
+    }
+    if items.len() > 25 {
+        markdown.push_str(&format!(
+            "- ... {} more in JSON export.\n",
+            items.len() - 25
+        ));
+    }
+}
+
+fn markdown_issue_rows(markdown: &mut String, value: &Value) {
+    let Some(items) = value.as_array() else {
+        markdown.push_str("- No issue rows.\n");
+        return;
+    };
+    if items.is_empty() {
+        markdown.push_str("- No issue rows.\n");
+        return;
+    }
+    let mut grouped = BTreeMap::<(String, String, String), usize>::new();
+    for item in items {
+        let key = (
+            report_string(item, "/severity"),
+            report_string(item, "/title"),
+            report_string(item, "/suggestion"),
+        );
+        *grouped.entry(key).or_insert(0) += 1;
+    }
+    for ((severity, title, suggestion), count) in grouped.iter().take(30) {
+        let count_label = if *count > 1 {
+            format!(" ({count} occurrences)")
+        } else {
+            String::new()
+        };
+        markdown.push_str(&format!(
+            "- [{}] {}{} — {}\n",
+            severity, title, count_label, suggestion
+        ));
+    }
+    if grouped.len() > 30 {
+        markdown.push_str(&format!(
+            "- ... {} more issue groups in JSON export.\n",
+            grouped.len() - 30
+        ));
+    }
+}
+
+fn markdown_analysis_rows(markdown: &mut String, value: &Value) {
+    let Some(items) = value.as_array() else {
+        markdown.push_str("- No analysis result rows.\n");
+        return;
+    };
+    if items.is_empty() {
+        markdown.push_str("- No analysis result rows.\n");
+        return;
+    }
+    for item in items {
+        markdown.push_str(&format!(
+            "- {}: {} ({})\n",
+            report_string(item, "/title"),
+            report_string(item, "/summary"),
+            report_string(item, "/status")
+        ));
+    }
 }
 
 pub(crate) fn report_string(value: &Value, pointer: &str) -> String {
@@ -423,6 +1107,19 @@ pub(crate) fn report_string(value: &Value, pointer: &str) -> String {
         .pointer(pointer)
         .map(value_to_markdown_string)
         .unwrap_or_else(|| "n/a".to_string())
+}
+
+fn report_timestamp_label(value: Option<&Value>) -> String {
+    let Some(millis) = value.and_then(Value::as_i64) else {
+        return "n/a".to_string();
+    };
+    match OffsetDateTime::from_unix_timestamp_nanos(i128::from(millis) * 1_000_000) {
+        Ok(timestamp) => match timestamp.format(&Rfc3339) {
+            Ok(formatted) => format!("{formatted} ({millis} ms since Unix epoch)"),
+            Err(_) => format!("{millis} ms since Unix epoch"),
+        },
+        Err(_) => format!("{millis} ms since Unix epoch"),
+    }
 }
 
 pub(crate) fn json_field_string(value: &Value, field: &str) -> String {
@@ -670,15 +1367,21 @@ pub(crate) fn inferred_llm_prompt_scope(params: &LlmPreviewPromptParams) -> Opti
 }
 
 pub(crate) fn destination_host_for_url(base_url: &str) -> String {
-    let without_scheme = base_url
-        .strip_prefix("https://")
-        .or_else(|| base_url.strip_prefix("http://"))
-        .unwrap_or(base_url);
-    without_scheme
-        .split('/')
-        .next()
-        .unwrap_or("<unknown>")
-        .to_string()
+    let Ok(url) = Url::parse(base_url) else {
+        return "<unknown>".to_string();
+    };
+    let Some(host) = url.host_str() else {
+        return "<unknown>".to_string();
+    };
+    let host = if host.contains(':') {
+        format!("[{host}]")
+    } else {
+        host.to_string()
+    };
+    match url.port() {
+        Some(port) => format!("{host}:{port}"),
+        None => host,
+    }
 }
 
 pub(crate) fn llm_review_risk(

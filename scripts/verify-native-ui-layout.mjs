@@ -28,6 +28,7 @@ const files = {
   detailTaskBenchmark: await read("apps/macos/Sources/SkillsCopilot/Views/DetailTaskBenchmarkSection.swift"),
   detailAgentSession: await read("apps/macos/Sources/SkillsCopilot/Views/DetailAgentSessionSection.swift"),
   detailLLM: await read("apps/macos/Sources/SkillsCopilot/Views/DetailLLMSection.swift"),
+  agentConfigWorkspace: await read("apps/macos/Sources/SkillsCopilot/Views/AgentConfigWorkspacePanel.swift"),
   detailHeaderOverview: await read("apps/macos/Sources/SkillsCopilot/Views/DetailHeaderOverviewSection.swift"),
   detailFindingsHistory: await read("apps/macos/Sources/SkillsCopilot/Views/DetailFindingsHistorySection.swift"),
   agentIconProvider: await read("apps/macos/Sources/SkillsCopilot/Support/AgentIconProvider.swift"),
@@ -40,7 +41,9 @@ const files = {
   serviceProcessRunner: await read("apps/macos/Sources/SkillsCopilot/Services/ServiceProcessRunner.swift"),
   settings: await read("apps/macos/Sources/SkillsCopilot/Views/SettingsView.swift"),
   sidebar: await read("apps/macos/Sources/SkillsCopilot/Views/SidebarView.swift"),
+  sidebarSelection: await read("apps/macos/Sources/SkillsCopilot/Models/SidebarSelection.swift"),
   store: await read("apps/macos/Sources/SkillsCopilot/Stores/SkillStore.swift"),
+  storeDerivedState: await read("apps/macos/Sources/SkillsCopilot/Stores/SkillStoreDerivedState.swift"),
   storeNavigation: await read("apps/macos/Sources/SkillsCopilot/Stores/SkillStoreNavigationActions.swift"),
   storeWorkflow: await read("apps/macos/Sources/SkillsCopilot/Stores/SkillStoreWorkflowSelectors.swift"),
   taskCockpit: await read("apps/macos/Sources/SkillsCopilot/Views/TaskCockpitPanel.swift"),
@@ -70,6 +73,7 @@ files.detailSurface = [
   files.detailTaskBenchmark,
   files.detailAgentSession,
   files.detailLLM,
+  files.agentConfigWorkspace,
   files.detailHeaderOverview,
   files.detailFindingsHistory,
   files.taskCockpit,
@@ -82,6 +86,7 @@ files.serviceIPC = [
 ].join("\n");
 files.storeSurface = [
   files.store,
+  files.storeDerivedState,
   files.storeNavigation,
   files.storeWorkflow,
 ].join("\n");
@@ -110,32 +115,66 @@ const checks = [
     pattern: /NavigationSplitView\s*{/,
   },
   {
-    label: "sidebar column has bounded native width",
+    label: "primary and secondary sidebar columns have bounded native widths",
     text: files.content,
-    pattern: /\.navigationSplitViewColumnWidth\(min:\s*300,\s*ideal:\s*340,\s*max:\s*430\)/,
+    pattern: /SidebarView\(\)[\s\S]*?\.navigationSplitViewColumnWidth\(min:\s*260,\s*ideal:\s*300,\s*max:\s*340\)[\s\S]*?SecondarySidebarView\(\)[\s\S]*?\.navigationSplitViewColumnWidth\(min:\s*300,\s*ideal:\s*340,\s*max:\s*430\)/,
   },
   {
-    label: "sidebar exposes state filter",
+    label: "selected agent session metrics refresh from the root view independent of sidebar mode",
+    text: files.content + "\n" + files.storeSurface,
+    pattern: /(?=[\s\S]*?\.task\(id:\s*store\.selectedAgentLocalSessionRefreshKey\)[\s\S]*?await store\.refreshSelectedAgentLocalSessions\(\))(?=[\s\S]*?var selectedAgentLocalSessionRefreshKey:[\s\S]*?agentFilter\.rawValue[\s\S]*?activeProjectContext\?\.rootPath)(?=[\s\S]*?func refreshSelectedAgentLocalSessions\(\)\s*async[\s\S]*?previewLocalSessions\(allowDuringCatalogRefresh:\s*true\))/,
+  },
+  {
+    label: "primary sidebar exposes sessions, skills, config cards, and fixed report/preflight footer tools",
     text: files.sidebar,
-    pattern: /Picker\(UIStrings\.state,\s*selection:\s*\$store\.stateFilter\)/,
+    passed: /@State private var isReportSheetPresented = false/.test(files.sidebar)
+      && /@State private var isPreflightSheetPresented = false/.test(files.sidebar)
+      && /AgentWorkspaceHeader\(\)[\s\S]*?ProjectContextControls\(\)/.test(files.sidebar)
+      && /SidebarNavigationCardButton\([\s\S]*?title:\s*SidebarContentMode\.sessions\.title[\s\S]*?sessionCardMetrics[\s\S]*?selectSessions\(\)/.test(files.sidebar)
+      && /SidebarNavigationCardButton\([\s\S]*?title:\s*SidebarContentMode\.skills\.title[\s\S]*?skillCardMetrics[\s\S]*?selectSkills\(\)/.test(files.sidebar)
+      && /SidebarNavigationCardButton\([\s\S]*?title:\s*SidebarContentMode\.config\.title[\s\S]*?configCardMetrics[\s\S]*?selectConfig\(\)/.test(files.sidebar)
+      && /SidebarFooterToolRow\([\s\S]*?isReportSheetPresented = true[\s\S]*?isPreflightSheetPresented = true/.test(files.sidebar)
+      && /\.sheet\(isPresented:\s*\$isReportSheetPresented\)[\s\S]*?LocalReportPreviewSheet\(includeSelectedSkill:\s*false\)/.test(files.sidebar)
+      && /\.sheet\(isPresented:\s*\$isPreflightSheetPresented\)[\s\S]*?TaskPreflightPreviewSheet\(\)/.test(files.sidebar)
+      && !/SidebarNavigationCardButton\(\s*title:\s*UIStrings\.text\("sidebar\.report\.title"/.test(files.sidebar)
+      && !/SidebarNavigationCardButton\([\s\S]*?UIStrings\.taskCockpitTitle[\s\S]*?selectedSidebarSelection = \.preflight/.test(files.sidebar)
+      && !/selectedSidebarSelection\s*=\s*\.report/.test(files.sidebar),
   },
   {
-    label: "sidebar exposes sort picker",
+    label: "secondary sidebar omits the agent profile row and switches session, skill, or config lists",
     text: files.sidebar,
-    pattern: /Picker\(UIStrings\.sort,\s*selection:\s*\$store\.sortOrder\)/,
+    passed: /struct SecondarySidebarView:[\s\S]*?List\(selection:\s*\$store\.selectedSidebarSelection\)[\s\S]*?switch store\.sidebarContentMode[\s\S]*?case \.sessions:[\s\S]*?SessionSidebarPanel\(\)[\s\S]*?case \.skills:[\s\S]*?SkillSidebarPanel/.test(files.sidebar)
+      && /case \.config:[\s\S]*?ConfigSidebarPanel\(\)/.test(files.sidebar)
+      && !/AgentProfileSidebarRow/.test(files.sidebar)
+      && !/SidebarSelection\.agentWorkspace/.test(files.sidebar),
   },
   {
-    label: "detail sections use bounded menu picker",
+    label: "sidebar sessions surface exposes discovery, list selection, and top skill usage",
+    text: files.sidebar,
+    pattern: /private struct SessionSidebarPanel:[\s\S]*?sidebar\.sessions\.autoDiscovery[\s\S]*?await store\.previewLocalSessions\(\)[\s\S]*?sidebar\.sessions\.list[\s\S]*?SessionSidebarRow\([\s\S]*?store\.selectedSidebarSelection == \.session\(session\.id\)[\s\S]*?store\.selectLocalSession\(session\)[\s\S]*?localSessionPreviewResult\.skillUsageRows/,
+  },
+  {
+    label: "skill sidebar exposes filter scope sort and direction controls",
+    text: files.sidebar,
+    pattern: /private struct SkillSidebarPanel:[\s\S]*?selection:\s*\$store\.stateFilter[\s\S]*?SkillStateFilter\.sidebarCases[\s\S]*?selection:\s*\$store\.skillScopeFilter[\s\S]*?selection:\s*\$store\.sortOrder[\s\S]*?selection:\s*\$store\.sortDirection/,
+  },
+  {
+    label: "config sidebar exposes scope filtering, supported operations, and selectable config history",
+    text: files.sidebar,
+    pattern: /private struct ConfigSidebarPanel:[\s\S]*?selection:\s*\$store\.configScopeFilter[\s\S]*?AgentConfigScopeFilter\.allCases[\s\S]*?Supported operations[\s\S]*?ConfigOperationRow\(title:\s*UIStrings\.scan[\s\S]*?ConfigOperationRow\(title:\s*UIStrings\.writableConfig[\s\S]*?ForEach\(selectedSnapshots\)[\s\S]*?ConfigSnapshotSidebarRow\([\s\S]*?store\.selectedSidebarSelection == \.configSnapshot\(snapshot\.id\)[\s\S]*?store\.selectConfigSnapshot\(snapshot\)/,
+  },
+  {
+    label: "detail sections use expanded tag selector",
     text: files.detailSurface,
-    pattern: /\.pickerStyle\(\.menu\)[\s\S]*?\.labelsHidden\(\)[\s\S]*?\.frame\(width:\s*240,\s*alignment:\s*\.leading\)/,
+    pattern: /struct DetailSectionSwitcher:[\s\S]*?ScrollView\(\.horizontal,\s*showsIndicators:\s*false\)[\s\S]*?ForEach\(DetailSection\.visibleCases\)[\s\S]*?DetailSectionTagButton\([\s\S]*?isSelected:\s*selection == item[\s\S]*?selection = item[\s\S]*?private struct DetailSectionTagButton:[\s\S]*?\.background\(background,\s*in:\s*Capsule\(\)\)[\s\S]*?\.accessibilityAddTraits\(isSelected \? \.isSelected : \[\]\)/,
   },
   {
-    label: "V2.80 detail navigation has a stable scroll-to-top anchor",
+    label: "detail navigation has a stable scroll-to-top anchor",
     text: files.detailSurface,
     pattern: /private static let topAnchorID = "skills-copilot\.detail\.top"[\s\S]*?ScrollViewReader\s*{\s*proxy\s+in[\s\S]*?\.id\(Self\.topAnchorID\)/,
   },
   {
-    label: "V2.80 detail navigation scrolls to top when the selected section changes",
+    label: "detail navigation scrolls to top when the selected section changes",
     text: files.detailSurface,
     pattern: /\.onChange\(of:\s*store\.selectedDetailSection\)[\s\S]*?proxy\.scrollTo\(Self\.topAnchorID,\s*anchor:\s*\.top\)/,
   },
@@ -145,34 +184,27 @@ const checks = [
     pattern: /static var visibleCases:[\s\S]*?\[\.overview,\s*\.findings,\s*\.history,\s*\.analysis\][\s\S]*?static var primaryWorkCases:[\s\S]*?\[\][\s\S]*?UIStrings\.providerObservabilityTitle/,
   },
   {
-    label: "agent workspace aggregate renders before empty detail fallback",
+    label: "detail router separates session, config, and skill details while report/preflight are modal tools",
     text: files.detailSurface,
-    pattern: /if store\.selectedDetailSection\.isAgentWorkspaceSurface[\s\S]*?AgentWorkspacePanel\(\)[\s\S]*?else if let skill[\s\S]*?EmptyDetailView\(\)/,
+    passed: /if store\.selectedSidebarSelection\?\.isSession == true[\s\S]*?AgentSessionDetailPanel\(\)[\s\S]*?else if store\.selectedSidebarSelection\?\.isConfig == true[\s\S]*?AgentConfigDetailPanel\(\)[\s\S]*?else if store\.selectedDetailSection == \.guidedCleanup[\s\S]*?else if store\.selectedSidebarSelection\?\.isSkill == true,\s*let skill[\s\S]*?EmptyDetailView\([\s\S]*?title:\s*emptyDetailTitle[\s\S]*?message:\s*emptyDetailMessage/.test(files.detailSurface)
+      && !/isReport/.test(files.detailSurface)
+      && !/isPreflight/.test(files.detailSurface)
+      && !/LocalReportExportPanel\(includeSelectedSkill:\s*false\)/.test(files.detailSurface),
   },
   {
-    label: "local session preview is default-off, explicitly authorized, and privacy-rendered",
+    label: "local session preview is auto-discovered and privacy-rendered",
     text: files.detailAgentSession + "\n" + files.storeSurface + "\n" + files.serviceProtocol,
-    pattern: /LocalSessionPreviewPanel\([\s\S]*?roots:\s*\$localSessionRoots[\s\S]*?Preview is default-off[\s\S]*?TextField\(UIStrings\.text\("localSessionPreview\.placeholder"[\s\S]*?PrivacyEvidenceText\(value:\s*row\.redactedPath[\s\S]*?PrivacyEvidenceText\(value:\s*row\.excerpt[\s\S]*?func previewLocalSessions\(\)\s*async[\s\S]*?service\.previewLocalSessions[\s\S]*?session\.previewLocalSessions/,
+    pattern: /LocalSessionPreviewPanel\([\s\S]*?Auto discovery[\s\S]*?result\.skillUsageRows[\s\S]*?PrivacyEvidenceText\(value:\s*row\.redactedPath[\s\S]*?PrivacyEvidenceText\(value:\s*row\.excerpt[\s\S]*?func previewLocalSessions\(\)\s*async[\s\S]*?service\.previewLocalSessions[\s\S]*?session\.previewLocalSessions/,
   },
   {
-    label: "MCP server preview is default-off, explicitly authorized, and privacy-rendered",
+    label: "MCP server preview component remains default-off, explicitly authorized, and privacy-rendered",
     text: files.agentCopilotOverview + "\n" + files.storeSurface + "\n" + files.serviceClientEvidence + "\n" + files.mcpServerPreview + "\n" + files.serviceProtocol,
-    pattern: /McpServerPreviewPanel\([\s\S]*?paths:\s*\$store\.mcpServerPreviewPaths[\s\S]*?Preview is default-off[\s\S]*?TextField\(UIStrings\.text\("mcpServerPreview\.placeholder"[\s\S]*?PrivacyEvidenceText\(value:\s*row\.sourcePath[\s\S]*?PrivacyEvidenceText\(value:\s*command[\s\S]*?func previewMcpServers\(\)\s*async[\s\S]*?service\.previewMcpServers[\s\S]*?evidence\.previewMcpServers/,
+    pattern: /McpServerPreviewPanel[\s\S]*?Preview is default-off[\s\S]*?TextField\(UIStrings\.text\("mcpServerPreview\.placeholder"[\s\S]*?PrivacyEvidenceText\(value:\s*row\.sourcePath[\s\S]*?PrivacyEvidenceText\(value:\s*command[\s\S]*?func previewMcpServers\(\)\s*async[\s\S]*?service\.previewMcpServers[\s\S]*?evidence\.previewMcpServers/,
   },
   {
-    label: "Agent Workspace combines Agent Profile and Task Preflight before skill detail fallback",
-    text: files.detailSurface,
-    pattern: /if store\.selectedDetailSection\.isAgentWorkspaceSurface[\s\S]*?AgentWorkspacePanel\(\)[\s\S]*?else if store\.selectedDetailSection == \.guidedCleanup[\s\S]*?else if let skill/,
-  },
-  {
-    label: "Agent Workspace orders capability, Task Preflight, MCP, and local export",
-    text: files.agentCopilotDecision + "\n" + files.agentCopilotOverview,
-    pattern: /struct AgentWorkspacePanel:[\s\S]*?AgentProfilePanel\(\)[\s\S]*?struct AgentProfilePanel:[\s\S]*?AgentCapabilitySummaryCard\(capability:\s*capability\)[\s\S]*?TaskCockpitPanel\([\s\S]*?McpServerPreviewPanel\([\s\S]*?LocalReportExportPanel\(includeSelectedSkill:\s*false\)[\s\S]*?private struct McpServerPreviewPanel:/,
-  },
-  {
-    label: "Agent Profile metrics use a white agent summary container",
-    text: files.agentCopilotOverview + "\n" + files.agentIconProvider,
-    pattern: /AgentProfileSummaryCard\(agent:\s*store\.agentFilter,\s*metrics:\s*\[[\s\S]*?AgentProfileMetric\(title:\s*UIStrings\.skills[\s\S]*?AgentProfileMetric\(title:\s*UIStrings\.text\("agentCopilot\.metric\.conflicts"[\s\S]*?private struct AgentProfileSummaryCard:[\s\S]*?AgentProfileIconBadge\(filter:\s*agent\)[\s\S]*?Text\(agent\.title\)[\s\S]*?textBackgroundColor[\s\S]*?stroke\(\.quaternary\.opacity\(0\.35\),\s*lineWidth:\s*1\)[\s\S]*?private struct AgentProfileIconBadge:[\s\S]*?AgentIconProvider\.image\(for:\s*filter\)[\s\S]*?private struct AgentProfileMetricGrid:[\s\S]*?adaptive\(minimum:\s*150\)[\s\S]*?private struct AgentProfileMetricCard:[\s\S]*?minHeight:\s*54,\s*maxHeight:\s*54[\s\S]*?enum AgentIconProvider/,
+    label: "agent summary metrics are folded into primary sidebar cards",
+    text: files.sidebar,
+    pattern: /private var sessionCardMetrics:[\s\S]*?localSessionPreviewResult\.userMessageCount[\s\S]*?localSessionPreviewResult\.totalMessageCount[\s\S]*?localSessionPreviewResult\.toolCallCount[\s\S]*?localSessionPreviewResult\.skillCallCount[\s\S]*?private var skillCardMetrics:[\s\S]*?agentEnabledCount[\s\S]*?agentFindingCount[\s\S]*?agentConflictCount[\s\S]*?private var configCardMetrics:[\s\S]*?configSupportMetric\([\s\S]*?capabilities:\s*\[configCapability\?\.scan,\s*configCapability\?\.projectScan\][\s\S]*?capabilities:\s*\[configCapability\?\.configToggle\][\s\S]*?capabilities:\s*\[configCapability\?\.configSnapshot\][\s\S]*?capabilities:\s*\[configCapability\?\.writable\][\s\S]*?private struct SidebarNavigationCardButton:[\s\S]*?if !metrics\.isEmpty[\s\S]*?HStack\(spacing:\s*5\)[\s\S]*?private struct SidebarNavigationMetricPill:/,
   },
   {
     label: "guided cleanup renders safe-link buttons",
@@ -275,9 +307,12 @@ const checks = [
     pattern: /struct TaskCockpitEvidenceList:[\s\S]*?DenseDisclosureList\(evidence,\s*visibleLimit:\s*6,\s*spacing:\s*6\)[\s\S]*?PrivacyEvidenceText\(value:\s*source,\s*font:\s*\.caption2,\s*lineLimit:\s*1\)[\s\S]*?PrivacyEvidenceText\(value:\s*item\.detail,\s*font:\s*\.caption,\s*lineLimit:\s*nil\)/,
   },
   {
-    label: "agent workspace header owns the compact agent selector",
-    text: files.sidebar,
-    pattern: /Section\s*{[\s\S]*?AgentWorkspaceHeader\(\)[\s\S]*?\.tag\(SidebarSelection\.agentWorkspace\)[\s\S]*?Section\s*{[\s\S]*?ProjectContextControls\(\)[\s\S]*?private struct AgentWorkspaceHeader:[\s\S]*?AgentSelectorMenu\(width:\s*84\)[\s\S]*?private struct AgentSelectorMenu:[\s\S]*?Picker\(UIStrings\.agent,\s*selection:\s*\$store\.agentFilter\)[\s\S]*?\.pickerStyle\(\.menu\)[\s\S]*?\.frame\(width:\s*width,\s*alignment:\s*\.trailing\)[\s\S]*?\.accessibilityValue\(store\.agentFilter\.title\)/,
+    label: "primary sidebar header keeps the agent selector inline and compact",
+    passed: /Section\s*{[\s\S]*?AgentWorkspaceHeader\(\)[\s\S]*?Section\s*{[\s\S]*?ProjectContextControls\(\)/.test(files.sidebar)
+      && /private struct AgentWorkspaceHeader:[\s\S]*?HStack\(spacing:\s*8\)[\s\S]*?AgentIconBadge\(filter:\s*store\.agentFilter\)[\s\S]*?Text\(store\.agentFilter\.title\)[\s\S]*?minimumScaleFactor\(0\.78\)[\s\S]*?AgentSelectorMenu\(width:\s*84\)/.test(files.sidebar)
+      && /private struct AgentSelectorMenu:[\s\S]*?Picker\(UIStrings\.agent,\s*selection:\s*\$store\.agentFilter\)[\s\S]*?\.pickerStyle\(\.menu\)[\s\S]*?\.frame\(width:\s*width,\s*alignment:\s*\.trailing\)[\s\S]*?\.accessibilityValue\(store\.agentFilter\.title\)/.test(files.sidebar)
+      && !/store\.selectedSidebarSelection\s*=\s*\.agentWorkspace/.test(files.sidebar)
+      && !/\.tag\(SidebarSelection\.agentWorkspace\)/.test(files.sidebar),
   },
   {
     label: "project title row owns merged project selection and actions",
@@ -290,14 +325,12 @@ const checks = [
     pattern: /private struct SkillListSectionHeader:[\s\S]*?private static let trailingControlInset: CGFloat = 14[\s\S]*?Button\(action:\s*action\)[\s\S]*?\.padding\(\.trailing,\s*Self\.trailingControlInset\)/,
   },
   {
-    label: "findings expose severity filter",
-    text: files.detailSurface,
-    pattern: /Picker\(UIStrings\.findingSeverityFilter,\s*selection:\s*\$severityFilter\)/,
-  },
-  {
-    label: "findings expose rule filter",
-    text: files.detailSurface,
-    pattern: /Picker\(UIStrings\.findingRuleFilter,\s*selection:\s*\$ruleFilter\)/,
+    label: "findings expose only the rule filter in the control panel",
+    passed: /Picker\(UIStrings\.findingRuleFilter,\s*selection:\s*\$ruleFilter\)/.test(files.detailSurface)
+      && /rulePicker\.frame\(width:\s*250\)/.test(files.detailSurface)
+      && !/Picker\(UIStrings\.findingSeverityFilter,\s*selection:\s*\$severityFilter\)/.test(files.detailSurface)
+      && !/FindingsSummaryOverview/.test(files.detailSurface)
+      && !/FindingsSummaryStrip/.test(files.detailSurface),
   },
   {
     label: "findings render severity groups",
@@ -422,7 +455,7 @@ const checks = [
   {
     label: "localized finding filter labels are present",
     text: files.localizable,
-    pattern: /"findings\.filter\.severity".*"findings\.filter\.rule".*"findings\.visibleSummary"/s,
+    pattern: /"findings\.filter\.rule".*"findings\.filter\.allRules"/s,
   },
   {
     label: "localized adapter capability labels are present",
@@ -482,36 +515,35 @@ const nativeIPCCleanupChecks = [
       && /stderrReader\?\.(?:close|closeFile)\s*\(/.test(files.serviceProcessRunner),
   },
   {
-    label: "V2.81 ServiceClient clears pipe readability handlers or closes read handles",
+    label: "ServiceClient clears pipe readability handlers or closes read handles",
     passed: /readabilityHandler\s*=\s*nil/.test(files.serviceIPC)
       || (/stdoutReader\?\.(?:close|closeFile)\s*\(/.test(files.serviceProcessRunner)
         && /stderrReader\?\.(?:close|closeFile)\s*\(/.test(files.serviceProcessRunner)),
   },
   {
-    label: "V2.81 ServiceClient protects continuations from stale or duplicate completion",
+    label: "ServiceClient protects continuations from stale or duplicate completion",
     passed: /(resumeOnce|finishOnce|completeOnce|didResume|hasResumed|isCompleted|completed|finished|cleanedUp|stale)/i.test(files.serviceIPC)
       && /(NSLock|DispatchQueue|ManagedAtomic|lock\s*\(|actor\b)/.test(files.serviceIPC)
       && /(if\s+cleanedUp|guard\s+!.*cleanedUp|markCancelled|Task\.checkCancellation)/s.test(files.serviceProcessRunner),
   },
   {
-    label: "V2.81 ServiceClient does not introduce a daemon, socket, XPC, or network redesign",
+    label: "ServiceClient does not introduce a daemon, socket, XPC, or network redesign",
     passed: !/(^|\n)\s*import\s+Network\b|NWListener|NWConnection|NSXPCConnection|URLSessionWebSocketTask|SocketPort|UnixDomainSocket|\bdaemon\b|\blaunchd\b/.test(files.serviceIPC),
   },
   {
-    label: "V2.81 ServiceRequest IPC payload remains id, method, and params only",
+    label: "ServiceRequest IPC payload remains id, method, and params only",
     passed: /let\s+id:\s*String/.test(serviceRequestBody)
       && /let\s+method:\s*String/.test(serviceRequestBody)
       && /let\s+params:\s*Params/.test(serviceRequestBody)
       && !/(cancel|timeout|pid|socket|daemon|token)/i.test(serviceRequestBody),
   },
   {
-    label: "V2.91 Agent Copilot protocol method surface remains the current 93-method contract",
+    label: "Agent Copilot protocol method surface matches the supported method contract",
     passed: supportedMethods.length === 93
-      && statusFixtureMethods.length === 93
-      && /current count is 93 methods/.test(files.serviceProtocol),
+      && statusFixtureMethods.length === 93,
   },
   {
-    label: "V2.81 protocol surface has no IPC control, daemon, process, or socket methods",
+    label: "protocol surface has no IPC control, daemon, process, or socket methods",
     passed: forbiddenProtocolMethods.length === 0,
   },
 ];
@@ -538,18 +570,41 @@ const customChecks = [
       && /searchText/.test(files.providerObservabilitySettings),
   },
   {
+    label: "Agent Config moved from Settings into the main sidebar workflow",
+    passed: !/AgentConfigSettingsPanel\(/.test(files.settings)
+      && /SidebarContentMode\.config/.test(files.sidebar)
+      && /AgentConfigDetailPanel\(\)/.test(files.detail)
+      && /struct AgentConfigOverviewDetailPanel/.test(files.agentConfigWorkspace)
+      && /struct AgentConfigSnapshotDetailPanel/.test(files.agentConfigWorkspace),
+  },
+  {
     label: "Agent Workspace does not expose the retired evidence surface navigation grid",
     passed: !/AgentProfileNavigationGrid|agentCopilot\.evidenceSurfaces|selectedSidebarSelection\s*=\s*\.work\(section\)/.test(files.agentCopilotOverview),
   },
   {
-    label: "local report export lives in Agent Workspace detail instead of the sidebar",
-    passed: !/LocalReportExportPanel\(/.test(files.sidebar)
-      && /LocalReportExportPanel\(includeSelectedSkill:\s*false\)/.test(files.agentCopilotOverview)
+    label: "local report export opens from the fixed sidebar footer sheet, keeps history, and remains file-action capable",
+    passed: /LocalReportPreviewSheet\(includeSelectedSkill:\s*false\)/.test(files.sidebar)
+      && /struct LocalReportPreviewSheet:[\s\S]*?LocalReportExportPanel\(includeSelectedSkill:\s*includeSelectedSkill\)[\s\S]*?LocalReportHistoryPanel/.test(files.localReportExport)
+      && /localReportExportHistory/.test(files.localReportExport)
+      && /selectLocalReportHistoryRecord/.test(files.localReportExport + "\n" + files.store)
+      && !/LocalReportExportPanel\(/.test(files.sidebar)
+      && !/LocalReportExportPanel\(includeSelectedSkill:\s*false\)/.test(files.agentCopilotOverview)
       && /Task\s*{\s*await store\.exportLocalReport\(includeSelectedSkill:\s*includeSelectedSkill\)\s*}/.test(files.localReportExport)
       && /NSWorkspace\.shared\.open\(fileURL\)/.test(files.localReportExport)
       && /NSWorkspace\.shared\.activateFileViewerSelecting\(\[fileURL\]\)/.test(files.localReportExport)
+      && /localReport\.download/.test(files.localReportExport)
       && /NSPasteboard\.general\.setString\(fileURL\.path,\s*forType:\s*\.string\)/.test(files.localReportExport)
       && /LocalReportFileResolver\.fileURL/.test(files.localReportExport),
+  },
+  {
+    label: "task preflight opens from the fixed sidebar footer sheet and keeps selectable history",
+    passed: /TaskPreflightPreviewSheet\(\)/.test(files.sidebar)
+      && /struct TaskPreflightPreviewSheet:[\s\S]*?TaskCockpitPanel\([\s\S]*?TaskPreflightHistoryPanel/.test(files.taskCockpit)
+      && /taskCockpitHistory/.test(files.taskCockpit + "\n" + files.store)
+      && /selectTaskCockpitHistoryRecord/.test(files.taskCockpit + "\n" + files.store)
+      && /recordTaskCockpitHistory/.test(files.store)
+      && !/case preflight/.test(files.sidebarSelection)
+      && !/selectedSidebarSelection\s*=\s*\.preflight/.test(files.sidebar + "\n" + files.storeSurface),
   },
   {
     label: "local report export clears stale result when report scope changes",
@@ -595,9 +650,11 @@ const customChecks = [
       && /ProviderObservabilityDimensionList/.test(files.detailProviderObservability),
   },
   {
-    label: "sidebar keeps adapter capability content in the Agent Workspace detail surface",
+    label: "sidebar and retired agent profile omit adapter capability content",
     passed: !/SidebarAgentStatusPanel|AdapterCapabilityCard|RefreshStatusView/.test(files.sidebar)
-      && /AgentCapabilitySummaryCard\(capability:\s*capability\)/.test(files.agentCopilotOverview),
+      && !/AgentCapabilitySummaryCard/.test(files.agentCopilotOverview)
+      && !/capabilityReminders\(from:\s*store\.selectedAdapterCapability\)/.test(files.agentCopilotOverview)
+      && !/AgentProfileInfoRow/.test(files.agentCopilotOverview),
   },
   {
     label: "V2.80 detail evidence lists are row-capped and use privacy rendering",
@@ -612,7 +669,12 @@ const customChecks = [
 ];
 
 const failures = [
-  ...checks.filter((check) => !check.pattern.test(check.text)),
+  ...checks.filter((check) => {
+    if (check.pattern) {
+      return !check.pattern.test(check.text);
+    }
+    return !check.passed;
+  }),
   ...customChecks.filter((check) => !check.passed),
 ];
 if (failures.length > 0) {

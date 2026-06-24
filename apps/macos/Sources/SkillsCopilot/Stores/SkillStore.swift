@@ -11,6 +11,8 @@ final class SkillStore: ObservableObject {
     @Published private(set) var crossAgentComparisons = CrossAgentComparisonResult.emptyFallback()
     @Published private(set) var isLoadingCrossAgentComparisons = false
     @Published private(set) var localReportExportResult: LocalReportExportResult?
+    @Published private(set) var localReportExportHistory: [LocalReportExportHistoryRecord] = []
+    @Published private(set) var selectedLocalReportHistoryID: LocalReportExportHistoryRecord.ID?
     @Published private(set) var isExportingLocalReport = false
     @Published private(set) var healthSummary = SkillHealthSummary.empty
     @Published private(set) var agentConfigSnapshots: [ConfigSnapshotRecord] = []
@@ -102,6 +104,8 @@ final class SkillStore: ObservableObject {
     @Published private(set) var providerObservabilityResult: ProviderObservabilityResult?
     @Published private(set) var isLoadingProviderObservability = false
     @Published private(set) var taskCockpitResult: TaskCockpitResult?
+    @Published private(set) var taskCockpitHistory: [TaskCockpitHistoryRecord] = []
+    @Published private(set) var selectedTaskCockpitHistoryID: TaskCockpitHistoryRecord.ID?
     @Published private(set) var isBuildingTaskCockpit = false
     @Published private(set) var taskCockpitOperationState = TaskCockpitOperationState.idle
     @Published private(set) var scriptExecutionPreviews: [SkillRecord.ID: ScriptExecutionPreview] = [:]
@@ -131,7 +135,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var settingsErrorMessage: String?
     @Published private(set) var aiProviderMessage: String?
     @Published private(set) var aiProviderErrorMessage: String?
-    @Published var selectedSidebarSelection: SidebarSelection? = .agentWorkspace {
+    @Published var selectedSidebarSelection: SidebarSelection? {
         didSet { handleSidebarSelectionChanged() }
     }
     @Published var selectedSkillID: SkillRecord.ID? {
@@ -140,7 +144,13 @@ final class SkillStore: ObservableObject {
             synchronizeSidebarSelectionWithSelectedSkill()
         }
     }
-    @Published var selectedDetailSection: DetailSection = .agentWorkspace
+    @Published var selectedDetailSection: DetailSection = .overview
+    @Published var sidebarContentMode: SidebarContentMode = .sessions {
+        didSet { handleSidebarContentModeChanged() }
+    }
+    @Published var configScopeFilter: AgentConfigScopeFilter = .all {
+        didSet { normalizeConfigSnapshotSelection() }
+    }
     @Published var searchText = "" {
         didSet {
             clearLocalReportExportState()
@@ -172,13 +182,24 @@ final class SkillStore: ObservableObject {
             agentSessionSkillReviewDeleteResult = nil
             agentSessionSkillReviewList = AgentSessionSkillReviewListResult(reviews: [])
             localSessionPreviewResult = LocalSessionPreviewResult()
+            selectedLocalSessionID = nil
             mcpServerPreviewResult = McpServerPreviewResult()
+            if sidebarContentMode == .config {
+                selectedSidebarSelection = .configOverview
+            }
             Task { await loadAgentConfigSnapshots() }
             Task { await loadCleanupQueue() }
             Task { await loadCrossAgentComparisons() }
+            Task { await refreshSelectedAgentLocalSessions() }
         }
     }
     @Published var stateFilter: SkillStateFilter = .all {
+        didSet {
+            clearLocalReportExportState()
+            handleListCriteriaChanged()
+        }
+    }
+    @Published var skillScopeFilter: SkillScopeFilter = .all {
         didSet {
             clearLocalReportExportState()
             handleListCriteriaChanged()
@@ -201,6 +222,12 @@ final class SkillStore: ObservableObject {
         didSet { clearLocalReportExportState() }
     }
     @Published var sortOrder: SkillSortOrder = .name {
+        didSet {
+            clearLocalReportExportState()
+            handleListCriteriaChanged()
+        }
+    }
+    @Published var sortDirection: SkillSortDirection = .ascending {
         didSet {
             clearLocalReportExportState()
             handleListCriteriaChanged()
@@ -265,6 +292,19 @@ final class SkillStore: ObservableObject {
     @Published var agentSessionSkillReviewTask = ""
     @Published var agentSessionSkillReviewExpectedSkills = ""
     @Published var localSessionPreviewRoots = ""
+    @Published var localSessionScopeFilter: LocalSessionScopeFilter = .project {
+        didSet {
+            selectedLocalSessionID = nil
+            Task { await refreshSelectedAgentLocalSessions() }
+        }
+    }
+    @Published var localSessionSearchText = "" {
+        didSet {
+            guard sidebarContentMode == .sessions else { return }
+            normalizeSelectedLocalSession()
+        }
+    }
+    @Published var selectedLocalSessionID: LocalSessionPreviewRow.ID?
     @Published var mcpServerPreviewPaths = ""
     @Published var errorMessage: String?
 
@@ -274,6 +314,7 @@ final class SkillStore: ObservableObject {
     private var taskReadinessCheckedSkillID: SkillRecord.ID?
     private var routingConfidenceRankedSkillID: SkillRecord.ID?
     private var agentConfigSnapshotLoadGeneration = 0
+    private var localSessionPreviewGeneration = 0
     private var taskCockpitOperationID: UUID?
     private var taskCockpitTimeoutTask: Task<Void, Never>?
     private var taskCockpitServiceTask: Task<TaskCockpitResult, Error>?
@@ -283,6 +324,70 @@ final class SkillStore: ObservableObject {
     init(service: ServiceClient, taskCockpitTimeoutSeconds: TimeInterval = 15) {
         self.service = service
         self.taskCockpitTimeoutSeconds = max(0.05, taskCockpitTimeoutSeconds)
+    }
+
+    var selectedLocalSession: LocalSessionPreviewRow? {
+        if let selectedLocalSessionID,
+           let row = localSessionPreviewResult.sessionRows.first(where: { $0.id == selectedLocalSessionID }) {
+            return row
+        }
+        return nil
+    }
+
+    var filteredLocalSessionRows: [LocalSessionPreviewRow] {
+        let query = localSessionSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else {
+            return localSessionPreviewResult.sessionRows
+        }
+        return localSessionPreviewResult.sessionRows.filter { row in
+            row.title.lowercased().contains(query)
+                || row.redactedPath.lowercased().contains(query)
+                || (row.projectRoot?.lowercased().contains(query) ?? false)
+        }
+    }
+
+    var selectedConfigSnapshot: ConfigSnapshotRecord? {
+        guard case let .configSnapshot(id) = selectedSidebarSelection else { return nil }
+        return agentConfigSnapshots.first { $0.id == id }
+    }
+
+    func selectLocalSession(_ session: LocalSessionPreviewRow) {
+        selectedLocalSessionID = session.id
+        selectedSidebarSelection = .session(session.id)
+    }
+
+    func selectConfigSnapshot(_ snapshot: ConfigSnapshotRecord) {
+        selectedSidebarSelection = .configSnapshot(snapshot.id)
+    }
+
+    func selectLocalReportHistoryRecord(_ record: LocalReportExportHistoryRecord) {
+        selectedLocalReportHistoryID = record.id
+        localReportExportResult = record.result
+    }
+
+    func selectTaskCockpitHistoryRecord(_ record: TaskCockpitHistoryRecord) {
+        taskCockpitText = record.taskText
+        taskCockpitResult = record.result
+        taskCockpitOperationState = record.operationState
+        selectedTaskCockpitHistoryID = record.id
+    }
+
+    func localReportScopeSummary(includeSelectedSkill: Bool) -> String {
+        var parts = [agentFilter.title]
+        if stateFilter != .all {
+            parts.append(stateFilter.title)
+        }
+        let trimmedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedSearch.isEmpty {
+            parts.append(UIStrings.text("localReport.scope.search", "Search filter active"))
+        }
+        if includeSelectedSkill, let selectedSkill {
+            parts.append(selectedSkill.name)
+        }
+        return String(
+            format: UIStrings.text("localReport.scope.agent", "Exports the current local audit scope: %@."),
+            parts.joined(separator: " · ")
+        )
     }
 
     func setFindingTriageStatus(_ status: FindingTriageStatus, for triageKeys: [String]) {
@@ -758,6 +863,7 @@ final class SkillStore: ObservableObject {
         let agent = agentFilter == .all ? nil : agentFilter.rawValue
         let state = stateFilter == .all ? nil : stateFilter.rawValue
         let trimmedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let scopeSummary = localReportScopeSummary(includeSelectedSkill: includeSelectedSkill)
         do {
             let result = try await service.exportLocalReport(
                 format: localReportFormat,
@@ -770,6 +876,7 @@ final class SkillStore: ObservableObject {
             if result.isUnavailable {
                 lastMutationMessage = nil
             } else {
+                recordLocalReportExportHistory(result: result, scopeSummary: scopeSummary)
                 lastMutationMessage = UIStrings.localReportExported(result.displayName)
             }
         } catch {
@@ -1504,6 +1611,7 @@ final class SkillStore: ObservableObject {
                     message: UIStrings.taskCockpitLoaded
                 )
             }
+            recordTaskCockpitHistory(result: result, taskText: taskText)
         } catch {
             guard isCurrentTaskCockpitOperation(operationID) else { return }
             let message = error.localizedDescription
@@ -1950,25 +2058,52 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func refreshSelectedAgentLocalSessions() async {
+        await previewLocalSessions(allowDuringCatalogRefresh: true)
+    }
+
     func previewLocalSessions() async {
+        await previewLocalSessions(allowDuringCatalogRefresh: false)
+    }
+
+    private func previewLocalSessions(allowDuringCatalogRefresh: Bool) async {
         let roots = normalizedLocalSessionPreviewRoots
-        guard !isRefreshBusy else {
+        guard allowDuringCatalogRefresh || !isRefreshBusy else {
             localSessionPreviewResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
             return
         }
 
+        localSessionPreviewGeneration += 1
+        let generation = localSessionPreviewGeneration
+        let requestedAgentFilter = agentFilter
+        let agent = requestedAgentFilter == .all ? nil : requestedAgentFilter.rawValue
         isPreviewingLocalSessions = true
-        defer { isPreviewingLocalSessions = false }
+        defer {
+            if generation == localSessionPreviewGeneration {
+                isPreviewingLocalSessions = false
+            }
+        }
 
-        let agent = agentFilter == .all ? nil : agentFilter.rawValue
         do {
-            localSessionPreviewResult = try await service.previewLocalSessions(
+            let result = try await service.previewLocalSessions(
                 authorizedRoots: roots,
                 agent: agent,
+                scope: localSessionScopeFilter,
+                search: nil,
+                project: activeProjectContext,
                 limit: 20
             )
+            guard generation == localSessionPreviewGeneration, agentFilter == requestedAgentFilter else { return }
+            localSessionPreviewResult = result
+            normalizeSelectedLocalSession()
         } catch {
+            guard generation == localSessionPreviewGeneration, agentFilter == requestedAgentFilter else { return }
             localSessionPreviewResult = .unavailable(reason: error.localizedDescription)
+            selectedLocalSessionID = nil
+            if selectedSidebarSelection?.isSession == true {
+                setSidebarSelection(nil)
+                selectedDetailSection = .overview
+            }
         }
     }
 
@@ -2350,13 +2485,13 @@ final class SkillStore: ObservableObject {
         }
     }
 
-    func loadAgentConfigSnapshots() async {
+    func loadAgentConfigSnapshots(agent: String? = nil) async {
         agentConfigSnapshotLoadGeneration += 1
         let generation = agentConfigSnapshotLoadGeneration
         isLoadingAgentConfigSnapshots = true
 
         do {
-            let records = try await fetchAgentConfigSnapshots()
+            let records = try await fetchAgentConfigSnapshots(agent: agent)
             guard generation == agentConfigSnapshotLoadGeneration else { return }
             agentConfigSnapshots = records
         } catch {
@@ -2469,8 +2604,8 @@ final class SkillStore: ObservableObject {
         }
     }
 
-    private func fetchAgentConfigSnapshots() async throws -> [ConfigSnapshotRecord] {
-        guard let agent = selectedAgentConfigTimelineAgent else {
+    private func fetchAgentConfigSnapshots(agent requestedAgent: String? = nil) async throws -> [ConfigSnapshotRecord] {
+        guard let agent = requestedAgent ?? selectedAgentConfigTimelineAgent else {
             return []
         }
         let records = try await service.listAgentConfigSnapshots(agent: agent, scope: nil)
@@ -2586,6 +2721,7 @@ final class SkillStore: ObservableObject {
     private func clearLocalReportExportState() {
         let hadLocalReportExportResult = localReportExportResult != nil
         localReportExportResult = nil
+        selectedLocalReportHistoryID = nil
         if hadLocalReportExportResult {
             lastMutationMessage = nil
         }
@@ -2593,10 +2729,37 @@ final class SkillStore: ObservableObject {
 
     private func clearTaskCockpitTransientState() {
         taskCockpitResult = nil
+        selectedTaskCockpitHistoryID = nil
         if isBuildingTaskCockpit {
             cancelTaskCockpitBuild(publishFallbackResult: false)
         } else {
             taskCockpitOperationState = .idle
+        }
+    }
+
+    private func recordLocalReportExportHistory(result: LocalReportExportResult, scopeSummary: String) {
+        guard !result.isUnavailable else { return }
+        let record = LocalReportExportHistoryRecord(result: result, scopeSummary: scopeSummary)
+        localReportExportHistory.removeAll { $0.id == record.id }
+        localReportExportHistory.insert(record, at: 0)
+        selectedLocalReportHistoryID = record.id
+        if localReportExportHistory.count > 12 {
+            localReportExportHistory.removeLast(localReportExportHistory.count - 12)
+        }
+    }
+
+    private func recordTaskCockpitHistory(result: TaskCockpitResult, taskText: String) {
+        let normalizedTask = taskText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedTask.isEmpty, !result.isUnavailable else { return }
+        let record = TaskCockpitHistoryRecord(
+            taskText: normalizedTask,
+            result: result,
+            operationState: taskCockpitOperationState
+        )
+        taskCockpitHistory.insert(record, at: 0)
+        selectedTaskCockpitHistoryID = record.id
+        if taskCockpitHistory.count > 12 {
+            taskCockpitHistory.removeLast(taskCockpitHistory.count - 12)
         }
     }
 
@@ -2895,10 +3058,36 @@ final class SkillStore: ObservableObject {
         agentSessionSkillReviewDeleteResult = nil
         agentSessionSkillReviewList = AgentSessionSkillReviewListResult(reviews: [])
         localSessionPreviewResult = LocalSessionPreviewResult()
+        selectedLocalSessionID = nil
+        if selectedSidebarSelection?.isSession == true {
+            setSidebarSelection(nil)
+            selectedDetailSection = .overview
+        }
         mcpServerPreviewResult = McpServerPreviewResult()
         Task { @MainActor [weak self] in
             await self?.loadSelectedDetail()
             await self?.loadCrossAgentComparisons()
+        }
+    }
+
+    private func normalizeSelectedLocalSession() {
+        let rows = sidebarContentMode == .sessions ? filteredLocalSessionRows : localSessionPreviewResult.sessionRows
+        guard !rows.isEmpty else {
+            selectedLocalSessionID = nil
+            if selectedSidebarSelection?.isSession == true {
+                setSidebarSelection(nil)
+                selectedDetailSection = .overview
+            }
+            return
+        }
+        if let selectedLocalSessionID, rows.contains(where: { $0.id == selectedLocalSessionID }) {
+            return
+        }
+        let firstSessionID = rows[0].id
+        selectedLocalSessionID = firstSessionID
+        if sidebarContentMode == .sessions,
+           selectedSidebarSelection == nil || selectedSidebarSelection?.isSession == true {
+            setSidebarSelection(.session(firstSessionID))
         }
     }
 
@@ -2959,20 +3148,32 @@ final class SkillStore: ObservableObject {
     private func handleSidebarSelectionChanged() {
         guard !isSynchronizingSidebarSelection else { return }
 
-        switch selectedSidebarSelection ?? .agentWorkspace {
-        case .agentWorkspace:
-            if selectedSidebarSelection == nil {
-                setSidebarSelection(.agentWorkspace)
-            }
-            selectedDetailSection = .agentWorkspace
+        guard let selectedSidebarSelection else {
+            selectedDetailSection = .overview
+            return
+        }
+
+        switch selectedSidebarSelection {
         case .work(let section):
             if section.requiresSelectedSkill, selectedSkillID == nil {
                 setSelectedSkillID(filteredSkills.first?.id ?? skills.first?.id, syncSidebar: false)
             }
             selectedDetailSection = section
+        case .session(let id):
+            selectedLocalSessionID = id
+            selectedDetailSection = .overview
         case .skill(let id):
             setSelectedSkillID(id, syncSidebar: false)
             if selectedDetailSection.isAgentWorkspaceSurface {
+                selectedDetailSection = .overview
+            }
+        case .configOverview:
+            selectedDetailSection = .overview
+        case .configSnapshot(let id):
+            if agentConfigSnapshots.contains(where: { $0.id == id }) {
+                selectedDetailSection = .overview
+            } else {
+                setSidebarSelection(.configOverview)
                 selectedDetailSection = .overview
             }
         }
@@ -2981,15 +3182,62 @@ final class SkillStore: ObservableObject {
     private func synchronizeSidebarSelectionWithSelectedSkill() {
         guard !isSynchronizingSidebarSelection else { return }
 
-        if let selectedSkillID {
+        guard sidebarContentMode == .skills else {
+            if selectedSidebarSelection?.isSkill == true {
+                setSidebarSelection(nil)
+            }
+            return
+        }
+
+        if selectedSidebarSelection?.isSkill == true, let selectedSkillID {
             guard selectedSidebarSelection != .skill(selectedSkillID) else { return }
             setSidebarSelection(.skill(selectedSkillID))
-            if selectedDetailSection.isAgentWorkspaceSurface {
-                selectedDetailSection = .overview
-            }
         } else if selectedSidebarSelection?.isSkill == true {
-            setSidebarSelection(.agentWorkspace)
-            selectedDetailSection = .agentWorkspace
+            setSidebarSelection(nil)
+            selectedDetailSection = .overview
+        }
+    }
+
+    private func handleSidebarContentModeChanged() {
+        guard !isSynchronizingSidebarSelection else { return }
+
+        switch sidebarContentMode {
+        case .sessions:
+            normalizeSelectedLocalSession()
+        case .skills:
+            if selectedSidebarSelection?.isSession == true {
+                if let skill = selectedSkill {
+                    setSidebarSelection(.skill(skill.id))
+                } else {
+                    setSidebarSelection(nil)
+                    selectedDetailSection = .overview
+                }
+            } else if selectedSidebarSelection?.isConfig == true {
+                if let skill = selectedSkill {
+                    setSidebarSelection(.skill(skill.id))
+                } else {
+                    setSidebarSelection(nil)
+                    selectedDetailSection = .overview
+                }
+            }
+        case .config:
+            if selectedSidebarSelection?.isConfig != true {
+                setSidebarSelection(.configOverview)
+            } else {
+                normalizeConfigSnapshotSelection()
+            }
+        }
+    }
+
+    private func normalizeConfigSnapshotSelection() {
+        guard case let .configSnapshot(id) = selectedSidebarSelection else { return }
+        let visible = agentConfigSnapshots.contains { snapshot in
+            snapshot.id == id
+                && (agentFilter == .all || snapshot.agent == agentFilter.rawValue)
+                && configScopeFilter.includes(snapshot)
+        }
+        if !visible {
+            setSidebarSelection(.configOverview)
         }
     }
 
@@ -3003,7 +3251,7 @@ final class SkillStore: ObservableObject {
         }
     }
 
-    private func setSidebarSelection(_ selection: SidebarSelection) {
+    private func setSidebarSelection(_ selection: SidebarSelection?) {
         isSynchronizingSidebarSelection = true
         selectedSidebarSelection = selection
         isSynchronizingSidebarSelection = false

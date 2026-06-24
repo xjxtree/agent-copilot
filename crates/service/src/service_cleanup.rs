@@ -378,35 +378,36 @@ impl ServiceHost {
         let generated_at = unix_timestamp_millis();
         let export_id = format!("local-report-{generated_at}");
         let output_dir = self.app_data_dir.join("report-exports").join(&export_id);
-        fs::create_dir_all(&output_dir)?;
+        create_private_dir_all(&output_dir)?;
 
-        let formats = report_export_formats(params.formats);
+        let formats = report_export_formats(params.formats.clone());
         let adapter_ctx = self.effective_adapter_ctx()?;
         let catalog = self.open_existing_catalog_read_only()?;
         let catalog_available = catalog.is_some();
 
         let (skills, findings, triage, conflicts, health, analysis, cleanup, comparison) =
             if let Some(catalog) = catalog.as_ref() {
-                let skills = self.list_visible_skill_records(catalog)?;
-                let findings = list_findings(catalog)?;
+                let skills =
+                    report_filter_skills(self.list_visible_skill_records(catalog)?, &params);
+                let findings = report_filter_findings(list_findings(catalog)?, &skills);
                 let triage = list_finding_triage(catalog)?;
-                let conflicts = list_conflicts(catalog)?;
+                let conflicts = report_filter_conflicts(list_conflicts(catalog)?, &skills);
                 let health = serde_json::to_value(skill_health_summary(catalog, &adapter_ctx)?)?;
                 let analysis = serde_json::to_value(analyze_catalog(catalog, &adapter_ctx)?)?;
                 let cleanup = self.cleanup_list_queue(CleanupListQueueParams::default())?;
                 let comparison = list_cross_agent_comparisons(
                     catalog,
                     &adapter_ctx,
-                    None,
-                    None,
-                    None,
+                    params.instance_id.as_deref(),
+                    params.agent.as_deref(),
+                    params.search.as_deref(),
                     Some(50),
                 )?;
                 (
-                    serde_json::to_value(skills)?,
-                    serde_json::to_value(findings)?,
-                    serde_json::to_value(triage)?,
-                    serde_json::to_value(conflicts)?,
+                    skills,
+                    findings,
+                    triage,
+                    conflicts,
                     health,
                     analysis,
                     serde_json::to_value(cleanup)?,
@@ -414,10 +415,10 @@ impl ServiceHost {
                 )
             } else {
                 (
-                    Value::Array(Vec::new()),
-                    Value::Array(Vec::new()),
-                    Value::Array(Vec::new()),
-                    Value::Array(Vec::new()),
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
                     empty_health_summary_json(),
                     serde_json::to_value(empty_cross_agent_analysis_json())?,
                     serde_json::to_value(cleanup_queue_response(Vec::new(), None))?,
@@ -425,9 +426,27 @@ impl ServiceHost {
                 )
             };
 
-        let summary = report_export_summary(&skills, &findings, &triage, &cleanup, &comparison);
+        let legacy_skills = serde_json::to_value(&skills)?;
+        let legacy_findings = serde_json::to_value(&findings)?;
+        let legacy_triage = serde_json::to_value(&triage)?;
+        let legacy_comparison = comparison.clone();
+        let result_summary = report_export_summary(
+            &legacy_skills,
+            &legacy_findings,
+            &legacy_triage,
+            &cleanup,
+            &legacy_comparison,
+        );
+        let agent = report_agent_scope(&params, &skills, catalog_available);
+        let skill_usage = report_skill_usage(&skills, &findings, &conflicts);
+        let issues = report_issue_rows(&findings, &conflicts, &skills);
+        let recommended_usage = report_recommended_usage(&skills, &issues);
+        let task_preflight = report_task_preflight();
+        let analysis_results = report_analysis_results(&health, &analysis, &cleanup, &comparison);
+        let usage_summary = report_usage_summary(&skills, &issues, &conflicts, &analysis_results);
+        let sections = report_usage_sections(&usage_summary);
         let mut report = json!({
-            "schema_version": 1,
+            "schema_version": 2,
             "export_id": export_id,
             "generated_at": generated_at,
             "catalog_available": catalog_available,
@@ -440,19 +459,18 @@ impl ServiceHost {
                 "scope": "local-redacted-report-export"
             },
             "redaction": report_export_redaction(),
-            "summary": summary.clone(),
-            "agent_coverage": {
+            "summary": usage_summary,
+            "agent": agent,
+            "skills": skill_usage,
+            "recommended_usage": recommended_usage,
+            "issues": issues,
+            "task_preflight": task_preflight,
+            "analysis_results": analysis_results,
+            "source_evidence": {
                 "status": self.status(),
-                "skills": skills
-            },
-            "health": health,
-            "findings": {
-                "open_groups": findings,
-                "triage": triage,
-                "conflicts": conflicts
-            },
-            "cleanup_queue": cleanup,
-            "cross_agent": {
+                "health": health,
+                "triage": legacy_triage,
+                "legacy_cleanup_queue": cleanup,
                 "analysis": analysis,
                 "comparison": comparison
             }
@@ -465,10 +483,10 @@ impl ServiceHost {
             match format {
                 ReportExportFormat::Json => {
                     let content = serde_json::to_string_pretty(&report)?;
-                    fs::write(&path, content)?;
+                    write_private_text_file(&path, &content)?;
                 }
                 ReportExportFormat::Markdown => {
-                    fs::write(&path, render_report_markdown(&report))?;
+                    write_private_text_file(&path, &render_report_markdown(&report))?;
                 }
             }
             files.push(ReportExportedFile {
@@ -483,7 +501,8 @@ impl ServiceHost {
             output_dir: redact_path_string(&output_dir, &self.redaction_roots(&adapter_ctx)),
             files,
             catalog_available,
-            summary,
+            summary: result_summary,
+            sections,
             redaction: report_export_redaction(),
             read_only: true,
             writes_allowed: false,

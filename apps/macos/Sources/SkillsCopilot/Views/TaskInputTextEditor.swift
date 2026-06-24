@@ -66,6 +66,7 @@ struct TaskInputTextEditor: View {
                 .textFieldStyle(.roundedBorder)
                 .lineLimit(3...5)
                 .frame(
+                    maxWidth: .infinity,
                     minHeight: Self.minHeight,
                     idealHeight: Self.idealHeight,
                     maxHeight: Self.maxHeight
@@ -91,6 +92,7 @@ struct TaskInputTextEditor: View {
             .accessibilityLabel(statusText)
             .accessibilityValue(statusText)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var statusText: String {
