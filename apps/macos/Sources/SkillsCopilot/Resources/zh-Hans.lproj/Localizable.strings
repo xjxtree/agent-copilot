@@ -258,6 +258,7 @@
 "taskCockpit.score.readiness" = "就绪度";
 "taskCockpit.score.routing" = "路由";
 "taskCockpit.recommendation.title" = "候选路径";
+"taskCockpit.candidates.title" = "最匹配的候选技能";
 "taskCockpit.reasons.title" = "关键原因";
 "taskCockpit.reasons.empty" = "未返回可读的推荐原因。";
 "taskCockpit.reason.readinessBlocked" = "任务证据不足，暂不能放心交给 agent。";

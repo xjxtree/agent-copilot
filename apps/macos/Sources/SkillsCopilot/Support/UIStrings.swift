@@ -798,6 +798,7 @@ enum UIStrings {
     static var taskCockpitReadinessShort: String { text("taskCockpit.score.readiness", "Readiness") }
     static var taskCockpitRoutingShort: String { text("taskCockpit.score.routing", "Routing") }
     static var taskCockpitRecommendationTitle: String { text("taskCockpit.recommendation.title", "Candidate path") }
+    static var taskCockpitCandidateAlternativesTitle: String { text("taskCockpit.candidates.title", "Closest skill candidates") }
     static var taskCockpitReasonsTitle: String { text("taskCockpit.reasons.title", "Key reasons") }
     static var taskCockpitNoReasons: String { text("taskCockpit.reasons.empty", "No readable route reasons were returned.") }
     static var taskCockpitReasonReadinessBlocked: String { text("taskCockpit.reason.readinessBlocked", "There is not enough local fit evidence for a confident handoff.") }

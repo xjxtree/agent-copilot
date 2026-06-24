@@ -877,6 +877,13 @@ private struct TaskCockpitDecisionModel {
         return Array(Self.uniqueMeaningful(values).prefix(2))
     }
 
+    var candidateAlternatives: [String] {
+        guard hasRouteAmbiguity else { return [] }
+        return Array(uniqueCandidateRows.prefix(3).enumerated()).map { index, row in
+            candidateAlternativeLine(index: index, row: row)
+        }
+    }
+
     var nextStep: String {
         switch verdict {
         case .ready:
@@ -908,6 +915,47 @@ private struct TaskCockpitDecisionModel {
             || topRoute != nil
             || topSkill != nil
             || topAgent != nil
+    }
+
+    private var hasRouteAmbiguity: Bool {
+        guard uniqueCandidateRows.count > 1 else { return false }
+        let values = reasons
+            + result.blockerRows.flatMap { [$0.title, $0.detail] }
+            + result.gapRows.flatMap { [$0.title, $0.detail] }
+            + result.routeCandidates.flatMap(\.reasons)
+        return values.contains { value in
+            let normalized = value.lowercased()
+            return normalized.contains("small score margin")
+                || normalized.contains("close or overlapping alternatives")
+                || normalized.contains("nearby routes")
+                || (normalized.contains("within") && normalized.contains("candidate"))
+                || normalized.contains("相近候选")
+                || normalized.contains("候选路径相近")
+        }
+    }
+
+    private var uniqueCandidateRows: [TaskCockpitCandidateRow] {
+        let rows = result.skillCandidates.count > 1 ? result.skillCandidates : result.routeCandidates
+        var seen = Set<String>()
+        var unique: [TaskCockpitCandidateRow] = []
+        for row in rows {
+            let name = row.skill?.name ?? row.title
+            let key = "\(row.agent ?? ""):\(name)".lowercased()
+            guard seen.insert(key).inserted else { continue }
+            unique.append(row)
+        }
+        return unique
+    }
+
+    private func candidateAlternativeLine(index: Int, row: TaskCockpitCandidateRow) -> String {
+        let agent = row.agent.map(DisplayText.agent)
+        let name = row.skill?.name ?? row.title
+        let score = row.routingScore ?? row.readinessScore ?? row.score
+        let scoreText = score.map { " · \(UIStrings.taskCockpitRoutingShort) \($0)" } ?? ""
+        if let agent, !agent.isEmpty {
+            return "\(index + 1). \(agent) · \(name)\(scoreText)"
+        }
+        return "\(index + 1). \(name)\(scoreText)"
     }
 
     private var userBlockerRows: [TaskCockpitContextRow] {
@@ -964,6 +1012,9 @@ private struct TaskCockpitDecisionModel {
             return UIStrings.taskCockpitReasonNetworkDeclared
         }
         if normalized.contains("close or overlapping alternatives") {
+            return UIStrings.taskCockpitReasonRouteAmbiguous
+        }
+        if normalized.contains("small score margin") {
             return UIStrings.taskCockpitReasonRouteAmbiguous
         }
         if normalized.contains("matched product/resource scope") {
@@ -1107,6 +1158,17 @@ private struct TaskCockpitDecisionSummaryCard: View {
 
                     ForEach(Array(model.keyReasons.enumerated()), id: \.offset) { _, reason in
                         PrivacyEvidenceLabel(value: reason, systemImage: reasonSystemImage, font: .callout, lineLimit: 2)
+                    }
+                }
+            }
+
+            if !model.candidateAlternatives.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(UIStrings.taskCockpitCandidateAlternativesTitle, systemImage: "list.bullet")
+                        .font(.callout.bold())
+
+                    ForEach(Array(model.candidateAlternatives.enumerated()), id: \.offset) { _, candidate in
+                        PrivacyEvidenceLabel(value: candidate, systemImage: "chevron.right.circle", font: .callout, lineLimit: 1)
                     }
                 }
             }
