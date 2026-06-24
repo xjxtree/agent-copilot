@@ -451,7 +451,7 @@ private struct TaskCockpitStageProgressView: View {
             ProgressView(value: snapshot.estimatedProgress)
                 .controlSize(.small)
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], alignment: .leading, spacing: 8) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 8)], alignment: .leading, spacing: 8) {
                 ForEach(snapshot.stageRows) { row in
                     TaskCockpitStageTile(row: row)
                 }
@@ -548,14 +548,11 @@ private struct TaskCockpitStageTile: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(row.title)
                     .font(.caption.bold())
-                    .lineLimit(1)
+                    .lineLimit(2)
                 Label(Self.stateTitle(row.state), systemImage: stateSystemImage(row.state))
                     .font(.caption2)
                     .foregroundStyle(stateForegroundStyle(row.state))
                     .lineLimit(1)
-                if !row.detail.isEmpty {
-                    PrivacyEvidenceText(value: row.detail, font: .caption2, lineLimit: 2)
-                }
             }
             Spacer(minLength: 4)
             VStack(alignment: .trailing, spacing: 2) {
@@ -575,7 +572,7 @@ private struct TaskCockpitStageTile: View {
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 8)
-        .frame(minHeight: 68, alignment: .center)
+        .frame(minHeight: 58, alignment: .center)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.32), in: RoundedRectangle(cornerRadius: 6))
         .accessibilityElement(children: .combine)
@@ -1158,8 +1155,9 @@ private struct TaskCockpitTechnicalDiagnosticsView: View {
                 result: result
             )
 
-            if let fallbackReason = result.fallbackReason, !fallbackReason.isEmpty {
-                PrivacyEvidenceLabel(value: fallbackReason, systemImage: "info.circle", font: .callout, lineLimit: 3)
+            if let fallbackReason = result.fallbackReason,
+               let displayFallbackReason = TaskCockpitDecisionModel.displayText(fallbackReason) {
+                PrivacyEvidenceLabel(value: displayFallbackReason, systemImage: "info.circle", font: .callout, lineLimit: 2)
             }
 
             TaskCockpitMatchingProcessView(
