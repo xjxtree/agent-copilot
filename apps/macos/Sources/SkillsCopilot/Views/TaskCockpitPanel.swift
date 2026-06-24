@@ -19,21 +19,7 @@ struct TaskPreflightPreviewSheet: View {
 
             HStack(alignment: .top, spacing: 12) {
                 ScrollView {
-                    TaskCockpitPanel(
-                        taskText: $store.taskCockpitText,
-                        currentTaskText: store.selectedTaskCockpitInput,
-                        result: store.taskCockpitResult,
-                        isBuilding: store.isBuildingTaskCockpit,
-                        operationState: store.taskCockpitOperationState,
-                        onBuild: {
-                            Task {
-                                await store.buildTaskCockpit()
-                            }
-                        },
-                        onCancel: {
-                            store.cancelTaskCockpitBuild()
-                        }
-                    )
+                    TaskPreflightEditorPane(historySelectionID: store.selectedTaskCockpitHistoryID)
                 }
                 .frame(minWidth: 640, maxWidth: .infinity)
 
@@ -49,6 +35,72 @@ struct TaskPreflightPreviewSheet: View {
         }
         .padding(16)
         .frame(minWidth: 950, idealWidth: 1_020, minHeight: 620, alignment: .topLeading)
+    }
+}
+
+private struct TaskPreflightEditorPane: View {
+    @EnvironmentObject private var store: SkillStore
+    @State private var draftTaskText = ""
+    @State private var hasLoadedInitialDraft = false
+    let historySelectionID: TaskCockpitHistoryRecord.ID?
+
+    var body: some View {
+        TaskCockpitPanel(
+            taskText: $draftTaskText,
+            currentTaskText: effectiveTaskText,
+            result: displayedResult,
+            isBuilding: displayedIsBuilding,
+            operationState: displayedOperationState,
+            onBuild: {
+                Task {
+                    syncDraftToStore()
+                    await store.buildTaskCockpit()
+                }
+            },
+            onCancel: {
+                store.cancelTaskCockpitBuild()
+            }
+        )
+        .onAppear {
+            guard !hasLoadedInitialDraft else { return }
+            draftTaskText = store.taskCockpitText
+            hasLoadedInitialDraft = true
+        }
+        .onDisappear {
+            syncDraftToStore()
+        }
+        .onChange(of: historySelectionID) { _ in
+            draftTaskText = store.taskCockpitText
+        }
+    }
+
+    private var effectiveTaskText: String {
+        let trimmedDraft = draftTaskText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedDraft.isEmpty {
+            return draftTaskText
+        }
+        return store.selectedCrossAgentReadinessInput
+    }
+
+    private var isDraftSyncedWithStore: Bool {
+        draftTaskText == store.taskCockpitText
+    }
+
+    private var displayedResult: TaskCockpitResult? {
+        isDraftSyncedWithStore ? store.taskCockpitResult : nil
+    }
+
+    private var displayedIsBuilding: Bool {
+        isDraftSyncedWithStore && store.isBuildingTaskCockpit
+    }
+
+    private var displayedOperationState: TaskCockpitOperationState {
+        isDraftSyncedWithStore ? store.taskCockpitOperationState : .idle
+    }
+
+    private func syncDraftToStore() {
+        guard store.taskCockpitText != draftTaskText else { return }
+        store.taskCockpitText = draftTaskText
     }
 }
 
@@ -644,7 +696,7 @@ private struct TaskCockpitResultView: View {
                 .padding(.top, 8)
             } label: {
                 Label(UIStrings.taskCockpitDiagnosticsTitle, systemImage: "stethoscope")
-                    .font(.callout.bold())
+                    .font(.caption.bold())
                     .foregroundStyle(.secondary)
             }
         }
@@ -723,29 +775,24 @@ private struct TaskCockpitDecisionModel {
         if result.isUnavailable {
             return .unavailable
         }
-        if userBlockerCount > 0 || scoreIsBlocked(readinessScore) {
+        if !hasCandidatePath {
             return .blocked
         }
-        if gapCount > 0 || scoreNeedsReview(readinessScore) || scoreNeedsReview(routingScore) {
+        if userBlockerCount > 0
+            || gapCount > 0
+            || scoreNeedsReview(readinessScore)
+            || scoreNeedsReview(routingScore)
+            || reviewRiskCount > 0
+        {
             return .needsReview
         }
         return .ready
     }
 
-    var taskLabel: String {
-        if !result.filters.taskText.isEmpty {
-            return result.filters.taskText
-        }
-        if !result.summary.taskText.isEmpty {
-            return result.summary.taskText
-        }
-        return UIStrings.unknown
-    }
-
     var hasReliableRecommendation: Bool {
         switch verdict {
         case .ready, .needsReview:
-            return recommendedAgent != UIStrings.unknown || recommendedSkill != UIStrings.unknown
+            return hasCandidatePath
         case .blocked, .unavailable:
             return false
         }
@@ -798,6 +845,10 @@ private struct TaskCockpitDecisionModel {
         return userBlockerRows.count
     }
 
+    var reviewRiskCount: Int {
+        reviewRiskRows.count
+    }
+
     var showsPartialNotice: Bool {
         result.recoveryDiagnosticReason != nil && !result.isUnavailable
     }
@@ -815,7 +866,7 @@ private struct TaskCockpitDecisionModel {
     }
 
     var attentionRows: [TaskCockpitContextRow] {
-        Array((userBlockerRows + result.gapRows).prefix(3))
+        Array((userBlockerRows + reviewRiskRows + result.gapRows).prefix(2))
     }
 
     var keyReasons: [String] {
@@ -826,7 +877,7 @@ private struct TaskCockpitDecisionModel {
             ].compactMap(\.self)
         }
         values.append(contentsOf: reasons)
-        return Array(Self.uniqueMeaningful(values).prefix(3))
+        return Array(Self.uniqueMeaningful(values).prefix(2))
     }
 
     var nextStep: String {
@@ -854,15 +905,28 @@ private struct TaskCockpitDecisionModel {
         result.agentCandidates.first
     }
 
+    private var hasCandidatePath: Bool {
+        recommendedAgent != UIStrings.unknown
+            || recommendedSkill != UIStrings.unknown
+            || topRoute != nil
+            || topSkill != nil
+            || topAgent != nil
+    }
+
     private var userBlockerRows: [TaskCockpitContextRow] {
         result.blockerRows.filter { row in
-            !Self.isInternalBoundary(row.title) && !Self.isInternalBoundary(row.detail)
+            !Self.isInternalBoundary(row.title)
+                && !Self.isInternalBoundary(row.detail)
+                && !Self.isReviewOnlyRisk(row)
         }
     }
 
-    private func scoreIsBlocked(_ score: Int?) -> Bool {
-        guard let score else { return false }
-        return score < 40
+    private var reviewRiskRows: [TaskCockpitContextRow] {
+        result.blockerRows.filter { row in
+            !Self.isInternalBoundary(row.title)
+                && !Self.isInternalBoundary(row.detail)
+                && Self.isReviewOnlyRisk(row)
+        }
     }
 
     private func scoreNeedsReview(_ score: Int?) -> Bool {
@@ -905,13 +969,35 @@ private struct TaskCockpitDecisionModel {
         if normalized.contains("close or overlapping alternatives") {
             return UIStrings.taskCockpitReasonRouteAmbiguous
         }
+        if normalized.contains("matched product/resource scope") {
+            return UIStrings.taskCockpitReasonProductMatched
+        }
+        if normalized.contains("product/resource mismatch") {
+            return UIStrings.taskCockpitReasonProductMismatch
+        }
         if normalized.contains("duplicate_name") || normalized.contains("cross-agent analysis") {
-            return UIStrings.taskCockpitReasonCrossAgentDuplicate
+            return nil
         }
         if normalized.contains("task fit is weak") {
             return UIStrings.taskCockpitReasonTaskFitWeak
         }
         return trimmed
+    }
+
+    private static func isReviewOnlyRisk(_ row: TaskCockpitContextRow) -> Bool {
+        [row.title, row.detail, row.status, row.severity, row.source]
+            .compactMap(\.self)
+            .contains { value in
+                let normalized = value.lowercased()
+                return normalized.contains("permissions.exec-needs-human")
+                    || normalized.contains("permissions.network-declared")
+                    || normalized.contains("may execute commands")
+                    || normalized.contains("execute commands")
+                    || normalized.contains("network access")
+                    || normalized.contains("confirm destination")
+                    || normalized.contains("人工确认")
+                    || normalized.contains("网络访问")
+            }
     }
 
     fileprivate static func isInternalBoundary(_ value: String) -> Bool {
@@ -922,9 +1008,24 @@ private struct TaskCockpitDecisionModel {
             || normalized.contains("provider not sent")
             || normalized.contains("task cockpit combined")
             || normalized.contains("evaluated the top")
+            || normalized.contains("matched task term")
+            || normalized.contains("description evidence")
+            || normalized.contains("rank ")
+            || normalized.contains("top route leads")
+            || normalized.contains("only one visible route candidate")
+            || normalized.contains("confidence is below readiness")
+            || normalized.contains("no candidate-level blockers")
+            || normalized.contains("no likely wrong-pick risk")
             || normalized.contains("skipped by the cockpit request filters")
             || normalized.contains("session review row")
             || normalized.contains("provider observability row")
+            || normalized.contains("cross-agent analysis")
+            || normalized.contains("duplicate_name")
+            || normalized.contains("duplicate-name")
+            || normalized.contains("cross-agent duplicate")
+            || normalized.contains("source overlap")
+            || normalized.contains("same-name")
+            || normalized.contains("overlap signals")
             || normalized.contains("provider-observability context was skipped")
             || normalized.contains("remediation context was skipped")
             || normalized.contains("session-review context was skipped")
@@ -992,10 +1093,10 @@ private struct TaskCockpitDecisionSummaryCard: View {
             }
 
             if model.hasReliableRecommendation {
-                DetailMetricGrid(maxColumns: 2, minColumnWidth: 220, spacing: 8) {
-                    SummaryChip(title: UIStrings.taskCockpitRecommendedAgent, value: model.recommendedAgent, systemImage: "person.crop.circle", valueLineLimit: 1)
-                    SummaryChip(title: UIStrings.taskCockpitRecommendedSkill, value: model.recommendedSkill, systemImage: "doc.text", valueLineLimit: 1)
-                }
+                Label(model.recommendationLine, systemImage: "arrow.triangle.branch")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
             } else {
                 Label(UIStrings.taskCockpitNoReliableRecommendation, systemImage: "hand.raised")
                     .font(.callout)
@@ -1045,16 +1146,6 @@ private struct TaskCockpitTechnicalDiagnosticsView: View {
     let operationState: TaskCockpitOperationState
     let isBuilding: Bool
 
-    private var taskLabel: String {
-        if !result.filters.taskText.isEmpty {
-            return result.filters.taskText
-        }
-        if !result.summary.taskText.isEmpty {
-            return result.summary.taskText
-        }
-        return UIStrings.unknown
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(UIStrings.taskCockpitDiagnosticsSummary)
@@ -1071,41 +1162,12 @@ private struct TaskCockpitTechnicalDiagnosticsView: View {
                 PrivacyEvidenceLabel(value: fallbackReason, systemImage: "info.circle", font: .callout, lineLimit: 3)
             }
 
-            DetailMetricGrid {
-                SummaryChip(title: UIStrings.taskCockpitRoutes, value: "\(routeCount)", systemImage: "point.3.connected.trianglepath.dotted")
-                SummaryChip(title: UIStrings.taskCockpitAgents, value: "\(agentCount)", systemImage: "person.3")
-                SummaryChip(title: UIStrings.taskCockpitSkills, value: "\(skillCount)", systemImage: "doc.text")
-                SummaryChip(title: UIStrings.taskCockpitReadinessSignals, value: "\(readinessSignalCount)", systemImage: "gauge.medium")
-                SummaryChip(title: UIStrings.taskReadinessGaps, value: "\(gapCount)", systemImage: "puzzlepiece.extension")
-                SummaryChip(title: UIStrings.taskReadinessBlockers, value: "\(blockerCount)", systemImage: "exclamationmark.octagon")
-            }
-
-            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
-                MetadataRow(label: UIStrings.routingAccuracyGeneratedBy, value: result.generatedBy)
-                MetadataRow(label: UIStrings.routingAccuracyCatalog, value: result.catalogAvailable ? UIStrings.routingAccuracyAvailable : UIStrings.routingAccuracyUnavailableShort)
-                MetadataRow(label: UIStrings.taskReadinessTask, value: taskLabel)
-                MetadataRow(label: UIStrings.taskCockpitRecommendedAgent, value: result.summary.recommendedAgent.map(DisplayText.agent) ?? UIStrings.unknown)
-                MetadataRow(label: UIStrings.taskCockpitRecommendedSkill, value: result.summary.recommendedSkillName ?? UIStrings.unknown)
-                MetadataRow(label: UIStrings.crossAgentReadinessReadinessScore, value: result.summary.readinessScore.map(String.init) ?? UIStrings.unknown)
-                MetadataRow(label: UIStrings.crossAgentReadinessRoutingScore, value: result.summary.routingScore.map(String.init) ?? UIStrings.unknown)
-                if let promptRequest = result.promptRequest {
-                    MetadataRow(label: UIStrings.routingAccuracyPromptRequest, value: promptRequestLabel(promptRequest))
-                }
-            }
-
-            TaskCockpitContextList(title: UIStrings.taskCockpitSections, empty: UIStrings.taskCockpitNoRows, rows: result.cockpitSections, systemImage: "checklist")
-            TaskCockpitCandidateList(title: UIStrings.taskCockpitTasks, empty: UIStrings.taskCockpitNoRows, rows: result.taskRows, systemImage: "text.badge.checkmark")
-            TaskCockpitCandidateList(title: UIStrings.taskCockpitRoutes, empty: UIStrings.taskCockpitNoRows, rows: result.routeCandidates, systemImage: "point.3.connected.trianglepath.dotted")
-            TaskCockpitCandidateList(title: UIStrings.taskCockpitAgents, empty: UIStrings.taskCockpitNoRows, rows: result.agentCandidates, systemImage: "person.3")
-            TaskCockpitCandidateList(title: UIStrings.taskCockpitSkills, empty: UIStrings.taskCockpitNoRows, rows: result.skillCandidates, systemImage: "doc.text")
-            TaskCockpitContextList(title: UIStrings.taskCockpitReadinessSignals, empty: UIStrings.taskCockpitNoRows, rows: result.readinessSignals, systemImage: "gauge.medium")
-            TaskCockpitContextList(title: UIStrings.taskCockpitSessionContext, empty: UIStrings.taskCockpitNoRows, rows: result.sessionReviewContext, systemImage: "text.bubble")
-            TaskCockpitContextList(title: UIStrings.taskCockpitProviderContext, empty: UIStrings.taskCockpitNoRows, rows: result.providerObservabilityContext, systemImage: "network")
-            TaskCockpitContextList(title: UIStrings.taskCockpitRemediationContext, empty: UIStrings.taskCockpitNoRows, rows: result.remediationContext, systemImage: "wrench.and.screwdriver")
-            TaskCockpitContextList(title: UIStrings.taskReadinessGaps, empty: UIStrings.taskReadinessNoGaps, rows: result.gapRows, systemImage: "puzzlepiece.extension")
-            TaskCockpitContextList(title: UIStrings.taskReadinessBlockers, empty: UIStrings.taskReadinessNoBlockers, rows: result.blockerRows, systemImage: "exclamationmark.octagon")
-            TaskCockpitEvidenceList(evidence: result.evidenceReferences)
-            TaskCockpitSafetyList(safety: result.safetyFlags)
+            TaskCockpitMatchingProcessView(
+                result: result,
+                routeCount: routeCount,
+                skillCount: skillCount,
+                agentCount: agentCount
+            )
         }
     }
 
@@ -1133,10 +1195,70 @@ private struct TaskCockpitTechnicalDiagnosticsView: View {
         result.summary.blockerCount > 0 ? result.summary.blockerCount : result.blockerRows.count
     }
 
-    private func promptRequestLabel(_ promptRequest: ProviderObservabilityPromptRequest) -> String {
-        let state = promptRequest.enabled ? UIStrings.llmEnabled : UIStrings.llmDisabled
-        let copy = promptRequest.copyOnly ? UIStrings.llmPromptCopyOnly : UIStrings.llmSkillAnalysisEnabledUnsafe
-        return "\(promptRequest.requestKind) · \(state) · \(copy)"
+}
+
+private struct TaskCockpitMatchingProcessView: View {
+    let result: TaskCockpitResult
+    let routeCount: Int
+    let skillCount: Int
+    let agentCount: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(UIStrings.taskCockpitDiagnosticsProcess)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 7) {
+                PrivacyEvidenceLabel(
+                    value: scanSummary,
+                    systemImage: "line.3.horizontal.decrease.circle",
+                    font: .callout,
+                    lineLimit: 2
+                )
+
+                if let topRoute = result.routeCandidates.first {
+                    PrivacyEvidenceLabel(
+                        value: topRouteSummary(topRoute),
+                        systemImage: "arrow.triangle.branch",
+                        font: .callout,
+                        lineLimit: 2
+                    )
+                }
+
+                ForEach(Array(processNotes.enumerated()), id: \.offset) { _, note in
+                    PrivacyEvidenceLabel(
+                        value: note,
+                        systemImage: "text.bubble",
+                        font: .callout,
+                        lineLimit: 2
+                    )
+                }
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 8))
+        }
+    }
+
+    private var scanSummary: String {
+        "\(UIStrings.taskCockpitDiagnosticsScanned): \(routeCount) \(UIStrings.taskCockpitRoutes), \(skillCount) \(UIStrings.taskCockpitSkills), \(agentCount) \(UIStrings.taskCockpitAgents)"
+    }
+
+    private func topRouteSummary(_ row: TaskCockpitCandidateRow) -> String {
+        let score = row.routingScore ?? row.readinessScore ?? row.score
+        let scoreText = score.map { " · \($0)" } ?? ""
+        return "\(UIStrings.taskCockpitDiagnosticsTopRoute): \(row.title)\(scoreText)"
+    }
+
+    private var processNotes: [String] {
+        var values: [String] = []
+        if let topRoute = result.routeCandidates.first {
+            values.append(contentsOf: topRoute.reasons)
+        }
+        values.append(contentsOf: result.gapRows.map(\.detail))
+        values.append(contentsOf: result.blockerRows.map(\.detail))
+        return Array(values.compactMap(TaskCockpitDecisionModel.displayText).prefix(3))
     }
 }
 

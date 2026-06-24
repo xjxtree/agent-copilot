@@ -1862,35 +1862,242 @@ pub(crate) fn empty_task_readiness_result(
 
 pub(crate) fn task_readiness_terms(task: &str) -> Vec<String> {
     let mut seen = BTreeMap::new();
-    task.split(|ch: char| !ch.is_ascii_alphanumeric())
-        .map(str::trim)
-        .filter(|term| term.len() >= 3)
-        .map(|term| term.to_ascii_lowercase())
-        .filter(|term| {
-            !matches!(
-                term.as_str(),
-                "the"
-                    | "and"
-                    | "for"
-                    | "with"
-                    | "from"
-                    | "that"
-                    | "this"
-                    | "into"
-                    | "using"
-                    | "need"
-                    | "task"
-            )
-        })
-        .filter(|term| {
-            if let std::collections::btree_map::Entry::Vacant(entry) = seen.entry(term.clone()) {
-                entry.insert(());
-                true
-            } else {
-                false
-            }
-        })
-        .collect()
+    let mut terms = Vec::new();
+    let mut ascii_run = String::new();
+    let mut cjk_run = String::new();
+
+    for ch in task.chars() {
+        if ch.is_ascii_alphanumeric() {
+            task_readiness_flush_cjk_terms(&mut cjk_run, &mut seen, &mut terms);
+            ascii_run.push(ch);
+        } else if task_readiness_is_cjk_char(ch) {
+            task_readiness_flush_ascii_term(&mut ascii_run, &mut seen, &mut terms);
+            cjk_run.push(ch);
+        } else {
+            task_readiness_flush_ascii_term(&mut ascii_run, &mut seen, &mut terms);
+            task_readiness_flush_cjk_terms(&mut cjk_run, &mut seen, &mut terms);
+        }
+    }
+    task_readiness_flush_ascii_term(&mut ascii_run, &mut seen, &mut terms);
+    task_readiness_flush_cjk_terms(&mut cjk_run, &mut seen, &mut terms);
+
+    let base_terms = terms.clone();
+    for term in base_terms {
+        task_readiness_push_expanded_terms(&term, &mut seen, &mut terms);
+    }
+    terms
+}
+
+fn task_readiness_flush_ascii_term(
+    run: &mut String,
+    seen: &mut BTreeMap<String, ()>,
+    terms: &mut Vec<String>,
+) {
+    if run.is_empty() {
+        return;
+    }
+    let normalized = run.to_ascii_lowercase();
+    run.clear();
+    if normalized.len() < 3 || task_readiness_is_stopword(&normalized) {
+        return;
+    }
+    task_readiness_push_term(normalized, seen, terms);
+}
+
+fn task_readiness_flush_cjk_terms(
+    run: &mut String,
+    seen: &mut BTreeMap<String, ()>,
+    terms: &mut Vec<String>,
+) {
+    if run.is_empty() {
+        return;
+    }
+    let chars = run.chars().collect::<Vec<_>>();
+    run.clear();
+    if chars.len() < 2 {
+        return;
+    }
+    if chars.len() <= 12 {
+        task_readiness_push_term(chars.iter().collect::<String>(), seen, terms);
+    }
+    for width in 2..=usize::min(4, chars.len()) {
+        for window in chars.windows(width) {
+            task_readiness_push_term(window.iter().collect::<String>(), seen, terms);
+        }
+    }
+}
+
+fn task_readiness_push_expanded_terms(
+    term: &str,
+    seen: &mut BTreeMap<String, ()>,
+    terms: &mut Vec<String>,
+) {
+    if matches!(term, "aliyun" | "alibaba" | "alibabacloud")
+        || term.contains("阿里云")
+        || term == "阿里"
+        || term == "里云"
+    {
+        for expanded in ["alibabacloud", "aliyun", "alibaba"] {
+            task_readiness_push_term(expanded.to_string(), seen, terms);
+        }
+    }
+
+    if matches!(term, "alert" | "alerts" | "alarm" | "alarms" | "cms")
+        || term.contains("报警")
+        || term.contains("告警")
+    {
+        for expanded in ["alert", "alerts", "alarm", "cms", "报警", "告警"] {
+            task_readiness_push_term(expanded.to_string(), seen, terms);
+        }
+    }
+
+    if matches!(term, "metric" | "metrics" | "monitor" | "monitoring")
+        || term.contains("指标")
+        || term.contains("监控")
+    {
+        for expanded in ["metric", "metrics", "monitor", "monitoring", "指标", "监控"] {
+            task_readiness_push_term(expanded.to_string(), seen, terms);
+        }
+    }
+
+    if matches!(term, "error" | "errors" | "exception" | "exceptions")
+        || term.contains("错误")
+        || term.contains("异常")
+    {
+        for expanded in ["error", "errors", "exception", "异常", "错误"] {
+            task_readiness_push_term(expanded.to_string(), seen, terms);
+        }
+    }
+
+    if matches!(term, "alb" | "slb") || term.contains("负载均衡") {
+        for expanded in ["alb", "slb", "load", "balancer", "负载", "均衡", "负载均衡"] {
+            task_readiness_push_term(expanded.to_string(), seen, terms);
+        }
+    }
+
+    if matches!(term, "ecs") || term.contains("云服务器") || term.contains("服务器") {
+        for expanded in [
+            "ecs",
+            "elastic",
+            "compute",
+            "server",
+            "instance",
+            "云服务器",
+            "服务器",
+        ] {
+            task_readiness_push_term(expanded.to_string(), seen, terms);
+        }
+    }
+
+    if matches!(term, "disk" | "disks" | "ebs" | "volume" | "storage")
+        || term.contains("磁盘")
+        || term.contains("硬盘")
+        || term.contains("存储")
+    {
+        for expanded in [
+            "disk", "disks", "ebs", "volume", "storage", "磁盘", "硬盘", "存储",
+        ] {
+            task_readiness_push_term(expanded.to_string(), seen, terms);
+        }
+    }
+
+    if matches!(
+        term,
+        "load" | "usage" | "utilization" | "metric" | "metrics"
+    ) || term.contains("负载")
+        || term.contains("使用率")
+        || term.contains("利用率")
+    {
+        for expanded in [
+            "load",
+            "usage",
+            "utilization",
+            "metric",
+            "metrics",
+            "负载",
+            "使用率",
+            "利用率",
+        ] {
+            task_readiness_push_term(expanded.to_string(), seen, terms);
+        }
+    }
+
+    if matches!(
+        term,
+        "analysis" | "analyze" | "diagnose" | "diagnosis" | "status" | "overview"
+    ) || term.contains("分析")
+        || term.contains("诊断")
+        || term.contains("情况")
+        || term.contains("状态")
+    {
+        for expanded in [
+            "analysis",
+            "analyze",
+            "diagnose",
+            "diagnosis",
+            "monitor",
+            "metric",
+            "metrics",
+            "status",
+            "overview",
+            "分析",
+            "诊断",
+            "情况",
+            "状态",
+        ] {
+            task_readiness_push_term(expanded.to_string(), seen, terms);
+        }
+    }
+
+    if matches!(term, "query" | "list" | "view" | "describe" | "history")
+        || term.contains("查看")
+        || term.contains("查询")
+        || term.contains("列表")
+        || term.contains("历史")
+    {
+        for expanded in ["query", "list", "view", "describe"] {
+            task_readiness_push_term(expanded.to_string(), seen, terms);
+        }
+    }
+}
+
+fn task_readiness_push_term(
+    term: String,
+    seen: &mut BTreeMap<String, ()>,
+    terms: &mut Vec<String>,
+) {
+    if let std::collections::btree_map::Entry::Vacant(entry) = seen.entry(term.clone()) {
+        entry.insert(());
+        terms.push(term);
+    }
+}
+
+fn task_readiness_is_stopword(term: &str) -> bool {
+    matches!(
+        term,
+        "the"
+            | "and"
+            | "for"
+            | "with"
+            | "from"
+            | "that"
+            | "this"
+            | "into"
+            | "using"
+            | "need"
+            | "task"
+    )
+}
+
+fn task_readiness_is_cjk_char(ch: char) -> bool {
+    let code = ch as u32;
+    (0x3400..=0x4DBF).contains(&code)
+        || (0x4E00..=0x9FFF).contains(&code)
+        || (0xF900..=0xFAFF).contains(&code)
+        || (0x20000..=0x2A6DF).contains(&code)
+        || (0x2A700..=0x2B73F).contains(&code)
+        || (0x2B740..=0x2B81F).contains(&code)
+        || (0x2B820..=0x2CEAF).contains(&code)
 }
 
 pub(crate) fn task_readiness_candidate_scan_limit(limit: usize, requested_count: usize) -> usize {
@@ -1913,18 +2120,351 @@ pub(crate) fn task_readiness_record_affinity(skill: &SkillRecord, task_terms: &[
         skill.id, skill.definition_id, skill.name, skill.agent, skill.scope
     )
     .to_ascii_lowercase();
-    let mut score = task_terms
+    let matched_terms = task_terms
         .iter()
         .filter(|term| searchable.contains(term.as_str()))
-        .count() as u16
-        * 12;
+        .cloned()
+        .collect::<Vec<_>>();
+    let domain_signal = task_readiness_domain_signal(task_terms, &searchable);
+    let mut score = task_readiness_weighted_match_score(&matched_terms).clamp(0, 240) as u16;
+    if domain_signal.has_product_match() {
+        score = score.saturating_add(28);
+    } else if !domain_signal.incompatible_candidate_domains.is_empty() {
+        score = score.saturating_sub(30);
+    }
     if skill.enabled {
-        score += 4;
+        score = score.saturating_add(4);
     }
     if skill.state == "loaded" {
-        score += 3;
+        score = score.saturating_add(3);
     }
     score
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct TaskReadinessDomainSignal {
+    task_domains: BTreeSet<&'static str>,
+    candidate_domains: BTreeSet<&'static str>,
+    matched_domains: BTreeSet<&'static str>,
+    compatible_domains: BTreeSet<&'static str>,
+    incompatible_candidate_domains: BTreeSet<&'static str>,
+}
+
+impl TaskReadinessDomainSignal {
+    fn has_product_match(&self) -> bool {
+        !self.matched_domains.is_empty() || !self.compatible_domains.is_empty()
+    }
+}
+
+fn task_readiness_weighted_match_score(matched_terms: &[String]) -> i16 {
+    matched_terms
+        .iter()
+        .map(|term| task_readiness_term_weight(term))
+        .sum::<i16>()
+        .min(45)
+}
+
+fn task_readiness_term_weight(term: &str) -> i16 {
+    let normalized = term.to_ascii_lowercase();
+    if task_readiness_is_generic_route_term(&normalized) {
+        return 3;
+    }
+    if task_readiness_is_product_or_resource_term(&normalized) {
+        return 14;
+    }
+    if matches!(
+        normalized.as_str(),
+        "metric"
+            | "metrics"
+            | "monitor"
+            | "monitoring"
+            | "alert"
+            | "alerts"
+            | "alarm"
+            | "alarms"
+            | "error"
+            | "errors"
+            | "exception"
+            | "exceptions"
+            | "usage"
+            | "utilization"
+    ) || normalized.contains("指标")
+        || normalized.contains("监控")
+        || normalized.contains("报警")
+        || normalized.contains("告警")
+        || normalized.contains("错误")
+        || normalized.contains("异常")
+        || normalized.contains("使用率")
+        || normalized.contains("利用率")
+    {
+        return 8;
+    }
+    6
+}
+
+fn task_readiness_is_generic_route_term(term: &str) -> bool {
+    matches!(
+        term,
+        "aliyun"
+            | "alibaba"
+            | "alibabacloud"
+            | "analysis"
+            | "analyze"
+            | "diagnose"
+            | "diagnosis"
+            | "query"
+            | "list"
+            | "view"
+            | "describe"
+            | "history"
+            | "status"
+            | "overview"
+            | "情况"
+            | "状态"
+            | "查看"
+            | "查询"
+            | "列表"
+            | "历史"
+    ) || term.contains("阿里")
+        || term.contains("里云")
+        || term.contains("分析")
+        || term.contains("诊断")
+}
+
+fn task_readiness_is_product_or_resource_term(term: &str) -> bool {
+    matches!(
+        term,
+        "ecs"
+            | "alb"
+            | "slb"
+            | "rds"
+            | "oss"
+            | "waf"
+            | "sls"
+            | "ebs"
+            | "disk"
+            | "disks"
+            | "volume"
+            | "storage"
+            | "analyticdb"
+            | "spark"
+            | "flink"
+            | "emr"
+            | "maxcompute"
+            | "odps"
+            | "polardb"
+            | "mongodb"
+            | "elasticsearch"
+            | "tair"
+            | "lindorm"
+            | "dataworks"
+            | "dts"
+            | "ddos"
+            | "ram"
+            | "vpc"
+            | "cdn"
+            | "cms"
+    ) || term.contains("云服务器")
+        || term.contains("服务器")
+        || term.contains("负载均衡")
+        || term.contains("磁盘")
+        || term.contains("硬盘")
+        || term.contains("存储")
+        || term.contains("分析型数据库")
+        || term.contains("云监控")
+}
+
+fn task_readiness_domain_signal(
+    task_terms: &[String],
+    searchable: &str,
+) -> TaskReadinessDomainSignal {
+    let task_domains = task_readiness_product_domains_from_terms(task_terms);
+    let candidate_domains = task_readiness_product_domains_from_text(searchable);
+    let task_capabilities = task_readiness_capabilities_from_terms(task_terms);
+    let mut matched_domains = task_domains
+        .intersection(&candidate_domains)
+        .copied()
+        .collect::<BTreeSet<_>>();
+    let mut compatible_domains = BTreeSet::new();
+
+    if task_readiness_load_balancer_domains_compatible(&task_domains, &candidate_domains) {
+        compatible_domains.insert("load-balancer");
+    }
+    if task_capabilities.contains("monitoring")
+        && candidate_domains.contains("cms")
+        && task_readiness_candidate_has_no_exclusive_product_mismatch(
+            &task_domains,
+            &candidate_domains,
+        )
+    {
+        compatible_domains.insert("cms-monitoring");
+    }
+    if task_domains.contains("disk") && candidate_domains.contains("ebs") {
+        matched_domains.insert("disk");
+    }
+
+    let incompatible_candidate_domains = if task_domains.is_empty()
+        || candidate_domains.is_empty()
+        || !matched_domains.is_empty()
+        || !compatible_domains.is_empty()
+    {
+        BTreeSet::new()
+    } else {
+        candidate_domains.clone()
+    };
+
+    TaskReadinessDomainSignal {
+        task_domains,
+        candidate_domains,
+        matched_domains,
+        compatible_domains,
+        incompatible_candidate_domains,
+    }
+}
+
+fn task_readiness_product_domains_from_terms(terms: &[String]) -> BTreeSet<&'static str> {
+    let searchable = terms.join(" ").to_ascii_lowercase();
+    task_readiness_product_domains_from_text(&searchable)
+}
+
+fn task_readiness_product_domains_from_text(text: &str) -> BTreeSet<&'static str> {
+    let normalized = text.to_ascii_lowercase();
+    let mut domains = BTreeSet::new();
+    task_readiness_insert_domain_if(
+        &mut domains,
+        "ecs",
+        &normalized,
+        &["ecs", "elastic compute", "云服务器", "服务器"],
+    );
+    task_readiness_insert_domain_if(
+        &mut domains,
+        "alb",
+        &normalized,
+        &["alb", "application load balancer", "应用型负载均衡"],
+    );
+    task_readiness_insert_domain_if(
+        &mut domains,
+        "slb",
+        &normalized,
+        &["slb", "server load balancer", "负载均衡"],
+    );
+    task_readiness_insert_domain_if(
+        &mut domains,
+        "disk",
+        &normalized,
+        &["disk", "disks", "volume", "storage", "磁盘", "硬盘", "存储"],
+    );
+    task_readiness_insert_domain_if(
+        &mut domains,
+        "ebs",
+        &normalized,
+        &["ebs", "elastic block storage", "块存储"],
+    );
+    task_readiness_insert_domain_if(
+        &mut domains,
+        "cms",
+        &normalized,
+        &["cms", "cloudmonitor", "cloud monitor", "云监控"],
+    );
+    task_readiness_insert_domain_if(
+        &mut domains,
+        "analyticdb",
+        &normalized,
+        &["analyticdb", "分析型数据库"],
+    );
+    task_readiness_insert_domain_if(&mut domains, "spark", &normalized, &["spark"]);
+    task_readiness_insert_domain_if(&mut domains, "rds", &normalized, &["rds"]);
+    task_readiness_insert_domain_if(&mut domains, "oss", &normalized, &["oss"]);
+    task_readiness_insert_domain_if(&mut domains, "sls", &normalized, &["sls", "log service"]);
+    task_readiness_insert_domain_if(&mut domains, "waf", &normalized, &["waf"]);
+    task_readiness_insert_domain_if(&mut domains, "ddos", &normalized, &["ddos"]);
+    task_readiness_insert_domain_if(&mut domains, "ram", &normalized, &["ram"]);
+    task_readiness_insert_domain_if(&mut domains, "vpc", &normalized, &["vpc"]);
+    task_readiness_insert_domain_if(&mut domains, "cdn", &normalized, &["cdn"]);
+    task_readiness_insert_domain_if(&mut domains, "flink", &normalized, &["flink"]);
+    task_readiness_insert_domain_if(&mut domains, "emr", &normalized, &["emr"]);
+    task_readiness_insert_domain_if(&mut domains, "maxcompute", &normalized, &["maxcompute"]);
+    task_readiness_insert_domain_if(&mut domains, "odps", &normalized, &["odps"]);
+    task_readiness_insert_domain_if(&mut domains, "polardb", &normalized, &["polardb"]);
+    task_readiness_insert_domain_if(&mut domains, "mongodb", &normalized, &["mongodb"]);
+    task_readiness_insert_domain_if(
+        &mut domains,
+        "elasticsearch",
+        &normalized,
+        &["elasticsearch"],
+    );
+    task_readiness_insert_domain_if(&mut domains, "tair", &normalized, &["tair"]);
+    task_readiness_insert_domain_if(&mut domains, "lindorm", &normalized, &["lindorm"]);
+    task_readiness_insert_domain_if(&mut domains, "dataworks", &normalized, &["dataworks"]);
+    task_readiness_insert_domain_if(&mut domains, "dts", &normalized, &["dts"]);
+    domains
+}
+
+fn task_readiness_insert_domain_if(
+    domains: &mut BTreeSet<&'static str>,
+    domain: &'static str,
+    text: &str,
+    patterns: &[&str],
+) {
+    if patterns.iter().any(|pattern| text.contains(pattern)) {
+        domains.insert(domain);
+    }
+}
+
+fn task_readiness_capabilities_from_terms(terms: &[String]) -> BTreeSet<&'static str> {
+    let mut capabilities = BTreeSet::new();
+    for term in terms {
+        let normalized = term.to_ascii_lowercase();
+        if matches!(
+            normalized.as_str(),
+            "metric" | "metrics" | "monitor" | "monitoring" | "status" | "overview"
+        ) || normalized.contains("指标")
+            || normalized.contains("监控")
+        {
+            capabilities.insert("monitoring");
+        }
+        if matches!(
+            normalized.as_str(),
+            "alert" | "alerts" | "alarm" | "alarms" | "cms"
+        ) || normalized.contains("报警")
+            || normalized.contains("告警")
+        {
+            capabilities.insert("monitoring");
+            capabilities.insert("alert");
+        }
+        if matches!(
+            normalized.as_str(),
+            "error" | "errors" | "exception" | "exceptions"
+        ) || normalized.contains("错误")
+            || normalized.contains("异常")
+        {
+            capabilities.insert("monitoring");
+            capabilities.insert("error");
+        }
+    }
+    capabilities
+}
+
+fn task_readiness_load_balancer_domains_compatible(
+    task_domains: &BTreeSet<&'static str>,
+    candidate_domains: &BTreeSet<&'static str>,
+) -> bool {
+    (task_domains.contains("alb") || task_domains.contains("slb"))
+        && (candidate_domains.contains("alb") || candidate_domains.contains("slb"))
+}
+
+fn task_readiness_candidate_has_no_exclusive_product_mismatch(
+    task_domains: &BTreeSet<&'static str>,
+    candidate_domains: &BTreeSet<&'static str>,
+) -> bool {
+    candidate_domains
+        .iter()
+        .all(|domain| *domain == "cms" || task_domains.contains(domain))
+        || task_readiness_load_balancer_domains_compatible(task_domains, candidate_domains)
+}
+
+fn task_readiness_domain_list(domains: &BTreeSet<&'static str>) -> String {
+    domains.iter().copied().collect::<Vec<_>>().join(", ")
 }
 
 pub(crate) fn task_readiness_findings_by_instance(
@@ -2131,6 +2671,7 @@ pub(crate) fn task_readiness_candidate(
         .filter(|term| searchable.contains(term.as_str()))
         .cloned()
         .collect::<Vec<_>>();
+    let domain_signal = task_readiness_domain_signal(task_terms, &searchable);
     let mut match_reasons = Vec::new();
     if matched_terms.is_empty() {
         match_reasons.push(
@@ -2146,6 +2687,25 @@ pub(crate) fn task_readiness_candidate(
                 .map(|term| redact_for_llm_preview(term))
                 .collect::<Vec<_>>()
                 .join(", ")
+        ));
+    }
+    if domain_signal.has_product_match() {
+        let mut matched_domains = domain_signal.matched_domains.clone();
+        matched_domains.extend(domain_signal.compatible_domains.iter().copied());
+        match_reasons.push(format!(
+            "Matched product/resource scope: {}.",
+            task_readiness_domain_list(&matched_domains)
+        ));
+    } else if !domain_signal.incompatible_candidate_domains.is_empty() {
+        match_reasons.push(format!(
+            "Product/resource mismatch: task mentions {}; candidate scope is {}.",
+            task_readiness_domain_list(&domain_signal.task_domains),
+            task_readiness_domain_list(&domain_signal.incompatible_candidate_domains)
+        ));
+    } else if !domain_signal.task_domains.is_empty() && domain_signal.candidate_domains.is_empty() {
+        match_reasons.push(format!(
+            "Task product/resource terms detected ({}), but this candidate has no explicit product scope.",
+            task_readiness_domain_list(&domain_signal.task_domains)
         ));
     }
     if skill.description.trim().is_empty() {
@@ -2276,7 +2836,14 @@ pub(crate) fn task_readiness_candidate(
         signals.conflicts,
         signals.analysis_groups,
     );
-    let mut score = (matched_terms.len() as i16 * 12).min(40);
+    let mut score = task_readiness_weighted_match_score(&matched_terms);
+    if domain_signal.has_product_match() {
+        score += 22;
+    } else if !domain_signal.incompatible_candidate_domains.is_empty() {
+        score -= 45;
+    } else if !domain_signal.task_domains.is_empty() {
+        score -= 12;
+    }
     score += signals
         .quality
         .map(|quality| i16::from(quality.score) / 4)

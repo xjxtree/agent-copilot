@@ -3,7 +3,6 @@ import SwiftUI
 
 struct SidebarView: View {
     @EnvironmentObject private var store: SkillStore
-    @State private var isReportSheetPresented = false
     @State private var isPreflightSheetPresented = false
 
     var body: some View {
@@ -62,22 +61,13 @@ struct SidebarView: View {
             Divider()
                 .opacity(0.35)
 
-            SidebarFooterToolRow(
-                onOpenReport: {
-                    isReportSheetPresented = true
-                },
-                onOpenPreflight: {
-                    isPreflightSheetPresented = true
-                }
-            )
+            SidebarFooterToolRow {
+                isPreflightSheetPresented = true
+            }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
         }
         .navigationTitle(UIStrings.appTitle)
-        .sheet(isPresented: $isReportSheetPresented) {
-            LocalReportPreviewSheet(includeSelectedSkill: false)
-                .environmentObject(store)
-        }
         .sheet(isPresented: $isPreflightSheetPresented) {
             TaskPreflightPreviewSheet()
                 .environmentObject(store)
@@ -361,39 +351,17 @@ private enum SidebarNavigationMetricTone: Hashable {
 }
 
 private struct SidebarFooterToolRow: View {
-    @EnvironmentObject private var store: SkillStore
-    let onOpenReport: () -> Void
     let onOpenPreflight: () -> Void
 
     var body: some View {
-        HStack(spacing: 8) {
-            SidebarFooterToolButton(
-                title: UIStrings.text("sidebar.report.title", "Usage Report"),
-                subtitle: UIStrings.text("sidebar.report.subtitle", "Local export"),
-                systemImage: "square.and.arrow.down",
-                accent: .green,
-                badge: reportBadge,
-                action: onOpenReport
-            )
-
-            SidebarFooterToolButton(
-                title: UIStrings.taskCockpitTitle,
-                subtitle: UIStrings.text("sidebar.preflight.subtitle", "Read-only task check"),
-                systemImage: "checklist",
-                accent: .accentColor,
-                badge: UIStrings.text("sidebar.preflight.metric.readOnly", "Read-only"),
-                action: onOpenPreflight
-            )
-        }
-    }
-
-    private var reportBadge: String {
-        switch store.localReportFormat {
-        case .markdown:
-            return "MD"
-        case .json:
-            return "JSON"
-        }
+        SidebarFooterToolButton(
+            title: UIStrings.taskCockpitTitle,
+            subtitle: UIStrings.text("sidebar.preflight.subtitle", "Read-only task check"),
+            systemImage: "checklist",
+            accent: .accentColor,
+            badge: UIStrings.text("sidebar.preflight.metric.readOnly", "Read-only"),
+            action: onOpenPreflight
+        )
     }
 }
 

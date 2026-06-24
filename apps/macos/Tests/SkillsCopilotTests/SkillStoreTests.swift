@@ -64,6 +64,8 @@ struct SkillStoreTests {
         try await providerObservabilityUsesReadOnlyServiceContract()
         try await providerObservabilityFallsBackWhenMethodUnavailable()
         try await taskCockpitUsesReadOnlyServiceContract()
+        try await taskCockpitUsesGlobalScopeOutsideSkillDetail()
+        try await taskCockpitHistoryPersistsLocally()
         try await taskCockpitPreservesExactUserInputInServiceContract()
         try await taskCockpitWhitespaceOnlyInputUsesFallbackTask()
         try await taskCockpitFallsBackWhenMethodUnavailable()
@@ -1760,10 +1762,13 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let historyStore = makeTemporaryTaskCockpitHistoryStore()
+        defer { cleanupTaskCockpitHistoryStore(historyStore) }
+        let store = SkillStore(service: ServiceClient(), taskCockpitHistoryStore: historyStore)
         store.selectedSkillID = "beta"
         store.taskCockpitText = "Prepare local release audit work."
         await store.reload()
+        store.selectedSidebarSelection = .skill("beta")
         let snapshotCallsBeforeCockpit = countOccurrences("snapshot.", in: fake.calls())
         await store.buildTaskCockpit()
 
@@ -1801,7 +1806,7 @@ struct SkillStoreTests {
         let calls = fake.calls()
         try expectContains(calls, "task.buildCockpit", "Task cockpit should call the V2.65 task.buildCockpit method.")
         try expectContains(calls, "\"task\":\"Prepare local release audit work.\"", "Task cockpit should send task text.")
-        try expectContains(calls, "\"agent\":\"claude-code\"", "Task cockpit should pass the current agent filter.")
+        try expectContains(calls, "\"agent\":\"claude-code\"", "Task cockpit should pass the selected skill agent filter.")
         try expectContains(calls, "\"selected_skill_id\":\"beta\"", "Task cockpit should pass selected skill id.")
         try expectContains(calls, "\"selected_skill_name\":\"Beta\"", "Task cockpit should pass selected skill name.")
         try expectContains(calls, "\"selected_skill_agent\":\"claude-code\"", "Task cockpit should pass selected skill agent.")
@@ -1823,13 +1828,70 @@ struct SkillStoreTests {
         try expectFalse(calls.contains("credential"), "Task cockpit must not call credential paths.")
     }
 
+    private func taskCockpitUsesGlobalScopeOutsideSkillDetail() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let historyStore = makeTemporaryTaskCockpitHistoryStore()
+        defer { cleanupTaskCockpitHistoryStore(historyStore) }
+        let store = SkillStore(service: ServiceClient(), taskCockpitHistoryStore: historyStore)
+        store.agentFilter = .claudeCode
+        store.taskCockpitText = "查看阿里云 ALB 报警历史"
+        await store.reload()
+        try expectFalse(store.selectedSidebarSelection?.isSkill == true, "Fixture should exercise the global Preflight entry instead of a skill detail.")
+        await store.buildTaskCockpit()
+
+        let calls = fake.calls()
+        let cockpitCall = calls
+            .split(separator: "\n")
+            .map(String.init)
+            .last { $0.contains("\"method\":\"task.buildCockpit\"") }
+        try expectContains(cockpitCall, "task.buildCockpit", "Global Preflight should call the V2.65 task.buildCockpit method.")
+        try expectContains(cockpitCall, "\"task\":\"查看阿里云 ALB 报警历史\"", "Global Preflight should send the original Chinese task text.")
+        try expectFalse(cockpitCall?.contains("\"agent\":\"claude-code\"") ?? false, "Global Preflight should not constrain candidates to the current sidebar agent filter.")
+        try expectFalse(cockpitCall?.contains("\"selected_skill_id\"") ?? false, "Global Preflight should not inherit a retained selected skill id.")
+        try expectFalse(cockpitCall?.contains("\"selected_skill_agent\"") ?? false, "Global Preflight should not inherit a retained selected skill agent.")
+        try expectFalse(cockpitCall?.contains("\"candidate_instance_ids\"") ?? false, "Global Preflight should not inherit retained skill candidate ids.")
+    }
+
+    private func taskCockpitHistoryPersistsLocally() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let historyStore = makeTemporaryTaskCockpitHistoryStore()
+        defer { cleanupTaskCockpitHistoryStore(historyStore) }
+        let task = "阿里云 ECS 磁盘负载情况分析"
+        let firstStore = SkillStore(service: ServiceClient(), taskCockpitHistoryStore: historyStore)
+        firstStore.taskCockpitText = task
+        await firstStore.reload()
+        await firstStore.buildTaskCockpit()
+
+        try expectEqual(firstStore.taskCockpitHistory.count, 1, "Successful Preflight should add one local history record.")
+        try expectEqual(firstStore.taskCockpitHistory.first?.displayTask, task, "History should preserve the visible task text.")
+        try expectEqual(FileManager.default.fileExists(atPath: historyStore.fileURL.path), true, "Preflight history should be written to the local app data file.")
+
+        let persisted = try String(contentsOf: historyStore.fileURL, encoding: .utf8)
+        try expectContains(persisted, task, "Persisted history should include the task for later recall.")
+        try expectFalse(persisted.contains("prompt_request"), "Persisted history must not keep provider prompt request metadata.")
+        try expectFalse(persisted.contains("task_cockpit"), "Persisted history must not keep raw prompt request kind metadata.")
+
+        let secondStore = SkillStore(service: ServiceClient(), taskCockpitHistoryStore: historyStore)
+        try expectEqual(secondStore.taskCockpitHistory.count, 1, "A new store should load persisted Preflight history.")
+        try expectEqual(secondStore.taskCockpitHistory.first?.displayTask, task, "Reloaded history should show the original task.")
+        try expectEqual(secondStore.taskCockpitHistory.first?.result.summary.recommendedSkillName, "Beta", "Reloaded history should retain the recommendation summary.")
+    }
+
     private func taskCockpitPreservesExactUserInputInServiceContract() async throws {
         let fake = try FakeServiceScript()
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
         let exactTask = "  修复 Task Cockpit 🧪\n第二行\t带制表  "
-        let store = SkillStore(service: ServiceClient())
+        let historyStore = makeTemporaryTaskCockpitHistoryStore()
+        defer { cleanupTaskCockpitHistoryStore(historyStore) }
+        let store = SkillStore(service: ServiceClient(), taskCockpitHistoryStore: historyStore)
         store.selectedSkillID = "beta"
         store.taskCockpitText = exactTask
         await store.reload()
@@ -1853,7 +1915,9 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let historyStore = makeTemporaryTaskCockpitHistoryStore()
+        defer { cleanupTaskCockpitHistoryStore(historyStore) }
+        let store = SkillStore(service: ServiceClient(), taskCockpitHistoryStore: historyStore)
         store.selectedSkillID = "beta"
         store.routingConfidenceText = "Route a local audit release note task."
         store.taskCockpitText = " \n\t "
@@ -1877,7 +1941,9 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "normal")
 
-        let store = SkillStore(service: ServiceClient())
+        let historyStore = makeTemporaryTaskCockpitHistoryStore()
+        defer { cleanupTaskCockpitHistoryStore(historyStore) }
+        let store = SkillStore(service: ServiceClient(), taskCockpitHistoryStore: historyStore)
         store.selectedSkillID = "beta"
         store.routingConfidenceText = "Route a local audit release note task."
         await store.reload()
@@ -1899,7 +1965,9 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient(), taskCockpitTimeoutSeconds: 0.5)
+        let historyStore = makeTemporaryTaskCockpitHistoryStore()
+        defer { cleanupTaskCockpitHistoryStore(historyStore) }
+        let store = SkillStore(service: ServiceClient(), taskCockpitTimeoutSeconds: 0.5, taskCockpitHistoryStore: historyStore)
         store.selectedSkillID = "beta"
         store.taskCockpitText = "Prepare local release audit work."
         await store.reload()
@@ -1936,7 +2004,9 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient(), taskCockpitTimeoutSeconds: 1)
+        let historyStore = makeTemporaryTaskCockpitHistoryStore()
+        defer { cleanupTaskCockpitHistoryStore(historyStore) }
+        let store = SkillStore(service: ServiceClient(), taskCockpitTimeoutSeconds: 1, taskCockpitHistoryStore: historyStore)
         store.selectedSkillID = "beta"
         store.taskCockpitText = "Prepare local release audit work."
         await store.reload()
@@ -2880,6 +2950,16 @@ struct SkillStoreTests {
 
     private func countMethodCalls(_ method: String, in calls: String) -> Int {
         countOccurrences("\"method\":\"\(method)\"", in: calls)
+    }
+
+    private func makeTemporaryTaskCockpitHistoryStore() -> TaskCockpitHistoryStore {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("skills-copilot-task-preflight-history-\(UUID().uuidString)", isDirectory: true)
+        return TaskCockpitHistoryStore(fileURL: directory.appendingPathComponent("history.json"))
+    }
+
+    private func cleanupTaskCockpitHistoryStore(_ store: TaskCockpitHistoryStore) {
+        try? FileManager.default.removeItem(at: store.fileURL.deletingLastPathComponent())
     }
 
     private func permissionMarker(_ detail: SkillDetailRecord?) -> String? {

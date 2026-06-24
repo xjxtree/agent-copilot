@@ -785,15 +785,15 @@ enum UIStrings {
     static var taskCockpitNoRows: String { text("taskCockpit.empty.rows", "No rows returned.") }
     static var taskCockpitRecommendedAgent: String { text("taskCockpit.recommendedAgent", "Recommended agent") }
     static var taskCockpitRecommendedSkill: String { text("taskCockpit.recommendedSkill", "Recommended skill") }
-    static var taskCockpitNoReliableRecommendation: String { text("taskCockpit.recommendation.none", "No reliable recommendation yet") }
-    static var taskCockpitPartialNotice: String { text("taskCockpit.partialNotice", "Some technical diagnostics did not return; the core recommendation is still usable.") }
-    static var taskCockpitVerdictReady: String { text("taskCockpit.verdict.ready", "Ready to proceed") }
-    static var taskCockpitVerdictNeedsReview: String { text("taskCockpit.verdict.needsReview", "Clarify before handoff") }
+    static var taskCockpitNoReliableRecommendation: String { text("taskCockpit.recommendation.none", "No clear candidate path yet") }
+    static var taskCockpitPartialNotice: String { text("taskCockpit.partialNotice", "Some diagnostics did not return; the candidate path is still usable.") }
+    static var taskCockpitVerdictReady: String { text("taskCockpit.verdict.ready", "Recommend agent handoff") }
+    static var taskCockpitVerdictNeedsReview: String { text("taskCockpit.verdict.needsReview", "Recommend with confirmation") }
     static var taskCockpitVerdictBlocked: String { text("taskCockpit.verdict.blocked", "Do not hand off yet") }
     static var taskCockpitVerdictUnavailable: String { text("taskCockpit.verdict.unavailable", "Preflight unavailable") }
-    static var taskCockpitVerdictReadyMessage: String { text("taskCockpit.verdict.ready.message", "A local route was found. After human confirmation, hand off to the recommended agent.") }
-    static var taskCockpitVerdictNeedsReviewMessage: String { text("taskCockpit.verdict.needsReview.message", "A candidate route exists, but the task or safety boundary is still unclear.") }
-    static var taskCockpitVerdictBlockedMessage: String { text("taskCockpit.verdict.blocked.message", "There is not enough evidence yet. Clarify the task or address the risk first.") }
+    static var taskCockpitVerdictReadyMessage: String { text("taskCockpit.verdict.ready.message", "A matching local route was found. Confirm once, then hand off.") }
+    static var taskCockpitVerdictNeedsReviewMessage: String { text("taskCockpit.verdict.needsReview.message", "A candidate route exists; confirm command, network, or permission boundaries before handoff.") }
+    static var taskCockpitVerdictBlockedMessage: String { text("taskCockpit.verdict.blocked.message", "No clear local candidate path was found. Add product, resource, or action details.") }
     static var taskCockpitVerdictUnavailableMessage: String { text("taskCockpit.verdict.unavailable.message", "Not enough local data was returned to make a recommendation.") }
     static var taskCockpitReadinessShort: String { text("taskCockpit.score.readiness", "Readiness") }
     static var taskCockpitRoutingShort: String { text("taskCockpit.score.routing", "Routing") }
@@ -808,14 +808,19 @@ enum UIStrings {
     static var taskCockpitReasonRouteAmbiguous: String { text("taskCockpit.reason.routeAmbiguous", "Nearby routes exist; make the task more specific.") }
     static var taskCockpitReasonCrossAgentDuplicate: String { text("taskCockpit.reason.crossAgentDuplicate", "Cross-agent duplicate or overlap signals may affect routing.") }
     static var taskCockpitReasonTaskFitWeak: String { text("taskCockpit.reason.taskFitWeak", "Task fit is weak, so choosing this skill may be inaccurate.") }
+    static var taskCockpitReasonProductMatched: String { text("taskCockpit.reason.productMatched", "The task product/resource matches the candidate skill scope.") }
+    static var taskCockpitReasonProductMismatch: String { text("taskCockpit.reason.productMismatch", "The task product/resource does not match this skill scope.") }
     static var taskCockpitAttentionTitle: String { text("taskCockpit.attention.title", "Needs attention") }
     static var taskCockpitNoAttentionItems: String { text("taskCockpit.attention.empty", "No issue needs attention.") }
     static var taskCockpitNextStepReady: String { text("taskCockpit.next.ready", "Next: after human confirmation, hand off to the recommended agent.") }
-    static var taskCockpitNextStepNeedsReview: String { text("taskCockpit.next.needsReview", "Next: clarify the task or adjust the skill, then regenerate.") }
-    static var taskCockpitNextStepBlocked: String { text("taskCockpit.next.blocked", "Next: clarify the task or address the risk, then regenerate.") }
+    static var taskCockpitNextStepNeedsReview: String { text("taskCockpit.next.needsReview", "Next: confirm the boundary, or add details and regenerate.") }
+    static var taskCockpitNextStepBlocked: String { text("taskCockpit.next.blocked", "Next: add product, resource, or action details, then regenerate.") }
     static var taskCockpitNextStepUnavailable: String { text("taskCockpit.next.unavailable", "Next: refresh the catalog, or choose a project/agent and retry.") }
     static var taskCockpitDiagnosticsTitle: String { text("taskCockpit.diagnostics.title", "Technical diagnostics") }
-    static var taskCockpitDiagnosticsSummary: String { text("taskCockpit.diagnostics.summary", "For troubleshooting only: stage progress, raw evidence, context, and safety flags.") }
+    static var taskCockpitDiagnosticsSummary: String { text("taskCockpit.diagnostics.summary", "For troubleshooting only: key matching steps and compact candidate evidence.") }
+    static var taskCockpitDiagnosticsProcess: String { text("taskCockpit.diagnostics.process", "Matching process") }
+    static var taskCockpitDiagnosticsTopRoute: String { text("taskCockpit.diagnostics.topRoute", "Top route") }
+    static var taskCockpitDiagnosticsScanned: String { text("taskCockpit.diagnostics.scanned", "Scanned") }
     static var taskCockpitProgressTitle: String { text("taskCockpit.progress.title", "Progressive feedback") }
     static var taskCockpitProgressPending: String { text("taskCockpit.progress.pending", "Pending") }
     static var taskCockpitProgressChecking: String { text("taskCockpit.progress.checking", "Checking") }

@@ -320,10 +320,17 @@ final class SkillStore: ObservableObject {
     private var taskCockpitServiceTask: Task<TaskCockpitResult, Error>?
     private var isSynchronizingSidebarSelection = false
     private let taskCockpitTimeoutSeconds: TimeInterval
+    private let taskCockpitHistoryStore: TaskCockpitHistoryStore
 
-    init(service: ServiceClient, taskCockpitTimeoutSeconds: TimeInterval = 15) {
+    init(
+        service: ServiceClient,
+        taskCockpitTimeoutSeconds: TimeInterval = 15,
+        taskCockpitHistoryStore: TaskCockpitHistoryStore = TaskCockpitHistoryStore()
+    ) {
         self.service = service
         self.taskCockpitTimeoutSeconds = max(0.05, taskCockpitTimeoutSeconds)
+        self.taskCockpitHistoryStore = taskCockpitHistoryStore
+        taskCockpitHistory = taskCockpitHistoryStore.load()
     }
 
     var selectedLocalSession: LocalSessionPreviewRow? {
@@ -1576,9 +1583,9 @@ final class SkillStore: ObservableObject {
         )
         scheduleTaskCockpitTimeout(operationID: operationID, taskText: taskText)
 
-        let agent = agentFilter == .all ? nil : agentFilter.rawValue
         let project = activeProjectContext
-        let selectedSkill = selectedSkill
+        let selectedSkill = selectedSidebarSelection?.isSkill == true ? selectedSkill : nil
+        let agent = selectedSkill?.agent
         let serviceTask = Task {
             try await service.buildTaskCockpit(
                 taskText: taskText,
@@ -2758,9 +2765,10 @@ final class SkillStore: ObservableObject {
         )
         taskCockpitHistory.insert(record, at: 0)
         selectedTaskCockpitHistoryID = record.id
-        if taskCockpitHistory.count > 12 {
-            taskCockpitHistory.removeLast(taskCockpitHistory.count - 12)
+        if taskCockpitHistory.count > TaskCockpitHistoryStore.maxRecords {
+            taskCockpitHistory.removeLast(taskCockpitHistory.count - TaskCockpitHistoryStore.maxRecords)
         }
+        taskCockpitHistoryStore.save(taskCockpitHistory)
     }
 
     private var roundedTaskCockpitTimeoutSeconds: Int {

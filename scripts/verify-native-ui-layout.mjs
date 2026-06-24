@@ -22,7 +22,6 @@ const files = {
   detailGuidedCleanup: await read("apps/macos/Sources/SkillsCopilot/Views/DetailGuidedCleanupFlowPanel.swift"),
   detailProviderObservability: await read("apps/macos/Sources/SkillsCopilot/Views/DetailProviderObservabilityPanel.swift"),
   providerObservabilitySettings: await read("apps/macos/Sources/SkillsCopilot/Views/ProviderObservabilitySettingsPanel.swift"),
-  localReportExport: await read("apps/macos/Sources/SkillsCopilot/Views/LocalReportExportPanel.swift"),
   batchSkillOperation: await read("apps/macos/Sources/SkillsCopilot/Views/BatchSkillOperationSheet.swift"),
   detailLocalSkillMap: await read("apps/macos/Sources/SkillsCopilot/Views/DetailLocalSkillMapViews.swift"),
   detailTaskBenchmark: await read("apps/macos/Sources/SkillsCopilot/Views/DetailTaskBenchmarkSection.swift"),
@@ -125,17 +124,16 @@ const checks = [
     pattern: /(?=[\s\S]*?\.task\(id:\s*store\.selectedAgentLocalSessionRefreshKey\)[\s\S]*?await store\.refreshSelectedAgentLocalSessions\(\))(?=[\s\S]*?var selectedAgentLocalSessionRefreshKey:[\s\S]*?agentFilter\.rawValue[\s\S]*?activeProjectContext\?\.rootPath)(?=[\s\S]*?func refreshSelectedAgentLocalSessions\(\)\s*async[\s\S]*?previewLocalSessions\(allowDuringCatalogRefresh:\s*true\))/,
   },
   {
-    label: "primary sidebar exposes sessions, skills, config cards, and fixed report/preflight footer tools",
+    label: "primary sidebar exposes sessions, skills, config cards, and fixed preflight footer tool",
     text: files.sidebar,
-    passed: /@State private var isReportSheetPresented = false/.test(files.sidebar)
-      && /@State private var isPreflightSheetPresented = false/.test(files.sidebar)
+    passed: /@State private var isPreflightSheetPresented = false/.test(files.sidebar)
       && /AgentWorkspaceHeader\(\)[\s\S]*?ProjectContextControls\(\)/.test(files.sidebar)
       && /SidebarNavigationCardButton\([\s\S]*?title:\s*SidebarContentMode\.sessions\.title[\s\S]*?sessionCardMetrics[\s\S]*?selectSessions\(\)/.test(files.sidebar)
       && /SidebarNavigationCardButton\([\s\S]*?title:\s*SidebarContentMode\.skills\.title[\s\S]*?skillCardMetrics[\s\S]*?selectSkills\(\)/.test(files.sidebar)
       && /SidebarNavigationCardButton\([\s\S]*?title:\s*SidebarContentMode\.config\.title[\s\S]*?configCardMetrics[\s\S]*?selectConfig\(\)/.test(files.sidebar)
-      && /SidebarFooterToolRow\([\s\S]*?isReportSheetPresented = true[\s\S]*?isPreflightSheetPresented = true/.test(files.sidebar)
-      && /\.sheet\(isPresented:\s*\$isReportSheetPresented\)[\s\S]*?LocalReportPreviewSheet\(includeSelectedSkill:\s*false\)/.test(files.sidebar)
+      && /SidebarFooterToolRow\s*{[\s\S]*?isPreflightSheetPresented = true[\s\S]*?}/.test(files.sidebar)
       && /\.sheet\(isPresented:\s*\$isPreflightSheetPresented\)[\s\S]*?TaskPreflightPreviewSheet\(\)/.test(files.sidebar)
+      && !/isReportSheetPresented|LocalReportPreviewSheet|sidebar\.report\.title/.test(files.sidebar)
       && !/SidebarNavigationCardButton\(\s*title:\s*UIStrings\.text\("sidebar\.report\.title"/.test(files.sidebar)
       && !/SidebarNavigationCardButton\([\s\S]*?UIStrings\.taskCockpitTitle[\s\S]*?selectedSidebarSelection = \.preflight/.test(files.sidebar)
       && !/selectedSidebarSelection\s*=\s*\.report/.test(files.sidebar),
@@ -383,11 +381,6 @@ const checks = [
     pattern: /PrivacyPathRow\(label:\s*UIStrings\.source,\s*path:\s*skill\.displayPath\)[\s\S]*?PrivacyPathRow\(label:\s*UIStrings\.source,\s*path:\s*preview\.sourcePath\)/,
   },
   {
-    label: "local report export uses privacy path display for exported files",
-    text: files.localReportExport,
-    pattern: /PrivacyPathText\(path:\s*result\.displayPath/,
-  },
-  {
     label: "sidebar uses privacy path display for project paths",
     text: files.sidebar,
     pattern: /PrivacyPathText\(path:\s*rootPath/,
@@ -582,19 +575,10 @@ const customChecks = [
     passed: !/AgentProfileNavigationGrid|agentCopilot\.evidenceSurfaces|selectedSidebarSelection\s*=\s*\.work\(section\)/.test(files.agentCopilotOverview),
   },
   {
-    label: "local report export opens from the fixed sidebar footer sheet, keeps history, and remains file-action capable",
-    passed: /LocalReportPreviewSheet\(includeSelectedSkill:\s*false\)/.test(files.sidebar)
-      && /struct LocalReportPreviewSheet:[\s\S]*?LocalReportExportPanel\(includeSelectedSkill:\s*includeSelectedSkill\)[\s\S]*?LocalReportHistoryPanel/.test(files.localReportExport)
-      && /localReportExportHistory/.test(files.localReportExport)
-      && /selectLocalReportHistoryRecord/.test(files.localReportExport + "\n" + files.store)
-      && !/LocalReportExportPanel\(/.test(files.sidebar)
-      && !/LocalReportExportPanel\(includeSelectedSkill:\s*false\)/.test(files.agentCopilotOverview)
-      && /Task\s*{\s*await store\.exportLocalReport\(includeSelectedSkill:\s*includeSelectedSkill\)\s*}/.test(files.localReportExport)
-      && /NSWorkspace\.shared\.open\(fileURL\)/.test(files.localReportExport)
-      && /NSWorkspace\.shared\.activateFileViewerSelecting\(\[fileURL\]\)/.test(files.localReportExport)
-      && /localReport\.download/.test(files.localReportExport)
-      && /NSPasteboard\.general\.setString\(fileURL\.path,\s*forType:\s*\.string\)/.test(files.localReportExport)
-      && /LocalReportFileResolver\.fileURL/.test(files.localReportExport),
+    label: "local report preview UI is removed from sidebar surfaces",
+    passed: !/LocalReportPreviewSheet|LocalReportExportPanel|isReportSheetPresented|sidebar\.report\.title|localReport\.preview|localReport\.download|localReport\.history/.test(
+      files.sidebar + "\n" + files.agentCopilotOverview + "\n" + files.detailSurface + "\n" + files.localizable,
+    ),
   },
   {
     label: "task preflight opens from the fixed sidebar footer sheet and keeps selectable history",

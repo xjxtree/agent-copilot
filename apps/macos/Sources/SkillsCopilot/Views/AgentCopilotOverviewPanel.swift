@@ -26,8 +26,6 @@ private struct AgentSessionContentPanel: View {
 
     @State private var selectedKinds = Set(LocalSessionContentKind.allCases)
 
-    private let columns = [GridItem(.adaptive(minimum: 132), spacing: 8)]
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -58,13 +56,6 @@ private struct AgentSessionContentPanel: View {
                                 .font(.caption.bold())
                                 .foregroundStyle(.secondary)
                         }
-                    }
-
-                    LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
-                        SummaryChip(title: UIStrings.text("sidebar.sessions.userMessages", "User messages"), value: "\(session.userMessageCount)", systemImage: "person.text.rectangle")
-                        SummaryChip(title: UIStrings.text("sidebar.sessions.totalMessages", "Total messages"), value: "\(session.totalMessageCount)", systemImage: "text.bubble")
-                        SummaryChip(title: UIStrings.text("sidebar.sessions.toolCalls", "Tool calls"), value: "\(session.toolCallCount)", systemImage: "wrench.and.screwdriver")
-                        SummaryChip(title: UIStrings.text("sidebar.sessions.skillCalls", "Skill calls"), value: "\(session.skillCallCount)", systemImage: "square.stack.3d.up")
                     }
 
                     LocalSessionContentFilterBar(items: session.contentItems, selectedKinds: $selectedKinds)

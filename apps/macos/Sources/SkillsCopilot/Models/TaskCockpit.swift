@@ -81,12 +81,13 @@ struct TaskCockpitHistoryRecord: Identifiable, Hashable {
     let operationState: TaskCockpitOperationState
 
     init(
+        id: UUID = UUID(),
         taskText: String,
         result: TaskCockpitResult,
         operationState: TaskCockpitOperationState,
         createdAt: Date = Date()
     ) {
-        id = UUID()
+        self.id = id
         self.createdAt = createdAt
         self.taskText = taskText
         self.result = result
