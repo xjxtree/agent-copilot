@@ -39,6 +39,8 @@
         "agent": "codex",
         "redacted_path": "$HOME/.codex/sessions/fixture-session.jsonl",
         "modified_at": 1781600000000,
+        "started_at": 1781599800000,
+        "ended_at": 1781600000000,
         "excerpt": "{\"role\":\"assistant\",\"content\":\"Used fixture-skill-id for local task with <redacted>.\"}",
         "excerpt_char_count": 82,
         "user_message_count": 1,
@@ -57,6 +59,7 @@
             "title": "User",
             "text": "Run skill:fixture-skill for local task.",
             "char_count": 39,
+            "timestamp": 1781599800000,
             "evidence_refs": []
           },
           {
@@ -65,6 +68,7 @@
             "title": "Agent",
             "text": "Used skill:fixture-skill for local task with <redacted>.",
             "char_count": 56,
+            "timestamp": 1781600000000,
             "evidence_refs": []
           },
           {
@@ -73,6 +77,7 @@
             "title": "Tool",
             "text": "fixture tool call",
             "char_count": 17,
+            "timestamp": 1781600000000,
             "evidence_refs": []
           },
           {
@@ -81,6 +86,7 @@
             "title": "Skill: fixture-skill",
             "text": "fixture-skill (2 calls)",
             "char_count": 23,
+            "timestamp": null,
             "evidence_refs": [
               "session.content_hash:fixturehash"
             ]

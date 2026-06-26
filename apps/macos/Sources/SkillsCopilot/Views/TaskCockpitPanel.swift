@@ -48,9 +48,17 @@ private struct TaskPreflightEditorPane: View {
         TaskCockpitPanel(
             taskText: $draftTaskText,
             currentTaskText: effectiveTaskText,
+            agentOptions: store.taskCockpitAgentOptions,
+            selectedAgentIDs: store.taskCockpitSelectedAgentIDs,
             result: displayedResult,
             isBuilding: displayedIsBuilding,
             operationState: displayedOperationState,
+            onToggleAgent: { agentID in
+                store.toggleTaskCockpitAgentSelection(agentID)
+            },
+            onSelectAllAgents: {
+                store.selectAllTaskCockpitAgents()
+            },
             onBuild: {
                 Task {
                     syncDraftToStore()
@@ -63,6 +71,7 @@ private struct TaskPreflightEditorPane: View {
         )
         .onAppear {
             guard !hasLoadedInitialDraft else { return }
+            store.ensureTaskCockpitAgentSelection()
             draftTaskText = store.taskCockpitText
             hasLoadedInitialDraft = true
         }
@@ -170,6 +179,11 @@ private struct TaskPreflightHistoryRow: View {
                     .foregroundStyle(isSelected ? .white.opacity(0.82) : .secondary)
                     .lineLimit(1)
 
+                Label(record.agentScopeSummary, systemImage: "person.2")
+                    .font(.caption2)
+                    .foregroundStyle(isSelected ? .white.opacity(0.78) : .secondary)
+                    .lineLimit(1)
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text(model.verdict.title)
                         .font(.caption2.weight(.semibold))
@@ -203,9 +217,13 @@ private struct TaskPreflightHistoryRow: View {
 struct TaskCockpitPanel: View {
     @Binding var taskText: String
     let currentTaskText: String
+    let agentOptions: [TaskCockpitAgentOption]
+    let selectedAgentIDs: Set<String>
     let result: TaskCockpitResult?
     let isBuilding: Bool
     let operationState: TaskCockpitOperationState
+    let onToggleAgent: (String) -> Void
+    let onSelectAllAgents: () -> Void
     let onBuild: () -> Void
     let onCancel: () -> Void
 
@@ -228,6 +246,13 @@ struct TaskCockpitPanel: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
+
+            TaskCockpitAgentSelector(
+                options: agentOptions,
+                selectedAgentIDs: selectedAgentIDs,
+                onToggle: onToggleAgent,
+                onSelectAll: onSelectAllAgents
+            )
 
             VStack(alignment: .trailing, spacing: 8) {
                 TaskInputTextEditor(
@@ -289,10 +314,100 @@ struct TaskCockpitPanel: View {
         }
         .controlSize(.regular)
         .buttonStyle(.borderedProminent)
-        .disabled(isBuilding || !inputModel.canSubmit)
+        .disabled(isBuilding || !inputModel.canSubmit || selectedAgentIDs.isEmpty)
         .help(UIStrings.taskCockpitBoundary)
         .accessibilityIdentifier(AppAccessibilityID.taskCockpitBuildButton)
         .accessibilityLabel(actionTitle)
+    }
+}
+
+private struct TaskCockpitAgentSelector: View {
+    let options: [TaskCockpitAgentOption]
+    let selectedAgentIDs: Set<String>
+    let onToggle: (String) -> Void
+    let onSelectAll: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Label(UIStrings.text("taskCockpit.agentScope.title", "Agents"), systemImage: "person.2")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button {
+                    onSelectAll()
+                } label: {
+                    Label(UIStrings.text("taskCockpit.agentScope.selectAll", "Select all"), systemImage: "checkmark.circle")
+                }
+                .buttonStyle(.borderless)
+                .font(.caption)
+                .disabled(isAllSelected)
+            }
+
+            HStack(spacing: 8) {
+                ForEach(options) { option in
+                    TaskCockpitAgentChip(
+                        option: option,
+                        isSelected: selectedAgentIDs.contains(option.id),
+                        onToggle: {
+                            onToggle(option.id)
+                        }
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if selectedAgentIDs.isEmpty {
+                Label(UIStrings.text("taskCockpit.agentScope.required", "Select at least one agent."), systemImage: "exclamationmark.circle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.18), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var isAllSelected: Bool {
+        !options.isEmpty && Set(options.map(\.id)).isSubset(of: selectedAgentIDs)
+    }
+}
+
+private struct TaskCockpitAgentChip: View {
+    let option: TaskCockpitAgentOption
+    let isSelected: Bool
+    let onToggle: () -> Void
+
+    var body: some View {
+        Button(action: onToggle) {
+            HStack(spacing: 7) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(option.title)
+                        .font(.caption.bold())
+                        .lineLimit(1)
+                    Text(option.subtitle)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .background(
+                isSelected ? Color.accentColor.opacity(0.14) : Color.secondary.opacity(0.08),
+                in: RoundedRectangle(cornerRadius: 8)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isSelected ? Color.accentColor.opacity(0.55) : Color.clear, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(option.title)
+        .accessibilityValue(isSelected ? UIStrings.stateEnabled : UIStrings.stateDisabled)
     }
 }
 
@@ -395,9 +510,9 @@ private struct TaskCockpitOperationStatusView: View {
             )
         }
         if state.elapsedSeconds() > 0 {
-            return "\(state.message) \(UIStrings.taskCockpitElapsedSeconds(state.elapsedSeconds()))"
+            return "\(UIStrings.localizedServiceMessage(state.message)) \(UIStrings.taskCockpitElapsedSeconds(state.elapsedSeconds()))"
         }
-        return state.message
+        return UIStrings.localizedServiceMessage(state.message)
     }
 
     private func progress(now: Date) -> CGFloat {
@@ -775,6 +890,9 @@ private struct TaskCockpitDecisionModel {
         if !hasCandidatePath {
             return .blocked
         }
+        if hasAgentOnlyCandidate {
+            return .needsReview
+        }
         if userBlockerCount > 0
             || gapCount > 0
             || scoreNeedsReview(readinessScore)
@@ -796,9 +914,20 @@ private struct TaskCockpitDecisionModel {
     }
 
     var recommendationLine: String {
-        hasReliableRecommendation
-            ? "\(recommendedAgent) · \(recommendedSkill)"
-            : UIStrings.taskCockpitNoReliableRecommendation
+        guard hasReliableRecommendation else {
+            return UIStrings.taskCockpitNoReliableRecommendation
+        }
+        if recommendedSkill != UIStrings.unknown {
+            return "\(recommendedAgent) · \(recommendedSkill)"
+        }
+        if recommendedAgent != UIStrings.unknown {
+            return UIStrings.taskCockpitAgentOnlyRecommendation(recommendedAgent)
+        }
+        return UIStrings.taskCockpitNoReliableRecommendation
+    }
+
+    var agentScopeSummary: String {
+        TaskCockpitHistoryRecord.agentScopeSummary(result.agentScopeIDs)
     }
 
     var recommendedAgent: String {
@@ -857,7 +986,12 @@ private struct TaskCockpitDecisionModel {
             values.append(topRoute.summary)
             values.append(contentsOf: topRoute.reasons)
         }
+        if let topSkill {
+            values.append(topSkill.summary)
+            values.append(contentsOf: topSkill.reasons)
+        }
         values.append(contentsOf: result.readinessSignals.map(\.detail))
+        values.append(contentsOf: result.agentCandidates.prefix(1).map(\.summary))
         values.append(contentsOf: result.agentCandidates.prefix(1).flatMap(\.reasons))
         return Self.uniqueMeaningful(values)
     }
@@ -878,7 +1012,7 @@ private struct TaskCockpitDecisionModel {
     }
 
     var candidateAlternatives: [String] {
-        guard hasRouteAmbiguity else { return [] }
+        guard uniqueCandidateRows.count > 1 else { return [] }
         return Array(uniqueCandidateRows.prefix(3).enumerated()).map { index, row in
             candidateAlternativeLine(index: index, row: row)
         }
@@ -917,6 +1051,13 @@ private struct TaskCockpitDecisionModel {
             || topAgent != nil
     }
 
+    private var hasAgentOnlyCandidate: Bool {
+        topAgent != nil
+            && topRoute == nil
+            && topSkill == nil
+            && recommendedSkill == UIStrings.unknown
+    }
+
     private var hasRouteAmbiguity: Bool {
         guard uniqueCandidateRows.count > 1 else { return false }
         let values = reasons
@@ -935,7 +1076,14 @@ private struct TaskCockpitDecisionModel {
     }
 
     private var uniqueCandidateRows: [TaskCockpitCandidateRow] {
-        let rows = result.skillCandidates.count > 1 ? result.skillCandidates : result.routeCandidates
+        let rows: [TaskCockpitCandidateRow]
+        if !result.skillCandidates.isEmpty {
+            rows = result.skillCandidates
+        } else if !result.routeCandidates.isEmpty {
+            rows = result.routeCandidates
+        } else {
+            rows = result.agentCandidates
+        }
         var seen = Set<String>()
         var unique: [TaskCockpitCandidateRow] = []
         for row in rows {
@@ -993,7 +1141,7 @@ private struct TaskCockpitDecisionModel {
 
     fileprivate static func displayText(_ value: String) -> String? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !isInternalBoundary(trimmed) else { return nil }
+        guard !trimmed.isEmpty, !isInternalBoundary(trimmed), !looksLikeRawStructuredPayload(trimmed) else { return nil }
 
         let normalized = trimmed.lowercased()
         if normalized.contains("task readiness is blocked") {
@@ -1029,7 +1177,17 @@ private struct TaskCockpitDecisionModel {
         if normalized.contains("task fit is weak") {
             return UIStrings.taskCockpitReasonTaskFitWeak
         }
-        return trimmed
+        return UIStrings.localizedServiceMessage(trimmed)
+    }
+
+    private static func looksLikeRawStructuredPayload(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.hasPrefix("{")
+            || trimmed.hasPrefix("[")
+            || trimmed.hasPrefix("```")
+            || trimmed.contains("\"agent_candidates\"")
+            || trimmed.contains("\"skill_candidates\"")
+            || trimmed.contains("\"route_candidates\"")
     }
 
     private static func isReviewOnlyRisk(_ row: TaskCockpitContextRow) -> Bool {
@@ -1150,6 +1308,11 @@ private struct TaskCockpitDecisionSummaryCard: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
+
+            Label(model.agentScopeSummary, systemImage: "person.2")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
 
             if !model.keyReasons.isEmpty {
                 VStack(alignment: .leading, spacing: 7) {

@@ -1,0 +1,58 @@
+{
+  "id": "fixture-skill-manager-preview-install",
+  "ok": true,
+  "result": {
+    "preview": {
+      "tool_id": "npx-skills",
+      "operation": "install",
+      "command": [
+        "/usr/local/bin/npx",
+        "skills",
+        "add",
+        "vercel-labs/agent-skills",
+        "--skill",
+        "frontend-design",
+        "--agent",
+        "claude-code",
+        "--agent",
+        "pi",
+        "--agent",
+        "opencode",
+        "--agent",
+        "codex",
+        "--agent",
+        "hermes-agent",
+        "--agent",
+        "openclaw",
+        "-y"
+      ],
+      "cwd": "/tmp/skills-copilot-project",
+      "env": [
+        {
+          "key": "HOME",
+          "value": "/tmp/skills-copilot-home"
+        },
+        {
+          "key": "DISABLE_TELEMETRY",
+          "value": "1"
+        }
+      ],
+      "requires_confirmation": true,
+      "confirmed": false,
+      "network_required": true,
+      "network_allowed": false,
+      "will_run": false,
+      "preview_token": "skill-manager:fixture-install",
+      "summary": "Install vercel-labs/agent-skills for 6 supported agent target(s).",
+      "risks": [
+        "The external manager writes canonical skill files and agent symlinks/copies for selected agents.",
+        "Agent enablement state is not changed; use Agent Enablement toggles separately.",
+        "Source vercel-labs/agent-skills may require network access through npx skills."
+      ]
+    },
+    "output": null,
+    "applied": false,
+    "scanned_count": 0,
+    "updated_skills": []
+  }
+}

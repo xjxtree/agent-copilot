@@ -1,0 +1,5 @@
+{
+  "id": "fixture-skill-manager-list-tools",
+  "method": "skillManager.listTools",
+  "params": {}
+}

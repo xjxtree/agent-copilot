@@ -5,6 +5,7 @@ enum DetailSection: String, CaseIterable, Identifiable {
     case lineup
     case agentProfile
     case taskCockpit
+    case skillManager
     case overview
     case cleanup
     case guidedCleanup
@@ -28,7 +29,7 @@ enum DetailSection: String, CaseIterable, Identifiable {
         switch self {
         case .overview, .findings, .conflicts, .history:
             return true
-        case .agentWorkspace, .lineup, .agentProfile, .taskCockpit, .cleanup, .guidedCleanup, .observability, .analysis:
+        case .agentWorkspace, .lineup, .agentProfile, .taskCockpit, .skillManager, .cleanup, .guidedCleanup, .observability, .analysis:
             return false
         }
     }
@@ -43,6 +44,8 @@ enum DetailSection: String, CaseIterable, Identifiable {
             return UIStrings.text("detail.agentProfile", "Agent Profile")
         case .taskCockpit:
             return UIStrings.taskCockpitTitle
+        case .skillManager:
+            return UIStrings.text("skillManager.title", "Skill Package Manager")
         case .overview:
             return UIStrings.overview
         case .cleanup:
@@ -72,6 +75,8 @@ enum DetailSection: String, CaseIterable, Identifiable {
             return "person.crop.rectangle.stack"
         case .taskCockpit:
             return "checklist"
+        case .skillManager:
+            return "shippingbox.and.arrow.backward"
         case .overview:
             return "stethoscope"
         case .cleanup:
@@ -101,6 +106,8 @@ enum DetailSection: String, CaseIterable, Identifiable {
             return UIStrings.text("detail.section.agentProfile.summary", "Inspect one agent's capability, health, scan state, and related read-only work surfaces.")
         case .taskCockpit:
             return UIStrings.text("detail.section.taskCockpit.summary", "Check whether the current task can proceed, which agent/skill should handle it, why, and what must be fixed first.")
+        case .skillManager:
+            return UIStrings.text("detail.section.skillManager.summary", "Search, install, update, remove, and manage local skills through supported manager tools.")
         case .overview:
             return UIStrings.text("detail.section.overview.summary", "Inspect the selected skill metadata, permissions, provenance, and raw catalog details.")
         case .cleanup:
@@ -124,7 +131,7 @@ enum DetailSection: String, CaseIterable, Identifiable {
         switch self {
         case .agentWorkspace, .lineup, .agentProfile, .taskCockpit:
             return true
-        case .overview, .cleanup, .guidedCleanup, .observability, .findings, .conflicts, .history, .analysis:
+        case .skillManager, .overview, .cleanup, .guidedCleanup, .observability, .findings, .conflicts, .history, .analysis:
             return false
         }
     }
@@ -150,11 +157,10 @@ struct SkillSummaryCard: View {
                 }
             }
 
-            Text(summaryText)
-                .font(.callout)
-                .foregroundStyle(summaryText == UIStrings.noDescription ? .secondary : .primary)
-                .lineLimit(nil)
-                .textSelection(.enabled)
+            OverviewDescriptionPanel(
+                summaryText: summaryText,
+                isEmpty: summaryText == UIStrings.noDescription
+            )
 
             DetailMetricGrid {
                 SummaryChip(title: UIStrings.agent, value: DisplayText.agent(skill.agent), systemImage: "person.crop.circle")
@@ -180,6 +186,110 @@ struct SkillSummaryCard: View {
             return UIStrings.noDescription
         }
         return description
+    }
+}
+
+private struct OverviewDescriptionPanel: View {
+    let summaryText: String
+    let isEmpty: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Label(UIStrings.text("detail.skillPurpose", "Purpose"), systemImage: "text.quote")
+                    .font(.subheadline.bold())
+                Spacer()
+                Text(isEmpty ? UIStrings.noDescription : UIStrings.text("detail.skillPurposeSource", "Description"))
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(.quaternary.opacity(0.38), in: Capsule())
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(summaryItems.indices, id: \.self) { index in
+                    Text(summaryItems[index])
+                        .font(.callout)
+                        .lineSpacing(2)
+                        .foregroundStyle(isEmpty ? .secondary : .primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.24), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private var summaryItems: [String] {
+        let normalized = summaryText
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return [UIStrings.noDescription] }
+
+        let lineItems = normalized
+            .split(whereSeparator: \.isNewline)
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if lineItems.count > 1 {
+            return lineItems
+        }
+
+        return sentenceItems(from: normalized)
+    }
+
+    private func sentenceItems(from value: String) -> [String] {
+        var items: [String] = []
+        let characters = Array(value)
+        var startIndex = 0
+        var index = 0
+        let terminalPunctuation: Set<Character> = [".", "。", "!", "！", "?", "？"]
+        let closingPunctuation: Set<Character> = [")", "]", "}", "\"", "'", "”", "’"]
+
+        while index < characters.count {
+            guard terminalPunctuation.contains(characters[index]),
+                  !isInlineAbbreviationEnding(at: index, in: characters)
+            else {
+                index += 1
+                continue
+            }
+
+            var endIndex = index + 1
+            while endIndex < characters.count, closingPunctuation.contains(characters[endIndex]) {
+                endIndex += 1
+            }
+
+            if endIndex == characters.count || isWhitespace(characters[endIndex]) {
+                let item = String(characters[startIndex..<endIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+                if !item.isEmpty {
+                    items.append(item)
+                }
+                startIndex = endIndex
+                index = endIndex
+            } else {
+                index += 1
+            }
+        }
+
+        if startIndex < characters.count {
+            let tail = String(characters[startIndex...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !tail.isEmpty {
+                items.append(tail)
+            }
+        }
+        return items.isEmpty ? [value] : items
+    }
+
+    private func isInlineAbbreviationEnding(at index: Int, in characters: [Character]) -> Bool {
+        let start = max(0, index - 4)
+        let prefix = String(characters[start...index]).lowercased()
+        return prefix.hasSuffix("e.g.") || prefix.hasSuffix("i.e.") || prefix.hasSuffix("etc.")
+    }
+
+    private func isWhitespace(_ character: Character) -> Bool {
+        String(character).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 

@@ -1,11 +1,42 @@
 import Foundation
 
+struct FilteredSkillListCacheKey: Equatable {
+    let dataRevision: Int
+    let searchText: String
+    let agentFilter: String
+    let stateFilter: String
+    let scopeFilter: String
+    let sortOrder: String
+    let sortDirection: String
+}
+
+struct FilteredSkillListCache {
+    let key: FilteredSkillListCacheKey
+    let skills: [SkillRecord]
+}
+
+struct AppStartupLoadingState: Equatable {
+    let message: String
+    let progress: Double
+
+    init(message: String, progress: Double) {
+        self.message = message
+        self.progress = min(max(progress, 0), 1)
+    }
+}
+
 @MainActor
 final class SkillStore: ObservableObject {
-    @Published private(set) var skills: [SkillRecord] = []
-    @Published private(set) var findings: [RuleFindingRecord] = []
+    @Published private(set) var skills: [SkillRecord] = [] {
+        didSet { invalidateFilteredSkillListCache() }
+    }
+    @Published private(set) var findings: [RuleFindingRecord] = [] {
+        didSet { invalidateFilteredSkillListCache() }
+    }
     @Published private(set) var ruleTuning: [RuleTuningRecord] = []
-    @Published private(set) var conflicts: [ConflictGroupRecord] = []
+    @Published private(set) var conflicts: [ConflictGroupRecord] = [] {
+        didSet { invalidateFilteredSkillListCache() }
+    }
     @Published private(set) var cleanupQueue = CleanupQueueResult.emptyFallback()
     @Published private(set) var isLoadingCleanupQueue = false
     @Published private(set) var crossAgentComparisons = CrossAgentComparisonResult.emptyFallback()
@@ -106,6 +137,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var taskCockpitResult: TaskCockpitResult?
     @Published private(set) var taskCockpitHistory: [TaskCockpitHistoryRecord] = []
     @Published private(set) var selectedTaskCockpitHistoryID: TaskCockpitHistoryRecord.ID?
+    @Published private(set) var taskCockpitSelectedAgentIDs: Set<String> = [SkillAgentFilter.claudeCode.rawValue]
     @Published private(set) var isBuildingTaskCockpit = false
     @Published private(set) var taskCockpitOperationState = TaskCockpitOperationState.idle
     @Published private(set) var scriptExecutionPreviews: [SkillRecord.ID: ScriptExecutionPreview] = [:]
@@ -113,7 +145,51 @@ final class SkillStore: ObservableObject {
     @Published private(set) var batchTogglePreview: BatchTogglePreview?
     @Published private(set) var isPreviewingBatchToggle = false
     @Published private(set) var isApplyingBatchToggle = false
+    @Published private(set) var skillManagerTools: [SkillManagerToolRecord] = []
+    @Published private(set) var skillManagerSearchResult: SkillManagerSearchRecord?
+    @Published private(set) var skillManagerInstalled: SkillManagerInstalledListRecord?
+    @Published private(set) var skillManagerMutationPreview: SkillManagerMutationRecord?
+    @Published private(set) var skillManagerLocalCreatePreview: SkillManagerLocalCreateRecord?
+    @Published private(set) var skillManagerLocalDeletePreview: SkillManagerLocalDeleteRecord?
+    @Published private(set) var isLoadingSkillManagerTools = false
+    @Published private(set) var isSearchingSkillManager = false
+    @Published private(set) var isListingSkillManagerInstalled = false
+    @Published private(set) var isPreviewingSkillManagerMutation = false
+    @Published private(set) var isApplyingSkillManagerMutation = false
+    @Published var skillManagerSearchQuery = "" {
+        didSet { skillManagerSearchResult = nil }
+    }
+    @Published var skillManagerOwner = "" {
+        didSet { skillManagerSearchResult = nil }
+    }
+    @Published var skillManagerSource = "" {
+        didSet { clearSkillManagerWritePreviews() }
+    }
+    @Published var skillManagerSkillName = "" {
+        didSet { clearSkillManagerWritePreviews() }
+    }
+    @Published var skillManagerLocalSkillName = "" {
+        didSet { clearSkillManagerWritePreviews() }
+    }
+    @Published var skillManagerNetworkAllowed = false {
+        didSet { clearSkillManagerWritePreviews() }
+    }
+    @Published var skillManagerScope: SkillManagerScope = .project {
+        didSet { clearSkillManagerWritePreviews() }
+    }
+    @Published var skillManagerDistribution: SkillManagerDistribution = .symlink {
+        didSet { clearSkillManagerWritePreviews() }
+    }
+    @Published var skillManagerSelectedAgentIDs: Set<String> = Set(SkillManagerAgent.defaultTargets.map(\.rawValue)) {
+        didSet { clearSkillManagerWritePreviews() }
+    }
     @Published private(set) var projectContextState: ProjectContextState?
+    @Published private(set) var startupLoadingState: AppStartupLoadingState? = AppStartupLoadingState(
+        message: UIStrings.startupPreparingLoading,
+        progress: 0.02
+    )
+    @Published private(set) var hasCompletedStartupLoad = false
+    @Published private(set) var isRunningStartupLoad = false
     @Published private(set) var isLoading = false
     @Published private(set) var isLoadingDetail = false
     @Published private(set) var isScanning = false
@@ -131,34 +207,48 @@ final class SkillStore: ObservableObject {
     @Published private(set) var lastScanActivity: RefreshActivity?
     @Published private(set) var canRetryLastRefresh = false
     @Published private(set) var claudeSettings: ConfigDocumentRecord?
+    @Published private(set) var currentAgentConfigDocuments: [ConfigDocumentRecord] = []
+    @Published private(set) var isLoadingAgentConfigDocuments = false
     @Published private(set) var settingsMessage: String?
     @Published private(set) var settingsErrorMessage: String?
     @Published private(set) var aiProviderMessage: String?
     @Published private(set) var aiProviderErrorMessage: String?
     @Published var selectedSidebarSelection: SidebarSelection? {
-        didSet { handleSidebarSelectionChanged() }
+        didSet {
+            guard oldValue != selectedSidebarSelection else { return }
+            handleSidebarSelectionChanged()
+        }
     }
     @Published var selectedSkillID: SkillRecord.ID? {
         didSet {
+            guard oldValue != selectedSkillID else { return }
             clearLocalReportExportState()
             synchronizeSidebarSelectionWithSelectedSkill()
         }
     }
     @Published var selectedDetailSection: DetailSection = .overview
-    @Published var sidebarContentMode: SidebarContentMode = .sessions {
-        didSet { handleSidebarContentModeChanged() }
+    @Published var sidebarContentMode: SidebarContentMode = .skills {
+        didSet {
+            guard oldValue != sidebarContentMode else { return }
+            handleSidebarContentModeChanged()
+        }
     }
     @Published var configScopeFilter: AgentConfigScopeFilter = .all {
-        didSet { normalizeConfigSnapshotSelection() }
+        didSet {
+            guard oldValue != configScopeFilter else { return }
+            normalizeConfigSelection()
+        }
     }
     @Published var searchText = "" {
         didSet {
+            guard oldValue != searchText else { return }
             clearLocalReportExportState()
             handleListCriteriaChanged()
         }
     }
     @Published var agentFilter: SkillAgentFilter = .claudeCode {
         didSet {
+            guard oldValue != agentFilter else { return }
             clearLocalReportExportState()
             handleListCriteriaChanged()
             routingAccuracyDashboard = nil
@@ -167,6 +257,7 @@ final class SkillStore: ObservableObject {
             localSkillMapResult = nil
             skillLifecycleTimelineResult = nil
             clearTaskCockpitTransientState()
+            resetTaskCockpitAgentSelectionToSidebarDefault(clearResult: false)
             similarSkillGroupingResult = nil
             capabilityTaxonomyResult = nil
             workspaceReadinessResult = nil
@@ -182,25 +273,28 @@ final class SkillStore: ObservableObject {
             agentSessionSkillReviewDeleteResult = nil
             agentSessionSkillReviewList = AgentSessionSkillReviewListResult(reviews: [])
             localSessionPreviewResult = LocalSessionPreviewResult()
+            loadedLocalSessionPreviewRequestKey = nil
+            activeLocalSessionPreviewRequestKey = nil
             selectedLocalSessionID = nil
             mcpServerPreviewResult = McpServerPreviewResult()
             if sidebarContentMode == .config {
                 selectedSidebarSelection = .configOverview
             }
-            Task { await loadAgentConfigSnapshots() }
+            Task { await loadAgentConfigSnapshotsIfNeeded() }
             Task { await loadCleanupQueue() }
             Task { await loadCrossAgentComparisons() }
-            Task { await refreshSelectedAgentLocalSessions() }
         }
     }
     @Published var stateFilter: SkillStateFilter = .all {
         didSet {
+            guard oldValue != stateFilter else { return }
             clearLocalReportExportState()
             handleListCriteriaChanged()
         }
     }
     @Published var skillScopeFilter: SkillScopeFilter = .all {
         didSet {
+            guard oldValue != skillScopeFilter else { return }
             clearLocalReportExportState()
             handleListCriteriaChanged()
         }
@@ -223,12 +317,14 @@ final class SkillStore: ObservableObject {
     }
     @Published var sortOrder: SkillSortOrder = .name {
         didSet {
+            guard oldValue != sortOrder else { return }
             clearLocalReportExportState()
             handleListCriteriaChanged()
         }
     }
     @Published var sortDirection: SkillSortDirection = .ascending {
         didSet {
+            guard oldValue != sortDirection else { return }
             clearLocalReportExportState()
             handleListCriteriaChanged()
         }
@@ -294,8 +390,8 @@ final class SkillStore: ObservableObject {
     @Published var localSessionPreviewRoots = ""
     @Published var localSessionScopeFilter: LocalSessionScopeFilter = .project {
         didSet {
-            selectedLocalSessionID = nil
-            Task { await refreshSelectedAgentLocalSessions() }
+            guard oldValue != localSessionScopeFilter else { return }
+            normalizeSelectedLocalSession()
         }
     }
     @Published var localSessionSearchText = "" {
@@ -314,23 +410,40 @@ final class SkillStore: ObservableObject {
     private var taskReadinessCheckedSkillID: SkillRecord.ID?
     private var routingConfidenceRankedSkillID: SkillRecord.ID?
     private var agentConfigSnapshotLoadGeneration = 0
+    private var agentConfigDocumentLoadGeneration = 0
+    private var claudeSettingsLoadGeneration = 0
+    private var loadedAgentConfigSnapshotRequestKey: String?
+    private var activeAgentConfigSnapshotRequestKey: String?
+    private var loadedAgentConfigDocumentRequestKey: String?
+    private var activeAgentConfigDocumentRequestKey: String?
+    private var loadedClaudeSettingsRequestKey: String?
+    private var activeClaudeSettingsRequestKey: String?
     private var localSessionPreviewGeneration = 0
+    private var loadedLocalSessionPreviewRequestKey: String?
+    private var activeLocalSessionPreviewRequestKey: String?
     private var taskCockpitOperationID: UUID?
     private var taskCockpitTimeoutTask: Task<Void, Never>?
     private var taskCockpitServiceTask: Task<TaskCockpitResult, Error>?
     private var isSynchronizingSidebarSelection = false
+    var filteredSkillListDataRevision = 0
+    var filteredSkillListCache: FilteredSkillListCache?
     private let taskCockpitTimeoutSeconds: TimeInterval
     private let taskCockpitHistoryStore: TaskCockpitHistoryStore
 
     init(
         service: ServiceClient,
-        taskCockpitTimeoutSeconds: TimeInterval = 15,
+        taskCockpitTimeoutSeconds: TimeInterval = 300,
         taskCockpitHistoryStore: TaskCockpitHistoryStore = TaskCockpitHistoryStore()
     ) {
         self.service = service
         self.taskCockpitTimeoutSeconds = max(0.05, taskCockpitTimeoutSeconds)
         self.taskCockpitHistoryStore = taskCockpitHistoryStore
         taskCockpitHistory = taskCockpitHistoryStore.load()
+    }
+
+    func invalidateFilteredSkillListCache() {
+        filteredSkillListDataRevision &+= 1
+        filteredSkillListCache = nil
     }
 
     var selectedLocalSession: LocalSessionPreviewRow? {
@@ -343,13 +456,51 @@ final class SkillStore: ObservableObject {
 
     var filteredLocalSessionRows: [LocalSessionPreviewRow] {
         let query = localSessionSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let scopedRows = scopedLocalSessionRows
         guard !query.isEmpty else {
-            return localSessionPreviewResult.sessionRows
+            return scopedRows
         }
-        return localSessionPreviewResult.sessionRows.filter { row in
+        return scopedRows.filter { row in
             row.title.lowercased().contains(query)
                 || row.redactedPath.lowercased().contains(query)
                 || (row.projectRoot?.lowercased().contains(query) ?? false)
+        }
+    }
+
+    var scopedLocalSessionRows: [LocalSessionPreviewRow] {
+        localSessionPreviewResult.sessionRows.filter { localSessionMatchesCurrentScope($0) }
+    }
+
+    var scopedLocalSessionUserMessageCount: Int {
+        scopedLocalSessionRows.reduce(0) { $0 + $1.userMessageCount }
+    }
+
+    var scopedLocalSessionTotalMessageCount: Int {
+        scopedLocalSessionRows.reduce(0) { $0 + $1.totalMessageCount }
+    }
+
+    var scopedLocalSessionToolCallCount: Int {
+        scopedLocalSessionRows.reduce(0) { $0 + $1.toolCallCount }
+    }
+
+    var scopedLocalSessionSkillCallCount: Int {
+        scopedLocalSessionRows.reduce(0) { $0 + $1.skillCallCount }
+    }
+
+    private func localSessionMatchesCurrentScope(_ row: LocalSessionPreviewRow) -> Bool {
+        switch localSessionScopeFilter {
+        case .all:
+            return true
+        case .project:
+            let scope = row.scope.lowercased()
+            guard scope.contains("project") else { return false }
+
+            let selectedRoot = activeProjectContext?.rootPath.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let selectedRoot, !selectedRoot.isEmpty else { return true }
+
+            let rowRoot = row.projectRoot?.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let rowRoot, !rowRoot.isEmpty, rowRoot != "<project-root>" else { return true }
+            return rowRoot == selectedRoot || rowRoot.hasPrefix(selectedRoot + "/")
         }
     }
 
@@ -358,12 +509,27 @@ final class SkillStore: ObservableObject {
         return agentConfigSnapshots.first { $0.id == id }
     }
 
+    var selectedConfigDocument: ConfigDocumentRecord? {
+        guard case let .configDocument(target) = selectedSidebarSelection else { return nil }
+        return currentAgentConfigDocuments.first { $0.target == target }
+    }
+
     func selectLocalSession(_ session: LocalSessionPreviewRow) {
+        guard selectedLocalSessionID != session.id || selectedSidebarSelection != .session(session.id) else {
+            return
+        }
         selectedLocalSessionID = session.id
-        selectedSidebarSelection = .session(session.id)
+        setSidebarSelection(.session(session.id))
+        selectedDetailSection = .overview
+    }
+
+    func selectConfigDocument(_ document: ConfigDocumentRecord) {
+        guard selectedSidebarSelection != .configDocument(document.target) else { return }
+        selectedSidebarSelection = .configDocument(document.target)
     }
 
     func selectConfigSnapshot(_ snapshot: ConfigSnapshotRecord) {
+        guard selectedSidebarSelection != .configSnapshot(snapshot.id) else { return }
         selectedSidebarSelection = .configSnapshot(snapshot.id)
     }
 
@@ -374,9 +540,50 @@ final class SkillStore: ObservableObject {
 
     func selectTaskCockpitHistoryRecord(_ record: TaskCockpitHistoryRecord) {
         taskCockpitText = record.taskText
+        setTaskCockpitAgentSelection(record.agentIDs, clearResult: false)
         taskCockpitResult = record.result
         taskCockpitOperationState = record.operationState
         selectedTaskCockpitHistoryID = record.id
+    }
+
+    var taskCockpitAgentOptions: [TaskCockpitAgentOption] {
+        SkillAgentFilter.managementCases.map { filter in
+            TaskCockpitAgentOption(
+                id: filter.rawValue,
+                title: DisplayText.agent(filter.rawValue),
+                enabledSkillCount: skills.filter { skill in
+                    skill.agent == filter.rawValue
+                        && DisplayText.statusKind(skill.state, enabled: skill.enabled) == .enabled
+                }.count
+            )
+        }
+    }
+
+    var taskCockpitSelectedAgents: [String] {
+        normalizedTaskCockpitAgentIDs(Array(taskCockpitSelectedAgentIDs))
+    }
+
+    func ensureTaskCockpitAgentSelection() {
+        let normalized = taskCockpitSelectedAgents
+        if normalized.isEmpty {
+            resetTaskCockpitAgentSelectionToSidebarDefault(clearResult: false)
+        } else if Set(normalized) != taskCockpitSelectedAgentIDs {
+            taskCockpitSelectedAgentIDs = Set(normalized)
+        }
+    }
+
+    func toggleTaskCockpitAgentSelection(_ agentID: String) {
+        var next = taskCockpitSelectedAgentIDs
+        if next.contains(agentID) {
+            next.remove(agentID)
+        } else {
+            next.insert(agentID)
+        }
+        setTaskCockpitAgentSelection(Array(next), clearResult: true)
+    }
+
+    func selectAllTaskCockpitAgents() {
+        setTaskCockpitAgentSelection(SkillAgentFilter.managementCases.map(\.rawValue), clearResult: true)
     }
 
     func localReportScopeSummary(includeSelectedSkill: Bool) -> String {
@@ -607,6 +814,53 @@ final class SkillStore: ObservableObject {
     func canSendRoutingConfidencePrompt(for skill: SkillRecord) -> Bool {
         guard let preview = routingConfidencePromptPreview(for: skill) else { return false }
         return canSendLLMPrompt(preview)
+    }
+
+    func loadAppStartupDataIfNeeded() async {
+        guard !hasCompletedStartupLoad, !isRunningStartupLoad else { return }
+        isRunningStartupLoad = true
+        isLoading = true
+        errorMessage = nil
+        beginRefresh(.reload, message: UIStrings.startupCatalogLoading)
+        setStartupLoading(UIStrings.startupPreparingLoading, progress: 0.04)
+        defer {
+            startupLoadingState = nil
+            hasCompletedStartupLoad = true
+            isRunningStartupLoad = false
+            isLoading = false
+        }
+
+        do {
+            setStartupLoading(UIStrings.startupCatalogLoading, progress: 0.16)
+            try await refreshCollections()
+
+            setStartupLoading(UIStrings.startupAnalysisLoading, progress: 0.40)
+            await loadCleanupQueue()
+            await loadCrossAgentComparisons()
+
+            setStartupLoading(UIStrings.startupSessionsLoading, progress: 0.58)
+            await refreshSelectedAgentLocalSessions()
+
+            setStartupLoading(UIStrings.startupConfigLoading, progress: 0.74)
+            await loadCurrentAgentConfigDocuments(agent: agentFilter.rawValue)
+            if agentFilter == .claudeCode, status?.supportedMethods.contains("config.readClaudeSettings") == true {
+                await loadClaudeSettings()
+            }
+
+            setStartupLoading(UIStrings.startupDetailLoading, progress: 0.90)
+            await loadSelectedDetail()
+
+            setStartupLoading(UIStrings.startupReadyLoading, progress: 1.0)
+            refreshStatusMessage = UIStrings.refreshReloaded(skills.count, findings.count, sameAgentRuntimeConflictCount)
+            appendRefreshLog(level: "info", message: refreshStatusMessage)
+            canRetryLastRefresh = false
+        } catch {
+            handleRefreshFailure(error, action: .reload)
+        }
+    }
+
+    private func setStartupLoading(_ message: String, progress: Double) {
+        startupLoadingState = AppStartupLoadingState(message: message, progress: progress)
     }
 
     func reload() async {
@@ -855,6 +1109,271 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func loadSkillManagerTools() async {
+        guard !isLoadingSkillManagerTools else { return }
+        isLoadingSkillManagerTools = true
+        defer { isLoadingSkillManagerTools = false }
+
+        do {
+            skillManagerTools = try await service.listSkillManagerTools()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func searchSkillManager() async {
+        let query = skillManagerSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            errorMessage = UIStrings.text("skillManager.search.required", "Enter a skill search query.")
+            return
+        }
+        guard !isSearchingSkillManager else { return }
+        isSearchingSkillManager = true
+        errorMessage = nil
+        defer { isSearchingSkillManager = false }
+
+        do {
+            skillManagerSearchResult = try await service.searchSkillManager(
+                query: query,
+                owner: skillManagerOwner,
+                networkAllowed: skillManagerNetworkAllowed
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+            skillManagerSearchResult = nil
+        }
+    }
+
+    func listSkillManagerInstalled() async {
+        guard !isListingSkillManagerInstalled else { return }
+        isListingSkillManagerInstalled = true
+        errorMessage = nil
+        defer { isListingSkillManagerInstalled = false }
+
+        do {
+            skillManagerInstalled = try await service.listSkillManagerInstalled(
+                agents: selectedSkillManagerAgentIDsForRead(),
+                scope: skillManagerScope
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+            skillManagerInstalled = nil
+        }
+    }
+
+    func setSkillManagerAgent(_ agentID: String, selected: Bool) {
+        var next = skillManagerSelectedAgentIDs
+        if selected {
+            next.insert(agentID)
+        } else {
+            next.remove(agentID)
+        }
+        skillManagerSelectedAgentIDs = next
+    }
+
+    func selectAllSkillManagerAgents() {
+        skillManagerSelectedAgentIDs = Set(SkillManagerAgent.defaultTargets.map(\.rawValue))
+    }
+
+    func clearSkillManagerAgents() {
+        skillManagerSelectedAgentIDs = []
+    }
+
+    func previewSkillManagerInstall(source: String? = nil, skillName: String? = nil) async {
+        if let source {
+            skillManagerSource = source
+        }
+        if let skillName {
+            skillManagerSkillName = skillName
+        }
+        guard let agents = selectedSkillManagerAgentIDsForMutation() else { return }
+        let source = skillManagerSource.trimmingCharacters(in: .whitespacesAndNewlines)
+        let skills = parsedSkillManagerSkillNames()
+        guard !source.isEmpty else {
+            errorMessage = UIStrings.text("skillManager.source.required", "Enter a skill source.")
+            return
+        }
+        guard !skills.isEmpty else {
+            errorMessage = UIStrings.text("skillManager.skill.required", "Enter at least one skill name.")
+            return
+        }
+
+        await previewSkillManagerMutation {
+            try await service.previewSkillManagerInstall(
+                source: source,
+                skills: skills,
+                agents: agents,
+                scope: skillManagerScope,
+                distribution: skillManagerDistribution,
+                networkAllowed: skillManagerNetworkAllowed
+            )
+        }
+    }
+
+    func applySkillManagerInstall() async {
+        guard let preview = skillManagerMutationPreview else { return }
+        guard let agents = selectedSkillManagerAgentIDsForMutation() else { return }
+        await applySkillManagerMutation {
+            try await service.applySkillManagerInstall(
+                preview: preview,
+                source: skillManagerSource.trimmingCharacters(in: .whitespacesAndNewlines),
+                skills: parsedSkillManagerSkillNames(),
+                agents: agents,
+                scope: skillManagerScope,
+                distribution: skillManagerDistribution,
+                networkAllowed: skillManagerNetworkAllowed
+            )
+        }
+    }
+
+    func previewSkillManagerRemove(skillName: String? = nil) async {
+        if let skillName {
+            skillManagerSkillName = skillName
+        }
+        guard let agents = selectedSkillManagerAgentIDsForMutation() else { return }
+        let skill = skillManagerSkillName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !skill.isEmpty else {
+            errorMessage = UIStrings.text("skillManager.skill.required", "Enter at least one skill name.")
+            return
+        }
+
+        await previewSkillManagerMutation {
+            try await service.previewSkillManagerRemove(
+                skill: skill,
+                agents: agents,
+                scope: skillManagerScope
+            )
+        }
+    }
+
+    func applySkillManagerRemove() async {
+        guard let preview = skillManagerMutationPreview else { return }
+        guard let agents = selectedSkillManagerAgentIDsForMutation() else { return }
+        await applySkillManagerMutation {
+            try await service.applySkillManagerRemove(
+                preview: preview,
+                skill: skillManagerSkillName.trimmingCharacters(in: .whitespacesAndNewlines),
+                agents: agents,
+                scope: skillManagerScope
+            )
+        }
+    }
+
+    func previewSkillManagerUpdate(skillName: String? = nil) async {
+        if let skillName {
+            skillManagerSkillName = skillName
+        }
+        guard let agents = selectedSkillManagerAgentIDsForMutation() else { return }
+
+        await previewSkillManagerMutation {
+            try await service.previewSkillManagerUpdate(
+                skills: parsedSkillManagerSkillNames(),
+                agents: agents,
+                scope: skillManagerScope,
+                networkAllowed: skillManagerNetworkAllowed
+            )
+        }
+    }
+
+    func applySkillManagerUpdate() async {
+        guard let preview = skillManagerMutationPreview else { return }
+        guard let agents = selectedSkillManagerAgentIDsForMutation() else { return }
+        await applySkillManagerMutation {
+            try await service.applySkillManagerUpdate(
+                preview: preview,
+                skills: parsedSkillManagerSkillNames(),
+                agents: agents,
+                scope: skillManagerScope,
+                networkAllowed: skillManagerNetworkAllowed
+            )
+        }
+    }
+
+    func previewSkillManagerLocalCreate() async {
+        let name = skillManagerLocalSkillName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else {
+            errorMessage = UIStrings.text("skillManager.localCreate.required", "Enter a local skill name.")
+            return
+        }
+        guard !isPreviewingSkillManagerMutation else { return }
+        isPreviewingSkillManagerMutation = true
+        errorMessage = nil
+        defer { isPreviewingSkillManagerMutation = false }
+
+        do {
+            skillManagerLocalCreatePreview = try await service.previewSkillManagerLocalCreate(name: name)
+        } catch {
+            errorMessage = error.localizedDescription
+            skillManagerLocalCreatePreview = nil
+        }
+    }
+
+    func applySkillManagerLocalCreate() async {
+        guard let preview = skillManagerLocalCreatePreview else { return }
+        let name = skillManagerLocalSkillName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        guard !isApplyingSkillManagerMutation else { return }
+        isApplyingSkillManagerMutation = true
+        isWriting = true
+        errorMessage = nil
+        lastMutationMessage = nil
+        defer {
+            isWriting = false
+            isApplyingSkillManagerMutation = false
+        }
+
+        do {
+            skillManagerLocalCreatePreview = try await service.applySkillManagerLocalCreate(preview: preview, name: name)
+            try await refreshCollections()
+            lastMutationMessage = UIStrings.text("skillManager.localCreate.applied", "Local skill template created and imported.")
+            recordLocalRefresh(message: UIStrings.refreshAfterWrite)
+        } catch {
+            errorMessage = error.localizedDescription
+            lastMutationMessage = nil
+        }
+    }
+
+    func previewSkillManagerLocalDelete(skill: SkillRecord) async {
+        guard !isPreviewingSkillManagerMutation else { return }
+        isPreviewingSkillManagerMutation = true
+        errorMessage = nil
+        defer { isPreviewingSkillManagerMutation = false }
+
+        do {
+            skillManagerLocalDeletePreview = try await service.previewSkillManagerLocalDelete(instanceID: skill.id)
+        } catch {
+            errorMessage = error.localizedDescription
+            skillManagerLocalDeletePreview = nil
+        }
+    }
+
+    func applySkillManagerLocalDelete() async {
+        guard let preview = skillManagerLocalDeletePreview else { return }
+        guard preview.physicalDeleteAllowed else {
+            errorMessage = preview.summary
+            return
+        }
+        guard !isApplyingSkillManagerMutation else { return }
+        isApplyingSkillManagerMutation = true
+        isWriting = true
+        errorMessage = nil
+        lastMutationMessage = nil
+        defer {
+            isWriting = false
+            isApplyingSkillManagerMutation = false
+        }
+
+        do {
+            skillManagerLocalDeletePreview = try await service.applySkillManagerLocalDelete(instanceID: preview.instanceId)
+            try await refreshCollections()
+            lastMutationMessage = UIStrings.text("skillManager.localDelete.applied", "Local skill deleted.")
+            recordLocalRefresh(message: UIStrings.refreshAfterWrite)
+        } catch {
+            errorMessage = error.localizedDescription
+            lastMutationMessage = nil
+        }
+    }
+
     func exportLocalReport(includeSelectedSkill: Bool = true) async {
         guard !isRefreshBusy else {
             errorMessage = UIStrings.operationUnavailableBusy
@@ -929,6 +1448,84 @@ final class SkillStore: ObservableObject {
             errorMessage = error.localizedDescription
             return nil
         }
+    }
+
+    func skillManagerSourcePath(for localSkill: SkillRecord) -> String {
+        let url = URL(fileURLWithPath: localSkill.path)
+        if url.lastPathComponent.caseInsensitiveCompare("SKILL.md") == .orderedSame {
+            return url.deletingLastPathComponent().path
+        }
+        return localSkill.path
+    }
+
+    private func clearSkillManagerWritePreviews() {
+        skillManagerMutationPreview = nil
+        skillManagerLocalCreatePreview = nil
+        skillManagerLocalDeletePreview = nil
+    }
+
+    private func previewSkillManagerMutation(_ operation: () async throws -> SkillManagerMutationRecord) async {
+        guard !isPreviewingSkillManagerMutation else { return }
+        isPreviewingSkillManagerMutation = true
+        errorMessage = nil
+        lastMutationMessage = nil
+        defer { isPreviewingSkillManagerMutation = false }
+
+        do {
+            skillManagerMutationPreview = try await operation()
+        } catch {
+            errorMessage = error.localizedDescription
+            skillManagerMutationPreview = nil
+        }
+    }
+
+    private func applySkillManagerMutation(_ operation: () async throws -> SkillManagerMutationRecord) async {
+        guard !isApplyingSkillManagerMutation else { return }
+        isApplyingSkillManagerMutation = true
+        isWriting = true
+        errorMessage = nil
+        lastMutationMessage = nil
+        defer {
+            isWriting = false
+            isApplyingSkillManagerMutation = false
+        }
+
+        do {
+            let result = try await operation()
+            skillManagerMutationPreview = result
+            detailsByID.removeAll()
+            try await refreshCollections()
+            await listSkillManagerInstalled()
+            lastMutationMessage = UIStrings.text("skillManager.apply.applied", "Skill Manager operation applied.")
+            recordLocalRefresh(message: UIStrings.refreshAfterWrite)
+            await loadSelectedDetail()
+        } catch {
+            errorMessage = error.localizedDescription
+            lastMutationMessage = nil
+        }
+    }
+
+    private func selectedSkillManagerAgentIDsForMutation() -> [String]? {
+        let agents = skillManagerSelectedAgents
+        guard !agents.isEmpty else {
+            errorMessage = UIStrings.text("skillManager.agents.required", "Select at least one target agent.")
+            return nil
+        }
+        return agents
+    }
+
+    private func selectedSkillManagerAgentIDsForRead() -> [String] {
+        let agents = skillManagerSelectedAgents
+        return agents.isEmpty ? SkillManagerAgent.defaultTargets.map(\.rawValue) : agents
+    }
+
+    private func parsedSkillManagerSkillNames() -> [String] {
+        skillManagerSkillName
+            .split { character in
+                character == "," || character == "\n" || character == ";"
+            }
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 
     private func setFindingTriageStatus(_ status: FindingTriageStatus, triageKeys: [String]) async {
@@ -1561,6 +2158,16 @@ final class SkillStore: ObservableObject {
             )
             return
         }
+        let selectedAgents = taskCockpitSelectedAgents
+        guard !selectedAgents.isEmpty else {
+            let message = UIStrings.text("taskCockpit.agentScope.required", "Select at least one agent.")
+            taskCockpitResult = .unavailable(taskText: taskText, reason: message)
+            taskCockpitOperationState = TaskCockpitOperationState.idle.finished(
+                phase: .failed,
+                message: message
+            )
+            return
+        }
         guard !isBuildingTaskCockpit else { return }
         guard !isRefreshBusy else {
             taskCockpitResult = .unavailable(taskText: taskText, reason: UIStrings.operationUnavailableBusy)
@@ -1583,20 +2190,30 @@ final class SkillStore: ObservableObject {
         )
         scheduleTaskCockpitTimeout(operationID: operationID, taskText: taskText)
 
-        let project = activeProjectContext
-        let selectedSkill = selectedSidebarSelection?.isSkill == true ? selectedSkill : nil
-        let agent = selectedSkill?.agent
+        let candidateSkillIDs = taskCockpitCandidateSkillIDs(for: selectedAgents)
         let serviceTask = Task {
-            try await service.buildTaskCockpit(
+            let preview = try await service.previewPromptForTaskCockpit(
                 taskText: taskText,
-                agent: agent,
-                project: project,
-                selectedSkill: selectedSkill,
-                limit: 5,
-                includeSessionReview: false,
-                includeProviderObservability: false,
-                includeRemediationContext: false,
-                includeEvidence: false
+                agents: selectedAgents,
+                instanceIDs: candidateSkillIDs
+            )
+            guard self.canSendLLMPrompt(preview) else {
+                let reason = UIStrings.localizedServiceMessage(preview.disabledReason ?? UIStrings.llmSkillAnalysisUnavailable)
+                return TaskCockpitResult.unavailable(taskText: taskText, reason: reason)
+            }
+            let sendResult = try await service.confirmPromptAndSendForTaskCockpit(
+                previewID: preview.previewID,
+                taskText: taskText,
+                agents: selectedAgents,
+                instanceIDs: candidateSkillIDs
+            )
+            guard sendResult.success else {
+                return TaskCockpitResult.unavailable(taskText: taskText, reason: UIStrings.localizedServiceMessage(sendResult.message))
+            }
+            return TaskCockpitProviderOutputParser.result(
+                from: sendResult.outputText,
+                taskText: taskText,
+                agentIDs: selectedAgents
             )
         }
         taskCockpitServiceTask = serviceTask
@@ -1618,11 +2235,11 @@ final class SkillStore: ObservableObject {
                     message: UIStrings.taskCockpitLoaded
                 )
             }
-            recordTaskCockpitHistory(result: result, taskText: taskText)
+            recordTaskCockpitHistory(result: result, taskText: taskText, agentIDs: selectedAgents)
         } catch {
             guard isCurrentTaskCockpitOperation(operationID) else { return }
-            let message = error.localizedDescription
-            taskCockpitResult = .unavailable(taskText: taskText, reason: error.localizedDescription)
+            let message = UIStrings.localizedServiceMessage(error.localizedDescription)
+            taskCockpitResult = .unavailable(taskText: taskText, reason: message)
             finishTaskCockpitOperation(
                 operationID,
                 phase: .failed,
@@ -2066,28 +2683,42 @@ final class SkillStore: ObservableObject {
     }
 
     func refreshSelectedAgentLocalSessions() async {
-        await previewLocalSessions(allowDuringCatalogRefresh: true)
+        await previewLocalSessions(allowDuringCatalogRefresh: true, force: true)
+    }
+
+    func refreshSelectedAgentLocalSessionsIfNeeded() async {
+        await previewLocalSessions(allowDuringCatalogRefresh: true, force: false)
     }
 
     func previewLocalSessions() async {
-        await previewLocalSessions(allowDuringCatalogRefresh: false)
+        await previewLocalSessions(allowDuringCatalogRefresh: false, force: true)
     }
 
-    private func previewLocalSessions(allowDuringCatalogRefresh: Bool) async {
+    private func previewLocalSessions(allowDuringCatalogRefresh: Bool, force: Bool) async {
         let roots = normalizedLocalSessionPreviewRoots
         guard allowDuringCatalogRefresh || !isRefreshBusy else {
             localSessionPreviewResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
             return
         }
 
+        let requestKey = localSessionPreviewRequestKey(roots: roots)
+        if !force {
+            if loadedLocalSessionPreviewRequestKey == requestKey || activeLocalSessionPreviewRequestKey == requestKey {
+                return
+            }
+        }
+
         localSessionPreviewGeneration += 1
         let generation = localSessionPreviewGeneration
         let requestedAgentFilter = agentFilter
+        let previousResult = localSessionPreviewResult
         let agent = requestedAgentFilter == .all ? nil : requestedAgentFilter.rawValue
+        activeLocalSessionPreviewRequestKey = requestKey
         isPreviewingLocalSessions = true
         defer {
             if generation == localSessionPreviewGeneration {
                 isPreviewingLocalSessions = false
+                activeLocalSessionPreviewRequestKey = nil
             }
         }
 
@@ -2095,23 +2726,40 @@ final class SkillStore: ObservableObject {
             let result = try await service.previewLocalSessions(
                 authorizedRoots: roots,
                 agent: agent,
-                scope: localSessionScopeFilter,
+                scope: .all,
                 search: nil,
                 project: activeProjectContext,
                 limit: 20
             )
             guard generation == localSessionPreviewGeneration, agentFilter == requestedAgentFilter else { return }
             localSessionPreviewResult = result
+            loadedLocalSessionPreviewRequestKey = requestKey
             normalizeSelectedLocalSession()
         } catch {
             guard generation == localSessionPreviewGeneration, agentFilter == requestedAgentFilter else { return }
-            localSessionPreviewResult = .unavailable(reason: error.localizedDescription)
-            selectedLocalSessionID = nil
-            if selectedSidebarSelection?.isSession == true {
-                setSidebarSelection(nil)
-                selectedDetailSection = .overview
+            loadedLocalSessionPreviewRequestKey = requestKey
+            if previousResult.sessionRows.isEmpty {
+                localSessionPreviewResult = .unavailable(reason: error.localizedDescription)
+                selectedLocalSessionID = nil
+                if selectedSidebarSelection?.isSession == true {
+                    setSidebarSelection(nil)
+                    selectedDetailSection = .overview
+                }
             }
         }
+    }
+
+    private func localSessionPreviewRequestKey(roots: [String]) -> String {
+        let agent = agentFilter == .all ? SkillAgentFilter.all.rawValue : agentFilter.rawValue
+        let rootKey = roots.joined(separator: "\u{1f}")
+        let projectRoot = activeProjectContext?.rootPath ?? ""
+        let projectCWD = activeProjectContext?.currentCWD ?? ""
+        return [
+            agent,
+            projectRoot,
+            projectCWD,
+            rootKey
+        ].joined(separator: "\u{1e}")
     }
 
     func previewMcpServers() async {
@@ -2286,16 +2934,119 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func loadSelectedAgentConfigDataIfNeeded() async {
+        await loadAgentConfigSnapshotsIfNeeded(agent: agentFilter.rawValue)
+        await loadCurrentAgentConfigDocumentsIfNeeded(agent: agentFilter.rawValue)
+        if agentFilter == .claudeCode {
+            await loadClaudeSettingsIfNeeded()
+        }
+    }
+
+    func refreshSelectedAgentConfigData() async {
+        await loadAgentConfigSnapshots(agent: agentFilter.rawValue)
+        await loadCurrentAgentConfigDocuments(agent: agentFilter.rawValue)
+        if agentFilter == .claudeCode {
+            await loadClaudeSettings()
+        }
+    }
+
+    func loadClaudeSettingsIfNeeded() async {
+        await loadClaudeSettings(force: false)
+    }
+
     func loadClaudeSettings() async {
+        await loadClaudeSettings(force: true)
+    }
+
+    private func loadClaudeSettings(force: Bool) async {
+        let requestKey = claudeSettingsRequestKey()
+        if !force {
+            if loadedClaudeSettingsRequestKey == requestKey || activeClaudeSettingsRequestKey == requestKey {
+                return
+            }
+        }
+        guard activeClaudeSettingsRequestKey != requestKey else { return }
+
+        claudeSettingsLoadGeneration += 1
+        let generation = claudeSettingsLoadGeneration
+        activeClaudeSettingsRequestKey = requestKey
         isLoadingSettings = true
         settingsErrorMessage = nil
-        defer { isLoadingSettings = false }
+        defer {
+            if generation == claudeSettingsLoadGeneration {
+                isLoadingSettings = false
+            }
+            if activeClaudeSettingsRequestKey == requestKey {
+                activeClaudeSettingsRequestKey = nil
+            }
+        }
 
         do {
-            claudeSettings = try await service.readClaudeSettings()
+            let settings = try await service.readClaudeSettings()
+            guard generation == claudeSettingsLoadGeneration else { return }
+            claudeSettings = settings
+            loadedClaudeSettingsRequestKey = requestKey
         } catch {
+            guard generation == claudeSettingsLoadGeneration else { return }
             settingsErrorMessage = error.localizedDescription
         }
+    }
+
+    func loadCurrentAgentConfigDocumentsIfNeeded(agent requestedAgent: String? = nil) async {
+        await loadCurrentAgentConfigDocuments(agent: requestedAgent, force: false)
+    }
+
+    func loadCurrentAgentConfigDocuments(agent requestedAgent: String? = nil) async {
+        await loadCurrentAgentConfigDocuments(agent: requestedAgent, force: true)
+    }
+
+    private func loadCurrentAgentConfigDocuments(agent requestedAgent: String? = nil, force: Bool) async {
+        guard let agent = normalizedConfigAgent(requestedAgent) else {
+            if !currentAgentConfigDocuments.isEmpty {
+                currentAgentConfigDocuments = []
+                normalizeConfigSelection()
+            }
+            return
+        }
+
+        let requestKey = agentConfigRequestKey(agent: agent)
+        if !force {
+            if loadedAgentConfigDocumentRequestKey == requestKey || activeAgentConfigDocumentRequestKey == requestKey {
+                return
+            }
+        }
+        guard activeAgentConfigDocumentRequestKey != requestKey else { return }
+
+        agentConfigDocumentLoadGeneration += 1
+        let generation = agentConfigDocumentLoadGeneration
+        activeAgentConfigDocumentRequestKey = requestKey
+        isLoadingAgentConfigDocuments = true
+        settingsErrorMessage = nil
+        defer {
+            if generation == agentConfigDocumentLoadGeneration {
+                isLoadingAgentConfigDocuments = false
+            }
+            if activeAgentConfigDocumentRequestKey == requestKey {
+                activeAgentConfigDocumentRequestKey = nil
+            }
+        }
+
+        do {
+            let documents = try await service.readAgentConfig(agent: agent)
+            guard generation == agentConfigDocumentLoadGeneration, normalizedConfigAgent(nil) == agent else { return }
+            currentAgentConfigDocuments = documents
+            loadedAgentConfigDocumentRequestKey = requestKey
+            normalizeConfigSelection()
+        } catch {
+            guard generation == agentConfigDocumentLoadGeneration, normalizedConfigAgent(nil) == agent else { return }
+            normalizeConfigSelection()
+            settingsErrorMessage = error.localizedDescription
+        }
+    }
+
+    func clearSettingsFeedback() {
+        settingsMessage = nil
+        settingsErrorMessage = nil
     }
 
     func loadAIProviderStatus() async {
@@ -2492,22 +3243,53 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func loadAgentConfigSnapshotsIfNeeded(agent: String? = nil) async {
+        await loadAgentConfigSnapshots(agent: agent, force: false)
+    }
+
     func loadAgentConfigSnapshots(agent: String? = nil) async {
+        await loadAgentConfigSnapshots(agent: agent, force: true)
+    }
+
+    private func loadAgentConfigSnapshots(agent requestedAgent: String? = nil, force: Bool) async {
+        guard let agent = normalizedConfigAgent(requestedAgent) else {
+            if !agentConfigSnapshots.isEmpty {
+                agentConfigSnapshots = []
+                normalizeConfigSelection()
+            }
+            return
+        }
+
+        let requestKey = agentConfigRequestKey(agent: agent)
+        if !force {
+            if loadedAgentConfigSnapshotRequestKey == requestKey || activeAgentConfigSnapshotRequestKey == requestKey {
+                return
+            }
+        }
+        guard activeAgentConfigSnapshotRequestKey != requestKey else { return }
+
         agentConfigSnapshotLoadGeneration += 1
         let generation = agentConfigSnapshotLoadGeneration
+        activeAgentConfigSnapshotRequestKey = requestKey
         isLoadingAgentConfigSnapshots = true
+        defer {
+            if generation == agentConfigSnapshotLoadGeneration {
+                isLoadingAgentConfigSnapshots = false
+            }
+            if activeAgentConfigSnapshotRequestKey == requestKey {
+                activeAgentConfigSnapshotRequestKey = nil
+            }
+        }
 
         do {
             let records = try await fetchAgentConfigSnapshots(agent: agent)
-            guard generation == agentConfigSnapshotLoadGeneration else { return }
+            guard generation == agentConfigSnapshotLoadGeneration, normalizedConfigAgent(nil) == agent else { return }
             agentConfigSnapshots = records
+            loadedAgentConfigSnapshotRequestKey = requestKey
+            normalizeConfigSelection()
         } catch {
-            guard generation == agentConfigSnapshotLoadGeneration else { return }
+            guard generation == agentConfigSnapshotLoadGeneration, normalizedConfigAgent(nil) == agent else { return }
             errorMessage = error.localizedDescription
-        }
-
-        if generation == agentConfigSnapshotLoadGeneration {
-            isLoadingAgentConfigSnapshots = false
         }
     }
 
@@ -2532,6 +3314,11 @@ final class SkillStore: ObservableObject {
         self.conflicts = snapshot.conflicts
         self.healthSummary = snapshot.health
         self.agentConfigSnapshots = try await agentConfigSnapshots
+        if let agent = selectedAgentConfigTimelineAgent {
+            loadedAgentConfigSnapshotRequestKey = agentConfigRequestKey(agent: agent)
+        } else {
+            loadedAgentConfigSnapshotRequestKey = nil
+        }
         let currentSkillIDs = Set(snapshot.skills.map(\.id))
         scriptExecutionPreviews = scriptExecutionPreviews.filter { currentSkillIDs.contains($0.key) }
         hydratePromptSendResultsFromRuns(currentSkillIDs: currentSkillIDs)
@@ -2611,8 +3398,30 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    private func normalizedConfigAgent(_ requestedAgent: String?) -> String? {
+        let agent = requestedAgent ?? selectedAgentConfigTimelineAgent
+        guard let agent, agent != SkillAgentFilter.all.rawValue else { return nil }
+        return agent
+    }
+
+    private func agentConfigRequestKey(agent: String) -> String {
+        [
+            agent,
+            activeProjectContext?.rootPath ?? "",
+            activeProjectContext?.currentCWD ?? ""
+        ].joined(separator: "\u{1e}")
+    }
+
+    private func claudeSettingsRequestKey() -> String {
+        [
+            SkillAgentFilter.claudeCode.rawValue,
+            activeProjectContext?.rootPath ?? "",
+            activeProjectContext?.currentCWD ?? ""
+        ].joined(separator: "\u{1e}")
+    }
+
     private func fetchAgentConfigSnapshots(agent requestedAgent: String? = nil) async throws -> [ConfigSnapshotRecord] {
-        guard let agent = requestedAgent ?? selectedAgentConfigTimelineAgent else {
+        guard let agent = normalizedConfigAgent(requestedAgent) else {
             return []
         }
         let records = try await service.listAgentConfigSnapshots(agent: agent, scope: nil)
@@ -2755,11 +3564,12 @@ final class SkillStore: ObservableObject {
         }
     }
 
-    private func recordTaskCockpitHistory(result: TaskCockpitResult, taskText: String) {
+    private func recordTaskCockpitHistory(result: TaskCockpitResult, taskText: String, agentIDs: [String]) {
         let normalizedTask = taskText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedTask.isEmpty, !result.isUnavailable else { return }
         let record = TaskCockpitHistoryRecord(
             taskText: normalizedTask,
+            agentIDs: agentIDs,
             result: result,
             operationState: taskCockpitOperationState
         )
@@ -2769,6 +3579,41 @@ final class SkillStore: ObservableObject {
             taskCockpitHistory.removeLast(taskCockpitHistory.count - TaskCockpitHistoryStore.maxRecords)
         }
         taskCockpitHistoryStore.save(taskCockpitHistory)
+    }
+
+    private func resetTaskCockpitAgentSelectionToSidebarDefault(clearResult: Bool) {
+        let defaultAgents: [String]
+        if agentFilter == .all {
+            defaultAgents = SkillAgentFilter.managementCases.map(\.rawValue)
+        } else {
+            defaultAgents = [agentFilter.rawValue]
+        }
+        setTaskCockpitAgentSelection(defaultAgents, clearResult: clearResult)
+    }
+
+    private func setTaskCockpitAgentSelection(_ agentIDs: [String], clearResult: Bool) {
+        let normalized = normalizedTaskCockpitAgentIDs(agentIDs)
+        taskCockpitSelectedAgentIDs = Set(normalized)
+        if clearResult {
+            clearTaskCockpitTransientState()
+        }
+    }
+
+    private func normalizedTaskCockpitAgentIDs(_ agentIDs: [String]) -> [String] {
+        let orderedAgents = SkillAgentFilter.managementCases.map(\.rawValue)
+        let selected = Set(agentIDs.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) })
+        return orderedAgents.filter { selected.contains($0) }
+    }
+
+    private func taskCockpitCandidateSkillIDs(for agentIDs: [String]) -> [SkillRecord.ID] {
+        let selectedAgents = Set(normalizedTaskCockpitAgentIDs(agentIDs))
+        guard !selectedAgents.isEmpty else { return [] }
+        return skills
+            .filter { skill in
+                selectedAgents.contains(skill.agent)
+                    && DisplayText.statusKind(skill.state, enabled: skill.enabled) == .enabled
+            }
+            .map(\.id)
     }
 
     private var roundedTaskCockpitTimeoutSeconds: Int {
@@ -3066,6 +3911,8 @@ final class SkillStore: ObservableObject {
         agentSessionSkillReviewDeleteResult = nil
         agentSessionSkillReviewList = AgentSessionSkillReviewListResult(reviews: [])
         localSessionPreviewResult = LocalSessionPreviewResult()
+        loadedLocalSessionPreviewRequestKey = nil
+        activeLocalSessionPreviewRequestKey = nil
         selectedLocalSessionID = nil
         if selectedSidebarSelection?.isSession == true {
             setSidebarSelection(nil)
@@ -3148,9 +3995,19 @@ final class SkillStore: ObservableObject {
     private func normalizeSelectionToVisibleSkills() {
         let visibleSkills = filteredSkills
         if let selectedSkillID, visibleSkills.contains(where: { $0.id == selectedSkillID }) {
+            if sidebarContentMode == .skills, selectedSidebarSelection == nil {
+                setSidebarSelection(.skill(selectedSkillID))
+            }
             return
         }
-        setSelectedSkillID(visibleSkills.first?.id, syncSidebar: selectedSidebarSelection?.isSkill == true)
+        let nextSkillID = visibleSkills.first?.id
+        setSelectedSkillID(
+            nextSkillID,
+            syncSidebar: selectedSidebarSelection?.isSkill == true
+        )
+        if sidebarContentMode == .skills, selectedSidebarSelection == nil, let nextSkillID {
+            setSidebarSelection(.skill(nextSkillID))
+        }
     }
 
     private func handleSidebarSelectionChanged() {
@@ -3168,7 +4025,9 @@ final class SkillStore: ObservableObject {
             }
             selectedDetailSection = section
         case .session(let id):
-            selectedLocalSessionID = id
+            if selectedLocalSessionID != id {
+                selectedLocalSessionID = id
+            }
             selectedDetailSection = .overview
         case .skill(let id):
             setSelectedSkillID(id, syncSidebar: false)
@@ -3177,6 +4036,13 @@ final class SkillStore: ObservableObject {
             }
         case .configOverview:
             selectedDetailSection = .overview
+        case .configDocument(let target):
+            if currentAgentConfigDocuments.contains(where: { $0.target == target }) {
+                selectedDetailSection = .overview
+            } else {
+                setSidebarSelection(.configOverview)
+                selectedDetailSection = .overview
+            }
         case .configSnapshot(let id):
             if agentConfigSnapshots.contains(where: { $0.id == id }) {
                 selectedDetailSection = .overview
@@ -3232,24 +4098,45 @@ final class SkillStore: ObservableObject {
             if selectedSidebarSelection?.isConfig != true {
                 setSidebarSelection(.configOverview)
             } else {
-                normalizeConfigSnapshotSelection()
+                normalizeConfigSelection()
             }
         }
     }
 
-    private func normalizeConfigSnapshotSelection() {
-        guard case let .configSnapshot(id) = selectedSidebarSelection else { return }
-        let visible = agentConfigSnapshots.contains { snapshot in
-            snapshot.id == id
-                && (agentFilter == .all || snapshot.agent == agentFilter.rawValue)
-                && configScopeFilter.includes(snapshot)
-        }
-        if !visible {
-            setSidebarSelection(.configOverview)
+    private func normalizeConfigSelection() {
+        switch selectedSidebarSelection {
+        case .configDocument(let target):
+            let visible = currentAgentConfigDocuments.contains { document in
+                document.target == target
+                    && (agentFilter == .all || document.agent == agentFilter.rawValue)
+                    && configScopeFilter.includes(document)
+            }
+            if !visible {
+                setSidebarSelection(.configOverview)
+            }
+        case .configSnapshot(let id):
+            let visible = agentConfigSnapshots.contains { snapshot in
+                snapshot.id == id
+                    && (agentFilter == .all || snapshot.agent == agentFilter.rawValue)
+                    && configScopeFilter.includes(snapshot)
+            }
+            if !visible {
+                setSidebarSelection(.configOverview)
+            }
+        default:
+            return
         }
     }
 
     private func setSelectedSkillID(_ id: SkillRecord.ID?, syncSidebar: Bool) {
+        guard selectedSkillID != id else {
+            if syncSidebar, sidebarContentMode == .skills, let id, selectedSidebarSelection != .skill(id) {
+                setSidebarSelection(.skill(id))
+            } else if syncSidebar, id == nil, selectedSidebarSelection?.isSkill == true {
+                setSidebarSelection(nil)
+            }
+            return
+        }
         if syncSidebar {
             selectedSkillID = id
         } else {
@@ -3260,6 +4147,7 @@ final class SkillStore: ObservableObject {
     }
 
     private func setSidebarSelection(_ selection: SidebarSelection?) {
+        guard selectedSidebarSelection != selection else { return }
         isSynchronizingSidebarSelection = true
         selectedSidebarSelection = selection
         isSynchronizingSidebarSelection = false

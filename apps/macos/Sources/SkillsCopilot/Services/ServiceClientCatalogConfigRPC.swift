@@ -251,6 +251,13 @@ extension ServiceClient {
         try await call(method: "config.readClaudeSettings", params: EmptyParams())
     }
 
+    func readAgentConfig(agent: String, scope: String? = nil) async throws -> [ConfigDocumentRecord] {
+        try await call(
+            method: "config.readAgentConfig",
+            params: ReadAgentConfigParams(agent: agent, scope: scope)
+        )
+    }
+
     func saveClaudeSettings(content: String) async throws -> ConfigDocumentRecord {
         try await call(
             method: "config.saveClaudeSettings",

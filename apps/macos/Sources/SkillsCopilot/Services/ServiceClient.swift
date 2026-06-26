@@ -96,6 +96,11 @@ struct ToggleSkillParams: Encodable {
     }
 }
 
+struct ReadAgentConfigParams: Encodable {
+    let agent: String
+    let scope: String?
+}
+
 struct BatchToggleParams: Encodable {
     let instanceIDs: [String]
     let targetEnabled: Bool
@@ -843,6 +848,7 @@ struct PreviewLLMPromptParams: Encodable {
     let instanceId: String?
     let definitionId: String?
     let agent: String?
+    let agents: [String]?
     let taskText: String?
     let userIntent: String?
     let candidateInstanceIDs: [String]?
@@ -857,6 +863,7 @@ struct PreviewLLMPromptParams: Encodable {
         case instanceId = "instance_id"
         case definitionId = "definition_id"
         case agent
+        case agents
         case taskText = "task_text"
         case userIntent = "user_intent"
         case candidateInstanceIDs = "candidate_instance_ids"
@@ -1086,7 +1093,10 @@ final class ServiceClient {
             case .processFailed(let status, let stderr):
                 return "Service exited with \(status): \(stderr)"
             case .processTimedOut:
-                return "Service call timed out before the sidecar returned a complete response."
+                return UIStrings.text(
+                    "service.error.sidecarTimedOut",
+                    "Service call timed out before the sidecar returned a complete response."
+                )
             }
         }
     }

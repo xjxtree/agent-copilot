@@ -412,6 +412,13 @@ impl Catalog {
         Ok(())
     }
 
+    pub fn delete_skill_instance(&self, id: &str) -> Result<bool, CatalogError> {
+        Ok(self
+            .conn
+            .execute("DELETE FROM skill_instance WHERE id = ?1", params![id])?
+            > 0)
+    }
+
     pub fn create_skill_event(&self, draft: SkillEventDraft<'_>) -> Result<(), CatalogError> {
         self.conn.execute(
             "INSERT INTO skill_event (instance_id, kind, payload, occurred_at)

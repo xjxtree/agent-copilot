@@ -2679,6 +2679,102 @@ fn read_claude_settings_returns_default_for_missing_file() {
 }
 
 #[test]
+fn read_agent_config_returns_pi_documents_without_creating_missing_project_config_dir() {
+    let temp_root = temp_test_dir("read-agent-config-pi");
+    let home = temp_root.join("home");
+    let project = temp_root.join("project");
+    let global_settings = home.join(".pi/agent/settings.json");
+    std::fs::create_dir_all(global_settings.parent().expect("Pi settings parent"))
+        .expect("create Pi settings parent");
+    std::fs::create_dir_all(&project).expect("create project");
+    std::fs::write(
+        &global_settings,
+        "{\"skills\":{\"disabled\":[\"remote-review\"]}}\n",
+    )
+    .expect("write Pi settings");
+    let ctx = AdapterContext {
+        user_home: home.clone(),
+        project_root: Some(project.clone()),
+        project_cwd: Some(project.clone()),
+        extra_roots: Vec::new(),
+    };
+
+    let documents = read_agent_config(&ctx, "pi", None).expect("read Pi config documents");
+
+    assert_eq!(documents.len(), 2);
+    assert_eq!(documents[0].agent, "pi");
+    assert_eq!(documents[0].scope, "agent-global");
+    assert!(documents[0].exists);
+    assert!(documents[0].content.contains("remote-review"));
+    assert_eq!(documents[1].scope, "agent-project");
+    assert!(!documents[1].exists);
+    assert_eq!(documents[1].content, "{\"skills\":{\"disabled\":[]}}\n");
+    assert!(
+        !project.join(".pi").exists(),
+        "read-only config preview must not create missing config directories"
+    );
+
+    let _ = std::fs::remove_dir_all(&temp_root);
+}
+
+#[test]
+fn read_agent_config_returns_codex_user_and_project_documents_without_enabling_project_writes() {
+    let temp_root = temp_test_dir("read-agent-config-codex");
+    let home = temp_root.join("home");
+    let project = temp_root.join("project");
+    let user_config = home.join(".codex/config.toml");
+    let project_config = project.join(".codex/config.toml");
+    std::fs::create_dir_all(user_config.parent().expect("Codex user config parent"))
+        .expect("create Codex user config dir");
+    std::fs::create_dir_all(
+        project_config
+            .parent()
+            .expect("Codex project config parent"),
+    )
+    .expect("create Codex project config dir");
+    std::fs::write(&user_config, "model = \"gpt-5\"\n").expect("write Codex user config");
+    std::fs::write(&project_config, "approval_policy = \"never\"\n")
+        .expect("write Codex project config");
+    let ctx = AdapterContext {
+        user_home: home.clone(),
+        project_root: Some(project.clone()),
+        project_cwd: Some(project.clone()),
+        extra_roots: Vec::new(),
+    };
+
+    let documents = read_agent_config(&ctx, "codex", None).expect("read Codex config documents");
+
+    assert_eq!(documents.len(), 2);
+    assert_eq!(documents[0].agent, "codex");
+    assert_eq!(documents[0].scope, "agent-global");
+    assert_eq!(documents[0].format, "toml");
+    assert!(documents[0].exists);
+    assert!(documents[0].content.contains("gpt-5"));
+    assert_eq!(documents[1].scope, "agent-project");
+    assert_eq!(
+        documents[1].target,
+        project_config.to_string_lossy().to_string()
+    );
+    assert_eq!(documents[1].format, "toml");
+    assert!(documents[1].exists);
+    assert!(documents[1].content.contains("approval_policy"));
+
+    let project_only = read_agent_config(&ctx, "codex", Some("agent-project"))
+        .expect("read Codex project config document");
+    assert_eq!(project_only.len(), 1);
+    assert_eq!(
+        project_only[0].target,
+        project_config.to_string_lossy().to_string()
+    );
+    assert!(
+        expected_config_target(&ctx, AgentId::Codex, Scope::AgentProject).is_err(),
+        "Codex project config remains read-only for write targets"
+    );
+
+    let _ = std::fs::remove_dir_all(&temp_root);
+}
+
+#[test]
 #[cfg(unix)]
 fn read_claude_settings_rejects_symlinked_config_directory() {
     let temp_root = std::env::temp_dir().join(format!(

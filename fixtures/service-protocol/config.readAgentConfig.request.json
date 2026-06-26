@@ -1,0 +1,7 @@
+{
+  "id": "fixture-config-read-agent-config",
+  "method": "config.readAgentConfig",
+  "params": {
+    "agent": "pi"
+  }
+}

@@ -9,6 +9,7 @@ struct TaskCockpitModelTests {
         try derivesPreparingProgressRowsFromOperationState()
         try derivesCompletedProgressRowsFromResultMetadata()
         try derivesFallbackProgressRowsWithoutUnsafeCapabilities()
+        try parsesLooseProviderCandidateJSONWithoutLeakingRawOutput()
         try decodesServiceProtocolFixture()
     }
 
@@ -357,6 +358,54 @@ struct TaskCockpitModelTests {
         try expectEqual(snapshot.row(for: .readiness)?.state, .fallback, "Stages with returned fallback evidence should be marked fallback.")
         try expectEqual(snapshot.row(for: .routing)?.state, .unavailable, "Missing stages in a fallback result should be unavailable, not complete.")
         try expectEqual(snapshot.stageRows.allSatisfy(\.safetyFlagsClear), true, "Fallback progress rows must not introduce provider, write, script, credential, cloud, or telemetry affordances.")
+    }
+
+    private func parsesLooseProviderCandidateJSONWithoutLeakingRawOutput() throws {
+        let output = """
+        {
+          "agent_candidates": [
+            {
+              "agent_id": "claude-code",
+              "title": "Claude Code",
+              "score": 73,
+              "summary": "任务提到 ALB 指标与错误，Claude Code 有可用阿里云技能候选。",
+              "reasons": ["任务包含明确的 ALB 产品和指标/错误查询意图。"]
+            }
+          ],
+          "skill_candidates": [
+            {
+              "skill_id": "alibabacloud-cms-alert-rule-create",
+              "name": "alibabacloud-cms-alert-rule-create",
+              "agent": "claude-code",
+              "score": 61,
+              "routing_score": 61,
+              "summary": "候选与云监控相关，但仍需确认是否覆盖 ALB 指标读取。"
+            }
+          ],
+          "gap_rows": [
+            {
+              "title": "缺少查询边界",
+              "detail": "建议补充地域、实例或时间范围。"
+            }
+          ]
+        }
+        """
+
+        let result = TaskCockpitProviderOutputParser.result(
+            from: output,
+            taskText: "查看下阿里云 ALB 指标与错误情况",
+            agentIDs: ["claude-code", "codex"]
+        )
+
+        try expectFalse(result.isUnavailable, "Loose provider candidate JSON should recover a usable preflight result.")
+        try expectEqual(result.summary.recommendedAgent, "claude-code", "Loose provider result should infer the recommended agent from candidates.")
+        try expectEqual(result.agentCandidates.count, 1, "Loose provider result should recover agent candidates.")
+        try expectEqual(result.skillCandidates.first?.title, "alibabacloud-cms-alert-rule-create", "Loose provider result should recover skill candidates.")
+        try expectEqual(result.gapRows.first?.title, "缺少查询边界", "Loose provider result should recover gap rows.")
+        try expectFalse(
+            result.summary.summaryText.contains("agent_candidates"),
+            "Loose provider fallback must not leak raw JSON into the user-facing summary."
+        )
     }
 
     private func decodesServiceProtocolFixture() throws {

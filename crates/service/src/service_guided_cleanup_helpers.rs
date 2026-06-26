@@ -207,6 +207,7 @@ pub(crate) fn empty_guided_cleanup_flow_result(
                 app_language: None,
                 skill_instance_id: None,
                 instance_ids: Vec::new(),
+                agents: Vec::new(),
                 analysis_kind: None,
                 user_intent: Some(
                     "Explain deterministic guided cleanup flow steps using only local redacted evidence."

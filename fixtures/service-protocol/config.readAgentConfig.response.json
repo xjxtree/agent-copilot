@@ -1,0 +1,22 @@
+{
+  "id": "fixture-config-read-agent-config",
+  "ok": true,
+  "result": [
+    {
+      "agent": "pi",
+      "scope": "agent-global",
+      "target": "/tmp/skills-copilot-home/.pi/agent/settings.json",
+      "format": "json",
+      "content": "{\"skills\":{\"disabled\":[\"alibabacloud-agentbay-aio-skills\"]}}\n",
+      "exists": true
+    },
+    {
+      "agent": "pi",
+      "scope": "agent-project",
+      "target": "/tmp/skills-copilot-project/.pi/settings.json",
+      "format": "json",
+      "content": "{\"skills\":{\"disabled\":[]}}\n",
+      "exists": false
+    }
+  ]
+}

@@ -33,6 +33,7 @@ use skills_copilot_core::SkillScript;
 mod analysis;
 mod config_support;
 mod script_execution;
+mod skill_manager;
 
 use analysis::{
     dedupe_rule_finding_records, dedupe_rule_findings, validate_finding_triage_status,
@@ -46,7 +47,9 @@ use config_support::{
 };
 
 pub use analysis::*;
+pub use config_support::read_agent_config;
 pub use script_execution::*;
+pub use skill_manager::*;
 
 pub fn app_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
@@ -98,6 +101,12 @@ pub enum CommandError {
     InvalidRuleTuningRequest(String),
     #[error("invalid batch action: {0}")]
     InvalidBatchAction(String),
+    #[error("skill manager unavailable: {0}")]
+    SkillManagerUnavailable(String),
+    #[error("invalid skill manager request: {0}")]
+    InvalidSkillManagerRequest(String),
+    #[error("skill manager command failed: {0}")]
+    SkillManagerCommandFailed(String),
 }
 
 pub fn scan_claude_to_catalog(
@@ -3344,11 +3353,11 @@ fn batch_preview_token(
 }
 
 #[derive(Debug, Clone)]
-struct ConfigTarget {
-    agent: AgentId,
-    scope: Scope,
-    path: PathBuf,
-    format: ConfigFormat,
+pub(crate) struct ConfigTarget {
+    pub(crate) agent: AgentId,
+    pub(crate) scope: Scope,
+    pub(crate) path: PathBuf,
+    pub(crate) format: ConfigFormat,
 }
 
 fn config_target_for_instance(
@@ -4037,7 +4046,7 @@ fn should_honor_codex_home(ctx: &AdapterContext, codex_home: &Path) -> bool {
             .starts_with(normalize_path_lexically(&ctx.user_home))
 }
 
-fn normalize_path_lexically(path: &Path) -> PathBuf {
+pub(crate) fn normalize_path_lexically(path: &Path) -> PathBuf {
     use std::path::Component;
 
     let mut normalized = PathBuf::new();
@@ -4311,7 +4320,7 @@ fn preview_context_from_snapshot(
     }
 }
 
-fn expected_config_target(
+pub(crate) fn expected_config_target(
     ctx: &AdapterContext,
     agent: AgentId,
     scope: Scope,
@@ -4541,7 +4550,7 @@ fn validate_skill_install_target(
     Ok(())
 }
 
-fn reject_symlink(path: &Path, label: &str) -> Result<(), CommandError> {
+pub(crate) fn reject_symlink(path: &Path, label: &str) -> Result<(), CommandError> {
     match fs::symlink_metadata(path) {
         Ok(metadata) if metadata.file_type().is_symlink() => Err(CommandError::UnsafeConfigPath(
             format!("{label} is a symlink: {}", path.display()),

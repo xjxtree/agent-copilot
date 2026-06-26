@@ -1473,35 +1473,21 @@ impl ServiceHost {
                         "llm.previewPrompt task_cockpit requires user_intent/task".to_string(),
                     )
                 })?;
-                let cockpit = self.build_task_cockpit(TaskCockpitParams {
-                    task: task.to_string(),
-                    agent: None,
-                    candidate_instance_ids: params.instance_ids.clone(),
-                    limit: Some(8),
-                    include_session_review: Some(true),
-                    include_provider_observability: Some(true),
-                    include_remediation_context: Some(true),
-                    timeout_ms: None,
-                })?;
                 prompt_scope.extend([
-                    "deterministic task-first cockpit summary".to_string(),
-                    "task readiness and routing rows".to_string(),
-                    "cross-agent route rows".to_string(),
-                    "app-local session review rows".to_string(),
-                    "app-local provider observability metadata".to_string(),
-                    "read-only remediation next steps".to_string(),
-                    "gap, blocker, evidence, and safety summaries".to_string(),
+                    "redacted task preflight prompt".to_string(),
+                    "selected agent catalog summaries".to_string(),
+                    "effective enabled skill names and descriptions".to_string(),
+                    "adapter capability and diagnostic status summaries".to_string(),
+                    "required JSON result schema".to_string(),
                 ]);
                 included_fields.extend([
                     "redacted task intent".to_string(),
-                    "readiness and routing scores".to_string(),
-                    "candidate skill ids, names, agents, scopes, enabled states, and states"
+                    "selected agent ids and display names".to_string(),
+                    "adapter support statuses without raw config contents".to_string(),
+                    "effective skill ids, names, agents, enabled states, and descriptions"
                         .to_string(),
-                    "session review outcomes and detected/expected counts".to_string(),
-                    "provider/model/status/count metadata without raw prompts or responses"
+                    "task preflight feature description, evaluation rules, and output schema"
                         .to_string(),
-                    "read-only remediation next-step labels".to_string(),
-                    "evidence ids and safety flags".to_string(),
                 ]);
                 excluded_fields.extend([
                     "raw source paths".to_string(),
@@ -1511,10 +1497,16 @@ impl ServiceHost {
                     "raw trace content".to_string(),
                     "agent config contents".to_string(),
                     "raw skill body".to_string(),
+                    "skill frontmatter".to_string(),
                     "write/apply instructions".to_string(),
                     "snapshot creation or rollback commands".to_string(),
                 ]);
-                sections.push(render_task_cockpit_prompt_section(&cockpit, &mut redactor));
+                sections.push(self.render_task_cockpit_provider_prompt_section(
+                    task,
+                    &params.agents,
+                    &params.instance_ids,
+                    &mut redactor,
+                )?);
             }
             LlmPromptActionKind::SkillLifecycleTimeline => {
                 let timeline =
@@ -1571,7 +1563,11 @@ impl ServiceHost {
             }
         }
 
-        sections.push("Required output: concise Markdown draft guidance in the requested output language, with evidence notes, uncertainty, and safe next steps. Use narrow, pane-friendly Markdown: prefer bullets and short subsections. Do not use Markdown tables. Do not wrap the answer in fenced code blocks. For score breakdowns, write one bullet per component in the form `component: score - issue - evidence`. Mark all suggestions copy-only.".to_string());
+        if params.action == LlmPromptActionKind::TaskCockpit {
+            sections.push("Required output: return only valid JSON. Do not wrap it in Markdown fences. Use the exact shape requested in the task preflight section. All prose values must use the requested output language. Keep agent ids and skill names unchanged. Treat all recommendations as copy-only and read-only; do not include commands to execute.".to_string());
+        } else {
+            sections.push("Required output: concise Markdown draft guidance in the requested output language, with evidence notes, uncertainty, and safe next steps. Use narrow, pane-friendly Markdown: prefer bullets and short subsections. Do not use Markdown tables. Do not wrap the answer in fenced code blocks. For score breakdowns, write one bullet per component in the form `component: score - issue - evidence`. Mark all suggestions copy-only.".to_string());
+        }
         let estimated_output_tokens = match params.action {
             LlmPromptActionKind::Analyze => 700,
             LlmPromptActionKind::Recommend => 500,
@@ -1595,7 +1591,7 @@ impl ServiceHost {
             LlmPromptActionKind::GuidedCleanupFlow => 900,
             LlmPromptActionKind::TaskReadiness => 750,
             LlmPromptActionKind::RoutingConfidence => 850,
-            LlmPromptActionKind::TaskCockpit => 950,
+            LlmPromptActionKind::TaskCockpit => 1400,
             LlmPromptActionKind::SkillLifecycleTimeline => 850,
         };
         let prompt_preview = sections.join("\n\n");
@@ -1650,6 +1646,211 @@ impl ServiceHost {
             redactor.redact(&skill.frontmatter_raw),
             redactor.redact(&skill.body),
             finding_lines
+        ))
+    }
+
+    pub(crate) fn render_task_cockpit_provider_prompt_section(
+        &self,
+        task: &str,
+        agents: &[String],
+        instance_ids: &[String],
+        redactor: &mut PromptRedactor<'_>,
+    ) -> Result<String, ServiceError> {
+        let adapter_ctx = self.effective_adapter_ctx()?;
+        let capabilities = list_adapter_capabilities(&adapter_ctx);
+        let diagnostics = list_adapter_diagnostics(&adapter_ctx);
+        let catalog = self.open_existing_catalog_read_only()?;
+        let catalog_available = catalog.is_some();
+        let visible_skills = match catalog.as_ref() {
+            Some(catalog) => self.list_visible_skill_records(catalog)?,
+            None => Vec::new(),
+        };
+        let selected_agents = selected_task_cockpit_agents(agents, &visible_skills, &capabilities);
+        let selected_agent_set = selected_agents
+            .iter()
+            .map(String::as_str)
+            .collect::<BTreeSet<_>>();
+        let candidate_id_set = instance_ids
+            .iter()
+            .map(String::as_str)
+            .collect::<BTreeSet<_>>();
+
+        let mut effective_skills = Vec::new();
+        if let Some(catalog) = catalog.as_ref() {
+            for skill in visible_skills
+                .iter()
+                .filter(|skill| selected_agent_set.contains(skill.agent.as_str()))
+                .filter(|skill| {
+                    candidate_id_set.is_empty() || candidate_id_set.contains(skill.id.as_str())
+                })
+                .filter(|skill| skill.enabled && skill.state == "loaded")
+                .take(320)
+            {
+                let description = catalog
+                    .get_skill_detail(&skill.id)?
+                    .map(|detail| detail.description)
+                    .unwrap_or_default();
+                effective_skills.push(serde_json::json!({
+                    "id": redactor.redact(&skill.id),
+                    "name": redactor.redact(&skill.name),
+                    "agent": redactor.redact(&skill.agent),
+                    "definition_id": redactor.redact(&skill.definition_id),
+                    "scope": redactor.redact(&skill.scope),
+                    "state": redactor.redact(&skill.state),
+                    "enabled": skill.enabled,
+                    "description": truncate_chars(&redactor.redact(&description), 500),
+                }));
+            }
+        }
+
+        let agent_summaries = selected_agents
+            .iter()
+            .map(|agent| {
+                let capability = capabilities
+                    .iter()
+                    .find(|capability| capability.agent == agent.as_str());
+                let diagnostic = diagnostics
+                    .iter()
+                    .find(|diagnostic| diagnostic.agent == agent.as_str());
+                let active_skill_count = effective_skills
+                    .iter()
+                    .filter(|skill| skill.get("agent").and_then(Value::as_str) == Some(agent.as_str()))
+                    .count();
+                serde_json::json!({
+                    "agent": redactor.redact(agent),
+                    "display_name": capability
+                        .map(|capability| redactor.redact(capability.display_name))
+                        .unwrap_or_else(|| redactor.redact(agent)),
+                    "status": capability
+                        .map(|capability| redactor.redact(capability.status))
+                        .or_else(|| diagnostic.map(|diagnostic| redactor.redact(diagnostic.status)))
+                        .unwrap_or_else(|| "unknown".to_string()),
+                    "active_skill_count": active_skill_count,
+                    "capabilities": capability.map(|capability| serde_json::json!({
+                        "scan": capability.scan.supported,
+                        "project_scan": capability.project_scan.supported,
+                        "config_toggle": capability.config_toggle.supported,
+                        "config_snapshot": capability.config_snapshot.supported,
+                        "install": capability.install.supported,
+                        "writable": capability.writable.supported,
+                    })),
+                    "blockers": capability
+                        .map(|capability| capability.blockers.iter().map(|value| redactor.redact(value)).collect::<Vec<_>>())
+                        .unwrap_or_default(),
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let payload = serde_json::json!({
+            "feature": {
+                "name": "Task Preflight",
+                "description": "Read-only preflight that decides whether a user task is ready for agent handoff, which selected agent and effective skill fit best, what needs human confirmation, and what information is missing.",
+                "requirements": [
+                    "Compare the task with selected agents and effective skills by product/resource, action intent, required permissions, and likely execution risk.",
+                    "Prefer exact product/resource matches over broad or semantically adjacent matches.",
+                    "When multiple candidates are close, include the best three candidates with short reasons.",
+                    "Do not recommend unavailable agents or skills outside the selected agent scope.",
+                    "Do not invent hidden tools, credentials, network access, command execution, or write capability.",
+                    "Mark handoff as needs review when the task requires command execution, network/API access, credentials, unclear scope, or ambiguous resource ownership."
+                ]
+            },
+            "task": redactor.redact(task),
+            "selected_agents": selected_agents.iter().map(|agent| redactor.redact(agent)).collect::<Vec<_>>(),
+            "catalog_available": catalog_available,
+            "agent_summaries": agent_summaries,
+            "effective_skills": effective_skills,
+            "output_schema": {
+                "generated_by": "provider-task-cockpit",
+                "catalog_available": true,
+                "filters": {
+                    "task_text": "<same redacted task>",
+                    "agents": ["<selected agent id>"]
+                },
+                "summary": {
+                    "task_text": "<same redacted task>",
+                    "summary": "<one concise user-facing finding>",
+                    "recommended_agent": "<agent id or null>",
+                    "recommended_skill_name": "<skill name or null>",
+                    "readiness_score": "0-100 integer",
+                    "routing_score": "0-100 integer",
+                    "agent_candidate_count": "integer",
+                    "skill_candidate_count": "integer",
+                    "gap_count": "integer",
+                    "blocker_count": "integer"
+                },
+                "agent_candidates": [
+                    {
+                        "id": "agent:<agent id>",
+                        "rank": 1,
+                        "title": "<display name>",
+                        "agent": "<agent id>",
+                        "score": "0-100 integer",
+                        "summary": "<why this agent fits or does not fit>",
+                        "reasons": ["<short reason>"]
+                    }
+                ],
+                "skill_candidates": [
+                    {
+                        "id": "skill:<skill id>",
+                        "rank": 1,
+                        "title": "<skill name>",
+                        "agent": "<agent id>",
+                        "skill": {
+                            "instance_id": "<skill id>",
+                            "name": "<skill name>",
+                            "agent": "<agent id>",
+                            "definition_id": "<definition id>"
+                        },
+                        "score": "0-100 integer",
+                        "routing_score": "0-100 integer",
+                        "readiness_score": "0-100 integer",
+                        "summary": "<short reason this skill fits>",
+                        "reasons": ["<short reason>"]
+                    }
+                ],
+                "readiness_signals": [
+                    {
+                        "id": "signal:<short id>",
+                        "title": "<signal title>",
+                        "detail": "<brief user-facing process note>",
+                        "status": "ready|review|blocked",
+                        "agent": "<agent id or null>"
+                    }
+                ],
+                "gap_rows": [
+                    {
+                        "id": "gap:<short id>",
+                        "title": "<missing information>",
+                        "detail": "<what the user should add>",
+                        "severity": "info|warning|critical",
+                        "agent": "<agent id or null>"
+                    }
+                ],
+                "blocker_rows": [
+                    {
+                        "id": "blocker:<short id>",
+                        "title": "<handoff blocker>",
+                        "detail": "<why it blocks or needs confirmation>",
+                        "severity": "info|warning|critical",
+                        "agent": "<agent id or null>"
+                    }
+                ],
+                "safety_flags": {
+                    "provider_request_sent": true,
+                    "write_back_allowed": false,
+                    "script_execution_allowed": false,
+                    "raw_prompt_persisted": false,
+                    "raw_response_persisted": false,
+                    "notes": ["copy-only recommendation"]
+                }
+            }
+        });
+
+        let payload_text =
+            serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "{}".to_string());
+        Ok(format!(
+            "Task preflight provider input:\n{}\n\nReturn only JSON matching `output_schema`. The UI will display the top recommended path, the top three skill candidates, key reasons, and concise process notes.",
+            payload_text
         ))
     }
 
@@ -2249,6 +2450,41 @@ fn redact_model_task_string_list(
     redacted.sort();
     redacted.dedup();
     redacted
+}
+
+fn selected_task_cockpit_agents(
+    requested_agents: &[String],
+    skills: &[SkillRecord],
+    capabilities: &[AdapterCapabilityRecord],
+) -> Vec<String> {
+    let mut requested = requested_agents
+        .iter()
+        .map(|agent| agent.trim())
+        .filter(|agent| !agent.is_empty())
+        .collect::<BTreeSet<_>>();
+    if requested.is_empty() {
+        requested = skills
+            .iter()
+            .map(|skill| skill.agent.as_str())
+            .collect::<BTreeSet<_>>();
+    }
+    if requested.is_empty() {
+        requested = capabilities
+            .iter()
+            .map(|capability| capability.agent)
+            .collect::<BTreeSet<_>>();
+    }
+
+    let mut ordered = Vec::new();
+    for capability in capabilities {
+        if requested.remove(capability.agent) {
+            ordered.push(capability.agent.to_string());
+        }
+    }
+    for agent in requested {
+        ordered.push(agent.to_string());
+    }
+    ordered
 }
 
 fn redacted_model_task_record(

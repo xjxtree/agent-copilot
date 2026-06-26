@@ -17,6 +17,10 @@ This file describes security and privacy boundaries.
 
 - No cloud sync, accounts, telemetry, anonymous crash reports, or uncontrolled
   outbound network calls.
+- Skill Manager search/install/update may make outbound network calls only
+  through a supported external manager CLI after command preview, target
+  visibility, network posture, and explicit user confirmation are represented
+  in the typed service request.
 - Provider calls are optional and require user enablement, prompt preview,
   redaction, destination visibility, and explicit confirmation.
 - Raw transcripts, prompts, responses, traces, credentials, screenshots, and
@@ -39,6 +43,10 @@ This file describes security and privacy boundaries.
   cleanup guidance.
 - Adapter writes stay limited to the documented guarded toggles and install
   roots in `AGENTS.md` and `docs/adapters/agent-adapters.md`.
+- Skill Manager writes must use the manager tool when the tool supports the
+  operation. The service may run `npx skills` with argv-only commands,
+  telemetry-off env, redacted logs, and read-back catalog refresh; enable/
+  disable still uses the existing guarded agent-config toggle APIs.
 - Hidden apply/write paths, hidden task state, raw prompt/response/trace
   persistence, public distribution automation, signing, notarization, DMG, and
   ZIP work require explicit new scope.

@@ -1,0 +1,23 @@
+{
+  "id": "fixture-skill-manager-delete-local",
+  "ok": true,
+  "result": {
+    "instance_id": "fixture-local-tool-global",
+    "skill_name": "local-review-helper",
+    "path": "/tmp/skills-copilot-app/tool-global/skills/local-review-helper/SKILL.md",
+    "app_owned": true,
+    "physical_delete_allowed": false,
+    "blocked_by_references": [
+      {
+        "instance_id": "fixture-local-codex",
+        "name": "local-review-helper",
+        "agent": "codex",
+        "scope": "agent-project",
+        "path": "/tmp/skills-copilot-project/.codex/skills/local-review-helper/SKILL.md"
+      }
+    ],
+    "confirmed": false,
+    "deleted": false,
+    "summary": "Local skill cannot be physically deleted until supported-agent references are removed, or because the source is not app-owned."
+  }
+}

@@ -35,6 +35,8 @@ struct LocalSessionPreviewModelTests {
             "source_kind": "authorized-local-session",
             "agent": "codex",
             "redacted_path": "$HOME/.codex/sessions/fixture.jsonl",
+            "started_at": 1781599800000,
+            "ended_at": 1781600000000,
             "excerpt": "Used fixture-skill-id with <redacted>.",
             "excerpt_char_count": 38,
             "user_message_count": 1,
@@ -50,6 +52,7 @@ struct LocalSessionPreviewModelTests {
                 "title": "User",
                 "text": "Run skill:fixture-skill.",
                 "char_count": 24,
+                "timestamp": 1781599800000,
                 "evidence_refs": []
               },
               {
@@ -58,6 +61,7 @@ struct LocalSessionPreviewModelTests {
                 "title": "fixture-tool",
                 "text": "fixture tool call",
                 "char_count": 17,
+                "timestamp": 1781600000000,
                 "evidence_refs": []
               },
               {
@@ -111,10 +115,14 @@ struct LocalSessionPreviewModelTests {
         try expectEqual(result.skillUsageRows.first?.skillName, "fixture-skill", "Skill usage row should decode.")
         try expectEqual(result.skillUsageRows.first?.callCount, 2, "Skill usage count should decode.")
         try expectEqual(result.sessionRows.first?.agent, "codex", "Agent should decode from preview row.")
+        try expectEqual(result.sessionRows.first?.startedAt, 1781599800000, "Session start time should decode.")
+        try expectEqual(result.sessionRows.first?.endedAt, 1781600000000, "Session end time should decode.")
         try expectEqual(result.sessionRows.first?.evidenceRefs.count, 1, "Evidence refs should decode.")
         try expectEqual(result.sessionRows.first?.contentItems.count, 3, "Session content items should decode.")
         try expectEqual(result.sessionRows.first?.contentItems.first?.kind, .userMessage, "Session content kind should decode.")
+        try expectEqual(result.sessionRows.first?.contentItems.first?.timestamp, 1781599800000, "Message timestamp should decode.")
         try expectEqual(result.sessionRows.first?.contentItems[1].title, "fixture-tool", "Session content title should decode.")
+        try expectEqual(result.sessionRows.first?.contentItems[1].timestamp, 1781600000000, "Tool timestamp should decode.")
         try expectEqual(result.sessionRows.first?.contentItems.last?.kind, .skillCall, "Skill call content kind should decode.")
         try expectEqual(result.userMessageCount, 1, "Preview should decode user message count.")
         try expectEqual(result.totalMessageCount, 2, "Preview should decode total message count.")

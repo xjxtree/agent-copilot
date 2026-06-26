@@ -12,9 +12,13 @@ blocked operations. It is a current contract, not a version history.
 - Writes must go through the service layer with preview, snapshot/read-back
   where applicable, atomic write, rollback, and rescan.
 - Network fetch, package manager calls, script execution, credentials, cloud
-  sync, and telemetry are blocked unless explicitly scoped and reviewed.
+  sync, and telemetry are blocked unless explicitly scoped. The `skillManager.*`
+  service domain is the scoped exception for supported external manager CLIs.
 - Configured or compatibility roots are scan-only unless the adapter table
   below explicitly names a guarded write path.
+- Skill Manager defaults to the app-supported agent set only: Claude Code, Pi,
+  opencode, Codex, Hermes, and OpenClaw. It must not use wildcard manager
+  targets that could reach unsupported agents.
 
 ## Adapter Matrix
 
@@ -26,6 +30,28 @@ blocked operations. It is a current contract, not a version history.
 | Pi | Native `~/.pi/agent/skills`, project `.pi/skills`, and `.agents/skills` compatibility roots | Guarded settings toggle for native and `.agents` compatibility instances | Native Pi roots only | Package install/remove, `.agents` direct installs, scripts, credentials |
 | Hermes | Native `~/.hermes/skills` and explicit read-only `skills.external_dirs` | Global `skills.disabled` only | Native `~/.hermes/skills` | Project installs, `platform_disabled`, `external_dirs` writes, hub/URL/tap/update/uninstall/reset |
 | OpenClaw | Native `~/.openclaw/skills`, shared `~/.agents/skills`, bundled roots, confirmed workspace `<workspace>/skills`, and `<workspace>/.agents/skills` | `skills.entries.<key>.enabled` only | Native `~/.openclaw/skills` and confirmed workspace `<workspace>/skills` | `.agents` direct installs, allowlists, env/apiKey, install policy, load roots, ClawHub/Git/update/verify/workshop |
+
+## Skill Manager Tooling
+
+- `npx skills` is the first writable manager tool. It owns search, list,
+  install, remove, update, and local template creation when the app calls
+  `skillManager.*`.
+- `skills-npm` is registered for capability discovery only in this slice; write
+  execution needs a future scoped adapter.
+- Manager-backed search/install/update may use external network access only
+  when the request marks network access allowed and the app has shown command
+  preview and confirmation state.
+- Commands must be executed as argv arrays with telemetry-off env
+  (`DISABLE_TELEMETRY=1`, `DO_NOT_TRACK=1`) and redacted output logging. Shell
+  string concatenation is forbidden.
+- Install uses the manager default symlink flow. `--copy` is sent only for an
+  explicit copy selection.
+- Skill removal uses manager-backed agent link removal for the targets selected
+  in the Skill Manager panel; the panel does not expose agent-layer
+  enable/disable controls.
+- Agent enable/disable remains in `config.toggleSkill`,
+  `batch.previewSkillToggles`, and `batch.applySkillToggles` outside the Skill
+  Manager surface; package manager state and agent config state are separate.
 
 ## Discovery Requirements
 
@@ -57,7 +83,7 @@ root conventions.
 
 - `skills.urls`, hubs, taps, package managers, Git-backed installs, cloud
   scanners, security scans, and update commands are metadata-only or blocked
-  unless separately scoped.
+  outside the scoped `skillManager.*` manager path.
 - Import/install must copy only confirmed local `SKILL.md` records into verified
   app-controlled or native roots.
 - Adapter config snapshots must redact secrets before persistence or display.

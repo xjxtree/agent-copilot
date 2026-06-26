@@ -1,0 +1,57 @@
+{
+  "id": "fixture-skill-manager-apply-update",
+  "ok": true,
+  "result": {
+    "preview": {
+      "tool_id": "npx-skills",
+      "operation": "update",
+      "command": [
+        "/usr/local/bin/npx",
+        "skills",
+        "update",
+        "frontend-design",
+        "--agent",
+        "codex",
+        "-y"
+      ],
+      "cwd": "/tmp/skills-copilot-project",
+      "env": [
+        {
+          "key": "HOME",
+          "value": "/tmp/skills-copilot-home"
+        }
+      ],
+      "requires_confirmation": true,
+      "confirmed": true,
+      "network_required": true,
+      "network_allowed": true,
+      "will_run": true,
+      "preview_token": "skill-manager:fixture-update",
+      "summary": "Update managed skills for 1 supported agent target(s).",
+      "risks": [
+        "Update may contact remote source repositories or indexes through the external CLI."
+      ]
+    },
+    "output": {
+      "status": "completed",
+      "exit_code": 0,
+      "stdout": "updated frontend-design",
+      "stderr": ""
+    },
+    "applied": true,
+    "scanned_count": 1,
+    "updated_skills": [
+      {
+        "id": "fixture-updated-codex",
+        "agent": "codex",
+        "scope": "agent-project",
+        "path": "/tmp/skills-copilot-project/.codex/skills/frontend-design/SKILL.md",
+        "display_path": "/tmp/skills-copilot-project/.codex/skills/frontend-design/SKILL.md",
+        "definition_id": "fixture-definition",
+        "name": "frontend-design",
+        "state": "valid",
+        "enabled": true
+      }
+    ]
+  }
+}

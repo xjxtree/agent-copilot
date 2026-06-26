@@ -13,24 +13,31 @@ use skills_copilot_catalog::{
     RuleTuningRecord, SkillDetailRecord, SkillEventRecord, SkillRecord,
 };
 use skills_copilot_commands::{
-    analyze_catalog, apply_skill_toggles, clear_finding_triage, clear_rule_severity_override,
-    clear_rule_suppression, empty_cross_agent_comparison, export_skill_bundle,
+    analyze_catalog, apply_install_with_manager, apply_local_create_with_manager,
+    apply_remove_with_manager, apply_skill_toggles, apply_update_with_manager,
+    clear_finding_triage, clear_rule_severity_override, clear_rule_suppression,
+    delete_local_skill_with_manager, empty_cross_agent_comparison, export_skill_bundle,
     export_staging_skill_bundle, get_skill, import_github_skill_to_tool_global_deferred,
     import_local_skill_to_tool_global, install_skill_from_tool_global, list_adapter_capabilities,
     list_adapter_diagnostics, list_agent_config_snapshots, list_conflicts,
-    list_cross_agent_comparisons, list_finding_triage, list_findings, list_rule_tuning,
-    list_skill_events, list_snapshots, preview_script_execution, preview_skill_toggles,
-    preview_snapshot_rollback, read_claude_settings, record_blocked_script_execution,
-    rollback_snapshot, run_pi_writable_evidence_harness, save_claude_settings,
-    scan_all_catalog_report, scan_claude_to_catalog, set_finding_triage,
+    list_cross_agent_comparisons, list_finding_triage, list_findings,
+    list_installed_skills_with_manager, list_rule_tuning, list_skill_events,
+    list_skill_management_tools, list_snapshots, preview_install_with_manager,
+    preview_local_create_with_manager, preview_remove_with_manager, preview_script_execution,
+    preview_skill_toggles, preview_snapshot_rollback, preview_update_with_manager,
+    read_agent_config, read_claude_settings, record_blocked_script_execution, rollback_snapshot,
+    run_pi_writable_evidence_harness, save_claude_settings, scan_all_catalog_report,
+    scan_claude_to_catalog, search_skills_with_manager, set_finding_triage,
     set_rule_severity_override, set_rule_suppression, skill_health_summary, toggle_skill,
     AdapterCapabilityRecord, AdapterDiagnosticsRecord, AgentCatalogScanReport,
     BatchToggleApplyRecord, BatchTogglePreviewRecord, ConfigDocumentRecord,
     CrossAgentAnalysisGroup, CrossAgentAnalysisRecord, CrossAgentComparisonRecord,
     ExportedSkillBundle, PiWritableHarnessReport, ScriptExecutionAttemptRecord,
     ScriptExecutionPreviewRecord, ScriptExecutionRequest, SkillHealthSummary,
-    SkillInstallPreviewRecord, SnapshotRollbackPreviewRecord, ToolGlobalImportResult,
-    SCRIPT_EXECUTION_DISABLED_REASON,
+    SkillInstallPreviewRecord, SkillManagerDeleteLocalParams, SkillManagerInstallParams,
+    SkillManagerListInstalledParams, SkillManagerLocalCreateParams, SkillManagerRemoveParams,
+    SkillManagerSearchParams, SkillManagerUpdateParams, SnapshotRollbackPreviewRecord,
+    ToolGlobalImportResult, SCRIPT_EXECUTION_DISABLED_REASON,
 };
 use skills_copilot_core::{AdapterContext, AdapterRoot, AgentId, RootSource, Scope, SkillInstance};
 use thiserror::Error;
@@ -3144,6 +3151,8 @@ pub struct LocalSessionPreviewRow {
     pub project_root: Option<String>,
     pub redacted_path: String,
     pub modified_at: Option<i64>,
+    pub started_at: Option<i64>,
+    pub ended_at: Option<i64>,
     pub excerpt: String,
     pub excerpt_char_count: usize,
     pub user_message_count: usize,
@@ -3162,6 +3171,7 @@ pub struct LocalSessionContentItem {
     pub title: String,
     pub text: String,
     pub char_count: usize,
+    pub timestamp: Option<i64>,
     pub evidence_refs: Vec<String>,
 }
 
@@ -3693,6 +3703,8 @@ pub struct LlmPreviewPromptParams {
     pub skill_instance_id: Option<String>,
     #[serde(default)]
     pub instance_ids: Vec<String>,
+    #[serde(default)]
+    pub agents: Vec<String>,
     #[serde(default)]
     pub analysis_kind: Option<LlmSkillAnalysisKind>,
     #[serde(default)]
@@ -4734,6 +4746,13 @@ pub struct SnapshotParams {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ListAgentConfigSnapshotsParams {
+    pub agent: String,
+    #[serde(default)]
+    pub scope: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ReadAgentConfigParams {
     pub agent: String,
     #[serde(default)]
     pub scope: Option<String>,

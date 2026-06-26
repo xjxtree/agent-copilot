@@ -128,6 +128,7 @@ pub(crate) fn empty_remediation_plan_result(
                 app_language: None,
                 skill_instance_id: None,
                 instance_ids: Vec::new(),
+                agents: Vec::new(),
                 analysis_kind: None,
                 user_intent: Some(
                     "Explain deterministic remediation plan items using only local catalog evidence."
@@ -589,6 +590,7 @@ pub(crate) fn empty_remediation_preview_drafts_result(
                 app_language: None,
                 skill_instance_id: None,
                 instance_ids: Vec::new(),
+                agents: Vec::new(),
                 analysis_kind: None,
                 user_intent: Some(
                     "Explain deterministic fix preview drafts using only local catalog evidence."
@@ -708,6 +710,7 @@ pub(crate) fn empty_remediation_preview_impact_result(
                 app_language: None,
                 skill_instance_id: None,
                 instance_ids: Vec::new(),
+                agents: Vec::new(),
                 analysis_kind: None,
                 user_intent: Some(
                     "Explain deterministic remediation impact preview using only local catalog evidence."
@@ -847,6 +850,7 @@ pub(crate) fn empty_remediation_batch_review_result(
                 app_language: None,
                 skill_instance_id: None,
                 instance_ids: Vec::new(),
+                agents: Vec::new(),
                 analysis_kind: None,
                 user_intent: Some(
                     "Explain deterministic batch review workflow items using only local catalog evidence."

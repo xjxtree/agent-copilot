@@ -1,0 +1,73 @@
+{
+  "id": "fixture-skill-manager-list-installed",
+  "ok": true,
+  "result": {
+    "preview": {
+      "tool_id": "npx-skills",
+      "operation": "listInstalled",
+      "command": [
+        "/usr/local/bin/npx",
+        "skills",
+        "list",
+        "--json",
+        "--agent",
+        "claude-code",
+        "--agent",
+        "pi",
+        "--agent",
+        "opencode",
+        "--agent",
+        "codex",
+        "--agent",
+        "hermes-agent",
+        "--agent",
+        "openclaw"
+      ],
+      "cwd": "/tmp/skills-copilot-project",
+      "env": [
+        {
+          "key": "HOME",
+          "value": "/tmp/skills-copilot-home"
+        },
+        {
+          "key": "DISABLE_TELEMETRY",
+          "value": "1"
+        }
+      ],
+      "requires_confirmation": false,
+      "confirmed": false,
+      "network_required": false,
+      "network_allowed": true,
+      "will_run": false,
+      "preview_token": "skill-manager:fixture-list-installed",
+      "summary": "List skills currently managed by npx skills.",
+      "risks": []
+    },
+    "output": {
+      "status": "completed",
+      "exit_code": 0,
+      "stdout": "{\"skills\":[{\"name\":\"frontend-design\",\"source\":\"vercel-labs/agent-skills\",\"agents\":[\"codex\"]}]}",
+      "stderr": ""
+    },
+    "installed": [
+      {
+        "name": "frontend-design",
+        "source": "vercel-labs/agent-skills",
+        "agents": [
+          "codex"
+        ],
+        "scope": "project",
+        "path": "/tmp/skills-copilot-project/.codex/skills/frontend-design/SKILL.md",
+        "raw": {
+          "name": "frontend-design",
+          "source": "vercel-labs/agent-skills",
+          "agents": [
+            "codex"
+          ],
+          "scope": "project",
+          "path": "/tmp/skills-copilot-project/.codex/skills/frontend-design/SKILL.md"
+        }
+      }
+    ]
+  }
+}

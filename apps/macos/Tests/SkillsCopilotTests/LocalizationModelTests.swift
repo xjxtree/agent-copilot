@@ -27,8 +27,43 @@ struct LocalizationModelTests {
         try expectEqual(UIStrings.aiProviderSettings, "AI 提供方", "Chinese provider settings label should load")
         try expectEqual(UIStrings.service, "服务", "Chinese service label should load")
         try expectEqual(UIStrings.scannedSkills(2), "已扫描受支持 adapter 中的 2 个技能。", "Chinese formatted scan summary should preserve arguments")
+        try expectEqual(
+            UIStrings.localizedServiceMessage("Single request token limit is lower than the redacted prompt estimate."),
+            "单次请求 token 限制低于脱敏提示词估算值。",
+            "Provider token-limit blocker should be localized."
+        )
+        try expectEqual(
+            UIStrings.localizedServiceMessage("budget_blocked: Single request token limit is lower than the prompt estimate."),
+            "budget_blocked: 单次请求 token 限制低于提示词估算值。",
+            "Provider error-code prefixes should preserve the code and localize the message."
+        )
+        try expectEqual(
+            UIStrings.localizedServiceMessage("Provider profile `openai` exists but is disabled."),
+            "提供方配置 `openai` 已存在，但当前已禁用。",
+            "Provider profile status messages should preserve profile ids while localizing."
+        )
+        try expectEqual(
+            UIStrings.localizedServiceMessage("Service call timed out before the sidecar returned a complete response."),
+            "服务调用超时：sidecar 未在限定时间内返回完整响应。",
+            "Sidecar timeout messages from stored history should be localized."
+        )
+        try expectEqual(
+            ServiceClient.ClientError.processTimedOut.localizedDescription,
+            "服务调用超时：sidecar 未在限定时间内返回完整响应。",
+            "Sidecar timeout errors should use the selected app language."
+        )
 
         UIStrings.use(.english)
         try expectEqual(UIStrings.scan, "Scan", "Switching back to English should not reuse cached Chinese values")
+        try expectEqual(
+            UIStrings.localizedServiceMessage("Single request token limit is lower than the redacted prompt estimate."),
+            "Single request token limit is lower than the redacted prompt estimate.",
+            "English service messages should stay readable."
+        )
+        try expectEqual(
+            ServiceClient.ClientError.processTimedOut.localizedDescription,
+            "Service call timed out before the sidecar returned a complete response.",
+            "English sidecar timeout message should stay readable."
+        )
     }
 }

@@ -182,6 +182,7 @@ pub(crate) fn empty_skill_lifecycle_timeline_result(
                 app_language: None,
                 skill_instance_id: None,
                 instance_ids: Vec::new(),
+                agents: Vec::new(),
                 analysis_kind: None,
                 user_intent: Some(
                     "Explain deterministic skill lifecycle timeline rows using only local redacted evidence."
@@ -1845,6 +1846,7 @@ pub(crate) fn empty_task_readiness_result(
                 app_language: None,
                 skill_instance_id: None,
                 instance_ids: Vec::new(),
+                agents: Vec::new(),
                 analysis_kind: None,
                 user_intent: Some(task),
             },
@@ -3119,6 +3121,7 @@ pub(crate) fn empty_agent_readiness_comparison(
                 app_language: None,
                 skill_instance_id: None,
                 instance_ids: Vec::new(),
+                agents: Vec::new(),
                 analysis_kind: None,
                 user_intent: Some(task),
             },

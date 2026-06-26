@@ -118,7 +118,7 @@ private struct ProviderObservabilityDashboardSettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let fallbackReason = result.fallbackReason, !fallbackReason.isEmpty {
-                Label(fallbackReason, systemImage: "info.circle")
+                Label(UIStrings.localizedServiceMessage(fallbackReason), systemImage: "info.circle")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
@@ -364,9 +364,9 @@ private struct ProviderObservabilitySettingsCallRow: View {
 
     private var errorText: String? {
         if let code = row.errorCode, let message = row.errorMessage, !message.isEmpty {
-            return "\(code): \(message)"
+            return "\(code): \(UIStrings.localizedServiceMessage(message))"
         }
-        return row.errorMessage ?? row.errorCode
+        return row.errorMessage.map(UIStrings.localizedServiceMessage) ?? row.errorCode
     }
 }
 

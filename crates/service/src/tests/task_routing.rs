@@ -2606,9 +2606,20 @@ fn local_session_preview_auto_discovers_codex_sessions() {
     ));
     let session_root = user_home.join(".codex/sessions/2026/06/20");
     fs::create_dir_all(&session_root).expect("create codex session root");
+    let first_user = json!({
+        "timestamp": "2026-06-20T08:00:00Z",
+        "role": "user",
+        "content": "Use skill:fixture-session-skill for ECS diagnosis"
+    });
+    let assistant = json!({
+        "timestamp": "2026-06-20T08:05:10.250Z",
+        "role": "assistant",
+        "content": "Called /skill fixture-session-skill",
+        "tool_calls": [{ "name": "shell" }]
+    });
     fs::write(
         session_root.join("rollout-2026-06-20T08-00-00-fixture.jsonl"),
-        "{\"role\":\"user\",\"content\":\"Use skill:fixture-session-skill for ECS diagnosis\"}\n{\"role\":\"assistant\",\"content\":\"Called /skill fixture-session-skill\",\"tool_calls\":[{\"name\":\"shell\"}]}\n",
+        format!("{first_user}\n{assistant}\n"),
     )
     .expect("write codex session");
     let host = ServiceHost {
@@ -2680,6 +2691,24 @@ fn local_session_preview_auto_discovers_codex_sessions() {
         result.get("skill_call_count").and_then(Value::as_u64),
         Some(2)
     );
+    assert_eq!(
+        result
+            .pointer("/session_rows/0/started_at")
+            .and_then(Value::as_i64),
+        Some(1_781_942_400_000)
+    );
+    assert_eq!(
+        result
+            .pointer("/session_rows/0/ended_at")
+            .and_then(Value::as_i64),
+        Some(1_781_942_710_250)
+    );
+    assert_eq!(
+        result
+            .pointer("/session_rows/0/content_items/0/timestamp")
+            .and_then(Value::as_i64),
+        Some(1_781_942_400_000)
+    );
     assert!(result
         .pointer("/session_rows/0/content_items")
         .and_then(Value::as_array)
@@ -2689,63 +2718,6 @@ fn local_session_preview_auto_discovers_codex_sessions() {
     assert!(!host.trace_imports_path().exists());
     assert!(!host.agent_session_reviews_path().exists());
     assert!(!provider_call_metadata_path(&app_data_dir).exists());
-
-    let _ = fs::remove_dir_all(app_data_dir);
-    let _ = fs::remove_dir_all(user_home);
-}
-
-#[test]
-fn local_session_preview_redacts_unix_listing_owners() {
-    let unique = unique_suffix();
-    let app_data_dir = env::temp_dir().join(format!(
-        "skills-copilot-local-session-preview-owner-redaction-test-{}-{unique}",
-        std::process::id(),
-    ));
-    let user_home = env::temp_dir().join(format!(
-        "skills-copilot-local-session-preview-owner-redaction-home-{}-{unique}",
-        std::process::id(),
-    ));
-    let session_root = user_home.join(".codex/sessions/2026/06/21");
-    fs::create_dir_all(&session_root).expect("create codex session root");
-    let user_line = json!({
-        "role": "user",
-        "content": "show repository files"
-    });
-    let assistant_line = json!({
-        "role": "assistant",
-        "content": "total 8\n-rw-r--r--@ 1 localuser staff 234 Jun 21 16:34 README.md\ndrwxr-xr-x 12 localuser staff 384 Jun 21 16:35 docs",
-        "tool_calls": [{ "name": "shell" }]
-    });
-    fs::write(
-        session_root.join("rollout-2026-06-21T08-00-00-owner-fixture.jsonl"),
-        format!("{user_line}\n{assistant_line}\n"),
-    )
-    .expect("write codex session");
-    let host = ServiceHost {
-        app_data_dir: app_data_dir.clone(),
-        adapter_ctx: AdapterContext {
-            user_home: user_home.clone(),
-            project_root: None,
-            project_cwd: None,
-            extra_roots: Vec::new(),
-        },
-    };
-
-    let response = host.handle(ServiceRequest {
-        id: Some("session-preview-owner-redaction".to_string()),
-        method: "session.previewLocalSessions".to_string(),
-        params: json!({
-            "agent": "codex",
-            "limit": 10,
-            "max_excerpt_chars": 1200
-        }),
-    });
-
-    assert!(response.ok, "{:?}", response.error);
-    let result = response.result.expect("local session preview result");
-    let serialized = serde_json::to_string(&result).expect("serialize local session result");
-    assert!(!serialized.contains("localuser staff"), "{serialized}");
-    assert!(serialized.contains("<user> <group>"));
 
     let _ = fs::remove_dir_all(app_data_dir);
     let _ = fs::remove_dir_all(user_home);

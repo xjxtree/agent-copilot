@@ -5,6 +5,16 @@ available from git history when needed.
 
 ## Unreleased
 
+- Added the `skillManager.*` service protocol surface for manager-backed skill
+  search, list, install, remove, update, local template creation, and guarded
+  local deletion across Claude Code, Pi, opencode, Codex, Hermes, and OpenClaw.
+- Scoped `npx skills` as the first writable Skill Manager tool: symlink
+  distribution is default, copy is opt-in, network-backed search/install/update
+  require command preview and confirmation, and `skills-npm` is discovery-only
+  for now.
+- Updated the Skill Manager UI so deletion removes manager-installed skill
+  links from the selected agent targets; agent config enable/disable stays out
+  of the Skill Manager panel.
 - Keep V2.98 safety boundaries in force: no provider default calls, hidden
   writes, script execution, credential persistence, cloud sync, telemetry, or
   signing/release automation without a new scoped version.

@@ -64,6 +64,7 @@ private struct StoredTaskCockpitHistoryRecord: Codable {
     let id: UUID
     let createdAt: Date
     let taskText: String
+    let agentIDs: [String]?
     let result: StoredTaskCockpitResult
     let operationState: StoredTaskCockpitOperationState
 
@@ -71,6 +72,7 @@ private struct StoredTaskCockpitHistoryRecord: Codable {
         id = record.id
         createdAt = record.createdAt
         taskText = record.taskText
+        agentIDs = record.agentIDs
         result = StoredTaskCockpitResult(record.result)
         operationState = StoredTaskCockpitOperationState(record.operationState)
     }
@@ -79,6 +81,7 @@ private struct StoredTaskCockpitHistoryRecord: Codable {
         TaskCockpitHistoryRecord(
             id: id,
             taskText: taskText,
+            agentIDs: agentIDs ?? result.result().agentScopeIDs,
             result: result.result(),
             operationState: operationState.state(fallbackTaskText: taskText),
             createdAt: createdAt

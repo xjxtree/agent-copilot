@@ -20,6 +20,10 @@ coding agents working in this repository.
 - UI work must call the typed Rust service protocol.
 - SwiftUI/AppKit code stays in the native macOS shell and follows existing
   view/model/service patterns.
+- App UI filters, scope pickers, sort/search controls, and navigation should
+  derive from startup/manual-refresh cache and avoid expensive reads or scans by
+  default. Fetch fresh data only for explicit refresh, startup prewarm, or
+  consistency-bound flows such as config edit/write/rollback.
 - Service behavior changes must keep `docs/service-protocol.md`, fixtures, and
   protocol drift verification in sync.
 - Do not recreate `ui/`, `src-tauri/`, or Tauri IPC.
@@ -32,9 +36,12 @@ coding agents working in this repository.
   roots.
 - Adapter writes are limited to the guarded toggle/install scopes documented in
   `docs/adapters/agent-adapters.md`.
-- Network-backed installs, scripts, credentials, cloud sync, telemetry,
-  uncontrolled fetch, broad config writes, and release automation require a new
-  scoped safety review.
+- Network-backed installs outside the `skillManager.*` service path, scripts,
+  credentials, cloud sync, telemetry, uncontrolled fetch, broad config writes,
+  and release automation require a new scoped safety review. Skill Manager
+  search/install/update may use the scoped external manager CLI path with
+  command preview, target visibility, telemetry-off env, redaction, and explicit
+  confirmation.
 
 ## Safety Boundaries
 

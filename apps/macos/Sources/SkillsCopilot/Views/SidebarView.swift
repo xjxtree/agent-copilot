@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SidebarView: View {
     @EnvironmentObject private var store: SkillStore
+    @State private var isSkillManagerSheetPresented = false
     @State private var isPreflightSheetPresented = false
 
     var body: some View {
@@ -20,17 +21,6 @@ struct SidebarView: View {
                 Section(UIStrings.text("sidebar.primaryNavigation", "Navigate")) {
                     VStack(spacing: 8) {
                         SidebarNavigationCardButton(
-                            title: SidebarContentMode.sessions.title,
-                            subtitle: sessionButtonSubtitle,
-                            systemImage: SidebarContentMode.sessions.systemImage,
-                            count: String(store.localSessionPreviewResult.count),
-                            metrics: sessionCardMetrics,
-                            isSelected: isSessionCardSelected
-                        ) {
-                            selectSessions()
-                        }
-
-                        SidebarNavigationCardButton(
                             title: SidebarContentMode.skills.title,
                             subtitle: skillButtonSubtitle,
                             systemImage: SidebarContentMode.skills.systemImage,
@@ -42,10 +32,21 @@ struct SidebarView: View {
                         }
 
                         SidebarNavigationCardButton(
+                            title: SidebarContentMode.sessions.title,
+                            subtitle: sessionButtonSubtitle,
+                            systemImage: SidebarContentMode.sessions.systemImage,
+                            count: String(store.localSessionPreviewResult.count),
+                            metrics: sessionCardMetrics,
+                            isSelected: isSessionCardSelected
+                        ) {
+                            selectSessions()
+                        }
+
+                        SidebarNavigationCardButton(
                             title: SidebarContentMode.config.title,
                             subtitle: AgentConfigDisplay.shortTargetPath(for: store.agentFilter, store: store),
                             systemImage: SidebarContentMode.config.systemImage,
-                            count: configStatusText,
+                            count: configCountText,
                             metrics: configCardMetrics,
                             isSelected: isConfigCardSelected
                         ) {
@@ -61,13 +62,23 @@ struct SidebarView: View {
             Divider()
                 .opacity(0.35)
 
-            SidebarFooterToolRow {
-                isPreflightSheetPresented = true
-            }
+            SidebarFooterToolRow(
+                isSkillManagerPresented: isSkillManagerSheetPresented,
+                onOpenSkillManager: {
+                    isSkillManagerSheetPresented = true
+                },
+                onOpenPreflight: {
+                    isPreflightSheetPresented = true
+                }
+            )
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
         }
-        .navigationTitle(UIStrings.appTitle)
+        .navigationTitle("")
+        .sheet(isPresented: $isSkillManagerSheetPresented) {
+            SkillPackageManagerSheet()
+                .environmentObject(store)
+        }
         .sheet(isPresented: $isPreflightSheetPresented) {
             TaskPreflightPreviewSheet()
                 .environmentObject(store)
@@ -90,8 +101,8 @@ struct SidebarView: View {
         store.skills.filter { store.agentFilter.includes($0) }
     }
 
-    private var configCapability: AdapterCapabilityRecord? {
-        store.adapterCapabilities.first { $0.agent == store.agentFilter.rawValue }
+    private var agentDisabledSkills: [SkillRecord] {
+        AgentConfigDisplay.disabledSkills(for: store.agentFilter, store: store)
     }
 
     private var agentSkillCount: Int {
@@ -110,27 +121,31 @@ struct SidebarView: View {
         store.selectedAgentHealthSummary?.conflictCount ?? 0
     }
 
+    private var agentDisabledCount: Int {
+        agentDisabledSkills.count
+    }
+
     private var sessionCardMetrics: [SidebarNavigationMetric] {
         [
             SidebarNavigationMetric(
                 title: UIStrings.text("sidebar.sessions.userShort", "User"),
-                value: String(store.localSessionPreviewResult.userMessageCount),
-                tone: countTone(store.localSessionPreviewResult.userMessageCount, active: .info)
+                value: String(store.scopedLocalSessionUserMessageCount),
+                tone: countTone(store.scopedLocalSessionUserMessageCount, active: .info)
             ),
             SidebarNavigationMetric(
                 title: UIStrings.text("sidebar.sessions.totalShort", "Msg"),
-                value: String(store.localSessionPreviewResult.totalMessageCount),
-                tone: countTone(store.localSessionPreviewResult.totalMessageCount, active: .info)
+                value: String(store.scopedLocalSessionTotalMessageCount),
+                tone: countTone(store.scopedLocalSessionTotalMessageCount, active: .info)
             ),
             SidebarNavigationMetric(
                 title: UIStrings.text("sidebar.sessions.toolShort", "Tool"),
-                value: String(store.localSessionPreviewResult.toolCallCount),
-                tone: countTone(store.localSessionPreviewResult.toolCallCount, active: .warning)
+                value: String(store.scopedLocalSessionToolCallCount),
+                tone: countTone(store.scopedLocalSessionToolCallCount, active: .warning)
             ),
             SidebarNavigationMetric(
                 title: UIStrings.text("sidebar.sessions.skillShort", "Skill"),
-                value: String(store.localSessionPreviewResult.skillCallCount),
-                tone: countTone(store.localSessionPreviewResult.skillCallCount, active: .positive)
+                value: String(store.scopedLocalSessionSkillCallCount),
+                tone: countTone(store.scopedLocalSessionSkillCallCount, active: .positive)
             )
         ]
     }
@@ -141,6 +156,11 @@ struct SidebarView: View {
                 title: UIStrings.text("agentCopilot.metric.enabled", "Enabled"),
                 value: String(agentEnabledCount),
                 tone: countTone(agentEnabledCount, active: .positive)
+            ),
+            SidebarNavigationMetric(
+                title: UIStrings.text("agentCopilot.metric.disabled", "Disabled"),
+                value: String(agentDisabledCount),
+                tone: agentDisabledCount > 0 ? .warning : .positive
             ),
             SidebarNavigationMetric(
                 title: UIStrings.text("agentCopilot.metric.findings", "Issues"),
@@ -157,21 +177,20 @@ struct SidebarView: View {
 
     private var configCardMetrics: [SidebarNavigationMetric] {
         [
-            configSupportMetric(
-                title: UIStrings.text("sidebar.config.scanShort", "Scan"),
-                capabilities: [configCapability?.scan, configCapability?.projectScan]
+            SidebarNavigationMetric(
+                title: UIStrings.text("sidebar.config.filesShort", "Files"),
+                value: String(configDocumentCount),
+                tone: countTone(configDocumentCount, active: .info)
             ),
-            configSupportMetric(
-                title: UIStrings.text("sidebar.config.toggleShort", "Toggle"),
-                capabilities: [configCapability?.configToggle]
+            SidebarNavigationMetric(
+                title: UIStrings.text("sidebar.config.projectShort", "Project"),
+                value: String(projectConfigDocumentCount),
+                tone: countTone(projectConfigDocumentCount, active: .positive)
             ),
-            configSupportMetric(
-                title: UIStrings.text("sidebar.config.snapshotShort", "Snapshot"),
-                capabilities: [configCapability?.configSnapshot]
-            ),
-            configSupportMetric(
-                title: UIStrings.text("sidebar.config.writeShort", "Write"),
-                capabilities: [configCapability?.writable]
+            SidebarNavigationMetric(
+                title: UIStrings.text("sidebar.config.historyShort", "History"),
+                value: String(configHistoryCount),
+                tone: countTone(configHistoryCount, active: .info)
             )
         ]
     }
@@ -180,38 +199,49 @@ struct SidebarView: View {
         value > 0 ? active : .muted
     }
 
-    private func configSupportMetric(
-        title: String,
-        capabilities: [AdapterFeatureCapability?]
-    ) -> SidebarNavigationMetric {
-        let loadedCapabilities = capabilities.compactMap { $0 }
-        guard !loadedCapabilities.isEmpty else {
-            return SidebarNavigationMetric(title: title, value: "—", tone: .muted)
-        }
-        let supported = loadedCapabilities.filter(\.supported).count
-        if supported == loadedCapabilities.count {
-            return SidebarNavigationMetric(
-                title: title,
-                value: UIStrings.text("value.short.supported", "OK"),
-                tone: .positive
-            )
-        }
-        if supported > 0 {
-            return SidebarNavigationMetric(
-                title: title,
-                value: UIStrings.text("value.short.partial", "Partial"),
-                tone: .warning
-            )
-        }
-        return SidebarNavigationMetric(
-            title: title,
-            value: UIStrings.text("value.short.notSupported", "No"),
-            tone: .muted
-        )
+    private var selectedConfigDocuments: [ConfigDocumentRecord] {
+        store.currentAgentConfigDocuments.filter { $0.agent == store.agentFilter.rawValue }
     }
 
-    private var configStatusText: String? {
-        configCapability?.status ?? UIStrings.notLoaded
+    private var configDocumentCount: Int {
+        guard store.agentFilter != .all else { return 0 }
+        return selectedConfigDocuments.isEmpty ? expectedConfigDocumentCount : selectedConfigDocuments.count
+    }
+
+    private var projectConfigDocumentCount: Int {
+        guard store.agentFilter != .all else { return 0 }
+        let loadedProjectCount = selectedConfigDocuments.filter { document in
+            document.scope.localizedCaseInsensitiveContains("project")
+        }.count
+        return selectedConfigDocuments.isEmpty ? expectedProjectConfigDocumentCount : loadedProjectCount
+    }
+
+    private var configHistoryCount: Int {
+        store.agentConfigSnapshots.filter { $0.agent == store.agentFilter.rawValue }.count
+    }
+
+    private var configCountText: String? {
+        store.agentFilter == .all ? nil : String(configDocumentCount)
+    }
+
+    private var expectedConfigDocumentCount: Int {
+        switch store.agentFilter {
+        case .claudeCode, .codex, .opencode, .pi:
+            return store.activeProjectContext == nil ? 1 : 2
+        case .hermes, .openclaw:
+            return 1
+        case .all:
+            return 0
+        }
+    }
+
+    private var expectedProjectConfigDocumentCount: Int {
+        switch store.agentFilter {
+        case .claudeCode, .codex, .opencode, .pi:
+            return store.activeProjectContext == nil ? 0 : 1
+        case .hermes, .openclaw, .all:
+            return 0
+        }
     }
 
     private func selectSessions() {
@@ -222,20 +252,23 @@ struct SidebarView: View {
             store.selectedSidebarSelection = nil
         }
         if !store.isPreviewingLocalSessions {
-            Task { await store.refreshSelectedAgentLocalSessions() }
+            Task { await store.refreshSelectedAgentLocalSessionsIfNeeded() }
         }
     }
 
     private func selectSkills() {
+        let nextSelection = store.selectedSkill.map { SidebarSelection.skill($0.id) }
+        guard store.sidebarContentMode != .skills || store.selectedSidebarSelection != nextSelection else { return }
         store.sidebarContentMode = .skills
-        if let skill = store.selectedSkill {
-            store.selectedSidebarSelection = .skill(skill.id)
+        if let nextSelection {
+            store.selectedSidebarSelection = nextSelection
         } else {
             store.selectedSidebarSelection = nil
         }
     }
 
     private func selectConfig() {
+        guard store.sidebarContentMode != .config || store.selectedSidebarSelection != .configOverview else { return }
         store.sidebarContentMode = .config
         store.selectedSidebarSelection = .configOverview
     }
@@ -257,17 +290,25 @@ struct SecondarySidebarView: View {
     @State private var isBatchOperationPresented = false
 
     var body: some View {
-        List(selection: $store.selectedSidebarSelection) {
-            switch store.sidebarContentMode {
-            case .sessions:
-                SessionSidebarPanel()
-            case .skills:
-                SkillSidebarPanel(isBatchOperationPresented: $isBatchOperationPresented)
-            case .config:
-                ConfigSidebarPanel()
+        VStack(alignment: .leading, spacing: 0) {
+            SecondarySidebarTitleBar()
+
+            Divider()
+                .opacity(0.25)
+
+            List(selection: $store.selectedSidebarSelection) {
+                switch store.sidebarContentMode {
+                case .sessions:
+                    SessionSidebarPanel()
+                case .skills:
+                    SkillSidebarPanel(isBatchOperationPresented: $isBatchOperationPresented)
+                case .config:
+                    ConfigSidebarPanel()
+                }
             }
+            .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
         }
-        .listStyle(.sidebar)
         .secondarySidebarPaneBackground()
         .navigationTitle("")
         .sheet(isPresented: $isBatchOperationPresented) {
@@ -277,12 +318,55 @@ struct SecondarySidebarView: View {
     }
 }
 
+private struct SkillPackageManagerSheet: View {
+    @EnvironmentObject private var store: SkillStore
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Label(UIStrings.text("skillManager.title", "Skill Package Manager"), systemImage: "shippingbox.and.arrow.backward")
+                    .font(.title3.bold())
+
+                Spacer()
+
+                Button {
+                    dismiss()
+                } label: {
+                    Label(UIStrings.done, systemImage: "xmark")
+                }
+                .controlSize(.small)
+            }
+            .padding(.horizontal, 22)
+            .padding(.vertical, 16)
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if let error = store.errorMessage {
+                        ErrorBanner(message: error)
+                    }
+
+                    if let message = store.lastMutationMessage {
+                        SuccessBanner(message: message)
+                    }
+
+                    SkillManagerPanel(showsHeader: false)
+                }
+                .padding(22)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .frame(minWidth: 900, idealWidth: 980, minHeight: 680, idealHeight: 760)
+    }
+}
+
 private struct SecondarySidebarPaneBackground: ViewModifier {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     func body(content: Content) -> some View {
         content
-            .scrollContentBackground(.hidden)
             .background {
                 Rectangle()
                     .fill(
@@ -298,6 +382,37 @@ private struct SecondarySidebarPaneBackground: ViewModifier {
 private extension View {
     func secondarySidebarPaneBackground() -> some View {
         modifier(SecondarySidebarPaneBackground())
+    }
+}
+
+private struct SecondarySidebarTitleBar: View {
+    @EnvironmentObject private var store: SkillStore
+
+    var body: some View {
+        HStack(spacing: 9) {
+            AgentIconBadge(filter: store.agentFilter)
+                .fixedSize()
+
+            Text(title)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+                .allowsTightening(true)
+                .layoutPriority(1)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 22)
+        .padding(.top, 8)
+        .padding(.bottom, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
+    }
+
+    private var title: String {
+        "\(store.agentFilter.title) \(store.sidebarContentMode.title)"
     }
 }
 
@@ -351,17 +466,31 @@ private enum SidebarNavigationMetricTone: Hashable {
 }
 
 private struct SidebarFooterToolRow: View {
+    let isSkillManagerPresented: Bool
+    let onOpenSkillManager: () -> Void
     let onOpenPreflight: () -> Void
 
     var body: some View {
-        SidebarFooterToolButton(
-            title: UIStrings.taskCockpitTitle,
-            subtitle: UIStrings.text("sidebar.preflight.subtitle", "Read-only task check"),
-            systemImage: "checklist",
-            accent: .accentColor,
-            badge: UIStrings.text("sidebar.preflight.metric.readOnly", "Read-only"),
-            action: onOpenPreflight
-        )
+        VStack(spacing: 8) {
+            SidebarFooterToolButton(
+                title: UIStrings.text("skillManager.title", "Skill Package Manager"),
+                subtitle: UIStrings.text("skillManager.sidebar.subtitle", "Search, install, local library"),
+                systemImage: "shippingbox.and.arrow.backward",
+                accent: .accentColor,
+                badge: UIStrings.text("sidebar.skillManager.metric.global", "Global"),
+                isSelected: isSkillManagerPresented,
+                action: onOpenSkillManager
+            )
+
+            SidebarFooterToolButton(
+                title: UIStrings.taskCockpitTitle,
+                subtitle: UIStrings.text("sidebar.preflight.subtitle", "Read-only task check"),
+                systemImage: "checklist",
+                accent: .accentColor,
+                badge: UIStrings.text("sidebar.preflight.metric.readOnly", "Read-only"),
+                action: onOpenPreflight
+            )
+        }
     }
 }
 
@@ -371,6 +500,7 @@ private struct SidebarFooterToolButton: View {
     let systemImage: String
     let accent: Color
     let badge: String
+    var isSelected = false
     let action: () -> Void
 
     var body: some View {
@@ -378,18 +508,18 @@ private struct SidebarFooterToolButton: View {
             HStack(alignment: .center, spacing: 7) {
                 Image(systemName: systemImage)
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(accent)
+                    .foregroundStyle(iconColor)
                     .frame(width: 22, height: 22)
-                    .background(accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+                    .background(iconBackground, in: RoundedRectangle(cornerRadius: 6))
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title)
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(primaryTextColor)
                         .lineLimit(1)
                     Text(subtitle)
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(secondaryTextColor)
                         .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -397,25 +527,57 @@ private struct SidebarFooterToolButton: View {
 
                 Text(badge)
                     .font(.caption2.weight(.medium))
-                    .foregroundStyle(accent)
+                    .foregroundStyle(badgeTextColor)
                     .lineLimit(1)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
-                    .background(accent.opacity(0.10), in: Capsule())
+                    .background(badgeBackground, in: Capsule())
                     .fixedSize(horizontal: true, vertical: false)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
             .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
-            .background(Color(nsColor: .controlBackgroundColor).opacity(0.62), in: RoundedRectangle(cornerRadius: 8))
+            .background(buttonBackground, in: RoundedRectangle(cornerRadius: 8))
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.secondary.opacity(0.14), lineWidth: 1)
+                    .stroke(borderColor, lineWidth: 1)
             )
             .contentShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
+    }
+
+    private var iconColor: Color {
+        isSelected ? .white.opacity(0.95) : accent
+    }
+
+    private var iconBackground: Color {
+        isSelected ? Color.white.opacity(0.16) : accent.opacity(0.12)
+    }
+
+    private var primaryTextColor: Color {
+        isSelected ? .white : .primary
+    }
+
+    private var secondaryTextColor: Color {
+        isSelected ? .white.opacity(0.82) : .secondary
+    }
+
+    private var badgeTextColor: Color {
+        isSelected ? .white.opacity(0.92) : accent
+    }
+
+    private var badgeBackground: Color {
+        isSelected ? .white.opacity(0.16) : accent.opacity(0.10)
+    }
+
+    private var buttonBackground: Color {
+        isSelected ? accent : Color(nsColor: .controlBackgroundColor).opacity(0.62)
+    }
+
+    private var borderColor: Color {
+        isSelected ? Color.white.opacity(0.22) : Color.secondary.opacity(0.14)
     }
 }
 
@@ -551,12 +713,11 @@ private struct SessionSidebarPanel: View {
     @EnvironmentObject private var store: SkillStore
 
     var body: some View {
-        Group {
-            Section(UIStrings.text("sidebar.sessions.analysis", "Session Analysis")) {
-                Label(UIStrings.text("sidebar.sessions.autoDiscovery", "Auto-discovered local sessions"), systemImage: "sparkle.magnifyingglass")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        let preview = store.localSessionPreviewResult
+        let filteredRows = store.filteredLocalSessionRows
 
+        Group {
+            Section {
                 Picker(UIStrings.text("sidebar.sessions.scope", "Scope"), selection: $store.localSessionScopeFilter) {
                     ForEach(LocalSessionScopeFilter.allCases) { scope in
                         Text(scope.title).tag(scope)
@@ -568,8 +729,15 @@ private struct SessionSidebarPanel: View {
                 Button {
                     Task { await store.previewLocalSessions() }
                 } label: {
-                    Label(UIStrings.text("sidebar.sessions.preview", "Refresh Sessions"), systemImage: "arrow.clockwise")
-                        .frame(maxWidth: .infinity, alignment: .center)
+                    HStack(spacing: 6) {
+                        Label(UIStrings.text("sidebar.sessions.preview", "Refresh Sessions"), systemImage: "arrow.clockwise")
+                        if store.isPreviewingLocalSessions {
+                            ProgressView()
+                                .controlSize(.small)
+                                .scaleEffect(0.68)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
@@ -596,14 +764,15 @@ private struct SessionSidebarPanel: View {
             }
 
             Section(UIStrings.text("sidebar.sessions.list", "Sessions")) {
-                if store.localSessionPreviewResult.sessionRows.isEmpty {
+                if preview.sessionRows.isEmpty {
                     SidebarEmptyMessage(message: UIStrings.text("sidebar.sessions.empty", "No local sessions found."))
-                } else if store.filteredLocalSessionRows.isEmpty {
-                    SidebarEmptyMessage(message: UIStrings.text("sidebar.sessions.noMatches", "No sessions match the current search."))
+                } else if filteredRows.isEmpty {
+                    SidebarEmptyMessage(message: UIStrings.text("sidebar.sessions.noMatches", "No sessions match the current filters."))
                 } else {
-                    ForEach(store.filteredLocalSessionRows) { session in
+                    ForEach(filteredRows) { session in
                         SessionSidebarRow(
                             session: session,
+                            showsProjectRoot: store.localSessionScopeFilter == .all,
                             isSelected: store.selectedSidebarSelection == .session(session.id)
                         ) {
                             store.selectLocalSession(session)
@@ -612,9 +781,9 @@ private struct SessionSidebarPanel: View {
                 }
             }
 
-            if !store.localSessionPreviewResult.skillUsageRows.isEmpty {
+            if !preview.skillUsageRows.isEmpty {
                 Section(UIStrings.text("sidebar.sessions.topSkills", "Top skills from sessions")) {
-                    ForEach(store.localSessionPreviewResult.skillUsageRows.prefix(3)) { row in
+                    ForEach(preview.skillUsageRows.prefix(3)) { row in
                         SidebarMetricRow(
                             title: row.skillName,
                             value: "\(row.callCount)",
@@ -627,9 +796,6 @@ private struct SessionSidebarPanel: View {
     }
 
     private var sessionStatusMessage: String? {
-        if store.isPreviewingLocalSessions {
-            return UIStrings.loading
-        }
         if let fallback = store.localSessionPreviewResult.fallbackReason, !fallback.isEmpty {
             return fallback
         }
@@ -643,6 +809,7 @@ private struct SessionSidebarPanel: View {
 
 private struct SessionSidebarRow: View {
     let session: LocalSessionPreviewRow
+    let showsProjectRoot: Bool
     let isSelected: Bool
     let onSelect: () -> Void
 
@@ -662,7 +829,19 @@ private struct SessionSidebarRow: View {
                         .font(.caption2)
                         .foregroundStyle(isSelected ? .white.opacity(0.82) : .secondary)
                         .lineLimit(1)
-                    if let project = session.projectRoot, !project.isEmpty {
+                    if let startedAt = session.startedAt {
+                        Text("\(UIStrings.text("sidebar.sessions.startShort", "Start")) \(DisplayText.timestamp(startedAt))")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(isSelected ? Color.white.opacity(0.72) : Color.secondary)
+                            .lineLimit(1)
+                    }
+                    if let endedAt = session.endedAt, session.startedAt.map({ $0 != endedAt }) ?? true {
+                        Text("\(UIStrings.text("sidebar.sessions.lastShort", "Last")) \(DisplayText.timestamp(endedAt))")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(isSelected ? Color.white.opacity(0.72) : Color.secondary)
+                            .lineLimit(1)
+                    }
+                    if showsProjectRoot, let project = session.projectRoot, !project.isEmpty {
                         Text(project)
                             .font(.caption2)
                             .foregroundStyle(isSelected ? Color.white.opacity(0.72) : Color.secondary)
@@ -691,6 +870,7 @@ private struct SessionSidebarRow: View {
     private var sessionMetricSummary: String {
         "\(session.userMessageCount) \(UIStrings.text("sidebar.sessions.userShort", "user")) · \(session.toolCallCount) \(UIStrings.text("sidebar.sessions.toolShort", "tool")) · \(session.skillCallCount) \(UIStrings.text("sidebar.sessions.skillShort", "skill"))"
     }
+
 }
 
 private struct SidebarMetricRow: View {
@@ -721,6 +901,8 @@ private struct SkillSidebarPanel: View {
     @Binding var isBatchOperationPresented: Bool
 
     var body: some View {
+        let visibleSkills = store.filteredSkills
+
         Section(UIStrings.text("nav.filter", "Filter")) {
             Picker(UIStrings.text("sidebar.skillFilter", "Filter"), selection: $store.stateFilter) {
                 ForEach(SkillStateFilter.sidebarCases) { filter in
@@ -767,42 +949,41 @@ private struct SkillSidebarPanel: View {
             Section(UIStrings.skills) {
                 SidebarEmptyMessage(message: store.isLoading ? UIStrings.loading : emptyCatalogMessage)
             }
-        } else if store.filteredSkills.isEmpty {
+        } else if visibleSkills.isEmpty {
             Section(UIStrings.skills) {
                 SidebarEmptyMessage(message: emptyFilteredMessage)
             }
         } else {
             Section {
-                ForEach(store.filteredSkills) { skill in
+                ForEach(visibleSkills) { skill in
                     SkillRow(skill: skill)
                         .tag(SidebarSelection.skill(skill.id))
                 }
             } header: {
                 SkillListSectionHeader(
-                    title: skillListSectionTitle,
-                    visibleCount: store.filteredSkills.count,
-                    isBatchDisabled: store.filteredSkills.isEmpty || store.isRefreshBusy,
+                    title: skillListSectionTitle(visibleCount: visibleSkills.count),
+                    visibleCount: visibleSkills.count,
+                    isBatchDisabled: visibleSkills.isEmpty || store.isRefreshBusy,
                     action: {
                         store.resetBatchToggleSelectionToVisibleSkills()
                         isBatchOperationPresented = true
                     }
                 )
             }
-            .id(skillListRefreshID)
+            .id(skillListRefreshID(visibleCount: visibleSkills.count))
         }
     }
 
-    private var skillListSectionTitle: String {
-        let count = store.filteredSkills.count
+    private func skillListSectionTitle(visibleCount: Int) -> String {
         if store.stateFilter == .all,
            store.skillScopeFilter == .all,
            store.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return UIStrings.text("sidebar.currentAgentSkills", "\(store.agentFilter.title) Skills")
         }
-        return UIStrings.text("sidebar.filteredAgentSkills", "\(store.agentFilter.title) Skills · \(count) shown")
+        return UIStrings.text("sidebar.filteredAgentSkills", "\(store.agentFilter.title) Skills · \(visibleCount) shown")
     }
 
-    private var skillListRefreshID: String {
+    private func skillListRefreshID(visibleCount: Int) -> String {
         [
             store.agentFilter.rawValue,
             store.stateFilter.rawValue,
@@ -810,7 +991,7 @@ private struct SkillSidebarPanel: View {
             store.sortOrder.rawValue,
             store.sortDirection.rawValue,
             store.searchText,
-            String(store.filteredSkills.count)
+            String(visibleCount)
         ].joined(separator: "|")
     }
 
@@ -895,44 +1076,27 @@ private struct ConfigSidebarPanel: View {
             .sorted { $0.createdAt > $1.createdAt }
     }
 
+    private var disabledSkills: [SkillRecord] {
+        AgentConfigDisplay.disabledSkills(for: store.agentFilter, store: store)
+    }
+
+    private var selectedConfigDocuments: [ConfigDocumentRecord] {
+        store.currentAgentConfigDocuments
+            .filter { document in
+                document.agent == store.agentFilter.rawValue && store.configScopeFilter.includes(document)
+            }
+            .sorted { lhs, rhs in
+                let lhsProject = lhs.scope.lowercased().contains("project")
+                let rhsProject = rhs.scope.lowercased().contains("project")
+                if lhsProject != rhsProject {
+                    return lhsProject
+                }
+                return lhs.target.localizedStandardCompare(rhs.target) == .orderedAscending
+            }
+    }
+
     var body: some View {
         Group {
-            Section {
-                Button {
-                    store.selectedSidebarSelection = .configOverview
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: SidebarContentMode.config.systemImage)
-                            .foregroundStyle(store.selectedSidebarSelection == .configOverview ? .white.opacity(0.9) : .secondary)
-                            .frame(width: 18)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(DisplayText.agent(store.agentFilter.rawValue))
-                                .font(.caption.bold())
-                                .foregroundStyle(store.selectedSidebarSelection == .configOverview ? .white : .primary)
-                                .lineLimit(1)
-                            Text(AgentConfigDisplay.shortTargetPath(for: store.agentFilter, store: store))
-                                .font(.caption2)
-                                .foregroundStyle(store.selectedSidebarSelection == .configOverview ? .white.opacity(0.8) : .secondary)
-                                .lineLimit(1)
-                        }
-                        Spacer(minLength: 4)
-                    }
-                    .padding(.vertical, 6)
-                    .padding(.horizontal, 8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        Group {
-                            if store.selectedSidebarSelection == .configOverview {
-                                RoundedRectangle(cornerRadius: 7).fill(Color.accentColor)
-                            }
-                        }
-                    )
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .tag(SidebarSelection.configOverview)
-            }
-
             Section(UIStrings.text("sidebar.config.filters", "Config filters")) {
                 Picker(UIStrings.scope, selection: $store.configScopeFilter) {
                     ForEach(AgentConfigScopeFilter.allCases) { filter in
@@ -940,16 +1104,25 @@ private struct ConfigSidebarPanel: View {
                     }
                 }
                 .controlSize(.small)
+            }
 
-                Button {
-                    Task { await store.loadAgentConfigSnapshots(agent: store.agentFilter.rawValue) }
-                } label: {
-                    Label(UIStrings.reload, systemImage: "arrow.clockwise")
-                        .frame(maxWidth: .infinity, alignment: .center)
+            Section(UIStrings.currentConfigFile) {
+                if selectedConfigDocuments.isEmpty, store.isLoadingAgentConfigDocuments {
+                    Label(UIStrings.loading, systemImage: "hourglass")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if selectedConfigDocuments.isEmpty {
+                    SidebarEmptyMessage(message: UIStrings.agentConfigNoReadableDocuments)
+                } else {
+                    ForEach(selectedConfigDocuments, id: \.target) { document in
+                        ConfigCurrentDocumentSidebarRow(
+                            document: document,
+                            isSelected: store.selectedSidebarSelection == .configDocument(document.target)
+                        ) {
+                            store.selectConfigDocument(document)
+                        }
+                    }
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(store.isLoadingAgentConfigSnapshots || store.isWriting)
             }
 
             Section(UIStrings.text("sidebar.config.operations", "Supported operations")) {
@@ -960,8 +1133,12 @@ private struct ConfigSidebarPanel: View {
                 ConfigOperationRow(title: UIStrings.writableConfig, capability: capability?.writable, systemImage: "lock.open")
             }
 
+            Section(UIStrings.agentConfigSkillEnablement) {
+                ConfigDisabledSkillSummaryRow(skills: disabledSkills)
+            }
+
             Section(UIStrings.agentConfigSettingsHistory) {
-                if store.isLoadingAgentConfigSnapshots {
+                if selectedSnapshots.isEmpty, store.isLoadingAgentConfigSnapshots {
                     Label(UIStrings.loading, systemImage: "hourglass")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -979,12 +1156,56 @@ private struct ConfigSidebarPanel: View {
                 }
             }
         }
-        .task(id: store.agentFilter.rawValue) {
-            await store.loadAgentConfigSnapshots(agent: store.agentFilter.rawValue)
-            if store.agentFilter == .claudeCode, store.claudeSettings == nil {
-                await store.loadClaudeSettings()
-            }
+        .task(id: store.selectedAgentConfigRefreshKey) {
+            await store.loadSelectedAgentConfigDataIfNeeded()
         }
+    }
+}
+
+private struct ConfigCurrentDocumentSidebarRow: View {
+    let document: ConfigDocumentRecord
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: document.exists ? "doc.text" : "doc.badge.plus")
+                    .foregroundStyle(isSelected ? .white.opacity(0.9) : .secondary)
+                    .frame(width: 16)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(DisplayText.scope(document.scope))
+                        .font(.caption.bold())
+                        .foregroundStyle(isSelected ? .white : .primary)
+                        .lineLimit(1)
+                    Text(AgentConfigDisplay.pathSummary(document.target))
+                        .font(.caption2)
+                        .foregroundStyle(isSelected ? .white.opacity(0.82) : .secondary)
+                        .lineLimit(1)
+                        .help(document.target)
+                    Text(document.exists ? UIStrings.existingFile : UIStrings.willCreateFile)
+                        .font(.caption2)
+                        .foregroundStyle(isSelected ? Color.white.opacity(0.74) : Color.secondary.opacity(0.75))
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 4)
+            }
+            .padding(.vertical, 5)
+            .padding(.horizontal, 7)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                Group {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 7).fill(Color.accentColor)
+                    }
+                }
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(DisplayText.scope(document.scope)), \(AgentConfigDisplay.pathSummary(document.target))")
     }
 }
 
@@ -1002,16 +1223,44 @@ private struct ConfigOperationRow: View {
                 Text(title)
                     .font(.caption.bold())
                     .lineLimit(1)
-                Text(capability?.status ?? UIStrings.notLoaded)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
             }
             Spacer(minLength: 6)
             Image(systemName: AgentConfigDisplay.supportSymbol(capability))
                 .foregroundStyle(AgentConfigDisplay.supportColor(capability))
         }
-        .help(capability?.reason ?? capability?.status ?? "")
+        .help(capability?.reason ?? AgentConfigDisplay.supportText(capability))
+    }
+}
+
+private struct ConfigDisabledSkillSummaryRow: View {
+    let skills: [SkillRecord]
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: skills.isEmpty ? "checkmark.circle.fill" : "pause.circle.fill")
+                .foregroundStyle(skills.isEmpty ? Color.green : Color.orange)
+                .frame(width: 17)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(UIStrings.agentConfigDisabledSkillsCount(skills.count))
+                    .font(.caption.bold())
+                    .lineLimit(1)
+                Text(summary)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 4)
+        }
+        .help(summary)
+    }
+
+    private var summary: String {
+        guard !skills.isEmpty else {
+            return UIStrings.agentConfigDisabledSkillsEmpty
+        }
+        return AgentConfigDisplay.disabledSkillNamesSummary(skills, limit: 2)
     }
 }
 
@@ -1032,9 +1281,13 @@ private struct ConfigSnapshotSidebarRow: View {
                         .font(.caption.bold())
                         .foregroundStyle(isSelected ? .white : .primary)
                         .lineLimit(1)
-                    Text("\(item.timeText) · \(item.targetSummary)")
+                    Text("\(item.timeText) · \(item.scopeText) · \(item.capturedText)")
                         .font(.caption2)
                         .foregroundStyle(isSelected ? .white.opacity(0.82) : .secondary)
+                        .lineLimit(1)
+                    Text(item.targetSummary)
+                        .font(.caption2)
+                        .foregroundStyle(isSelected ? Color.white.opacity(0.74) : Color.secondary.opacity(0.75))
                         .lineLimit(1)
                         .help(item.targetSummary)
                 }
@@ -1054,7 +1307,7 @@ private struct ConfigSnapshotSidebarRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(item.actionText)
+        .accessibilityLabel("\(item.actionText), \(item.timeText), \(item.scopeText), \(item.capturedText)")
     }
 }
 
@@ -1062,32 +1315,18 @@ private struct AgentWorkspaceHeader: View {
     @EnvironmentObject private var store: SkillStore
 
     var body: some View {
-        HStack(spacing: 8) {
-            AgentIconBadge(filter: store.agentFilter)
+        HStack(alignment: .center, spacing: 12) {
+            AgentIconBadge(filter: store.agentFilter, size: 40)
                 .fixedSize()
+                .help(DisplayText.agent(store.agentFilter.rawValue))
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(store.agentFilter.title)
-                    .font(.headline)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.78)
-                    .allowsTightening(true)
-                Text(UIStrings.text("sidebar.agentContext", "Agent"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.78)
-                    .allowsTightening(true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .layoutPriority(1)
+            Spacer(minLength: 12)
 
-            Spacer(minLength: 4)
-
-            AgentSelectorMenu(width: 84)
+            AgentSelectorMenu(width: 118)
+                .layoutPriority(1)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
@@ -1105,7 +1344,7 @@ private struct AgentSelectorMenu: View {
         }
         .labelsHidden()
         .pickerStyle(.menu)
-        .controlSize(.small)
+        .controlSize(.regular)
         .frame(width: width, alignment: .trailing)
         .help("\(UIStrings.text("help.agentSelector", "Select the agent workspace.")) \(store.agentFilter.title)")
         .accessibilityLabel(UIStrings.agent)
@@ -1365,6 +1604,7 @@ private struct TimelinePill: View {
 
 private struct AgentIconBadge: View {
     let filter: SkillAgentFilter
+    var size: CGFloat = 28
 
     var body: some View {
         ZStack {
@@ -1372,18 +1612,34 @@ private struct AgentIconBadge: View {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 24, height: 24)
-                    .clipShape(RoundedRectangle(cornerRadius: 5))
+                    .frame(width: imageSize, height: imageSize)
+                    .clipShape(RoundedRectangle(cornerRadius: imageCornerRadius))
                     .accessibilityLabel(DisplayText.agent(filter.rawValue))
             } else {
                 Image(systemName: fallbackSystemImage)
-                    .font(.title3)
+                    .font(.system(size: fallbackIconSize, weight: .semibold))
                     .foregroundStyle(Color.accentColor)
                     .accessibilityLabel(DisplayText.agent(filter.rawValue))
             }
         }
-        .frame(width: 28, height: 28)
-        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
+        .frame(width: size, height: size)
+        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: badgeCornerRadius))
+    }
+
+    private var imageSize: CGFloat {
+        max(18, size - 4)
+    }
+
+    private var imageCornerRadius: CGFloat {
+        max(5, size * 0.18)
+    }
+
+    private var fallbackIconSize: CGFloat {
+        max(16, size * 0.58)
+    }
+
+    private var badgeCornerRadius: CGFloat {
+        max(8, size * 0.28)
     }
 
     private var fallbackSystemImage: String {

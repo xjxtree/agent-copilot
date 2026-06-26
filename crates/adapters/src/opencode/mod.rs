@@ -701,14 +701,16 @@ mod tests {
             }"#,
         )
         .expect("write global opencode config");
-        std::fs::write(
-            project.join("opencode.json"),
-            format!(
-                "{{\"skills\":{{\"paths\":[\"custom/project-skills\", \"{}\"]}}}}",
-                outside_project.to_string_lossy()
-            ),
-        )
-        .expect("write project opencode config");
+        let project_config = serde_json::json!({
+            "skills": {
+                "paths": [
+                    "custom/project-skills",
+                    outside_project.to_string_lossy().to_string(),
+                ],
+            },
+        });
+        std::fs::write(project.join("opencode.json"), project_config.to_string())
+            .expect("write project opencode config");
         let adapter = OpencodeAdapter;
         let ctx = AdapterContext {
             user_home: home.clone(),

@@ -1,0 +1,14 @@
+{
+  "id": "fixture-skill-manager-apply-install",
+  "method": "skillManager.applyInstall",
+  "params": {
+    "source": "vercel-labs/agent-skills",
+    "skills": [
+      "frontend-design"
+    ],
+    "scope": "project",
+    "network_allowed": true,
+    "confirmed": true,
+    "preview_token": "skill-manager:fixture-install"
+  }
+}

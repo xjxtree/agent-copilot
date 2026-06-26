@@ -156,7 +156,11 @@ struct SettingsView: View {
                 }
 
                 if !store.aiProviderStatus.serviceAvailable {
-                    SettingsBanner(message: store.aiProviderStatus.disabledReason ?? UIStrings.aiProviderUnavailable, systemImage: "exclamationmark.triangle.fill", color: .orange)
+                    SettingsBanner(
+                        message: UIStrings.localizedServiceMessage(store.aiProviderStatus.disabledReason ?? UIStrings.aiProviderUnavailable),
+                        systemImage: "exclamationmark.triangle.fill",
+                        color: .orange
+                    )
                 }
 
                 providerForm
@@ -171,11 +175,11 @@ struct SettingsView: View {
                 }
 
                 if let message = store.aiProviderMessage {
-                    SettingsBanner(message: message, systemImage: "checkmark.circle.fill", color: .green)
+                    SettingsBanner(message: UIStrings.localizedServiceMessage(message), systemImage: "checkmark.circle.fill", color: .green)
                 }
 
                 if let error = store.aiProviderErrorMessage {
-                    SettingsBanner(message: error, systemImage: "exclamationmark.triangle.fill", color: .red)
+                    SettingsBanner(message: UIStrings.localizedServiceMessage(error), systemImage: "exclamationmark.triangle.fill", color: .red)
                 }
 
                 if store.isSavingAIProvider {
@@ -238,22 +242,35 @@ struct SettingsView: View {
             }
 
             GridRow {
-                Text(UIStrings.aiProviderBudget)
+                Text(UIStrings.aiProviderMonthlyBudget)
                     .foregroundStyle(.secondary)
-                HStack(spacing: 12) {
-                    TextField(UIStrings.aiProviderMonthlyBudget, text: $providerDraft.monthlyBudgetUSD)
+                VStack(alignment: .leading, spacing: 4) {
+                    TextField(UIStrings.aiProviderMonthlyBudgetPlaceholder, text: $providerDraft.monthlyBudgetUSD)
                         .textFieldStyle(.roundedBorder)
-                        .frame(width: 150)
-                    TextField(UIStrings.aiProviderTokenLimit, text: $providerDraft.singleRequestTokenLimit)
+                    Text(UIStrings.aiProviderMonthlyBudgetHelp)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            GridRow {
+                Text(UIStrings.aiProviderTokenLimit)
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    TextField(UIStrings.aiProviderTokenLimitPlaceholder, text: $providerDraft.singleRequestTokenLimit)
                         .textFieldStyle(.roundedBorder)
-                        .frame(width: 190)
+                    Text(UIStrings.aiProviderTokenLimitHelp)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
             SettingsMetadataRow(label: UIStrings.aiProviderStorage, value: store.aiProviderStatus.credentialStorage ?? UIStrings.notLoaded)
             SettingsMetadataRow(label: UIStrings.llmEnabled, value: store.aiProviderStatus.enabled ? UIStrings.llmEnabled : UIStrings.llmDisabled)
             if let disabledReason = store.aiProviderStatus.disabledReason, !disabledReason.isEmpty {
-                SettingsMetadataRow(label: UIStrings.aiProviderUnconfigured, value: disabledReason)
+                SettingsMetadataRow(label: UIStrings.aiProviderUnconfigured, value: UIStrings.localizedServiceMessage(disabledReason))
             }
         }
     }
@@ -304,7 +321,7 @@ struct SettingsView: View {
 
     private func providerTestResult(_ result: AIProviderTestResult) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label(result.message, systemImage: result.success ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+            Label(UIStrings.localizedServiceMessage(result.message), systemImage: result.success ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                 .font(.headline)
                 .foregroundStyle(result.success ? .green : .orange)
 

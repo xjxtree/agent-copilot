@@ -64,6 +64,20 @@ enum AgentConfigScopeFilter: String, CaseIterable, Identifiable {
             return !scope.contains("global") && !scope.contains("project")
         }
     }
+
+    func includes(_ document: ConfigDocumentRecord) -> Bool {
+        let scope = document.scope.lowercased()
+        switch self {
+        case .all:
+            return true
+        case .global:
+            return scope.contains("global")
+        case .project:
+            return scope.contains("project")
+        case .other:
+            return !scope.contains("global") && !scope.contains("project")
+        }
+    }
 }
 
 enum LocalSessionScopeFilter: String, CaseIterable, Identifiable {

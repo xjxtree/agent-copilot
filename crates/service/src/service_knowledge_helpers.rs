@@ -63,6 +63,7 @@ pub(crate) fn empty_stale_drift_result(
                 app_language: None,
                 skill_instance_id: None,
                 instance_ids: Vec::new(),
+                agents: Vec::new(),
                 analysis_kind: None,
                 user_intent: Some(
                     "Explain deterministic stale/drift signals using only local catalog evidence."
@@ -579,6 +580,7 @@ pub(crate) fn empty_knowledge_search_result(
                 app_language: None,
                 skill_instance_id: None,
                 instance_ids: Vec::new(),
+                agents: Vec::new(),
                 analysis_kind: None,
                 user_intent: Some(
                     "Explain deterministic local knowledge search results.".to_string(),
@@ -1288,6 +1290,7 @@ pub(crate) fn empty_similar_skill_grouping_result(
                 app_language: None,
                 skill_instance_id: None,
                 instance_ids: Vec::new(),
+                agents: Vec::new(),
                 analysis_kind: None,
                 user_intent: Some(
                     "Explain deterministic similar skill grouping using only local catalog evidence."
@@ -2068,6 +2071,7 @@ pub(crate) fn empty_capability_taxonomy_result(
                 app_language: None,
                 skill_instance_id: None,
                 instance_ids: Vec::new(),
+                agents: Vec::new(),
                 analysis_kind: None,
                 user_intent: Some(
                     "Explain deterministic capability taxonomy using only local catalog evidence."
@@ -2878,6 +2882,7 @@ pub(crate) fn empty_local_skill_map_result(
                 app_language: None,
                 skill_instance_id: None,
                 instance_ids: Vec::new(),
+                agents: Vec::new(),
                 analysis_kind: None,
                 user_intent: Some(
                     "Explain deterministic local skill map using only local catalog evidence."
@@ -3505,6 +3510,7 @@ pub(crate) fn empty_workspace_readiness_result(
                 app_language: None,
                 skill_instance_id: None,
                 instance_ids: Vec::new(),
+                agents: Vec::new(),
                 analysis_kind: None,
                 user_intent: Some(
                     "Explain deterministic workspace readiness using only local catalog evidence."

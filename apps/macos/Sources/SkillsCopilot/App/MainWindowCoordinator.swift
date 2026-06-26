@@ -52,6 +52,9 @@ enum MainWindowCoordinator {
         if window.title.isEmpty {
             window.title = UIStrings.appWindowTitle
         }
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.styleMask.insert(.fullSizeContentView)
     }
 
     static func mainWindowScore(identifier: NSUserInterfaceItemIdentifier?, title: String, canBecomeMain: Bool) -> Int {

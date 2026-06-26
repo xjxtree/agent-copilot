@@ -6,8 +6,8 @@ import { fileURLToPath } from "node:url";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
-const methodPattern = /^[a-z]+\.[A-Za-z][A-Za-z0-9]*$/;
-const methodLiteralPattern = /"([a-z]+\.[A-Za-z][A-Za-z0-9]*)"/g;
+const methodPattern = /^[A-Za-z][A-Za-z0-9]*\.[A-Za-z][A-Za-z0-9]*$/;
+const methodLiteralPattern = /"([A-Za-z][A-Za-z0-9]*\.[A-Za-z][A-Za-z0-9]*)"/g;
 
 function fail(message) {
   console.error(`service protocol drift verification failed: ${message}`);
@@ -139,7 +139,7 @@ function parseDispatchMethods(rustSource) {
     if (arrowIndex === -1) {
       continue;
     }
-    const armPattern = /"([a-z]+\.[A-Za-z][A-Za-z0-9]*)"/g;
+    const armPattern = /"([A-Za-z][A-Za-z0-9]*\.[A-Za-z][A-Za-z0-9]*)"/g;
     for (const match of line.slice(0, arrowIndex).matchAll(armPattern)) {
       methods.push(match[1]);
     }

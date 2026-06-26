@@ -80,6 +80,7 @@ struct LocalSessionContentItem: Decodable, Hashable, Identifiable {
     let title: String
     let text: String
     let charCount: Int
+    let timestamp: Int64?
     let evidenceRefs: [String]
 
     enum CodingKeys: String, CodingKey {
@@ -89,6 +90,9 @@ struct LocalSessionContentItem: Decodable, Hashable, Identifiable {
         case text
         case charCount = "char_count"
         case charCountAlt = "charCount"
+        case timestamp
+        case createdAt = "created_at"
+        case createdAtAlt = "createdAt"
         case evidenceRefs = "evidence_refs"
         case evidenceRefsAlt = "evidenceRefs"
         case evidence
@@ -100,6 +104,7 @@ struct LocalSessionContentItem: Decodable, Hashable, Identifiable {
         title: String,
         text: String,
         charCount: Int? = nil,
+        timestamp: Int64? = nil,
         evidenceRefs: [String] = []
     ) {
         self.id = id
@@ -107,6 +112,7 @@ struct LocalSessionContentItem: Decodable, Hashable, Identifiable {
         self.title = title
         self.text = text
         self.charCount = charCount ?? text.count
+        self.timestamp = timestamp
         self.evidenceRefs = evidenceRefs
     }
 
@@ -120,6 +126,7 @@ struct LocalSessionContentItem: Decodable, Hashable, Identifiable {
         charCount = try container.decodeIfPresent(Int.self, forKey: .charCount)
             ?? container.decodeIfPresent(Int.self, forKey: .charCountAlt)
             ?? text.count
+        timestamp = try container.decodeFlexibleLocalSessionInt64(keys: [.timestamp, .createdAt, .createdAtAlt])
         evidenceRefs = try container.decodeFlexibleLocalSessionStringArray(keys: [
             .evidenceRefs,
             .evidenceRefsAlt,
@@ -137,6 +144,8 @@ struct LocalSessionPreviewRow: Decodable, Hashable, Identifiable {
     let projectRoot: String?
     let redactedPath: String
     let modifiedAt: String?
+    let startedAt: Int64?
+    let endedAt: Int64?
     let excerpt: String
     let excerptCharCount: Int
     let userMessageCount: Int
@@ -161,6 +170,10 @@ struct LocalSessionPreviewRow: Decodable, Hashable, Identifiable {
         case path
         case modifiedAt = "modified_at"
         case modifiedAtAlt = "modifiedAt"
+        case startedAt = "started_at"
+        case startedAtAlt = "startedAt"
+        case endedAt = "ended_at"
+        case endedAtAlt = "endedAt"
         case excerpt
         case redactedExcerpt = "redacted_excerpt"
         case excerptCharCount = "excerpt_char_count"
@@ -201,6 +214,8 @@ struct LocalSessionPreviewRow: Decodable, Hashable, Identifiable {
             ?? container.decodeIfPresent(String.self, forKey: .path)
             ?? ""
         modifiedAt = try container.decodeFlexibleLocalSessionString(keys: [.modifiedAt, .modifiedAtAlt])
+        startedAt = try container.decodeFlexibleLocalSessionInt64(keys: [.startedAt, .startedAtAlt])
+        endedAt = try container.decodeFlexibleLocalSessionInt64(keys: [.endedAt, .endedAtAlt])
         excerpt = try container.decodeIfPresent(String.self, forKey: .excerpt)
             ?? container.decodeIfPresent(String.self, forKey: .redactedExcerpt)
             ?? ""
@@ -540,5 +555,29 @@ private extension KeyedDecodingContainer {
             }
         }
         return []
+    }
+
+    func decodeFlexibleLocalSessionInt64(keys: [Key]) throws -> Int64? {
+        for key in keys {
+            if let value = try? decodeIfPresent(Int64.self, forKey: key) {
+                return value
+            }
+            if let value = try? decodeIfPresent(Int.self, forKey: key) {
+                return Int64(value)
+            }
+            if let value = try? decodeIfPresent(Double.self, forKey: key), value.isFinite {
+                return Int64(value.rounded())
+            }
+            if let value = try? decodeIfPresent(String.self, forKey: key) {
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let intValue = Int64(trimmed) {
+                    return intValue
+                }
+                if let doubleValue = Double(trimmed), doubleValue.isFinite {
+                    return Int64(doubleValue.rounded())
+                }
+            }
+        }
+        return nil
     }
 }

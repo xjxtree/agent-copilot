@@ -519,6 +519,96 @@ impl ServiceHost {
                 )?;
                 serde_json::to_value(attempt).map_err(Into::into)
             }
+            "skillManager.listTools" => {
+                serde_json::to_value(list_skill_management_tools()).map_err(Into::into)
+            }
+            "skillManager.search" => {
+                let params: SkillManagerSearchParams = serde_json::from_value(request.params)?;
+                let adapter_ctx = self.effective_adapter_ctx()?;
+                serde_json::to_value(search_skills_with_manager(&adapter_ctx, &params)?)
+                    .map_err(Into::into)
+            }
+            "skillManager.listInstalled" => {
+                let params: SkillManagerListInstalledParams = if request.params.is_null() {
+                    SkillManagerListInstalledParams::default()
+                } else {
+                    serde_json::from_value(request.params)?
+                };
+                let adapter_ctx = self.effective_adapter_ctx()?;
+                serde_json::to_value(list_installed_skills_with_manager(&adapter_ctx, &params)?)
+                    .map_err(Into::into)
+            }
+            "skillManager.previewInstall" => {
+                let params: SkillManagerInstallParams = serde_json::from_value(request.params)?;
+                let adapter_ctx = self.effective_adapter_ctx()?;
+                serde_json::to_value(preview_install_with_manager(&adapter_ctx, &params)?)
+                    .map_err(Into::into)
+            }
+            "skillManager.applyInstall" => {
+                let params: SkillManagerInstallParams = serde_json::from_value(request.params)?;
+                let catalog = self.open_catalog()?;
+                let adapter_ctx = self.effective_adapter_ctx()?;
+                serde_json::to_value(apply_install_with_manager(&catalog, &adapter_ctx, &params)?)
+                    .map_err(Into::into)
+            }
+            "skillManager.previewRemove" => {
+                let params: SkillManagerRemoveParams = serde_json::from_value(request.params)?;
+                let adapter_ctx = self.effective_adapter_ctx()?;
+                serde_json::to_value(preview_remove_with_manager(&adapter_ctx, &params)?)
+                    .map_err(Into::into)
+            }
+            "skillManager.applyRemove" => {
+                let params: SkillManagerRemoveParams = serde_json::from_value(request.params)?;
+                let catalog = self.open_catalog()?;
+                let adapter_ctx = self.effective_adapter_ctx()?;
+                serde_json::to_value(apply_remove_with_manager(&catalog, &adapter_ctx, &params)?)
+                    .map_err(Into::into)
+            }
+            "skillManager.previewUpdate" => {
+                let params: SkillManagerUpdateParams = serde_json::from_value(request.params)?;
+                let adapter_ctx = self.effective_adapter_ctx()?;
+                serde_json::to_value(preview_update_with_manager(&adapter_ctx, &params)?)
+                    .map_err(Into::into)
+            }
+            "skillManager.applyUpdate" => {
+                let params: SkillManagerUpdateParams = serde_json::from_value(request.params)?;
+                let catalog = self.open_catalog()?;
+                let adapter_ctx = self.effective_adapter_ctx()?;
+                serde_json::to_value(apply_update_with_manager(&catalog, &adapter_ctx, &params)?)
+                    .map_err(Into::into)
+            }
+            "skillManager.previewLocalCreate" => {
+                let params: SkillManagerLocalCreateParams = serde_json::from_value(request.params)?;
+                let adapter_ctx = self.effective_adapter_ctx()?;
+                serde_json::to_value(preview_local_create_with_manager(
+                    &self.app_data_dir,
+                    &adapter_ctx,
+                    &params,
+                )?)
+                .map_err(Into::into)
+            }
+            "skillManager.applyLocalCreate" => {
+                let params: SkillManagerLocalCreateParams = serde_json::from_value(request.params)?;
+                let catalog = self.open_catalog()?;
+                let adapter_ctx = self.effective_adapter_ctx()?;
+                serde_json::to_value(apply_local_create_with_manager(
+                    &catalog,
+                    &self.app_data_dir,
+                    &adapter_ctx,
+                    &params,
+                )?)
+                .map_err(Into::into)
+            }
+            "skillManager.deleteLocal" => {
+                let params: SkillManagerDeleteLocalParams = serde_json::from_value(request.params)?;
+                let catalog = self.open_catalog()?;
+                serde_json::to_value(delete_local_skill_with_manager(
+                    &catalog,
+                    &self.app_data_dir,
+                    &params,
+                )?)
+                .map_err(Into::into)
+            }
             "project.getContext" => {
                 let state: ProjectContextState = load_project_context_state(&self.app_data_dir)?;
                 serde_json::to_value(state).map_err(Into::into)
@@ -737,6 +827,13 @@ impl ServiceHost {
                 let adapter_ctx = self.effective_adapter_ctx()?;
                 let document: ConfigDocumentRecord = read_claude_settings(&adapter_ctx)?;
                 serde_json::to_value(document).map_err(Into::into)
+            }
+            "config.readAgentConfig" => {
+                let params: ReadAgentConfigParams = serde_json::from_value(request.params)?;
+                let adapter_ctx = self.effective_adapter_ctx()?;
+                let documents: Vec<ConfigDocumentRecord> =
+                    read_agent_config(&adapter_ctx, &params.agent, params.scope.as_deref())?;
+                serde_json::to_value(documents).map_err(Into::into)
             }
             "config.saveClaudeSettings" => {
                 let params: SaveClaudeSettingsParams = serde_json::from_value(request.params)?;

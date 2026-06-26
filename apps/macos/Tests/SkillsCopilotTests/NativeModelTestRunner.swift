@@ -76,6 +76,7 @@ public func runNativeModelTests() {
         try LLMModelTests().run()
         try ScriptExecutionModelTests().run()
         try ToolGlobalModelTests().run()
+        try SkillManagerModelTests().run()
         try AgentConfigTimelineModelTests().run()
         try ConfigContentRedactorTests().run()
         try LocalizationModelTests().run()

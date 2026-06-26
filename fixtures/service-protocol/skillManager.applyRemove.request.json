@@ -1,0 +1,10 @@
+{
+  "id": "fixture-skill-manager-apply-remove",
+  "method": "skillManager.applyRemove",
+  "params": {
+    "skill": "frontend-design",
+    "scope": "project",
+    "confirmed": true,
+    "preview_token": "skill-manager:fixture-remove"
+  }
+}

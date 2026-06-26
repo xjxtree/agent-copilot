@@ -1,0 +1,13 @@
+{
+  "id": "fixture-skill-manager-apply-update",
+  "method": "skillManager.applyUpdate",
+  "params": {
+    "skills": [
+      "frontend-design"
+    ],
+    "scope": "project",
+    "network_allowed": true,
+    "confirmed": true,
+    "preview_token": "skill-manager:fixture-update"
+  }
+}

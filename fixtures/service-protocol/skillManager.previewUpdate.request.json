@@ -1,0 +1,12 @@
+{
+  "id": "fixture-skill-manager-preview-update",
+  "method": "skillManager.previewUpdate",
+  "params": {
+    "skills": [
+      "frontend-design"
+    ],
+    "scope": "project",
+    "network_allowed": false,
+    "confirmed": false
+  }
+}

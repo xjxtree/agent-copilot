@@ -77,12 +77,14 @@ struct TaskCockpitHistoryRecord: Identifiable, Hashable {
     let id: UUID
     let createdAt: Date
     let taskText: String
+    let agentIDs: [String]
     let result: TaskCockpitResult
     let operationState: TaskCockpitOperationState
 
     init(
         id: UUID = UUID(),
         taskText: String,
+        agentIDs: [String] = [],
         result: TaskCockpitResult,
         operationState: TaskCockpitOperationState,
         createdAt: Date = Date()
@@ -90,6 +92,7 @@ struct TaskCockpitHistoryRecord: Identifiable, Hashable {
         self.id = id
         self.createdAt = createdAt
         self.taskText = taskText
+        self.agentIDs = Self.normalizedAgentIDs(agentIDs.isEmpty ? result.agentScopeIDs : agentIDs)
         self.result = result
         self.operationState = operationState
     }
@@ -105,6 +108,41 @@ struct TaskCockpitHistoryRecord: Identifiable, Hashable {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .first { !$0.isEmpty }
             ?? UIStrings.unknown
+    }
+
+    var agentScopeSummary: String {
+        Self.agentScopeSummary(agentIDs.isEmpty ? result.agentScopeIDs : agentIDs)
+    }
+
+    static func agentScopeSummary(_ agentIDs: [String]) -> String {
+        let normalized = normalizedAgentIDs(agentIDs)
+        let allAgents = SkillAgentFilter.managementCases.map(\.rawValue)
+        if normalized.isEmpty || Set(normalized) == Set(allAgents) {
+            return UIStrings.text("taskCockpit.agentScope.all", "All agents")
+        }
+        return normalized.map(DisplayText.agent).joined(separator: ", ")
+    }
+
+    static func normalizedAgentIDs(_ agentIDs: [String]) -> [String] {
+        let allowed = Set(SkillAgentFilter.managementCases.map(\.rawValue))
+        var seen = Set<String>()
+        return agentIDs
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && allowed.contains($0) }
+            .filter { seen.insert($0).inserted }
+    }
+}
+
+struct TaskCockpitAgentOption: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let enabledSkillCount: Int
+
+    var subtitle: String {
+        String(
+            format: UIStrings.text("taskCockpit.agentScope.skillCount", "%d active skills"),
+            enabledSkillCount
+        )
     }
 }
 
@@ -462,7 +500,7 @@ struct TaskCockpitCandidateRow: Decodable, Hashable, Identifiable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let topLevelSkillName = try container.decodeFlexibleTaskCockpitString(keys: [.skillName, .skillNameAlt, .bestSkillName, .bestSkillNameAlt])
         let topLevelInstanceID = try container.decodeFlexibleTaskCockpitString(keys: [.instanceID, .skillID])
-        let decodedAgent = try container.decodeFlexibleTaskCockpitString(keys: [.agent])
+        let decodedAgent = try container.decodeFlexibleTaskCockpitString(keys: [.agent, .agentID])
         let topLevelDefinitionID = try container.decodeFlexibleTaskCockpitString(keys: [.definitionID, .definitionIDAlt])
         let topLevelSkill = topLevelSkillName.map {
             TaskBenchmarkSkillRef(
@@ -629,6 +667,10 @@ struct TaskCockpitResult: Decodable, Hashable {
         return nil
     }
 
+    var agentScopeIDs: [String] {
+        TaskCockpitHistoryRecord.normalizedAgentIDs(filters.agents.isEmpty ? filters.agent.map { [$0] } ?? [] : filters.agents)
+    }
+
     private var hasNoReturnedRows: Bool {
         routeCandidates.isEmpty
             && agentCandidates.isEmpty
@@ -791,6 +833,487 @@ struct TaskCockpitResult: Decodable, Hashable {
             safetyFlags: ProviderObservabilitySafety(notes: [reason]),
             fallbackReason: reason
         )
+    }
+}
+
+enum TaskCockpitProviderOutputParser {
+    static func result(from outputText: String?, taskText: String, agentIDs: [String]) -> TaskCockpitResult {
+        let normalizedTask = taskText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedAgents = TaskCockpitHistoryRecord.normalizedAgentIDs(agentIDs)
+        guard let outputText, !outputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return fallbackResult(
+                taskText: normalizedTask,
+                agentIDs: normalizedAgents,
+                reason: UIStrings.text("taskCockpit.provider.empty", "The provider returned an empty preflight response.")
+            )
+        }
+
+        if let data = extractedJSONData(from: outputText),
+           let decoded = try? JSONDecoder().decode(TaskCockpitResult.self, from: data) {
+            return normalized(decoded, taskText: normalizedTask, agentIDs: normalizedAgents)
+        }
+        if let data = extractedJSONData(from: outputText),
+           let loose = looseResult(from: data, taskText: normalizedTask, agentIDs: normalizedAgents) {
+            return loose
+        }
+
+        return fallbackResult(
+            taskText: normalizedTask,
+            agentIDs: normalizedAgents,
+            reason: UIStrings.taskCockpitProviderUnparsed
+        )
+    }
+
+    private static func normalized(_ result: TaskCockpitResult, taskText: String, agentIDs: [String]) -> TaskCockpitResult {
+        let inferredTopSkill = result.skillCandidates.first ?? result.routeCandidates.first
+        let inferredAgent = inferredTopSkill?.agent ?? result.agentCandidates.first?.agent
+        let filters = TaskCockpitFilters(
+            taskText: result.filters.taskText.isEmpty ? taskText : result.filters.taskText,
+            agent: result.filters.agent,
+            agents: result.filters.agents.isEmpty ? agentIDs : result.filters.agents,
+            selectedSkillID: result.filters.selectedSkillID,
+            selectedSkillName: result.filters.selectedSkillName,
+            selectedSkillAgent: result.filters.selectedSkillAgent,
+            projectRoot: result.filters.projectRoot,
+            currentCWD: result.filters.currentCWD,
+            workspace: result.filters.workspace,
+            limit: result.filters.limit,
+            includeSessionReview: result.filters.includeSessionReview,
+            includeProviderObservability: result.filters.includeProviderObservability,
+            includeRemediationContext: result.filters.includeRemediationContext
+        )
+        let summary = TaskCockpitSummary(
+            taskText: result.summary.taskText.isEmpty ? taskText : result.summary.taskText,
+            summaryText: result.summary.summaryText,
+            routeCandidateCount: max(result.summary.routeCandidateCount, result.routeCandidates.count),
+            agentCandidateCount: max(result.summary.agentCandidateCount, result.agentCandidates.count),
+            skillCandidateCount: max(result.summary.skillCandidateCount, result.skillCandidates.count),
+            readinessSignalCount: max(result.summary.readinessSignalCount, result.readinessSignals.count),
+            sessionReviewCount: result.summary.sessionReviewCount,
+            providerCallCount: result.summary.providerCallCount,
+            remediationItemCount: result.summary.remediationItemCount,
+            gapCount: max(result.summary.gapCount, result.gapRows.count),
+            blockerCount: max(result.summary.blockerCount, result.blockerRows.count),
+            evidenceCount: max(result.summary.evidenceCount, result.evidenceReferences.count),
+            safetyFlagCount: result.summary.safetyFlagCount,
+            recommendedAgent: result.summary.recommendedAgent ?? inferredAgent,
+            recommendedSkillName: result.summary.recommendedSkillName
+                ?? inferredTopSkill?.skill?.name
+                ?? (inferredTopSkill?.agent == nil ? inferredTopSkill?.title : nil),
+            readinessScore: result.summary.readinessScore ?? inferredTopSkill?.readinessScore,
+            routingScore: result.summary.routingScore ?? inferredTopSkill?.routingScore ?? inferredTopSkill?.score
+        )
+        return TaskCockpitResult(
+            generatedBy: result.generatedBy.isEmpty ? "provider-task-cockpit" : result.generatedBy,
+            catalogAvailable: result.catalogAvailable,
+            filters: filters,
+            summary: summary,
+            cockpitSections: result.cockpitSections,
+            taskRows: result.taskRows,
+            routeCandidates: result.routeCandidates,
+            agentCandidates: result.agentCandidates,
+            skillCandidates: result.skillCandidates,
+            readinessSignals: result.readinessSignals,
+            sessionReviewContext: result.sessionReviewContext,
+            providerObservabilityContext: result.providerObservabilityContext,
+            remediationContext: result.remediationContext,
+            gapRows: result.gapRows,
+            blockerRows: result.blockerRows,
+            evidenceReferences: result.evidenceReferences,
+            promptRequest: result.promptRequest,
+            aggregation: result.aggregation,
+            safetyFlags: result.safetyFlags,
+            fallbackReason: result.fallbackReason
+        )
+    }
+
+    private static func fallbackResult(taskText: String, agentIDs: [String], reason: String) -> TaskCockpitResult {
+        TaskCockpitResult(
+            generatedBy: "provider-task-cockpit",
+            catalogAvailable: true,
+            filters: TaskCockpitFilters(taskText: taskText, agents: agentIDs),
+            summary: TaskCockpitSummary(
+                taskText: taskText,
+                summaryText: reason,
+                readinessScore: 0,
+                routingScore: 0
+            ),
+            readinessSignals: [
+                TaskCockpitContextRow(
+                    id: "provider-output",
+                    title: UIStrings.text("taskCockpit.provider.output", "Provider output"),
+                    detail: reason,
+                    status: "review",
+                    source: "llm.confirmPromptAndSend"
+                )
+            ],
+            safetyFlags: ProviderObservabilitySafety(providerRequestSent: true),
+            fallbackReason: nil
+        )
+    }
+
+    private static func looseResult(from data: Data, taskText: String, agentIDs: [String]) -> TaskCockpitResult? {
+        guard let raw = try? JSONSerialization.jsonObject(with: data),
+              let object = raw as? [String: Any]
+        else { return nil }
+        let payload = dictionaryValue(object, keys: ["result"]) ?? object
+        let summaryObject = dictionaryValue(payload, keys: ["summary", "task_summary", "taskSummary"])
+        let routeCandidates = looseCandidateRows(
+            firstValue(payload, keys: ["route_candidates", "routeCandidates", "routes", "candidate_routes", "candidateRoutes"]),
+            kind: .route
+        )
+        let agentCandidates = looseCandidateRows(
+            firstValue(payload, keys: ["agent_candidates", "agentCandidates", "agent_rows", "agentRows", "agent_route_rows", "agentRouteRows", "agents"]),
+            kind: .agent
+        )
+        let skillCandidates = looseCandidateRows(
+            firstValue(payload, keys: ["skill_candidates", "skillCandidates", "skill_candidate_rows", "skillCandidateRows", "candidate_skills", "candidateSkills", "skills"]),
+            kind: .skill
+        )
+        let readinessRows = looseContextRows(
+            firstValue(payload, keys: ["readiness_signals", "readinessSignals", "readiness_rows", "readinessRows", "readiness", "signals"]),
+            fallbackIDPrefix: "signal"
+        )
+        let gapRows = looseContextRows(
+            firstValue(payload, keys: ["gap_rows", "gapRows", "gap_notes", "gapNotes", "gaps"]),
+            fallbackIDPrefix: "gap"
+        )
+        let blockerRows = looseContextRows(
+            firstValue(payload, keys: ["blocker_rows", "blockerRows", "blocker_notes", "blockerNotes", "blockers"]),
+            fallbackIDPrefix: "blocker"
+        )
+
+        let hasCandidateOrContext = !routeCandidates.isEmpty
+            || !agentCandidates.isEmpty
+            || !skillCandidates.isEmpty
+            || !readinessRows.isEmpty
+            || !gapRows.isEmpty
+            || !blockerRows.isEmpty
+        guard hasCandidateOrContext else { return nil }
+
+        let topSkill = skillCandidates.first ?? routeCandidates.first
+        let topAgent = topSkill?.agent ?? agentCandidates.first?.agent
+        let summaryText = stringValue(summaryObject, keys: ["summary", "message", "text"])
+            ?? stringValue(payload, keys: ["summary", "message", "text", "reason"])
+            ?? UIStrings.taskCockpitProviderPartialSummary
+        let summary = TaskCockpitSummary(
+            taskText: stringValue(summaryObject, keys: ["task_text", "taskText", "task", "user_intent", "userIntent"]) ?? taskText,
+            summaryText: sanitizedProviderSummary(summaryText) ?? UIStrings.taskCockpitProviderPartialSummary,
+            routeCandidateCount: intValue(summaryObject, keys: ["route_candidate_count", "routeCandidateCount", "route_count", "routeCount"]) ?? routeCandidates.count,
+            agentCandidateCount: intValue(summaryObject, keys: ["agent_candidate_count", "agentCandidateCount", "agent_count", "agentCount"]) ?? agentCandidates.count,
+            skillCandidateCount: intValue(summaryObject, keys: ["skill_candidate_count", "skillCandidateCount", "candidate_skill_count", "candidateSkillCount", "candidate_count", "candidateCount"]) ?? skillCandidates.count,
+            readinessSignalCount: intValue(summaryObject, keys: ["readiness_signal_count", "readinessSignalCount"]) ?? readinessRows.count,
+            gapCount: intValue(summaryObject, keys: ["gap_count", "gapCount"]) ?? gapRows.count,
+            blockerCount: intValue(summaryObject, keys: ["blocker_count", "blockerCount"]) ?? blockerRows.count,
+            recommendedAgent: normalizedAgentID(
+                stringValue(summaryObject, keys: ["recommended_agent", "recommendedAgent", "top_agent", "topAgent"])
+            ) ?? topAgent,
+            recommendedSkillName: stringValue(summaryObject, keys: ["recommended_skill_name", "recommendedSkillName", "top_skill_name", "topSkillName"])
+                ?? topSkill?.skill?.name
+                ?? (topSkill?.agent == nil ? topSkill?.title : nil),
+            readinessScore: intValue(summaryObject, keys: ["readiness_score", "readinessScore"]) ?? topSkill?.readinessScore,
+            routingScore: intValue(summaryObject, keys: ["routing_score", "routingScore", "routing_confidence_score", "routingConfidenceScore", "confidence_score", "confidenceScore"]) ?? topSkill?.routingScore ?? topSkill?.score
+        )
+
+        return TaskCockpitResult(
+            generatedBy: stringValue(payload, keys: ["generated_by", "generatedBy"]) ?? "provider-task-cockpit",
+            catalogAvailable: boolValue(payload, keys: ["catalog_available", "catalogAvailable"]) ?? true,
+            filters: TaskCockpitFilters(taskText: taskText, agents: agentIDs),
+            summary: summary,
+            routeCandidates: routeCandidates,
+            agentCandidates: agentCandidates,
+            skillCandidates: skillCandidates,
+            readinessSignals: readinessRows,
+            gapRows: gapRows,
+            blockerRows: blockerRows,
+            safetyFlags: ProviderObservabilitySafety(providerRequestSent: true)
+        )
+    }
+
+    private enum LooseCandidateKind {
+        case route
+        case agent
+        case skill
+
+        var fallbackIDPrefix: String {
+            switch self {
+            case .route: return "route"
+            case .agent: return "agent"
+            case .skill: return "skill"
+            }
+        }
+    }
+
+    private static func looseCandidateRows(_ value: Any?, kind: LooseCandidateKind) -> [TaskCockpitCandidateRow] {
+        if let array = value as? [Any] {
+            return array.enumerated().compactMap { index, item in
+                looseCandidateRow(item, kind: kind, index: index)
+            }
+        }
+        if let value {
+            return looseCandidateRow(value, kind: kind, index: 0).map { [$0] } ?? []
+        }
+        return []
+    }
+
+    private static func looseCandidateRow(_ value: Any, kind: LooseCandidateKind, index: Int) -> TaskCockpitCandidateRow? {
+        if let text = sanitizedProviderSummary(stringValue(value)), !text.isEmpty {
+            return TaskCockpitCandidateRow(id: "\(kind.fallbackIDPrefix):\(index)", rank: index + 1, title: text)
+        }
+        guard let object = value as? [String: Any] else { return nil }
+        let nestedSkillObject = dictionaryValue(object, keys: ["skill", "candidate_skill", "candidateSkill", "route"])
+        let nestedSkillName = stringValue(nestedSkillObject, keys: ["name", "skill_name", "skillName", "title"])
+        let nestedSkillID = stringValue(nestedSkillObject, keys: ["instance_id", "instanceId", "skill_id", "skillId", "id"])
+        let nestedDefinitionID = stringValue(nestedSkillObject, keys: ["definition_id", "definitionId"])
+        let agent = normalizedAgentID(stringValue(object, keys: ["agent", "agent_id", "agentId"]))
+            ?? normalizedAgentID(stringValue(nestedSkillObject, keys: ["agent", "agent_id", "agentId"]))
+        let topSkillName = stringValue(object, keys: ["skill_name", "skillName", "best_skill_name", "bestSkillName"])
+        let inferredSkillName = nestedSkillName ?? topSkillName ?? (kind == .skill || kind == .route ? stringValue(object, keys: ["title", "name", "label"]) : nil)
+        let skillID = nestedSkillID ?? stringValue(object, keys: ["instance_id", "instanceId", "skill_id", "skillId"])
+        let skill = inferredSkillName.map {
+            TaskBenchmarkSkillRef(
+                instanceID: skillID,
+                name: $0,
+                agent: agent ?? UIStrings.unknown,
+                definitionID: nestedDefinitionID ?? stringValue(object, keys: ["definition_id", "definitionId"])
+            )
+        }
+        let title = stringValue(object, keys: ["title", "name", "label", "display_name", "displayName", "agent_name", "agentName"])
+            ?? inferredSkillName
+            ?? agent.map(DisplayText.agent)
+            ?? UIStrings.unknown
+        let id = stringValue(object, keys: ["id", "route_id", "routeId", "agent_id", "agentId", "skill_id", "skillId", "instance_id", "instanceId"])
+            ?? "\(kind.fallbackIDPrefix):\(index)"
+
+        return TaskCockpitCandidateRow(
+            id: id,
+            rank: intValue(object, keys: ["rank", "position"]) ?? index + 1,
+            title: title,
+            agent: agent ?? skill?.agent,
+            skill: skill,
+            readinessScore: intValue(object, keys: ["readiness_score", "readinessScore"]),
+            routingScore: intValue(object, keys: ["routing_score", "routingScore", "routing_confidence_score", "routingConfidenceScore", "confidence_score", "confidenceScore"]),
+            score: intValue(object, keys: ["score", "value", "comparison_score", "comparisonScore", "quality_score", "qualityScore"]),
+            band: stringValue(object, keys: ["band", "readiness_band", "readinessBand", "routing_confidence_band", "routingConfidenceBand", "confidence_band", "confidenceBand"]),
+            status: stringValue(object, keys: ["status", "state", "enabled"]),
+            summary: sanitizedProviderSummary(stringValue(object, keys: ["summary", "detail", "rationale", "reason", "scope"]) ?? "") ?? "",
+            reasons: stringArrayValue(object, keys: ["reasons", "reason", "match_reasons", "matchReasons", "why"]),
+            evidenceRefs: stringArrayValue(object, keys: ["evidence_refs", "evidenceRefs", "evidence"]),
+            safetyFlags: stringArrayValue(object, keys: ["safety_flags", "safetyFlags", "flags", "blocker_notes", "blockerNotes", "gap_notes", "gapNotes"])
+        )
+    }
+
+    private static func looseContextRows(_ value: Any?, fallbackIDPrefix: String) -> [TaskCockpitContextRow] {
+        if let array = value as? [Any] {
+            return array.enumerated().compactMap { index, item in
+                looseContextRow(item, fallbackIDPrefix: fallbackIDPrefix, index: index)
+            }
+        }
+        if let value {
+            return looseContextRow(value, fallbackIDPrefix: fallbackIDPrefix, index: 0).map { [$0] } ?? []
+        }
+        return []
+    }
+
+    private static func looseContextRow(_ value: Any, fallbackIDPrefix: String, index: Int) -> TaskCockpitContextRow? {
+        if let text = sanitizedProviderSummary(stringValue(value)), !text.isEmpty {
+            return TaskCockpitContextRow(id: "\(fallbackIDPrefix):\(index)", title: text)
+        }
+        guard let object = value as? [String: Any] else { return nil }
+        let title = sanitizedProviderSummary(stringValue(object, keys: ["title", "name", "label", "task", "summary", "message", "reason"]) ?? "") ?? UIStrings.unknown
+        let detail = sanitizedProviderSummary(stringValue(object, keys: ["detail", "description", "suggested_safe_next_action", "suggestedSafeNextAction"]) ?? "") ?? ""
+        return TaskCockpitContextRow(
+            id: stringValue(object, keys: ["id", "row_id", "rowId"]) ?? "\(fallbackIDPrefix):\(index)",
+            title: title,
+            detail: detail,
+            status: stringValue(object, keys: ["status", "outcome"]),
+            severity: stringValue(object, keys: ["severity", "priority"]),
+            source: stringValue(object, keys: ["source", "source_method", "sourceMethod", "row_type", "rowType"]),
+            agent: normalizedAgentID(stringValue(object, keys: ["agent", "agent_id", "agentId"])),
+            count: intValue(object, keys: ["count", "total", "row_count", "rowCount"]),
+            evidenceRefs: stringArrayValue(object, keys: ["evidence_refs", "evidenceRefs", "evidence"]),
+            safetyFlags: stringArrayValue(object, keys: ["safety_flags", "safetyFlags", "flags"])
+        )
+    }
+
+    private static func firstValue(_ object: [String: Any], keys: [String]) -> Any? {
+        for key in keys {
+            if let value = object[key], !(value is NSNull) {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private static func dictionaryValue(_ object: [String: Any]?, keys: [String]) -> [String: Any]? {
+        guard let object else { return nil }
+        for key in keys {
+            if let value = object[key] as? [String: Any] {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private static func stringValue(_ object: [String: Any]?, keys: [String]) -> String? {
+        guard let object else { return nil }
+        for key in keys {
+            if let value = stringValue(object[key]) {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private static func stringValue(_ value: Any?) -> String? {
+        switch value {
+        case let value as String:
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        case let value as NSNumber:
+            return value.stringValue
+        case let value as Bool:
+            return value ? UIStrings.stateEnabled : UIStrings.stateDisabled
+        default:
+            return nil
+        }
+    }
+
+    private static func intValue(_ object: [String: Any]?, keys: [String]) -> Int? {
+        guard let object else { return nil }
+        for key in keys {
+            if let value = intValue(object[key]) {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        switch value {
+        case let value as Int:
+            return value
+        case let value as Double:
+            return Int(value.rounded())
+        case let value as NSNumber:
+            return value.intValue
+        case let value as String:
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let intValue = Int(trimmed) { return intValue }
+            if let doubleValue = Double(trimmed) { return Int(doubleValue.rounded()) }
+            return nil
+        default:
+            return nil
+        }
+    }
+
+    private static func boolValue(_ object: [String: Any]?, keys: [String]) -> Bool? {
+        guard let object else { return nil }
+        for key in keys {
+            if let value = boolValue(object[key]) {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private static func boolValue(_ value: Any?) -> Bool? {
+        switch value {
+        case let value as Bool:
+            return value
+        case let value as NSNumber:
+            return value.boolValue
+        case let value as String:
+            switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "true", "yes", "1", "enabled", "available":
+                return true
+            case "false", "no", "0", "disabled", "unavailable":
+                return false
+            default:
+                return nil
+            }
+        default:
+            return nil
+        }
+    }
+
+    private static func stringArrayValue(_ object: [String: Any], keys: [String]) -> [String] {
+        for key in keys {
+            if let values = stringArrayValue(object[key]) {
+                return values
+            }
+        }
+        return []
+    }
+
+    private static func stringArrayValue(_ value: Any?) -> [String]? {
+        if let values = value as? [Any] {
+            return values.compactMap { item -> String? in
+                if let text = sanitizedProviderSummary(stringValue(item)) {
+                    return text
+                }
+                if let object = item as? [String: Any] {
+                    return sanitizedProviderSummary(
+                        stringValue(object, keys: ["detail", "summary", "message", "title", "name", "source", "id"]) ?? ""
+                    )
+                }
+                return nil
+            }
+        }
+        if let text = sanitizedProviderSummary(stringValue(value) ?? "") {
+            return [text]
+        }
+        return nil
+    }
+
+    private static func normalizedAgentID(_ value: String?) -> String? {
+        guard let value, !value.isEmpty else { return nil }
+        if value.hasPrefix("agent:") {
+            return String(value.dropFirst("agent:".count))
+        }
+        return value
+    }
+
+    private static func sanitizedProviderSummary(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !looksLikeRawStructuredPayload(trimmed) else { return nil }
+        return UIStrings.localizedServiceMessage(trimmed)
+    }
+
+    private static func looksLikeRawStructuredPayload(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.hasPrefix("{")
+            || trimmed.hasPrefix("[")
+            || trimmed.hasPrefix("```")
+            || trimmed.contains("\"agent_candidates\"")
+            || trimmed.contains("\"skill_candidates\"")
+            || trimmed.contains("\"route_candidates\"")
+    }
+
+    private static func extractedJSONData(from text: String) -> Data? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let fenced = fencedJSONBody(from: trimmed) {
+            return fenced.data(using: .utf8)
+        }
+        guard let first = trimmed.firstIndex(of: "{"),
+              let last = trimmed.lastIndex(of: "}"),
+              first <= last
+        else {
+            return nil
+        }
+        return String(trimmed[first...last]).data(using: .utf8)
+    }
+
+    private static func fencedJSONBody(from text: String) -> String? {
+        guard let startFence = text.range(of: "```") else { return nil }
+        let afterFence = text[startFence.upperBound...]
+        guard let endFence = afterFence.range(of: "```") else { return nil }
+        var body = String(afterFence[..<endFence.lowerBound])
+        if body.lowercased().hasPrefix("json") {
+            body = String(body.dropFirst(4))
+        }
+        return body.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

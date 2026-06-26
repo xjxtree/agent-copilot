@@ -1,0 +1,50 @@
+{
+  "id": "fixture-skill-manager-preview-update",
+  "ok": true,
+  "result": {
+    "preview": {
+      "tool_id": "npx-skills",
+      "operation": "update",
+      "command": [
+        "/usr/local/bin/npx",
+        "skills",
+        "update",
+        "frontend-design",
+        "--agent",
+        "claude-code",
+        "--agent",
+        "pi",
+        "--agent",
+        "opencode",
+        "--agent",
+        "codex",
+        "--agent",
+        "hermes-agent",
+        "--agent",
+        "openclaw",
+        "-y"
+      ],
+      "cwd": "/tmp/skills-copilot-project",
+      "env": [
+        {
+          "key": "HOME",
+          "value": "/tmp/skills-copilot-home"
+        }
+      ],
+      "requires_confirmation": true,
+      "confirmed": false,
+      "network_required": true,
+      "network_allowed": false,
+      "will_run": false,
+      "preview_token": "skill-manager:fixture-update",
+      "summary": "Update managed skills for 6 supported agent target(s).",
+      "risks": [
+        "Update may contact remote source repositories or indexes through the external CLI."
+      ]
+    },
+    "output": null,
+    "applied": false,
+    "scanned_count": 0,
+    "updated_skills": []
+  }
+}

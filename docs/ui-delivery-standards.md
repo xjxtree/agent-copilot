@@ -17,6 +17,23 @@ This file captures UI and evidence standards.
 - Agent Usage Report and Task Preflight are compact preview tools.
 - Retired surfaces should not reappear without a new scoped version.
 
+## Responsive Loading Defaults
+
+- Startup prewarm and explicit refresh buttons are the default places for
+  expensive file scans, config reads, history reads, and analysis/statistics
+  work.
+- Scope pickers, filters, search, sort controls, sidebar navigation, and list
+  row selection should derive from already loaded app data and must not clear the
+  current UI into a loading state for routine changes.
+- While a refresh is running, keep the last successful data visible and show
+  progress only on the explicit refresh/loading control.
+- Exceptions are consistency-bound flows that must read current data before a
+  mutation or irreversible preview, such as config edit, save, rollback, and
+  guarded write operations.
+- When a fresh read is needed after user action, request the smallest domain
+  needed for that action instead of rescanning unrelated agents, projects, or
+  surfaces.
+
 ## Evidence Screenshots
 
 - Completed screenshots must capture only the full app window.

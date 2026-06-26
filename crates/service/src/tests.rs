@@ -16,6 +16,7 @@ mod llm_provider;
 mod local_session_preview;
 mod protocol_fixtures;
 mod remediation_workspace;
+mod skill_manager_fixtures;
 mod support_and_status;
 mod support_seed;
 mod task_cockpit_routing;

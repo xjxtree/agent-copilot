@@ -1,4 +1,4 @@
-use super::*;
+use super::{skill_manager_fixtures::skill_manager_dispatch_params, *};
 
 #[test]
 fn supported_methods_have_dispatch_coverage() {
@@ -31,10 +31,7 @@ fn supported_methods_have_dispatch_coverage() {
     assert!(!unknown.ok);
     let error = unknown.error.expect("unknown method error");
     assert_eq!(error.code, "unknown_method");
-    assert!(
-        error.message.contains("service.notReal"),
-        "unknown method error should name the method"
-    );
+    assert!(error.message.contains("service.notReal"));
 
     let _ = fs::remove_dir_all(app_data_dir);
 }
@@ -246,6 +243,8 @@ fn dispatch_coverage_params(method: &str) -> Value {
             "command": ["echo", "blocked"],
             "confirmed": true
         }),
+        method if method.starts_with("skillManager.") => skill_manager_dispatch_params(method),
+        "config.readAgentConfig" => json!({ "agent": "codex" }),
         "config.saveClaudeSettings" => json!({ "content": "{}\n" }),
         "project.setContext" | "project.validateContext" => {
             json!({ "root_path": "/tmp/skills-copilot-missing-project" })
@@ -2931,7 +2930,7 @@ pub(super) struct WireLocalSessionPreviewRoot { pub(super) root: String, pub(sup
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[rustfmt::skip]
-pub(super) struct WireLocalSessionContentItem { pub(super) id: String, pub(super) kind: String, pub(super) title: String, pub(super) text: String, pub(super) char_count: usize, pub(super) evidence_refs: Vec<String> }
+pub(super) struct WireLocalSessionContentItem { pub(super) id: String, pub(super) kind: String, pub(super) title: String, pub(super) text: String, pub(super) char_count: usize, pub(super) timestamp: Option<i64>, pub(super) evidence_refs: Vec<String> }
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
@@ -2939,8 +2938,8 @@ pub(super) struct WireLocalSessionContentItem { pub(super) id: String, pub(super
 #[rustfmt::skip]
 pub(super) struct WireLocalSessionPreviewRow {
     pub(super) id: String, pub(super) title: String, pub(super) source_kind: String,
-    pub(super) agent: Option<String>, pub(super) redacted_path: String,
-    pub(super) modified_at: Option<i64>, pub(super) excerpt: String,
+    pub(super) agent: Option<String>, pub(super) redacted_path: String, pub(super) modified_at: Option<i64>,
+    pub(super) started_at: Option<i64>, pub(super) ended_at: Option<i64>, pub(super) excerpt: String,
     pub(super) excerpt_char_count: usize, pub(super) user_message_count: usize,
     pub(super) total_message_count: usize, pub(super) tool_call_count: usize,
     pub(super) skill_call_count: usize, pub(super) content_hash: String,

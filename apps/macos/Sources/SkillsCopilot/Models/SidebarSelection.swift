@@ -3,6 +3,7 @@ enum SidebarSelection: Hashable {
     case session(String)
     case skill(String)
     case configOverview
+    case configDocument(String)
     case configSnapshot(String)
 
     var isSkill: Bool {
@@ -21,7 +22,7 @@ enum SidebarSelection: Hashable {
 
     var isConfig: Bool {
         switch self {
-        case .configOverview, .configSnapshot:
+        case .configOverview, .configDocument, .configSnapshot:
             return true
         default:
             return false

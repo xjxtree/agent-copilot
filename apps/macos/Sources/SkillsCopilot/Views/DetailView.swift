@@ -78,7 +78,7 @@ struct DetailView: View {
                             DetailSectionSwitcher(selection: $store.selectedDetailSection)
 
                             switch store.selectedDetailSection {
-                            case .agentWorkspace, .lineup, .agentProfile, .taskCockpit, .guidedCleanup, .observability:
+                            case .agentWorkspace, .lineup, .agentProfile, .taskCockpit, .skillManager, .guidedCleanup, .observability:
                                 EmptyView()
                             case .overview:
                                 VStack(alignment: .leading, spacing: 16) {
@@ -509,7 +509,9 @@ struct DetailView: View {
                             )
                         }
                     }
-                    .padding(28)
+                    .padding(.top, 8)
+                    .padding(.horizontal, 28)
+                    .padding(.bottom, 28)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
@@ -520,7 +522,7 @@ struct DetailView: View {
                 scrollToTop(proxy)
             }
         }
-        .navigationTitle(UIStrings.appWindowTitle)
+        .navigationTitle("")
         .transaction { transaction in
             if reduceMotion {
                 transaction.animation = nil

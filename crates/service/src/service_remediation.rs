@@ -658,7 +658,8 @@ impl ServiceHost {
                     app_language: None,
                     skill_instance_id: None,
                     instance_ids: prompt_instance_ids,
-                    analysis_kind: None,
+                    agents: Vec::new(),
+                analysis_kind: None,
                     user_intent: filters.task.clone().or_else(|| {
                         Some(
                             "Explain deterministic remediation plan items using only local catalog evidence."
@@ -970,7 +971,8 @@ impl ServiceHost {
                     app_language: None,
                     skill_instance_id: None,
                     instance_ids: prompt_instance_ids,
-                    analysis_kind: None,
+                    agents: Vec::new(),
+                analysis_kind: None,
                     user_intent: filters.task.clone().or_else(|| {
                         Some(
                             "Explain deterministic fix preview drafts using only local catalog evidence."
@@ -1304,7 +1306,8 @@ impl ServiceHost {
                     app_language: None,
                     skill_instance_id: None,
                     instance_ids: prompt_instance_ids,
-                    analysis_kind: None,
+                    agents: Vec::new(),
+                analysis_kind: None,
                     user_intent: filters.task.clone().or_else(|| {
                         Some(
                             "Explain deterministic remediation impact preview using only local catalog evidence."
@@ -1583,7 +1586,8 @@ impl ServiceHost {
                     app_language: None,
                     skill_instance_id: None,
                     instance_ids: prompt_instance_ids,
-                    analysis_kind: None,
+                    agents: Vec::new(),
+                analysis_kind: None,
                     user_intent: filters.task.clone().or_else(|| {
                         Some(
                             "Explain deterministic batch review workflow items using only local catalog evidence."

@@ -7,7 +7,7 @@ struct AgentSessionDetailPanel: View {
     var body: some View {
         AgentSessionContentPanel(
             session: store.selectedLocalSession,
-            result: store.localSessionPreviewResult,
+            gapNotes: store.selectedLocalSession == nil ? store.localSessionPreviewResult.gapNotes : [],
             isRefreshing: store.isPreviewingLocalSessions,
             onRefresh: {
                 Task {
@@ -20,7 +20,7 @@ struct AgentSessionDetailPanel: View {
 
 private struct AgentSessionContentPanel: View {
     let session: LocalSessionPreviewRow?
-    let result: LocalSessionPreviewResult
+    let gapNotes: [String]
     let isRefreshing: Bool
     let onRefresh: () -> Void
 
@@ -49,6 +49,12 @@ private struct AgentSessionContentPanel: View {
                                 .font(.callout.bold())
                                 .lineLimit(1)
                             PrivacyEvidenceText(value: session.redactedPath, font: .caption2, lineLimit: 1)
+                            if let timeRange = sessionTimeRangeText(session) {
+                                Label(timeRange, systemImage: "clock")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
                         }
                         Spacer()
                         if let agent = session.agent, !agent.isEmpty {
@@ -78,8 +84,8 @@ private struct AgentSessionContentPanel: View {
                     Text(emptySessionMessage)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    if !result.gapNotes.isEmpty {
-                        Text(result.gapNotes.prefix(2).joined(separator: " "))
+                    if !gapNotes.isEmpty {
+                        Text(gapNotes.prefix(2).joined(separator: " "))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -93,9 +99,6 @@ private struct AgentSessionContentPanel: View {
     }
 
     private var emptySessionMessage: String {
-        if isRefreshing {
-            return UIStrings.loading
-        }
         return UIStrings.text("agentCopilot.sessions.empty", "No local sessions are loaded for the selected agent.")
     }
 
@@ -104,6 +107,23 @@ private struct AgentSessionContentPanel: View {
             return UIStrings.text("agentCopilot.sessions.noSelectedFilters", "Select at least one content filter.")
         }
         return UIStrings.text("agentCopilot.sessions.noFilteredContent", "No session content matches the selected filters.")
+    }
+
+    private func sessionTimeRangeText(_ session: LocalSessionPreviewRow) -> String? {
+        switch (session.startedAt, session.endedAt) {
+        case let (started?, ended?) where started != ended:
+            let startLabel = UIStrings.text("agentCopilot.sessions.started", "Started")
+            let endLabel = UIStrings.text("agentCopilot.sessions.ended", "Last")
+            return "\(startLabel) \(DisplayText.timestamp(started)) · \(endLabel) \(DisplayText.timestamp(ended))"
+        case let (started?, _):
+            let startLabel = UIStrings.text("agentCopilot.sessions.started", "Started")
+            return "\(startLabel) \(DisplayText.timestamp(started))"
+        case let (_, ended?):
+            let endLabel = UIStrings.text("agentCopilot.sessions.ended", "Last")
+            return "\(endLabel) \(DisplayText.timestamp(ended))"
+        default:
+            return nil
+        }
     }
 }
 
@@ -216,10 +236,19 @@ private struct LocalSessionContentItemRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Label(item.title.isEmpty ? item.kind.title : item.title, systemImage: item.kind.systemImage)
-                    .font(.caption.bold())
-                    .foregroundStyle(item.kind == .skillCall ? Color.accentColor : .secondary)
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Label(item.title.isEmpty ? item.kind.title : item.title, systemImage: item.kind.systemImage)
+                        .font(.caption.bold())
+                        .foregroundStyle(item.kind == .skillCall ? Color.accentColor : .secondary)
+                        .lineLimit(1)
+                    if let timestamp = item.timestamp {
+                        Text(DisplayText.timestamp(timestamp))
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
                 Spacer(minLength: 8)
                 Text(UIStrings.localSessionContentCharacters(item.charCount))
                     .font(.caption2.monospacedDigit())

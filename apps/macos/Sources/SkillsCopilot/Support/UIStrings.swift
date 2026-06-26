@@ -189,6 +189,13 @@ enum UIStrings {
     static var adapterToggle: String { text("adapter.capability.toggle", "Toggle") }
     static var adapterInstall: String { text("adapter.capability.install", "Install") }
     static var loading: String { text("state.loading", "Loading...") }
+    static var startupPreparingLoading: String { text("startup.preparing", "Preparing startup...") }
+    static var startupCatalogLoading: String { text("startup.catalog", "Loading catalog data...") }
+    static var startupAnalysisLoading: String { text("startup.analysis", "Loading analysis data...") }
+    static var startupSessionsLoading: String { text("startup.sessions", "Loading session data...") }
+    static var startupConfigLoading: String { text("startup.config", "Loading config data...") }
+    static var startupDetailLoading: String { text("startup.detail", "Loading detail data...") }
+    static var startupReadyLoading: String { text("startup.ready", "Loading app...") }
     static var stateEnabled: String { text("state.enabled", "Enabled") }
     static var stateDisabled: String { text("state.disabled", "Disabled") }
     static var stateBroken: String { text("state.broken", "Broken") }
@@ -388,7 +395,11 @@ enum UIStrings {
     static var aiProviderKeychainFirst: String { text("settings.aiProvider.keychainFirst", "API keys are sent only to the service on Save or Test Connection. The service should store secrets in Keychain first; the native UI clears this field after each action and never displays saved keys.") }
     static var aiProviderBudget: String { text("settings.aiProvider.budget", "Budget") }
     static var aiProviderMonthlyBudget: String { text("settings.aiProvider.monthlyBudget", "Monthly budget") }
+    static var aiProviderMonthlyBudgetPlaceholder: String { text("settings.aiProvider.monthlyBudget.placeholder", "5") }
+    static var aiProviderMonthlyBudgetHelp: String { text("settings.aiProvider.monthlyBudget.help", "Maximum monthly provider spend in USD. Blank uses the service default; 0 disables provider requests.") }
     static var aiProviderTokenLimit: String { text("settings.aiProvider.tokenLimit", "Single-request token limit") }
+    static var aiProviderTokenLimitPlaceholder: String { text("settings.aiProvider.tokenLimit.placeholder", "128000") }
+    static var aiProviderTokenLimitHelp: String { text("settings.aiProvider.tokenLimit.help", "Maximum input and output tokens allowed for one provider request. Requests above this estimate are blocked before sending.") }
     static var aiProviderStorage: String { text("settings.aiProvider.storage", "Credential storage") }
     static var aiProviderConfigured: String { text("settings.aiProvider.configured", "Configured") }
     static var aiProviderUnconfigured: String { text("settings.aiProvider.unconfigured", "Unconfigured") }
@@ -424,14 +435,29 @@ enum UIStrings {
     static var agentConfigSensitiveValuesHidden: String { text("settings.agentConfig.sensitiveValuesHidden", "Sensitive values hidden") }
     static var agentConfigSensitiveValuesVisible: String { text("settings.agentConfig.sensitiveValuesVisible", "Sensitive values visible") }
     static var agentConfigShowSensitive: String { text("settings.agentConfig.showSensitive", "Show & Edit") }
+    static var agentConfigShowSensitiveValues: String { text("settings.agentConfig.showSensitiveValues", "Show Values") }
     static var agentConfigHideSensitive: String { text("settings.agentConfig.hideSensitive", "Hide") }
+    static var agentConfigSkillEnablement: String { text("settings.agentConfig.skillEnablement", "Skill enablement") }
+    static var agentConfigDisabledSkillsTitle: String { text("settings.agentConfig.disabledSkills", "Disabled skills") }
+    static var agentConfigDisabledSkillsEmpty: String { text("settings.agentConfig.disabledSkills.empty", "No config-disabled skills detected.") }
+    static var agentConfigReadOnlyBoundary: String { text("settings.agentConfig.readOnlyBoundary", "Read-only preview only. This view does not write agent config, create snapshots, execute scripts, call providers, or save credentials.") }
+    static var agentConfigNoReadableDocuments: String { text("settings.agentConfig.noReadableDocuments", "No readable config documents were reported for this agent.") }
     static var supported: String { text("value.supported", "Supported") }
     static var notSupported: String { text("value.notSupported", "Not supported") }
+    static func agentConfigDisabledSkillsCount(_ count: Int) -> String {
+        format("settings.agentConfig.disabledSkills.count", "%d disabled", count)
+    }
+    static func agentConfigDisabledSkillsMore(_ count: Int) -> String {
+        format("settings.agentConfig.disabledSkills.more", "%d more", count)
+    }
     static func agentConfigHistoryEmpty(_ agent: String) -> String {
         format("settings.agentConfig.historyEmpty", "No %@ config snapshots yet.", agent)
     }
     static func agentConfigRawEditorBoundary(_ agent: String) -> String {
         format("settings.agentConfig.rawEditorBoundary", "%@ config is managed only through verified skill toggle paths for now. Raw editing is intentionally limited to Claude settings.", agent)
+    }
+    static func agentConfigReadOnlyPreview(_ agent: String) -> String {
+        format("settings.agentConfig.readOnlyPreview", "%@ current config is shown as a redacted, read-only preview.", agent)
     }
     static var claudeSettings: String { text("settings.claudeSettings", "Claude Settings") }
     static var existingFile: String { text("settings.existingFile", "Existing file") }
@@ -786,6 +812,9 @@ enum UIStrings {
     static var taskCockpitRecommendedAgent: String { text("taskCockpit.recommendedAgent", "Recommended agent") }
     static var taskCockpitRecommendedSkill: String { text("taskCockpit.recommendedSkill", "Recommended skill") }
     static var taskCockpitNoReliableRecommendation: String { text("taskCockpit.recommendation.none", "No clear candidate path yet") }
+    static func taskCockpitAgentOnlyRecommendation(_ agent: String) -> String {
+        format("taskCockpit.recommendation.agentOnly", "%@ · Agent candidate, confirm the skill", agent)
+    }
     static var taskCockpitPartialNotice: String { text("taskCockpit.partialNotice", "Some diagnostics did not return; the candidate path is still usable.") }
     static var taskCockpitVerdictReady: String { text("taskCockpit.verdict.ready", "Recommend agent handoff") }
     static var taskCockpitVerdictNeedsReview: String { text("taskCockpit.verdict.needsReview", "Recommend with confirmation") }
@@ -811,6 +840,8 @@ enum UIStrings {
     static var taskCockpitReasonTaskFitWeak: String { text("taskCockpit.reason.taskFitWeak", "Task fit is weak, so choosing this skill may be inaccurate.") }
     static var taskCockpitReasonProductMatched: String { text("taskCockpit.reason.productMatched", "The task product/resource matches the candidate skill scope.") }
     static var taskCockpitReasonProductMismatch: String { text("taskCockpit.reason.productMismatch", "The task product/resource does not match this skill scope.") }
+    static var taskCockpitProviderPartialSummary: String { text("taskCockpit.provider.partialSummary", "The model returned candidate information in an incomplete format; showing the recovered candidate summary.") }
+    static var taskCockpitProviderUnparsed: String { text("taskCockpit.provider.unparsed", "The model response format was incomplete, so candidate details could not be parsed reliably.") }
     static var taskCockpitAttentionTitle: String { text("taskCockpit.attention.title", "Needs attention") }
     static var taskCockpitNoAttentionItems: String { text("taskCockpit.attention.empty", "No issue needs attention.") }
     static var taskCockpitNextStepReady: String { text("taskCockpit.next.ready", "Next: after human confirmation, hand off to the recommended agent.") }
@@ -836,11 +867,16 @@ enum UIStrings {
     static var taskCockpitProgressFailed: String { text("taskCockpit.progress.failed", "Stopped") }
 
     static func taskCockpitPreparingStatus(elapsedSeconds: Int, timeoutSeconds: Int) -> String {
-        format("taskCockpit.preparingStatus", "Building preflight... %d/%d seconds.", elapsedSeconds, timeoutSeconds)
+        format(
+            "taskCockpit.preparingStatus",
+            "Building preflight... %@ / %@.",
+            taskCockpitDuration(elapsedSeconds),
+            taskCockpitDuration(timeoutSeconds)
+        )
     }
 
     static func taskCockpitTimedOut(_ timeoutSeconds: Int) -> String {
-        format("taskCockpit.timedOut", "Preflight did not finish within %d seconds; retry later.", timeoutSeconds)
+        format("taskCockpit.timedOut", "Preflight did not finish within %@; retry later.", taskCockpitDuration(timeoutSeconds))
     }
 
     static func taskCockpitFailed(_ reason: String) -> String {
@@ -1190,6 +1226,97 @@ enum UIStrings {
     static var llmPromptHistoryNote: String { text("llm.promptPreview.historyNote", "Latest provider output is shown here and saved in local prompt run history.") }
     static var llmPromptHistoricalResponse: String { text("llm.promptPreview.historicalResponse", "Previous provider response") }
     static var llmPromptNoOutput: String { text("llm.promptPreview.noOutput", "Provider response did not include copy-only output text.") }
+    static func localizedServiceMessage(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return value }
+
+        if let (code, rest) = splitErrorCodePrefix(trimmed) {
+            let localizedRest = localizedServiceMessage(rest)
+            if localizedRest != rest {
+                return "\(code): \(localizedRest)"
+            }
+        }
+
+        if let profileID = backtickValue(
+            in: trimmed,
+            prefix: "Provider profile ",
+            suffix: " is configured; provider calls remain user-triggered and confirmation-gated."
+        ) {
+            return format("service.message.providerProfileConfigured", "Provider profile `%@` is configured; provider calls remain user-triggered and confirmation-gated.", profileID)
+        }
+        if let profileID = backtickValue(
+            in: trimmed,
+            prefix: "Provider profile ",
+            suffix: " exists but is disabled."
+        ) {
+            return format("service.message.providerProfileExistsDisabled", "Provider profile `%@` exists but is disabled.", profileID)
+        }
+        if let profileID = backtickValue(
+            in: trimmed,
+            prefix: "Provider profile ",
+            suffix: " exists but its API key is unavailable from the OS credential store."
+        ) {
+            return format("service.message.providerProfileMissingKey", "Provider profile `%@` exists but its API key is unavailable from the OS credential store.", profileID)
+        }
+        if let profileID = backtickValue(in: trimmed, prefix: "Provider profile ", suffix: " is disabled.") {
+            return format("service.message.providerProfileDisabled", "Provider profile `%@` is disabled.", profileID)
+        }
+
+        switch trimmed {
+        case "No enabled provider profile is configured; no provider request can be sent.":
+            return text("service.message.noEnabledProviderProfile", "No enabled provider profile is configured; no provider request can be sent.")
+        case "Provider profiles exist, but none is enabled as the default provider.":
+            return text("service.message.providerProfilesNoDefault", "Provider profiles exist, but none is enabled as the default provider.")
+        case "LLM actions are disabled by default; no local provider is configured.":
+            return text("service.message.llmNoProviderConfigured", "LLM actions are disabled by default; no local provider is configured.")
+        case "Monthly provider budget is 0; provider requests are disabled.":
+            return text("service.message.monthlyBudgetZero", "Monthly provider budget is 0; provider requests are disabled.")
+        case "Single request token limit is lower than the redacted prompt estimate.":
+            return text("service.message.tokenLimitBelowRedactedEstimate", "Single request token limit is lower than the redacted prompt estimate.")
+        case "Single request token limit is lower than the prompt estimate.":
+            return text("service.message.tokenLimitBelowPromptEstimate", "Single request token limit is lower than the prompt estimate.")
+        case "Single request token limit is lower than the connection test estimate.":
+            return text("service.message.tokenLimitBelowConnectionEstimate", "Single request token limit is lower than the connection test estimate.")
+        case "Redacted prompt preview is ready for explicit confirmation.":
+            return text("service.message.redactedPromptReady", "Redacted prompt preview is ready for explicit confirmation.")
+        case "Confirm to send only this redacted prompt to the displayed provider endpoint.":
+            return text("service.message.confirmRedactedPrompt", "Confirm to send only this redacted prompt to the displayed provider endpoint.")
+        case "No provider profile is available for the confirmed prompt.":
+            return text("service.message.noProviderForConfirmedPrompt", "No provider profile is available for the confirmed prompt.")
+        case "preview_id does not match the current redacted prompt preview":
+            return text("service.message.previewIDMismatch", "preview_id does not match the current redacted prompt preview")
+        case "Provider profile is disabled; no request was sent.":
+            return text("service.message.providerProfileDisabledNoRequest", "Provider profile is disabled; no request was sent.")
+        case "Explicit confirmation id is required before a provider test.":
+            return text("service.message.providerTestConfirmationRequired", "Explicit confirmation id is required before a provider test.")
+        case "Explicit confirmation id is required before a provider prompt request.":
+            return text("service.message.providerPromptConfirmationRequired", "Explicit confirmation id is required before a provider prompt request.")
+        case "Provider budget settings block the test request.":
+            return text("service.message.providerBudgetBlocksTest", "Provider budget settings block the test request.")
+        case "Redacted prompt is empty; no request was sent.":
+            return text("service.message.redactedPromptEmpty", "Redacted prompt is empty; no request was sent.")
+        case "API key stored in the OS credential store.":
+            return text("service.message.apiKeyStored", "API key stored in the OS credential store.")
+        case "API key is available from the OS credential store.":
+            return text("service.message.apiKeyAvailable", "API key is available from the OS credential store.")
+        case "No API key is stored for this profile.":
+            return text("service.message.noAPIKeyStored", "No API key is stored for this profile.")
+        case "Connection test is within configured local budget limits.":
+            return text("service.message.connectionTestWithinBudget", "Connection test is within configured local budget limits.")
+        case "Provider connection test succeeded.":
+            return aiProviderTestSucceeded
+        case "Provider connection test failed.":
+            return aiProviderTestFailed
+        case "Provider response received.":
+            return llmPromptSendSucceeded
+        case "Provider request failed.":
+            return llmPromptSendFailed
+        case "Service call timed out before the sidecar returned a complete response.":
+            return text("service.error.sidecarTimedOut", "Service call timed out before the sidecar returned a complete response.")
+        default:
+            return trimmed
+        }
+    }
     static func markdownTableHiddenRows(_ count: Int) -> String {
         format("llm.markdown.table.hiddenRows", "%d more rows in full details", count)
     }
@@ -1560,6 +1687,35 @@ enum UIStrings {
 
     private static func format(_ key: String, _ defaultValue: String, _ arguments: CVarArg...) -> String {
         String(format: text(key, defaultValue), arguments: arguments)
+    }
+
+    private static func splitErrorCodePrefix(_ value: String) -> (String, String)? {
+        guard let separator = value.firstIndex(of: ":") else { return nil }
+        let code = String(value[..<separator]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let rest = String(value[value.index(after: separator)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !code.isEmpty, !rest.isEmpty, code.rangeOfCharacter(from: .whitespacesAndNewlines) == nil else {
+            return nil
+        }
+        return (code, rest)
+    }
+
+    private static func backtickValue(in value: String, prefix: String, suffix: String) -> String? {
+        guard value.hasPrefix(prefix), value.hasSuffix(suffix) else { return nil }
+        let start = value.index(value.startIndex, offsetBy: prefix.count)
+        let end = value.index(value.endIndex, offsetBy: -suffix.count)
+        let raw = String(value[start..<end]).trimmingCharacters(in: CharacterSet(charactersIn: "` "))
+        return raw.isEmpty ? nil : raw
+    }
+
+    private static func taskCockpitDuration(_ seconds: Int) -> String {
+        let normalized = max(0, seconds)
+        if normalized >= 60, normalized % 60 == 0 {
+            return format("taskCockpit.duration.minutes", "%d minutes", normalized / 60)
+        }
+        if normalized >= 60 {
+            return format("taskCockpit.duration.minutesSeconds", "%d min %d sec", normalized / 60, normalized % 60)
+        }
+        return format("taskCockpit.duration.seconds", "%d seconds", normalized)
     }
 
     private static func localizedStrings() -> [String: String] {

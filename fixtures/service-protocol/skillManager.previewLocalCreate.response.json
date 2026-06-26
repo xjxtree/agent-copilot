@@ -1,0 +1,38 @@
+{
+  "id": "fixture-skill-manager-preview-local-create",
+  "ok": true,
+  "result": {
+    "preview": {
+      "tool_id": "npx-skills",
+      "operation": "localCreate",
+      "command": [
+        "/usr/local/bin/npx",
+        "skills",
+        "init",
+        "local-review-helper"
+      ],
+      "cwd": "/tmp/skills-copilot-app/local-skill-library/sources",
+      "env": [
+        {
+          "key": "HOME",
+          "value": "/tmp/skills-copilot-home"
+        }
+      ],
+      "requires_confirmation": true,
+      "confirmed": false,
+      "network_required": false,
+      "network_allowed": true,
+      "will_run": false,
+      "preview_token": "skill-manager:fixture-local-create",
+      "summary": "Create a local skill template named local-review-helper.",
+      "risks": [
+        "After creation, the app imports the local source through the existing Local Skill Library parser and rule checks."
+      ]
+    },
+    "output": null,
+    "imported": null,
+    "instance_id": null,
+    "source_path": "/tmp/skills-copilot-app/local-skill-library/sources/local-review-helper",
+    "applied": false
+  }
+}

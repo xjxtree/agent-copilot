@@ -36,6 +36,10 @@ verification.
 - Provider calls require preview, redaction, destination visibility, and
   explicit confirmation.
 - Skill scripts remain default-denied.
+- Skill Manager may invoke supported external manager CLIs for search,
+  install, remove, update, list, and local template creation when the request
+  exposes command preview, target agents, network posture, telemetry-off env,
+  and confirmation state. Calls must use argv arrays, not shell strings.
 - App-local metadata writes must be redacted.
 - Adapter config writes must use the guarded paths documented in
   `docs/adapters/agent-adapters.md`.
@@ -69,6 +73,18 @@ verification.
 | `llm.deleteModelTaskMatch` | Yes, updates app-local redacted metadata only |
 | `script.previewExecution` | No |
 | `script.execute` | No |
+| `skillManager.listTools` | No |
+| `skillManager.search` | No, may run a network-backed manager search only when allowed by the request |
+| `skillManager.listInstalled` | No, reads external manager state |
+| `skillManager.previewInstall` | No |
+| `skillManager.applyInstall` | Yes, after confirmation through the external manager CLI and catalog refresh |
+| `skillManager.previewRemove` | No |
+| `skillManager.applyRemove` | Yes, after confirmation through the external manager CLI and catalog refresh |
+| `skillManager.previewUpdate` | No |
+| `skillManager.applyUpdate` | Yes, after confirmation through the external manager CLI and catalog refresh |
+| `skillManager.previewLocalCreate` | No |
+| `skillManager.applyLocalCreate` | Yes, creates a manager template and imports it into app-owned local library |
+| `skillManager.deleteLocal` | Yes, physically deletes only app-owned local skills with no supported-agent references |
 | `project.getContext` | No |
 | `project.setContext` | Yes, writes app state |
 | `project.clearContext` | Yes, writes app state |
@@ -89,6 +105,7 @@ verification.
 | `skill.listEvents` | No |
 | `skill.lifecycleTimeline` | No |
 | `config.toggleSkill` | Yes, writes agent config |
+| `config.readAgentConfig` | No |
 | `config.readClaudeSettings` | No |
 | `config.saveClaudeSettings` | Yes, writes Claude settings and rescans |
 | `snapshot.list` | No |
@@ -139,6 +156,48 @@ verification.
 | `cleanup.recordGuidedStep` | Yes, writes app-data metadata only |
 | `comparison.listCrossAgent` | No |
 | `report.exportLocal` | Yes, writes app-controlled redacted report files |
+
+## Skill Manager
+
+- `npx skills` is the first writable manager. `skills-npm` is listed as a
+  registry capability, with write execution deferred to a future adapter.
+- Default targets are exactly the supported app agents: `claude-code`, `pi`,
+  `opencode`, `codex`, `hermes-agent`, and `openclaw`. The service never uses
+  wildcard agent targeting.
+- Install defaults to symlink distribution. `--copy` is sent only when the user
+  explicitly selects copy.
+- Search, install, and update may require external network access through the
+  manager CLI. Requests must carry `network_allowed`; previews show whether a
+  command will run.
+- The Skill Manager UI does not expose agent-layer enable/disable controls.
+  Skill removal is manager-backed unlink/removal from the currently selected
+  agent targets, using the same explicit confirmation flow as install/update.
+- Enable/disable remains in `config.toggleSkill`,
+  `batch.previewSkillToggles`, and `batch.applySkillToggles` because it is
+  agent config state, not manager package state.
+
+## Session Preview
+
+- `session.previewLocalSessions` returns event-derived session timing when the
+  local store exposes it. Each `session_rows[]` item includes `started_at` and
+  `ended_at` in Unix epoch milliseconds, with `ended_at` representing the last
+  parsed session message/content event. Each `content_items[]` item includes
+  `timestamp` when its source event has a timestamp.
+- When a session store has no parseable event timestamp, the service falls back
+  to the redacted read-only file metadata timestamp for row-level timing only.
+
+## LLM Prompt Actions
+
+- `llm.previewPrompt` action `task_cockpit` accepts `agents: string[]` plus
+  `instance_ids: string[]` and `user_intent`/`task_text`. The service renders a
+  redacted task preflight prompt from selected agent names, adapter capability
+  summaries, and current effective skill names/descriptions only. Raw skill
+  bodies, frontmatter, config contents, paths, credentials, raw prompts, raw
+  responses, traces, writes, scripts, snapshots, and rollback commands are
+  excluded.
+- `task.buildCockpit` remains a local read-only deterministic RPC for backward
+  compatibility. The native task preflight UI uses the provider-gated
+  `task_cockpit` prompt action for new model-backed recommendations.
 
 ## Environment Overrides
 

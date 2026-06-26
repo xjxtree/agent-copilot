@@ -141,6 +141,7 @@ fn status_request_returns_supported_methods() {
     assert!(methods.contains(&Value::String("skill.exportBundle".to_string())));
     assert!(methods.contains(&Value::String("skill.install".to_string())));
     assert!(methods.contains(&Value::String("config.toggleSkill".to_string())));
+    assert!(methods.contains(&Value::String("config.readAgentConfig".to_string())));
     assert!(methods.contains(&Value::String("config.readClaudeSettings".to_string())));
     assert!(methods.contains(&Value::String("config.saveClaudeSettings".to_string())));
     assert!(methods.contains(&Value::String("snapshot.list".to_string())));

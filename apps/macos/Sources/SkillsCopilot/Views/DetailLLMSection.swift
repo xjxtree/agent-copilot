@@ -112,7 +112,7 @@ struct SkillAnalysisPrepareResultView: View {
                 .foregroundStyle(result.enabled ? .primary : .secondary)
 
             if let reason = result.disabledReason, !reason.isEmpty {
-                Text(reason)
+                Text(UIStrings.localizedServiceMessage(reason))
                     .foregroundStyle(.secondary)
             }
 
@@ -1040,7 +1040,7 @@ struct LLMAssistPanel: View {
             }
 
             if let disabledReason = status.disabledReason, !disabledReason.isEmpty {
-                Text(disabledReason)
+                Text(UIStrings.localizedServiceMessage(disabledReason))
                     .font(.callout)
                     .foregroundStyle(.secondary)
             } else if status.enabled {
@@ -1104,7 +1104,7 @@ struct LLMPrepareResultView: View {
                 .foregroundStyle(result.enabled ? .primary : .secondary)
 
             if let disabledReason = result.disabledReason, !disabledReason.isEmpty {
-                Text(disabledReason)
+                Text(UIStrings.localizedServiceMessage(disabledReason))
                     .foregroundStyle(.secondary)
             }
 
@@ -1230,7 +1230,7 @@ struct LLMPromptPreviewCard: View {
                 .foregroundStyle(preview.enabled ? Color.secondary : Color.orange)
 
             if let disabledReason = preview.disabledReason, !disabledReason.isEmpty {
-                Text(disabledReason)
+                Text(UIStrings.localizedServiceMessage(disabledReason))
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -1291,7 +1291,7 @@ struct PromptFieldList: View {
                         Label(field.label, systemImage: "checklist")
                             .font(.callout)
                         if let reason = field.reason, !reason.isEmpty {
-                            Text(reason)
+                            Text(UIStrings.localizedServiceMessage(reason))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -1310,7 +1310,7 @@ struct RedactionSummaryView: View {
             Text(UIStrings.llmReviewRedaction)
                 .font(.caption.bold())
                 .foregroundStyle(.secondary)
-            Text(redaction.summary.isEmpty ? redaction.status : "\(redaction.status): \(redaction.summary)")
+            Text(redaction.summary.isEmpty ? redaction.status : "\(redaction.status): \(UIStrings.localizedServiceMessage(redaction.summary))")
                 .font(.callout)
                 .foregroundStyle(.secondary)
             if !redaction.redactedFields.isEmpty {
@@ -1346,7 +1346,7 @@ struct LLMPromptSendResultView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Label(result.message, systemImage: result.success ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+            Label(UIStrings.localizedServiceMessage(result.message), systemImage: result.success ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                 .font(.subheadline.bold())
                 .foregroundStyle(resultTint)
 
@@ -1557,7 +1557,7 @@ struct ScriptExecutionPreviewView: View {
                 .foregroundStyle(preview.executionAllowed ? .orange : .secondary)
 
             if let reason = preview.disabledReason, !reason.isEmpty {
-                Text(reason)
+                Text(UIStrings.localizedServiceMessage(reason))
                     .foregroundStyle(.secondary)
             }
 

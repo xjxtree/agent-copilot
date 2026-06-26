@@ -1,5 +1,10 @@
 import Foundation
 
+private enum LLMPromptRequestTimeouts {
+    static let standardSendMS = 600_000
+    static let taskCockpitSendMS = 300_000
+}
+
 extension ServiceClient {
     func llmStatus() async throws -> LLMStatus {
         do {
@@ -88,6 +93,7 @@ extension ServiceClient {
             instanceId: skill.id,
             definitionId: skill.definitionId,
             agent: skill.agent,
+            agents: nil,
             taskText: nil,
             userIntent: nil,
             candidateInstanceIDs: nil
@@ -113,6 +119,7 @@ extension ServiceClient {
             instanceId: nil,
             definitionId: nil,
             agent: nil,
+            agents: nil,
             taskText: nil,
             userIntent: nil,
             candidateInstanceIDs: nil
@@ -134,6 +141,7 @@ extension ServiceClient {
             instanceId: skill.id,
             definitionId: skill.definitionId,
             agent: skill.agent,
+            agents: nil,
             taskText: nil,
             userIntent: nil,
             candidateInstanceIDs: nil
@@ -155,6 +163,7 @@ extension ServiceClient {
             instanceId: skill.id,
             definitionId: skill.definitionId,
             agent: skill.agent,
+            agents: nil,
             taskText: taskText,
             userIntent: taskText,
             candidateInstanceIDs: [skill.id]
@@ -176,6 +185,7 @@ extension ServiceClient {
             instanceId: skill.id,
             definitionId: skill.definitionId,
             agent: skill.agent,
+            agents: nil,
             taskText: taskText,
             userIntent: taskText,
             candidateInstanceIDs: [skill.id]
@@ -197,6 +207,7 @@ extension ServiceClient {
             instanceId: skill.id,
             definitionId: skill.definitionId,
             agent: skill.agent,
+            agents: nil,
             taskText: nil,
             userIntent: nil,
             candidateInstanceIDs: nil
@@ -219,6 +230,7 @@ extension ServiceClient {
             instanceId: nil,
             definitionId: nil,
             agent: nil,
+            agents: nil,
             taskText: nil,
             userIntent: nil,
             candidateInstanceIDs: nil
@@ -236,6 +248,7 @@ extension ServiceClient {
             instanceId: skill.id,
             definitionId: skill.definitionId,
             agent: skill.agent,
+            agents: nil,
             taskText: nil,
             userIntent: nil,
             candidateInstanceIDs: nil
@@ -253,6 +266,7 @@ extension ServiceClient {
             instanceId: skill.id,
             definitionId: skill.definitionId,
             agent: skill.agent,
+            agents: nil,
             taskText: taskText,
             userIntent: taskText,
             candidateInstanceIDs: [skill.id]
@@ -270,11 +284,69 @@ extension ServiceClient {
             instanceId: skill.id,
             definitionId: skill.definitionId,
             agent: skill.agent,
+            agents: nil,
             taskText: taskText,
             userIntent: taskText,
             candidateInstanceIDs: [skill.id]
         )
         return try await confirmPromptAndSend(previewID: previewID, request: request)
+    }
+
+    func previewPromptForTaskCockpit(
+        taskText: String,
+        agents: [String],
+        instanceIDs: [String]
+    ) async throws -> LLMPromptPreview {
+        let params = PreviewLLMPromptParams(
+            action: "task_cockpit",
+            requestKind: "task_cockpit",
+            analysisKind: nil,
+            scope: "agents",
+            instanceIDs: instanceIDs,
+            instanceId: nil,
+            definitionId: nil,
+            agent: nil,
+            agents: agents,
+            taskText: taskText,
+            userIntent: taskText,
+            candidateInstanceIDs: instanceIDs
+        )
+        do {
+            return try await call(
+                method: "llm.previewPrompt",
+                params: params,
+                timeoutMS: LLMPromptRequestTimeouts.taskCockpitSendMS
+            )
+        } catch ClientError.service(let error) where error.code == "unknown_method" {
+            return .unavailable(reason: UIStrings.taskCockpitUnavailable)
+        }
+    }
+
+    func confirmPromptAndSendForTaskCockpit(
+        previewID: String,
+        taskText: String,
+        agents: [String],
+        instanceIDs: [String]
+    ) async throws -> LLMPromptSendResult {
+        let request = PreviewLLMPromptParams(
+            action: "task_cockpit",
+            requestKind: "task_cockpit",
+            analysisKind: nil,
+            scope: "agents",
+            instanceIDs: instanceIDs,
+            instanceId: nil,
+            definitionId: nil,
+            agent: nil,
+            agents: agents,
+            taskText: taskText,
+            userIntent: taskText,
+            candidateInstanceIDs: instanceIDs
+        )
+        return try await confirmPromptAndSend(
+            previewID: previewID,
+            request: request,
+            timeoutMS: LLMPromptRequestTimeouts.taskCockpitSendMS
+        )
     }
 
     func listLLMPromptRuns(skill: SkillRecord? = nil, limit: Int = 80) async throws -> LLMPromptRunListResult {
@@ -314,15 +386,19 @@ extension ServiceClient {
         }
     }
 
-    private func confirmPromptAndSend(previewID: String, request: PreviewLLMPromptParams) async throws -> LLMPromptSendResult {
+    private func confirmPromptAndSend(
+        previewID: String,
+        request: PreviewLLMPromptParams,
+        timeoutMS: Int = LLMPromptRequestTimeouts.standardSendMS
+    ) async throws -> LLMPromptSendResult {
         let params = ConfirmLLMPromptParams(
             previewID: previewID,
             confirmationID: "prompt-confirm-\(UUID().uuidString)",
             request: request,
-            timeoutMS: 600_000
+            timeoutMS: timeoutMS
         )
         do {
-            return try await call(method: "llm.confirmPromptAndSend", params: params)
+            return try await call(method: "llm.confirmPromptAndSend", params: params, timeoutMS: timeoutMS)
         } catch ClientError.service(let error) where error.code == "unknown_method" {
             return .unavailable(previewID: previewID, reason: UIStrings.llmSkillAnalysisUnavailable)
         }

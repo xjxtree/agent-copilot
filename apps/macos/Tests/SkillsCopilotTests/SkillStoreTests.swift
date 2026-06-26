@@ -7,16 +7,22 @@ struct SkillStoreTests {
         try defaultNavigationStartsAtSessionsWithoutAgentProfile()
         try selectedAgentSessionRefreshKeyFollowsAgentOutsideSessionMode()
         try await localSessionSearchNormalizesSelectionAndDetail()
+        try await localSessionRefreshIfNeededSkipsLoadedRequest()
+        try await localSessionScopeChangeFiltersCachedRowsWithoutRefresh()
         try await reloadKeepsSelectedSkillWhenItStillExists()
         try await reloadFallsBackToFirstSkillWhenSelectionIsMissing()
         try await emptyCatalogKeepsFriendlyEmptyModel()
         try await serviceErrorClearsLoadingAndKeepsReadableError()
         try await reloadUsesStateSnapshotForCollectionRefresh()
+        try await startupLoadPrewarmsLaunchDataWithoutScanningOrWriting()
         try await stateSnapshotRefreshesDoNotReuseStaleFindingsOrPermissions()
         try await selectedDetailDataIsScopedToCurrentAgentAndSkill()
         try await scanAllUsesGenericCatalogMethod()
         try await searchAndFilterChangesNormalizeSelectionAndDetail()
         try await agentConfigTimelineFollowsSelectedAgentFilterOnly()
+        try await readOnlyAgentConfigLoadsCurrentDocuments()
+        try await agentConfigRefreshIfNeededSkipsLoadedRequestAndScopeFiltersLocally()
+        try await settingsFeedbackClearsAfterFailedConfigSave()
         try await previewRollbackShowsDiffWithoutCallingRollback()
         try await rollbackSnapshotRequiresVisibleAgentTimelineRecord()
         try await refreshOperationsIgnoreReentryWhileBusy()
@@ -99,7 +105,7 @@ struct SkillStoreTests {
     private func defaultNavigationStartsAtSessionsWithoutAgentProfile() throws {
         let store = SkillStore(service: ServiceClient())
         try expectNil(store.selectedSidebarSelection, "Agent Copilot should not expose a default Agent Profile detail selection.")
-        try expectEqual(store.sidebarContentMode, .sessions, "Agent Copilot should start from the Sessions primary navigation.")
+        try expectEqual(store.sidebarContentMode, .skills, "Agent Copilot should start from the Skills primary navigation.")
         try expectEqual(store.selectedDetailSection, .overview, "Default detail section should stay neutral until a session, skill, report, or Preflight is selected.")
     }
 
@@ -121,6 +127,7 @@ struct SkillStoreTests {
         fake.activate(scenario: "sessions")
 
         let store = SkillStore(service: ServiceClient())
+        store.sidebarContentMode = .sessions
         await store.previewLocalSessions()
 
         try expectEqual(store.filteredLocalSessionRows.map(\.id), ["session-alpha", "session-develop"], "Session preview should load the fake rows.")
@@ -144,6 +151,80 @@ struct SkillStoreTests {
 
         try expectEqual(store.selectedLocalSessionID, "session-alpha", "Clearing search should restore the first visible session.")
         try expectEqual(store.selectedSidebarSelection, .session("session-alpha"), "Clearing search should restore session detail.")
+    }
+
+    private func localSessionRefreshIfNeededSkipsLoadedRequest() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "sessions")
+
+        let store = SkillStore(service: ServiceClient())
+        await store.refreshSelectedAgentLocalSessionsIfNeeded()
+
+        try expectEqual(
+            countMethodCalls("session.previewLocalSessions", in: fake.calls()),
+            1,
+            "Initial need-based session refresh should load local sessions."
+        )
+
+        await store.refreshSelectedAgentLocalSessionsIfNeeded()
+
+        try expectEqual(
+            countMethodCalls("session.previewLocalSessions", in: fake.calls()),
+            1,
+            "Need-based session refresh should not rescan the same agent/project payload."
+        )
+
+        await store.previewLocalSessions()
+
+        try expectEqual(
+            countMethodCalls("session.previewLocalSessions", in: fake.calls()),
+            2,
+            "Manual session refresh should still force a new preview request."
+        )
+    }
+
+    private func localSessionScopeChangeFiltersCachedRowsWithoutRefresh() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "sessions-mixed")
+
+        let store = SkillStore(service: ServiceClient())
+        store.sidebarContentMode = .sessions
+        await store.previewLocalSessions()
+        guard let globalSession = store.localSessionPreviewResult.sessionRows.first(where: { $0.id == "session-global" }) else {
+            throw NativeModelTestFailure(description: "Fake session fixture should include the global session.")
+        }
+
+        try expectEqual(store.localSessionPreviewResult.sessionRows.map(\.id), ["session-alpha", "session-develop", "session-global"], "Session preview should keep the all-scope startup cache.")
+        try expectEqual(store.filteredLocalSessionRows.map(\.id), ["session-alpha", "session-develop"], "Default project scope should locally filter the all-scope cache.")
+        try expectEqual(store.scopedLocalSessionUserMessageCount, 2, "Project scope metrics should be derived from project rows only.")
+        try expectEqual(store.scopedLocalSessionTotalMessageCount, 4, "Project scope message totals should be derived from project rows only.")
+        let callsBeforeScopeChange = countMethodCalls("session.previewLocalSessions", in: fake.calls())
+        try expectContains(fake.calls(), "\"scope\":\"all\"", "Session preview should request the all-scope cache for local filtering.")
+
+        store.localSessionScopeFilter = .all
+
+        try expectEqual(store.filteredLocalSessionRows.map(\.id), ["session-alpha", "session-develop", "session-global"], "All scope should reveal the cached global session without rescanning.")
+        try expectEqual(store.scopedLocalSessionUserMessageCount, 4, "All-scope metrics should include global rows.")
+        try expectEqual(store.scopedLocalSessionSkillCallCount, 1, "All-scope skill metrics should include global rows.")
+        try expectEqual(
+            countMethodCalls("session.previewLocalSessions", in: fake.calls()),
+            callsBeforeScopeChange,
+            "Scope changes should be local filters and must not trigger a background session preview."
+        )
+
+        store.selectLocalSession(globalSession)
+        store.localSessionScopeFilter = .project
+
+        try expectEqual(store.filteredLocalSessionRows.map(\.id), ["session-alpha", "session-develop"], "Returning to project scope should hide global rows from the cached list.")
+        try expectEqual(store.selectedLocalSessionID, "session-alpha", "Scope filtering should normalize a hidden global selection to the first visible project session.")
+        try expectEqual(store.selectedSidebarSelection, .session("session-alpha"), "Detail selection should follow the locally visible session after scope filtering.")
+        try expectEqual(
+            countMethodCalls("session.previewLocalSessions", in: fake.calls()),
+            callsBeforeScopeChange,
+            "Returning to project scope should still avoid a service rescan."
+        )
     }
 
     private func reloadKeepsSelectedSkillWhenItStillExists() async throws {
@@ -227,6 +308,37 @@ struct SkillStoreTests {
         try expectEqual(countMethodCalls("snapshot.listAgentConfig", in: calls), 1, "Reload should refresh the selected agent config history.")
         try expectContains(calls, "llm.status", "Reload should preserve the separate LLM status behavior.")
         try expectContains(calls, "project.getContext", "Reload should preserve the separate project context behavior.")
+    }
+
+    private func startupLoadPrewarmsLaunchDataWithoutScanningOrWriting() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "sessions")
+
+        let store = SkillStore(service: ServiceClient())
+        try expectFalse(store.hasCompletedStartupLoad, "Startup should begin behind the progress overlay.")
+        try expectFalse(store.startupLoadingState == nil, "Startup should expose an initial progress state.")
+
+        await store.loadAppStartupDataIfNeeded()
+
+        let calls = fake.calls()
+        try expectFalse(!store.hasCompletedStartupLoad, "Startup should mark the initial prewarm as complete.")
+        try expectNil(store.startupLoadingState, "Startup should clear the progress overlay when prewarm completes.")
+        try expectFalse(store.isLoading, "Startup should reset the global loading state.")
+        try expectNil(store.errorMessage, "Startup should not surface a background error on success.")
+        try expectEqual(store.localSessionPreviewResult.sessionRows.count, 2, "Startup should prewarm the selected agent session summary.")
+        try expectEqual(store.selectedSkillDetail?.id, "alpha", "Startup should prewarm the first selected skill detail.")
+        try expectEqual(countOccurrences("app.stateSnapshot", in: calls), 1, "Startup should use the combined state snapshot once.")
+        try expectEqual(countMethodCalls("snapshot.listAgentConfig", in: calls), 1, "Startup should prewarm selected-agent config history.")
+        try expectContains(calls, "session.previewLocalSessions", "Startup should prewarm selected-agent local sessions.")
+        try expectContains(calls, "config.readAgentConfig", "Startup should prewarm selected-agent current config documents.")
+        try expectContains(calls, "catalog.getSkill", "Startup should prewarm the selected skill detail.")
+        try expectFalse(calls.contains("\"method\":\"catalog.scanAll\""), "Startup should not scan roots automatically.")
+        try expectFalse(calls.contains("\"method\":\"config.toggleSkill\""), "Startup should not write agent config.")
+
+        await store.loadAppStartupDataIfNeeded()
+
+        try expectEqual(countOccurrences("app.stateSnapshot", in: fake.calls()), 1, "Startup prewarm should be idempotent after completion.")
     }
 
     private func stateSnapshotRefreshesDoNotReuseStaleFindingsOrPermissions() async throws {
@@ -433,6 +545,171 @@ struct SkillStoreTests {
         try expectEqual(preview.rollbackSupported, true, "Preview should expose rollback support without performing it.")
         try expectContains(fake.calls(), "snapshot.previewRollback", "Preview should call only the preview method.")
         try expectEqual(countMethodCalls("snapshot.rollback", in: fake.calls()), 0, "Preview must not call rollback or write automatically.")
+    }
+
+    private func readOnlyAgentConfigLoadsCurrentDocuments() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "agent-config")
+
+        let store = SkillStore(service: ServiceClient())
+        await store.reload()
+
+        await store.loadCurrentAgentConfigDocuments(agent: "claude-code")
+        try expectEqual(store.currentAgentConfigDocuments.count, 2, "Claude config preview should include global and project documents.")
+        try expectEqual(
+            Set(store.currentAgentConfigDocuments.map(\.scope)),
+            Set(["agent-global", "agent-project"]),
+            "Claude config preview should keep project config documents visible alongside global config."
+        )
+        guard let projectClaudeDocument = store.currentAgentConfigDocuments.first(where: { $0.scope == "agent-project" }) else {
+            throw NativeModelTestFailure(description: "Claude config preview should include the selected project's current settings file.")
+        }
+        try expectEqual(
+            AgentConfigScopeFilter.project.includes(projectClaudeDocument),
+            true,
+            "Project scope filter should include current project config documents."
+        )
+        store.selectConfigDocument(projectClaudeDocument)
+        try expectEqual(
+            store.selectedConfigDocument?.target,
+            Optional(projectClaudeDocument.target),
+            "Selecting a current config row should make that exact document available to the detail view."
+        )
+        store.configScopeFilter = .global
+        try expectNil(
+            store.selectedConfigDocument,
+            "Changing to a scope filter that hides the current config document should clear the document detail selection."
+        )
+        try expectEqual(
+            store.selectedSidebarSelection,
+            Optional(SidebarSelection.configOverview),
+            "Hidden current config selections should normalize back to the config overview."
+        )
+        store.configScopeFilter = .all
+
+        store.agentFilter = .codex
+        await store.loadCurrentAgentConfigDocuments(agent: "codex")
+        try expectEqual(store.currentAgentConfigDocuments.count, 2, "Codex config preview should include user and project documents.")
+        try expectEqual(
+            Set(store.currentAgentConfigDocuments.map(\.scope)),
+            Set(["agent-global", "agent-project"]),
+            "Codex config preview should keep project diagnostics visible alongside user config."
+        )
+        guard let projectCodexDocument = store.currentAgentConfigDocuments.first(where: { $0.scope == "agent-project" }) else {
+            throw NativeModelTestFailure(description: "Codex config preview should include the selected project's .codex/config.toml.")
+        }
+        try expectContains(projectCodexDocument.target, ".codex/config.toml", "Codex project document should use the project config path.")
+        try expectEqual(
+            AgentConfigScopeFilter.project.includes(projectCodexDocument),
+            true,
+            "Project scope filter should include Codex project config documents."
+        )
+
+        store.agentFilter = .opencode
+        await store.loadCurrentAgentConfigDocuments(agent: "opencode")
+        try expectEqual(store.currentAgentConfigDocuments.count, 2, "opencode config preview should include global and project documents.")
+        try expectEqual(
+            Set(store.currentAgentConfigDocuments.map(\.scope)),
+            Set(["agent-global", "agent-project"]),
+            "opencode config preview should keep document scopes."
+        )
+
+        store.agentFilter = .pi
+        await store.loadCurrentAgentConfigDocuments(agent: "pi")
+
+        try expectEqual(store.currentAgentConfigDocuments.count, 2, "Pi config preview should include global and project documents.")
+        try expectEqual(Set(store.currentAgentConfigDocuments.map(\.scope)), Set(["agent-global", "agent-project"]), "Pi config preview should keep document scopes.")
+        try expectContains(store.currentAgentConfigDocuments.first?.content, "alibabacloud-agentbay-aio-skills", "Pi config preview should expose current disabled skill config content.")
+
+        store.agentFilter = .hermes
+        await store.loadCurrentAgentConfigDocuments(agent: "hermes")
+        try expectEqual(store.currentAgentConfigDocuments.count, 1, "Hermes config preview should expose its global config document.")
+        try expectEqual(store.currentAgentConfigDocuments.first?.scope, "agent-global", "Hermes should not invent a project config document.")
+        try expectEqual(
+            AgentConfigScopeFilter.project.includes(store.currentAgentConfigDocuments[0]),
+            false,
+            "Project scope filter should not include global-only Hermes config documents."
+        )
+
+        store.agentFilter = .openclaw
+        await store.loadCurrentAgentConfigDocuments(agent: "openclaw")
+        try expectEqual(store.currentAgentConfigDocuments.count, 1, "OpenClaw config preview should expose its global config document.")
+        try expectEqual(store.currentAgentConfigDocuments.first?.scope, "agent-global", "OpenClaw config writes are global-only.")
+
+        try expectContains(fake.calls(), "config.readAgentConfig", "Config preview should call the read-only agent config method.")
+        try expectEqual(countMethodCalls("config.toggleSkill", in: fake.calls()), 0, "Config preview must not call toggle or write paths.")
+    }
+
+    private func agentConfigRefreshIfNeededSkipsLoadedRequestAndScopeFiltersLocally() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "agent-config")
+
+        let store = SkillStore(service: ServiceClient())
+        await store.loadCurrentAgentConfigDocumentsIfNeeded(agent: "claude-code")
+        await store.loadAgentConfigSnapshotsIfNeeded(agent: "claude-code")
+
+        let configReadsAfterFirstLoad = countMethodCalls("config.readAgentConfig", in: fake.calls())
+        let snapshotReadsAfterFirstLoad = countMethodCalls("snapshot.listAgentConfig", in: fake.calls())
+
+        await store.loadCurrentAgentConfigDocumentsIfNeeded(agent: "claude-code")
+        await store.loadAgentConfigSnapshotsIfNeeded(agent: "claude-code")
+
+        try expectEqual(
+            countMethodCalls("config.readAgentConfig", in: fake.calls()),
+            configReadsAfterFirstLoad,
+            "Need-based current config load should not reread the same agent/project payload."
+        )
+        try expectEqual(
+            countMethodCalls("snapshot.listAgentConfig", in: fake.calls()),
+            snapshotReadsAfterFirstLoad,
+            "Need-based config history load should not reread the same agent/project payload."
+        )
+
+        store.configScopeFilter = .project
+
+        try expectEqual(
+            countMethodCalls("config.readAgentConfig", in: fake.calls()),
+            configReadsAfterFirstLoad,
+            "Config scope changes should filter cached current documents locally."
+        )
+        try expectEqual(
+            countMethodCalls("snapshot.listAgentConfig", in: fake.calls()),
+            snapshotReadsAfterFirstLoad,
+            "Config scope changes should filter cached history locally."
+        )
+
+        await store.loadCurrentAgentConfigDocuments(agent: "claude-code")
+        await store.loadAgentConfigSnapshots(agent: "claude-code")
+
+        try expectEqual(
+            countMethodCalls("config.readAgentConfig", in: fake.calls()),
+            configReadsAfterFirstLoad + 1,
+            "Manual current config refresh should still force a new read."
+        )
+        try expectEqual(
+            countMethodCalls("snapshot.listAgentConfig", in: fake.calls()),
+            snapshotReadsAfterFirstLoad + 1,
+            "Manual config history refresh should still force a new read."
+        )
+    }
+
+    private func settingsFeedbackClearsAfterFailedConfigSave() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "normal")
+
+        let store = SkillStore(service: ServiceClient())
+        let saved = await store.saveClaudeSettings(content: "{")
+
+        try expectFalse(saved, "Unsupported fake settings save should fail in this scenario.")
+        try expectContains(store.settingsErrorMessage, "test.unknown", "Failed config save should surface a settings error.")
+
+        store.clearSettingsFeedback()
+
+        try expectNil(store.settingsErrorMessage, "Continuing to edit settings should clear stale config save errors.")
+        try expectNil(store.settingsMessage, "Continuing to edit settings should clear stale config save success messages.")
     }
 
     private func rollbackSnapshotRequiresVisibleAgentTimelineRecord() async throws {
@@ -1773,21 +2050,17 @@ struct SkillStoreTests {
         await store.buildTaskCockpit()
 
         let result = store.taskCockpitResult
-        try expectEqual(result?.generatedBy, "local-v2.73", "Task cockpit should expose generator metadata.")
+        try expectEqual(result?.generatedBy, "provider-task-cockpit", "Task cockpit should expose provider-backed generator metadata.")
         try expectEqual(result?.summary.recommendedAgent, "claude-code", "Task cockpit should expose recommended agent.")
         try expectEqual(result?.summary.recommendedSkillName, "Beta", "Task cockpit should expose recommended skill.")
-        try expectEqual(result?.routeCandidates.first?.title, "Beta", "Task cockpit should expose route candidates.")
+        try expectEqual(result?.filters.agents, ["claude-code"], "Task cockpit should preserve the selected agent scope.")
         try expectEqual(result?.agentCandidates.first?.agent, "claude-code", "Task cockpit should expose agent candidates.")
         try expectEqual(result?.skillCandidates.first?.skill?.name, "Beta", "Task cockpit should expose skill candidates.")
-        try expectEqual(result?.readinessSignals.first?.title, "Readiness partial", "Task cockpit should expose readiness signals.")
-        try expectEqual(result?.sessionReviewContext.first?.source, "session.reviewAgentSkillUse", "Task cockpit should expose session context.")
-        try expectEqual(result?.providerObservabilityContext.first?.source, "llm.providerObservability", "Task cockpit should expose provider observability context.")
-        try expectEqual(result?.remediationContext.first?.source, "remediation.plan", "Task cockpit should expose remediation context.")
-        try expectEqual(result?.gapRows.first?.title, "Codex coverage gap", "Task cockpit should expose gaps.")
-        try expectEqual(result?.blockerRows.first?.title, "No apply path", "Task cockpit should expose blockers.")
-        try expectEqual(result?.evidenceReferences.first?.source, "task.buildCockpit", "Task cockpit should expose evidence references.")
-        try expectEqual(result?.promptRequest?.requestKind, "task_cockpit", "Task cockpit should expose prompt metadata.")
-        try expectFalse(result?.safetyFlags.providerRequestSent ?? true, "Task cockpit must not send provider requests.")
+        try expectEqual(result?.skillCandidates.count, 2, "Task cockpit should expose the top provider-ranked skill candidates.")
+        try expectEqual(result?.readinessSignals.first?.title, "Provider readiness", "Task cockpit should expose concise provider process signals.")
+        try expectEqual(result?.gapRows.first?.title, "Codex coverage not selected", "Task cockpit should expose gaps.")
+        try expectEqual(result?.blockerRows.count, 0, "Task cockpit should expose provider blockers.")
+        try expectEqual(result?.safetyFlags.providerRequestSent, true, "Provider-backed task cockpit should mark the provider request as sent.")
         try expectFalse(result?.safetyFlags.writeBackAllowed ?? true, "Task cockpit must not allow write-back.")
         try expectFalse(result?.safetyFlags.writeActionsAvailable ?? true, "Task cockpit must not expose write actions.")
         try expectFalse(result?.safetyFlags.scriptExecutionAllowed ?? true, "Task cockpit must not allow script execution.")
@@ -1802,26 +2075,17 @@ struct SkillStoreTests {
         try expectFalse(result?.safetyFlags.cloudSyncEnabled ?? true, "Task cockpit must not sync cloud data.")
         try expectFalse(result?.safetyFlags.telemetryEnabled ?? true, "Task cockpit must not emit telemetry.")
         try expectFalse(store.isBuildingTaskCockpit, "Task cockpit should reset loading state.")
+        try expectEqual(store.taskCockpitOperationState.timeoutSeconds, 300, "Task cockpit should use a five minute UI timeout by default.")
 
         let calls = fake.calls()
-        try expectContains(calls, "task.buildCockpit", "Task cockpit should call the V2.65 task.buildCockpit method.")
-        try expectContains(calls, "\"task\":\"Prepare local release audit work.\"", "Task cockpit should send task text.")
-        try expectContains(calls, "\"agent\":\"claude-code\"", "Task cockpit should pass the selected skill agent filter.")
-        try expectContains(calls, "\"selected_skill_id\":\"beta\"", "Task cockpit should pass selected skill id.")
-        try expectContains(calls, "\"selected_skill_name\":\"Beta\"", "Task cockpit should pass selected skill name.")
-        try expectContains(calls, "\"selected_skill_agent\":\"claude-code\"", "Task cockpit should pass selected skill agent.")
-        try expectContains(calls, "\"candidate_instance_ids\":[\"beta\"]", "Task cockpit should include selected skill candidate context.")
-        try expectContains(calls, "\"project_root\":\"\\/tmp\\/project\"", "Task cockpit should pass active project root.")
-        try expectContains(calls, "\"current_cwd\":\"\\/tmp\\/project\"", "Task cockpit should pass active project cwd.")
-        try expectContains(calls, "\"workspace\":\"Fixture Project\"", "Task cockpit should pass active workspace name.")
-        try expectContains(calls, "\"limit\":5", "Task cockpit should pass the compact preflight limit.")
-        try expectContains(calls, "\"include_session_review\":false", "Task cockpit should skip session-review context by default.")
-        try expectContains(calls, "\"include_provider_observability\":false", "Task cockpit should skip provider-observability context by default.")
-        try expectContains(calls, "\"include_remediation_context\":false", "Task cockpit should skip remediation context by default.")
-        try expectContains(calls, "\"include_evidence\":false", "Task cockpit should skip raw evidence rows by default.")
-        try expectContains(calls, "\"app_language\":\"en\"", "Task cockpit should pass app language for localized service rows.")
-        try expectFalse(calls.contains("llm.previewPrompt"), "Task cockpit must not prepare provider prompts.")
-        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Task cockpit must not send to provider.")
+        try expectContains(calls, "llm.previewPrompt", "Task cockpit should prepare a provider prompt preview.")
+        try expectContains(calls, "llm.confirmPromptAndSend", "Task cockpit should send through the confirmation-gated provider path.")
+        try expectContains(calls, "\"timeout_ms\":300000", "Task cockpit provider send should use a five minute request timeout.")
+        try expectContains(calls, "\"request_kind\":\"task_cockpit\"", "Task cockpit should use the task_cockpit prompt action.")
+        try expectContains(calls, "\"task_text\":\"Prepare local release audit work.\"", "Task cockpit should send task text.")
+        try expectContains(calls, "\"agents\":[\"claude-code\"]", "Task cockpit should pass the selected agent scope.")
+        try expectContains(calls, "\"instance_ids\":[\"alpha\",\"beta\"]", "Task cockpit should include effective skill candidates for selected agents.")
+        try expectFalse(calls.contains("task.buildCockpit"), "New Task cockpit flow must not use local string-matching cockpit RPC.")
         try expectFalse(calls.contains("config.toggleSkill"), "Task cockpit must not call config write paths.")
         try expectFalse(calls.contains("script.execute"), "Task cockpit must not call execution paths.")
         try expectEqual(countOccurrences("snapshot.", in: calls), snapshotCallsBeforeCockpit, "Task cockpit must not call snapshot paths.")
@@ -1839,20 +2103,19 @@ struct SkillStoreTests {
         store.agentFilter = .claudeCode
         store.taskCockpitText = "查看阿里云 ALB 报警历史"
         await store.reload()
-        try expectFalse(store.selectedSidebarSelection?.isSkill == true, "Fixture should exercise the global Preflight entry instead of a skill detail.")
+        try expectEqual(store.selectedSidebarSelection?.isSkill, true, "Fixture should cover the default selected skill sidebar state.")
         await store.buildTaskCockpit()
 
         let calls = fake.calls()
-        let cockpitCall = calls
+        let previewCall = calls
             .split(separator: "\n")
             .map(String.init)
-            .last { $0.contains("\"method\":\"task.buildCockpit\"") }
-        try expectContains(cockpitCall, "task.buildCockpit", "Global Preflight should call the V2.65 task.buildCockpit method.")
-        try expectContains(cockpitCall, "\"task\":\"查看阿里云 ALB 报警历史\"", "Global Preflight should send the original Chinese task text.")
-        try expectFalse(cockpitCall?.contains("\"agent\":\"claude-code\"") ?? false, "Global Preflight should not constrain candidates to the current sidebar agent filter.")
-        try expectFalse(cockpitCall?.contains("\"selected_skill_id\"") ?? false, "Global Preflight should not inherit a retained selected skill id.")
-        try expectFalse(cockpitCall?.contains("\"selected_skill_agent\"") ?? false, "Global Preflight should not inherit a retained selected skill agent.")
-        try expectFalse(cockpitCall?.contains("\"candidate_instance_ids\"") ?? false, "Global Preflight should not inherit retained skill candidate ids.")
+            .last { $0.contains("\"method\":\"llm.previewPrompt\"") && $0.contains("\"request_kind\":\"task_cockpit\"") }
+        try expectContains(previewCall, "llm.previewPrompt", "Global Preflight should prepare the provider-backed task_cockpit prompt.")
+        try expectContains(previewCall, "\"task_text\":\"查看阿里云 ALB 报警历史\"", "Global Preflight should send the original Chinese task text.")
+        try expectContains(previewCall, "\"agents\":[\"claude-code\"]", "Global Preflight should use the current sidebar agent as the default scope.")
+        try expectContains(previewCall, "\"instance_ids\":[\"alpha\",\"beta\"]", "Global Preflight should include effective skills for the selected agent scope.")
+        try expectFalse(previewCall?.contains("\"selected_skill_id\"") ?? false, "Global Preflight should not inherit a retained selected skill id.")
     }
 
     private func taskCockpitHistoryPersistsLocally() async throws {
@@ -1900,11 +2163,11 @@ struct SkillStoreTests {
         try expectEqual(store.selectedTaskCockpitInput, exactTask, "Non-blank cockpit input should preserve the exact user text.")
 
         let calls = fake.calls()
-        try expectContains(calls, "task.buildCockpit", "Exact-input test should call the Task Cockpit method.")
-        try expectContains(calls, "\"task\":\"  修复 Task Cockpit 🧪\\n第二行\\t带制表  \"", "Task cockpit should pass Chinese, emoji, multiline text, tabs, and surrounding spaces unchanged.")
-        try expectFalse(calls.contains("\"task\":\"修复 Task Cockpit 🧪\\n第二行\\t带制表\""), "Task cockpit must not trim non-blank user text before submission.")
-        try expectFalse(calls.contains("llm.previewPrompt"), "Exact-input cockpit flow must not prepare provider prompts.")
-        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Exact-input cockpit flow must not send to provider.")
+        try expectContains(calls, "llm.previewPrompt", "Exact-input test should prepare the provider-backed Task Preflight prompt.")
+        try expectContains(calls, "llm.confirmPromptAndSend", "Exact-input cockpit flow should send through provider confirmation.")
+        try expectContains(calls, "\"task_text\":\"  修复 Task Cockpit 🧪\\n第二行\\t带制表  \"", "Task cockpit should pass Chinese, emoji, multiline text, tabs, and surrounding spaces unchanged.")
+        try expectFalse(calls.contains("\"task_text\":\"修复 Task Cockpit 🧪\\n第二行\\t带制表\""), "Task cockpit must not trim non-blank user text before submission.")
+        try expectFalse(calls.contains("task.buildCockpit"), "Exact-input cockpit flow must not use local string matching.")
         try expectFalse(calls.contains("config.toggleSkill"), "Exact-input cockpit flow must not call config write paths.")
         try expectFalse(calls.contains("script.execute"), "Exact-input cockpit flow must not call execution paths.")
         try expectFalse(calls.contains("credential"), "Exact-input cockpit flow must not call credential paths.")
@@ -1927,11 +2190,10 @@ struct SkillStoreTests {
         try expectEqual(store.selectedTaskCockpitInput, "Route a local audit release note task.", "Whitespace-only cockpit input should reuse the existing fallback task.")
 
         let calls = fake.calls()
-        try expectContains(calls, "task.buildCockpit", "Whitespace fallback test should call the Task Cockpit method.")
-        try expectContains(calls, "\"task\":\"Route a local audit release note task.\"", "Whitespace-only cockpit input should submit the fallback task.")
-        try expectFalse(calls.contains("\"task\":\" \\n\\t \""), "Whitespace-only cockpit input must not be sent as the task.")
-        try expectFalse(calls.contains("llm.previewPrompt"), "Whitespace fallback cockpit flow must not prepare provider prompts.")
-        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Whitespace fallback cockpit flow must not send to provider.")
+        try expectContains(calls, "llm.previewPrompt", "Whitespace fallback test should prepare the provider-backed Task Preflight prompt.")
+        try expectContains(calls, "\"task_text\":\"Route a local audit release note task.\"", "Whitespace-only cockpit input should submit the fallback task.")
+        try expectFalse(calls.contains("\"task_text\":\" \\n\\t \""), "Whitespace-only cockpit input must not be sent as the task.")
+        try expectFalse(calls.contains("task.buildCockpit"), "Whitespace fallback cockpit flow must not use local string matching.")
         try expectFalse(calls.contains("config.toggleSkill"), "Whitespace fallback cockpit flow must not call config write paths.")
         try expectFalse(calls.contains("script.execute"), "Whitespace fallback cockpit flow must not call execution paths.")
     }
@@ -1952,9 +2214,9 @@ struct SkillStoreTests {
         try expectEqual(store.taskCockpitResult?.isUnavailable, true, "Task cockpit should expose unavailable fallback for older services.")
         try expectEqual(store.taskCockpitResult?.fallbackReason, UIStrings.taskCockpitUnavailable, "Unknown method fallback should use the localized unavailable copy.")
         try expectFalse(store.isBuildingTaskCockpit, "Unavailable task cockpit should reset loading state.")
-        try expectContains(fake.calls(), "task.buildCockpit", "Fallback should still prove the intended V2.65 method was attempted.")
-        try expectContains(fake.calls(), "\"task\":\"Route a local audit release note task.\"", "Fallback should reuse existing routing task text when cockpit input is blank.")
-        try expectFalse(fake.calls().contains("llm.previewPrompt"), "Unavailable cockpit flow must not fall back to provider prompt preview.")
+        try expectContains(fake.calls(), "llm.previewPrompt", "Fallback should still prove the intended provider preview method was attempted.")
+        try expectContains(fake.calls(), "\"task_text\":\"Route a local audit release note task.\"", "Fallback should reuse existing routing task text when cockpit input is blank.")
+        try expectFalse(fake.calls().contains("task.buildCockpit"), "Unavailable cockpit flow must not fall back to local string matching.")
         try expectFalse(fake.calls().contains("llm.confirmPromptAndSend"), "Unavailable cockpit flow must not send to provider.")
         try expectFalse(fake.calls().contains("config.toggleSkill"), "Unavailable cockpit flow must not call config write paths.")
         try expectFalse(fake.calls().contains("script.execute"), "Unavailable cockpit flow must not call execution paths.")
@@ -1992,9 +2254,9 @@ struct SkillStoreTests {
         await slowBuild.value
         try expectEqual(store.taskCockpitResult?.summary.recommendedSkillName, "Beta", "Late slow response must not overwrite the retry result.")
         let calls = fake.calls()
-        try expectContains(calls, "task.buildCockpit", "Timeout path should still call the Task Cockpit method.")
-        try expectFalse(calls.contains("llm.previewPrompt"), "Timeout recovery must not prepare provider prompts.")
-        try expectFalse(calls.contains("llm.confirmPromptAndSend"), "Timeout recovery must not send to provider.")
+        try expectContains(calls, "llm.previewPrompt", "Timeout path should prepare task preflight prompt previews.")
+        try expectContains(calls, "llm.confirmPromptAndSend", "Timeout path should use the provider confirmation method.")
+        try expectFalse(calls.contains("task.buildCockpit"), "Timeout recovery must not use local string matching.")
         try expectFalse(calls.contains("config.toggleSkill"), "Timeout recovery must not call config write paths.")
         try expectFalse(calls.contains("script.execute"), "Timeout recovery must not call execution paths.")
     }
@@ -2033,7 +2295,8 @@ struct SkillStoreTests {
 
         await slowBuild.value
         try expectEqual(store.taskCockpitResult?.summary.recommendedSkillName, "Beta", "Late cancelled response must not overwrite the retry result.")
-        try expectFalse(fake.calls().contains("llm.confirmPromptAndSend"), "Cancel recovery must not send to provider.")
+        try expectContains(fake.calls(), "llm.confirmPromptAndSend", "Cancel recovery should use the provider confirmation method for the retry.")
+        try expectFalse(fake.calls().contains("task.buildCockpit"), "Cancel recovery must not use local string matching.")
         try expectFalse(fake.calls().contains("config.toggleSkill"), "Cancel recovery must not call config write paths.")
         try expectFalse(fake.calls().contains("script.execute"), "Cancel recovery must not call execution paths.")
     }

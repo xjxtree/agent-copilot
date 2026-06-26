@@ -1,0 +1,8 @@
+{
+  "id": "fixture-skill-manager-delete-local",
+  "method": "skillManager.deleteLocal",
+  "params": {
+    "instance_id": "fixture-local-tool-global",
+    "confirmed": false
+  }
+}

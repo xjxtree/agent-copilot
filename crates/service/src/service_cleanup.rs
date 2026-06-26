@@ -202,7 +202,8 @@ impl ServiceHost {
                     app_language: None,
                     skill_instance_id: filters.selected_skill_id.clone(),
                     instance_ids: prompt_instance_ids,
-                    analysis_kind: None,
+                    agents: Vec::new(),
+                analysis_kind: None,
                     user_intent: filters.task.clone().or_else(|| {
                         Some(
                             "Explain deterministic guided cleanup flow steps using only local redacted evidence."

@@ -1,4 +1,5 @@
 use super::*;
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 impl ServiceHost {
     pub fn check_task_readiness(
@@ -196,7 +197,8 @@ impl ServiceHost {
                     app_language: None,
                     skill_instance_id: None,
                     instance_ids: prompt_instance_ids,
-                    analysis_kind: None,
+                    agents: Vec::new(),
+                analysis_kind: None,
                     user_intent: Some(task.clone()),
                 },
                 note: "Optional provider-backed explanation must be requested through prompt preview and explicit confirmation; task.checkReadiness never sends provider traffic."
@@ -414,6 +416,7 @@ impl ServiceHost {
                     app_language: None,
                     skill_instance_id: None,
                     instance_ids: prompt_instance_ids,
+                    agents: Vec::new(),
                     analysis_kind: None,
                     user_intent: Some(task),
                 },
@@ -851,7 +854,8 @@ impl ServiceHost {
                     app_language: None,
                     skill_instance_id: None,
                     instance_ids: prompt_instance_ids,
-                    analysis_kind: None,
+                    agents: Vec::new(),
+                analysis_kind: None,
                     user_intent: Some(readiness.task),
                 },
                 note: "Optional provider-backed cockpit explanation must be requested through prompt preview and explicit confirmation; task.buildCockpit never sends provider traffic."
@@ -1212,7 +1216,8 @@ impl ServiceHost {
                     app_language: None,
                     skill_instance_id: None,
                     instance_ids: prompt_instance_ids,
-                    analysis_kind: None,
+                    agents: Vec::new(),
+                analysis_kind: None,
                     user_intent: Some(
                         "Explain deterministic skill lifecycle timeline rows using only local redacted evidence."
                             .to_string(),
@@ -2482,7 +2487,30 @@ struct LocalSessionContentDraft {
     kind: String,
     title: String,
     text: String,
+    timestamp: Option<i64>,
     evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct LocalSessionTimeBounds {
+    started_at: Option<i64>,
+    ended_at: Option<i64>,
+}
+
+impl LocalSessionTimeBounds {
+    fn push(&mut self, timestamp: Option<i64>) {
+        let Some(timestamp) = timestamp else {
+            return;
+        };
+        self.started_at = Some(
+            self.started_at
+                .map_or(timestamp, |current| current.min(timestamp)),
+        );
+        self.ended_at = Some(
+            self.ended_at
+                .map_or(timestamp, |current| current.max(timestamp)),
+        );
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -2921,6 +2949,8 @@ fn local_session_preview_row(
         &skill_mentions,
         redactor,
     );
+    let modified_at = local_session_modified_at(path);
+    let (started_at, ended_at) = local_session_time_bounds(&content, &content_items, modified_at);
     let metrics = local_session_metrics(&content, &content_items);
     let agent = options
         .requested_agent
@@ -2941,7 +2971,9 @@ fn local_session_preview_row(
             agent,
             project_root: redacted_project_root,
             redacted_path: redacted_path.clone(),
-            modified_at: local_session_modified_at(path),
+            modified_at,
+            started_at,
+            ended_at,
             excerpt,
             excerpt_char_count,
             user_message_count: metrics.user_message_count,
@@ -3607,8 +3639,11 @@ fn local_session_content_items(
             continue;
         }
         match serde_json::from_str::<Value>(trimmed) {
-            Ok(value) => collect_json_session_content_drafts(&value, &mut drafts),
-            Err(_) => collect_text_session_content_drafts(trimmed, &mut drafts),
+            Ok(value) => {
+                let timestamp = json_session_timestamp_millis(&value);
+                collect_json_session_content_drafts(&value, timestamp, &mut drafts);
+            }
+            Err(_) => collect_text_session_content_drafts(trimmed, None, &mut drafts),
         }
         if drafts.len() >= MAX_SESSION_CONTENT_ITEMS {
             break;
@@ -3629,6 +3664,7 @@ fn local_session_content_items(
             kind: "skill_call".to_string(),
             title: format!("Skill: {}", mention.skill_name),
             text,
+            timestamp: None,
             evidence_refs: vec![mention.evidence_ref.clone()],
         });
     }
@@ -3649,6 +3685,7 @@ fn local_session_content_items(
             kind: "skill_call".to_string(),
             title: format!("Skill: {invocation}"),
             text,
+            timestamp: None,
             evidence_refs: vec![format!("session.content_hash:{short_hash}")],
         });
     }
@@ -3658,6 +3695,7 @@ fn local_session_content_items(
             kind: "agent_reply".to_string(),
             title: "Session excerpt".to_string(),
             text: content.to_string(),
+            timestamp: None,
             evidence_refs: vec![format!("session.content_hash:{short_hash}")],
         });
     }
@@ -3677,10 +3715,114 @@ fn local_session_content_items(
                 title: truncate_chars(&redactor.redact(&draft.title), 120),
                 char_count: redacted.chars().count(),
                 text: redacted,
+                timestamp: draft.timestamp,
                 evidence_refs: draft.evidence_refs,
             }
         })
         .collect()
+}
+
+fn local_session_time_bounds(
+    content: &str,
+    content_items: &[LocalSessionContentItem],
+    fallback_timestamp: Option<i64>,
+) -> (Option<i64>, Option<i64>) {
+    let mut bounds = LocalSessionTimeBounds::default();
+    for item in content_items {
+        bounds.push(item.timestamp);
+    }
+
+    if bounds.started_at.is_none() || bounds.ended_at.is_none() {
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
+                bounds.push(json_session_timestamp_millis(&value));
+            }
+        }
+    }
+
+    let started_at = bounds.started_at.or(fallback_timestamp);
+    let ended_at = bounds.ended_at.or(started_at).or(fallback_timestamp);
+    (started_at, ended_at)
+}
+
+fn json_session_timestamp_millis(value: &Value) -> Option<i64> {
+    let Value::Object(map) = value else {
+        return json_session_timestamp_value_millis(value);
+    };
+    for key in [
+        "timestamp",
+        "created_at",
+        "createdAt",
+        "updated_at",
+        "updatedAt",
+        "completed_at",
+        "completedAt",
+        "time",
+    ] {
+        if let Some(timestamp) = map.get(key).and_then(json_session_timestamp_value_millis) {
+            return Some(timestamp);
+        }
+    }
+    None
+}
+
+fn json_session_timestamp_value_millis(value: &Value) -> Option<i64> {
+    match value {
+        Value::String(text) => parse_local_session_timestamp_millis(text),
+        Value::Number(number) => number
+            .as_i64()
+            .and_then(normalize_local_session_epoch_millis)
+            .or_else(|| {
+                number
+                    .as_f64()
+                    .and_then(normalize_local_session_epoch_millis_from_float)
+            }),
+        _ => None,
+    }
+}
+
+fn parse_local_session_timestamp_millis(value: &str) -> Option<i64> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if let Ok(epoch) = trimmed.parse::<i64>() {
+        return normalize_local_session_epoch_millis(epoch);
+    }
+    if let Ok(epoch) = trimmed.parse::<f64>() {
+        return normalize_local_session_epoch_millis_from_float(epoch);
+    }
+    let parsed = OffsetDateTime::parse(trimmed, &Rfc3339).ok()?;
+    let millis = parsed.unix_timestamp_nanos() / 1_000_000;
+    i64::try_from(millis).ok()
+}
+
+fn normalize_local_session_epoch_millis(value: i64) -> Option<i64> {
+    let magnitude = value.checked_abs().unwrap_or(i64::MAX);
+    if magnitude >= 10_000_000_000 {
+        Some(value)
+    } else {
+        value.checked_mul(1_000)
+    }
+}
+
+fn normalize_local_session_epoch_millis_from_float(value: f64) -> Option<i64> {
+    if !value.is_finite() {
+        return None;
+    }
+    let millis = if value.abs() >= 10_000_000_000.0 {
+        value
+    } else {
+        value * 1_000.0
+    };
+    if millis < i64::MIN as f64 || millis > i64::MAX as f64 {
+        return None;
+    }
+    Some(millis.round() as i64)
 }
 
 fn redact_local_session_content(redactor: &mut PromptRedactor<'_>, value: &str) -> String {
@@ -3736,14 +3878,19 @@ fn is_unix_listing_mode(token: &str) -> bool {
         .all(|ch| matches!(ch, 'r' | 'w' | 'x' | 's' | 'S' | 't' | 'T' | '-'))
 }
 
-fn collect_json_session_content_drafts(value: &Value, drafts: &mut Vec<LocalSessionContentDraft>) {
+fn collect_json_session_content_drafts(
+    value: &Value,
+    inherited_timestamp: Option<i64>,
+    drafts: &mut Vec<LocalSessionContentDraft>,
+) {
     match value {
         Value::Array(items) => {
             for item in items {
-                collect_json_session_content_drafts(item, drafts);
+                collect_json_session_content_drafts(item, inherited_timestamp, drafts);
             }
         }
         Value::Object(map) => {
+            let timestamp = json_session_timestamp_millis(value).or(inherited_timestamp);
             let role = json_session_role(map).map(str::to_string);
             let mut pushed_direct_tool = false;
             if let Some(kind) = json_session_content_kind(map, role.as_deref()) {
@@ -3757,6 +3904,7 @@ fn collect_json_session_content_drafts(value: &Value, drafts: &mut Vec<LocalSess
                             resolved_kind,
                             json_session_title(map, resolved_kind),
                             text,
+                            timestamp,
                             Vec::new(),
                         );
                     }
@@ -3764,7 +3912,7 @@ fn collect_json_session_content_drafts(value: &Value, drafts: &mut Vec<LocalSess
             }
 
             if !pushed_direct_tool {
-                collect_json_tool_call_drafts(map, drafts);
+                collect_json_tool_call_drafts(map, timestamp, drafts);
             }
 
             for (key, nested) in map {
@@ -3784,27 +3932,30 @@ fn collect_json_session_content_drafts(value: &Value, drafts: &mut Vec<LocalSess
                 ) {
                     continue;
                 }
-                collect_json_session_content_drafts(nested, drafts);
+                collect_json_session_content_drafts(nested, timestamp, drafts);
             }
         }
-        Value::String(text) => collect_text_session_content_drafts(text, drafts),
+        Value::String(text) => {
+            collect_text_session_content_drafts(text, inherited_timestamp, drafts)
+        }
         _ => {}
     }
 }
 
 fn collect_json_tool_call_drafts(
     map: &serde_json::Map<String, Value>,
+    timestamp: Option<i64>,
     drafts: &mut Vec<LocalSessionContentDraft>,
 ) {
     for key in ["content", "parts"] {
         if let Some(nested) = map.get(key) {
-            collect_json_tool_part_drafts(nested, drafts);
+            collect_json_tool_part_drafts(nested, timestamp, drafts);
         }
     }
     if let Some(message) = map.get("message").and_then(Value::as_object) {
         for key in ["content", "parts"] {
             if let Some(nested) = message.get(key) {
-                collect_json_tool_part_drafts(nested, drafts);
+                collect_json_tool_part_drafts(nested, timestamp, drafts);
             }
         }
     }
@@ -3825,6 +3976,7 @@ fn collect_json_tool_call_drafts(
                         kind: "tool_call".to_string(),
                         title: json_tool_title(item),
                         text: compact_json_session_text(item),
+                        timestamp,
                         evidence_refs: Vec::new(),
                     });
                 }
@@ -3834,6 +3986,7 @@ fn collect_json_tool_call_drafts(
                     kind: "tool_call".to_string(),
                     title: json_tool_title(value),
                     text: compact_json_session_text(value),
+                    timestamp,
                     evidence_refs: Vec::new(),
                 });
             }
@@ -3842,14 +3995,19 @@ fn collect_json_tool_call_drafts(
     }
 }
 
-fn collect_json_tool_part_drafts(value: &Value, drafts: &mut Vec<LocalSessionContentDraft>) {
+fn collect_json_tool_part_drafts(
+    value: &Value,
+    inherited_timestamp: Option<i64>,
+    drafts: &mut Vec<LocalSessionContentDraft>,
+) {
     match value {
         Value::Array(items) => {
             for item in items {
-                collect_json_tool_part_drafts(item, drafts);
+                collect_json_tool_part_drafts(item, inherited_timestamp, drafts);
             }
         }
         Value::Object(map) => {
+            let timestamp = json_session_timestamp_millis(value).or(inherited_timestamp);
             if let Some(kind) = map.get("type").and_then(Value::as_str) {
                 let normalized = kind.to_ascii_lowercase().replace(['_', '-'], "");
                 if is_json_tool_type(&normalized) {
@@ -3857,6 +4015,7 @@ fn collect_json_tool_part_drafts(value: &Value, drafts: &mut Vec<LocalSessionCon
                         kind: "tool_call".to_string(),
                         title: json_tool_title(value),
                         text: json_tool_payload_text(value),
+                        timestamp,
                         evidence_refs: Vec::new(),
                     });
                     return;
@@ -3864,13 +4023,13 @@ fn collect_json_tool_part_drafts(value: &Value, drafts: &mut Vec<LocalSessionCon
             }
             for key in ["content", "parts"] {
                 if let Some(nested) = map.get(key) {
-                    collect_json_tool_part_drafts(nested, drafts);
+                    collect_json_tool_part_drafts(nested, timestamp, drafts);
                 }
             }
             if let Some(message) = map.get("message").and_then(Value::as_object) {
                 for key in ["content", "parts"] {
                     if let Some(nested) = message.get(key) {
-                        collect_json_tool_part_drafts(nested, drafts);
+                        collect_json_tool_part_drafts(nested, timestamp, drafts);
                     }
                 }
             }
@@ -3879,7 +4038,11 @@ fn collect_json_tool_part_drafts(value: &Value, drafts: &mut Vec<LocalSessionCon
     }
 }
 
-fn collect_text_session_content_drafts(line: &str, drafts: &mut Vec<LocalSessionContentDraft>) {
+fn collect_text_session_content_drafts(
+    line: &str,
+    timestamp: Option<i64>,
+    drafts: &mut Vec<LocalSessionContentDraft>,
+) {
     let lower = line.to_ascii_lowercase();
     let (kind, title, text) = if let Some(text) =
         strip_session_line_prefix(line, &["user:", "human:", "用户：", "用户:"])
@@ -3914,6 +4077,7 @@ fn collect_text_session_content_drafts(line: &str, drafts: &mut Vec<LocalSession
         kind,
         title.to_string(),
         text.trim().to_string(),
+        timestamp,
         Vec::new(),
     );
 }
@@ -3933,6 +4097,7 @@ fn push_local_session_text_drafts(
     kind: &str,
     title: String,
     text: String,
+    timestamp: Option<i64>,
     evidence_refs: Vec<String>,
 ) {
     for (segment_kind, segment_text) in split_inline_thinking_segments(kind, &text) {
@@ -3944,6 +4109,7 @@ fn push_local_session_text_drafts(
                 json_fallback_session_title(segment_kind)
             },
             text: segment_text,
+            timestamp,
             evidence_refs: evidence_refs.clone(),
         });
     }

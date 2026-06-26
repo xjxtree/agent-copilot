@@ -579,6 +579,7 @@ pub(crate) fn task_benchmark_prompt_request(
             app_language: None,
             skill_instance_id: None,
             instance_ids,
+            agents: Vec::new(),
             analysis_kind: None,
             user_intent: task,
         },
@@ -1033,6 +1034,7 @@ pub(crate) fn skill_route_ranking_from_readiness(
                 app_language: None,
                 skill_instance_id: None,
                 instance_ids: prompt_instance_ids,
+                agents: Vec::new(),
                 analysis_kind: None,
                 user_intent: Some(readiness.task),
             },
@@ -3406,6 +3408,7 @@ pub(crate) fn render_skill_lifecycle_timeline_prompt_section(
     )
 }
 
+#[allow(dead_code)]
 pub(crate) fn render_task_cockpit_prompt_section(
     cockpit: &TaskCockpitResult,
     redactor: &mut PromptRedactor<'_>,

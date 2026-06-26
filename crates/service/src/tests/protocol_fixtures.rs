@@ -243,6 +243,145 @@ pub(super) fn inline_service_protocol_fixtures() -> Vec<(Value, Value)> {
     ]
 }
 
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WireSkillManagerToolRecord {
+    id: String,
+    display_name: String,
+    status: String,
+    executable: Option<String>,
+    operations: Vec<String>,
+    default_agents: Vec<String>,
+    notes: Vec<String>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WireSkillManagerCommandPreview {
+    tool_id: String,
+    operation: String,
+    command: Vec<String>,
+    cwd: String,
+    env: Vec<WireSkillManagerEnvPreview>,
+    requires_confirmation: bool,
+    confirmed: bool,
+    network_required: bool,
+    network_allowed: bool,
+    will_run: bool,
+    preview_token: String,
+    summary: String,
+    risks: Vec<String>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WireSkillManagerEnvPreview {
+    key: String,
+    value: String,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WireSkillManagerCommandOutput {
+    status: String,
+    exit_code: Option<i32>,
+    stdout: String,
+    stderr: String,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WireSkillManagerSearchRecord {
+    preview: WireSkillManagerCommandPreview,
+    output: Option<WireSkillManagerCommandOutput>,
+    results: Vec<WireSkillManagerSearchResult>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WireSkillManagerSearchResult {
+    name: String,
+    source: Option<String>,
+    description: Option<String>,
+    raw: Value,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WireSkillManagerInstalledListRecord {
+    preview: WireSkillManagerCommandPreview,
+    output: WireSkillManagerCommandOutput,
+    installed: Vec<WireSkillManagerInstalledRecord>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WireSkillManagerInstalledRecord {
+    name: String,
+    source: Option<String>,
+    agents: Vec<String>,
+    scope: Option<String>,
+    path: Option<String>,
+    raw: Value,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WireSkillManagerMutationRecord {
+    preview: WireSkillManagerCommandPreview,
+    output: Option<WireSkillManagerCommandOutput>,
+    applied: bool,
+    scanned_count: usize,
+    updated_skills: Vec<WireSkillRecord>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WireSkillManagerLocalCreateRecord {
+    preview: WireSkillManagerCommandPreview,
+    output: Option<WireSkillManagerCommandOutput>,
+    imported: Option<WireSkillRecord>,
+    instance_id: Option<String>,
+    source_path: String,
+    applied: bool,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WireSkillManagerLocalDeleteRecord {
+    instance_id: String,
+    skill_name: String,
+    path: String,
+    app_owned: bool,
+    physical_delete_allowed: bool,
+    blocked_by_references: Vec<WireSkillManagerReferenceRecord>,
+    confirmed: bool,
+    deleted: bool,
+    summary: String,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WireSkillManagerReferenceRecord {
+    instance_id: String,
+    name: String,
+    agent: String,
+    scope: String,
+    path: String,
+}
+
 pub(super) fn decode_response_fixture(method: &str, result: &Value, path: &Path) {
     match method {
         "app.version" => {
@@ -1414,6 +1553,86 @@ pub(super) fn decode_response_fixture(method: &str, result: &Value, path: &Path)
             assert!(!attempt.spawned_process);
             assert!(!attempt.preview.execution_allowed);
         }
+        "skillManager.listTools" => {
+            let tools: Vec<WireSkillManagerToolRecord> =
+                decode_fixture_result(method, result, path);
+            let npx = tools
+                .iter()
+                .find(|tool| tool.id == "npx-skills")
+                .expect("npx skills tool fixture");
+            assert_skill_manager_agents(&npx.default_agents);
+            assert!(npx
+                .operations
+                .iter()
+                .any(|operation| operation == "applyInstall"));
+        }
+        "skillManager.search" => {
+            let search: WireSkillManagerSearchRecord = decode_fixture_result(method, result, path);
+            assert_eq!(search.preview.operation, "search");
+            assert!(!search.preview.requires_confirmation);
+            assert!(search.preview.network_required);
+            assert!(!search.preview.will_run);
+        }
+        "skillManager.listInstalled" => {
+            let installed: WireSkillManagerInstalledListRecord =
+                decode_fixture_result(method, result, path);
+            assert_eq!(installed.preview.operation, "listInstalled");
+            assert!(installed.preview.command.iter().any(|arg| arg == "--json"));
+            assert!(!installed.installed.is_empty());
+        }
+        "skillManager.previewInstall"
+        | "skillManager.applyInstall"
+        | "skillManager.previewRemove"
+        | "skillManager.applyRemove"
+        | "skillManager.previewUpdate"
+        | "skillManager.applyUpdate" => {
+            let mutation: WireSkillManagerMutationRecord =
+                decode_fixture_result(method, result, path);
+            assert!(mutation.preview.command.iter().any(|arg| arg == "skills"));
+            assert!(!mutation.preview.command.iter().any(|arg| arg == "*"));
+            assert!(!mutation.preview.preview_token.is_empty());
+            assert_eq!(mutation.applied, method.contains(".apply"));
+            if method.contains("preview") {
+                assert!(mutation.output.is_none());
+                assert!(!mutation.preview.confirmed);
+            }
+            if method.contains("apply") {
+                assert!(mutation.output.is_some());
+                assert!(mutation.preview.confirmed);
+            }
+            if method.ends_with("Install") && method.contains("preview") {
+                assert_eq!(
+                    mutation
+                        .preview
+                        .command
+                        .iter()
+                        .filter(|arg| arg.as_str() == "--agent")
+                        .count(),
+                    6
+                );
+                assert!(!mutation.preview.command.iter().any(|arg| arg == "--copy"));
+            }
+        }
+        "skillManager.previewLocalCreate" | "skillManager.applyLocalCreate" => {
+            let create: WireSkillManagerLocalCreateRecord =
+                decode_fixture_result(method, result, path);
+            assert_eq!(create.preview.operation, "localCreate");
+            assert!(create.source_path.contains("local-skill-library"));
+            assert_eq!(create.applied, method.contains(".apply"));
+            if create.applied {
+                assert_eq!(
+                    create.imported.as_ref().expect("imported skill").agent,
+                    "tool-global"
+                );
+            }
+        }
+        "skillManager.deleteLocal" => {
+            let delete: WireSkillManagerLocalDeleteRecord =
+                decode_fixture_result(method, result, path);
+            assert!(delete.app_owned);
+            assert!(!delete.deleted);
+            assert!(!delete.blocked_by_references.is_empty());
+        }
         "project.getContext" | "project.setContext" | "project.clearContext" => {
             let _: ProjectContextState = decode_fixture_result(method, result, path);
             let state: WireProjectContextState = decode_fixture_result(method, result, path);
@@ -1531,6 +1750,9 @@ pub(super) fn decode_response_fixture(method: &str, result: &Value, path: &Path)
         "skill.listEvents" => {
             let _: Vec<WireSkillEventRecord> = decode_fixture_result(method, result, path);
         }
+        "config.readAgentConfig" => {
+            let _: Vec<WireConfigDocumentRecord> = decode_fixture_result(method, result, path);
+        }
         "config.readClaudeSettings" | "config.saveClaudeSettings" => {
             let _: WireConfigDocumentRecord = decode_fixture_result(method, result, path);
         }
@@ -1596,6 +1818,23 @@ pub(super) fn assert_supported_methods(method: &str, actual: &[String]) {
         return;
     }
     assert_eq!(actual, expected, "{method} supported_methods drifted");
+}
+
+pub(super) fn assert_skill_manager_agents(actual: &[String]) {
+    assert_eq!(
+        actual,
+        vec![
+            "claude-code",
+            "pi",
+            "opencode",
+            "codex",
+            "hermes-agent",
+            "openclaw"
+        ]
+        .into_iter()
+        .map(ToOwned::to_owned)
+        .collect::<Vec<_>>()
+    );
 }
 
 pub(super) fn assert_trace_import_safety(flags: &WireTraceImportSafetyFlags) {

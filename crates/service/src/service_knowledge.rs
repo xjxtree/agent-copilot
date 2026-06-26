@@ -265,7 +265,8 @@ impl ServiceHost {
                     app_language: None,
                     skill_instance_id: Some(params.instance_id),
                     instance_ids: Vec::new(),
-                    analysis_kind: None,
+                    agents: Vec::new(),
+                analysis_kind: None,
                     user_intent: Some(
                         "Explain this deterministic local quality score using only the included redacted evidence."
                             .to_string(),
@@ -468,7 +469,8 @@ impl ServiceHost {
                     app_language: None,
                     skill_instance_id: None,
                     instance_ids: prompt_instance_ids,
-                    analysis_kind: None,
+                    agents: Vec::new(),
+                analysis_kind: None,
                     user_intent: Some(
                         "Explain deterministic stale/drift signals using only local catalog evidence."
                             .to_string(),
@@ -638,6 +640,7 @@ impl ServiceHost {
                     app_language: None,
                     skill_instance_id: None,
                     instance_ids: prompt_instance_ids,
+                    agents: Vec::new(),
                     analysis_kind: None,
                     user_intent: filters.query.clone().or_else(|| {
                         Some("Explain deterministic local knowledge search results.".to_string())
@@ -813,7 +816,8 @@ impl ServiceHost {
                     app_language: None,
                     skill_instance_id: None,
                     instance_ids: prompt_instance_ids,
-                    analysis_kind: None,
+                    agents: Vec::new(),
+                analysis_kind: None,
                     user_intent: Some(
                         "Explain deterministic similar skill grouping using only local catalog evidence."
                             .to_string(),
@@ -1007,7 +1011,8 @@ impl ServiceHost {
                     app_language: None,
                     skill_instance_id: None,
                     instance_ids: prompt_instance_ids,
-                    analysis_kind: None,
+                    agents: Vec::new(),
+                analysis_kind: None,
                     user_intent: Some(
                         "Explain deterministic capability taxonomy using only local catalog evidence."
                             .to_string(),
@@ -1685,7 +1690,8 @@ impl ServiceHost {
                     app_language: None,
                     skill_instance_id: None,
                     instance_ids: prompt_instance_ids,
-                    analysis_kind: None,
+                    agents: Vec::new(),
+                analysis_kind: None,
                     user_intent: filters.task.clone().or_else(|| {
                         Some(
                             "Explain deterministic local skill map using only local catalog evidence."
@@ -1963,7 +1969,8 @@ impl ServiceHost {
                     app_language: None,
                     skill_instance_id: None,
                     instance_ids: prompt_instance_ids,
-                    analysis_kind: None,
+                    agents: Vec::new(),
+                analysis_kind: None,
                     user_intent: filters.task.clone().or_else(|| {
                         Some(
                             "Explain deterministic workspace readiness using only local catalog evidence."

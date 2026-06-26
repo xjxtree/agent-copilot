@@ -26,7 +26,7 @@ json5 = "0.4"
 serde_yaml = "0.9"
 sha2 = "0.10"
 thiserror = "2"
-time = { version = "0.3", features = ["formatting", "macros"] }
+time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 keyring = { version = "3", features = ["apple-native"] }
 ureq = { version = "2", features = ["json"] }

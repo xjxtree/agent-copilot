@@ -280,6 +280,7 @@ pub(crate) fn routing_accuracy_prompt_request(
             app_language: None,
             skill_instance_id: None,
             instance_ids,
+            agents: Vec::new(),
             analysis_kind: None,
             user_intent: task,
         },

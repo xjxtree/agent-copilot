@@ -16,7 +16,8 @@ struct ServiceEnvelope<ResultPayload: Decodable>: Decodable {
 extension ServiceClient {
     func call<ResultPayload: Decodable, Params: Encodable>(
         method: String,
-        params: Params
+        params: Params,
+        timeoutMS: Int? = nil
     ) async throws -> ResultPayload {
         let request = ServiceRequest(
             id: UUID().uuidString,
@@ -24,7 +25,7 @@ extension ServiceClient {
             params: params
         )
         let input = try JSONEncoder().encode(request)
-        let output = try await runService(input: input)
+        let output = try await runService(input: input, timeoutMS: timeoutMS)
         let envelope: ServiceEnvelope<ResultPayload>
         do {
             envelope = try JSONDecoder().decode(ServiceEnvelope<ResultPayload>.self, from: output)
@@ -41,8 +42,13 @@ extension ServiceClient {
         throw ClientError.invalidOutput(String(data: output, encoding: .utf8) ?? "<binary>")
     }
 
-    private func runService(input: Data) async throws -> Data {
-        try await processRunner.run(executableURL: resolveServiceURL(), input: input)
+    private func runService(input: Data, timeoutMS: Int?) async throws -> Data {
+        let timeoutNanoseconds = timeoutMS.map { UInt64(max($0, 50)) * 1_000_000 }
+        return try await processRunner.run(
+            executableURL: resolveServiceURL(),
+            input: input,
+            timeoutNanoseconds: timeoutNanoseconds
+        )
     }
 
     private func resolveServiceURL() throws -> URL {

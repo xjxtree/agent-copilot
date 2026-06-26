@@ -2,7 +2,7 @@ import Darwin
 import Foundation
 
 protocol ServiceProcessRunning {
-    func run(executableURL: URL, input: Data) async throws -> Data
+    func run(executableURL: URL, input: Data, timeoutNanoseconds: UInt64?) async throws -> Data
 }
 
 final class StdioServiceProcessRunner: ServiceProcessRunning {
@@ -12,14 +12,15 @@ final class StdioServiceProcessRunner: ServiceProcessRunning {
         self.timeoutNanoseconds = timeoutNanoseconds
     }
 
-    func run(executableURL: URL, input: Data) async throws -> Data {
+    func run(executableURL: URL, input: Data, timeoutNanoseconds overrideTimeoutNanoseconds: UInt64? = nil) async throws -> Data {
         let invocation = StdioServiceProcessInvocation(executableURL: executableURL, input: input)
         let coordinator = StdioServiceProcessRunCoordinator(invocation: invocation)
+        let effectiveTimeoutNanoseconds = overrideTimeoutNanoseconds ?? timeoutNanoseconds
 
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 coordinator.start(
-                    timeoutNanoseconds: timeoutNanoseconds,
+                    timeoutNanoseconds: effectiveTimeoutNanoseconds,
                     continuation: continuation
                 )
             }

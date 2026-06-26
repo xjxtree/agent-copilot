@@ -1,0 +1,45 @@
+{
+  "id": "fixture-skill-manager-apply-remove",
+  "ok": true,
+  "result": {
+    "preview": {
+      "tool_id": "npx-skills",
+      "operation": "remove",
+      "command": [
+        "/usr/local/bin/npx",
+        "skills",
+        "remove",
+        "frontend-design",
+        "--agent",
+        "codex",
+        "-y"
+      ],
+      "cwd": "/tmp/skills-copilot-project",
+      "env": [
+        {
+          "key": "HOME",
+          "value": "/tmp/skills-copilot-home"
+        }
+      ],
+      "requires_confirmation": true,
+      "confirmed": true,
+      "network_required": false,
+      "network_allowed": true,
+      "will_run": true,
+      "preview_token": "skill-manager:fixture-remove",
+      "summary": "Remove frontend-design from 1 supported agent target(s).",
+      "risks": [
+        "The manager may delete its canonical copy when no selected or managed agent still references it."
+      ]
+    },
+    "output": {
+      "status": "completed",
+      "exit_code": 0,
+      "stdout": "removed frontend-design",
+      "stderr": ""
+    },
+    "applied": true,
+    "scanned_count": 1,
+    "updated_skills": []
+  }
+}

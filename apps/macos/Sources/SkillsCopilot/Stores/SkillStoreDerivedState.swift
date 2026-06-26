@@ -12,8 +12,17 @@ extension SkillStore {
             || isTestingAIProvider
             || isApplyingBatchToggle
             || isExportingLocalReport
+            || isSkillManagerBusy
             || isTaskBenchmarkBusy
             || isLLMPromptBusy
+    }
+
+    private var isSkillManagerBusy: Bool {
+        isLoadingSkillManagerTools
+            || isSearchingSkillManager
+            || isListingSkillManagerInstalled
+            || isPreviewingSkillManagerMutation
+            || isApplyingSkillManagerMutation
     }
 
     private var isTaskBenchmarkBusy: Bool {
@@ -82,6 +91,23 @@ extension SkillStore {
         return visibleSkills.first
     }
 
+    var localSkillLibrarySkills: [SkillRecord] {
+        skills
+            .filter(DisplayText.isToolGlobal)
+            .sorted {
+                if $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedSame {
+                    return $0.displayPath < $1.displayPath
+                }
+                return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
+    }
+
+    var skillManagerSelectedAgents: [String] {
+        let selected = skillManagerSelectedAgentIDs
+        let ordered = SkillManagerAgent.defaultTargets.map(\.rawValue)
+        return ordered.filter { selected.contains($0) }
+    }
+
     var selectedSkillDetail: SkillDetailRecord? {
         guard let id = selectedSkill?.id else { return nil }
         return detailsByID[id]
@@ -132,6 +158,14 @@ extension SkillStore {
         ].joined(separator: "|")
     }
 
+    var selectedAgentConfigRefreshKey: String {
+        [
+            agentFilter.rawValue,
+            activeProjectContext?.rootPath ?? "",
+            activeProjectContext?.currentCWD ?? ""
+        ].joined(separator: "|")
+    }
+
     var projectValidationMessage: String? {
         guard let message = activeProjectContext?.validationError, !message.isEmpty else {
             return nil
@@ -140,17 +174,34 @@ extension SkillStore {
     }
 
     var filteredSkills: [SkillRecord] {
-        SkillListModel.filteredAndSorted(
+        let normalizedSearchText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cacheKey = FilteredSkillListCacheKey(
+            dataRevision: filteredSkillListDataRevision,
+            searchText: normalizedSearchText,
+            agentFilter: agentFilter.rawValue,
+            stateFilter: stateFilter.rawValue,
+            scopeFilter: skillScopeFilter.rawValue,
+            sortOrder: sortOrder.rawValue,
+            sortDirection: sortDirection.rawValue
+        )
+
+        if let filteredSkillListCache, filteredSkillListCache.key == cacheKey {
+            return filteredSkillListCache.skills
+        }
+
+        let visibleSkills = SkillListModel.filteredAndSorted(
             skills: skills,
             findings: findings,
             conflicts: conflicts,
-            searchText: searchText,
+            searchText: normalizedSearchText,
             agentFilter: agentFilter,
             stateFilter: stateFilter,
             scopeFilter: skillScopeFilter,
             sortOrder: sortOrder,
             sortDirection: sortDirection
         )
+        filteredSkillListCache = FilteredSkillListCache(key: cacheKey, skills: visibleSkills)
+        return visibleSkills
     }
 
     var filteredSkillGroups: [SkillAgentGroup] {

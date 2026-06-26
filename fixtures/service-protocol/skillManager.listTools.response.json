@@ -1,0 +1,57 @@
+{
+  "id": "fixture-skill-manager-list-tools",
+  "ok": true,
+  "result": [
+    {
+      "id": "npx-skills",
+      "display_name": "npx skills",
+      "status": "available",
+      "executable": "/usr/local/bin/npx",
+      "operations": [
+        "search",
+        "listInstalled",
+        "previewInstall",
+        "applyInstall",
+        "previewRemove",
+        "applyRemove",
+        "previewUpdate",
+        "applyUpdate",
+        "previewLocalCreate",
+        "applyLocalCreate",
+        "deleteLocal"
+      ],
+      "default_agents": [
+        "claude-code",
+        "pi",
+        "opencode",
+        "codex",
+        "hermes-agent",
+        "openclaw"
+      ],
+      "notes": [
+        "Network-backed search/install/update run only after explicit app confirmation.",
+        "Symlink distribution is the default; copy is opt-in."
+      ]
+    },
+    {
+      "id": "skills-npm",
+      "display_name": "skills-npm",
+      "status": "planned",
+      "executable": null,
+      "operations": [
+        "listTools"
+      ],
+      "default_agents": [
+        "claude-code",
+        "pi",
+        "opencode",
+        "codex",
+        "hermes-agent",
+        "openclaw"
+      ],
+      "notes": [
+        "Registry entry only in this slice; write execution is deferred to a later scoped adapter."
+      ]
+    }
+  ]
+}

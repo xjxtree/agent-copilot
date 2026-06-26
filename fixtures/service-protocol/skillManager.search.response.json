@@ -1,0 +1,61 @@
+{
+  "id": "fixture-skill-manager-search",
+  "ok": true,
+  "result": {
+    "preview": {
+      "tool_id": "npx-skills",
+      "operation": "search",
+      "command": [
+        "/usr/local/bin/npx",
+        "skills",
+        "find",
+        "frontend",
+        "--owner",
+        "vercel-labs"
+      ],
+      "cwd": "/tmp/skills-copilot-project",
+      "env": [
+        {
+          "key": "HOME",
+          "value": "/tmp/skills-copilot-home"
+        },
+        {
+          "key": "DISABLE_TELEMETRY",
+          "value": "1"
+        },
+        {
+          "key": "DO_NOT_TRACK",
+          "value": "1"
+        },
+        {
+          "key": "CI",
+          "value": "1"
+        },
+        {
+          "key": "npm_config_audit",
+          "value": "false"
+        },
+        {
+          "key": "npm_config_fund",
+          "value": "false"
+        },
+        {
+          "key": "npm_config_update_notifier",
+          "value": "false"
+        }
+      ],
+      "requires_confirmation": false,
+      "confirmed": false,
+      "network_required": true,
+      "network_allowed": false,
+      "will_run": false,
+      "preview_token": "skill-manager:fixture-search",
+      "summary": "Search remote skill indexes with npx skills.",
+      "risks": [
+        "Search may contact skills.sh, npm, or git-host metadata through the external CLI."
+      ]
+    },
+    "output": null,
+    "results": []
+  }
+}
