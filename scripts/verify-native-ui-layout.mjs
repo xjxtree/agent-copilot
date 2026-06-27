@@ -23,6 +23,8 @@ const files = {
   detailGuidedCleanup: await read("apps/macos/Sources/SkillsCopilot/Views/DetailGuidedCleanupFlowPanel.swift"),
   detailProviderObservability: await read("apps/macos/Sources/SkillsCopilot/Views/DetailProviderObservabilityPanel.swift"),
   providerObservabilitySettings: await read("apps/macos/Sources/SkillsCopilot/Views/ProviderObservabilitySettingsPanel.swift"),
+  skillManager: await read("apps/macos/Sources/SkillsCopilot/Views/SkillManagerPanel.swift"),
+  skillManagerModel: await read("apps/macos/Sources/SkillsCopilot/Models/SkillManager.swift"),
   batchSkillOperation: await read("apps/macos/Sources/SkillsCopilot/Views/BatchSkillOperationSheet.swift"),
   detailLocalSkillMap: await read("apps/macos/Sources/SkillsCopilot/Views/DetailLocalSkillMapViews.swift"),
   detailTaskBenchmark: await read("apps/macos/Sources/SkillsCopilot/Views/DetailTaskBenchmarkSection.swift"),
@@ -42,6 +44,7 @@ const files = {
   settings: await read("apps/macos/Sources/SkillsCopilot/Views/SettingsView.swift"),
   sidebar: await read("apps/macos/Sources/SkillsCopilot/Views/SidebarView.swift"),
   sidebarSelection: await read("apps/macos/Sources/SkillsCopilot/Models/SidebarSelection.swift"),
+  uiOptimization: await read("apps/macos/Sources/SkillsCopilot/Models/UIOptimizationPresentation.swift"),
   store: await read("apps/macos/Sources/SkillsCopilot/Stores/SkillStore.swift"),
   storeDerivedState: await read("apps/macos/Sources/SkillsCopilot/Stores/SkillStoreDerivedState.swift"),
   storeNavigation: await read("apps/macos/Sources/SkillsCopilot/Stores/SkillStoreNavigationActions.swift"),
@@ -129,8 +132,9 @@ const checks = [
   },
   {
     label: "primary and secondary sidebar columns have bounded native widths",
-    text: files.content,
-    pattern: /SidebarView\(\)[\s\S]*?\.navigationSplitViewColumnWidth\(min:\s*260,\s*ideal:\s*300,\s*max:\s*340\)[\s\S]*?SecondarySidebarView\(\)[\s\S]*?\.navigationSplitViewColumnWidth\(min:\s*300,\s*ideal:\s*340,\s*max:\s*430\)/,
+    text: files.content + "\n" + files.uiOptimization,
+    passed: /minimumPrimaryColumnWidth = 220[\s\S]*?idealPrimaryColumnWidth = 260[\s\S]*?maximumPrimaryColumnWidth = 320[\s\S]*?minimumSecondaryColumnWidth = 360[\s\S]*?idealSecondaryColumnWidth = 400[\s\S]*?maximumSecondaryColumnWidth = 520/.test(files.uiOptimization)
+      && /SidebarView\(\)[\s\S]*?UIOptimizationPresentation\.skillList\.minimumPrimaryColumnWidth[\s\S]*?UIOptimizationPresentation\.skillList\.idealPrimaryColumnWidth[\s\S]*?UIOptimizationPresentation\.skillList\.maximumPrimaryColumnWidth[\s\S]*?SecondarySidebarView\(\)[\s\S]*?UIOptimizationPresentation\.skillList\.minimumSecondaryColumnWidth[\s\S]*?UIOptimizationPresentation\.skillList\.idealSecondaryColumnWidth[\s\S]*?UIOptimizationPresentation\.skillList\.maximumSecondaryColumnWidth/.test(files.content),
   },
   {
     label: "selected agent session metrics refresh from the root view uses need-based prewarm",
@@ -176,9 +180,12 @@ const checks = [
   {
     label: "sidebar sessions surface exposes refresh, compact rows, and top skill usage",
     text: files.sidebar + "\n" + files.store,
-    passed: /private struct SessionSidebarPanel:[\s\S]*?let preview = store\.localSessionPreviewResult[\s\S]*?await store\.previewLocalSessions\(\)[\s\S]*?sidebar\.sessions\.list[\s\S]*?SessionSidebarRow\([\s\S]*?showsProjectRoot:\s*store\.localSessionScopeFilter == \.all[\s\S]*?store\.selectedSidebarSelection == \.session\(session\.id\)[\s\S]*?store\.selectLocalSession\(session\)[\s\S]*?preview\.skillUsageRows/.test(files.sidebar)
-      && /private struct SessionSidebarRow:[\s\S]*?let showsProjectRoot:\s*Bool[\s\S]*?if let startedAt = session\.startedAt[\s\S]*?sidebar\.sessions\.startShort[\s\S]*?if let endedAt = session\.endedAt[\s\S]*?sidebar\.sessions\.lastShort[\s\S]*?if showsProjectRoot,\s*let project = session\.projectRoot/.test(files.sidebar)
+    passed: /private struct SessionSidebarPanel:[\s\S]*?let preview = store\.localSessionPreviewResult[\s\S]*?sidebar\.sessions\.list[\s\S]*?SessionSidebarRow\([\s\S]*?showsProjectRoot:\s*store\.localSessionScopeFilter == \.all[\s\S]*?store\.selectedSidebarSelection == \.session\(session\.id\)[\s\S]*?store\.selectLocalSession\(session\)[\s\S]*?preview\.skillUsageRows/.test(files.sidebar)
+      && /private var sessionRefreshButton:[\s\S]*?await store\.previewLocalSessions\(\)/.test(files.sidebar)
+      && /private struct SessionSidebarRow:[\s\S]*?let showsProjectRoot:\s*Bool[\s\S]*?session\.projectRoot[\s\S]*?if let startedAt = session\.startedAt[\s\S]*?sidebar\.sessions\.startShort[\s\S]*?if let endedAt = session\.endedAt[\s\S]*?sidebar\.sessions\.lastShort/.test(files.sidebar)
       && /private func selectSessions\(\)[\s\S]*?refreshSelectedAgentLocalSessionsIfNeeded\(\)/.test(files.sidebar)
+      && /private func selectSessions\(\)[\s\S]*?store\.filteredLocalSessionRows\.first/.test(files.sidebar)
+      && !/private func selectSessions\(\)[\s\S]*?localSessionPreviewResult\.sessionRows\.first/.test(files.sidebar)
       && /private var sessionStatusMessage:[\s\S]*?fallbackReason[\s\S]*?authorizationRequired[\s\S]*?return nil/.test(files.sidebar)
       && !/private var sessionStatusMessage:[\s\S]*?UIStrings\.loading[\s\S]*?return nil/.test(files.sidebar)
       && /@Published var localSessionScopeFilter:[\s\S]*?guard oldValue != localSessionScopeFilter else \{ return \}[\s\S]*?normalizeSelectedLocalSession\(\)/.test(files.store)
@@ -192,15 +199,20 @@ const checks = [
   {
     label: "skill sidebar exposes filter scope sort and direction controls",
     text: files.sidebar,
-    pattern: /private struct SkillSidebarPanel:[\s\S]*?selection:\s*\$store\.stateFilter[\s\S]*?SkillStateFilter\.sidebarCases[\s\S]*?selection:\s*\$store\.skillScopeFilter[\s\S]*?selection:\s*\$store\.sortOrder[\s\S]*?selection:\s*\$store\.sortDirection/,
+    pattern: /private struct SkillSidebarPanel:[\s\S]*?skillToolbar\(visibleSkills:\s*visibleSkills\)[\s\S]*?private var filterControls:[\s\S]*?selection:\s*\$store\.stateFilter[\s\S]*?SkillStateFilter\.sidebarCases[\s\S]*?selection:\s*\$store\.skillScopeFilter[\s\S]*?selection:\s*\$store\.sortOrder[\s\S]*?store\.sortDirection = store\.sortDirection == \.ascending \? \.descending : \.ascending/,
   },
   {
     label: "config sidebar exposes scope filtering, clean operation support, disabled skills, and selectable config history",
     text: files.sidebar + "\n" + files.agentConfigWorkspace,
-    passed: /private struct ConfigSidebarPanel:[\s\S]*?private var selectedConfigDocuments:[\s\S]*?store\.currentAgentConfigDocuments[\s\S]*?store\.configScopeFilter\.includes\(document\)[\s\S]*?Section\(UIStrings\.text\("sidebar\.config\.filters"[\s\S]*?selection:\s*\$store\.configScopeFilter[\s\S]*?AgentConfigScopeFilter\.allCases[\s\S]*?Section\(UIStrings\.currentConfigFile\)[\s\S]*?ForEach\(selectedConfigDocuments,\s*id:\s*\\\.target\)[\s\S]*?ConfigCurrentDocumentSidebarRow\([\s\S]*?document:\s*document[\s\S]*?isSelected:\s*store\.selectedSidebarSelection == \.configDocument\(document\.target\)[\s\S]*?store\.selectConfigDocument\(document\)[\s\S]*?Supported operations[\s\S]*?ConfigOperationRow\(title:\s*UIStrings\.scan[\s\S]*?ConfigOperationRow\(title:\s*UIStrings\.writableConfig[\s\S]*?UIStrings\.agentConfigSkillEnablement[\s\S]*?ConfigDisabledSkillSummaryRow\(skills:\s*disabledSkills\)[\s\S]*?ForEach\(selectedSnapshots\)[\s\S]*?ConfigSnapshotSidebarRow\([\s\S]*?store\.selectedSidebarSelection == \.configSnapshot\(snapshot\.id\)[\s\S]*?store\.selectConfigSnapshot\(snapshot\)/.test(files.sidebar)
+    passed: /private struct ConfigSidebarPanel:[\s\S]*?private var selectedConfigDocuments:[\s\S]*?store\.currentAgentConfigDocuments[\s\S]*?store\.configScopeFilter\.includes\(document\)[\s\S]*?store\.configDocumentMatchesSidebarQuery\(document\)[\s\S]*?Section\s*{[\s\S]*?configToolbar[\s\S]*?Section\(UIStrings\.currentConfigFile\)[\s\S]*?ForEach\(selectedConfigDocuments,\s*id:\s*\\\.target\)[\s\S]*?ConfigCurrentDocumentSidebarRow\([\s\S]*?document:\s*document[\s\S]*?isSelected:\s*store\.selectedSidebarSelection == \.configDocument\(document\.target\)[\s\S]*?store\.selectConfigDocument\(document\)[\s\S]*?Supported operations[\s\S]*?ConfigOperationRow\(title:\s*UIStrings\.scan[\s\S]*?ConfigOperationRow\(title:\s*UIStrings\.writableConfig[\s\S]*?UIStrings\.agentConfigSkillEnablement[\s\S]*?ConfigDisabledSkillSummaryRow\(skills:\s*disabledSkills\)[\s\S]*?ForEach\(selectedSnapshots\)[\s\S]*?ConfigSnapshotSidebarRow\([\s\S]*?store\.selectedSidebarSelection == \.configSnapshot\(snapshot\.id\)[\s\S]*?store\.selectConfigSnapshot\(snapshot\)/.test(files.sidebar)
+      && /private var configToolbar:[\s\S]*?ViewThatFits\(in:\s*\.horizontal\)[\s\S]*?configScopePicker[\s\S]*?configSearchField[\s\S]*?configRefreshButton/.test(files.sidebar)
+      && /private var configScopePicker:[\s\S]*?selection:\s*\$store\.configScopeFilter[\s\S]*?AgentConfigScopeFilter\.allCases/.test(files.sidebar)
+      && /private var configSearchField:[\s\S]*?SidebarSearchField\([\s\S]*?sidebar\.config\.search[\s\S]*?\$store\.configSidebarSearchText/.test(files.sidebar)
+      && /private var configRefreshButton:[\s\S]*?await store\.refreshSelectedAgentConfigData\(\)[\s\S]*?Image\(systemName:\s*"arrow\.clockwise"\)/.test(files.sidebar)
+      && /@Published var configSidebarSearchText/.test(files.store)
       && /private var disabledSkills:[\s\S]*?AgentConfigDisplay\.disabledSkills\(for:\s*store\.agentFilter,\s*store:\s*store\)/.test(files.sidebar)
       && /private struct ConfigDisabledSkillSummaryRow:[\s\S]*?UIStrings\.agentConfigDisabledSkillsCount\(skills\.count\)[\s\S]*?UIStrings\.agentConfigDisabledSkillsEmpty/.test(files.sidebar)
-      && /private struct ConfigCurrentDocumentSidebarRow:[\s\S]*?let isSelected:\s*Bool[\s\S]*?DisplayText\.scope\(document\.scope\)[\s\S]*?AgentConfigDisplay\.pathSummary\(document\.target\)[\s\S]*?document\.exists \? UIStrings\.existingFile : UIStrings\.willCreateFile[\s\S]*?RoundedRectangle\(cornerRadius:\s*7\)\.fill\(Color\.accentColor\)/.test(files.sidebar)
+      && /private struct ConfigCurrentDocumentSidebarRow:[\s\S]*?let isSelected:\s*Bool[\s\S]*?DisplayText\.scope\(document\.scope\)[\s\S]*?AgentConfigDisplay\.pathSummary\(document\.target\)[\s\S]*?document\.exists \? UIStrings\.existingFile : UIStrings\.willCreateFile[\s\S]*?optimizedSidebarSelection\(isSelected:\s*isSelected\)/.test(files.sidebar)
       && /private struct ConfigSnapshotSidebarRow:[\s\S]*?item\.timeText[\s\S]*?item\.scopeText[\s\S]*?item\.capturedText[\s\S]*?item\.targetSummary/.test(files.sidebar)
       && /\.task\(id:\s*store\.selectedAgentConfigRefreshKey\)[\s\S]*?await store\.loadSelectedAgentConfigDataIfNeeded\(\)/.test(files.sidebar)
       && /func loadSelectedAgentConfigDataIfNeeded\(\) async[\s\S]*?loadAgentConfigSnapshotsIfNeeded[\s\S]*?loadCurrentAgentConfigDocumentsIfNeeded/.test(files.store)
@@ -210,8 +222,7 @@ const checks = [
       && /var selectedConfigDocument:[\s\S]*?case let \.configDocument\(target\)[\s\S]*?currentAgentConfigDocuments\.first[\s\S]*?func selectConfigDocument\(_ document:[\s\S]*?guard selectedSidebarSelection != \.configDocument\(document\.target\)[\s\S]*?selectedSidebarSelection = \.configDocument\(document\.target\)/.test(files.storeSurface)
       && /AgentConfigOverviewDetailPanel\(selectedDocument:\s*store\.selectedConfigDocument\)[\s\S]*?let selectedDocument:[\s\S]*?if let selectedDocument[\s\S]*?currentAgentConfigSection\(documents:\s*\[selectedDocument\]\)/.test(files.agentConfigWorkspace)
       && !/AgentConfigCapabilityCard|AgentConfigDisabledSkillsPanel/.test(files.agentConfigWorkspace)
-      && !/Text\(capability\?\.status/.test(files.sidebar + "\n" + files.agentConfigWorkspace)
-      && !/private struct ConfigSidebarPanel:[\s\S]*?Label\(UIStrings\.reload/.test(files.sidebar),
+      && !/Text\(capability\?\.status/.test(files.sidebar + "\n" + files.agentConfigWorkspace),
   },
   {
     label: "detail sections use expanded tag selector",
@@ -231,7 +242,7 @@ const checks = [
   {
     label: "detail sections omit retired and settings-owned work surfaces",
     text: files.detailSurface,
-    pattern: /static var visibleCases:[\s\S]*?\[\.overview,\s*\.findings,\s*\.history,\s*\.analysis\][\s\S]*?static var primaryWorkCases:[\s\S]*?\[\][\s\S]*?UIStrings\.providerObservabilityTitle/,
+    pattern: /static var visibleCases:[\s\S]*?\[\.overview,\s*\.findings,\s*\.history,\s*\.analysis,\s*\.metadata\][\s\S]*?static var primaryWorkCases:[\s\S]*?\[\][\s\S]*?UIStrings\.providerObservabilityTitle/,
   },
   {
     label: "detail router separates session, config, and skill details while report/preflight are modal tools",
@@ -337,7 +348,7 @@ const checks = [
   {
     label: "task cockpit build button remains explicit and input-gated",
     text: files.taskCockpit,
-    pattern: /Button\s*{[\s\S]*?onBuild\(\)[\s\S]*?\.disabled\(isBuilding \|\| !inputModel\.canSubmit \|\| selectedAgentIDs\.isEmpty\)/,
+    pattern: /Button\s*{[\s\S]*?onBuild\(\)[\s\S]*?\.disabled\(isBuilding \|\| !inputModel\.canSubmit \|\| selectedAgentIDs\.isEmpty \|\| providerGateMessage != nil\)/,
   },
   {
     label: "detail presentation primitives live in a dedicated module file",
@@ -362,8 +373,8 @@ const checks = [
   {
     label: "primary sidebar header keeps the agent selector inline and compact",
     passed: /Section\s*{[\s\S]*?AgentWorkspaceHeader\(\)[\s\S]*?Section\s*{[\s\S]*?ProjectContextControls\(\)/.test(files.sidebar)
-      && /private struct AgentWorkspaceHeader:[\s\S]*?HStack\(alignment:\s*\.center,\s*spacing:\s*12\)[\s\S]*?AgentIconBadge\(filter:\s*store\.agentFilter,\s*size:\s*40\)[\s\S]*?Spacer\(minLength:\s*12\)[\s\S]*?AgentSelectorMenu\(width:\s*118\)[\s\S]*?\.padding\(\.horizontal,\s*10\)/.test(files.sidebar)
-      && /private struct AgentSelectorMenu:[\s\S]*?Picker\(UIStrings\.agent,\s*selection:\s*\$store\.agentFilter\)[\s\S]*?\.pickerStyle\(\.menu\)[\s\S]*?\.controlSize\(\.regular\)[\s\S]*?\.frame\(width:\s*width,\s*alignment:\s*\.trailing\)[\s\S]*?\.accessibilityValue\(store\.agentFilter\.title\)/.test(files.sidebar)
+      && /private struct AgentWorkspaceHeader:[\s\S]*?HStack\(alignment:\s*\.center,\s*spacing:\s*10\)[\s\S]*?AgentIconBadge\(filter:\s*store\.agentFilter,\s*size:\s*32\)[\s\S]*?AgentSelectorMenu\(\)[\s\S]*?\.padding\(\.vertical,\s*10\)/.test(files.sidebar)
+      && /private struct AgentSelectorMenu:[\s\S]*?Picker\(UIStrings\.agent,\s*selection:\s*\$store\.agentFilter\)[\s\S]*?\.pickerStyle\(\.menu\)[\s\S]*?\.controlSize\(\.regular\)[\s\S]*?\.frame\(maxWidth:\s*\.infinity,\s*alignment:\s*\.leading\)[\s\S]*?\.accessibilityValue\(store\.agentFilter\.title\)/.test(files.sidebar)
       && /private struct AgentIconBadge:[\s\S]*?var size:\s*CGFloat = 28[\s\S]*?frame\(width:\s*imageSize,\s*height:\s*imageSize\)[\s\S]*?frame\(width:\s*size,\s*height:\s*size\)/.test(files.sidebar)
       && !/private struct AgentWorkspaceHeader:[\s\S]*?Text\(store\.agentFilter\.title\)[\s\S]*?AgentSelectorMenu/.test(files.sidebar)
       && !/store\.selectedSidebarSelection\s*=\s*\.agentWorkspace/.test(files.sidebar)
@@ -372,12 +383,15 @@ const checks = [
   {
     label: "project title row owns merged project selection and actions",
     text: files.sidebar,
-    pattern: /private struct ProjectContextControls:[\s\S]*?HStack\(alignment:\s*\.center,\s*spacing:\s*8\)[\s\S]*?Text\(UIStrings\.project\)[\s\S]*?projectSelectionMenu[\s\S]*?projectActionsMenu[\s\S]*?private var projectSelectionMenu: some View[\s\S]*?Label\(UIStrings\.chooseProject,\s*systemImage:\s*"folder\.badge\.plus"\)[\s\S]*?Divider\(\)[\s\S]*?Section\(UIStrings\.recentProjects\)[\s\S]*?await store\.setProject\([\s\S]*?Label\(UIStrings\.text\("project\.chooseMenu"[\s\S]*?\.frame\(width:\s*92\)[\s\S]*?private var projectActionsMenu: some View/,
+    pattern: /private struct ProjectContextControls:[\s\S]*?HStack\(alignment:\s*\.top,\s*spacing:\s*6\)[\s\S]*?Text\(store\.activeProjectContext\?\.name \?\? UIStrings\.text\("project\.globalRoots"[\s\S]*?PrivacyPathText\(path:\s*rootPath,[\s\S]*?showsRevealControl:\s*false\)[\s\S]*?projectMenu[\s\S]*?private var projectMenu: some View[\s\S]*?Label\(UIStrings\.chooseProject,\s*systemImage:\s*"folder\.badge\.plus"\)[\s\S]*?Section\(UIStrings\.recentProjects\)[\s\S]*?await store\.setProject\([\s\S]*?Label\(UIStrings\.revealInFinder,[\s\S]*?arrow\.up\.forward\.app[\s\S]*?Label\(UIStrings\.clearProject,[\s\S]*?xmark\.circle[\s\S]*?\.labelStyle\(\.iconOnly\)/,
   },
   {
-    label: "skill-list batch header aligns with sidebar row controls",
+    label: "skill-list batch action lives in the compact toolbar",
     text: files.sidebar,
-    pattern: /private struct SkillListSectionHeader:[\s\S]*?private static let trailingControlInset: CGFloat = 14[\s\S]*?Button\(action:\s*action\)[\s\S]*?\.padding\(\.trailing,\s*Self\.trailingControlInset\)/,
+    passed: /private func skillToolbar\(visibleSkills:[\s\S]*?searchField[\s\S]*?batchToolbarButton\(visibleSkills:\s*visibleSkills\)/.test(files.sidebar)
+      && /private func batchToolbarButton\(visibleSkills:[\s\S]*?resetBatchToggleSelectionToVisibleSkills\(\)[\s\S]*?isBatchOperationPresented = true[\s\S]*?Image\(systemName:\s*"checklist\.checked"\)/.test(files.sidebar)
+      && /private struct SkillListSectionHeader:[\s\S]*?Text\(UIStrings\.batchToggleSelectedCount\(visibleCount\)\)/.test(files.sidebar)
+      && !/private struct SkillListSectionHeader:[\s\S]*?Button\(action:\s*action\)/.test(files.sidebar),
   },
   {
     label: "findings expose only the rule filter in the control panel",
@@ -415,7 +429,24 @@ const checks = [
   {
     label: "settings window has stable minimum dimensions",
     text: files.settings,
-    pattern: /\.frame\(minWidth:\s*760,\s*idealWidth:\s*860,\s*minHeight:\s*620,\s*idealHeight:\s*680\)/,
+    passed: /UIOptimizationPresentation\.settings\.minimumWidth/.test(files.settings)
+      && /UIOptimizationPresentation\.settings\.idealWidth/.test(files.settings)
+      && /UIOptimizationPresentation\.settings\.minimumHeight/.test(files.settings)
+      && /UIOptimizationPresentation\.settings\.idealHeight/.test(files.settings)
+      && /minimumWidth = 760[\s\S]*?idealWidth = 860[\s\S]*?minimumHeight = 620[\s\S]*?idealHeight = 680/.test(files.uiOptimization),
+  },
+  {
+    label: "settings pages use unified headers and compact sections",
+    text: files.settings,
+    passed: /private struct SettingsPageHeader/.test(files.settings)
+      && /private struct SettingsSectionCard/.test(files.settings)
+      && /SettingsPageHeader\([\s\S]*?title:\s*UIStrings\.languageSettings/.test(files.settings)
+      && /SettingsPageHeader\([\s\S]*?title:\s*UIStrings\.aiProviderSettings/.test(files.settings)
+      && /SettingsSectionCard\(title:\s*UIStrings\.text\("settings\.aiProvider\.connection"/.test(files.settings)
+      && /SettingsSectionCard\(title:\s*UIStrings\.text\("settings\.aiProvider\.limits"/.test(files.settings)
+      && /SettingsSectionCard\(title:\s*UIStrings\.text\("settings\.aiProvider\.credentialSafety"/.test(files.settings)
+      && /SettingsPageHeader\([\s\S]*?title:\s*UIStrings\.service/.test(files.settings)
+      && /DetailMetricGrid\(maxColumns:\s*3/.test(files.settings),
   },
   {
     label: "settings exposes screenshot privacy mode as app-local preference",
@@ -520,7 +551,18 @@ const checks = [
   {
     label: "localized task cockpit labels are present",
     text: files.localizable,
-    pattern: /"taskCockpit\.boundary".*"taskCockpit\.action\.build".*"taskCockpit\.empty\.result".*"taskCockpit\.recommendedSkill"/s,
+    passed: [
+      "taskCockpit.boundary",
+      "taskCockpit.history.summary",
+      "taskCockpit.action.build",
+      "taskCockpit.empty.result",
+      "taskCockpit.recommendedSkill",
+    ].every((key) => files.localizable.includes(`"${key}" =`)),
+  },
+  {
+    label: "localized skill manager workflow and unavailable-tool labels are present",
+    text: files.localizable,
+    pattern: /"skillManager\.workflow\.label".*"skillManager\.workflow\.searchInstall".*"skillManager\.workflow\.installedUpdates".*"skillManager\.workflow\.localLibrary".*"skillManager\.toolUnavailable\.title".*"skillManager\.toolUnavailable\.message"/s,
   },
   {
     label: "localized remediation and permissions labels are present",
@@ -606,6 +648,35 @@ const customChecks = [
       && !/ForEach\(DetailSection\.primaryWorkCases\)/.test(files.sidebar),
   },
   {
+    label: "secondary sidebar rows use the global muted selection treatment",
+    passed: ["SessionSidebarRow", "ConfigCurrentDocumentSidebarRow", "ConfigSnapshotSidebarRow"].every((name) => {
+      const body = extractStructBody(files.sidebar, name);
+      return body.includes(".optimizedSidebarSelection(isSelected: isSelected)")
+        && !/foregroundStyle\(isSelected \? (?:Color\.)?\.?white/.test(body)
+        && !/fill\(Color\.accentColor\)/.test(body);
+    })
+      && /struct SidebarSelectionPresentation:[\s\S]*?usesSaturatedAccentBackground = false[\s\S]*?usesWhiteSelectedText = false[\s\S]*?accentLineWidth = 3/.test(files.uiOptimization)
+      && /private struct OptimizedSidebarSelectionModifier:[\s\S]*?selectedContentBackgroundColor[\s\S]*?UIOptimizationPresentation\.sidebarSelection\.accentLineWidth/.test(files.sidebar),
+  },
+  {
+    label: "session and config sidebars use compact search plus icon refresh toolbars",
+    passed: /struct SidebarSecondaryListPresentation:[\s\S]*?minimumSearchWidth = 220[\s\S]*?compactRowMinHeight = 40[\s\S]*?compactRowMaxHeight = 44[\s\S]*?refreshUsesIconOnly = true/.test(files.uiOptimization)
+      && /private struct SidebarSearchField:[\s\S]*?Image\(systemName:\s*"magnifyingglass"\)[\s\S]*?TextField\(placeholder,\s*text:\s*\$text\)[\s\S]*?frame\(minWidth:\s*minimumWidth\)/.test(files.sidebar)
+      && /private var sessionToolbar:[\s\S]*?ViewThatFits\(in:\s*\.horizontal\)[\s\S]*?sessionScopePicker[\s\S]*?sessionSearchField[\s\S]*?sessionRefreshButton/.test(files.sidebar)
+      && /private var sessionRefreshButton:[\s\S]*?Image\(systemName:\s*"arrow\.clockwise"\)[\s\S]*?\.accessibilityLabel\(UIStrings\.text\("sidebar\.sessions\.preview"/.test(files.sidebar)
+      && /private var configToolbar:[\s\S]*?ViewThatFits\(in:\s*\.horizontal\)[\s\S]*?configScopePicker[\s\S]*?configSearchField[\s\S]*?configRefreshButton/.test(files.sidebar)
+      && /private var configRefreshButton:[\s\S]*?Image\(systemName:\s*"arrow\.clockwise"\)[\s\S]*?\.accessibilityLabel\(UIStrings\.reload\)/.test(files.sidebar),
+  },
+  {
+    label: "detail feedback uses an overlay toast instead of full-width content banners",
+    passed: /struct DetailFeedbackPresentation:[\s\S]*?usesOverlayToast = true[\s\S]*?maximumWidth = 420/.test(files.uiOptimization)
+      && /ZStack\(alignment:\s*\.topTrailing\)[\s\S]*?ScrollViewReader[\s\S]*?detailFeedbackOverlay[\s\S]*?allowsHitTesting\(false\)/.test(files.detail)
+      && /private var detailFeedbackOverlay:[\s\S]*?store\.errorMessage[\s\S]*?DetailFeedbackToast\([\s\S]*?store\.lastMutationMessage[\s\S]*?DetailFeedbackToast\(/.test(files.detail)
+      && /struct DetailFeedbackToast:[\s\S]*?UIOptimizationPresentation\.detailFeedback\.maximumWidth[\s\S]*?regularMaterial/.test(files.detailPrimitives)
+      && !/VStack\(alignment:\s*\.leading,\s*spacing:\s*24\)[\s\S]{0,240}?ErrorBanner\(message:\s*error\)/.test(files.detail)
+      && !/VStack\(alignment:\s*\.leading,\s*spacing:\s*24\)[\s\S]{0,260}?SuccessBanner\(message:\s*message\)/.test(files.detail),
+  },
+  {
     label: "settings owns Provider Observability with dashboard-first logs",
     passed: /ProviderObservabilitySettingsPanel\(\)/.test(files.settings)
       && /Label\(UIStrings\.providerObservabilityTitle,\s*systemImage:\s*"waveform\.path\.ecg\.rectangle"\)/.test(files.settings)
@@ -617,7 +688,10 @@ const customChecks = [
       && /modelFilter/.test(files.providerObservabilitySettings)
       && /destinationFilter/.test(files.providerObservabilitySettings)
       && /showIssuesOnly/.test(files.providerObservabilitySettings)
-      && /searchText/.test(files.providerObservabilitySettings),
+      && /searchText/.test(files.providerObservabilitySettings)
+      && /result\.isDashboardEmpty/.test(files.providerObservabilitySettings)
+      && /ProviderObservabilityEmptyDashboard/.test(files.providerObservabilitySettings)
+      && /providerObservability\.empty\.dashboardTitle/.test(files.providerObservabilitySettings + "\n" + files.localizable),
   },
   {
     label: "Agent Config moved from Settings into the main sidebar workflow",
@@ -642,11 +716,36 @@ const customChecks = [
     label: "task preflight opens from the fixed sidebar footer sheet and keeps selectable history",
     passed: /TaskPreflightPreviewSheet\(\)/.test(files.sidebar)
       && /struct TaskPreflightPreviewSheet:[\s\S]*?TaskCockpitPanel\([\s\S]*?TaskPreflightHistoryPanel/.test(files.taskCockpit)
+      && /providerGateMessage/.test(files.taskCockpit)
+      && /UIOptimizationPresentation\.taskPreflight\.fixedAgentChipWidth/.test(files.taskCockpit)
+      && /taskCockpit\.history\.summary/.test(files.taskCockpit + "\n" + files.localizable)
       && /taskCockpitHistory/.test(files.taskCockpit + "\n" + files.store)
       && /selectTaskCockpitHistoryRecord/.test(files.taskCockpit + "\n" + files.store)
       && /recordTaskCockpitHistory/.test(files.store)
       && !/case preflight/.test(files.sidebarSelection)
       && !/selectedSidebarSelection\s*=\s*\.preflight/.test(files.sidebar + "\n" + files.storeSurface),
+  },
+  {
+    label: "Skill Manager uses segmented workflows, local feedback, and unavailable-tool gating",
+    passed: /enum SkillManagerWorkflow:[\s\S]*?case searchInstall[\s\S]*?case installedUpdates[\s\S]*?case localLibrary/.test(files.skillManagerModel)
+      && /@State private var selectedWorkflow:\s*SkillManagerWorkflow = \.searchInstall/.test(files.skillManager)
+      && /Picker\(UIStrings\.text\("skillManager\.workflow\.label"/.test(files.skillManager)
+      && /case \.searchInstall:[\s\S]*?searchAndInstall/.test(files.skillManager)
+      && /case \.installedUpdates:[\s\S]*?installedSection/.test(files.skillManager)
+      && /case \.localLibrary:[\s\S]*?localLibrary/.test(files.skillManager)
+      && /externalMutationDisabled/.test(files.skillManager)
+      && /externalManagerUnavailableMessage/.test(files.skillManager)
+      && /toolUnavailableCard/.test(files.skillManager)
+      && /search\.isBlockedByNetwork/.test(files.skillManager)
+      && /skillManager\.search\.networkBlocked/.test(files.skillManager + "\n" + files.localizable)
+      && /preview\.localizedSummary/.test(files.skillManager)
+      && /var localizedSummary:\s*String/.test(files.skillManagerModel)
+      && /store\.skillManagerErrorMessage/.test(files.sidebar)
+      && /store\.skillManagerMessage/.test(files.sidebar)
+      && /skillManagerInstallSkillName/.test(files.store + "\n" + files.skillManager)
+      && /skillManagerRemoveSkillName/.test(files.store + "\n" + files.skillManager)
+      && /clearSkillManagerWorkflowPreviews/.test(files.store + "\n" + files.skillManager + "\n" + files.sidebar)
+      && !/TextField\([\s\S]*?\$store\.skillManagerSkillName/.test(files.skillManager),
   },
   {
     label: "local report export clears stale result when report scope changes",

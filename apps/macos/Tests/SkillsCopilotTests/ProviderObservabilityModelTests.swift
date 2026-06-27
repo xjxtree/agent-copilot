@@ -7,6 +7,7 @@ struct ProviderObservabilityModelTests {
         try decodesAliasAndStringForms()
         try decodesGroupingRowsIntoDimensionLists()
         try decodesServiceProtocolFixture()
+        try emptyServiceFixtureUsesDashboardEmptyState()
     }
 
     private struct ServiceEnvelope<ResultPayload: Decodable>: Decodable {
@@ -269,6 +270,7 @@ struct ProviderObservabilityModelTests {
         try expectFalse(result.safetyFlags.cloudSyncEnabled, "Provider observability must not sync cloud data.")
         try expectFalse(result.safetyFlags.telemetryEnabled, "Provider observability must not emit telemetry.")
         try expectFalse(result.safetyFlags.rawSecretReturned, "Provider observability must not expose secrets.")
+        try expectFalse(result.isDashboardEmpty, "Provider observability with call metadata should not render the empty dashboard state.")
     }
 
     private func decodesAliasAndStringForms() throws {
@@ -317,6 +319,7 @@ struct ProviderObservabilityModelTests {
         try expectEqual(result.evidenceReferences.first?.title, "prompt-runs:redacted", "Evidence string shorthand should decode.")
         try expectEqual(result.promptRequest?.requestKind, "provider_observability", "Prompt request kind alias should decode.")
         try expectFalse(result.safetyFlags.providerRequestSent, "Array safety shorthand should keep provider request false.")
+        try expectFalse(result.isDashboardEmpty, "Decoded call and hint rows should make the dashboard non-empty.")
     }
 
     private func decodesGroupingRowsIntoDimensionLists() throws {
@@ -398,6 +401,18 @@ struct ProviderObservabilityModelTests {
         try expectFalse(result.safetyFlags.rawResponsePersisted, "Provider observability fixture must not persist raw responses.")
         try expectFalse(result.safetyFlags.cloudSyncEnabled, "Provider observability fixture must keep cloud sync blocked.")
         try expectFalse(result.safetyFlags.telemetryEnabled, "Provider observability fixture must keep telemetry blocked.")
+    }
+
+    private func emptyServiceFixtureUsesDashboardEmptyState() throws {
+        let fixtureURL = try repositoryRoot()
+            .appendingPathComponent("fixtures/service-protocol/llm.providerObservability.response.json")
+        let data = try Data(contentsOf: fixtureURL)
+        let envelope = try JSONDecoder().decode(ServiceEnvelope<ProviderObservabilityResult>.self, from: data)
+        guard let result = envelope.result else {
+            throw NativeModelTestFailure(description: "Provider observability fixture should include a result.")
+        }
+
+        try expectEqual(result.isDashboardEmpty, true, "Zero-count explanatory status rows should render one empty dashboard card.")
     }
 
     private func repositoryRoot() throws -> URL {

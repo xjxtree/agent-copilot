@@ -69,6 +69,45 @@ enum SkillManagerDistribution: String, CaseIterable, Identifiable, Codable, Hash
     }
 }
 
+enum SkillManagerWorkflow: String, CaseIterable, Identifiable, Hashable {
+    case searchInstall = "search-install"
+    case installedUpdates = "installed-updates"
+    case localLibrary = "local-library"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .searchInstall:
+            return UIStrings.text("skillManager.workflow.searchInstall", "Search & Install")
+        case .installedUpdates:
+            return UIStrings.text("skillManager.workflow.installedUpdates", "Installed & Updates")
+        case .localLibrary:
+            return UIStrings.text("skillManager.workflow.localLibrary", "Local Library")
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .searchInstall:
+            return "magnifyingglass"
+        case .installedUpdates:
+            return "list.bullet.rectangle"
+        case .localLibrary:
+            return "folder"
+        }
+    }
+
+    var allowsExternalManagerMutation: Bool {
+        switch self {
+        case .searchInstall, .installedUpdates:
+            return true
+        case .localLibrary:
+            return false
+        }
+    }
+}
+
 struct SkillManagerToolRecord: Codable, Identifiable, Hashable {
     let id: String
     let displayName: String
@@ -108,6 +147,8 @@ struct SkillManagerCommandPreview: Codable, Hashable {
     let previewToken: String
     let summary: String
     let risks: [String]
+    let source: String?
+    let skills: [String]?
 
     enum CodingKeys: String, CodingKey {
         case toolId = "tool_id"
@@ -123,10 +164,49 @@ struct SkillManagerCommandPreview: Codable, Hashable {
         case previewToken = "preview_token"
         case summary
         case risks
+        case source
+        case skills
     }
 
     var displayCommand: String {
         command.map(Self.shellDisplay).joined(separator: " ")
+    }
+
+    var localizedSummary: String {
+        switch operation {
+        case "search":
+            return UIStrings.text("skillManager.previewSummary.search", summary)
+        case "listInstalled":
+            return UIStrings.text("skillManager.previewSummary.listInstalled", summary)
+        case "install":
+            return String(
+                format: UIStrings.text(
+                    "skillManager.previewSummary.install",
+                    "Preview install of %@ for selected targets."
+                ),
+                source ?? UIStrings.text("skillManager.source", "Source")
+            )
+        case "remove":
+            return String(
+                format: UIStrings.text(
+                    "skillManager.previewSummary.remove",
+                    "Preview removal of %@ from selected targets."
+                ),
+                skills?.first ?? UIStrings.text("skillManager.skillName", "Skill name")
+            )
+        case "update":
+            return UIStrings.text("skillManager.previewSummary.update", summary)
+        case "localCreate":
+            return String(
+                format: UIStrings.text(
+                    "skillManager.previewSummary.localCreate",
+                    "Preview local skill template creation for %@."
+                ),
+                skills?.first ?? UIStrings.text("skillManager.localName", "Local skill name")
+            )
+        default:
+            return summary
+        }
     }
 
     private static func shellDisplay(_ value: String) -> String {
@@ -134,6 +214,27 @@ struct SkillManagerCommandPreview: Codable, Hashable {
             return value
         }
         return "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
+    }
+
+    var compactMetadataRows: [CompactMetadataRow] {
+        [
+            CompactMetadataRow(label: "CWD", value: cwd, systemImage: "folder", isCopyable: true),
+            CompactMetadataRow(
+                label: UIStrings.text("skillManager.confirmed", "Confirmed"),
+                value: confirmed ? UIStrings.text("value.yes", "Yes") : UIStrings.text("value.no", "No"),
+                systemImage: "checkmark.circle"
+            ),
+            CompactMetadataRow(
+                label: UIStrings.text("skillManager.network", "Network"),
+                value: networkAllowed ? UIStrings.text("value.yes", "Yes") : UIStrings.text("value.no", "No"),
+                systemImage: "network"
+            ),
+            CompactMetadataRow(label: UIStrings.text("skillManager.token", "Token"), value: previewToken, systemImage: "key", isCopyable: true)
+        ]
+    }
+
+    var requiresExplicitApplyConfirmation: Bool {
+        requiresConfirmation && ["install", "remove", "update"].contains(operation)
     }
 }
 
@@ -178,6 +279,10 @@ struct SkillManagerSearchRecord: Codable, Hashable {
     let preview: SkillManagerCommandPreview
     let output: SkillManagerCommandOutput?
     let results: [SkillManagerSearchResult]
+
+    var isBlockedByNetwork: Bool {
+        preview.networkRequired && !preview.networkAllowed && output == nil
+    }
 }
 
 struct SkillManagerListInstalledParams: Encodable {

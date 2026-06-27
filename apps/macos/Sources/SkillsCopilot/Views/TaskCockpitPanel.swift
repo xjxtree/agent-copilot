@@ -30,11 +30,16 @@ struct TaskPreflightPreviewSheet: View {
                         store.selectTaskCockpitHistoryRecord(record)
                     }
                 )
-                .frame(width: 270)
+                .frame(width: CGFloat(UIOptimizationPresentation.taskPreflight.historyColumnWidth))
             }
         }
         .padding(16)
-        .frame(minWidth: 950, idealWidth: 1_020, minHeight: 620, alignment: .topLeading)
+        .frame(
+            minWidth: CGFloat(UIOptimizationPresentation.taskPreflight.sheetMinimumWidth),
+            idealWidth: CGFloat(UIOptimizationPresentation.taskPreflight.sheetIdealWidth),
+            minHeight: CGFloat(UIOptimizationPresentation.taskPreflight.sheetMinimumHeight),
+            alignment: .topLeading
+        )
     }
 }
 
@@ -53,6 +58,7 @@ private struct TaskPreflightEditorPane: View {
             result: displayedResult,
             isBuilding: displayedIsBuilding,
             operationState: displayedOperationState,
+            providerGateMessage: providerGateMessage,
             onToggleAgent: { agentID in
                 store.toggleTaskCockpitAgentSelection(agentID)
             },
@@ -111,6 +117,21 @@ private struct TaskPreflightEditorPane: View {
         guard store.taskCockpitText != draftTaskText else { return }
         store.taskCockpitText = draftTaskText
     }
+
+    private var providerGateMessage: String? {
+        let status = store.aiProviderStatus
+        if !status.serviceAvailable {
+            return UIStrings.localizedServiceMessage(status.disabledReason ?? UIStrings.aiProviderUnavailable)
+        }
+        if !status.configured || status.activeProfile == nil {
+            return UIStrings.text("taskCockpit.providerRequired", "Configure an AI provider before generating Task Preflight.")
+        }
+        if !status.enabled {
+            return status.disabledReason.map(UIStrings.localizedServiceMessage)
+                ?? UIStrings.text("taskCockpit.providerDisabled", "The configured AI provider is disabled.")
+        }
+        return nil
+    }
 }
 
 private struct TaskPreflightHistoryPanel: View {
@@ -122,6 +143,13 @@ private struct TaskPreflightHistoryPanel: View {
         VStack(alignment: .leading, spacing: 10) {
             Label(UIStrings.text("taskCockpit.history.title", "History"), systemImage: "clock.arrow.circlepath")
                 .font(.headline)
+            Text(UIStrings.text(
+                "taskCockpit.history.summary",
+                "Selecting a history row restores the task text, agent scope, and preflight result."
+            ))
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
 
             if records.isEmpty {
                 Text(UIStrings.text("taskCockpit.history.empty", "No task preflight history yet."))
@@ -167,40 +195,49 @@ private struct TaskPreflightHistoryRow: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Image(systemName: model.verdict.systemImage)
-                        .foregroundStyle(isSelected ? .white.opacity(0.9) : model.verdict.tint)
+                        .foregroundStyle(model.verdict.tint)
                     Text(record.displayTask)
                         .font(.caption.bold())
-                        .foregroundStyle(isSelected ? .white : .primary)
+                        .foregroundStyle(.primary)
                         .lineLimit(2)
                 }
 
                 Text(Self.dateFormatter.string(from: record.createdAt))
                     .font(.caption2)
-                    .foregroundStyle(isSelected ? .white.opacity(0.82) : .secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
 
                 Label(record.agentScopeSummary, systemImage: "person.2")
                     .font(.caption2)
-                    .foregroundStyle(isSelected ? .white.opacity(0.78) : .secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(model.verdict.title)
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(isSelected ? .white.opacity(0.86) : model.verdict.tint)
+                        .foregroundStyle(model.verdict.tint)
                         .lineLimit(1)
                     Text(model.recommendationLine)
                         .font(.caption2)
-                        .foregroundStyle(isSelected ? .white.opacity(0.74) : .secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
             }
             .padding(8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                isSelected ? Color.accentColor : Color.secondary.opacity(0.08),
+                isSelected ? Color(nsColor: .selectedContentBackgroundColor).opacity(0.18) : Color.secondary.opacity(0.08),
                 in: RoundedRectangle(cornerRadius: 8)
             )
+            .overlay(alignment: .leading) {
+                if isSelected {
+                    Rectangle()
+                        .fill(Color.accentColor)
+                        .frame(width: CGFloat(UIOptimizationPresentation.sidebarSelection.accentLineWidth))
+                        .clipShape(Capsule())
+                        .padding(.vertical, 6)
+                }
+            }
         }
         .buttonStyle(.plain)
         .accessibilityLabel(record.displayTask)
@@ -222,6 +259,7 @@ struct TaskCockpitPanel: View {
     let result: TaskCockpitResult?
     let isBuilding: Bool
     let operationState: TaskCockpitOperationState
+    let providerGateMessage: String?
     let onToggleAgent: (String) -> Void
     let onSelectAllAgents: () -> Void
     let onBuild: () -> Void
@@ -253,6 +291,23 @@ struct TaskCockpitPanel: View {
                 onToggle: onToggleAgent,
                 onSelectAll: onSelectAllAgents
             )
+
+            if let providerGateMessage {
+                Label(providerGateMessage, systemImage: "exclamationmark.triangle.fill")
+                    .font(.callout)
+                    .foregroundStyle(.orange)
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .adaptiveMaterialSurface()
+                    .overlay(alignment: .leading) {
+                        Rectangle()
+                            .fill(Color.orange)
+                            .frame(width: 3)
+                            .clipShape(Capsule())
+                    }
+                    .textSelection(.enabled)
+            }
 
             VStack(alignment: .trailing, spacing: 8) {
                 TaskInputTextEditor(
@@ -314,7 +369,7 @@ struct TaskCockpitPanel: View {
         }
         .controlSize(.regular)
         .buttonStyle(.borderedProminent)
-        .disabled(isBuilding || !inputModel.canSubmit || selectedAgentIDs.isEmpty)
+        .disabled(isBuilding || !inputModel.canSubmit || selectedAgentIDs.isEmpty || providerGateMessage != nil)
         .help(UIStrings.taskCockpitBoundary)
         .accessibilityIdentifier(AppAccessibilityID.taskCockpitBuildButton)
         .accessibilityLabel(actionTitle)
@@ -395,17 +450,19 @@ private struct TaskCockpitAgentChip: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .frame(width: CGFloat(UIOptimizationPresentation.taskPreflight.fixedAgentChipWidth), alignment: .leading)
+            .frame(minHeight: 44, alignment: .leading)
             .background(
-                isSelected ? Color.accentColor.opacity(0.14) : Color.secondary.opacity(0.08),
+                isSelected ? Color(nsColor: .selectedContentBackgroundColor).opacity(0.18) : Color.secondary.opacity(0.08),
                 in: RoundedRectangle(cornerRadius: 8)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(isSelected ? Color.accentColor.opacity(0.55) : Color.clear, lineWidth: 1)
+                    .stroke(isSelected ? Color.accentColor.opacity(0.45) : Color.clear, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
+        .help("\(option.title) · \(option.subtitle)")
         .accessibilityLabel(option.title)
         .accessibilityValue(isSelected ? UIStrings.stateEnabled : UIStrings.stateDisabled)
     }

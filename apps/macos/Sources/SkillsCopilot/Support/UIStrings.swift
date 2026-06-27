@@ -181,6 +181,9 @@ enum UIStrings {
     static var noRecentProjects: String { text("project.noRecent", "No Recent Projects") }
     static var projectValidation: String { text("project.validation", "Project Validation") }
     static var noProjectSkillsMessage: String { text("empty.noProjectSkills.message", "No skills were found in global roots. Choose a project to include project-scoped skills, then scan.") }
+    static func noAgentSkillsMessage(_ agent: String) -> String {
+        format("empty.noAgentSkills.message", "No %@ skills found in the current roots. Switch agents or choose a project, then scan again.", agent)
+    }
     static var noCodexProjectMessage: String { text("empty.noCodexProject.message", "No Codex skills match the current global roots. Choose a project to include project-scoped Codex skills.") }
     static var noCodexSkillsMessage: String { text("empty.noCodexSkills.message", "No Codex skills match the current search or filters.") }
     static var noOpenClawWorkspaceSkillsMessage: String { text("empty.noOpenClawWorkspace.message", "No OpenClaw workspace skills match this view. OpenClaw only scans confirmed workspace roots: <workspace>/skills and <workspace>/.agents/skills; generic repo roots are skipped rather than treated as missing skills.") }

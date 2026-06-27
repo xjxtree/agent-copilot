@@ -3,19 +3,21 @@ import SwiftUI
 struct SkillManagerPanel: View {
     @EnvironmentObject private var store: SkillStore
     var showsHeader = true
+    @State private var selectedWorkflow: SkillManagerWorkflow = .searchInstall
     @State private var pendingConfirmation: SkillManagerWriteConfirmation?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 16) {
             if showsHeader {
                 header
             }
             targetControls
-            searchAndInstall
-            operationPreview
-            installedSection
-            removeSkillSection
-            localLibrary
+            workflowPicker
+            if selectedWorkflow.allowsExternalManagerMutation, let message = externalManagerUnavailableMessage {
+                toolUnavailableCard(message)
+            }
+            workflowContent
+            workflowPreview
         }
         .task {
             if store.skillManagerTools.isEmpty {
@@ -40,6 +42,9 @@ struct SkillManagerPanel: View {
             if let confirmation = pendingConfirmation {
                 Text(confirmation.message)
             }
+        }
+        .onChange(of: selectedWorkflow) { _ in
+            store.clearSkillManagerWorkflowPreviews()
         }
     }
 
@@ -146,6 +151,53 @@ struct SkillManagerPanel: View {
         .adaptiveMaterialSurface()
     }
 
+    private var workflowPicker: some View {
+        Picker(UIStrings.text("skillManager.workflow.label", "Workflow"), selection: $selectedWorkflow) {
+            ForEach(SkillManagerWorkflow.allCases) { workflow in
+                Label(workflow.title, systemImage: workflow.systemImage).tag(workflow)
+            }
+        }
+        .pickerStyle(.segmented)
+        .frame(maxWidth: 520, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var workflowContent: some View {
+        switch selectedWorkflow {
+        case .searchInstall:
+            searchAndInstall
+        case .installedUpdates:
+            installedSection
+        case .localLibrary:
+            localLibrary
+        }
+    }
+
+    @ViewBuilder
+    private var workflowPreview: some View {
+        if let preview = store.skillManagerMutationPreview {
+            previewSection {
+                mutationPreview(preview)
+            }
+        }
+
+        switch selectedWorkflow {
+        case .searchInstall, .installedUpdates:
+            EmptyView()
+        case .localLibrary:
+            if store.skillManagerLocalCreatePreview != nil || store.skillManagerLocalDeletePreview != nil {
+                previewSection {
+                    if let preview = store.skillManagerLocalCreatePreview {
+                        localCreatePreview(preview)
+                    }
+                    if let preview = store.skillManagerLocalDeletePreview {
+                        localDeletePreview(preview)
+                    }
+                }
+            }
+        }
+    }
+
     private var searchAndInstall: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label(UIStrings.text("skillManager.searchInstall", "Search & Install"), systemImage: "magnifyingglass")
@@ -162,13 +214,13 @@ struct SkillManagerPanel: View {
                 } label: {
                     Label(UIStrings.text("action.search", "Search"), systemImage: "magnifyingglass")
                 }
-                .disabled(store.isSearchingSkillManager)
+                .disabled(store.isSearchingSkillManager || externalMutationDisabled)
             }
 
             HStack(spacing: 10) {
                 TextField(UIStrings.text("skillManager.source", "Source"), text: $store.skillManagerSource)
                     .textFieldStyle(.roundedBorder)
-                TextField(UIStrings.text("skillManager.skillName", "Skill name"), text: $store.skillManagerSkillName)
+                TextField(UIStrings.text("skillManager.installSkillName", "Skill name"), text: $store.skillManagerInstallSkillName)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 220)
                 Button {
@@ -176,12 +228,22 @@ struct SkillManagerPanel: View {
                 } label: {
                     Label(UIStrings.text("skillManager.previewInstall", "Preview Install"), systemImage: "plus.circle")
                 }
-                .disabled(store.isPreviewingSkillManagerMutation)
+                .disabled(store.isPreviewingSkillManagerMutation || externalMutationDisabled)
             }
 
             if let search = store.skillManagerSearchResult {
                 commandPreviewLine(search.preview)
-                if search.results.isEmpty {
+                if search.isBlockedByNetwork {
+                    Label(
+                        UIStrings.text(
+                            "skillManager.search.networkBlocked",
+                            "Network is off, so this remote search was previewed but not run."
+                        ),
+                        systemImage: "network.slash"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                } else if search.results.isEmpty {
                     Text(UIStrings.text("skillManager.search.noResults", "No search results returned."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -196,6 +258,7 @@ struct SkillManagerPanel: View {
                                     )
                                 }
                             }
+                            .disabled(externalMutationDisabled)
                         }
                     }
                 }
@@ -206,29 +269,15 @@ struct SkillManagerPanel: View {
         .adaptiveMaterialSurface()
     }
 
-    @ViewBuilder
-    private var operationPreview: some View {
-        if store.skillManagerMutationPreview != nil
-            || store.skillManagerLocalCreatePreview != nil
-            || store.skillManagerLocalDeletePreview != nil {
-            VStack(alignment: .leading, spacing: 12) {
-                Label(UIStrings.text("skillManager.preview", "Preview"), systemImage: "doc.text.magnifyingglass")
-                    .font(.headline)
-
-                if let preview = store.skillManagerMutationPreview {
-                    mutationPreview(preview)
-                }
-                if let preview = store.skillManagerLocalCreatePreview {
-                    localCreatePreview(preview)
-                }
-                if let preview = store.skillManagerLocalDeletePreview {
-                    localDeletePreview(preview)
-                }
-            }
-            .padding()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .adaptiveMaterialSurface()
+    private func previewSection<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label(UIStrings.text("skillManager.preview", "Preview"), systemImage: "doc.text.magnifyingglass")
+                .font(.headline)
+            content()
         }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
     }
 
     private var installedSection: some View {
@@ -243,7 +292,7 @@ struct SkillManagerPanel: View {
                     Label(UIStrings.text("action.refresh", "Refresh"), systemImage: "arrow.clockwise")
                 }
                 .controlSize(.small)
-                .disabled(store.isListingSkillManagerInstalled)
+                .disabled(store.isListingSkillManagerInstalled || externalMutationDisabled)
             }
 
             if let installed = store.skillManagerInstalled {
@@ -255,7 +304,7 @@ struct SkillManagerPanel: View {
                 } else {
                     VStack(spacing: 8) {
                         ForEach(installed.installed.prefix(12)) { record in
-                            InstalledSkillRow(record: record)
+                            InstalledSkillRow(record: record, externalMutationDisabled: externalMutationDisabled)
                         }
                     }
                 }
@@ -264,40 +313,43 @@ struct SkillManagerPanel: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .adaptiveMaterialSurface()
-    }
 
-    private var removeSkillSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label(UIStrings.text("skillManager.removeSelected", "Remove from Selected Agents"), systemImage: "minus.circle")
-                    .font(.headline)
-                Spacer()
-                Text(selectedAgentSummary)
+            DisclosureGroup {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 10) {
+                        TextField(UIStrings.text("skillManager.removeSkillName", "Skill to remove or update"), text: $store.skillManagerRemoveSkillName)
+                            .textFieldStyle(.roundedBorder)
+                        Button {
+                            Task { await store.previewSkillManagerUpdate() }
+                        } label: {
+                            Label(UIStrings.text("skillManager.previewUpdate", "Preview Update"), systemImage: "arrow.triangle.2.circlepath")
+                        }
+                        .disabled(store.isPreviewingSkillManagerMutation || externalMutationDisabled)
+                        Button(role: .destructive) {
+                            Task { await store.previewSkillManagerRemove() }
+                        } label: {
+                            Label(UIStrings.text("skillManager.previewRemove", "Preview Remove"), systemImage: "minus.circle")
+                        }
+                        .disabled(store.isPreviewingSkillManagerMutation || externalMutationDisabled || store.skillManagerSelectedAgents.isEmpty)
+                    }
+
+                    Text(UIStrings.text(
+                        "skillManager.removeSelected.summary",
+                        "Removes manager-installed skill links for the selected agents above. Per-agent enablement remains controlled by agent configuration."
+                    ))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            }
-
-            HStack(spacing: 10) {
-                TextField(UIStrings.text("skillManager.skillToRemove", "Skill to remove"), text: $store.skillManagerSkillName)
-                    .textFieldStyle(.roundedBorder)
-                Button(role: .destructive) {
-                    Task { await store.previewSkillManagerRemove() }
-                } label: {
-                    Label(UIStrings.text("skillManager.previewRemove", "Preview Remove"), systemImage: "minus.circle")
                 }
-                .disabled(store.isPreviewingSkillManagerMutation || store.skillManagerSelectedAgents.isEmpty)
+                .padding(.top, 8)
+            } label: {
+                HStack {
+                    Label(UIStrings.text("skillManager.advancedInstalledActions", "Advanced package actions"), systemImage: "slider.horizontal.3")
+                    Spacer()
+                    Text(selectedAgentSummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
-
-            Text(UIStrings.text(
-                "skillManager.removeSelected.summary",
-                "Removes manager-installed skill links for the selected agents above. Per-agent enablement remains controlled by agent configuration."
-            ))
-            .font(.caption)
-            .foregroundStyle(.secondary)
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -327,7 +379,7 @@ struct SkillManagerPanel: View {
             } else {
                 VStack(spacing: 8) {
                     ForEach(store.localSkillLibrarySkills.prefix(12)) { skill in
-                        LocalSkillLibraryRow(skill: skill)
+                        LocalSkillLibraryRow(skill: skill, externalMutationDisabled: externalMutationDisabled)
                     }
                 }
             }
@@ -407,7 +459,7 @@ struct SkillManagerPanel: View {
         HStack(spacing: 8) {
             Image(systemName: preview.willRun ? "play.circle" : "doc.text.magnifyingglass")
                 .foregroundStyle(.secondary)
-            Text(preview.summary)
+            Text(preview.localizedSummary)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
@@ -427,12 +479,7 @@ struct SkillManagerPanel: View {
                 .padding(8)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
-            DetailMetricGrid(maxColumns: 4, minColumnWidth: 120) {
-                SummaryChip(title: UIStrings.text("skillManager.cwd", "CWD"), value: preview.cwd, systemImage: "folder", valueLineLimit: 1)
-                SummaryChip(title: UIStrings.text("skillManager.confirmed", "Confirmed"), value: preview.confirmed ? UIStrings.text("value.yes", "Yes") : UIStrings.text("value.no", "No"), systemImage: "checkmark.circle")
-                SummaryChip(title: UIStrings.text("skillManager.network", "Network"), value: preview.networkAllowed ? UIStrings.text("value.yes", "Yes") : UIStrings.text("value.no", "No"), systemImage: "network")
-                SummaryChip(title: UIStrings.text("skillManager.token", "Token"), value: preview.previewToken, systemImage: "key", valueLineLimit: 1)
-            }
+            CompactMetadataGrid(rows: preview.compactMetadataRows)
             if !preview.risks.isEmpty {
                 DenseDisclosureList(preview.risks, visibleLimit: 3) { risk in
                     Label(risk, systemImage: "exclamationmark.triangle")
@@ -530,6 +577,60 @@ struct SkillManagerPanel: View {
 
     private var primaryTool: SkillManagerToolRecord? {
         store.skillManagerTools.first { $0.id == "npx-skills" } ?? store.skillManagerTools.first
+    }
+
+    private var externalMutationDisabled: Bool {
+        externalManagerUnavailableMessage != nil
+    }
+
+    private var externalManagerUnavailableMessage: String? {
+        guard !store.isLoadingSkillManagerTools else { return nil }
+        if let tool = primaryTool {
+            let status = tool.status.lowercased()
+            if tool.executable == nil || status.contains("unavailable") || status.contains("error") || status.contains("missing") {
+                return UIStrings.text(
+                    "skillManager.toolUnavailable.message",
+                    "The external manager tool is unavailable. Install Node/npm or set SKILLS_COPILOT_NPX_PATH, then refresh."
+                )
+            }
+            return nil
+        }
+        if store.skillManagerErrorMessage != nil {
+            return UIStrings.text(
+                "skillManager.toolUnavailable.message",
+                "The external manager tool is unavailable. Install Node/npm or set SKILLS_COPILOT_NPX_PATH, then refresh."
+            )
+        }
+        return nil
+    }
+
+    private func toolUnavailableCard(_ message: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(UIStrings.text("skillManager.toolUnavailable.title", "External manager unavailable"), systemImage: "exclamationmark.triangle.fill")
+                .font(.headline)
+                .foregroundStyle(.orange)
+            Text(message)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let error = store.skillManagerErrorMessage {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .lineLimit(3)
+            }
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(Color.orange)
+                .frame(width: 3)
+                .clipShape(Capsule())
+        }
     }
 }
 
@@ -663,6 +764,7 @@ private struct SearchResultRow: View {
 private struct InstalledSkillRow: View {
     @EnvironmentObject private var store: SkillStore
     let record: SkillManagerInstalledRecord
+    let externalMutationDisabled: Bool
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
@@ -682,12 +784,14 @@ private struct InstalledSkillRow: View {
                 Label(UIStrings.text("skillManager.previewUpdate", "Preview Update"), systemImage: "arrow.triangle.2.circlepath")
             }
             .controlSize(.small)
+            .disabled(externalMutationDisabled)
             Button(role: .destructive) {
                 Task { await store.previewSkillManagerRemove(skillName: record.name) }
             } label: {
                 Label(UIStrings.text("skillManager.previewRemove", "Preview Remove"), systemImage: "minus.circle")
             }
             .controlSize(.small)
+            .disabled(externalMutationDisabled)
         }
         .padding(10)
         .background(.quaternary.opacity(0.22), in: RoundedRectangle(cornerRadius: 8))
@@ -702,6 +806,7 @@ private struct InstalledSkillRow: View {
 private struct LocalSkillLibraryRow: View {
     @EnvironmentObject private var store: SkillStore
     let skill: SkillRecord
+    let externalMutationDisabled: Bool
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
@@ -727,6 +832,7 @@ private struct LocalSkillLibraryRow: View {
                 Label(UIStrings.text("skillManager.previewInstall", "Preview Install"), systemImage: "plus.circle")
             }
             .controlSize(.small)
+            .disabled(externalMutationDisabled)
             Button(role: .destructive) {
                 Task { await store.previewSkillManagerLocalDelete(skill: skill) }
             } label: {

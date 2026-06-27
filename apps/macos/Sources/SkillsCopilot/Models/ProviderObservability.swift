@@ -561,6 +561,16 @@ struct ProviderObservabilityDimensionRow: Decodable, Identifiable, Hashable {
         self.evidenceRefs = evidenceRefs
         self.safetyFlags = safetyFlags
     }
+
+    var hasActivity: Bool {
+        callCount > 0
+            || successCount > 0
+            || failureCount > 0
+            || blockedCount > 0
+            || estimatedTokens > 0
+            || (estimatedCostUSD ?? 0) > 0
+            || (averageDurationMS ?? 0) > 0
+    }
 }
 
 struct ProviderObservabilityIssueRow: Decodable, Identifiable, Hashable {
@@ -839,6 +849,20 @@ struct ProviderObservabilityHintRow: Decodable, Identifiable, Hashable {
         evidenceRefs = try container.decodeFlexibleProviderObservabilityStringArray(keys: [.evidenceRefs, .evidenceRefsAlt, .evidence])
         id = try container.decodeIfPresent(String.self, forKey: .id) ?? "\(severity):\(title)"
     }
+
+    var hasActivity: Bool {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+            return false
+        }
+        let normalized = value
+            .replacingOccurrences(of: "$", with: "")
+            .replacingOccurrences(of: ",", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if let number = Double(normalized) {
+            return number > 0
+        }
+        return true
+    }
 }
 
 struct ProviderObservabilityEvidenceReference: Decodable, Identifiable, Hashable {
@@ -1108,6 +1132,34 @@ struct ProviderObservabilityResult: Decodable, Hashable {
 
     var isUnavailable: Bool {
         generatedBy == "unavailable" || fallbackReason != nil && callRows.isEmpty && providerRows.isEmpty && modelRows.isEmpty
+    }
+
+    var isDashboardEmpty: Bool {
+        !hasProviderMetadata
+    }
+
+    private var hasProviderMetadata: Bool {
+        summary.callCount > 0
+            || summary.successCount > 0
+            || summary.failureCount > 0
+            || summary.blockedCount > 0
+            || summary.errorCount > 0
+            || summary.estimatedInputTokens > 0
+            || summary.estimatedOutputTokens > 0
+            || summary.estimatedTotalTokens > 0
+            || (summary.estimatedCostUSD ?? 0) > 0
+            || summary.totalDurationMS > 0
+            || !callRows.isEmpty
+            || providerRows.contains(where: \.hasActivity)
+            || modelRows.contains(where: \.hasActivity)
+            || destinationRows.contains(where: \.hasActivity)
+            || !modelTaskHistoryRows.isEmpty
+            || statusRows.contains { $0.count > 0 }
+            || errorRows.contains { $0.count > 0 }
+            || budgetHints.contains(where: \.hasActivity)
+            || usageHints.contains(where: \.hasActivity)
+            || retentionRows.contains(where: \.hasActivity)
+            || cleanupRecommendationRows.contains(where: \.hasActivity)
     }
 
     enum CodingKeys: String, CodingKey {

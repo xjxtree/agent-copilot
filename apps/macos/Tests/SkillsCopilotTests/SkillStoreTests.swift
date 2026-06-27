@@ -99,6 +99,8 @@ struct SkillStoreTests {
         try await routingConfidenceClearsStaleSelection()
         try await llmPreparePreviewIsScopedToSelectedSkillAndReadOnly()
         try await promptPreviewRequiresConfiguredProviderAndExplicitSend()
+        try await skillManagerValidationFeedbackStaysInManagerSurface()
+        try skillManagerUsesIndependentInstallRemoveAndLocalInputs()
         try await previewScriptExecutionSafetyStoresBlockedPreviewWithoutExecute()
     }
 
@@ -119,6 +121,33 @@ struct SkillStoreTests {
         try expectEqual(store.sidebarContentMode, .skills, "Switching agent should not require the Sessions sidebar to be active.")
         try expectContains(store.selectedAgentLocalSessionRefreshKey, SkillAgentFilter.codex.rawValue, "Selected-agent session refresh key should include the selected agent.")
         try expectFalse(store.selectedAgentLocalSessionRefreshKey == claudeKey, "Switching agent should trigger a new selected-agent session refresh key.")
+    }
+
+    private func skillManagerValidationFeedbackStaysInManagerSurface() async throws {
+        let store = SkillStore(service: ServiceClient())
+
+        await store.searchSkillManager()
+
+        try expectNil(store.errorMessage, "Skill Manager validation errors should not leak into the global detail banner.")
+        try expectEqual(
+            store.skillManagerErrorMessage,
+            UIStrings.text("skillManager.search.required", "Enter a skill search query."),
+            "Skill Manager should keep validation feedback local to the package manager sheet."
+        )
+    }
+
+    private func skillManagerUsesIndependentInstallRemoveAndLocalInputs() throws {
+        let store = SkillStore(service: ServiceClient())
+
+        store.skillManagerSource = "vercel-labs/agent-skills"
+        store.skillManagerInstallSkillName = "frontend-design"
+        store.skillManagerRemoveSkillName = "legacy-design"
+        store.skillManagerLocalSkillName = "local-note"
+
+        try expectEqual(store.skillManagerSkillName, "", "Legacy shared Skill Manager skill name should not retain workflow-specific input.")
+        try expectEqual(store.skillManagerInstallSkillName, "frontend-design", "Install skill input should be independent.")
+        try expectEqual(store.skillManagerRemoveSkillName, "legacy-design", "Remove skill input should be independent.")
+        try expectEqual(store.skillManagerLocalSkillName, "local-note", "Local create input should stay independent.")
     }
 
     private func localSessionSearchNormalizesSelectionAndDetail() async throws {

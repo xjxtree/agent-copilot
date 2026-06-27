@@ -80,6 +80,7 @@ public func runNativeModelTests() {
         try AgentConfigTimelineModelTests().run()
         try ConfigContentRedactorTests().run()
         try LocalizationModelTests().run()
+        try UIOptimizationModelTests().run()
         try MainWindowModelTests().run()
         try AgentCopilotDecisionModelTests().run()
         try LocalSessionPreviewModelTests().run()

@@ -63,7 +63,12 @@ struct SettingsView: View {
                 }
         }
         .padding(20)
-        .frame(minWidth: 760, idealWidth: 860, minHeight: 620, idealHeight: 680)
+        .frame(
+            minWidth: CGFloat(UIOptimizationPresentation.settings.minimumWidth),
+            idealWidth: CGFloat(UIOptimizationPresentation.settings.idealWidth),
+            minHeight: CGFloat(UIOptimizationPresentation.settings.minimumHeight),
+            idealHeight: CGFloat(UIOptimizationPresentation.settings.idealHeight)
+        )
         .task {
             if store.status == nil {
                 await store.reload()
@@ -92,40 +97,44 @@ struct SettingsView: View {
     private var languageSection: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(UIStrings.languageSettings)
-                        .font(.headline)
-                    Text(UIStrings.languageBoundary)
+                SettingsPageHeader(
+                    title: UIStrings.languageSettings,
+                    systemImage: "globe",
+                    boundary: UIStrings.languageBoundary,
+                    badge: UIStrings.text("settings.localOnly", "App-local")
+                )
+
+                SettingsSectionCard(
+                    title: UIStrings.text("settings.preferences", "Preferences"),
+                    systemImage: "slider.horizontal.3"
+                ) {
+                    Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 12) {
+                        GridRow {
+                            Text(UIStrings.languageSelection)
+                                .foregroundStyle(.secondary)
+                            Picker(UIStrings.languageSelection, selection: selectedLanguage) {
+                                ForEach(AppLanguage.allCases) { language in
+                                    Text(language.title).tag(language)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(width: 280)
+                        }
+
+                        GridRow {
+                            Text(UIStrings.privacyScreenshotMode)
+                                .foregroundStyle(.secondary)
+                            Toggle(UIStrings.privacyScreenshotMode, isOn: $screenshotPrivacyModeEnabled)
+                                .toggleStyle(.switch)
+                                .labelsHidden()
+                        }
+                    }
+
+                    Text(UIStrings.privacyScreenshotBoundary)
+                        .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-
-                Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 12) {
-                    GridRow {
-                        Text(UIStrings.languageSelection)
-                            .foregroundStyle(.secondary)
-                        Picker(UIStrings.languageSelection, selection: selectedLanguage) {
-                            ForEach(AppLanguage.allCases) { language in
-                                Text(language.title).tag(language)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(width: 280)
-                    }
-
-                    GridRow {
-                        Text(UIStrings.privacyScreenshotMode)
-                            .foregroundStyle(.secondary)
-                        Toggle(UIStrings.privacyScreenshotMode, isOn: $screenshotPrivacyModeEnabled)
-                            .toggleStyle(.switch)
-                            .labelsHidden()
-                    }
-                }
-
-                Text(UIStrings.privacyScreenshotBoundary)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
 
                 SettingsBanner(message: UIStrings.languageAppliesImmediately, systemImage: "checkmark.circle.fill", color: .green)
 
@@ -138,22 +147,14 @@ struct SettingsView: View {
     private var providerSection: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(UIStrings.aiProviderSettings)
-                            .font(.headline)
-                        Spacer()
-                        Label(
-                            store.aiProviderStatus.configured ? UIStrings.aiProviderConfigured : UIStrings.aiProviderUnconfigured,
-                            systemImage: store.aiProviderStatus.configured ? "checkmark.circle" : "circle.dashed"
-                        )
-                        .foregroundStyle(store.aiProviderStatus.configured ? .green : .secondary)
-                    }
-
-                    Text(UIStrings.aiProviderBoundary)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                SettingsPageHeader(
+                    title: UIStrings.aiProviderSettings,
+                    systemImage: "key",
+                    boundary: UIStrings.aiProviderBoundary,
+                    badge: store.aiProviderStatus.configured ? UIStrings.aiProviderConfigured : UIStrings.aiProviderUnconfigured,
+                    badgeSystemImage: store.aiProviderStatus.configured ? "checkmark.circle" : "circle.dashed",
+                    badgeTint: store.aiProviderStatus.configured ? .green : .secondary
+                )
 
                 if !store.aiProviderStatus.serviceAvailable {
                     SettingsBanner(
@@ -163,12 +164,17 @@ struct SettingsView: View {
                     )
                 }
 
-                providerForm
+                SettingsSectionCard(title: UIStrings.text("settings.aiProvider.connection", "Connection"), systemImage: "network") {
+                    providerConnectionForm
+                }
 
-                Text(UIStrings.aiProviderKeychainFirst)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                SettingsSectionCard(title: UIStrings.text("settings.aiProvider.limits", "Limits"), systemImage: "gauge.with.dots.needle.67percent") {
+                    providerLimitsForm
+                }
+
+                SettingsSectionCard(title: UIStrings.text("settings.aiProvider.credentialSafety", "Credential Safety"), systemImage: "lock.shield") {
+                    providerCredentialSafety
+                }
 
                 if let providerValidationMessage, hasEditedProviderDraft {
                     SettingsBanner(message: providerValidationMessage, systemImage: "exclamationmark.triangle.fill", color: .red)
@@ -188,10 +194,14 @@ struct SettingsView: View {
                     SettingsBanner(message: UIStrings.aiProviderTesting, systemImage: "network", color: .secondary)
                 }
 
-                providerActions
+                SettingsSectionCard(title: UIStrings.text("settings.actions", "Actions"), systemImage: "command") {
+                    providerActions
+                }
 
                 if let result = store.aiProviderTestResult {
-                    providerTestResult(result)
+                    SettingsSectionCard(title: UIStrings.aiProviderTestResult, systemImage: "checkmark.seal") {
+                        providerTestResult(result)
+                    }
                 }
 
                 Spacer(minLength: 0)
@@ -200,7 +210,7 @@ struct SettingsView: View {
         }
     }
 
-    private var providerForm: some View {
+    private var providerConnectionForm: some View {
         Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 12) {
             GridRow {
                 Text(UIStrings.llmProvider)
@@ -240,7 +250,11 @@ struct SettingsView: View {
                 SecureField(UIStrings.aiProviderAPIKeyPlaceholder, text: $providerDraft.apiKey)
                     .textFieldStyle(.roundedBorder)
             }
+        }
+    }
 
+    private var providerLimitsForm: some View {
+        Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 12) {
             GridRow {
                 Text(UIStrings.aiProviderMonthlyBudget)
                     .foregroundStyle(.secondary)
@@ -266,11 +280,22 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+        }
+    }
 
-            SettingsMetadataRow(label: UIStrings.aiProviderStorage, value: store.aiProviderStatus.credentialStorage ?? UIStrings.notLoaded)
-            SettingsMetadataRow(label: UIStrings.llmEnabled, value: store.aiProviderStatus.enabled ? UIStrings.llmEnabled : UIStrings.llmDisabled)
-            if let disabledReason = store.aiProviderStatus.disabledReason, !disabledReason.isEmpty {
-                SettingsMetadataRow(label: UIStrings.aiProviderUnconfigured, value: UIStrings.localizedServiceMessage(disabledReason))
+    private var providerCredentialSafety: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(UIStrings.aiProviderKeychainFirst)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
+                SettingsMetadataRow(label: UIStrings.aiProviderStorage, value: store.aiProviderStatus.credentialStorage ?? UIStrings.notLoaded)
+                SettingsMetadataRow(label: UIStrings.llmEnabled, value: store.aiProviderStatus.enabled ? UIStrings.llmEnabled : UIStrings.llmDisabled)
+                if let disabledReason = store.aiProviderStatus.disabledReason, !disabledReason.isEmpty {
+                    SettingsMetadataRow(label: UIStrings.aiProviderUnconfigured, value: UIStrings.localizedServiceMessage(disabledReason))
+                }
             }
         }
     }
@@ -356,6 +381,23 @@ struct SettingsView: View {
     private var serviceSection: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                SettingsPageHeader(
+                    title: UIStrings.service,
+                    systemImage: "wrench.and.screwdriver",
+                    boundary: UIStrings.text(
+                        "settings.service.boundary",
+                        "Review local sidecar health and privacy-safe diagnostics. This page does not write configuration or call providers."
+                    ),
+                    badge: UIStrings.text("settings.advanced", "Advanced"),
+                    badgeSystemImage: "gearshape"
+                )
+
+                DetailMetricGrid(maxColumns: 3, minColumnWidth: 150) {
+                    SummaryChip(title: UIStrings.version, value: store.status?.version ?? UIStrings.unknown, systemImage: "number")
+                    SummaryChip(title: UIStrings.protocolLabel, value: "\(store.status?.protocolVersion ?? 0)", systemImage: "point.3.connected.trianglepath.dotted")
+                    SummaryChip(title: UIStrings.methods, value: "\(store.status?.supportedMethods.count ?? 0)", systemImage: "list.bullet.rectangle")
+                }
+
                 DisclosureGroup(isExpanded: $showsServiceDiagnostics) {
                     Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
                         SettingsMetadataRow(label: UIStrings.version, value: store.status?.version ?? UIStrings.unknown)
@@ -369,6 +411,9 @@ struct SettingsView: View {
                     Label(UIStrings.text("settings.serviceDiagnostics", "Service Diagnostics"), systemImage: "wrench.and.screwdriver")
                         .font(.headline)
                 }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .adaptiveMaterialSurface()
                 Spacer(minLength: 0)
             }
             .padding(4)
@@ -400,6 +445,55 @@ private struct SettingsMetadataRow: View {
     }
 }
 
+private struct SettingsPageHeader: View {
+    let title: String
+    let systemImage: String
+    let boundary: String
+    var badge: String? = nil
+    var badgeSystemImage = "lock.shield"
+    var badgeTint: Color = .secondary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Label(title, systemImage: systemImage)
+                    .font(.headline)
+                Spacer()
+                if let badge {
+                    Label(badge, systemImage: badgeSystemImage)
+                        .font(.caption.bold())
+                        .foregroundStyle(badgeTint)
+                }
+            }
+            Text(boundary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct SettingsSectionCard<Content: View>: View {
+    let title: String
+    let systemImage: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label(title, systemImage: systemImage)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            content()
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
 private struct SettingsBanner: View {
     let message: String
     let systemImage: String
@@ -408,8 +502,15 @@ private struct SettingsBanner: View {
     var body: some View {
         Label(message, systemImage: systemImage)
             .foregroundStyle(color)
-            .padding(10)
+            .padding(.vertical, 10)
+            .padding(.horizontal, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .adaptiveMaterialSurface()
+            .overlay(alignment: .leading) {
+                Rectangle()
+                    .fill(color)
+                    .frame(width: 3)
+                    .clipShape(Capsule())
+            }
     }
 }

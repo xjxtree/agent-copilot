@@ -151,6 +151,8 @@ final class SkillStore: ObservableObject {
     @Published private(set) var skillManagerMutationPreview: SkillManagerMutationRecord?
     @Published private(set) var skillManagerLocalCreatePreview: SkillManagerLocalCreateRecord?
     @Published private(set) var skillManagerLocalDeletePreview: SkillManagerLocalDeleteRecord?
+    @Published private(set) var skillManagerErrorMessage: String?
+    @Published private(set) var skillManagerMessage: String?
     @Published private(set) var isLoadingSkillManagerTools = false
     @Published private(set) var isSearchingSkillManager = false
     @Published private(set) var isListingSkillManagerInstalled = false
@@ -166,6 +168,12 @@ final class SkillStore: ObservableObject {
         didSet { clearSkillManagerWritePreviews() }
     }
     @Published var skillManagerSkillName = "" {
+        didSet { clearSkillManagerWritePreviews() }
+    }
+    @Published var skillManagerInstallSkillName = "" {
+        didSet { clearSkillManagerWritePreviews() }
+    }
+    @Published var skillManagerRemoveSkillName = "" {
         didSet { clearSkillManagerWritePreviews() }
     }
     @Published var skillManagerLocalSkillName = "" {
@@ -236,6 +244,13 @@ final class SkillStore: ObservableObject {
     @Published var configScopeFilter: AgentConfigScopeFilter = .all {
         didSet {
             guard oldValue != configScopeFilter else { return }
+            normalizeConfigSelection()
+        }
+    }
+    @Published var configSidebarSearchText = "" {
+        didSet {
+            guard oldValue != configSidebarSearchText else { return }
+            guard sidebarContentMode == .config else { return }
             normalizeConfigSelection()
         }
     }
@@ -467,6 +482,26 @@ final class SkillStore: ObservableObject {
         }
     }
 
+    func configDocumentMatchesSidebarQuery(_ document: ConfigDocumentRecord) -> Bool {
+        configSidebarQueryMatches([
+            document.agent,
+            document.scope,
+            document.target,
+            document.format,
+            document.exists ? UIStrings.existingFile : UIStrings.willCreateFile
+        ])
+    }
+
+    func configSnapshotMatchesSidebarQuery(_ snapshot: ConfigSnapshotRecord) -> Bool {
+        configSidebarQueryMatches([
+            snapshot.agent,
+            snapshot.scope,
+            snapshot.target,
+            snapshot.reason,
+            DisplayText.timestamp(snapshot.createdAt)
+        ])
+    }
+
     var scopedLocalSessionRows: [LocalSessionPreviewRow] {
         localSessionPreviewResult.sessionRows.filter { localSessionMatchesCurrentScope($0) }
     }
@@ -501,6 +536,14 @@ final class SkillStore: ObservableObject {
             let rowRoot = row.projectRoot?.trimmingCharacters(in: .whitespacesAndNewlines)
             guard let rowRoot, !rowRoot.isEmpty, rowRoot != "<project-root>" else { return true }
             return rowRoot == selectedRoot || rowRoot.hasPrefix(selectedRoot + "/")
+        }
+    }
+
+    private func configSidebarQueryMatches(_ values: [String]) -> Bool {
+        let query = configSidebarSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return true }
+        return values.contains { value in
+            value.lowercased().contains(query)
         }
     }
 
@@ -1117,19 +1160,19 @@ final class SkillStore: ObservableObject {
         do {
             skillManagerTools = try await service.listSkillManagerTools()
         } catch {
-            errorMessage = error.localizedDescription
+            setSkillManagerError(error.localizedDescription)
         }
     }
 
     func searchSkillManager() async {
         let query = skillManagerSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else {
-            errorMessage = UIStrings.text("skillManager.search.required", "Enter a skill search query.")
+            setSkillManagerError(UIStrings.text("skillManager.search.required", "Enter a skill search query."))
             return
         }
         guard !isSearchingSkillManager else { return }
         isSearchingSkillManager = true
-        errorMessage = nil
+        clearSkillManagerFeedback()
         defer { isSearchingSkillManager = false }
 
         do {
@@ -1139,7 +1182,7 @@ final class SkillStore: ObservableObject {
                 networkAllowed: skillManagerNetworkAllowed
             )
         } catch {
-            errorMessage = error.localizedDescription
+            setSkillManagerError(error.localizedDescription)
             skillManagerSearchResult = nil
         }
     }
@@ -1147,7 +1190,7 @@ final class SkillStore: ObservableObject {
     func listSkillManagerInstalled() async {
         guard !isListingSkillManagerInstalled else { return }
         isListingSkillManagerInstalled = true
-        errorMessage = nil
+        clearSkillManagerFeedback()
         defer { isListingSkillManagerInstalled = false }
 
         do {
@@ -1156,7 +1199,7 @@ final class SkillStore: ObservableObject {
                 scope: skillManagerScope
             )
         } catch {
-            errorMessage = error.localizedDescription
+            setSkillManagerError(error.localizedDescription)
             skillManagerInstalled = nil
         }
     }
@@ -1184,17 +1227,17 @@ final class SkillStore: ObservableObject {
             skillManagerSource = source
         }
         if let skillName {
-            skillManagerSkillName = skillName
+            skillManagerInstallSkillName = skillName
         }
         guard let agents = selectedSkillManagerAgentIDsForMutation() else { return }
         let source = skillManagerSource.trimmingCharacters(in: .whitespacesAndNewlines)
-        let skills = parsedSkillManagerSkillNames()
+        let skills = parsedSkillManagerSkillNames(from: skillManagerInstallSkillName)
         guard !source.isEmpty else {
-            errorMessage = UIStrings.text("skillManager.source.required", "Enter a skill source.")
+            setSkillManagerError(UIStrings.text("skillManager.source.required", "Enter a skill source."))
             return
         }
         guard !skills.isEmpty else {
-            errorMessage = UIStrings.text("skillManager.skill.required", "Enter at least one skill name.")
+            setSkillManagerError(UIStrings.text("skillManager.skill.required", "Enter at least one skill name."))
             return
         }
 
@@ -1217,7 +1260,7 @@ final class SkillStore: ObservableObject {
             try await service.applySkillManagerInstall(
                 preview: preview,
                 source: skillManagerSource.trimmingCharacters(in: .whitespacesAndNewlines),
-                skills: parsedSkillManagerSkillNames(),
+                skills: parsedSkillManagerSkillNames(from: skillManagerInstallSkillName),
                 agents: agents,
                 scope: skillManagerScope,
                 distribution: skillManagerDistribution,
@@ -1228,12 +1271,12 @@ final class SkillStore: ObservableObject {
 
     func previewSkillManagerRemove(skillName: String? = nil) async {
         if let skillName {
-            skillManagerSkillName = skillName
+            skillManagerRemoveSkillName = skillName
         }
         guard let agents = selectedSkillManagerAgentIDsForMutation() else { return }
-        let skill = skillManagerSkillName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let skill = skillManagerRemoveSkillName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !skill.isEmpty else {
-            errorMessage = UIStrings.text("skillManager.skill.required", "Enter at least one skill name.")
+            setSkillManagerError(UIStrings.text("skillManager.skill.required", "Enter at least one skill name."))
             return
         }
 
@@ -1252,7 +1295,7 @@ final class SkillStore: ObservableObject {
         await applySkillManagerMutation {
             try await service.applySkillManagerRemove(
                 preview: preview,
-                skill: skillManagerSkillName.trimmingCharacters(in: .whitespacesAndNewlines),
+                skill: skillManagerRemoveSkillName.trimmingCharacters(in: .whitespacesAndNewlines),
                 agents: agents,
                 scope: skillManagerScope
             )
@@ -1261,13 +1304,13 @@ final class SkillStore: ObservableObject {
 
     func previewSkillManagerUpdate(skillName: String? = nil) async {
         if let skillName {
-            skillManagerSkillName = skillName
+            skillManagerRemoveSkillName = skillName
         }
         guard let agents = selectedSkillManagerAgentIDsForMutation() else { return }
 
         await previewSkillManagerMutation {
             try await service.previewSkillManagerUpdate(
-                skills: parsedSkillManagerSkillNames(),
+                skills: parsedSkillManagerSkillNames(from: skillManagerRemoveSkillName),
                 agents: agents,
                 scope: skillManagerScope,
                 networkAllowed: skillManagerNetworkAllowed
@@ -1281,7 +1324,7 @@ final class SkillStore: ObservableObject {
         await applySkillManagerMutation {
             try await service.applySkillManagerUpdate(
                 preview: preview,
-                skills: parsedSkillManagerSkillNames(),
+                skills: parsedSkillManagerSkillNames(from: skillManagerRemoveSkillName),
                 agents: agents,
                 scope: skillManagerScope,
                 networkAllowed: skillManagerNetworkAllowed
@@ -1292,18 +1335,18 @@ final class SkillStore: ObservableObject {
     func previewSkillManagerLocalCreate() async {
         let name = skillManagerLocalSkillName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
-            errorMessage = UIStrings.text("skillManager.localCreate.required", "Enter a local skill name.")
+            setSkillManagerError(UIStrings.text("skillManager.localCreate.required", "Enter a local skill name."))
             return
         }
         guard !isPreviewingSkillManagerMutation else { return }
         isPreviewingSkillManagerMutation = true
-        errorMessage = nil
+        clearSkillManagerWorkflowPreviews()
         defer { isPreviewingSkillManagerMutation = false }
 
         do {
             skillManagerLocalCreatePreview = try await service.previewSkillManagerLocalCreate(name: name)
         } catch {
-            errorMessage = error.localizedDescription
+            setSkillManagerError(error.localizedDescription)
             skillManagerLocalCreatePreview = nil
         }
     }
@@ -1315,34 +1358,33 @@ final class SkillStore: ObservableObject {
         guard !isApplyingSkillManagerMutation else { return }
         isApplyingSkillManagerMutation = true
         isWriting = true
-        errorMessage = nil
-        lastMutationMessage = nil
+        clearSkillManagerFeedback()
         defer {
             isWriting = false
             isApplyingSkillManagerMutation = false
         }
 
         do {
-            skillManagerLocalCreatePreview = try await service.applySkillManagerLocalCreate(preview: preview, name: name)
+            _ = try await service.applySkillManagerLocalCreate(preview: preview, name: name)
+            clearSkillManagerWritePreviews()
             try await refreshCollections()
-            lastMutationMessage = UIStrings.text("skillManager.localCreate.applied", "Local skill template created and imported.")
+            skillManagerMessage = UIStrings.text("skillManager.localCreate.applied", "Local skill template created and imported.")
             recordLocalRefresh(message: UIStrings.refreshAfterWrite)
         } catch {
-            errorMessage = error.localizedDescription
-            lastMutationMessage = nil
+            setSkillManagerError(error.localizedDescription)
         }
     }
 
     func previewSkillManagerLocalDelete(skill: SkillRecord) async {
         guard !isPreviewingSkillManagerMutation else { return }
         isPreviewingSkillManagerMutation = true
-        errorMessage = nil
+        clearSkillManagerWorkflowPreviews()
         defer { isPreviewingSkillManagerMutation = false }
 
         do {
             skillManagerLocalDeletePreview = try await service.previewSkillManagerLocalDelete(instanceID: skill.id)
         } catch {
-            errorMessage = error.localizedDescription
+            setSkillManagerError(error.localizedDescription)
             skillManagerLocalDeletePreview = nil
         }
     }
@@ -1350,27 +1392,26 @@ final class SkillStore: ObservableObject {
     func applySkillManagerLocalDelete() async {
         guard let preview = skillManagerLocalDeletePreview else { return }
         guard preview.physicalDeleteAllowed else {
-            errorMessage = preview.summary
+            setSkillManagerError(preview.summary)
             return
         }
         guard !isApplyingSkillManagerMutation else { return }
         isApplyingSkillManagerMutation = true
         isWriting = true
-        errorMessage = nil
-        lastMutationMessage = nil
+        clearSkillManagerFeedback()
         defer {
             isWriting = false
             isApplyingSkillManagerMutation = false
         }
 
         do {
-            skillManagerLocalDeletePreview = try await service.applySkillManagerLocalDelete(instanceID: preview.instanceId)
+            _ = try await service.applySkillManagerLocalDelete(instanceID: preview.instanceId)
+            clearSkillManagerWritePreviews()
             try await refreshCollections()
-            lastMutationMessage = UIStrings.text("skillManager.localDelete.applied", "Local skill deleted.")
+            skillManagerMessage = UIStrings.text("skillManager.localDelete.applied", "Local skill deleted.")
             recordLocalRefresh(message: UIStrings.refreshAfterWrite)
         } catch {
-            errorMessage = error.localizedDescription
-            lastMutationMessage = nil
+            setSkillManagerError(error.localizedDescription)
         }
     }
 
@@ -1458,23 +1499,37 @@ final class SkillStore: ObservableObject {
         return localSkill.path
     }
 
+    func clearSkillManagerWorkflowPreviews() {
+        clearSkillManagerWritePreviews()
+        clearSkillManagerFeedback()
+    }
+
     private func clearSkillManagerWritePreviews() {
         skillManagerMutationPreview = nil
         skillManagerLocalCreatePreview = nil
         skillManagerLocalDeletePreview = nil
     }
 
+    private func clearSkillManagerFeedback() {
+        skillManagerErrorMessage = nil
+        skillManagerMessage = nil
+    }
+
+    private func setSkillManagerError(_ message: String) {
+        skillManagerErrorMessage = UIStrings.localizedServiceMessage(message)
+        skillManagerMessage = nil
+    }
+
     private func previewSkillManagerMutation(_ operation: () async throws -> SkillManagerMutationRecord) async {
         guard !isPreviewingSkillManagerMutation else { return }
         isPreviewingSkillManagerMutation = true
-        errorMessage = nil
-        lastMutationMessage = nil
+        clearSkillManagerWorkflowPreviews()
         defer { isPreviewingSkillManagerMutation = false }
 
         do {
             skillManagerMutationPreview = try await operation()
         } catch {
-            errorMessage = error.localizedDescription
+            setSkillManagerError(error.localizedDescription)
             skillManagerMutationPreview = nil
         }
     }
@@ -1483,32 +1538,30 @@ final class SkillStore: ObservableObject {
         guard !isApplyingSkillManagerMutation else { return }
         isApplyingSkillManagerMutation = true
         isWriting = true
-        errorMessage = nil
-        lastMutationMessage = nil
+        clearSkillManagerFeedback()
         defer {
             isWriting = false
             isApplyingSkillManagerMutation = false
         }
 
         do {
-            let result = try await operation()
-            skillManagerMutationPreview = result
+            _ = try await operation()
+            clearSkillManagerWritePreviews()
             detailsByID.removeAll()
             try await refreshCollections()
             await listSkillManagerInstalled()
-            lastMutationMessage = UIStrings.text("skillManager.apply.applied", "Skill Manager operation applied.")
+            skillManagerMessage = UIStrings.text("skillManager.apply.applied", "Skill Manager operation applied.")
             recordLocalRefresh(message: UIStrings.refreshAfterWrite)
             await loadSelectedDetail()
         } catch {
-            errorMessage = error.localizedDescription
-            lastMutationMessage = nil
+            setSkillManagerError(error.localizedDescription)
         }
     }
 
     private func selectedSkillManagerAgentIDsForMutation() -> [String]? {
         let agents = skillManagerSelectedAgents
         guard !agents.isEmpty else {
-            errorMessage = UIStrings.text("skillManager.agents.required", "Select at least one target agent.")
+            setSkillManagerError(UIStrings.text("skillManager.agents.required", "Select at least one target agent."))
             return nil
         }
         return agents
@@ -1519,8 +1572,8 @@ final class SkillStore: ObservableObject {
         return agents.isEmpty ? SkillManagerAgent.defaultTargets.map(\.rawValue) : agents
     }
 
-    private func parsedSkillManagerSkillNames() -> [String] {
-        skillManagerSkillName
+    private func parsedSkillManagerSkillNames(from rawValue: String) -> [String] {
+        rawValue
             .split { character in
                 character == "," || character == "\n" || character == ";"
             }
@@ -4110,6 +4163,7 @@ final class SkillStore: ObservableObject {
                 document.target == target
                     && (agentFilter == .all || document.agent == agentFilter.rawValue)
                     && configScopeFilter.includes(document)
+                    && configDocumentMatchesSidebarQuery(document)
             }
             if !visible {
                 setSidebarSelection(.configOverview)
@@ -4119,6 +4173,7 @@ final class SkillStore: ObservableObject {
                 snapshot.id == id
                     && (agentFilter == .all || snapshot.agent == agentFilter.rawValue)
                     && configScopeFilter.includes(snapshot)
+                    && configSnapshotMatchesSidebarQuery(snapshot)
             }
             if !visible {
                 setSidebarSelection(.configOverview)

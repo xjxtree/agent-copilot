@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct SafetyPill: View {
@@ -103,6 +104,68 @@ struct DetailMetricGrid<Content: View>: View {
         ) {
             content()
         }
+    }
+}
+
+struct CompactMetadataGrid: View {
+    let rows: [CompactMetadataRow]
+    var labelWidth = CGFloat(UIOptimizationPresentation.detailHeader.metadataLabelWidth)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+                CompactMetadataRowView(row: row, labelWidth: labelWidth)
+                    .id("\(row.label)-\(index)")
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+}
+
+struct CompactMetadataRowView: View {
+    let row: CompactMetadataRow
+    let labelWidth: CGFloat
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            HStack(spacing: 5) {
+                if let systemImage = row.systemImage {
+                    Image(systemName: systemImage)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 13)
+                }
+                Text(row.label)
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .frame(width: labelWidth, alignment: .leading)
+
+            Text(row.value)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .textSelection(.enabled)
+                .help(row.value)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if row.isCopyable {
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(row.value, forType: .string)
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+                .help(UIStrings.text("action.copy", "Copy"))
+                .accessibilityLabel("\(UIStrings.text("action.copy", "Copy")) \(row.label)")
+            }
+        }
+        .frame(minHeight: CGFloat(UIOptimizationPresentation.detailHeader.metadataRowHeight), alignment: .center)
+        .contentShape(Rectangle())
     }
 }
 
@@ -253,9 +316,38 @@ struct ErrorBanner: View {
     var body: some View {
         Label(message, systemImage: "exclamationmark.triangle.fill")
             .foregroundStyle(.red)
-            .padding(10)
+            .padding(.vertical, 10)
+            .padding(.horizontal, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .adaptiveMaterialSurface()
+            .overlay(alignment: .leading) {
+                Rectangle()
+                    .fill(Color.red)
+                    .frame(width: 3)
+                    .clipShape(Capsule())
+            }
+    }
+}
+
+struct DetailFeedbackToast: View {
+    let message: String
+    let systemImage: String
+    let color: Color
+
+    var body: some View {
+        Label(message, systemImage: systemImage)
+            .font(.caption)
+            .foregroundStyle(color)
+            .lineLimit(3)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .frame(maxWidth: CGFloat(UIOptimizationPresentation.detailFeedback.maximumWidth), alignment: .leading)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: CGFloat(UIOptimizationPresentation.detailFeedback.cornerRadius)))
+            .overlay(
+                RoundedRectangle(cornerRadius: CGFloat(UIOptimizationPresentation.detailFeedback.cornerRadius))
+                    .stroke(color.opacity(0.18), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.10), radius: 10, x: 0, y: 4)
     }
 }
 
@@ -265,8 +357,15 @@ struct SuccessBanner: View {
     var body: some View {
         Label(message, systemImage: "checkmark.circle.fill")
             .foregroundStyle(.green)
-            .padding(10)
+            .padding(.vertical, 10)
+            .padding(.horizontal, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .adaptiveMaterialSurface()
+            .overlay(alignment: .leading) {
+                Rectangle()
+                    .fill(Color.green)
+                    .frame(width: 3)
+                    .clipShape(Capsule())
+            }
     }
 }

@@ -58,6 +58,10 @@ pub struct SkillManagerCommandPreview {
     pub preview_token: String,
     pub summary: String,
     pub risks: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skills: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -321,6 +325,8 @@ pub fn search_skills_with_manager(
                 "Search may contact skills.sh, npm, or git-host metadata through the external CLI."
                     .to_string(),
             ],
+            source: None,
+            skills: Vec::new(),
         },
     )?;
     if !params.network_allowed {
@@ -361,6 +367,8 @@ pub fn list_installed_skills_with_manager(
             confirmed: false,
             summary: "List skills currently managed by npx skills.".to_string(),
             risks: Vec::new(),
+            source: None,
+            skills: Vec::new(),
         },
     )?;
     let output = run_previewed_command(ctx, &preview)?;
@@ -607,9 +615,13 @@ fn build_install_preview(
         "add".to_string(),
         source.to_string(),
     ];
-    for skill in normalized_skill_names(&params.skills)? {
+    let skill_names = normalized_skill_names(&params.skills)?;
+    for skill in &skill_names {
         args.push("--skill".to_string());
-        args.push(skill);
+        args.push(skill.clone());
+    }
+    if !skill_names.is_empty() {
+        args.push("--full-depth".to_string());
     }
     let agents = normalize_manager_agents(&params.agents)?;
     append_agent_args(&mut args, &agents);
@@ -637,6 +649,8 @@ fn build_install_preview(
                 agents.len()
             ),
             risks: install_risks(source, network_required),
+            source: Some(source.to_string()),
+            skills: skill_names,
         },
     )
 }
@@ -664,7 +678,7 @@ fn build_remove_preview(
         ctx,
         CommandPreviewDraft {
             operation: "remove",
-        args,
+            args,
             cwd: manager_cwd(ctx, params.scope.as_deref())?,
             network_required: false,
             network_allowed: true,
@@ -677,6 +691,8 @@ fn build_remove_preview(
                 "The manager may delete its canonical copy when no selected or managed agent still references it."
                     .to_string(),
             ],
+            source: None,
+            skills: vec![skill.to_string()],
         },
     )
 }
@@ -685,9 +701,10 @@ fn build_update_preview(
     ctx: &AdapterContext,
     params: &SkillManagerUpdateParams,
 ) -> Result<SkillManagerCommandPreview, CommandError> {
+    let skill_names = normalized_skill_names(&params.skills)?;
     let mut args = vec![SKILLS_CLI_BINARY.to_string(), "update".to_string()];
-    for skill in normalized_skill_names(&params.skills)? {
-        args.push(skill);
+    for skill in &skill_names {
+        args.push(skill.clone());
     }
     let agents = normalize_manager_agents(&params.agents)?;
     append_agent_args(&mut args, &agents);
@@ -710,6 +727,8 @@ fn build_update_preview(
                 "Update may contact remote source repositories or indexes through the external CLI."
                     .to_string(),
             ],
+            source: None,
+            skills: skill_names,
         },
     )
 }
@@ -730,7 +749,7 @@ fn build_local_create_preview(
         ctx,
         CommandPreviewDraft {
             operation: "localCreate",
-        args,
+            args,
             cwd,
             network_required: false,
             network_allowed: true,
@@ -740,6 +759,8 @@ fn build_local_create_preview(
                 "After creation, the app imports the local source through the existing Local Skill Library parser and rule checks."
                     .to_string(),
             ],
+            source: None,
+            skills: vec![name.clone()],
         },
     )
 }
@@ -753,6 +774,8 @@ struct CommandPreviewDraft {
     confirmed: bool,
     summary: String,
     risks: Vec<String>,
+    source: Option<String>,
+    skills: Vec<String>,
 }
 
 fn command_preview(
@@ -787,6 +810,8 @@ fn command_preview(
         preview_token,
         summary: draft.summary,
         risks: draft.risks,
+        source: draft.source,
+        skills: draft.skills,
     })
 }
 
@@ -838,9 +863,10 @@ fn run_previewed_command(
         stderr: truncate_capture(&stderr),
     };
     if !output.status.success() {
+        let detail = failed_command_detail(&record.stdout, &record.stderr);
         return Err(CommandError::SkillManagerCommandFailed(format!(
             "{} failed with status {:?}: {}",
-            preview.operation, record.exit_code, record.stderr
+            preview.operation, record.exit_code, detail
         )));
     }
     Ok(record)
@@ -1052,19 +1078,67 @@ fn parse_search_results(stdout: &str) -> Vec<SkillManagerSearchResult> {
             })
             .collect();
     }
-    stdout
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .filter(|line| !line.starts_with("npx "))
-        .take(50)
-        .map(|line| SkillManagerSearchResult {
-            name: line.split_whitespace().next().unwrap_or(line).to_string(),
-            source: None,
-            description: Some(line.to_string()),
-            raw: Value::String(line.to_string()),
-        })
-        .collect()
+    let mut results = Vec::new();
+    for line in stdout.lines().map(strip_ansi_codes) {
+        let line = line.trim();
+        if line.is_empty()
+            || line.starts_with("Install with")
+            || line.starts_with("npx ")
+            || line.starts_with('└')
+            || line.starts_with("http://")
+            || line.starts_with("https://")
+        {
+            continue;
+        }
+        let Some((package, rest)) = line.split_once('@') else {
+            continue;
+        };
+        let package = package.trim();
+        let mut skill_and_description = rest.splitn(2, char::is_whitespace);
+        let skill = skill_and_description.next().unwrap_or_default().trim();
+        if package.is_empty() || skill.is_empty() || !package.contains('/') {
+            continue;
+        }
+        let description = skill_and_description
+            .next()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+        results.push(SkillManagerSearchResult {
+            name: skill.to_string(),
+            source: Some(package.to_string()),
+            description,
+            raw: serde_json::json!({
+                "name": skill,
+                "source": package,
+                "raw": line
+            }),
+        });
+        if results.len() >= 50 {
+            break;
+        }
+    }
+    results
+}
+
+fn strip_ansi_codes(value: &str) -> String {
+    let mut stripped = String::with_capacity(value.len());
+    let mut chars = value.chars().peekable();
+    while let Some(char) = chars.next() {
+        if char == '\u{1b}' {
+            if chars.peek() == Some(&'[') {
+                chars.next();
+                for next in chars.by_ref() {
+                    if ('@'..='~').contains(&next) {
+                        break;
+                    }
+                }
+            }
+            continue;
+        }
+        stripped.push(char);
+    }
+    stripped
 }
 
 fn parse_installed_records(stdout: &str) -> Vec<SkillManagerInstalledRecord> {
@@ -1191,6 +1265,18 @@ fn truncate_capture(value: &str) -> String {
     truncated
 }
 
+fn failed_command_detail(stdout: &str, stderr: &str) -> String {
+    let stderr = strip_ansi_codes(stderr).trim().to_string();
+    if !stderr.is_empty() {
+        return stderr;
+    }
+    let stdout = strip_ansi_codes(stdout).trim().to_string();
+    if !stdout.is_empty() {
+        return stdout;
+    }
+    "no output captured from external skills manager".to_string()
+}
+
 fn unix_timestamp_millis() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1239,6 +1325,10 @@ mod tests {
         };
         let preview = build_install_preview(&ctx, &params).expect("preview");
         assert!(preview.command.contains(&"--skill".to_string()));
+        assert!(
+            preview.command.contains(&"--full-depth".to_string()),
+            "installing a named skill from search results should search nested package directories"
+        );
         assert!(!preview.command.contains(&"--copy".to_string()));
         assert_eq!(
             preview
@@ -1258,5 +1348,32 @@ mod tests {
         )
         .expect("copy preview");
         assert!(copy_preview.command.contains(&"--copy".to_string()));
+    }
+
+    #[test]
+    fn failed_command_error_uses_stdout_when_stderr_is_empty() {
+        let stderr = "";
+        let stdout = "\u{1b}[31mNo matching skills found for: alibabacloud-find-skills\u{1b}[0m";
+
+        let detail = failed_command_detail(stdout, stderr);
+
+        assert_eq!(
+            detail,
+            "No matching skills found for: alibabacloud-find-skills"
+        );
+    }
+
+    #[test]
+    fn search_parser_extracts_ansi_find_results() {
+        let stdout = "\n\u{1b}[38;5;102mInstall with\u{1b}[0m npx skills add <owner/repo@skill>\n\n\u{1b}[38;5;145mobra/superpowers@brainstorming\u{1b}[0m \u{1b}[36m245.4K installs\u{1b}[0m\n\u{1b}[38;5;102m└ https://skills.sh/obra/superpowers/brainstorming\u{1b}[0m\n\n\u{1b}[38;5;145mobra/superpowers@systematic-debugging\u{1b}[0m \u{1b}[36m161.5K installs\u{1b}[0m\n\u{1b}[38;5;102m└ https://skills.sh/obra/superpowers/systematic-debugging\u{1b}[0m\n";
+
+        let results = parse_search_results(stdout);
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].name, "brainstorming");
+        assert_eq!(results[0].source.as_deref(), Some("obra/superpowers"));
+        assert_eq!(results[0].description.as_deref(), Some("245.4K installs"));
+        assert_eq!(results[1].name, "systematic-debugging");
+        assert_eq!(results[1].source.as_deref(), Some("obra/superpowers"));
     }
 }

@@ -19,6 +19,7 @@ struct PrivacyPathText: View {
     let path: String
     var font: Font = .caption
     var lineLimit: Int = 2
+    var showsRevealControl: Bool = true
     @AppStorage(DisplayText.screenshotPrivacyModeStorageKey) private var privacyModeEnabled = true
     @State private var revealFullPath = false
 
@@ -45,7 +46,7 @@ struct PrivacyPathText: View {
     }
 
     private var shouldShowRevealControl: Bool {
-        DisplayText.isLikelyPath(path) && (privacyModeEnabled || DisplayText.privacyPath(path, privacyModeEnabled: false) != path)
+        showsRevealControl && DisplayText.isLikelyPath(path) && (privacyModeEnabled || DisplayText.privacyPath(path, privacyModeEnabled: false) != path)
     }
 }
 

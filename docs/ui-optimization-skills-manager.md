@@ -1,7 +1,68 @@
 # 技能管理界面 UI 优化方案
 
-> 针对当前 Claude Code 技能管理界面的系统优化方案。
+> 针对当前 AgentCopilot 跨 agent 技能浏览、详情和技能包管理界面的系统优化方案。
 > 覆盖布局结构、视觉层级、信息密度、组件一致性与 macOS 原生体验。
+
+## 0. 当前实现状态
+
+2026-06-26 已按最新版 `AgentCopilot` UI 边界落地第一轮优化：
+
+- 三栏宽度改由 `UIOptimizationPresentation` 统一管理：左栏 220/260/320，中栏 360/400/520。
+- 左栏主导航和底部工具入口改为浅色选中态，保留主文字颜色，并以 3pt 品牌色竖线提示选中。
+- 项目区域收敛为项目名 + 路径的单组信息，选择项目和更多操作保留在右侧菜单。
+- 技能列表过滤器合并为自适应 toolbar：宽屏一行，窄屏自动分两行；搜索框保留 220px 最小宽度；批量入口移入 toolbar 图标按钮。
+- 技能列表项压缩到 36-40pt，并为长技能名和路径提供 tooltip。
+- 详情页 header 压缩为 48pt 标题区，状态 tag 与更多菜单同排；启用/禁用移入更多菜单，避免蓝色主按钮误导。
+- definition、agents、diagnostic metadata 和 Skill Manager preview metadata 改为紧凑 key-value 行；definition、source、CWD、preview token 提供复制按钮。
+- Detail tabs 增加 `Metadata`，raw catalog details 从 Overview 移入 Metadata；tab 选中态改为浅灰背景 + 下划线，不再使用饱和蓝底。
+- 权限与脚本风险块改为橙色 warning 语义和左侧 warning strip。
+- 当前 agent 为空但其他 agent 有技能时，空态会说明是当前 agent/root 无技能，不再误显示为搜索无匹配。
+
+保留边界：
+
+- Skill Manager 写操作仍保持 preview-first / explicit-confirm；没有新增隐藏 apply/write/script/provider 路径。
+- 路径复制遵循当前 screenshot/privacy presentation，不新增绕过隐私模式的 raw path 展示。
+
+验证记录：
+
+- `pnpm check:macos` 已覆盖 Rust fmt/test/clippy、Swift test/build、文档治理、协议漂移、版本文档、fixture smoke 和 app-window 截图。
+- 真实本机 Computer Use 已针对当前工作区 `dist/AgentCopilot.app` 验证 Codex 技能列表、详情 header、`Metadata` tab、copy affordance、warning 风险块和 Skill Manager preview metadata。
+- Skill Manager 验证只执行 preview 操作，未触发 `Remove` / apply / install / update 写入。
+
+2026-06-27 已按 Settings / Task Preflight / Skill Manager 范围落地第二轮优化：
+
+- Settings 保留 toolbar tab，不把已迁出的 Agent Config 放回 Settings；四页改为统一 header、boundary pill 和 compact section 结构。
+- AI Provider 设置拆分为 Connection、Limits、Credential Safety、Actions；服务页默认展示版本、协议和方法数健康摘要，路径细节收进 Advanced disclosure。
+- Provider Observability 在无数据时使用单一空态卡，避免图表和历史区分散显示空结果。
+- Task Preflight 保持 950px 双栏 sheet；左栏按 Agent scope、Task input、Result 排序，agent chip 固定宽度并提供 tooltip，右栏历史说明会回填输入、范围和结果。
+- Provider 未配置或不可用时，Task Preflight 在输入区上方显示阻断提示，并禁用生成动作；只读边界说明固定保留在底部。
+- Skill Manager 改为固定 Targets 摘要栏和 Search & Install、Installed & Updates、Local Library 三个 segmented workflows；移除/更新按名称操作收进 Installed 的 Advanced 区域。
+- Skill Manager 外部 manager 不可用时禁用 search/install/remove/update，并展示修复说明；Local Library 仍按自身能力可用。
+- Skill Manager 使用 surface-local error/message，关闭 sheet 会清理 workflow preview；安装名、移除/更新名、本地创建名分离，避免跨 workflow 串扰。
+- 新增 Swift 模型、本地化和 store 测试覆盖 presentation 常量、workflow、独立输入状态、surface-local feedback、Provider/Preflight 空态；布局 verifier 增加 Settings、Preflight、Skill Manager 结构约束。
+
+2026-06-27 审查后修复：
+
+- Local Library 中的「预览安装」也会展示 mutation preview，避免预览卡片丢失。
+- Skill Manager 写操作成功后统一清空 write previews，避免成功界面仍残留 Apply 按钮。
+- 各 preview 动作开始时清空全部 write previews，防止多个过期的 preview 同时堆积。
+- Skill Manager preview summary 改用后端返回的结构化 `source` / `skills` 字段，不再依赖命令行 token 顺序解析。
+- Settings 服务页「Advanced」badge 图标从默认 `lock.shield` 改为 `gearshape`，语义更贴切。
+- 技能列表 filter picker 宽度由固定值改为 `minWidth`，减少本地化截断风险。
+- CompactMetadataGrid 改用 enumerated offset 作为 ForEach ID，避免重复 value 导致 SwiftUI 警告。
+
+2026-06-27 设计系统一致性追加优化：
+
+- Task Preflight agent chip 选中态背景从饱和蓝改为 `selectedContentBackground` 浅灰，保留品牌色边框，与全局 sidebar 选中态统一。
+- Task Preflight 历史记录选中态从饱和蓝底白字改为浅灰背景 + 左侧 3pt 品牌色强调线，文字恢复主/次色。
+- Settings 页各类 banner（验证、成功、错误、保存/测试状态）增加左侧语义色带，强化提示层级并减少卡片堆砌感。
+- Task Preflight Provider 未配置阻断提示、Skill Manager 外部 manager 不可用提示同样增加左侧橙色 warning strip，与全局 warning 块统一。
+- ErrorBanner / SuccessBanner 统一增加左侧语义色带。
+
+验证记录（修复后）：
+
+- `pnpm check:macos` 全部通过。
+- `pnpm check:privacy` 通过。
 
 ---
 

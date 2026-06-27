@@ -52,6 +52,7 @@ struct LocalizationModelTests {
             "服务调用超时：sidecar 未在限定时间内返回完整响应。",
             "Sidecar timeout errors should use the selected app language."
         )
+        try skillManagerChineseLocalizationDoesNotFallBackToEnglish()
 
         UIStrings.use(.english)
         try expectEqual(UIStrings.scan, "Scan", "Switching back to English should not reuse cached Chinese values")
@@ -65,5 +66,40 @@ struct LocalizationModelTests {
             "Service call timed out before the sidecar returned a complete response.",
             "English sidecar timeout message should stay readable."
         )
+    }
+
+    private func skillManagerChineseLocalizationDoesNotFallBackToEnglish() throws {
+        let requiredKeys = [
+            "skillManager.targets",
+            "skillManager.workflow.searchInstall",
+            "skillManager.workflow.installedUpdates",
+            "skillManager.workflow.localLibrary",
+            "skillManager.toolUnavailable.title",
+            "skillManager.toolUnavailable.message",
+            "skillManager.searchInstall",
+            "skillManager.search.networkBlocked",
+            "skillManager.previewSummary.search",
+            "skillManager.previewSummary.listInstalled",
+            "skillManager.previewSummary.install",
+            "skillManager.previewSummary.remove",
+            "skillManager.previewSummary.update",
+            "skillManager.previewSummary.localCreate",
+            "skillManager.installed",
+            "skillManager.removeSelected",
+            "skillManager.localLibrary",
+            "skillManager.previewInstall",
+            "skillManager.previewRemove",
+            "skillManager.previewUpdate",
+            "skillManager.previewCreate",
+            "skillManager.installSkillName",
+            "skillManager.removeSkillName",
+            "skillManager.localName"
+        ]
+
+        for key in requiredKeys {
+            let value = UIStrings.text(key, "__missing__")
+            try expectFalse(value == "__missing__", "\(key) should have a Chinese localization")
+            try expectFalse(value.range(of: #"[A-Za-z]{4,}"#, options: .regularExpression) != nil, "\(key) should not fall back to English in Chinese UI: \(value)")
+        }
     }
 }

@@ -15,40 +15,20 @@ struct HeaderView: View {
         let disabledReason = toggleDisabledReason
         let isEffectivelyEnabled = DisplayText.statusKind(skill.state, enabled: skill.enabled) == .enabled
 
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 20) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(skill.name)
-                        .font(.largeTitle.bold())
-                    Text(skill.definitionId)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 8) {
-                    Label(
-                        DisplayText.isToolGlobal(skill) ? UIStrings.readOnlyPreview : DisplayText.state(skill.state, enabled: skill.enabled),
-                        systemImage: DisplayText.isToolGlobal(skill) ? "eye" : DisplayText.stateSystemImage(skill.state, enabled: skill.enabled)
-                    )
-                    .labelStyle(.titleAndIcon)
-                    .foregroundStyle(DisplayText.isToolGlobal(skill) ? .secondary : DisplayText.stateColor(skill.state, enabled: skill.enabled))
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
+                Text(skill.name)
+                    .font(.title2.bold())
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(skill.name)
 
-                    if showsReadOnlyPreviewBadge {
-                        Label(DisplayText.isToolGlobal(skill) ? UIStrings.readOnlyPreview : UIStrings.readOnly, systemImage: "lock.fill")
-                            .font(.caption.bold())
-                            .foregroundStyle(.secondary)
-                            .help(disabledReason ?? UIStrings.readOnly)
-                    }
+                Spacer(minLength: 12)
 
-                    if isGuardedToggleAvailable {
-                        Label(UIStrings.guardedToggle, systemImage: "shield.lefthalf.filled")
-                            .font(.caption.bold())
-                            .foregroundStyle(.secondary)
-                            .help(guardedToggleBoundary)
-                    }
+                statusTag(isEffectivelyEnabled: isEffectivelyEnabled)
 
-                    Button {
+                Menu {
+                    Button(role: isEffectivelyEnabled ? .destructive : nil) {
                         onToggle(!isEffectivelyEnabled)
                     } label: {
                         Label(
@@ -56,12 +36,19 @@ struct HeaderView: View {
                             systemImage: isEffectivelyEnabled ? "pause.circle" : "play.circle"
                         )
                     }
-                    .buttonStyle(.borderedProminent)
                     .disabled(disabledReason != nil)
-                    .help(disabledReason ?? "")
-                    .accessibilityHint(disabledReason ?? "")
+                } label: {
+                    Image(systemName: "ellipsis.circle")
                 }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .help(disabledReason ?? UIStrings.text("detail.actions", "Skill actions"))
+                .accessibilityLabel(UIStrings.text("detail.actions", "Skill actions"))
+                .accessibilityHint(disabledReason ?? "")
             }
+            .frame(height: CGFloat(UIOptimizationPresentation.detailHeader.height), alignment: .center)
+
+            CompactMetadataGrid(rows: headerMetadataRows)
 
             if let disabledReason {
                 Label(disabledReason, systemImage: "lock.fill")
@@ -83,9 +70,6 @@ struct HeaderView: View {
     private var headerMetrics: some View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: 10) {
-                adoptingAgentsChip
-                    .frame(minWidth: 360, maxWidth: .infinity)
-                    .layoutPriority(1)
                 if let sessionUsage {
                     sessionUsageChip(sessionUsage)
                         .frame(width: 220)
@@ -97,7 +81,6 @@ struct HeaderView: View {
             }
 
             VStack(alignment: .leading, spacing: 10) {
-                adoptingAgentsChip
                 DetailMetricGrid(maxColumns: 2, minColumnWidth: 190) {
                     if let sessionUsage {
                         sessionUsageChip(sessionUsage)
@@ -109,16 +92,6 @@ struct HeaderView: View {
         }
     }
 
-    private var adoptingAgentsChip: some View {
-        SummaryChip(
-            title: UIStrings.text("detail.adoptingAgents", "Agents with this skill installed"),
-            value: adoptingAgentSummary,
-            systemImage: "person.2",
-            valueLineLimit: nil,
-            valueTruncationMode: .tail
-        )
-    }
-
     private var issueBadge: some View {
         CountBadge(
             label: UIStrings.text("detail.issueGroups", "Issue groups"),
@@ -127,6 +100,49 @@ struct HeaderView: View {
             tint: .orange,
             action: { onSelectSection(.findings) }
         )
+    }
+
+    private var headerMetadataRows: [CompactMetadataRow] {
+        [
+            CompactMetadataRow(
+                label: UIStrings.definition,
+                value: skill.definitionId,
+                systemImage: "number",
+                isCopyable: true
+            ),
+            CompactMetadataRow(
+                label: UIStrings.text("detail.adoptingAgents.short", "Agents"),
+                value: adoptingAgentSummary,
+                systemImage: "person.2"
+            )
+        ]
+    }
+
+    private func statusTag(isEffectivelyEnabled: Bool) -> some View {
+        Label(
+            DisplayText.isToolGlobal(skill) ? UIStrings.readOnlyPreview : DisplayText.state(skill.state, enabled: skill.enabled),
+            systemImage: DisplayText.isToolGlobal(skill) ? "eye" : DisplayText.stateSystemImage(skill.state, enabled: skill.enabled)
+        )
+        .font(.caption.bold())
+        .lineLimit(1)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(statusBackground(isEffectivelyEnabled: isEffectivelyEnabled), in: Capsule())
+        .foregroundStyle(statusForeground)
+    }
+
+    private func statusBackground(isEffectivelyEnabled: Bool) -> Color {
+        if DisplayText.isToolGlobal(skill) {
+            return Color.secondary.opacity(0.12)
+        }
+        if isEffectivelyEnabled {
+            return Color.green.opacity(0.12)
+        }
+        return Color.secondary.opacity(0.12)
+    }
+
+    private var statusForeground: Color {
+        DisplayText.isToolGlobal(skill) ? .secondary : DisplayText.stateColor(skill.state, enabled: skill.enabled)
     }
 
     private func sessionUsageChip(_ row: LocalSessionSkillUsageRow) -> some View {

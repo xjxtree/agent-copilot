@@ -9,24 +9,17 @@ struct DetailView: View {
     private static let topAnchorID = "skills-copilot.detail.top"
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(spacing: 0) {
-                    Color.clear
-                        .frame(height: 0)
-                        .accessibilityHidden(true)
-                        .id(Self.topAnchorID)
+        ZStack(alignment: .topTrailing) {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 0) {
+                        Color.clear
+                            .frame(height: 0)
+                            .accessibilityHidden(true)
+                            .id(Self.topAnchorID)
 
-                    VStack(alignment: .leading, spacing: 24) {
-                        if let error = store.errorMessage {
-                            ErrorBanner(message: error)
-                        }
-
-                        if let message = store.lastMutationMessage {
-                            SuccessBanner(message: message)
-                        }
-
-                        if store.selectedSidebarSelection?.isSession == true {
+                        VStack(alignment: .leading, spacing: 24) {
+                            if store.selectedSidebarSelection?.isSession == true {
                             AgentSessionDetailPanel()
                         } else if store.selectedSidebarSelection?.isConfig == true {
                             AgentConfigDetailPanel()
@@ -88,22 +81,6 @@ struct DetailView: View {
                                         scriptPreview: store.scriptExecutionPreview(for: skill),
                                         isLoading: store.isLoadingDetail
                                     )
-
-                                    DisclosureGroup {
-                                        SkillDetailCard(
-                                            skill: skill,
-                                            detail: store.selectedSkillDetail,
-                                            adapterCapability: store.adapterCapabilities.first { $0.agent == skill.agent },
-                                            isLoading: store.isLoadingDetail
-                                        )
-                                        .padding(.top, 12)
-                                    } label: {
-                                        Label(UIStrings.text("detail.rawDetails", "Raw Catalog Details"), systemImage: "doc.text.magnifyingglass")
-                                            .font(.headline)
-                                    }
-                                    .padding()
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .adaptiveMaterialSurface()
 
                                     if DisplayText.isToolGlobal(skill) {
                                         ToolGlobalPreviewCard(skill: skill)
@@ -498,9 +475,16 @@ struct DetailView: View {
                                     Task {
                                         await store.previewScriptExecutionSafety(for: skill)
                                     }
-                                }
-                            )
-                        }
+                                    }
+                                )
+                            case .metadata:
+                                SkillDetailCard(
+                                    skill: skill,
+                                    detail: store.selectedSkillDetail,
+                                    adapterCapability: store.adapterCapabilities.first { $0.agent == skill.agent },
+                                    isLoading: store.isLoadingDetail
+                                )
+                            }
                         } else {
                             EmptyDetailView(
                                 title: emptyDetailTitle,
@@ -521,12 +505,35 @@ struct DetailView: View {
             .onChange(of: store.selectedSidebarSelection) { _ in
                 scrollToTop(proxy)
             }
+            }
+
+            detailFeedbackOverlay
+                .padding(.top, 18)
+                .padding(.trailing, 28)
+                .allowsHitTesting(false)
         }
         .navigationTitle("")
         .transaction { transaction in
             if reduceMotion {
                 transaction.animation = nil
             }
+        }
+    }
+
+    @ViewBuilder
+    private var detailFeedbackOverlay: some View {
+        if let error = store.errorMessage {
+            DetailFeedbackToast(
+                message: error,
+                systemImage: "exclamationmark.triangle.fill",
+                color: .red
+            )
+        } else if let message = store.lastMutationMessage {
+            DetailFeedbackToast(
+                message: message,
+                systemImage: "checkmark.circle.fill",
+                color: .green
+            )
         }
     }
 

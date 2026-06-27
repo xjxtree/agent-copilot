@@ -14,11 +14,12 @@ enum DetailSection: String, CaseIterable, Identifiable {
     case conflicts
     case history
     case analysis
+    case metadata
 
     var id: String { rawValue }
 
     static var visibleCases: [DetailSection] {
-        [.overview, .findings, .history, .analysis]
+        [.overview, .findings, .history, .analysis, .metadata]
     }
 
     static var primaryWorkCases: [DetailSection] {
@@ -27,7 +28,7 @@ enum DetailSection: String, CaseIterable, Identifiable {
 
     var requiresSelectedSkill: Bool {
         switch self {
-        case .overview, .findings, .conflicts, .history:
+        case .overview, .findings, .conflicts, .history, .metadata:
             return true
         case .agentWorkspace, .lineup, .agentProfile, .taskCockpit, .skillManager, .cleanup, .guidedCleanup, .observability, .analysis:
             return false
@@ -62,6 +63,8 @@ enum DetailSection: String, CaseIterable, Identifiable {
             return UIStrings.text("detail.history", "History")
         case .analysis:
             return UIStrings.text("detail.analysisReview", "Smart Analysis")
+        case .metadata:
+            return UIStrings.text("detail.metadata", "Metadata")
         }
     }
 
@@ -78,7 +81,7 @@ enum DetailSection: String, CaseIterable, Identifiable {
         case .skillManager:
             return "shippingbox.and.arrow.backward"
         case .overview:
-            return "stethoscope"
+            return "chart.pie"
         case .cleanup:
             return "tray.full"
         case .guidedCleanup:
@@ -92,7 +95,9 @@ enum DetailSection: String, CaseIterable, Identifiable {
         case .history:
             return "clock.arrow.circlepath"
         case .analysis:
-            return "doc.text.magnifyingglass"
+            return "sparkles"
+        case .metadata:
+            return "info.circle"
         }
     }
 
@@ -124,6 +129,8 @@ enum DetailSection: String, CaseIterable, Identifiable {
             return UIStrings.text("detail.section.history.summary", "Review selected-skill toggle and config history.")
         case .analysis:
             return UIStrings.text("detail.section.analysis.summary", "Use focused smart analysis panels for quality scoring, task fit, and routing.")
+        case .metadata:
+            return UIStrings.text("detail.section.metadata.summary", "Inspect raw catalog metadata, frontmatter, body excerpts, and adapter capability details.")
         }
     }
 
@@ -131,7 +138,7 @@ enum DetailSection: String, CaseIterable, Identifiable {
         switch self {
         case .agentWorkspace, .lineup, .agentProfile, .taskCockpit:
             return true
-        case .skillManager, .overview, .cleanup, .guidedCleanup, .observability, .findings, .conflicts, .history, .analysis:
+        case .skillManager, .overview, .cleanup, .guidedCleanup, .observability, .findings, .conflicts, .history, .analysis, .metadata:
             return false
         }
     }
@@ -162,14 +169,7 @@ struct SkillSummaryCard: View {
                 isEmpty: summaryText == UIStrings.noDescription
             )
 
-            DetailMetricGrid {
-                SummaryChip(title: UIStrings.agent, value: DisplayText.agent(skill.agent), systemImage: "person.crop.circle")
-                SummaryChip(title: UIStrings.scope, value: DisplayText.scope(for: skill), systemImage: "folder")
-                SummaryChip(title: UIStrings.provenanceRoot, value: SkillProvenanceDisplay.rootClass(for: skill), systemImage: "externaldrive")
-                SummaryChip(title: UIStrings.provenanceKind, value: SkillProvenanceDisplay.kind(for: skill), systemImage: "tag")
-                SummaryChip(title: UIStrings.definition, value: skill.definitionId, systemImage: "number")
-                SummaryChip(title: UIStrings.source, value: DisplayText.privacyPath(skill.displayPath, privacyModeEnabled: screenshotPrivacyModeEnabled), systemImage: "doc")
-            }
+            CompactMetadataGrid(rows: diagnosticRows)
 
             OverviewRiskPanel(
                 permissionSummary: PermissionDisplayModel.summary(for: detail?.permissions ?? .null),
@@ -186,6 +186,22 @@ struct SkillSummaryCard: View {
             return UIStrings.noDescription
         }
         return description
+    }
+
+    private var diagnosticRows: [CompactMetadataRow] {
+        [
+            CompactMetadataRow(label: UIStrings.agent, value: DisplayText.agent(skill.agent), systemImage: "person.crop.circle"),
+            CompactMetadataRow(label: UIStrings.scope, value: DisplayText.scope(for: skill), systemImage: "folder"),
+            CompactMetadataRow(label: UIStrings.provenanceRoot, value: SkillProvenanceDisplay.rootClass(for: skill), systemImage: "externaldrive"),
+            CompactMetadataRow(label: UIStrings.provenanceKind, value: SkillProvenanceDisplay.kind(for: skill), systemImage: "tag"),
+            CompactMetadataRow(label: UIStrings.definition, value: skill.definitionId, systemImage: "number", isCopyable: true),
+            CompactMetadataRow(
+                label: UIStrings.source,
+                value: DisplayText.privacyPath(skill.displayPath, privacyModeEnabled: screenshotPrivacyModeEnabled),
+                systemImage: "doc",
+                isCopyable: true
+            )
+        ]
     }
 }
 
@@ -533,7 +549,14 @@ private struct OverviewRiskPanel: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))
+        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(Color.orange)
+                .frame(width: 3)
+                .clipShape(RoundedRectangle(cornerRadius: 1.5))
+                .padding(.vertical, 10)
+        }
     }
 
     private var scriptState: String {
@@ -593,17 +616,25 @@ private struct DetailSectionTagButton: View {
 
     var body: some View {
         Button(action: action) {
-            Label(item.title, systemImage: item.systemImage)
-                .font(.caption.bold())
-                .lineLimit(1)
-                .foregroundStyle(isSelected ? Color.white : Color.primary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(background, in: Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(isSelected ? Color.clear : Color.secondary.opacity(0.16), lineWidth: 1)
-                )
+            VStack(spacing: 4) {
+                Label(item.title, systemImage: item.systemImage)
+                    .font(.caption.bold())
+                    .lineLimit(1)
+                    .foregroundStyle(isSelected ? Color.primary : Color.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(background, in: Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(isSelected ? Color.secondary.opacity(0.18) : Color.secondary.opacity(0.12), lineWidth: 1)
+                    )
+
+                Rectangle()
+                    .fill(isSelected ? Color.accentColor : Color.clear)
+                    .frame(height: 2)
+                    .clipShape(Capsule())
+                    .padding(.horizontal, 10)
+            }
         }
         .buttonStyle(.plain)
         .accessibilityLabel(item.title)
@@ -611,6 +642,6 @@ private struct DetailSectionTagButton: View {
     }
 
     private var background: some ShapeStyle {
-        isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quaternary.opacity(0.35))
+        isSelected ? AnyShapeStyle(Color(nsColor: .selectedContentBackgroundColor).opacity(0.12)) : AnyShapeStyle(.quaternary.opacity(0.30))
     }
 }

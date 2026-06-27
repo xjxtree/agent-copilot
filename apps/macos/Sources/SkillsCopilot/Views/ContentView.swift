@@ -31,10 +31,18 @@ struct ContentView: View {
     private var appShell: some View {
         NavigationSplitView {
             SidebarView()
-                .navigationSplitViewColumnWidth(min: 260, ideal: 300, max: 340)
+                .navigationSplitViewColumnWidth(
+                    min: CGFloat(UIOptimizationPresentation.skillList.minimumPrimaryColumnWidth),
+                    ideal: CGFloat(UIOptimizationPresentation.skillList.idealPrimaryColumnWidth),
+                    max: CGFloat(UIOptimizationPresentation.skillList.maximumPrimaryColumnWidth)
+                )
         } content: {
             SecondarySidebarView()
-                .navigationSplitViewColumnWidth(min: 300, ideal: 340, max: 430)
+                .navigationSplitViewColumnWidth(
+                    min: CGFloat(UIOptimizationPresentation.skillList.minimumSecondaryColumnWidth),
+                    ideal: CGFloat(UIOptimizationPresentation.skillList.idealSecondaryColumnWidth),
+                    max: CGFloat(UIOptimizationPresentation.skillList.maximumSecondaryColumnWidth)
+                )
         } detail: {
             DetailView(skill: store.selectedSkill)
         }

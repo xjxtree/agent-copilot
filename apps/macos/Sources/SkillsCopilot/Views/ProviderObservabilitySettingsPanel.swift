@@ -134,28 +134,32 @@ private struct ProviderObservabilityDashboardSettingsView: View {
                 SummaryChip(title: UIStrings.providerObservabilityDuration, value: durationLabel(result.summary.totalDurationMS), systemImage: "timer")
             }
 
-            ProviderObservabilityChartsPanel(result: result)
+            if result.isDashboardEmpty {
+                ProviderObservabilityEmptyDashboard()
+            } else {
+                ProviderObservabilityChartsPanel(result: result)
 
-            if !result.summary.summaryText.isEmpty {
-                Text(result.summary.summaryText)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
+                if !result.summary.summaryText.isEmpty {
+                    Text(result.summary.summaryText)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 12)], alignment: .leading, spacing: 12) {
+                    ProviderObservabilityDimensionList(title: UIStrings.providerObservabilityProviders, rows: result.providerRows, systemImage: "person.crop.circle.badge.checkmark")
+                    ProviderObservabilityDimensionList(title: UIStrings.providerObservabilityModels, rows: result.modelRows, systemImage: "cpu")
+                    ProviderObservabilityDimensionList(title: UIStrings.providerObservabilityDestinations, rows: result.destinationRows, systemImage: "network")
+                }
+
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 12)], alignment: .leading, spacing: 12) {
+                    ProviderObservabilityHintList(title: UIStrings.providerObservabilityBudgetHints, rows: result.budgetHints, systemImage: "gauge.with.dots.needle.67percent")
+                    ProviderObservabilityHintList(title: UIStrings.providerObservabilityUsageHints, rows: result.usageHints, systemImage: "chart.bar.xaxis")
+                    ProviderObservabilityHintList(title: UIStrings.providerObservabilityRetention, rows: result.retentionRows + result.cleanupRecommendationRows, systemImage: "archivebox")
+                }
+
+                ProviderObservabilityModelTaskHistoryList(rows: result.modelTaskHistoryRows)
             }
-
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 12)], alignment: .leading, spacing: 12) {
-                ProviderObservabilityDimensionList(title: UIStrings.providerObservabilityProviders, rows: result.providerRows, systemImage: "person.crop.circle.badge.checkmark")
-                ProviderObservabilityDimensionList(title: UIStrings.providerObservabilityModels, rows: result.modelRows, systemImage: "cpu")
-                ProviderObservabilityDimensionList(title: UIStrings.providerObservabilityDestinations, rows: result.destinationRows, systemImage: "network")
-            }
-
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 12)], alignment: .leading, spacing: 12) {
-                ProviderObservabilityHintList(title: UIStrings.providerObservabilityBudgetHints, rows: result.budgetHints, systemImage: "gauge.with.dots.needle.67percent")
-                ProviderObservabilityHintList(title: UIStrings.providerObservabilityUsageHints, rows: result.usageHints, systemImage: "chart.bar.xaxis")
-                ProviderObservabilityHintList(title: UIStrings.providerObservabilityRetention, rows: result.retentionRows + result.cleanupRecommendationRows, systemImage: "archivebox")
-            }
-
-            ProviderObservabilityModelTaskHistoryList(rows: result.modelTaskHistoryRows)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -180,6 +184,29 @@ private struct ProviderObservabilityDashboardSettingsView: View {
 
     private var estimatedTotalTokens: Int {
         result.summary.estimatedTotalTokens > 0 ? result.summary.estimatedTotalTokens : result.callRows.reduce(0) { $0 + $1.totalTokens }
+    }
+
+}
+
+private struct ProviderObservabilityEmptyDashboard: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(
+                UIStrings.text("providerObservability.empty.dashboardTitle", "No provider metadata yet"),
+                systemImage: "tray"
+            )
+                .font(.callout.bold())
+            Text(UIStrings.text(
+                "providerObservability.empty.dashboardSummary",
+                "No app-local provider prompt-run or call metadata has been recorded for this dashboard yet."
+            ))
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.22), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
