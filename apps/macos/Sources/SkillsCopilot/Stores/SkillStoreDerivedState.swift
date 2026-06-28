@@ -113,6 +113,10 @@ extension SkillStore {
         return detailsByID[id]
     }
 
+    func adoptingAgentSummary(for skill: SkillRecord) -> String {
+        adoptingAgentSummaryBySkillID[skill.id] ?? DisplayText.agent(skill.agent)
+    }
+
     var enabledCount: Int {
         skills.filter { DisplayText.statusKind($0.state, enabled: $0.enabled) == .enabled }.count
     }
@@ -241,6 +245,14 @@ extension SkillStore {
         return findings.filter { finding in
             finding.instanceId == skill.id
         }
+    }
+
+    var selectedDisplayFindings: [RuleFindingRecord] {
+        guard let skill = selectedSkill else { return [] }
+        return SkillListModel.displayFindings(skills: skills, findings: findings)
+            .filter { finding in
+                finding.instanceId == skill.id
+            }
     }
 
     var selectedCrossAgentComparisonGroup: CrossAgentComparisonGroup? {

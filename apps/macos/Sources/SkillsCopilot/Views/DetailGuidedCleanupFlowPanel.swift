@@ -430,18 +430,38 @@ struct GuidedCleanupSafeActionList: View {
 struct GuidedCleanupSafeLinkButton: View {
     let link: GuidedCleanupSafeActionDeepLink
     let onOpen: () -> Void
+    @State private var isConfirmingOpen = false
+
+    private var needsConfirmation: Bool {
+        link.requiresConfirmation
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Button {
-                    onOpen()
+                    if needsConfirmation && !isConfirmingOpen {
+                        isConfirmingOpen = true
+                    } else {
+                        isConfirmingOpen = false
+                        onOpen()
+                    }
                 } label: {
-                    Label(link.label.isEmpty ? UIStrings.guidedCleanupSafeLinkOpen : link.label, systemImage: "arrowshape.turn.up.right")
+                    Label(
+                        isConfirmingOpen ? UIStrings.guidedCleanupSafeLinkConfirmOpen : (link.label.isEmpty ? UIStrings.guidedCleanupSafeLinkOpen : link.label),
+                        systemImage: isConfirmingOpen ? "checkmark.shield" : "arrowshape.turn.up.right"
+                    )
                 }
                 .buttonStyle(.bordered)
                 .disabled(link.canApply)
                 .help(link.canApply ? UIStrings.guidedCleanupSafeLinkApplyBlocked : UIStrings.guidedCleanupSafeLinkHelp)
+
+                if isConfirmingOpen {
+                    Button(UIStrings.guidedCleanupSafeLinkCancelOpen) {
+                        isConfirmingOpen = false
+                    }
+                    .buttonStyle(.borderless)
+                }
 
                 Label(UIStrings.guidedCleanupFlowPreviewOnly, systemImage: "eye")
                     .font(.caption2.bold())

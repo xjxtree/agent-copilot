@@ -2,38 +2,32 @@ import Foundation
 import SwiftUI
 
 struct TaskPreflightPreviewSheet: View {
-    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var store: SkillStore
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .center, spacing: 10) {
-                Label(UIStrings.taskCockpitTitle, systemImage: "checklist")
-                    .font(.title3.weight(.semibold))
-                Spacer()
-                Button(UIStrings.done) {
-                    dismiss()
-                }
-                .keyboardShortcut(.cancelAction)
-            }
-
-            HStack(alignment: .top, spacing: 12) {
-                ScrollView {
-                    TaskPreflightEditorPane(historySelectionID: store.selectedTaskCockpitHistoryID)
-                }
-                .frame(minWidth: 640, maxWidth: .infinity)
-
-                TaskPreflightHistoryPanel(
-                    records: store.taskCockpitHistory,
-                    selectedID: store.selectedTaskCockpitHistoryID,
-                    onSelect: { record in
-                        store.selectTaskCockpitHistoryRecord(record)
+        WorkflowSheetShell(
+            title: UIStrings.taskCockpitTitle,
+            systemImage: "checklist",
+            subtitle: UIStrings.readOnlyPreview,
+            content: {
+                WorkflowSheetSplitLayout(
+                    secondaryWidth: CGFloat(UIOptimizationPresentation.taskPreflight.historyColumnWidth)
+                ) {
+                    ScrollView {
+                        TaskPreflightEditorPane(historySelectionID: store.selectedTaskCockpitHistoryID)
+                            .padding(.trailing, 14)
                     }
-                )
-                .frame(width: CGFloat(UIOptimizationPresentation.taskPreflight.historyColumnWidth))
+                } secondary: {
+                    TaskPreflightHistoryPanel(
+                        records: store.taskCockpitHistory,
+                        selectedID: store.selectedTaskCockpitHistoryID,
+                        onSelect: { record in
+                            store.selectTaskCockpitHistoryRecord(record)
+                        }
+                    )
+                }
             }
-        }
-        .padding(16)
+        )
         .frame(
             minWidth: CGFloat(UIOptimizationPresentation.taskPreflight.sheetMinimumWidth),
             idealWidth: CGFloat(UIOptimizationPresentation.taskPreflight.sheetIdealWidth),
@@ -152,13 +146,11 @@ private struct TaskPreflightHistoryPanel: View {
             .fixedSize(horizontal: false, vertical: true)
 
             if records.isEmpty {
-                Text(UIStrings.text("taskCockpit.history.empty", "No task preflight history yet."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
-                    .background(.quaternary.opacity(0.18), in: RoundedRectangle(cornerRadius: 8))
+                EmptyState(
+                    title: UIStrings.text("taskCockpit.history.emptyTitle", "No History"),
+                    systemImage: "clock.badge.questionmark",
+                    message: UIStrings.text("taskCockpit.history.emptyMessage", "Run a task preflight to save a reusable history row.")
+                )
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 8) {
@@ -293,20 +285,7 @@ struct TaskCockpitPanel: View {
             )
 
             if let providerGateMessage {
-                Label(providerGateMessage, systemImage: "exclamationmark.triangle.fill")
-                    .font(.callout)
-                    .foregroundStyle(.orange)
-                    .padding(.vertical, 10)
-                    .padding(.horizontal, 12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .adaptiveMaterialSurface()
-                    .overlay(alignment: .leading) {
-                        Rectangle()
-                            .fill(Color.orange)
-                            .frame(width: 3)
-                            .clipShape(Capsule())
-                    }
-                    .textSelection(.enabled)
+                WorkflowSheetInlineBanner(message: providerGateMessage, style: .warning)
             }
 
             VStack(alignment: .trailing, spacing: 8) {
@@ -370,7 +349,7 @@ struct TaskCockpitPanel: View {
         .controlSize(.regular)
         .buttonStyle(.borderedProminent)
         .disabled(isBuilding || !inputModel.canSubmit || selectedAgentIDs.isEmpty || providerGateMessage != nil)
-        .help(UIStrings.taskCockpitBoundary)
+        .help(providerGateMessage ?? UIStrings.taskCockpitBoundary)
         .accessibilityIdentifier(AppAccessibilityID.taskCockpitBuildButton)
         .accessibilityLabel(actionTitle)
     }
@@ -450,8 +429,8 @@ private struct TaskCockpitAgentChip: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
-            .frame(width: CGFloat(UIOptimizationPresentation.taskPreflight.fixedAgentChipWidth), alignment: .leading)
             .frame(minHeight: 44, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 isSelected ? Color(nsColor: .selectedContentBackgroundColor).opacity(0.18) : Color.secondary.opacity(0.08),
                 in: RoundedRectangle(cornerRadius: 8)
@@ -1117,19 +1096,17 @@ private struct TaskCockpitDecisionModel {
 
     private var hasRouteAmbiguity: Bool {
         guard uniqueCandidateRows.count > 1 else { return false }
-        let values = reasons
-            + result.blockerRows.flatMap { [$0.title, $0.detail] }
-            + result.gapRows.flatMap { [$0.title, $0.detail] }
-            + result.routeCandidates.flatMap(\.reasons)
-        return values.contains { value in
-            let normalized = value.lowercased()
-            return normalized.contains("small score margin")
-                || normalized.contains("close or overlapping alternatives")
-                || normalized.contains("nearby routes")
-                || (normalized.contains("within") && normalized.contains("candidate"))
-                || normalized.contains("相近候选")
-                || normalized.contains("候选路径相近")
+        let candidateScores = uniqueCandidateRows.prefix(2).compactMap { row in
+            row.routingScore ?? row.readinessScore ?? row.score
         }
+        if candidateScores.count == 2 {
+            return abs(candidateScores[0] - candidateScores[1]) <= 10
+        }
+        return result.summary.routeCandidateCount > 1
+            || result.summary.skillCandidateCount > 1
+            || result.summary.agentCandidateCount > 1
+            || result.routeCandidates.count > 1
+            || result.skillCandidates.count > 1
     }
 
     private var uniqueCandidateRows: [TaskCockpitCandidateRow] {
@@ -1165,16 +1142,14 @@ private struct TaskCockpitDecisionModel {
 
     private var userBlockerRows: [TaskCockpitContextRow] {
         result.blockerRows.filter { row in
-            !Self.isInternalBoundary(row.title)
-                && !Self.isInternalBoundary(row.detail)
+            !Self.isInternalBoundary(row)
                 && !Self.isReviewOnlyRisk(row)
         }
     }
 
     private var reviewRiskRows: [TaskCockpitContextRow] {
         result.blockerRows.filter { row in
-            !Self.isInternalBoundary(row.title)
-                && !Self.isInternalBoundary(row.detail)
+            !Self.isInternalBoundary(row)
                 && Self.isReviewOnlyRisk(row)
         }
     }
@@ -1200,41 +1175,16 @@ private struct TaskCockpitDecisionModel {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !isInternalBoundary(trimmed), !looksLikeRawStructuredPayload(trimmed) else { return nil }
 
-        let normalized = trimmed.lowercased()
-        if normalized.contains("task readiness is blocked") {
-            return UIStrings.taskCockpitReasonReadinessBlocked
-        }
-        if normalized.contains("routing confidence is blocked") {
-            return UIStrings.taskCockpitReasonRoutingBlocked
-        }
-        if normalized.contains("task wording did not clearly map") {
-            return UIStrings.taskCockpitReasonTaskWordingWeak
-        }
-        if normalized.contains("permissions.exec-needs-human") {
+        switch normalizedSignalToken(trimmed) {
+        case "permissions.exec-needs-human":
             return UIStrings.taskCockpitReasonExecNeedsHuman
-        }
-        if normalized.contains("permissions.network-declared") {
+        case "permissions.network-declared":
             return UIStrings.taskCockpitReasonNetworkDeclared
-        }
-        if normalized.contains("close or overlapping alternatives") {
-            return UIStrings.taskCockpitReasonRouteAmbiguous
-        }
-        if normalized.contains("small score margin") {
-            return UIStrings.taskCockpitReasonRouteAmbiguous
-        }
-        if normalized.contains("matched product/resource scope") {
-            return UIStrings.taskCockpitReasonProductMatched
-        }
-        if normalized.contains("product/resource mismatch") {
-            return UIStrings.taskCockpitReasonProductMismatch
-        }
-        if normalized.contains("duplicate_name") || normalized.contains("cross-agent analysis") {
+        case "duplicate-name", "cross-agent-analysis":
             return nil
+        default:
+            return UIStrings.localizedServiceMessage(trimmed)
         }
-        if normalized.contains("task fit is weak") {
-            return UIStrings.taskCockpitReasonTaskFitWeak
-        }
-        return UIStrings.localizedServiceMessage(trimmed)
     }
 
     private static func looksLikeRawStructuredPayload(_ value: String) -> Bool {
@@ -1248,62 +1198,93 @@ private struct TaskCockpitDecisionModel {
     }
 
     private static func isReviewOnlyRisk(_ row: TaskCockpitContextRow) -> Bool {
-        [row.title, row.detail, row.status, row.severity, row.source]
-            .compactMap(\.self)
-            .contains { value in
-                let normalized = value.lowercased()
-                return normalized.contains("permissions.exec-needs-human")
-                    || normalized.contains("permissions.network-declared")
-                    || normalized.contains("may execute commands")
-                    || normalized.contains("execute commands")
-                    || normalized.contains("network access")
-                    || normalized.contains("confirm destination")
-                    || normalized.contains("人工确认")
-                    || normalized.contains("网络访问")
-            }
+        !signalTokens(for: row).isDisjoint(with: reviewOnlyRiskTokens)
+    }
+
+    private static func isInternalBoundary(_ row: TaskCockpitContextRow) -> Bool {
+        !signalTokens(for: row).isDisjoint(with: internalBoundaryTokens)
     }
 
     fileprivate static func isInternalBoundary(_ value: String) -> Bool {
-        let normalized = value.lowercased()
-        return normalized.contains("no apply path")
-            || normalized.contains("read-only")
-            || normalized.contains("readonly")
-            || normalized.contains("provider not sent")
-            || normalized.contains("task cockpit combined")
-            || normalized.contains("evaluated the top")
-            || normalized.contains("matched task term")
-            || normalized.contains("description evidence")
-            || normalized.contains("rank ")
-            || normalized.contains("top route leads")
-            || normalized.contains("only one visible route candidate")
-            || normalized.contains("confidence is below readiness")
-            || normalized.contains("no candidate-level blockers")
-            || normalized.contains("no likely wrong-pick risk")
-            || normalized.contains("skipped by the cockpit request filters")
-            || normalized.contains("session review row")
-            || normalized.contains("provider observability row")
-            || normalized.contains("cross-agent analysis")
-            || normalized.contains("duplicate_name")
-            || normalized.contains("duplicate-name")
-            || normalized.contains("cross-agent duplicate")
-            || normalized.contains("source overlap")
-            || normalized.contains("same-name")
-            || normalized.contains("overlap signals")
-            || normalized.contains("provider-observability context was skipped")
-            || normalized.contains("remediation context was skipped")
-            || normalized.contains("session-review context was skipped")
-            || normalized.contains("remediation next step")
-            || normalized.contains("write action")
-            || normalized.contains("script execution")
-            || normalized.contains("snapshot")
-            || normalized.contains("telemetry")
-            || normalized.contains("cockpit only")
-            || normalized.contains("仅预览")
-            || normalized.contains("只读")
-            || normalized.contains("未启动提供方")
-            || normalized.contains("不会发送提供方")
-            || normalized.contains("不暴露应用")
+        internalBoundaryTokens.contains(normalizedSignalToken(value))
     }
+
+    private static func signalTokens(for row: TaskCockpitContextRow) -> Set<String> {
+        var tokens = Set<String>()
+        for value in [row.id, row.status, row.severity, row.source].compactMap(\.self) {
+            tokens.formUnion(signalTokenVariants(for: value))
+        }
+        for value in row.evidenceRefs + row.safetyFlags {
+            tokens.formUnion(signalTokenVariants(for: value))
+        }
+        return tokens
+    }
+
+    private static func signalTokenVariants(for value: String) -> Set<String> {
+        var tokens = Set<String>()
+        tokens.insert(normalizedSignalToken(value))
+        for separator in [":", "|", "#"] {
+            let parts = value.split(separator: Character(separator), omittingEmptySubsequences: true)
+            if parts.count > 1 {
+                tokens.insert(normalizedSignalToken(String(parts.last ?? "")))
+            }
+        }
+        return tokens.filter { !$0.isEmpty }
+    }
+
+    private static func normalizedSignalToken(_ value: String) -> String {
+        var normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        for separator in ["_", " ", "/", ":", "`"] {
+            normalized = normalized.replacingOccurrences(of: separator, with: "-")
+        }
+        while normalized.contains("--") {
+            normalized = normalized.replacingOccurrences(of: "--", with: "-")
+        }
+        return normalized.trimmingCharacters(in: CharacterSet(charactersIn: "-."))
+    }
+
+    private static let reviewOnlyRiskTokens: Set<String> = [
+        "permissions.exec-needs-human",
+        "permissions.network-declared",
+        "exec-needs-human",
+        "network-declared",
+        "requires-confirmation",
+        "network-access"
+    ]
+
+    private static let internalBoundaryTokens: Set<String> = [
+        "no-apply-path",
+        "read-only",
+        "readonly",
+        "read-only-preflight",
+        "preview-only",
+        "copy-only",
+        "provider-not-sent",
+        "task-cockpit-combined",
+        "cockpit-only",
+        "evaluated-top",
+        "matched-task-term",
+        "description-evidence",
+        "top-route-leads",
+        "one-visible-route-candidate",
+        "no-candidate-level-blockers",
+        "no-likely-wrong-pick-risk",
+        "skipped-by-filters",
+        "provider-observability-skipped",
+        "remediation-skipped",
+        "session-review-skipped",
+        "write-action",
+        "script-execution",
+        "snapshot",
+        "telemetry",
+        "cross-agent-analysis",
+        "duplicate-name",
+        "duplicate_name",
+        "cross-agent-duplicate",
+        "source-overlap",
+        "same-name",
+        "overlap-signals"
+    ]
 }
 
 private struct TaskCockpitScorePill: View {

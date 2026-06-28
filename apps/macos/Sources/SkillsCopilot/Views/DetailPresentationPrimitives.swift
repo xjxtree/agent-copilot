@@ -60,6 +60,8 @@ struct SummaryChip: View {
         .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
         .background(.quaternary.opacity(0.26), in: RoundedRectangle(cornerRadius: 8))
         .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
+        .accessibilityValue(value)
     }
 }
 
@@ -281,7 +283,7 @@ struct MetadataLine: View {
         HStack(alignment: .firstTextBaseline) {
             Text(label)
                 .foregroundStyle(.secondary)
-                .frame(width: 80, alignment: .leading)
+                .frame(minWidth: 80, alignment: .leading)
             Text(value)
                 .textSelection(.enabled)
                 .lineLimit(3)

@@ -1,15 +1,94 @@
 import Foundation
 
 enum UIOptimizationPresentation {
+    static let unifiedToolbar = UnifiedToolbarPresentation()
+    static let listPage = ListPagePresentation()
+    static let sidebarShell = SidebarShellPresentation()
     static let sidebarSelection = SidebarSelectionPresentation()
+    static let materialCornerRadius = sidebarSelection.rowCornerRadius
     static let sessionList = SidebarSecondaryListPresentation()
     static let configList = SidebarSecondaryListPresentation()
     static let skillList = SkillListPresentation()
     static let detailHeader = DetailHeaderPresentation()
     static let detailFeedback = DetailFeedbackPresentation()
+    static let configEditor = ConfigEditorPresentation()
     static let settings = SettingsPresentation()
+    static let workflowSheet = WorkflowSheetPresentation()
     static let taskPreflight = TaskPreflightPresentation()
     static let skillManager = SkillManagerPresentation()
+}
+
+enum UnifiedToolbarSearchPlacement: Equatable {
+    case globalTrailing
+}
+
+enum ListPageFilterStyle: Equatable {
+    case capsule
+}
+
+enum ListPageSearchScope: Equatable {
+    case localList
+}
+
+enum ListPageRowStyle: Equatable {
+    case materialCard
+}
+
+enum SettingsNavigationStyle: Equatable {
+    case sidebar
+}
+
+enum SettingsWindowControlPolicy: Equatable {
+    case closeOnly
+}
+
+enum WorkflowSheetTitlebarStyle: Equatable {
+    case liquidGlass
+}
+
+enum WorkflowSheetCloseActionPlacement: Equatable {
+    case trailingTitlebar
+}
+
+enum WorkflowSheetFeedbackStyle: Equatable {
+    case inlineTintedBanner
+}
+
+enum WorkflowSheetColumnLayout: Equatable {
+    case twoColumn
+}
+
+enum TaskPreflightSheetContentLayout: Equatable {
+    case editorWithHistory
+}
+
+enum SkillManagerSheetContentLayout: Equatable {
+    case controlsWithResults
+}
+
+struct UnifiedToolbarPresentation: Equatable {
+    let spansEntireWindow = true
+    let searchPlacement = UnifiedToolbarSearchPlacement.globalTrailing
+    let collapsesAtScrollEdge = true
+    let settingsActionUsesSystemSettingsLink = true
+    let minimumGlobalSearchWidth = 180
+    let idealGlobalSearchWidth = 220
+}
+
+struct ListPagePresentation: Equatable {
+    let filterStyle = ListPageFilterStyle.capsule
+    let searchScope = ListPageSearchScope.localList
+    let rowStyle = ListPageRowStyle.materialCard
+    let minimumCardRowHeight = 58
+    let cardRowSpacing = 8
+    let cardCornerRadius = 8
+    let cardHorizontalInset = 12
+    let localSearchCornerRadius = 10
+}
+
+struct SidebarShellPresentation: Equatable {
+    let width = 260
+    let footerTopSpacing = 10
 }
 
 struct SidebarSelectionPresentation: Equatable {
@@ -38,6 +117,11 @@ struct SkillListPresentation: Equatable {
     let compactRowMinHeight = 36
     let compactRowMaxHeight = 40
     let usesSingleLineFilterToolbar = true
+    let filterControlWidth = 72
+    let filterControlHeight = 28
+    let filterControlSpacing = 4
+    let filterToolbarVerticalPadding = 4
+    let sortDirectionButtonWidth = 28
 
     func emptyFilteredMessage(
         agentFilter: SkillAgentFilter,
@@ -81,7 +165,23 @@ struct DetailFeedbackPresentation: Equatable {
     let cornerRadius = 8
 }
 
+struct ConfigEditorPresentation: Equatable {
+    let usesSingleCodeCard = true
+    let showsLineNumbers = true
+    let usesCompactToolbarActions = true
+    let primarySaveButtonVisible = false
+    let autosaveEnabled = true
+    let autosaveDelayNanoseconds: UInt64 = 900_000_000
+    let codeCardMinHeight = 320
+    let lineNumberGutterWidth = 42
+}
+
 struct SettingsPresentation: Equatable {
+    let navigationStyle = SettingsNavigationStyle.sidebar
+    let usesDedicatedSettingsScene = true
+    let windowControlPolicy = SettingsWindowControlPolicy.closeOnly
+    let primarySaveButtonsVisible = false
+    let sidebarWidth = 190
     let minimumWidth = 760
     let idealWidth = 860
     let minimumHeight = 620
@@ -90,16 +190,28 @@ struct SettingsPresentation: Equatable {
     let sectionCornerRadius = 8
 }
 
+struct WorkflowSheetPresentation: Equatable {
+    let titlebarStyle = WorkflowSheetTitlebarStyle.liquidGlass
+    let closeActionPlacement = WorkflowSheetCloseActionPlacement.trailingTitlebar
+    let feedbackStyle = WorkflowSheetFeedbackStyle.inlineTintedBanner
+    let columnLayout = WorkflowSheetColumnLayout.twoColumn
+    let titlebarHeight = 58
+    let columnSpacing = 14
+    let secondaryColumnWidth = 320
+}
+
 struct TaskPreflightPresentation: Equatable {
+    let sheetContentLayout = TaskPreflightSheetContentLayout.editorWithHistory
     let sheetMinimumWidth = 950
     let sheetIdealWidth = 1_020
     let sheetMinimumHeight = 620
     let historyColumnWidth = 270
-    let fixedAgentChipWidth = 96
+    let fixedAgentChipWidth = 0
     let showsProviderUnavailableGate = true
 }
 
 struct SkillManagerPresentation: Equatable {
+    let sheetContentLayout = SkillManagerSheetContentLayout.controlsWithResults
     let sheetMinimumWidth = 900
     let sheetIdealWidth = 980
     let sheetMinimumHeight = 680

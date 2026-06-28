@@ -81,10 +81,8 @@ private struct AgentConfigOverviewDetailPanel: View {
 
     @State private var draft = ""
     @State private var revealsSensitiveConfig = false
-
-    private var capability: AdapterCapabilityRecord? {
-        store.adapterCapabilities.first { $0.agent == store.agentFilter.rawValue }
-    }
+    @State private var isConfirmingConfigEdit = false
+    @State private var configAutosaveTask: Task<Void, Never>?
 
     private var validationMessage: String? {
         guard let data = draft.data(using: .utf8) else {
@@ -102,8 +100,12 @@ private struct AgentConfigOverviewDetailPanel: View {
         draft != (store.claudeSettings?.content ?? "")
     }
 
-    private var canSave: Bool {
-        revealsSensitiveConfig && hasDraftChanges && validationMessage == nil && !store.isSavingSettings
+    private var canAutosaveConfig: Bool {
+        revealsSensitiveConfig
+            && hasDraftChanges
+            && validationMessage == nil
+            && !store.isSavingSettings
+            && !store.isLoadingSettings
     }
 
     private var displayedDraft: Binding<String> {
@@ -118,49 +120,6 @@ private struct AgentConfigOverviewDetailPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .center, spacing: 12) {
-                    AgentConfigAgentIcon(filter: store.agentFilter)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(UIStrings.agentConfigSettings)
-                            .font(.title2.bold())
-                        Text(DisplayText.agent(store.agentFilter.rawValue))
-                            .font(.headline)
-                        PrivacyPathText(
-                            path: selectedDocument?.target ?? AgentConfigDisplay.targetPath(for: store.agentFilter, store: store),
-                            font: .caption,
-                            lineLimit: 1
-                        )
-                    }
-                    Spacer()
-                    Text(capability == nil ? UIStrings.notLoaded : UIStrings.supported)
-                        .font(.caption.bold())
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(.secondary.opacity(0.10), in: Capsule())
-                }
-
-                if let blockers = capability?.blockers, !blockers.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(UIStrings.agentConfigBlockedScope)
-                            .font(.caption.bold())
-                            .foregroundStyle(.secondary)
-                        ForEach(blockers.prefix(4), id: \.self) { blocker in
-                            Label(blocker, systemImage: "minus.circle")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-                }
-            }
-            .padding()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .adaptiveMaterialSurface()
-
             if let selectedDocument {
                 if isEditableClaudeGlobalDocument(selectedDocument) {
                     claudeCurrentConfigSection
@@ -181,14 +140,20 @@ private struct AgentConfigOverviewDetailPanel: View {
         }
         .onChange(of: store.claudeSettings) { _ in
             if !hasDraftChanges {
-                resetDraftFromStore()
+                resetDraftFromStore(revealsSensitive: revealsSensitiveConfig)
             }
+        }
+        .onChange(of: draft) { _ in
+            handleConfigDraftChange()
+        }
+        .onDisappear {
+            configAutosaveTask?.cancel()
+            configAutosaveTask = nil
         }
     }
 
     private func currentAgentConfigSection(documents: [ConfigDocumentRecord]) -> some View {
         AgentCurrentConfigDocumentsSection(
-            agent: store.agentFilter,
             documents: documents,
             isLoading: store.isLoadingAgentConfigDocuments,
             errorMessage: store.settingsErrorMessage,
@@ -206,57 +171,40 @@ private struct AgentConfigOverviewDetailPanel: View {
     }
 
     private var claudeCurrentConfigSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(UIStrings.currentConfigFile)
-                        .font(.headline)
-                    PrivacyPathText(
-                        path: store.claudeSettings?.target ?? "~/.claude/settings.json",
-                        font: .callout,
-                        lineLimit: 1
-                    )
-                }
-                Spacer()
-                if let settings = store.claudeSettings {
-                    Label(
-                        settings.exists ? UIStrings.existingFile : UIStrings.willCreateFile,
-                        systemImage: settings.exists ? "doc.text" : "doc.badge.plus"
-                    )
-                    .foregroundStyle(.secondary)
-                }
+        ConfigCodeCard(
+            title: UIStrings.currentConfigFile,
+            path: store.claudeSettings?.target ?? "~/.claude/settings.json",
+            statusText: store.claudeSettings?.exists == true ? UIStrings.existingFile : UIStrings.willCreateFile,
+            statusSystemImage: store.claudeSettings?.exists == true ? "doc.text" : "doc.badge.plus",
+            sensitiveText: revealsSensitiveConfig ? UIStrings.agentConfigSensitiveValuesVisible : UIStrings.agentConfigSensitiveValuesHidden,
+            sensitiveSystemImage: revealsSensitiveConfig ? "eye" : "eye.slash",
+            sensitiveColor: revealsSensitiveConfig ? .orange : .secondary
+        ) {
+            ConfigCodeToolbar(
+                isReloadDisabled: store.isLoadingSettings || store.isSavingSettings,
+                isFormatDisabled: !revealsSensitiveConfig || validationMessage != nil || draft.isEmpty,
+                isRevealDisabled: store.isLoadingSettings || store.isSavingSettings,
+                isSensitiveVisible: revealsSensitiveConfig,
+                revealHelp: revealsSensitiveConfig ? UIStrings.agentConfigHideSensitive : UIStrings.agentConfigShowSensitive,
+                onReload: reloadClaudeConfig,
+                onFormat: formatDraftJSON,
+                onReveal: toggleSensitiveEditing
+            )
+        } content: {
+            if revealsSensitiveConfig {
+                JSONLineNumberedEditor(text: displayedDraft)
+                    .frame(minHeight: CGFloat(UIOptimizationPresentation.configEditor.codeCardMinHeight))
+                    .agentConfigTextSelection(enabled: true)
+            } else {
+                JSONSyntaxHighlightedText(content: displayedDraft.wrappedValue)
             }
-
-            HStack {
-                Label(
-                    revealsSensitiveConfig ? UIStrings.agentConfigSensitiveValuesVisible : UIStrings.agentConfigSensitiveValuesHidden,
-                    systemImage: revealsSensitiveConfig ? "eye" : "eye.slash"
-                )
-                    .font(.caption)
-                    .foregroundStyle(revealsSensitiveConfig ? Color.orange : Color.secondary)
-                Spacer()
-                Button {
-                    revealsSensitiveConfig.toggle()
-                } label: {
-                    Label(
-                        revealsSensitiveConfig ? UIStrings.agentConfigHideSensitive : UIStrings.agentConfigShowSensitive,
-                        systemImage: revealsSensitiveConfig ? "eye.slash" : "eye"
-                    )
-                }
-                .buttonStyle(.bordered)
-            }
-
-            TextEditor(text: displayedDraft)
-                .font(.system(.body, design: .monospaced))
-                .frame(minHeight: 280)
-                .padding(6)
-                .adaptiveMaterialSurface()
-                .disabled(!revealsSensitiveConfig)
 
             if let validationMessage {
                 ConfigInlineBanner(message: validationMessage, systemImage: "exclamationmark.triangle.fill", color: .red)
-            } else if hasDraftChanges {
+            } else if canAutosaveConfig {
                 ConfigInlineBanner(message: UIStrings.jsonValidSettingsWrite, systemImage: "checkmark.circle.fill", color: .green)
+            } else if revealsSensitiveConfig && hasDraftChanges {
+                ConfigInlineBanner(message: UIStrings.configAutosavePending, systemImage: "clock.arrow.circlepath", color: .secondary)
             }
 
             if let message = store.settingsMessage {
@@ -266,169 +214,160 @@ private struct AgentConfigOverviewDetailPanel: View {
             if let error = store.settingsErrorMessage {
                 ConfigInlineBanner(message: error, systemImage: "exclamationmark.triangle.fill", color: .red)
             }
-
-            HStack {
-                Button {
-                    Task {
-                        await store.refreshSelectedAgentConfigData()
-                        resetDraftFromStore()
-                    }
-                } label: {
-                    Label(UIStrings.reload, systemImage: "arrow.clockwise")
-                }
-                .disabled(store.isLoadingSettings || store.isSavingSettings)
-
-                Spacer()
-
-                Button {
-                    Task {
-                        let saved = await store.saveClaudeSettings(content: draft)
-                        if saved {
-                            resetDraftFromStore()
-                            await store.loadAgentConfigSnapshots(agent: store.agentFilter.rawValue)
-                        }
-                    }
-                } label: {
-                    Label(UIStrings.save, systemImage: "square.and.arrow.down")
-                }
-                .buttonStyle(.bordered)
-                .disabled(!canSave)
-            }
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .adaptiveMaterialSurface()
+        .confirmationDialog(
+            UIStrings.agentConfigEditConfirmationTitle,
+            isPresented: $isConfirmingConfigEdit,
+            titleVisibility: .visible
+        ) {
+            Button(UIStrings.agentConfigShowSensitive, role: .destructive) {
+                store.clearSettingsFeedback()
+                revealsSensitiveConfig = true
+            }
+            Button(UIStrings.cancel, role: .cancel) {
+                isConfirmingConfigEdit = false
+            }
+        } message: {
+            Text(UIStrings.agentConfigEditConfirmationMessage)
+        }
     }
 
-    private func resetDraftFromStore() {
+    private func resetDraftFromStore(revealsSensitive: Bool = false) {
+        configAutosaveTask?.cancel()
+        configAutosaveTask = nil
         draft = store.claudeSettings?.content ?? ""
-        revealsSensitiveConfig = false
+        revealsSensitiveConfig = revealsSensitive
+    }
+
+    private func reloadClaudeConfig() {
+        configAutosaveTask?.cancel()
+        configAutosaveTask = nil
+        Task {
+            await store.refreshSelectedAgentConfigData()
+            resetDraftFromStore()
+        }
+    }
+
+    private func toggleSensitiveEditing() {
+        if revealsSensitiveConfig {
+            configAutosaveTask?.cancel()
+            configAutosaveTask = nil
+            revealsSensitiveConfig = false
+        } else {
+            isConfirmingConfigEdit = true
+        }
+    }
+
+    private func formatDraftJSON() {
+        guard revealsSensitiveConfig,
+              let formatted = Self.formattedJSON(draft),
+              formatted != draft else {
+            return
+        }
+        draft = formatted
+        store.clearSettingsFeedback()
+    }
+
+    private func handleConfigDraftChange() {
+        configAutosaveTask?.cancel()
+        configAutosaveTask = nil
+
+        let draftSnapshot = draft
+        guard canAutosaveConfig else { return }
+
+        configAutosaveTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UIOptimizationPresentation.configEditor.autosaveDelayNanoseconds)
+            guard !Task.isCancelled else { return }
+            guard
+                revealsSensitiveConfig,
+                draft == draftSnapshot,
+                draftSnapshot != (store.claudeSettings?.content ?? ""),
+                validationMessage == nil,
+                !store.isSavingSettings,
+                !store.isLoadingSettings
+            else {
+                return
+            }
+
+            let saved = await store.saveClaudeSettings(content: draftSnapshot)
+            guard !Task.isCancelled else { return }
+            if saved {
+                draft = store.claudeSettings?.content ?? draftSnapshot
+                revealsSensitiveConfig = true
+                await store.loadAgentConfigSnapshots(agent: store.agentFilter.rawValue)
+                await store.loadCurrentAgentConfigDocuments(agent: store.agentFilter.rawValue)
+            }
+        }
+    }
+
+    private static func formattedJSON(_ content: String) -> String? {
+        guard let data = content.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data),
+              JSONSerialization.isValidJSONObject(json),
+              let formattedData = try? JSONSerialization.data(
+                withJSONObject: json,
+                options: [.prettyPrinted, .sortedKeys]
+              ),
+              let formatted = String(data: formattedData, encoding: .utf8) else {
+            return nil
+        }
+        return formatted + (content.hasSuffix("\n") ? "\n" : "")
     }
 }
 
 private struct AgentCurrentConfigDocumentsSection: View {
-    let agent: SkillAgentFilter
     let documents: [ConfigDocumentRecord]
     let isLoading: Bool
     let errorMessage: String?
     @Binding var revealsSensitiveConfig: Bool
     let reload: () -> Void
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(UIStrings.currentConfigFile)
-                        .font(.headline)
-                    Text(UIStrings.agentConfigReadOnlyPreview(DisplayText.agent(agent.rawValue)))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button(action: reload) {
-                    Label(UIStrings.reload, systemImage: "arrow.clockwise")
-                }
-                .disabled(isLoading)
-            }
-
-            HStack {
-                Label(
-                    revealsSensitiveConfig ? UIStrings.agentConfigSensitiveValuesVisible : UIStrings.agentConfigSensitiveValuesHidden,
-                    systemImage: revealsSensitiveConfig ? "eye" : "eye.slash"
-                )
-                .font(.caption)
-                .foregroundStyle(revealsSensitiveConfig ? Color.orange : Color.secondary)
-                Spacer()
-                Button {
-                    revealsSensitiveConfig.toggle()
-                } label: {
-                    Label(
-                        revealsSensitiveConfig ? UIStrings.agentConfigHideSensitive : UIStrings.agentConfigShowSensitiveValues,
-                        systemImage: revealsSensitiveConfig ? "eye.slash" : "eye"
-                    )
-                }
-                .buttonStyle(.bordered)
-                .disabled(documents.isEmpty)
-            }
-
-            if isLoading {
-                Label(UIStrings.loading, systemImage: "arrow.clockwise")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            if let errorMessage {
-                ConfigInlineBanner(message: errorMessage, systemImage: "exclamationmark.triangle.fill", color: .red)
-            }
-
-            if documents.isEmpty && !isLoading && errorMessage == nil {
-                Text(UIStrings.agentConfigNoReadableDocuments)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-            } else {
-                ForEach(documents, id: \.target) { document in
-                    AgentCurrentConfigDocumentPane(
-                        document: document,
-                        revealsSensitiveConfig: revealsSensitiveConfig
-                    )
-                }
-            }
-
-            Label(
-                UIStrings.agentConfigReadOnlyBoundary,
-                systemImage: "lock.shield"
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .adaptiveMaterialSurface()
+    private var primaryDocument: ConfigDocumentRecord? {
+        documents.first
     }
-}
-
-private struct AgentCurrentConfigDocumentPane: View {
-    let document: ConfigDocumentRecord
-    let revealsSensitiveConfig: Bool
 
     private var displayedContent: String {
-        let content = document.content.isEmpty ? UIStrings.emptyPlaceholder : document.content
+        guard let primaryDocument else {
+            return isLoading ? UIStrings.loading : UIStrings.agentConfigNoReadableDocuments
+        }
+        let content = primaryDocument.content.isEmpty ? UIStrings.emptyPlaceholder : primaryDocument.content
         guard !revealsSensitiveConfig else { return content }
         return ConfigContentRedactor.redactedForDisplay(content)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 4) {
-                    PrivacyPathText(path: document.target, font: .callout, lineLimit: 1)
-                    HStack(spacing: 8) {
-                        Text(DisplayText.scope(document.scope))
-                        Text(document.format.uppercased())
-                        Text(document.exists ? UIStrings.existingFile : UIStrings.willCreateFile)
-                    }
+        ConfigCodeCard(
+            title: UIStrings.currentConfigFile,
+            path: primaryDocument?.target ?? UIStrings.unknown,
+            statusText: primaryDocument?.exists == true ? UIStrings.existingFile : UIStrings.willCreateFile,
+            statusSystemImage: primaryDocument?.exists == true ? "doc.text" : "doc.badge.plus",
+            sensitiveText: revealsSensitiveConfig ? UIStrings.agentConfigSensitiveValuesVisible : UIStrings.agentConfigSensitiveValuesHidden,
+            sensitiveSystemImage: revealsSensitiveConfig ? "eye" : "eye.slash",
+            sensitiveColor: revealsSensitiveConfig ? .orange : .secondary
+        ) {
+            ConfigCodeToolbar(
+                isReloadDisabled: isLoading,
+                isFormatDisabled: true,
+                isRevealDisabled: documents.isEmpty,
+                isSensitiveVisible: revealsSensitiveConfig,
+                revealHelp: documents.isEmpty
+                    ? UIStrings.text("agentConfig.noDocumentsHint", "No config documents are loaded.")
+                    : (revealsSensitiveConfig ? UIStrings.agentConfigHideSensitive : UIStrings.agentConfigShowSensitiveValues),
+                onReload: reload,
+                onFormat: {},
+                onReveal: { revealsSensitiveConfig.toggle() }
+            )
+        } content: {
+            if let errorMessage {
+                ConfigInlineBanner(message: errorMessage, systemImage: "exclamationmark.triangle.fill", color: .red)
+            } else if isLoading {
+                Label(UIStrings.loading, systemImage: "arrow.clockwise")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                }
-                Spacer()
             }
 
-            ScrollView([.vertical, .horizontal]) {
-                Text(displayedContent)
-                    .font(.system(.body, design: .monospaced))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-            }
-            .frame(minHeight: 180, maxHeight: 300)
-            .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
+            JSONSyntaxHighlightedText(content: displayedContent)
         }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
@@ -512,7 +451,7 @@ private struct AgentConfigSnapshotDetailPanel: View {
                                 content: preview.snapshot.content.isEmpty ? UIStrings.emptyPlaceholder : preview.snapshot.content
                             )
                         }
-                        .frame(minHeight: 520)
+                        .frame(minHeight: 360, idealHeight: 460)
                     }
                 }
             } else {
@@ -581,6 +520,7 @@ private struct AgentConfigAgentIcon: View {
         }
         .frame(width: 36, height: 36)
         .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 9))
+        .accessibilityLabel(filter.title)
     }
 }
 
@@ -596,5 +536,254 @@ private struct ConfigInlineBanner: View {
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(color.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct ConfigCodeCard<Toolbar: View, Content: View>: View {
+    let title: String
+    let path: String
+    let statusText: String?
+    let statusSystemImage: String?
+    let sensitiveText: String
+    let sensitiveSystemImage: String
+    let sensitiveColor: Color
+    @ViewBuilder let toolbar: () -> Toolbar
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "curlybraces.square")
+                    .font(.title3)
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 32, height: 32)
+                    .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.headline)
+                    PrivacyPathText(path: path, font: .callout, lineLimit: 1)
+                }
+
+                Spacer(minLength: 12)
+
+                toolbar()
+            }
+
+            HStack(spacing: 10) {
+                if let statusText, let statusSystemImage {
+                    Label(statusText, systemImage: statusSystemImage)
+                        .foregroundStyle(.secondary)
+                }
+
+                Label(sensitiveText, systemImage: sensitiveSystemImage)
+                    .foregroundStyle(sensitiveColor)
+            }
+            .font(.caption)
+
+            content()
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveMaterialSurface()
+    }
+}
+
+private struct ConfigCodeToolbar: View {
+    let isReloadDisabled: Bool
+    let isFormatDisabled: Bool
+    let isRevealDisabled: Bool
+    let isSensitiveVisible: Bool
+    let revealHelp: String
+    let onReload: () -> Void
+    let onFormat: () -> Void
+    let onReveal: () -> Void
+
+    var body: some View {
+        HStack(spacing: 5) {
+            ConfigToolbarIconButton(
+                systemImage: "arrow.clockwise",
+                label: UIStrings.reload,
+                isDisabled: isReloadDisabled,
+                action: onReload
+            )
+            ConfigToolbarIconButton(
+                systemImage: "wand.and.sparkles",
+                label: UIStrings.formatJSON,
+                isDisabled: isFormatDisabled,
+                action: onFormat
+            )
+            ConfigToolbarIconButton(
+                systemImage: isSensitiveVisible ? "eye.slash" : "eye",
+                label: revealHelp,
+                isDisabled: isRevealDisabled,
+                action: onReveal
+            )
+        }
+    }
+}
+
+private struct ConfigToolbarIconButton: View {
+    let systemImage: String
+    let label: String
+    let isDisabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 13, weight: .semibold))
+                .frame(width: 28, height: 28)
+                .contentShape(RoundedRectangle(cornerRadius: 7))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isDisabled ? Color.secondary.opacity(0.45) : Color.secondary)
+        .background(
+            isDisabled ? Color.secondary.opacity(0.04) : Color.secondary.opacity(0.10),
+            in: RoundedRectangle(cornerRadius: 7)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 7)
+                .stroke(Color.secondary.opacity(0.10), lineWidth: 1)
+        )
+        .disabled(isDisabled)
+        .help(label)
+        .accessibilityLabel(label)
+    }
+}
+
+private struct JSONSyntaxHighlightedText: View {
+    let content: String
+
+    var body: some View {
+        ScrollView([.vertical, .horizontal]) {
+            VStack(alignment: .leading, spacing: 1) {
+                ForEach(Array(Self.lines(in: content).enumerated()), id: \.offset) { index, line in
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text("\(index + 1)")
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                            .frame(width: CGFloat(UIOptimizationPresentation.configEditor.lineNumberGutterWidth), alignment: .trailing)
+                            .textSelection(.disabled)
+
+                        Text(Self.highlighted(line.isEmpty ? " " : line))
+                            .font(.system(.body, design: .monospaced))
+                            .textSelection(.enabled)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(.vertical, 10)
+            .padding(.trailing, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(minHeight: CGFloat(UIOptimizationPresentation.configEditor.codeCardMinHeight))
+        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(Color.secondary.opacity(0.12), lineWidth: 1)
+        )
+    }
+
+    private static func highlighted(_ content: String) -> AttributedString {
+        let pattern = #""(?:\\.|[^"\\])*"\s*:|"(?:\\.|[^"\\])*"|\btrue\b|\bfalse\b|\bnull\b|-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return AttributedString(content)
+        }
+
+        var attributed = AttributedString(content)
+        let fullRange = NSRange(content.startIndex..<content.endIndex, in: content)
+        for match in regex.matches(in: content, range: fullRange) {
+            guard let stringRange = Range(match.range, in: content),
+                  let lower = AttributedString.Index(stringRange.lowerBound, within: attributed),
+                  let upper = AttributedString.Index(stringRange.upperBound, within: attributed) else {
+                continue
+            }
+
+            let token = String(content[stringRange])
+            let color = highlightColor(for: token)
+            attributed[lower..<upper].foregroundColor = color
+        }
+
+        return attributed
+    }
+
+    private static func highlightColor(for token: String) -> Color {
+        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasSuffix(":") {
+            return .accentColor
+        }
+        if trimmed == "true" || trimmed == "false" || trimmed == "null" {
+            return .purple
+        }
+        if trimmed.first == "\"" {
+            return .green
+        }
+        return .orange
+    }
+
+    private static func lines(in content: String) -> [String] {
+        let lines = content.components(separatedBy: .newlines)
+        return lines.isEmpty ? [""] : lines
+    }
+}
+
+private struct JSONLineNumberedEditor: View {
+    @Binding var text: String
+
+    private var lineCount: Int {
+        max(1, text.components(separatedBy: .newlines).count)
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 0) {
+            ConfigLineNumberColumn(lineCount: lineCount)
+
+            Divider()
+                .opacity(0.35)
+
+            TextEditor(text: $text)
+                .font(.system(.body, design: .monospaced))
+                .lineSpacing(2)
+                .padding(.vertical, 4)
+                .padding(.horizontal, 8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(Color.secondary.opacity(0.12), lineWidth: 1)
+        )
+    }
+}
+
+private struct ConfigLineNumberColumn: View {
+    let lineCount: Int
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 1) {
+            ForEach(1...max(lineCount, 1), id: \.self) { line in
+                Text("\(line)")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+                    .frame(height: 18)
+            }
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 8)
+        .frame(width: CGFloat(UIOptimizationPresentation.configEditor.lineNumberGutterWidth), alignment: .trailing)
+        .background(Color.secondary.opacity(0.05))
+        .textSelection(.disabled)
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func agentConfigTextSelection(enabled: Bool) -> some View {
+        if enabled {
+            textSelection(.enabled)
+        } else {
+            textSelection(.disabled)
+        }
     }
 }

@@ -20,53 +20,53 @@ struct DetailView: View {
 
                         VStack(alignment: .leading, spacing: 24) {
                             if store.selectedSidebarSelection?.isSession == true {
-                            AgentSessionDetailPanel()
-                        } else if store.selectedSidebarSelection?.isConfig == true {
-                            AgentConfigDetailPanel()
-                        } else if store.selectedDetailSection == .guidedCleanup {
-                            DetailSectionSwitcher(selection: $store.selectedDetailSection)
+                                AgentSessionDetailPanel()
+                            } else if store.selectedSidebarSelection?.isConfig == true {
+                                AgentConfigDetailPanel()
+                            } else if store.selectedDetailSection == .guidedCleanup {
+                                DetailSectionSwitcher(selection: $store.selectedDetailSection)
 
-                            GuidedCleanupFlowPanel(
-                                result: store.guidedCleanupFlowResult,
-                                recordResult: store.guidedCleanupRecordResult,
-                                isPlanning: store.isPlanningGuidedCleanupFlow,
-                                isRecording: store.isRecordingGuidedCleanupStep,
-                                onLoad: {
-                                    Task {
-                                        await store.planGuidedCleanupFlow()
+                                GuidedCleanupFlowPanel(
+                                    result: store.guidedCleanupFlowResult,
+                                    recordResult: store.guidedCleanupRecordResult,
+                                    isPlanning: store.isPlanningGuidedCleanupFlow,
+                                    isRecording: store.isRecordingGuidedCleanupStep,
+                                    onLoad: {
+                                        Task {
+                                            await store.planGuidedCleanupFlow()
+                                        }
+                                    },
+                                    onRecord: { step in
+                                        Task {
+                                            await store.recordGuidedCleanupStep(step)
+                                        }
+                                    },
+                                    onOpenSafeLink: { link, step in
+                                        Task {
+                                            await store.openGuidedCleanupSafeLink(link, step: step)
+                                        }
                                     }
-                                },
-                                onRecord: { step in
-                                    Task {
-                                        await store.recordGuidedCleanupStep(step)
+                                )
+                            } else if store.selectedSidebarSelection?.isSkill == true, let skill {
+                                let selectedFindingGroups = FindingDisplayModel.issueGroups(
+                                    findings: store.selectedDisplayFindings,
+                                    severityFilter: FindingDisplayModel.allFilterValue,
+                                    ruleFilter: FindingDisplayModel.allFilterValue
+                                )
+                                HeaderView(
+                                    skill: skill,
+                                    adoptingAgentSummary: store.adoptingAgentSummary(for: skill),
+                                    sessionUsage: sessionUsage(for: skill),
+                                    issueCount: selectedFindingGroups.count + store.selectedConflicts.count,
+                                    isWriting: store.isWriting,
+                                    adapterCapability: store.adapterCapabilities.first { $0.agent == skill.agent },
+                                    onSelectSection: { section in
+                                        store.selectedDetailSection = section
+                                    },
+                                    onToggle: { on in
+                                        Task { await store.toggleSelectedSkill(on: on) }
                                     }
-                                },
-                                onOpenSafeLink: { link, step in
-                                    Task {
-                                        await store.openGuidedCleanupSafeLink(link, step: step)
-                                    }
-                                }
-                            )
-                        } else if store.selectedSidebarSelection?.isSkill == true, let skill {
-                            let selectedFindingGroups = FindingDisplayModel.issueGroups(
-                                findings: store.selectedFindings,
-                                severityFilter: FindingDisplayModel.allFilterValue,
-                                ruleFilter: FindingDisplayModel.allFilterValue
-                            )
-                            HeaderView(
-                                skill: skill,
-                                adoptingAgentSummary: adoptingAgentSummary(for: skill),
-                                sessionUsage: sessionUsage(for: skill),
-                                issueCount: selectedFindingGroups.count + store.selectedConflicts.count,
-                                isWriting: store.isWriting,
-                                adapterCapability: store.adapterCapabilities.first { $0.agent == skill.agent },
-                                onSelectSection: { section in
-                                    store.selectedDetailSection = section
-                                },
-                                onToggle: { on in
-                                    Task { await store.toggleSelectedSkill(on: on) }
-                                }
-                            )
+                                )
 
                             DetailSectionSwitcher(selection: $store.selectedDetailSection)
 
@@ -89,7 +89,7 @@ struct DetailView: View {
                             case .cleanup, .findings, .conflicts:
                                 FindingsSection(
                                     skill: skill,
-                                    findings: store.selectedFindings,
+                                    findings: store.selectedDisplayFindings,
                                     conflicts: store.selectedConflicts,
                                     selectedSkillID: skill.id,
                                     currentAgentSkillIDs: Set(store.skills.filter { $0.agent == skill.agent }.map(\.id))
@@ -118,58 +118,58 @@ struct DetailView: View {
                                     taskReadinessResult: { skill in store.taskReadiness(for: skill) },
                                     isCheckingTaskReadiness: { skill in store.isCheckingTaskReadiness(for: skill) },
                                     taskReadinessPromptPreview: { skill in store.taskReadinessPromptPreview(for: skill) },
-                                isPreviewingTaskReadinessPrompt: { skill in store.isPreviewingTaskReadinessPrompt(for: skill) },
-                                isSendingTaskReadinessPrompt: { skill in store.isSendingTaskReadinessPrompt(for: skill) },
-                                taskReadinessPromptSendResult: { skill in store.taskReadinessPromptSendResult(for: skill) },
-                                canSendTaskReadinessPrompt: { skill in store.canSendTaskReadinessPrompt(for: skill) },
-                                routingConfidenceText: $store.routingConfidenceText,
-                                routingConfidenceResult: { skill in store.routingConfidence(for: skill) },
-                                isRankingRoutingConfidence: { skill in store.isRankingRoutingConfidence(for: skill) },
-                                routingConfidencePromptPreview: { skill in store.routingConfidencePromptPreview(for: skill) },
-                                isPreviewingRoutingConfidencePrompt: { skill in store.isPreviewingRoutingConfidencePrompt(for: skill) },
-                                isSendingRoutingConfidencePrompt: { skill in store.isSendingRoutingConfidencePrompt(for: skill) },
-                                routingConfidencePromptSendResult: { skill in store.routingConfidencePromptSendResult(for: skill) },
-                                canSendRoutingConfidencePrompt: { skill in store.canSendRoutingConfidencePrompt(for: skill) },
-                                crossAgentReadinessText: $store.crossAgentReadinessText,
-                                crossAgentReadinessInput: store.selectedCrossAgentReadinessInput,
-                                crossAgentReadinessResult: store.crossAgentReadinessResult,
-                                isComparingCrossAgentReadiness: store.isComparingCrossAgentReadiness,
-                                routingAccuracyDashboard: store.routingAccuracyDashboard,
-                                isLoadingRoutingAccuracyDashboard: store.isLoadingRoutingAccuracyDashboard,
-                                staleDriftDetection: store.staleDriftDetection,
-                                isDetectingStaleDrift: store.isDetectingStaleDrift,
-                                knowledgeSearchText: $store.knowledgeSearchText,
-                                knowledgeSearchResult: store.knowledgeSearchResult,
-                                isSearchingKnowledge: store.isSearchingKnowledge,
-                                localSkillMapResult: store.localSkillMapResult,
-                                isBuildingLocalSkillMap: store.isBuildingLocalSkillMap,
-                                skillLifecycleTimelineResult: store.skillLifecycleTimelineResult,
-                                isLoadingSkillLifecycleTimeline: store.isLoadingSkillLifecycleTimeline,
-                                providerObservabilityResult: store.providerObservabilityResult,
-                                isLoadingProviderObservability: store.isLoadingProviderObservability,
-                                similarSkillGroupingResult: store.similarSkillGroupingResult,
-                                isGroupingSimilarSkills: store.isGroupingSimilarSkills,
-                                capabilityTaxonomyResult: store.capabilityTaxonomyResult,
-                                isBuildingCapabilityTaxonomy: store.isBuildingCapabilityTaxonomy,
-                                workspaceReadinessResult: store.workspaceReadinessResult,
-                                isCheckingWorkspaceReadiness: store.isCheckingWorkspaceReadiness,
-                                remediationPlanResult: store.remediationPlanResult,
-                                isPlanningRemediation: store.isPlanningRemediation,
-                                remediationPreviewDraftsResult: store.remediationPreviewDraftsResult,
-                                isPreviewingRemediationDrafts: store.isPreviewingRemediationDrafts,
-                                remediationImpactPreviewResult: store.remediationImpactPreviewResult,
-                                isPreviewingRemediationImpact: store.isPreviewingRemediationImpact,
-                                remediationBatchReviewResult: store.remediationBatchReviewResult,
-                                isReviewingRemediationBatch: store.isReviewingRemediationBatch,
-                                remediationHistoryResult: store.remediationHistoryResult,
-                                remediationHistoryRecordResult: store.remediationHistoryRecordResult,
-                                isLoadingRemediationHistory: store.isLoadingRemediationHistory,
-                                isRecordingRemediationHistory: store.isRecordingRemediationHistory,
-                                guidedCleanupFlowResult: store.guidedCleanupFlowResult,
-                                guidedCleanupRecordResult: store.guidedCleanupRecordResult,
-                                isPlanningGuidedCleanupFlow: store.isPlanningGuidedCleanupFlow,
-                                isRecordingGuidedCleanupStep: store.isRecordingGuidedCleanupStep,
-                                onScoreQuality: {
+                                    isPreviewingTaskReadinessPrompt: { skill in store.isPreviewingTaskReadinessPrompt(for: skill) },
+                                    isSendingTaskReadinessPrompt: { skill in store.isSendingTaskReadinessPrompt(for: skill) },
+                                    taskReadinessPromptSendResult: { skill in store.taskReadinessPromptSendResult(for: skill) },
+                                    canSendTaskReadinessPrompt: { skill in store.canSendTaskReadinessPrompt(for: skill) },
+                                    routingConfidenceText: $store.routingConfidenceText,
+                                    routingConfidenceResult: { skill in store.routingConfidence(for: skill) },
+                                    isRankingRoutingConfidence: { skill in store.isRankingRoutingConfidence(for: skill) },
+                                    routingConfidencePromptPreview: { skill in store.routingConfidencePromptPreview(for: skill) },
+                                    isPreviewingRoutingConfidencePrompt: { skill in store.isPreviewingRoutingConfidencePrompt(for: skill) },
+                                    isSendingRoutingConfidencePrompt: { skill in store.isSendingRoutingConfidencePrompt(for: skill) },
+                                    routingConfidencePromptSendResult: { skill in store.routingConfidencePromptSendResult(for: skill) },
+                                    canSendRoutingConfidencePrompt: { skill in store.canSendRoutingConfidencePrompt(for: skill) },
+                                    crossAgentReadinessText: $store.crossAgentReadinessText,
+                                    crossAgentReadinessInput: store.selectedCrossAgentReadinessInput,
+                                    crossAgentReadinessResult: store.crossAgentReadinessResult,
+                                    isComparingCrossAgentReadiness: store.isComparingCrossAgentReadiness,
+                                    routingAccuracyDashboard: store.routingAccuracyDashboard,
+                                    isLoadingRoutingAccuracyDashboard: store.isLoadingRoutingAccuracyDashboard,
+                                    staleDriftDetection: store.staleDriftDetection,
+                                    isDetectingStaleDrift: store.isDetectingStaleDrift,
+                                    knowledgeSearchText: $store.knowledgeSearchText,
+                                    knowledgeSearchResult: store.knowledgeSearchResult,
+                                    isSearchingKnowledge: store.isSearchingKnowledge,
+                                    localSkillMapResult: store.localSkillMapResult,
+                                    isBuildingLocalSkillMap: store.isBuildingLocalSkillMap,
+                                    skillLifecycleTimelineResult: store.skillLifecycleTimelineResult,
+                                    isLoadingSkillLifecycleTimeline: store.isLoadingSkillLifecycleTimeline,
+                                    providerObservabilityResult: store.providerObservabilityResult,
+                                    isLoadingProviderObservability: store.isLoadingProviderObservability,
+                                    similarSkillGroupingResult: store.similarSkillGroupingResult,
+                                    isGroupingSimilarSkills: store.isGroupingSimilarSkills,
+                                    capabilityTaxonomyResult: store.capabilityTaxonomyResult,
+                                    isBuildingCapabilityTaxonomy: store.isBuildingCapabilityTaxonomy,
+                                    workspaceReadinessResult: store.workspaceReadinessResult,
+                                    isCheckingWorkspaceReadiness: store.isCheckingWorkspaceReadiness,
+                                    remediationPlanResult: store.remediationPlanResult,
+                                    isPlanningRemediation: store.isPlanningRemediation,
+                                    remediationPreviewDraftsResult: store.remediationPreviewDraftsResult,
+                                    isPreviewingRemediationDrafts: store.isPreviewingRemediationDrafts,
+                                    remediationImpactPreviewResult: store.remediationImpactPreviewResult,
+                                    isPreviewingRemediationImpact: store.isPreviewingRemediationImpact,
+                                    remediationBatchReviewResult: store.remediationBatchReviewResult,
+                                    isReviewingRemediationBatch: store.isReviewingRemediationBatch,
+                                    remediationHistoryResult: store.remediationHistoryResult,
+                                    remediationHistoryRecordResult: store.remediationHistoryRecordResult,
+                                    isLoadingRemediationHistory: store.isLoadingRemediationHistory,
+                                    isRecordingRemediationHistory: store.isRecordingRemediationHistory,
+                                    guidedCleanupFlowResult: store.guidedCleanupFlowResult,
+                                    guidedCleanupRecordResult: store.guidedCleanupRecordResult,
+                                    isPlanningGuidedCleanupFlow: store.isPlanningGuidedCleanupFlow,
+                                    isRecordingGuidedCleanupStep: store.isRecordingGuidedCleanupStep,
+                                    onScoreQuality: {
                                     Task {
                                         await store.scoreSelectedSkillQuality()
                                     }
@@ -580,39 +580,12 @@ struct DetailView: View {
         }
     }
 
-    private func adoptingAgentSummary(for skill: SkillRecord) -> String {
-        let selectedDefinition = normalizedIdentityValue(skill.definitionId)
-        let selectedName = normalizedIdentityValue(skill.name)
-        let agents = store.skills
-            .filter { candidate in
-                let candidateDefinition = normalizedIdentityValue(candidate.definitionId)
-                let candidateName = normalizedIdentityValue(candidate.name)
-                let sameDefinition = !selectedDefinition.isEmpty && candidateDefinition == selectedDefinition
-                let sameName = !selectedName.isEmpty && candidateName == selectedName
-                return sameDefinition || sameName
-            }
-            .map { DisplayText.agent($0.agent) }
-            .reduce(into: Set<String>()) { partialResult, agent in
-                partialResult.insert(agent)
-            }
-            .sorted { lhs, rhs in
-                lhs.localizedStandardCompare(rhs) == .orderedAscending
-            }
-
-        let displayAgents = agents.isEmpty ? [DisplayText.agent(skill.agent)] : agents
-        return displayAgents.joined(separator: ", ")
-    }
-
     private func sessionUsage(for skill: SkillRecord) -> LocalSessionSkillUsageRow? {
         store.localSessionPreviewResult.skillUsageRows.first { row in
             row.skillId == skill.id
                 || row.skillName == skill.name
                 || row.skillName.caseInsensitiveCompare(skill.name) == .orderedSame
         }
-    }
-
-    private func normalizedIdentityValue(_ value: String) -> String {
-        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 }
 

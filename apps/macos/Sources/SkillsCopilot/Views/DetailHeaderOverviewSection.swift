@@ -105,12 +105,6 @@ struct HeaderView: View {
     private var headerMetadataRows: [CompactMetadataRow] {
         [
             CompactMetadataRow(
-                label: UIStrings.definition,
-                value: skill.definitionId,
-                systemImage: "number",
-                isCopyable: true
-            ),
-            CompactMetadataRow(
                 label: UIStrings.text("detail.adoptingAgents.short", "Agents"),
                 value: adoptingAgentSummary,
                 systemImage: "person.2"

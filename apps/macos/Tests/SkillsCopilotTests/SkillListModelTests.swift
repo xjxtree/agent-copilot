@@ -7,6 +7,8 @@ struct SkillListModelTests {
         try searchMatchesNameDefinitionAndDisplayPathCaseInsensitively()
         try agentFiltersLimitResultsAndGroupsUseStableAdapterOrder()
         try stateFiltersUseEffectiveStatusFindingsAndConflicts()
+        try issueIndicatorCountsUseVisibleProblemSemantics()
+        try widespreadBaselineFindingsDoNotDrivePerSkillIssuePresentation()
         try problemItemsUseCurrentAgentRuntimeSemantics()
         try scopeFiltersSeparateProjectAndGlobalSkills()
         try sortOrdersAreStableForCoreListColumns()
@@ -20,15 +22,15 @@ struct SkillListModelTests {
     private func detailWorkbenchSectionsExposeDiagnostics() throws {
         try expectEqual(
             DetailSection.visibleCases,
-            [.overview, .findings, .history, .analysis, .metadata],
-            "Skill detail switcher should expose overview, issues, history, smart analysis, and metadata while omitting retired work surfaces."
+            [.overview, .findings, .conflicts, .history, .analysis, .metadata],
+            "Skill detail switcher should expose overview, issues, conflicts, history, smart analysis, and metadata while omitting retired work surfaces."
         )
         try expectEqual(DetailSection.primaryWorkCases, [], "Sidebar Work surfaces should remain retired; Provider Observability lives in Settings.")
         try expectEqual(DetailSection.agentWorkspace.title, "Agent Workspace", "Agent Workspace should be the default aggregate surface.")
         try expectEqual(DetailSection.guidedCleanup.title, "Guided Cleanup Flow", "Guided Cleanup section title")
         try expectEqual(DetailSection.observability.title, "Provider Observability", "Provider Observability section title")
         try expectEqual(DetailSection.findings.title, "Issues", "Findings tab should be renamed for user-facing issue review.")
-        try expectEqual(DetailSection.conflicts.title, "Issues", "Legacy conflicts route should resolve to the user-facing issue review.")
+        try expectEqual(DetailSection.conflicts.title, "Conflicts", "Conflicts should have a distinct user-facing title.")
         try expectEqual(DetailSection.history.title, "History", "History section title")
         try expectEqual(DetailSection.analysis.title, "Smart Analysis", "Smart Analysis section title")
         try expectEqual(DetailSection.metadata.title, "Metadata", "Metadata section title")
@@ -105,6 +107,84 @@ struct SkillListModelTests {
         try expectEqual(filtered(stateFilter: .unknown).map(\.id), ["theta"], "Unknown filter")
         try expectEqual(filtered(stateFilter: .withFindings).map(\.id), ["delta", "epsilon", "gamma", "theta"], "Problem item filter")
         try expectEqual(filtered(stateFilter: .risky).map(\.id), ["gamma"], "Risky filter")
+    }
+
+    private func issueIndicatorCountsUseVisibleProblemSemantics() throws {
+        let counts = Dictionary(uniqueKeysWithValues: Self.skills.map { skill in
+            (
+                skill.id,
+                SkillListModel.issueIndicatorCount(
+                    for: skill,
+                    skills: Self.skills,
+                    findings: Self.findings,
+                    conflicts: Self.conflicts
+                )
+            )
+        })
+
+        try expectEqual(counts["gamma"], 2, "Rows should count instance findings and same-agent conflicts.")
+        try expectEqual(counts["epsilon"], 2, "Rows should count missing state plus same-agent conflicts.")
+        try expectEqual(counts["delta"], 1, "Rows should count broken state as a visible issue.")
+        try expectEqual(counts["theta"], 1, "Rows should count unknown/root-error state as a visible issue.")
+        try expectEqual(counts["beta"], 0, "Rows should ignore cross-agent-only conflicts.")
+        try expectEqual(counts["alpha"], 0, "Rows should ignore definition-only findings until they are attached to an instance.")
+    }
+
+    private func widespreadBaselineFindingsDoNotDrivePerSkillIssuePresentation() throws {
+        let skills = [
+            skill(id: "alpha", scope: "agent-global", path: "/skills/alpha/SKILL.md", definitionId: "def.alpha", name: "Alpha"),
+            skill(id: "beta", scope: "agent-global", path: "/skills/beta/SKILL.md", definitionId: "def.beta", name: "Beta"),
+            skill(id: "gamma", scope: "agent-global", path: "/skills/gamma/SKILL.md", definitionId: "def.gamma", name: "Gamma"),
+            skill(id: "delta", scope: "agent-global", path: "/skills/delta/SKILL.md", definitionId: "def.delta", name: "Delta"),
+            skill(id: "codex-alpha", agent: "codex", scope: "agent-global", path: "/codex/alpha/SKILL.md", definitionId: "codex.alpha", name: "Codex Alpha"),
+            skill(id: "codex-beta", agent: "codex", scope: "agent-global", path: "/codex/beta/SKILL.md", definitionId: "codex.beta", name: "Codex Beta"),
+            skill(id: "codex-gamma", agent: "codex", scope: "agent-global", path: "/codex/gamma/SKILL.md", definitionId: "codex.gamma", name: "Codex Gamma"),
+            skill(id: "codex-delta", agent: "codex", scope: "agent-global", path: "/codex/delta/SKILL.md", definitionId: "codex.delta", name: "Codex Delta"),
+        ]
+        let findings = [
+            Self.finding(id: "exec-alpha", instanceId: "alpha", ruleId: "permissions.exec-needs-human"),
+            Self.finding(id: "exec-beta", instanceId: "beta", ruleId: "permissions.exec-needs-human"),
+            Self.finding(id: "exec-gamma", instanceId: "gamma", ruleId: "permissions.exec-needs-human"),
+            Self.finding(id: "network-alpha", instanceId: "alpha", ruleId: "permissions.network-declared"),
+            Self.finding(id: "network-beta", instanceId: "beta", ruleId: "permissions.network-declared"),
+            Self.finding(id: "network-gamma", instanceId: "gamma", ruleId: "permissions.network-declared"),
+            Self.finding(id: "body-gamma", instanceId: "gamma", ruleId: "body.too-long"),
+            Self.finding(id: "sparse-network", instanceId: "codex-alpha", ruleId: "permissions.network-declared"),
+        ]
+
+        try expectEqual(
+            SkillListModel.displayFindings(skills: skills, findings: findings).map(\.id),
+            ["body-gamma", "sparse-network"],
+            "Widespread declaration-baseline findings should be omitted from per-skill issue presentation, while specific and sparse findings remain visible."
+        )
+        try expectEqual(
+            SkillListModel.issueIndicatorCount(for: skills[0], skills: skills, findings: findings, conflicts: []),
+            0,
+            "Rows should not show a per-skill issue count when only widespread baseline findings apply."
+        )
+        try expectEqual(
+            SkillListModel.issueIndicatorCount(for: skills[2], skills: skills, findings: findings, conflicts: []),
+            1,
+            "Rows should still count specific findings after widespread baseline findings are filtered out."
+        )
+        try expectEqual(
+            SkillListModel.displayFindingCount(skills: skills, findings: findings, agentFilter: .claudeCode),
+            1,
+            "Sidebar issue metrics should use the same per-skill presentation semantics as rows and filters."
+        )
+        try expectEqual(
+            SkillListModel.filteredAndSorted(
+                skills: skills,
+                findings: findings,
+                conflicts: [],
+                searchText: "",
+                agentFilter: .all,
+                stateFilter: .withFindings,
+                sortOrder: .name
+            ).map(\.id),
+            ["codex-alpha", "gamma"],
+            "The Issues filter should navigate to skills with specific or sparse findings, not skills that only share common baseline gaps."
+        )
     }
 
     private func problemItemsUseCurrentAgentRuntimeSemantics() throws {
@@ -467,6 +547,24 @@ struct SkillListModelTests {
             createdAt: 0
         ),
     ]
+
+    private static func finding(
+        id: String,
+        instanceId: String,
+        ruleId: String,
+        severity: String = "warning"
+    ) -> RuleFindingRecord {
+        RuleFindingRecord(
+            id: id,
+            instanceId: instanceId,
+            definitionId: nil,
+            ruleId: ruleId,
+            severity: severity,
+            message: "\(ruleId) message",
+            suggestion: nil,
+            createdAt: 0
+        )
+    }
 
     private static let conflicts: [ConflictGroupRecord] = [
         ConflictGroupRecord(

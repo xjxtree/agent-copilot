@@ -19,7 +19,7 @@ enum DetailSection: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     static var visibleCases: [DetailSection] {
-        [.overview, .findings, .history, .analysis, .metadata]
+        [.overview, .findings, .conflicts, .history, .analysis, .metadata]
     }
 
     static var primaryWorkCases: [DetailSection] {
@@ -58,7 +58,7 @@ enum DetailSection: String, CaseIterable, Identifiable {
         case .findings:
             return UIStrings.findings
         case .conflicts:
-            return UIStrings.findings
+            return UIStrings.conflicts
         case .history:
             return UIStrings.text("detail.history", "History")
         case .analysis:
@@ -124,7 +124,7 @@ enum DetailSection: String, CaseIterable, Identifiable {
         case .findings:
             return UIStrings.text("detail.section.findings.summary", "Explain selected-skill issues with rules, suggestions, and evidence.")
         case .conflicts:
-            return UIStrings.text("detail.section.findings.summary", "Explain selected-skill issues with rules, suggestions, and evidence.")
+            return UIStrings.text("detail.section.conflicts.summary", "Review same-agent conflicts that currently reference the selected skill.")
         case .history:
             return UIStrings.text("detail.section.history.summary", "Review selected-skill toggle and config history.")
         case .analysis:
@@ -192,9 +192,7 @@ struct SkillSummaryCard: View {
         [
             CompactMetadataRow(label: UIStrings.agent, value: DisplayText.agent(skill.agent), systemImage: "person.crop.circle"),
             CompactMetadataRow(label: UIStrings.scope, value: DisplayText.scope(for: skill), systemImage: "folder"),
-            CompactMetadataRow(label: UIStrings.provenanceRoot, value: SkillProvenanceDisplay.rootClass(for: skill), systemImage: "externaldrive"),
             CompactMetadataRow(label: UIStrings.provenanceKind, value: SkillProvenanceDisplay.kind(for: skill), systemImage: "tag"),
-            CompactMetadataRow(label: UIStrings.definition, value: skill.definitionId, systemImage: "number", isCopyable: true),
             CompactMetadataRow(
                 label: UIStrings.source,
                 value: DisplayText.privacyPath(skill.displayPath, privacyModeEnabled: screenshotPrivacyModeEnabled),

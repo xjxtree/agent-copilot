@@ -5,6 +5,7 @@ struct LocalSessionPreviewModelTests {
     func run() throws {
         try previewDecodesRedactedRowsAndSafety()
         try unavailableKeepsAuthorizationRequired()
+        try filteredEmptyCopyExplainsHiddenLocalSessionCount()
     }
 
     private func previewDecodesRedactedRowsAndSafety() throws {
@@ -138,5 +139,11 @@ struct LocalSessionPreviewModelTests {
         let result = LocalSessionPreviewResult.unavailable(reason: "missing method")
         try expectEqual(result.authorizationRequired, false, "Unavailable preview should not request manual roots.")
         try expectEqual(result.sessionRows.count, 0, "Unavailable preview should not synthesize rows.")
+    }
+
+    private func filteredEmptyCopyExplainsHiddenLocalSessionCount() throws {
+        let message = UIStrings.localSessionNoMatchesMessage(totalCount: 9)
+        try expectFalse(!message.contains("9"), "Filtered-empty session copy should include the loaded local session count.")
+        try expectFalse(message.contains("secondary sidebar"), "Session empty copy should not reference an implementation-specific secondary sidebar.")
     }
 }

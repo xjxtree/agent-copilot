@@ -14,6 +14,7 @@ mod benchmarks;
 mod dispatch_fixtures;
 mod llm_provider;
 mod local_session_preview;
+mod local_session_project_scope;
 mod protocol_fixtures;
 mod remediation_workspace;
 mod skill_manager_fixtures;

@@ -140,6 +140,7 @@ struct BatchSkillOperationSheet: View {
             }
             .disabled(!store.canApplyBatchTogglePreview || store.isPreviewingBatchToggle)
             .help(store.batchTogglePreview?.applySupported == false ? UIStrings.batchToggleApplyUnavailable : "")
+            .keyboardShortcut("a", modifiers: [.command])
 
             if store.isPreviewingBatchToggle {
                 Label(UIStrings.batchTogglePreviewing, systemImage: "hourglass")

@@ -10,6 +10,8 @@
 "action.scanSkills" = "扫描技能";
 "help.scan" = "扫描受支持的 agent root 并刷新 catalog。";
 "action.reloadCatalog" = "重新加载 Catalog";
+"action.showLess" = "收起";
+"action.showMore" = "显示更多";
 "help.reload" = "不扫描 root，仅重新加载当前 catalog。";
 "agent.short.claudeCode" = "Claude";
 "filter.all" = "全部";
@@ -45,11 +47,23 @@
 "adapter.status.planned" = "已规划";
 "adapter.status.blocked" = "已阻止";
 "adapter.diagnostics.roots.none" = "未报告。";
+"toolbar.globalSearch" = "全局搜索";
+"toolbar.globalSearch.help" = "在当前列表中搜索。按 Return 应用。";
+"toolbar.new" = "新建";
+"toolbar.help" = "帮助";
+"toolbar.settings" = "设置";
+"toolbar.profile" = "用户";
 "project.globalRoots" = "全局 root";
 "project.chooseShortPrompt" = "选择项目以包含项目范围技能。";
 "project.chooseMenu" = "选择…";
 "project.moreActions" = "项目操作";
 "refresh.details" = "刷新详情";
+"settings.window.title" = "设置";
+"settings.sidebar.subtitle" = "即时生效的应用偏好";
+"settings.nav.language.subtitle" = "界面与隐私";
+"settings.nav.provider.subtitle" = "连接与钥匙串";
+"settings.nav.observability.subtitle" = "用量与日志";
+"settings.nav.service.subtitle" = "本地服务";
 "settings.serviceDiagnostics" = "服务诊断";
 "detail.history" = "历史";
 "detail.analysis" = "分析";
@@ -127,6 +141,7 @@
 "sidebar.sessions.list" = "会话列表";
 "sidebar.sessions.empty" = "未发现本地会话。";
 "sidebar.sessions.noMatches" = "没有匹配当前搜索的会话。";
+"sidebar.sessions.noMatchesWithCount" = "没有匹配当前筛选的会话。已加载 %d 个本地会话；清除搜索或切换范围即可显示。";
 "sidebar.sessions.userShort" = "用户";
 "sidebar.sessions.totalShort" = "消息";
 "sidebar.sessions.toolShort" = "工具";
@@ -140,6 +155,7 @@
 "skillManager.toolStatus" = "状态";
 "skillManager.localLibrary" = "本地库";
 "skillManager.workflow.label" = "流程";
+"skillManager.workflow.accessibility" = "技能管理流程";
 "skillManager.workflow.searchInstall" = "搜索与安装";
 "skillManager.workflow.installedUpdates" = "已安装与更新";
 "skillManager.workflow.localLibrary" = "本地库";
@@ -232,6 +248,7 @@
 "action.scan" = "扫描";
 "action.reload" = "重新加载";
 "action.save" = "保存";
+"action.formatJSON" = "格式化 JSON";
 "action.done" = "完成";
 "action.cancel" = "取消";
 "action.enable" = "启用";
@@ -299,7 +316,7 @@
 "taskCockpit.taskRequired" = "请输入任务。";
 "taskCockpit.task.placeholder" = "描述要交给 agent 的任务";
 "taskCockpit.input.ready" = "可生成预检。";
-"taskCockpit.empty.result" = "尚未加载任务 Preflight。";
+"taskCockpit.empty.result" = "准备就绪。输入任务后生成 Preflight。";
 "taskCockpit.history.title" = "历史记录";
 "taskCockpit.history.summary" = "选择历史记录会恢复任务文本、目标范围和预检结果。";
 "taskCockpit.history.empty" = "暂无任务 Preflight 历史。";
@@ -319,6 +336,7 @@
 "taskCockpit.failed" = "任务 Preflight 生成已停止：%@。";
 "taskCockpit.loadedWithFallback" = "已生成核心建议；部分诊断未返回。";
 "taskCockpit.elapsedSeconds" = "耗时：%d 秒。";
+"taskCockpit.elapsedSecond" = "耗时：%d 秒。";
 "taskCockpit.progress.title" = "渐进反馈";
 "taskCockpit.progress.pending" = "等待中";
 "taskCockpit.progress.checking" = "检查中";
@@ -418,6 +436,8 @@
 "guidedCleanup.safeAction.previewRequired" = "需要预览";
 "guidedCleanup.safeAction.confirmationRequired" = "需要确认";
 "guidedCleanup.safeLink.open" = "打开安全入口";
+"guidedCleanup.safeLink.confirmOpen" = "确认打开";
+"guidedCleanup.safeLink.cancelOpen" = "取消";
 "guidedCleanup.safeLink.applyBlocked" = "引导式清理链接不能应用更改。";
 "guidedCleanup.safeLink.help" = "打开已有的安全预览或只读复查入口。";
 "guidedCleanup.safeLink.target" = "安全链接目标";
@@ -530,7 +550,7 @@
 "mcpServerPreview.authorizationRequired" = "没有授权 MCP 配置文件，因此不会扫描任何默认 agent 或桌面配置位置。";
 "mcpServerPreview.noRows" = "尚未加载已脱敏的 MCP server 预览。";
 "mcpServerPreview.unavailable" = "MCP server 预览不可用。";
-"mcpServerPreview.counts" = "Args：%d · Env keys：%d";
+"mcpServerPreview.counts" = "参数：%d · 环境键：%d";
 "detail.overview" = "概览";
 "detail.findings" = "问题项";
 "detail.conflicts" = "冲突";
@@ -638,7 +658,7 @@
 "empty.noAgentSkills.message" = "当前 root 中未找到 %@ 技能。请切换 agent 或选择项目，然后重新扫描。";
 "empty.noCodexProject.message" = "当前全局 root 中没有匹配的 Codex 技能。请选择项目以包含项目范围的 Codex 技能。";
 "empty.noCodexSkills.message" = "没有 Codex 技能匹配当前搜索或筛选。";
-"empty.noOpenClawWorkspace.message" = "当前视图没有匹配的 OpenClaw workspace 技能。OpenClaw 只扫描确认的 workspace root：<workspace>/skills 和 <workspace>/.agents/skills；通用仓库 root 会被跳过，不会被视为缺失技能。";
+"empty.noOpenClawWorkspace.message" = "当前视图没有匹配的 OpenClaw workspace 技能。OpenClaw 只扫描已确认 workspace 的 skills 和 .agents/skills 根目录；通用仓库根目录会被跳过，不会被视为缺失技能。";
 "sidebar.adapterCapabilities" = "Adapter 能力";
 "adapter.capability.scan" = "扫描";
 "adapter.capability.toggle" = "Toggle";
@@ -667,7 +687,7 @@
 "empty.noSkillSelected" = "未选择技能";
 "empty.noSkillSelected.message" = "重新加载 catalog 或从侧边栏选择一个技能。";
 "empty.noSessionSelected" = "未选择会话";
-"empty.noSessionSelected.message" = "刷新会话或从次级侧边栏选择一个会话。";
+"empty.noSessionSelected.message" = "刷新会话或从「会话」列表选择一个会话。";
 "empty.noConfigSelected" = "未选择配置历史";
 "empty.noConfigSelected.message" = "在主侧边栏选择配置，然后选择一条配置历史查看详情。";
 "empty.noFindings" = "无问题项";
@@ -840,7 +860,7 @@
 "settings.aiProvider.optional.placeholder" = "可选";
 "settings.aiProvider.apiKey" = "API key";
 "settings.aiProvider.apiKey.placeholder" = "留空以保留现有 Keychain 项";
-"settings.aiProvider.keychainFirst" = "API key 只会在保存或测试连接时发送给服务。服务应优先使用 Keychain 保存密钥；原生 UI 会在每次操作后清空此字段，并且不会显示已保存的 key。";
+"settings.aiProvider.keychainFirst" = "API key 只会在 profile 自动保存或确认测试连接时发送给本地服务。服务应优先使用 Keychain 保存密钥；原生 UI 会在每次操作后清空此字段，并且不会显示已保存的 key。";
 "settings.aiProvider.connection" = "连接";
 "settings.aiProvider.limits" = "限额";
 "settings.aiProvider.credentialSafety" = "凭据安全";
@@ -854,10 +874,16 @@
 "settings.aiProvider.storage" = "凭据存储";
 "settings.aiProvider.configured" = "已配置";
 "settings.aiProvider.unconfigured" = "未配置";
+"settings.aiProvider.disabledReason" = "禁用原因";
 "settings.aiProvider.save" = "保存提供方";
 "settings.aiProvider.test" = "测试连接";
+"settings.aiProvider.saveConfirmation.title" = "保存提供方设置？";
+"settings.aiProvider.saveConfirmation.message" = "这会将提供方配置和当前 API key 草稿发送给本地服务，用于更新已验证的配置与 Keychain 凭据状态。";
+"settings.aiProvider.testConfirmation.title" = "测试提供方连接？";
+"settings.aiProvider.testConfirmation.message" = "这会对已配置 endpoint 执行一次手动连接测试。请求结束后界面会清空 API key 草稿。";
 "settings.aiProvider.saving" = "正在保存提供方...";
 "settings.aiProvider.testing" = "正在测试连接...";
+"settings.aiProvider.autosavePending" = "有效改动将自动保存。";
 "settings.aiProvider.saved" = "提供方设置已保存。API key 草稿已清空。";
 "settings.aiProvider.testResult" = "测试结果";
 "settings.aiProvider.testSucceeded" = "提供方连接测试成功。";
@@ -868,6 +894,10 @@
 "settings.aiProvider.audit.redaction" = "脱敏";
 "settings.aiProvider.audit.promptStored" = "提示词已存储";
 "settings.aiProvider.audit.responseStored" = "响应已存储";
+"settings.aiProvider.audit.applied" = "已应用";
+"settings.aiProvider.audit.notApplied" = "未应用";
+"settings.aiProvider.audit.stored" = "已存储";
+"settings.aiProvider.audit.notStored" = "未存储";
 "settings.aiProvider.audit.errorCode" = "错误代码";
 "settings.aiProvider.validation.endpointRequired" = "Endpoint 为必填。";
 "settings.aiProvider.validation.endpointInvalid" = "Endpoint 必须包含 URL scheme，例如 https://。";
@@ -888,6 +918,9 @@
 "settings.agentConfig.showSensitive" = "显示并编辑";
 "settings.agentConfig.showSensitiveValues" = "显示值";
 "settings.agentConfig.hideSensitive" = "隐藏";
+"settings.agentConfig.autosavePending" = "有效改动将自动保存。";
+"settings.agentConfig.editConfirmation.title" = "显示并编辑原始配置？";
+"settings.agentConfig.editConfirmation.message" = "这会显示敏感配置值并启用原始编辑。有效改动会通过已验证的快照流程自动保存。";
 "settings.agentConfig.skillEnablement" = "技能生效配置";
 "settings.agentConfig.disabledSkills" = "禁用技能";
 "settings.agentConfig.disabledSkills.empty" = "当前未检测到配置禁用的技能。";
@@ -902,7 +935,7 @@
 "settings.existingFile" = "现有文件";
 "settings.willCreateFile" = "将创建文件";
 "settings.invalidUtf8" = "设置内容不是有效 UTF-8。";
-"settings.jsonValid" = "JSON 有效。保存时会创建 agent 配置快照、原子写入、校验并重新扫描。";
+"settings.jsonValid" = "JSON 有效。改动将通过快照、原子写入、校验和重新扫描自动保存。";
 "value.supported" = "支持";
 "value.notSupported" = "未支持";
 "value.short.supported" = "支持";

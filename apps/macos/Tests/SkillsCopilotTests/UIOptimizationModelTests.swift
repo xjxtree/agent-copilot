@@ -4,11 +4,15 @@ import Foundation
 struct UIOptimizationModelTests {
     func run() throws {
         try sidebarSelectionUsesNativeMutedTreatment()
+        try listPagesUseUnifiedGlassToolbarAndCardRows()
         try secondarySidebarListsUseGlobalTreatment()
         try skillListDensityMatchesOptimizationPlan()
         try emptyAgentSkillListsExplainAgentContext()
         try detailHeaderUsesCompactCopyableMetadata()
         try detailFeedbackUsesInlineToast()
+        try configEditorUsesAutosaveCodeCardPresentation()
+        try settingsWindowUsesSidebarAndCloseOnlyControls()
+        try modalWorkflowsUseSharedSheetChromeAndColumns()
         try settingsPreflightAndManagerSurfacesHaveStablePresentation()
         try skillManagerPreviewMetadataIsCompactAndActionSafe()
     }
@@ -28,6 +32,59 @@ struct UIOptimizationModelTests {
             UIOptimizationPresentation.sidebarSelection.accentLineWidth,
             3,
             "Sidebar selected rows should use a 3pt brand accent line."
+        )
+    }
+
+    private func listPagesUseUnifiedGlassToolbarAndCardRows() throws {
+        try expectEqual(
+            UIOptimizationPresentation.unifiedToolbar.spansEntireWindow,
+            true,
+            "List pages should use one window-level toolbar instead of stacked gray bars."
+        )
+        try expectEqual(
+            UIOptimizationPresentation.unifiedToolbar.searchPlacement,
+            .globalTrailing,
+            "The global search field should live in the trailing window toolbar."
+        )
+        try expectEqual(
+            UIOptimizationPresentation.unifiedToolbar.collapsesAtScrollEdge,
+            true,
+            "The toolbar should allow the system Liquid Glass scroll-edge treatment to collapse or compact it."
+        )
+        try expectEqual(
+            UIOptimizationPresentation.unifiedToolbar.settingsActionUsesSystemSettingsLink,
+            true,
+            "The toolbar settings button should use the system Settings scene entry point."
+        )
+        try expectEqual(
+            UIOptimizationPresentation.listPage.filterStyle,
+            .capsule,
+            "Skill and session filters should render as capsule controls under the content title."
+        )
+        try expectEqual(
+            UIOptimizationPresentation.listPage.searchScope,
+            .localList,
+            "The search field below the list title should be visually and semantically scoped to the visible list."
+        )
+        try expectEqual(
+            UIOptimizationPresentation.listPage.rowStyle,
+            .materialCard,
+            "Skill and session rows should use spacious material card rows rather than compressed source-list strips."
+        )
+        try expectEqual(
+            UIOptimizationPresentation.listPage.minimumCardRowHeight,
+            58,
+            "Card rows need enough vertical space for icon, title, status, and secondary metadata."
+        )
+        try expectEqual(
+            UIOptimizationPresentation.listPage.cardRowSpacing,
+            8,
+            "Cards should have visible breathing room between rows."
+        )
+        try expectEqual(
+            UIOptimizationPresentation.sidebarShell.width,
+            260,
+            "The primary sidebar should use a stable full-height width for repository and navigation context."
         )
     }
 
@@ -113,6 +170,16 @@ struct UIOptimizationModelTests {
             UIStrings.noSkillsMatchSearch,
             "Active search or filter criteria should still use the filtered-empty copy."
         )
+
+        let openClawEmptyMessage = UIOptimizationPresentation.skillList.emptyFilteredMessage(
+            agentFilter: .openclaw,
+            hasActiveProjectContext: true,
+            hasActiveSearchOrFilter: false
+        )
+        try expectFalse(
+            openClawEmptyMessage.contains("<workspace>"),
+            "OpenClaw empty copy should not expose raw placeholder tokens to users."
+        )
     }
 
     private func detailHeaderUsesCompactCopyableMetadata() throws {
@@ -146,6 +213,95 @@ struct UIOptimizationModelTests {
         )
     }
 
+    private func configEditorUsesAutosaveCodeCardPresentation() throws {
+        try expectEqual(
+            UIOptimizationPresentation.configEditor.usesSingleCodeCard,
+            true,
+            "Config editing should use one focused code-card surface instead of separate header, editor, and footer bars."
+        )
+        try expectEqual(
+            UIOptimizationPresentation.configEditor.showsLineNumbers,
+            true,
+            "Config JSON viewers and editors should expose line numbers."
+        )
+        try expectEqual(
+            UIOptimizationPresentation.configEditor.usesCompactToolbarActions,
+            true,
+            "Reload, format, and reveal/edit controls should live in a compact card toolbar."
+        )
+        try expectEqual(
+            UIOptimizationPresentation.configEditor.primarySaveButtonVisible,
+            false,
+            "Config editing should not depend on a persistent large Save button under the editor."
+        )
+        try expectEqual(
+            UIOptimizationPresentation.configEditor.autosaveEnabled,
+            true,
+            "Editable JSON config changes should autosave through the verified service save flow."
+        )
+    }
+
+    private func settingsWindowUsesSidebarAndCloseOnlyControls() throws {
+        try expectEqual(
+            UIOptimizationPresentation.settings.navigationStyle,
+            .sidebar,
+            "Settings should use a macOS sidebar list instead of top tab pages."
+        )
+        try expectEqual(
+            UIOptimizationPresentation.settings.usesDedicatedSettingsScene,
+            true,
+            "Settings should remain a separate modeless Settings scene."
+        )
+        try expectEqual(
+            UIOptimizationPresentation.settings.windowControlPolicy,
+            .closeOnly,
+            "Settings windows should disable minimize and zoom controls."
+        )
+        try expectEqual(
+            UIOptimizationPresentation.settings.primarySaveButtonsVisible,
+            false,
+            "Settings changes should not depend on large persistent Save or Done buttons."
+        )
+        try expectEqual(
+            UIOptimizationPresentation.settings.sidebarWidth,
+            190,
+            "Settings sidebar should reserve stable width for language, provider, monitoring, and service categories."
+        )
+    }
+
+    private func modalWorkflowsUseSharedSheetChromeAndColumns() throws {
+        try expectEqual(
+            UIOptimizationPresentation.workflowSheet.titlebarStyle,
+            .liquidGlass,
+            "Modal workflows should share a compact Liquid Glass titlebar instead of bespoke red or gray header bands."
+        )
+        try expectEqual(
+            UIOptimizationPresentation.workflowSheet.closeActionPlacement,
+            .trailingTitlebar,
+            "Workflow sheets should expose Done/Close in the trailing titlebar."
+        )
+        try expectEqual(
+            UIOptimizationPresentation.workflowSheet.feedbackStyle,
+            .inlineTintedBanner,
+            "Workflow errors and warnings should use scoped lightweight banners."
+        )
+        try expectEqual(
+            UIOptimizationPresentation.workflowSheet.columnLayout,
+            .twoColumn,
+            "Workflow sheets should keep input/options visually separate from history, lists, and previews."
+        )
+        try expectEqual(
+            UIOptimizationPresentation.taskPreflight.sheetContentLayout,
+            .editorWithHistory,
+            "Task Preflight should render the editor on the left and history on the right."
+        )
+        try expectEqual(
+            UIOptimizationPresentation.skillManager.sheetContentLayout,
+            .controlsWithResults,
+            "Skill Manager should render controls on the left and search/installed/local results on the right."
+        )
+    }
+
     private func settingsPreflightAndManagerSurfacesHaveStablePresentation() throws {
         try expectEqual(
             UIOptimizationPresentation.settings.minimumWidth,
@@ -169,8 +325,8 @@ struct UIOptimizationModelTests {
         )
         try expectEqual(
             UIOptimizationPresentation.taskPreflight.fixedAgentChipWidth,
-            96,
-            "Task Preflight agent chips should use a fixed width so labels do not resize the row."
+            0,
+            "Task Preflight agent chips should use adaptive width instead of the old 96pt fixed width."
         )
         try expectEqual(
             UIOptimizationPresentation.taskPreflight.showsProviderUnavailableGate,

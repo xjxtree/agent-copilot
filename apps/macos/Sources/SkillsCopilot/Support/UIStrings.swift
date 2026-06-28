@@ -186,7 +186,7 @@ enum UIStrings {
     }
     static var noCodexProjectMessage: String { text("empty.noCodexProject.message", "No Codex skills match the current global roots. Choose a project to include project-scoped Codex skills.") }
     static var noCodexSkillsMessage: String { text("empty.noCodexSkills.message", "No Codex skills match the current search or filters.") }
-    static var noOpenClawWorkspaceSkillsMessage: String { text("empty.noOpenClawWorkspace.message", "No OpenClaw workspace skills match this view. OpenClaw only scans confirmed workspace roots: <workspace>/skills and <workspace>/.agents/skills; generic repo roots are skipped rather than treated as missing skills.") }
+    static var noOpenClawWorkspaceSkillsMessage: String { text("empty.noOpenClawWorkspace.message", "No OpenClaw workspace skills match this view. OpenClaw only scans confirmed workspace skills and workspace .agents/skills roots; generic repo roots are skipped rather than treated as missing skills.") }
     static var adapterCapabilities: String { text("sidebar.adapterCapabilities", "Adapter Capabilities") }
     static var adapterScan: String { text("adapter.capability.scan", "Scan") }
     static var adapterToggle: String { text("adapter.capability.toggle", "Toggle") }
@@ -215,7 +215,10 @@ enum UIStrings {
     static var noSkillSelected: String { text("empty.noSkillSelected", "No Skill Selected") }
     static var noSkillSelectedMessage: String { text("empty.noSkillSelected.message", "Reload the catalog or select a skill from the sidebar.") }
     static var noSessionSelected: String { text("empty.noSessionSelected", "No Session Selected") }
-    static var noSessionSelectedMessage: String { text("empty.noSessionSelected.message", "Refresh sessions or select a session from the secondary sidebar.") }
+    static var noSessionSelectedMessage: String { text("empty.noSessionSelected.message", "Refresh sessions or choose a session from the Sessions list.") }
+    static func localSessionNoMatchesMessage(totalCount: Int) -> String {
+        format("sidebar.sessions.noMatchesWithCount", "No sessions match the current filters. %d local sessions are loaded; clear search or change scope to show them.", totalCount)
+    }
     static var noConfigSelected: String { text("empty.noConfigSelected", "No Config History Selected") }
     static var noConfigSelectedMessage: String { text("empty.noConfigSelected.message", "Select Config in the primary sidebar, then choose a config history item to inspect.") }
     static var noFindings: String { text("empty.noFindings", "No Issues") }
@@ -364,6 +367,12 @@ enum UIStrings {
     static var permissionUndeclaredNote: String { text("permissions.undeclaredNote", "Permissions are undeclared or unavailable in the catalog payload; this is not a safe or unsafe verdict.") }
     static var permissionDeclarationNote: String { text("permissions.declarationNote", "These values are permission declarations from the catalog payload, not a safety verdict.") }
     static var service: String { text("settings.service", "Service") }
+    static var settingsWindowTitle: String { text("settings.window.title", "Settings") }
+    static var settingsSidebarSubtitle: String { text("settings.sidebar.subtitle", "Immediate app preferences") }
+    static var settingsNavLanguageSubtitle: String { text("settings.nav.language.subtitle", "Interface and privacy") }
+    static var settingsNavProviderSubtitle: String { text("settings.nav.provider.subtitle", "Connection and Keychain") }
+    static var settingsNavObservabilitySubtitle: String { text("settings.nav.observability.subtitle", "Usage and logs") }
+    static var settingsNavServiceSubtitle: String { text("settings.nav.service.subtitle", "Local sidecar") }
     static var languageSettings: String { text("settings.language.title", "Language") }
     static var languageSelection: String { text("settings.language.selection", "App language") }
     static var languageEnglish: String { text("settings.language.english", "English") }
@@ -395,7 +404,7 @@ enum UIStrings {
     static var aiProviderOptionalPlaceholder: String { text("settings.aiProvider.optional.placeholder", "optional") }
     static var aiProviderAPIKey: String { text("settings.aiProvider.apiKey", "API key") }
     static var aiProviderAPIKeyPlaceholder: String { text("settings.aiProvider.apiKey.placeholder", "Leave blank to keep existing Keychain item") }
-    static var aiProviderKeychainFirst: String { text("settings.aiProvider.keychainFirst", "API keys are sent only to the service on Save or Test Connection. The service should store secrets in Keychain first; the native UI clears this field after each action and never displays saved keys.") }
+    static var aiProviderKeychainFirst: String { text("settings.aiProvider.keychainFirst", "API keys are sent only to the local service when the profile auto-saves or when Test Connection is confirmed. The service should store secrets in Keychain first; the native UI clears this field after each action and never displays saved keys.") }
     static var aiProviderBudget: String { text("settings.aiProvider.budget", "Budget") }
     static var aiProviderMonthlyBudget: String { text("settings.aiProvider.monthlyBudget", "Monthly budget") }
     static var aiProviderMonthlyBudgetPlaceholder: String { text("settings.aiProvider.monthlyBudget.placeholder", "5") }
@@ -406,10 +415,16 @@ enum UIStrings {
     static var aiProviderStorage: String { text("settings.aiProvider.storage", "Credential storage") }
     static var aiProviderConfigured: String { text("settings.aiProvider.configured", "Configured") }
     static var aiProviderUnconfigured: String { text("settings.aiProvider.unconfigured", "Unconfigured") }
+    static var aiProviderDisabledReason: String { text("settings.aiProvider.disabledReason", "Disabled reason") }
     static var aiProviderSave: String { text("settings.aiProvider.save", "Save Provider") }
     static var aiProviderTest: String { text("settings.aiProvider.test", "Test Connection") }
+    static var aiProviderSaveConfirmationTitle: String { text("settings.aiProvider.saveConfirmation.title", "Save provider settings?") }
+    static var aiProviderSaveConfirmationMessage: String { text("settings.aiProvider.saveConfirmation.message", "This sends the provider profile and any API key draft to the local service so it can update the verified profile and Keychain-backed credential state.") }
+    static var aiProviderTestConfirmationTitle: String { text("settings.aiProvider.testConfirmation.title", "Test provider connection?") }
+    static var aiProviderTestConfirmationMessage: String { text("settings.aiProvider.testConfirmation.message", "This performs one manual provider connection test against the configured endpoint. The UI clears any API key draft after the request.") }
     static var aiProviderSaving: String { text("settings.aiProvider.saving", "Saving provider...") }
     static var aiProviderTesting: String { text("settings.aiProvider.testing", "Testing connection...") }
+    static var aiProviderAutosavePending: String { text("settings.aiProvider.autosavePending", "Valid changes will be saved automatically.") }
     static var aiProviderSaved: String { text("settings.aiProvider.saved", "Provider settings saved. API key draft cleared.") }
     static var aiProviderTestResult: String { text("settings.aiProvider.testResult", "Test result") }
     static var aiProviderTestSucceeded: String { text("settings.aiProvider.testSucceeded", "Provider connection test succeeded.") }
@@ -420,6 +435,10 @@ enum UIStrings {
     static var aiProviderAuditRedaction: String { text("settings.aiProvider.audit.redaction", "Redaction") }
     static var aiProviderAuditPromptStored: String { text("settings.aiProvider.audit.promptStored", "Prompt stored") }
     static var aiProviderAuditResponseStored: String { text("settings.aiProvider.audit.responseStored", "Response stored") }
+    static var aiProviderAuditApplied: String { text("settings.aiProvider.audit.applied", "Applied") }
+    static var aiProviderAuditNotApplied: String { text("settings.aiProvider.audit.notApplied", "Not applied") }
+    static var aiProviderAuditStored: String { text("settings.aiProvider.audit.stored", "Stored") }
+    static var aiProviderAuditNotStored: String { text("settings.aiProvider.audit.notStored", "Not stored") }
     static var aiProviderAuditErrorCode: String { text("settings.aiProvider.audit.errorCode", "Error code") }
     static var aiProviderEndpointRequired: String { text("settings.aiProvider.validation.endpointRequired", "Endpoint is required.") }
     static var aiProviderEndpointInvalid: String { text("settings.aiProvider.validation.endpointInvalid", "Endpoint must include a URL scheme such as https://.") }
@@ -440,6 +459,9 @@ enum UIStrings {
     static var agentConfigShowSensitive: String { text("settings.agentConfig.showSensitive", "Show & Edit") }
     static var agentConfigShowSensitiveValues: String { text("settings.agentConfig.showSensitiveValues", "Show Values") }
     static var agentConfigHideSensitive: String { text("settings.agentConfig.hideSensitive", "Hide") }
+    static var configAutosavePending: String { text("settings.agentConfig.autosavePending", "Valid changes will be saved automatically.") }
+    static var agentConfigEditConfirmationTitle: String { text("settings.agentConfig.editConfirmation.title", "Show and edit raw config?") }
+    static var agentConfigEditConfirmationMessage: String { text("settings.agentConfig.editConfirmation.message", "This reveals sensitive config values and enables raw editing. Valid changes auto-save through the verified snapshot flow.") }
     static var agentConfigSkillEnablement: String { text("settings.agentConfig.skillEnablement", "Skill enablement") }
     static var agentConfigDisabledSkillsTitle: String { text("settings.agentConfig.disabledSkills", "Disabled skills") }
     static var agentConfigDisabledSkillsEmpty: String { text("settings.agentConfig.disabledSkills.empty", "No config-disabled skills detected.") }
@@ -466,7 +488,8 @@ enum UIStrings {
     static var existingFile: String { text("settings.existingFile", "Existing file") }
     static var willCreateFile: String { text("settings.willCreateFile", "Will create file") }
     static var settingsInvalidUTF8: String { text("settings.invalidUtf8", "Settings content is not valid UTF-8.") }
-    static var jsonValidSettingsWrite: String { text("settings.jsonValid", "JSON is valid. Save will create an agent config snapshot, write atomically, verify, and rescan.") }
+    static var formatJSON: String { text("action.formatJSON", "Format JSON") }
+    static var jsonValidSettingsWrite: String { text("settings.jsonValid", "JSON is valid. Changes will auto-save through snapshot, atomic write, verification, and rescan.") }
     static var connectedProtocolNote: String { text("detail.protocolNote", "This native macOS shell is connected through the Rust service protocol. Scan, toggle, and agent config rollback actions use verified write paths with snapshots.") }
     static var loadingSkillDetail: String { text("detail.loading", "Loading skill detail...") }
     static var readOnlyPreview: String { text("detail.readOnlyPreview", "Read-only preview") }
@@ -735,6 +758,8 @@ enum UIStrings {
     static var guidedCleanupSafeActionPreviewRequired: String { text("guidedCleanup.safeAction.previewRequired", "Preview required") }
     static var guidedCleanupSafeActionConfirmationRequired: String { text("guidedCleanup.safeAction.confirmationRequired", "Confirmation required") }
     static var guidedCleanupSafeLinkOpen: String { text("guidedCleanup.safeLink.open", "Open safe entry") }
+    static var guidedCleanupSafeLinkConfirmOpen: String { text("guidedCleanup.safeLink.confirmOpen", "Confirm open") }
+    static var guidedCleanupSafeLinkCancelOpen: String { text("guidedCleanup.safeLink.cancelOpen", "Cancel") }
     static var guidedCleanupSafeLinkApplyBlocked: String { text("guidedCleanup.safeLink.applyBlocked", "Guided cleanup links cannot apply changes.") }
     static var guidedCleanupSafeLinkHelp: String { text("guidedCleanup.safeLink.help", "Open an existing safe preview or read-only review entry.") }
     static var guidedCleanupSafeLinkTarget: String { text("guidedCleanup.safeLink.target", "Safe link target") }
@@ -797,7 +822,7 @@ enum UIStrings {
     static var taskCockpitTaskRequired: String { text("taskCockpit.taskRequired", "Enter a task.") }
     static var taskCockpitTaskPlaceholder: String { text("taskCockpit.task.placeholder", "Describe the task to hand off to an agent") }
     static var taskCockpitInputReady: String { text("taskCockpit.input.ready", "Ready to build preflight.") }
-    static var taskCockpitNoResult: String { text("taskCockpit.empty.result", "No task preflight loaded.") }
+    static var taskCockpitNoResult: String { text("taskCockpit.empty.result", "Ready. Enter a task, then build Preflight.") }
     static var taskCockpitLoaded: String { text("taskCockpit.loaded", "Task preflight loaded from local evidence.") }
     static var taskCockpitCancelled: String { text("taskCockpit.cancelled", "Task preflight build was cancelled. No provider or write action was started.") }
     static var taskCockpitCatalogUnavailableDiagnostic: String { text("taskCockpit.diagnostic.catalogUnavailable", "The service returned preflight metadata without an available catalog.") }
@@ -891,7 +916,11 @@ enum UIStrings {
     }
 
     static func taskCockpitElapsedSeconds(_ elapsedSeconds: Int) -> String {
-        format("taskCockpit.elapsedSeconds", "Elapsed: %d seconds.", elapsedSeconds)
+        let safeElapsedSeconds = max(0, elapsedSeconds)
+        if safeElapsedSeconds == 1 {
+            return format("taskCockpit.elapsedSecond", "Elapsed: %d second.", safeElapsedSeconds)
+        }
+        return format("taskCockpit.elapsedSeconds", "Elapsed: %d seconds.", safeElapsedSeconds)
     }
 
     static func taskCockpitProgressBlocked(_ blockerCount: Int) -> String {
@@ -1415,6 +1444,10 @@ enum UIStrings {
         format("agentCopilot.agentProfile.riskSubset.inline", "Risk-related %d", count)
     }
 
+    static func mcpServerArgEnvSummary(args: Int, envKeys: Int) -> String {
+        format("mcpServerPreview.counts", "Args: %d · Env keys: %d", args, envKeys)
+    }
+
     static func visibleFindingsSummary(_ visible: Int, _ total: Int) -> String {
         format("findings.visibleSummary", "%d of %d issues", visible, total)
     }
@@ -1685,7 +1718,14 @@ enum UIStrings {
     }
 
     static func text(_ key: String, _ defaultValue: String) -> String {
-        localizedStrings()[key] ?? defaultValue
+        if let value = localizedStrings()[key] {
+            return value
+        }
+        let nativeValue = Bundle.main.localizedString(forKey: key, value: nil, table: nil)
+        if nativeValue != key {
+            return nativeValue
+        }
+        return defaultValue
     }
 
     private static func format(_ key: String, _ defaultValue: String, _ arguments: CVarArg...) -> String {

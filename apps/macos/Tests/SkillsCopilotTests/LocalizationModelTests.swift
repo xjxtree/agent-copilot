@@ -53,6 +53,7 @@ struct LocalizationModelTests {
             "Sidecar timeout errors should use the selected app language."
         )
         try skillManagerChineseLocalizationDoesNotFallBackToEnglish()
+        try taskCockpitElapsedSecondsHandlesBoundaries()
 
         UIStrings.use(.english)
         try expectEqual(UIStrings.scan, "Scan", "Switching back to English should not reuse cached Chinese values")
@@ -66,6 +67,14 @@ struct LocalizationModelTests {
             "Service call timed out before the sidecar returned a complete response.",
             "English sidecar timeout message should stay readable."
         )
+    }
+
+    private func taskCockpitElapsedSecondsHandlesBoundaries() throws {
+        UIStrings.use(.english)
+        try expectEqual(UIStrings.taskCockpitElapsedSeconds(-3), "Elapsed: 0 seconds.", "Negative elapsed time should clamp to zero.")
+        try expectEqual(UIStrings.taskCockpitElapsedSeconds(0), "Elapsed: 0 seconds.", "Zero elapsed time should be readable.")
+        try expectEqual(UIStrings.taskCockpitElapsedSeconds(1), "Elapsed: 1 second.", "Singular elapsed time should not use a plural noun.")
+        try expectEqual(UIStrings.taskCockpitElapsedSeconds(2), "Elapsed: 2 seconds.", "Plural elapsed time should stay readable.")
     }
 
     private func skillManagerChineseLocalizationDoesNotFallBackToEnglish() throws {

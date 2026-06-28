@@ -10,6 +10,8 @@
 "action.scanSkills" = "Scan Skills";
 "help.scan" = "Scan supported agent roots and refresh the catalog.";
 "action.reloadCatalog" = "Reload Catalog";
+"action.showLess" = "Show less";
+"action.showMore" = "Show more";
 "help.reload" = "Reload the current catalog without scanning roots.";
 "agent.short.claudeCode" = "Claude";
 "filter.all" = "All";
@@ -45,11 +47,23 @@
 "adapter.status.planned" = "Planned";
 "adapter.status.blocked" = "Blocked";
 "adapter.diagnostics.roots.none" = "None reported.";
+"toolbar.globalSearch" = "Search all";
+"toolbar.globalSearch.help" = "Search within the current list. Press Return to apply.";
+"toolbar.new" = "New";
+"toolbar.help" = "Help";
+"toolbar.settings" = "Settings";
+"toolbar.profile" = "Profile";
 "project.globalRoots" = "Global roots";
 "project.chooseShortPrompt" = "Choose a project to include project-scoped skills.";
 "project.chooseMenu" = "Choose...";
 "project.moreActions" = "Project actions";
 "refresh.details" = "Refresh Details";
+"settings.window.title" = "Settings";
+"settings.sidebar.subtitle" = "Immediate app preferences";
+"settings.nav.language.subtitle" = "Interface and privacy";
+"settings.nav.provider.subtitle" = "Connection and Keychain";
+"settings.nav.observability.subtitle" = "Usage and logs";
+"settings.nav.service.subtitle" = "Local sidecar";
 "settings.serviceDiagnostics" = "Service Diagnostics";
 "detail.history" = "History";
 "detail.analysis" = "Analysis";
@@ -127,6 +141,7 @@
 "sidebar.sessions.list" = "Sessions";
 "sidebar.sessions.empty" = "No local sessions found.";
 "sidebar.sessions.noMatches" = "No sessions match the current search.";
+"sidebar.sessions.noMatchesWithCount" = "No sessions match the current filters. %d local sessions are loaded; clear search or change scope to show them.";
 "sidebar.sessions.userShort" = "user";
 "sidebar.sessions.totalShort" = "msg";
 "sidebar.sessions.toolShort" = "tool";
@@ -140,6 +155,7 @@
 "skillManager.toolStatus" = "Status";
 "skillManager.localLibrary" = "Local Library";
 "skillManager.workflow.label" = "Workflow";
+"skillManager.workflow.accessibility" = "Skill Manager workflow";
 "skillManager.workflow.searchInstall" = "Search & Install";
 "skillManager.workflow.installedUpdates" = "Installed & Updates";
 "skillManager.workflow.localLibrary" = "Local Library";
@@ -232,6 +248,7 @@
 "action.scan" = "Scan";
 "action.reload" = "Reload";
 "action.save" = "Save";
+"action.formatJSON" = "Format JSON";
 "action.done" = "Done";
 "action.cancel" = "Cancel";
 "action.enable" = "Enable";
@@ -299,7 +316,7 @@
 "taskCockpit.taskRequired" = "Enter a task.";
 "taskCockpit.task.placeholder" = "Describe the task to hand off to an agent";
 "taskCockpit.input.ready" = "Ready to build preflight.";
-"taskCockpit.empty.result" = "No task preflight loaded.";
+"taskCockpit.empty.result" = "Ready. Enter a task, then build Preflight.";
 "taskCockpit.history.title" = "History";
 "taskCockpit.history.summary" = "Selecting a history row restores the task text, agent scope, and preflight result.";
 "taskCockpit.history.empty" = "No task preflight history yet.";
@@ -319,6 +336,7 @@
 "taskCockpit.failed" = "Task preflight build stopped: %@.";
 "taskCockpit.loadedWithFallback" = "Core recommendation is ready; some diagnostics did not return.";
 "taskCockpit.elapsedSeconds" = "Elapsed: %d seconds.";
+"taskCockpit.elapsedSecond" = "Elapsed: %d second.";
 "taskCockpit.progress.title" = "Progressive feedback";
 "taskCockpit.progress.pending" = "Pending";
 "taskCockpit.progress.checking" = "Checking";
@@ -418,6 +436,8 @@
 "guidedCleanup.safeAction.previewRequired" = "Preview required";
 "guidedCleanup.safeAction.confirmationRequired" = "Confirmation required";
 "guidedCleanup.safeLink.open" = "Open safe entry";
+"guidedCleanup.safeLink.confirmOpen" = "Confirm open";
+"guidedCleanup.safeLink.cancelOpen" = "Cancel";
 "guidedCleanup.safeLink.applyBlocked" = "Guided cleanup links cannot apply changes.";
 "guidedCleanup.safeLink.help" = "Open an existing safe preview or read-only review entry.";
 "guidedCleanup.safeLink.target" = "Safe link target";
@@ -638,7 +658,7 @@
 "empty.noAgentSkills.message" = "No %@ skills found in the current roots. Switch agents or choose a project, then scan again.";
 "empty.noCodexProject.message" = "No Codex skills match the current global roots. Choose a project to include project-scoped Codex skills.";
 "empty.noCodexSkills.message" = "No Codex skills match the current search or filters.";
-"empty.noOpenClawWorkspace.message" = "No OpenClaw workspace skills match this view. OpenClaw only scans confirmed workspace roots: <workspace>/skills and <workspace>/.agents/skills; generic repo roots are skipped rather than treated as missing skills.";
+"empty.noOpenClawWorkspace.message" = "No OpenClaw workspace skills match this view. OpenClaw only scans confirmed workspace skills and workspace .agents/skills roots; generic repo roots are skipped rather than treated as missing skills.";
 "sidebar.adapterCapabilities" = "Adapter Capabilities";
 "adapter.capability.scan" = "Scan";
 "adapter.capability.toggle" = "Toggle";
@@ -667,7 +687,7 @@
 "empty.noSkillSelected" = "No Skill Selected";
 "empty.noSkillSelected.message" = "Reload the catalog or select a skill from the sidebar.";
 "empty.noSessionSelected" = "No Session Selected";
-"empty.noSessionSelected.message" = "Refresh sessions or select a session from the secondary sidebar.";
+"empty.noSessionSelected.message" = "Refresh sessions or choose a session from the Sessions list.";
 "empty.noConfigSelected" = "No Config History Selected";
 "empty.noConfigSelected.message" = "Select Config in the primary sidebar, then choose a config history item to inspect.";
 "empty.noFindings" = "No Issues";
@@ -840,7 +860,7 @@
 "settings.aiProvider.optional.placeholder" = "optional";
 "settings.aiProvider.apiKey" = "API key";
 "settings.aiProvider.apiKey.placeholder" = "Leave blank to keep existing Keychain item";
-"settings.aiProvider.keychainFirst" = "API keys are sent only to the service on Save or Test Connection. The service should store secrets in Keychain first; the native UI clears this field after each action and never displays saved keys.";
+"settings.aiProvider.keychainFirst" = "API keys are sent only to the local service when the profile auto-saves or when Test Connection is confirmed. The service should store secrets in Keychain first; the native UI clears this field after each action and never displays saved keys.";
 "settings.aiProvider.connection" = "Connection";
 "settings.aiProvider.limits" = "Limits";
 "settings.aiProvider.credentialSafety" = "Credential Safety";
@@ -854,10 +874,16 @@
 "settings.aiProvider.storage" = "Credential storage";
 "settings.aiProvider.configured" = "Configured";
 "settings.aiProvider.unconfigured" = "Unconfigured";
+"settings.aiProvider.disabledReason" = "Disabled reason";
 "settings.aiProvider.save" = "Save Provider";
 "settings.aiProvider.test" = "Test Connection";
+"settings.aiProvider.saveConfirmation.title" = "Save provider settings?";
+"settings.aiProvider.saveConfirmation.message" = "This sends the provider profile and any API key draft to the local service so it can update the verified profile and Keychain-backed credential state.";
+"settings.aiProvider.testConfirmation.title" = "Test provider connection?";
+"settings.aiProvider.testConfirmation.message" = "This performs one manual provider connection test against the configured endpoint. The UI clears any API key draft after the request.";
 "settings.aiProvider.saving" = "Saving provider...";
 "settings.aiProvider.testing" = "Testing connection...";
+"settings.aiProvider.autosavePending" = "Valid changes will be saved automatically.";
 "settings.aiProvider.saved" = "Provider settings saved. API key draft cleared.";
 "settings.aiProvider.testResult" = "Test result";
 "settings.aiProvider.testSucceeded" = "Provider connection test succeeded.";
@@ -868,6 +894,10 @@
 "settings.aiProvider.audit.redaction" = "Redaction";
 "settings.aiProvider.audit.promptStored" = "Prompt stored";
 "settings.aiProvider.audit.responseStored" = "Response stored";
+"settings.aiProvider.audit.applied" = "Applied";
+"settings.aiProvider.audit.notApplied" = "Not applied";
+"settings.aiProvider.audit.stored" = "Stored";
+"settings.aiProvider.audit.notStored" = "Not stored";
 "settings.aiProvider.audit.errorCode" = "Error code";
 "settings.aiProvider.validation.endpointRequired" = "Endpoint is required.";
 "settings.aiProvider.validation.endpointInvalid" = "Endpoint must include a URL scheme such as https://.";
@@ -888,6 +918,9 @@
 "settings.agentConfig.showSensitive" = "Show & Edit";
 "settings.agentConfig.showSensitiveValues" = "Show Values";
 "settings.agentConfig.hideSensitive" = "Hide";
+"settings.agentConfig.autosavePending" = "Valid changes will be saved automatically.";
+"settings.agentConfig.editConfirmation.title" = "Show and edit raw config?";
+"settings.agentConfig.editConfirmation.message" = "This reveals sensitive config values and enables raw editing. Valid changes auto-save through the verified snapshot flow.";
 "settings.agentConfig.skillEnablement" = "Skill enablement";
 "settings.agentConfig.disabledSkills" = "Disabled skills";
 "settings.agentConfig.disabledSkills.empty" = "No config-disabled skills detected.";
@@ -902,7 +935,7 @@
 "settings.existingFile" = "Existing file";
 "settings.willCreateFile" = "Will create file";
 "settings.invalidUtf8" = "Settings content is not valid UTF-8.";
-"settings.jsonValid" = "JSON is valid. Save will create an agent config snapshot, write atomically, verify, and rescan.";
+"settings.jsonValid" = "JSON is valid. Changes will auto-save through snapshot, atomic write, verification, and rescan.";
 "value.supported" = "Supported";
 "value.notSupported" = "Not supported";
 "value.short.supported" = "OK";

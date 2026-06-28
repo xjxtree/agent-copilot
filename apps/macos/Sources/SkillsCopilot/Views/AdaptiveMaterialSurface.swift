@@ -6,7 +6,7 @@ struct AdaptiveMaterialSurface: ViewModifier {
     func body(content: Content) -> some View {
         content
             .background {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: CGFloat(UIOptimizationPresentation.materialCornerRadius))
                     .fill(
                         reduceTransparency
                             ? AnyShapeStyle(Color(nsColor: .windowBackgroundColor))
@@ -15,7 +15,7 @@ struct AdaptiveMaterialSurface: ViewModifier {
             }
             .overlay {
                 if reduceTransparency {
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: CGFloat(UIOptimizationPresentation.materialCornerRadius))
                         .strokeBorder(.separator, lineWidth: 1)
                 }
             }

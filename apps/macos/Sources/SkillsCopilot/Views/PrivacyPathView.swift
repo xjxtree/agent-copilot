@@ -105,6 +105,7 @@ private struct PrivacyPathValue: View {
             Text(DisplayText.privacyPath(path, privacyModeEnabled: privacyModeEnabled, revealFull: revealFullPath))
                 .textSelection(.enabled)
                 .lineLimit(3)
+                .truncationMode(.middle)
 
             if shouldShowRevealControl {
                 Button {

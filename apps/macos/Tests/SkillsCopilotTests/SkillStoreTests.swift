@@ -9,6 +9,8 @@ struct SkillStoreTests {
         try await localSessionSearchNormalizesSelectionAndDetail()
         try await localSessionRefreshIfNeededSkipsLoadedRequest()
         try await localSessionScopeChangeFiltersCachedRowsWithoutRefresh()
+        try await localSessionProjectScopeUsesProjectRootFromAllScopeCache()
+        try await localSessionSortChangesVisibleRowsWithoutRefresh()
         try await reloadKeepsSelectedSkillWhenItStillExists()
         try await reloadFallsBackToFirstSkillWhenSelectionIsMissing()
         try await emptyCatalogKeepsFriendlyEmptyModel()
@@ -253,6 +255,66 @@ struct SkillStoreTests {
             countMethodCalls("session.previewLocalSessions", in: fake.calls()),
             callsBeforeScopeChange,
             "Returning to project scope should still avoid a service rescan."
+        )
+    }
+
+    private func localSessionProjectScopeUsesProjectRootFromAllScopeCache() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "project-set")
+
+        let store = SkillStore(service: ServiceClient())
+        await store.setProject(rootPath: "/tmp/project", currentCWD: "/tmp/project", name: "Fixture Project")
+        fake.setScenario("sessions-all-scope-project-root")
+        store.sidebarContentMode = .sessions
+
+        await store.previewLocalSessions()
+
+        try expectEqual(store.activeProjectContext?.rootPath, "/tmp/project", "Fixture should expose an active project context.")
+        try expectContains(fake.calls(), "\"scope\":\"all\"", "Session preview should keep requesting the all-scope cache.")
+        try expectEqual(
+            store.localSessionPreviewResult.sessionRows.map(\.id),
+            ["session-project-from-all", "session-global"],
+            "All-scope cache should retain both project and global sessions."
+        )
+        try expectEqual(
+            store.filteredLocalSessionRows.map(\.id),
+            ["session-project-from-all"],
+            "Project scope should include cached all-scope rows when project root metadata matches."
+        )
+        try expectEqual(store.scopedLocalSessionToolCallCount, 24, "Project scope metrics should include the project-root session.")
+
+        store.localSessionScopeFilter = .all
+
+        try expectEqual(
+            store.filteredLocalSessionRows.map(\.id),
+            ["session-project-from-all", "session-global"],
+            "All scope should still reveal global rows from the same cache."
+        )
+    }
+
+    private func localSessionSortChangesVisibleRowsWithoutRefresh() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "sessions-mixed")
+
+        let store = SkillStore(service: ServiceClient())
+        store.sidebarContentMode = .sessions
+        await store.previewLocalSessions()
+        let callsBeforeSortChange = countMethodCalls("session.previewLocalSessions", in: fake.calls())
+
+        store.localSessionSortOrder = .title
+        store.localSessionSortDirection = .descending
+
+        try expectEqual(
+            store.filteredLocalSessionRows.map(\.id),
+            ["session-develop", "session-alpha"],
+            "Session sort controls should reorder the already loaded project rows locally."
+        )
+        try expectEqual(
+            countMethodCalls("session.previewLocalSessions", in: fake.calls()),
+            callsBeforeSortChange,
+            "Changing local session sort should not trigger a service rescan."
         )
     }
 
@@ -581,9 +643,26 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "agent-config")
 
+        let prewarmedStore = SkillStore(service: ServiceClient())
+        await prewarmedStore.loadCurrentAgentConfigDocuments(agent: "claude-code")
+        guard let prewarmedProjectClaudeDocument = prewarmedStore.currentAgentConfigDocuments.first(where: { $0.scope == "agent-project" }) else {
+            throw NativeModelTestFailure(description: "Prewarmed Claude config preview should include the selected project's current settings file.")
+        }
+        try expectNil(
+            prewarmedStore.selectedConfigDocument,
+            "Prewarming config documents outside config mode should not steal the visible selection."
+        )
+        prewarmedStore.sidebarContentMode = .config
+        try expectEqual(
+            prewarmedStore.selectedConfigDocument?.target,
+            Optional(prewarmedProjectClaudeDocument.target),
+            "Entering config mode after startup prewarm should select the first visible current config document."
+        )
+
         let store = SkillStore(service: ServiceClient())
         await store.reload()
 
+        store.sidebarContentMode = .config
         await store.loadCurrentAgentConfigDocuments(agent: "claude-code")
         try expectEqual(store.currentAgentConfigDocuments.count, 2, "Claude config preview should include global and project documents.")
         try expectEqual(
@@ -594,6 +673,11 @@ struct SkillStoreTests {
         guard let projectClaudeDocument = store.currentAgentConfigDocuments.first(where: { $0.scope == "agent-project" }) else {
             throw NativeModelTestFailure(description: "Claude config preview should include the selected project's current settings file.")
         }
+        try expectEqual(
+            store.selectedConfigDocument?.target,
+            Optional(projectClaudeDocument.target),
+            "Config mode should default to the first visible current config document."
+        )
         try expectEqual(
             AgentConfigScopeFilter.project.includes(projectClaudeDocument),
             true,
@@ -606,16 +690,23 @@ struct SkillStoreTests {
             "Selecting a current config row should make that exact document available to the detail view."
         )
         store.configScopeFilter = .global
-        try expectNil(
-            store.selectedConfigDocument,
-            "Changing to a scope filter that hides the current config document should clear the document detail selection."
-        )
+        guard let globalClaudeDocument = store.currentAgentConfigDocuments.first(where: { $0.scope == "agent-global" }) else {
+            throw NativeModelTestFailure(description: "Claude config preview should include the agent-global settings file.")
+        }
         try expectEqual(
-            store.selectedSidebarSelection,
-            Optional(SidebarSelection.configOverview),
-            "Hidden current config selections should normalize back to the config overview."
+            store.selectedConfigDocument?.target,
+            Optional(globalClaudeDocument.target),
+            "Changing to a scope filter that hides the current config document should select the first visible config document."
         )
         store.configScopeFilter = .all
+        store.selectConfigDocument(globalClaudeDocument)
+        store.sidebarContentMode = .skills
+        store.enterConfigMode()
+        try expectEqual(
+            store.selectedConfigDocument?.target,
+            Optional(projectClaudeDocument.target),
+            "Entering config mode should reset stale config detail selection to the first visible current config document."
+        )
 
         store.agentFilter = .codex
         await store.loadCurrentAgentConfigDocuments(agent: "codex")

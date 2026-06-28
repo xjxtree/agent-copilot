@@ -49,6 +49,11 @@ struct ProviderObservabilitySettingsPanel: View {
             Spacer(minLength: 0)
         }
         .padding(4)
+        .task {
+            if store.providerObservabilityResult == nil {
+                await store.loadProviderObservability()
+            }
+        }
     }
 
     private var header: some View {
@@ -282,6 +287,7 @@ private struct ProviderObservabilityLogSettingsView: View {
                 Toggle(UIStrings.providerObservabilityIssuesOnly, isOn: $showIssuesOnly)
                     .toggleStyle(.checkbox)
                     .font(.caption)
+                    .accessibilityLabel(UIStrings.providerObservabilityIssuesOnly)
             }
         }
     }

@@ -1,4 +1,5 @@
 use super::*;
+use std::io::BufRead;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 impl ServiceHost {
@@ -2868,10 +2869,12 @@ fn is_ignored_local_session_file(path: &Path) -> bool {
         return true;
     }
     path.components().any(|component| {
-        component
-            .as_os_str()
-            .to_str()
-            .is_some_and(|name| matches!(name, "memory" | "subagents" | "message" | "part"))
+        component.as_os_str().to_str().is_some_and(|name| {
+            matches!(
+                name,
+                "memory" | "subagents" | "message" | "part" | "tool-results"
+            )
+        })
     })
 }
 
@@ -2884,15 +2887,10 @@ fn local_session_preview_row(
     if !path.starts_with(root) {
         return Ok(None);
     }
-    const MAX_READ_BYTES: usize = 512_000;
-    let mut bytes = fs::read(path)?;
-    if bytes.is_empty() {
+    let file_content = read_local_session_file_content(path)?;
+    if file_content.is_empty() {
         return Ok(None);
     }
-    if bytes.len() > MAX_READ_BYTES {
-        bytes.truncate(MAX_READ_BYTES);
-    }
-    let file_content = String::from_utf8_lossy(&bytes).to_string();
     let content = enrich_local_session_content(path, root, &file_content);
     let mut metadata = local_session_parsed_metadata(path, &file_content, &content);
     if let Some(project_root) =
@@ -2989,6 +2987,103 @@ fn local_session_preview_row(
         },
         skill_mentions,
     }))
+}
+
+const LOCAL_SESSION_MAX_READ_BYTES: usize = 512_000;
+const LOCAL_SESSION_MAX_LINE_BYTES: usize = 64_000;
+
+fn read_local_session_file_content(path: &Path) -> Result<String, ServiceError> {
+    let file = fs::File::open(path)?;
+    let mut reader = std::io::BufReader::new(file);
+    let mut content = String::new();
+    let mut line = String::new();
+
+    loop {
+        line.clear();
+        let bytes_read = reader.read_line(&mut line)?;
+        if bytes_read == 0 {
+            break;
+        }
+        if should_skip_local_session_sidecar_line(&line) {
+            continue;
+        }
+        if content.len() + line.len() > LOCAL_SESSION_MAX_READ_BYTES {
+            if let Some(compacted) = compact_oversized_local_session_json_line(&line) {
+                if content.len() + compacted.len() <= LOCAL_SESSION_MAX_READ_BYTES {
+                    content.push_str(&compacted);
+                    continue;
+                }
+            }
+            if content.is_empty() {
+                content.push_str(&truncate_chars(&line, LOCAL_SESSION_MAX_READ_BYTES));
+            }
+            break;
+        }
+        if line.len() > LOCAL_SESSION_MAX_LINE_BYTES {
+            if let Some(compacted) = compact_oversized_local_session_json_line(&line) {
+                content.push_str(&compacted);
+                continue;
+            }
+            content.push_str(&truncate_chars(&line, LOCAL_SESSION_MAX_LINE_BYTES));
+            content.push('\n');
+            break;
+        }
+        content.push_str(&line);
+    }
+
+    Ok(content)
+}
+
+fn compact_oversized_local_session_json_line(line: &str) -> Option<String> {
+    let mut value = serde_json::from_str::<Value>(line).ok()?;
+    prune_large_local_session_json_values(&mut value);
+    let mut compacted = serde_json::to_string(&value).ok()?;
+    compacted.push('\n');
+    Some(compacted)
+}
+
+fn prune_large_local_session_json_values(value: &mut Value) {
+    match value {
+        Value::Array(items) => {
+            for item in items {
+                prune_large_local_session_json_values(item);
+            }
+        }
+        Value::Object(map) => {
+            for (key, nested) in map.iter_mut() {
+                if matches!(
+                    key.as_str(),
+                    "base64" | "blob" | "bytes" | "data" | "image" | "image_data"
+                ) && nested.as_str().is_some_and(|text| text.len() > 512)
+                {
+                    *nested = Value::String("<omitted-local-session-blob>".to_string());
+                    continue;
+                }
+                prune_large_local_session_json_values(nested);
+            }
+        }
+        Value::String(text) if text.len() > 4_096 => {
+            *text = truncate_chars(text, 4_096);
+        }
+        _ => {}
+    }
+}
+
+fn should_skip_local_session_sidecar_line(line: &str) -> bool {
+    let prefix = line.chars().take(4_096).collect::<String>();
+    [
+        "attachment",
+        "file-history-snapshot",
+        "last-prompt",
+        "mode",
+        "permission-mode",
+        "queue-operation",
+    ]
+    .iter()
+    .any(|record_type| {
+        prefix.contains(&format!("\"type\":\"{record_type}\""))
+            || prefix.contains(&format!("\"type\": \"{record_type}\""))
+    })
 }
 
 fn local_session_row_id(path: &Path) -> String {
@@ -3208,21 +3303,30 @@ fn json_session_title_candidate(map: &serde_json::Map<String, Value>) -> Option<
 }
 
 fn local_session_text_title_candidate(text: &str) -> Option<String> {
-    let candidate = normalize_local_session_title_text(text);
-    if candidate.is_empty() || is_unhelpful_local_session_title(&candidate) {
-        None
-    } else {
-        Some(truncate_chars(&candidate, 120))
+    let candidates = normalize_local_session_title_candidates(text);
+    if candidates
+        .first()
+        .is_some_and(|candidate| is_internal_local_session_title_block(candidate))
+    {
+        return None;
     }
+    for candidate in candidates {
+        if !candidate.is_empty() && !is_unhelpful_local_session_title(&candidate) {
+            return Some(truncate_chars(&candidate, 120));
+        }
+    }
+    None
 }
 
-fn normalize_local_session_title_text(text: &str) -> String {
+fn normalize_local_session_title_candidates(text: &str) -> Vec<String> {
     let mut value = text.trim().replace('\r', "\n");
     for prefix in [
         "<command-message>",
         "</command-message>",
         "<command-name>",
         "</command-name>",
+        "<command-args>",
+        "</command-args>",
     ] {
         value = value.replace(prefix, " ");
     }
@@ -3232,10 +3336,24 @@ fn normalize_local_session_title_text(text: &str) -> String {
     value
         .lines()
         .map(str::trim)
-        .find(|line| !line.is_empty())
-        .unwrap_or("")
-        .trim_matches(['"', '\'', '`', ' '])
-        .to_string()
+        .filter(|line| !line.is_empty())
+        .map(|line| line.trim_matches(['"', '\'', '`', ' ']).to_string())
+        .filter(|line| !line.is_empty())
+        .collect()
+}
+
+fn is_internal_local_session_title_block(value: &str) -> bool {
+    let lower = value.trim().to_ascii_lowercase();
+    lower.starts_with("# agents.md instructions")
+        || lower.starts_with("<permissions instructions>")
+        || lower.starts_with("<environment_context>")
+        || lower.starts_with("<local-command-caveat>")
+        || lower.starts_with("<command-")
+        || lower.starts_with("<skill name=")
+        || lower.starts_with("<turn_")
+        || lower.starts_with("you are a delegated subagent")
+        || lower.starts_with("you are codex")
+        || lower.starts_with("shared instruction entrypoint")
 }
 
 fn is_unhelpful_local_session_title(value: &str) -> bool {
@@ -3244,6 +3362,8 @@ fn is_unhelpful_local_session_title(value: &str) -> bool {
     lower.starts_with("# agents.md instructions")
         || lower.starts_with("<permissions instructions>")
         || lower.starts_with("<environment_context>")
+        || lower.starts_with("<local-command-caveat>")
+        || lower.starts_with("<command-")
         || lower.starts_with("<skill name=")
         || lower.starts_with("<turn_")
         || lower.starts_with("you are a delegated subagent")
@@ -3253,9 +3373,27 @@ fn is_unhelpful_local_session_title(value: &str) -> bool {
         || lower == "head"
         || lower == "main"
         || lower == "null"
+        || lower == "clear"
+        || lower == "cls"
+        || is_image_placeholder_local_session_title(trimmed)
         || trimmed.starts_with("$HOME")
         || trimmed.starts_with('/')
         || is_version_like_local_session_title(trimmed)
+}
+
+fn is_image_placeholder_local_session_title(value: &str) -> bool {
+    let trimmed = value.trim();
+    if !trimmed.starts_with("[Image #") {
+        return false;
+    }
+    let remainder = trimmed
+        .replace("[Image #", "")
+        .replace(']', "")
+        .replace(char::is_whitespace, "");
+    !remainder.is_empty()
+        && remainder
+            .chars()
+            .all(|character| character.is_ascii_digit())
 }
 
 fn is_version_like_local_session_title(value: &str) -> bool {
@@ -3272,7 +3410,7 @@ fn is_version_like_local_session_title(value: &str) -> bool {
 
 fn is_internal_local_session_message(kind: &str, text: &str) -> bool {
     matches!(kind, "user_message" | "agent_reply")
-        && is_unhelpful_local_session_title(&normalize_local_session_title_text(text))
+        && local_session_text_title_candidate(text).is_none()
 }
 
 fn local_session_storage_project_root(

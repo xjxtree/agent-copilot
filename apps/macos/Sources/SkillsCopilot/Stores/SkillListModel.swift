@@ -96,6 +96,22 @@ enum LocalSessionScopeFilter: String, CaseIterable, Identifiable {
     }
 }
 
+enum LocalSessionSortOrder: String, CaseIterable, Identifiable {
+    case recent
+    case title
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .recent:
+            return UIStrings.text("sidebar.sessions.sort.recent", "Recent")
+        case .title:
+            return UIStrings.text("sidebar.sessions.sort.title", "Title")
+        }
+    }
+}
+
 enum SkillStateFilter: String, CaseIterable, Identifiable {
     case all
     case risky
@@ -279,8 +295,9 @@ enum SkillListModel {
         sortDirection: SkillSortDirection = .ascending
     ) -> [SkillRecord] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let findingInstanceIDs = Set(findings.compactMap(\.instanceId))
-        let riskyFindingInstanceIDs = Set(findings.filter(Self.isRiskFinding).compactMap(\.instanceId))
+        let displayFindings = displayFindings(skills: skills, findings: findings)
+        let findingInstanceIDs = Set(displayFindings.compactMap(\.instanceId))
+        let riskyFindingInstanceIDs = Set(displayFindings.filter(Self.isRiskFinding).compactMap(\.instanceId))
         let sameAgentConflictInstanceIDs = sameAgentConflictInstanceIDs(skills: skills, conflicts: conflicts)
         let searched = query.isEmpty
             ? skills
@@ -354,6 +371,45 @@ enum SkillListModel {
         }
     }
 
+    static func displayFindings(
+        skills: [SkillRecord],
+        findings: [RuleFindingRecord]
+    ) -> [RuleFindingRecord] {
+        let commonBaselineKeys = commonBaselineFindingKeys(skills: skills, findings: findings)
+        let agentBySkillID = Dictionary(uniqueKeysWithValues: skills.map { ($0.id, $0.agent) })
+
+        return findings.filter { finding in
+            guard isBaselineRuleFinding(finding),
+                  let instanceID = finding.instanceId,
+                  let agent = agentBySkillID[instanceID] else {
+                return true
+            }
+            return !commonBaselineKeys.contains(BaselineFindingKey(agent: agent, ruleId: normalizedRuleID(finding.ruleId)))
+        }
+    }
+
+    static func displayFindingCount(
+        skills: [SkillRecord],
+        findings: [RuleFindingRecord],
+        agentFilter: SkillAgentFilter
+    ) -> Int {
+        let filteredSkills = skills.filter { agentFilter.includes($0) }
+        let instanceIDs = Set(filteredSkills.map(\.id))
+        let definitionIDs = Set(filteredSkills.map(\.definitionId))
+
+        return displayFindings(skills: skills, findings: findings)
+            .filter { finding in
+                if let instanceID = finding.instanceId {
+                    return instanceIDs.contains(instanceID)
+                }
+                if let definitionID = finding.definitionId {
+                    return definitionIDs.contains(definitionID)
+                }
+                return agentFilter == .all
+            }
+            .count
+    }
+
     static func groupedByAgent(_ skills: [SkillRecord]) -> [SkillAgentGroup] {
         let grouped = Dictionary(grouping: skills, by: \.agent)
         return grouped
@@ -368,6 +424,51 @@ enum SkillListModel {
                 }
                 return compare(lhs.title, rhs.title)
             }
+    }
+
+    static func issueIndicatorCount(
+        for skill: SkillRecord,
+        skills: [SkillRecord],
+        findings: [RuleFindingRecord],
+        conflicts: [ConflictGroupRecord]
+    ) -> Int {
+        let findingCount = displayFindings(skills: skills, findings: findings)
+            .filter { $0.instanceId == skill.id }
+            .count
+        let sameAgentConflictCount = sameAgentConflictGroups(skills: skills, conflicts: conflicts)
+            .filter { $0.contains(skill.id) }
+            .count
+        let status = DisplayText.statusKind(skill.state, enabled: skill.enabled)
+        let statusIssueCount = [.broken, .missing, .unknown].contains(status) ? 1 : 0
+        return findingCount + sameAgentConflictCount + statusIssueCount
+    }
+
+    static func adoptingAgentSummaryBySkillID(for skills: [SkillRecord]) -> [SkillRecord.ID: String] {
+        var agentsByIdentity: [String: Set<String>] = [:]
+        var identityKeysBySkillID: [SkillRecord.ID: Set<String>] = [:]
+
+        for skill in skills {
+            let keys = identityKeys(for: skill)
+            identityKeysBySkillID[skill.id] = keys
+
+            for key in keys {
+                agentsByIdentity[key, default: []].insert(DisplayText.agent(skill.agent))
+            }
+        }
+
+        return skills.reduce(into: [SkillRecord.ID: String]()) { partialResult, skill in
+            let keys = identityKeysBySkillID[skill.id] ?? []
+            let agents = keys
+                .flatMap { agentsByIdentity[$0] ?? [] }
+                .reduce(into: Set<String>()) { partialAgents, agent in
+                    partialAgents.insert(agent)
+                }
+                .sorted { lhs, rhs in
+                    lhs.localizedStandardCompare(rhs) == .orderedAscending
+                }
+            let displayAgents = agents.isEmpty ? [DisplayText.agent(skill.agent)] : agents
+            partialResult[skill.id] = displayAgents.joined(separator: ", ")
+        }
     }
 
     private static func compare(_ lhs: String, _ rhs: String) -> Bool {
@@ -410,8 +511,86 @@ enum SkillListModel {
         return aliases.joined(separator: " ")
     }
 
+    private static func identityKeys(for skill: SkillRecord) -> Set<String> {
+        var keys = Set<String>()
+        let definition = normalizedIdentityValue(skill.definitionId)
+        if !definition.isEmpty {
+            keys.insert("definition:\(definition)")
+        }
+        let name = normalizedIdentityValue(skill.name)
+        if !name.isEmpty {
+            keys.insert("name:\(name)")
+        }
+        return keys
+    }
+
+    private static func normalizedIdentityValue(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
     private static func isRiskFinding(_ finding: RuleFindingRecord) -> Bool {
         finding.isRiskCategoryFinding
+    }
+
+    private struct BaselineFindingKey: Hashable {
+        let agent: String
+        let ruleId: String
+    }
+
+    private static let baselineRuleCoverageThreshold = 0.5
+    private static let baselineRuleMinimumAffectedInstances = 3
+    private static let baselineRuleIDs: Set<String> = [
+        "frontmatter.tools-not-empty",
+        "permissions.network-declared",
+        "permissions.exec-needs-human",
+    ]
+
+    private static func commonBaselineFindingKeys(
+        skills: [SkillRecord],
+        findings: [RuleFindingRecord]
+    ) -> Set<BaselineFindingKey> {
+        let skillsByAgent = Dictionary(grouping: skills, by: \.agent)
+        let agentBySkillID = Dictionary(uniqueKeysWithValues: skills.map { ($0.id, $0.agent) })
+        var affectedSkillIDsByKey: [BaselineFindingKey: Set<String>] = [:]
+
+        for finding in findings where isBaselineRuleFinding(finding) {
+            guard let instanceID = finding.instanceId,
+                  let agent = agentBySkillID[instanceID] else {
+                continue
+            }
+            let key = BaselineFindingKey(agent: agent, ruleId: normalizedRuleID(finding.ruleId))
+            affectedSkillIDsByKey[key, default: []].insert(instanceID)
+        }
+
+        return affectedSkillIDsByKey.reduce(into: Set<BaselineFindingKey>()) { commonKeys, entry in
+            let agentSkillCount = skillsByAgent[entry.key.agent]?.count ?? 0
+            guard agentSkillCount > 0,
+                  entry.value.count >= baselineRuleMinimumAffectedInstances else {
+                return
+            }
+            let coverage = Double(entry.value.count) / Double(agentSkillCount)
+            if coverage >= baselineRuleCoverageThreshold {
+                commonKeys.insert(entry.key)
+            }
+        }
+    }
+
+    private static func isBaselineRuleFinding(_ finding: RuleFindingRecord) -> Bool {
+        baselineRuleIDs.contains(normalizedRuleID(finding.ruleId))
+            && isBaselineSeverity(finding.severity)
+    }
+
+    private static func normalizedRuleID(_ ruleID: String) -> String {
+        ruleID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private static func isBaselineSeverity(_ severity: String) -> Bool {
+        switch severity.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "critical", "error":
+            return false
+        default:
+            return true
+        }
     }
 
     static func sameAgentConflictGroupCount(

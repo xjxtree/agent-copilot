@@ -219,3 +219,294 @@ fn local_session_preview_redacts_unix_listing_owners() {
     let _ = fs::remove_dir_all(app_data_dir);
     let _ = fs::remove_dir_all(user_home);
 }
+
+#[test]
+fn local_session_preview_ignores_claude_tool_result_sidecars() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-local-session-claude-sidecar-test-{}-{unique}",
+        std::process::id(),
+    ));
+    let user_home = env::temp_dir().join(format!(
+        "skills-copilot-local-session-claude-sidecar-home-{}-{unique}",
+        std::process::id(),
+    ));
+    let project_root = app_data_dir.join("project-root");
+    let project_session_root = user_home
+        .join(".claude/projects")
+        .join(project_root.to_string_lossy().replace('/', "-"));
+    fs::create_dir_all(&project_root).expect("create project root");
+    fs::create_dir_all(project_session_root.join("session-claude/tool-results"))
+        .expect("create claude tool result directory");
+    fs::write(
+        project_session_root.join("session-claude.jsonl"),
+        format!(
+            "{{\"type\":\"user\",\"message\":{{\"role\":\"user\",\"content\":\"打开最新版 app\"}},\"cwd\":\"{}\",\"sessionId\":\"session-claude\"}}\n{{\"type\":\"ai-title\",\"aiTitle\":\"打开最新版 app\",\"sessionId\":\"session-claude\"}}\n",
+            project_root.display()
+        ),
+    )
+    .expect("write claude session");
+    fs::write(
+        project_session_root.join("session-claude/tool-results/b1.txt"),
+        "$ cargo fmt --all -- --check\n",
+    )
+    .expect("write claude tool result sidecar");
+    let host = ServiceHost {
+        app_data_dir: app_data_dir.clone(),
+        adapter_ctx: AdapterContext {
+            user_home: user_home.clone(),
+            project_root: Some(project_root.clone()),
+            project_cwd: Some(project_root.clone()),
+            extra_roots: Vec::new(),
+        },
+    };
+
+    let response = host.handle(ServiceRequest {
+        id: Some("session-preview-claude-sidecar".to_string()),
+        method: "session.previewLocalSessions".to_string(),
+        params: json!({
+            "agent": "claude-code",
+            "scope": "project",
+            "limit": 10,
+            "max_excerpt_chars": 800
+        }),
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("local session preview result");
+    assert_eq!(
+        result.get("count").and_then(Value::as_u64),
+        Some(1),
+        "Claude tool result sidecars should not appear as independent sessions"
+    );
+    assert_eq!(
+        result
+            .pointer("/session_rows/0/title")
+            .and_then(Value::as_str),
+        Some("打开最新版 app")
+    );
+    let serialized = serde_json::to_string(&result).expect("serialize result");
+    assert!(!serialized.contains("cargo fmt"));
+
+    let _ = fs::remove_dir_all(app_data_dir);
+    let _ = fs::remove_dir_all(user_home);
+}
+
+#[test]
+fn local_session_preview_reads_past_large_claude_file_history_snapshots() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-local-session-large-snapshot-test-{}-{unique}",
+        std::process::id(),
+    ));
+    let user_home = env::temp_dir().join(format!(
+        "skills-copilot-local-session-large-snapshot-home-{}-{unique}",
+        std::process::id(),
+    ));
+    let project_root = app_data_dir.join("project-root");
+    let project_session_root = user_home
+        .join(".claude/projects")
+        .join(project_root.to_string_lossy().replace('/', "-"));
+    fs::create_dir_all(&project_root).expect("create project root");
+    fs::create_dir_all(&project_session_root).expect("create claude project session root");
+    let large_snapshot = "x".repeat(600_000);
+    fs::write(
+        project_session_root.join("session-large-snapshot.jsonl"),
+        format!(
+            "{{\"type\":\"mode\",\"sessionId\":\"session-large-snapshot\"}}\n{{\"type\":\"file-history-snapshot\",\"content\":\"{}\"}}\n{{\"type\":\"user\",\"message\":{{\"role\":\"user\",\"content\":\"继续验证会话识别\"}},\"cwd\":\"{}\",\"sessionId\":\"session-large-snapshot\"}}\n",
+            large_snapshot,
+            project_root.display()
+        ),
+    )
+    .expect("write claude session with large snapshot");
+    let host = ServiceHost {
+        app_data_dir: app_data_dir.clone(),
+        adapter_ctx: AdapterContext {
+            user_home: user_home.clone(),
+            project_root: Some(project_root.clone()),
+            project_cwd: Some(project_root.clone()),
+            extra_roots: Vec::new(),
+        },
+    };
+
+    let response = host.handle(ServiceRequest {
+        id: Some("session-preview-large-snapshot".to_string()),
+        method: "session.previewLocalSessions".to_string(),
+        params: json!({
+            "agent": "claude-code",
+            "scope": "project",
+            "limit": 10,
+            "max_excerpt_chars": 800
+        }),
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("local session preview result");
+    assert_eq!(result.get("count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        result
+            .pointer("/session_rows/0/title")
+            .and_then(Value::as_str),
+        Some("继续验证会话识别")
+    );
+    assert_eq!(
+        result
+            .pointer("/session_rows/0/user_message_count")
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+
+    let _ = fs::remove_dir_all(app_data_dir);
+    let _ = fs::remove_dir_all(user_home);
+}
+
+#[test]
+fn local_session_preview_compacts_large_claude_image_messages_for_titles() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-local-session-large-image-test-{}-{unique}",
+        std::process::id(),
+    ));
+    let user_home = env::temp_dir().join(format!(
+        "skills-copilot-local-session-large-image-home-{}-{unique}",
+        std::process::id(),
+    ));
+    let project_root = app_data_dir.join("project-root");
+    let project_session_root = user_home
+        .join(".claude/projects")
+        .join(project_root.to_string_lossy().replace('/', "-"));
+    fs::create_dir_all(&project_root).expect("create project root");
+    fs::create_dir_all(&project_session_root).expect("create claude project session root");
+    let image_data = "a".repeat(120_000);
+    let lines = [
+        json!({
+            "type": "user",
+            "message": {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "[Image #1]"},
+                    {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": image_data}},
+                    {"type": "text", "text": "截图里会话识别是不是有问题"}
+                ]
+            },
+            "cwd": project_root.to_string_lossy(),
+            "sessionId": "session-large-image"
+        })
+        .to_string(),
+    ]
+    .join("\n");
+    fs::write(
+        project_session_root.join("session-large-image.jsonl"),
+        lines,
+    )
+    .expect("write large image claude session");
+    let host = ServiceHost {
+        app_data_dir: app_data_dir.clone(),
+        adapter_ctx: AdapterContext {
+            user_home: user_home.clone(),
+            project_root: Some(project_root.clone()),
+            project_cwd: Some(project_root.clone()),
+            extra_roots: Vec::new(),
+        },
+    };
+
+    let response = host.handle(ServiceRequest {
+        id: Some("session-preview-large-image".to_string()),
+        method: "session.previewLocalSessions".to_string(),
+        params: json!({
+            "agent": "claude-code",
+            "scope": "project",
+            "limit": 10,
+            "max_excerpt_chars": 800
+        }),
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("local session preview result");
+    assert_eq!(result.get("count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        result
+            .pointer("/session_rows/0/title")
+            .and_then(Value::as_str),
+        Some("截图里会话识别是不是有问题")
+    );
+    assert_eq!(
+        result
+            .pointer("/session_rows/0/user_message_count")
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+
+    let _ = fs::remove_dir_all(app_data_dir);
+    let _ = fs::remove_dir_all(user_home);
+}
+
+#[test]
+fn local_session_preview_skips_claude_local_command_caveat_titles() {
+    let unique = unique_suffix();
+    let app_data_dir = env::temp_dir().join(format!(
+        "skills-copilot-local-session-caveat-title-test-{}-{unique}",
+        std::process::id(),
+    ));
+    let user_home = env::temp_dir().join(format!(
+        "skills-copilot-local-session-caveat-title-home-{}-{unique}",
+        std::process::id(),
+    ));
+    let project_root = app_data_dir.join("project-root");
+    let project_session_root = user_home
+        .join(".claude/projects")
+        .join(project_root.to_string_lossy().replace('/', "-"));
+    fs::create_dir_all(&project_root).expect("create project root");
+    fs::create_dir_all(&project_session_root).expect("create claude project session root");
+    fs::write(
+        project_session_root.join("session-caveat-title.jsonl"),
+        format!(
+            "{{\"type\":\"user\",\"message\":{{\"role\":\"user\",\"content\":\"<local-command-caveat>Caveat: generated by local command runner</local-command-caveat>\"}},\"cwd\":\"{}\",\"sessionId\":\"session-caveat-title\"}}\n{{\"type\":\"user\",\"message\":{{\"role\":\"user\",\"content\":\"clear\"}},\"cwd\":\"{}\",\"sessionId\":\"session-caveat-title\"}}\n{{\"type\":\"user\",\"message\":{{\"role\":\"user\",\"content\":\"<command-args></command-args>\"}},\"cwd\":\"{}\",\"sessionId\":\"session-caveat-title\"}}\n{{\"type\":\"user\",\"message\":{{\"role\":\"user\",\"content\":\"全量检查其他 agent 会话\"}},\"cwd\":\"{}\",\"sessionId\":\"session-caveat-title\"}}\n",
+            project_root.display(),
+            project_root.display(),
+            project_root.display(),
+            project_root.display()
+        ),
+    )
+    .expect("write claude session with caveat");
+    let host = ServiceHost {
+        app_data_dir: app_data_dir.clone(),
+        adapter_ctx: AdapterContext {
+            user_home: user_home.clone(),
+            project_root: Some(project_root.clone()),
+            project_cwd: Some(project_root.clone()),
+            extra_roots: Vec::new(),
+        },
+    };
+
+    let response = host.handle(ServiceRequest {
+        id: Some("session-preview-caveat-title".to_string()),
+        method: "session.previewLocalSessions".to_string(),
+        params: json!({
+            "agent": "claude-code",
+            "scope": "project",
+            "limit": 10,
+            "max_excerpt_chars": 800
+        }),
+    });
+
+    assert!(response.ok, "{:?}", response.error);
+    let result = response.result.expect("local session preview result");
+    assert_eq!(result.get("count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        result
+            .pointer("/session_rows/0/title")
+            .and_then(Value::as_str),
+        Some("全量检查其他 agent 会话")
+    );
+    assert_eq!(
+        result
+            .pointer("/session_rows/0/user_message_count")
+            .and_then(Value::as_u64),
+        Some(1),
+        "Internal caveat messages should not count as user prompts"
+    );
+
+    let _ = fs::remove_dir_all(app_data_dir);
+    let _ = fs::remove_dir_all(user_home);
+}

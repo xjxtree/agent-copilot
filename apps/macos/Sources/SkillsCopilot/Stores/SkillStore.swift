@@ -28,7 +28,10 @@ struct AppStartupLoadingState: Equatable {
 @MainActor
 final class SkillStore: ObservableObject {
     @Published private(set) var skills: [SkillRecord] = [] {
-        didSet { invalidateFilteredSkillListCache() }
+        didSet {
+            invalidateFilteredSkillListCache()
+            rebuildAdoptingAgentSummaryCache()
+        }
     }
     @Published private(set) var findings: [RuleFindingRecord] = [] {
         didSet { invalidateFilteredSkillListCache() }
@@ -50,6 +53,7 @@ final class SkillStore: ObservableObject {
     @Published private(set) var isLoadingAgentConfigSnapshots = false
     @Published private(set) var detailsByID: [SkillRecord.ID: SkillDetailRecord] = [:]
     @Published private(set) var skillEventsByID: [SkillRecord.ID: [SkillEventRecord]] = [:]
+    @Published private(set) var adoptingAgentSummaryBySkillID: [SkillRecord.ID: String] = [:]
     @Published private(set) var loadingSkillEventIDs: Set<SkillRecord.ID> = []
     @Published private(set) var status: ServiceStatus?
     @Published private(set) var llmStatus = LLMStatus.disabledFallback()
@@ -409,6 +413,18 @@ final class SkillStore: ObservableObject {
             normalizeSelectedLocalSession()
         }
     }
+    @Published var localSessionSortOrder: LocalSessionSortOrder = .recent {
+        didSet {
+            guard oldValue != localSessionSortOrder else { return }
+            normalizeSelectedLocalSession()
+        }
+    }
+    @Published var localSessionSortDirection: SkillSortDirection = .descending {
+        didSet {
+            guard oldValue != localSessionSortDirection else { return }
+            normalizeSelectedLocalSession()
+        }
+    }
     @Published var localSessionSearchText = "" {
         didSet {
             guard sidebarContentMode == .sessions else { return }
@@ -461,6 +477,10 @@ final class SkillStore: ObservableObject {
         filteredSkillListCache = nil
     }
 
+    private func rebuildAdoptingAgentSummaryCache() {
+        adoptingAgentSummaryBySkillID = SkillListModel.adoptingAgentSummaryBySkillID(for: skills)
+    }
+
     var selectedLocalSession: LocalSessionPreviewRow? {
         if let selectedLocalSessionID,
            let row = localSessionPreviewResult.sessionRows.first(where: { $0.id == selectedLocalSessionID }) {
@@ -473,13 +493,39 @@ final class SkillStore: ObservableObject {
         let query = localSessionSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let scopedRows = scopedLocalSessionRows
         guard !query.isEmpty else {
-            return scopedRows
+            return sortedLocalSessionRows(scopedRows)
         }
-        return scopedRows.filter { row in
+        return sortedLocalSessionRows(scopedRows.filter { row in
             row.title.lowercased().contains(query)
                 || row.redactedPath.lowercased().contains(query)
                 || (row.projectRoot?.lowercased().contains(query) ?? false)
+        })
+    }
+
+    private func sortedLocalSessionRows(_ rows: [LocalSessionPreviewRow]) -> [LocalSessionPreviewRow] {
+        rows.enumerated().sorted { lhsPair, rhsPair in
+            let lhs = lhsPair.element
+            let rhs = rhsPair.element
+            switch localSessionSortOrder {
+            case .recent:
+                let result = localSessionSortTimestamp(lhs).compare(localSessionSortTimestamp(rhs))
+                if result != .orderedSame {
+                    return localSessionSortDirection == .ascending ? result == .orderedAscending : result == .orderedDescending
+                }
+            case .title:
+                let result = lhs.title.localizedStandardCompare(rhs.title)
+                if result != .orderedSame {
+                    return localSessionSortDirection == .ascending ? result == .orderedAscending : result == .orderedDescending
+                }
+            }
+
+            return lhsPair.offset < rhsPair.offset
         }
+        .map(\.element)
+    }
+
+    private func localSessionSortTimestamp(_ row: LocalSessionPreviewRow) -> NSNumber {
+        NSNumber(value: row.endedAt ?? row.startedAt ?? 0)
     }
 
     func configDocumentMatchesSidebarQuery(_ document: ConfigDocumentRecord) -> Bool {
@@ -527,15 +573,17 @@ final class SkillStore: ObservableObject {
         case .all:
             return true
         case .project:
-            let scope = row.scope.lowercased()
-            guard scope.contains("project") else { return false }
-
             let selectedRoot = activeProjectContext?.rootPath.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let selectedRoot, !selectedRoot.isEmpty else { return true }
-
             let rowRoot = row.projectRoot?.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let rowRoot, !rowRoot.isEmpty, rowRoot != "<project-root>" else { return true }
-            return rowRoot == selectedRoot || rowRoot.hasPrefix(selectedRoot + "/")
+            if let rowRoot, !rowRoot.isEmpty {
+                if rowRoot == "<project-root>" || rowRoot.hasPrefix("<project-root>/") {
+                    return true
+                }
+                guard let selectedRoot, !selectedRoot.isEmpty else { return true }
+                return rowRoot == selectedRoot || rowRoot.hasPrefix(selectedRoot + "/")
+            }
+
+            return row.scope.lowercased().contains("project")
         }
     }
 
@@ -557,6 +605,23 @@ final class SkillStore: ObservableObject {
         return currentAgentConfigDocuments.first { $0.target == target }
     }
 
+    var visibleConfigDocuments: [ConfigDocumentRecord] {
+        currentAgentConfigDocuments
+            .filter { document in
+                document.agent == agentFilter.rawValue
+                    && configScopeFilter.includes(document)
+                    && configDocumentMatchesSidebarQuery(document)
+            }
+            .sorted { lhs, rhs in
+                let lhsProject = lhs.scope.lowercased().contains("project")
+                let rhsProject = rhs.scope.lowercased().contains("project")
+                if lhsProject != rhsProject {
+                    return lhsProject
+                }
+                return lhs.target.localizedStandardCompare(rhs.target) == .orderedAscending
+            }
+    }
+
     func selectLocalSession(_ session: LocalSessionPreviewRow) {
         guard selectedLocalSessionID != session.id || selectedSidebarSelection != .session(session.id) else {
             return
@@ -569,6 +634,11 @@ final class SkillStore: ObservableObject {
     func selectConfigDocument(_ document: ConfigDocumentRecord) {
         guard selectedSidebarSelection != .configDocument(document.target) else { return }
         selectedSidebarSelection = .configDocument(document.target)
+    }
+
+    func enterConfigMode() {
+        sidebarContentMode = .config
+        selectDefaultConfigDocumentOrOverview()
     }
 
     func selectConfigSnapshot(_ snapshot: ConfigSnapshotRecord) {
@@ -4148,25 +4218,16 @@ final class SkillStore: ObservableObject {
                 }
             }
         case .config:
-            if selectedSidebarSelection?.isConfig != true {
-                setSidebarSelection(.configOverview)
-            } else {
-                normalizeConfigSelection()
-            }
+            selectDefaultConfigDocumentOrOverview()
         }
     }
 
     private func normalizeConfigSelection() {
         switch selectedSidebarSelection {
         case .configDocument(let target):
-            let visible = currentAgentConfigDocuments.contains { document in
-                document.target == target
-                    && (agentFilter == .all || document.agent == agentFilter.rawValue)
-                    && configScopeFilter.includes(document)
-                    && configDocumentMatchesSidebarQuery(document)
-            }
+            let visible = visibleConfigDocuments.contains { $0.target == target }
             if !visible {
-                setSidebarSelection(.configOverview)
+                selectDefaultConfigDocumentOrOverview()
             }
         case .configSnapshot(let id):
             let visible = agentConfigSnapshots.contains { snapshot in
@@ -4176,11 +4237,32 @@ final class SkillStore: ObservableObject {
                     && configSnapshotMatchesSidebarQuery(snapshot)
             }
             if !visible {
-                setSidebarSelection(.configOverview)
+                selectDefaultConfigDocumentOrOverview()
             }
+        case .configOverview, nil:
+            selectDefaultConfigDocumentIfVisible()
         default:
             return
         }
+    }
+
+    private func selectDefaultConfigDocumentOrOverview() {
+        if !selectDefaultConfigDocumentIfVisible() {
+            setSidebarSelection(.configOverview)
+            selectedDetailSection = .overview
+        }
+    }
+
+    @discardableResult
+    private func selectDefaultConfigDocumentIfVisible() -> Bool {
+        guard sidebarContentMode == .config,
+              let firstDocument = visibleConfigDocuments.first
+        else {
+            return false
+        }
+        setSidebarSelection(.configDocument(firstDocument.target))
+        selectedDetailSection = .overview
+        return true
     }
 
     private func setSelectedSkillID(_ id: SkillRecord.ID?, syncSidebar: Bool) {

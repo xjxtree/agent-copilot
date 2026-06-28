@@ -1,5 +1,54 @@
+import AppKit
 import Foundation
 import SwiftUI
+
+private enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
+    case language
+    case provider
+    case providerObservability
+    case service
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .language:
+            return UIStrings.languageSettings
+        case .provider:
+            return UIStrings.aiProviderSettings
+        case .providerObservability:
+            return UIStrings.providerObservabilityTitle
+        case .service:
+            return UIStrings.service
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .language:
+            return UIStrings.settingsNavLanguageSubtitle
+        case .provider:
+            return UIStrings.settingsNavProviderSubtitle
+        case .providerObservability:
+            return UIStrings.settingsNavObservabilitySubtitle
+        case .service:
+            return UIStrings.settingsNavServiceSubtitle
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .language:
+            return "globe"
+        case .provider:
+            return "key"
+        case .providerObservability:
+            return "waveform.path.ecg.rectangle"
+        case .service:
+            return "wrench.and.screwdriver"
+        }
+    }
+}
 
 struct SettingsView: View {
     @EnvironmentObject private var store: SkillStore
@@ -8,7 +57,10 @@ struct SettingsView: View {
     @AppStorage(DisplayText.screenshotPrivacyModeStorageKey) private var screenshotPrivacyModeEnabled = true
     @State private var providerDraft = AIProviderSettingsDraft(status: .unavailable())
     @State private var hasEditedProviderDraft = false
+    @State private var isConfirmingProviderTest = false
     @State private var showsServiceDiagnostics = false
+    @State private var selectedSettingsTab: SettingsTab = .language
+    @State private var providerAutosaveTask: Task<Void, Never>?
 
     private var providerValidationMessage: String? {
         providerDraft.validationMessage
@@ -16,10 +68,6 @@ struct SettingsView: View {
 
     private var providerActionsDisabled: Bool {
         store.isLoadingAIProvider || store.isSavingAIProvider || store.isTestingAIProvider || !store.aiProviderStatus.serviceAvailable
-    }
-
-    private var canSaveProvider: Bool {
-        hasEditedProviderDraft && providerValidationMessage == nil && !providerActionsDisabled
     }
 
     private var canTestProvider: Bool {
@@ -39,45 +87,36 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        TabView {
-            languageSection
-                .tabItem {
-                    Label(UIStrings.languageSettings, systemImage: "globe")
-                }
+        HStack(spacing: 0) {
+            settingsSidebar
 
-            providerSection
-                .tabItem {
-                    Label(UIStrings.aiProviderSettings, systemImage: "key")
-                }
+            Divider()
 
-            ScrollView {
-                ProviderObservabilitySettingsPanel()
-            }
-            .tabItem {
-                Label(UIStrings.providerObservabilityTitle, systemImage: "waveform.path.ecg.rectangle")
-            }
-
-            serviceSection
-                .tabItem {
-                    Label(UIStrings.service, systemImage: "wrench.and.screwdriver")
-                }
+            selectedSettingsPane
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .padding(20)
         .frame(
             minWidth: CGFloat(UIOptimizationPresentation.settings.minimumWidth),
             idealWidth: CGFloat(UIOptimizationPresentation.settings.idealWidth),
             minHeight: CGFloat(UIOptimizationPresentation.settings.minimumHeight),
             idealHeight: CGFloat(UIOptimizationPresentation.settings.idealHeight)
         )
-        .task {
+        .background(SettingsWindowConfigurator())
+        .task(id: selectedSettingsTab) {
             if store.status == nil {
                 await store.reload()
             }
-            await store.loadAIProviderStatus()
-            if store.providerObservabilityResult == nil {
-                await store.loadProviderObservability()
+            switch selectedSettingsTab {
+            case .language, .service:
+                break
+            case .provider:
+                await store.loadAIProviderStatus()
+                resetProviderDraftFromStore()
+            case .providerObservability:
+                if store.providerObservabilityResult == nil {
+                    await store.loadProviderObservability()
+                }
             }
-            resetProviderDraftFromStore()
         }
         .onChange(of: store.aiProviderStatus) { _ in
             if !hasEditedProviderDraft {
@@ -85,12 +124,82 @@ struct SettingsView: View {
             }
         }
         .onChange(of: providerDraft) { _ in
-            hasEditedProviderDraft = providerDraft != AIProviderSettingsDraft(status: store.aiProviderStatus)
+            handleProviderDraftChange()
         }
         .transaction { transaction in
             if reduceMotion {
                 transaction.animation = nil
             }
+        }
+        .confirmationDialog(
+            UIStrings.aiProviderTestConfirmationTitle,
+            isPresented: $isConfirmingProviderTest,
+            titleVisibility: .visible
+        ) {
+            Button(UIStrings.aiProviderTest, role: .destructive) {
+                testProviderConnection()
+            }
+            Button(UIStrings.cancel, role: .cancel) {
+                isConfirmingProviderTest = false
+            }
+        } message: {
+            Text(UIStrings.aiProviderTestConfirmationMessage)
+        }
+        .onDisappear {
+            providerAutosaveTask?.cancel()
+            providerAutosaveTask = nil
+        }
+        .onExitCommand {
+            NSApp.keyWindow?.close()
+        }
+    }
+
+    private var settingsSidebar: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(UIStrings.settingsWindowTitle)
+                    .font(.headline)
+                Text(UIStrings.settingsSidebarSubtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 18)
+
+            VStack(spacing: 4) {
+                ForEach(SettingsTab.allCases) { tab in
+                    SettingsSidebarItem(
+                        tab: tab,
+                        isSelected: selectedSettingsTab == tab
+                    ) {
+                        selectedSettingsTab = tab
+                    }
+                }
+            }
+            .padding(.horizontal, 10)
+
+            Spacer(minLength: 0)
+        }
+        .frame(width: CGFloat(UIOptimizationPresentation.settings.sidebarWidth))
+        .frame(maxHeight: .infinity)
+        .background(.bar)
+    }
+
+    @ViewBuilder
+    private var selectedSettingsPane: some View {
+        switch selectedSettingsTab {
+        case .language:
+            languageSection
+        case .provider:
+            providerSection
+        case .providerObservability:
+            ScrollView {
+                ProviderObservabilitySettingsPanel()
+                    .padding(20)
+            }
+        case .service:
+            serviceSection
         }
     }
 
@@ -140,7 +249,7 @@ struct SettingsView: View {
 
                 Spacer(minLength: 0)
             }
-            .padding(4)
+            .padding(20)
         }
     }
 
@@ -192,6 +301,8 @@ struct SettingsView: View {
                     SettingsBanner(message: UIStrings.aiProviderSaving, systemImage: "hourglass", color: .secondary)
                 } else if store.isTestingAIProvider {
                     SettingsBanner(message: UIStrings.aiProviderTesting, systemImage: "network", color: .secondary)
+                } else if hasEditedProviderDraft, providerValidationMessage == nil {
+                    SettingsBanner(message: UIStrings.aiProviderAutosavePending, systemImage: "clock.arrow.circlepath", color: .secondary)
                 }
 
                 SettingsSectionCard(title: UIStrings.text("settings.actions", "Actions"), systemImage: "command") {
@@ -206,7 +317,7 @@ struct SettingsView: View {
 
                 Spacer(minLength: 0)
             }
-            .padding(4)
+            .padding(20)
         }
     }
 
@@ -294,7 +405,7 @@ struct SettingsView: View {
                 SettingsMetadataRow(label: UIStrings.aiProviderStorage, value: store.aiProviderStatus.credentialStorage ?? UIStrings.notLoaded)
                 SettingsMetadataRow(label: UIStrings.llmEnabled, value: store.aiProviderStatus.enabled ? UIStrings.llmEnabled : UIStrings.llmDisabled)
                 if let disabledReason = store.aiProviderStatus.disabledReason, !disabledReason.isEmpty {
-                    SettingsMetadataRow(label: UIStrings.aiProviderUnconfigured, value: UIStrings.localizedServiceMessage(disabledReason))
+                    SettingsMetadataRow(label: UIStrings.aiProviderDisabledReason, value: UIStrings.localizedServiceMessage(disabledReason))
                 }
             }
         }
@@ -304,6 +415,7 @@ struct SettingsView: View {
         HStack {
             Button {
                 Task {
+                    providerAutosaveTask?.cancel()
                     await store.loadAIProviderStatus()
                     resetProviderDraftFromStore()
                 }
@@ -315,32 +427,11 @@ struct SettingsView: View {
             Spacer()
 
             Button {
-                Task {
-                    _ = await store.testAIProviderConnection(draft: providerDraft)
-                    providerDraft.apiKey = ""
-                    resetProviderEditedState()
-                }
+                isConfirmingProviderTest = true
             } label: {
                 Label(UIStrings.aiProviderTest, systemImage: "network")
             }
             .disabled(!canTestProvider)
-
-            Button {
-                Task {
-                    let saved = await store.saveAIProviderSettings(draft: providerDraft)
-                    providerDraft.apiKey = ""
-                    if saved {
-                        await store.loadAIProviderStatus()
-                        resetProviderDraftFromStore()
-                    } else {
-                        resetProviderEditedState()
-                    }
-                }
-            } label: {
-                Label(UIStrings.aiProviderSave, systemImage: "square.and.arrow.down")
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(!canSaveProvider)
         }
     }
 
@@ -358,9 +449,9 @@ struct SettingsView: View {
                     SettingsMetadataRow(label: UIStrings.llmModel, value: audit.model ?? UIStrings.unknown)
                     SettingsMetadataRow(label: UIStrings.aiProviderEndpoint, value: audit.endpoint ?? UIStrings.unknown)
                     SettingsMetadataRow(label: UIStrings.aiProviderAuditDuration, value: audit.durationMS.map { "\($0) ms" } ?? UIStrings.unknown)
-                    SettingsMetadataRow(label: UIStrings.aiProviderAuditRedaction, value: audit.redactionApplied ? UIStrings.llmEnabled : UIStrings.llmDisabled)
-                    SettingsMetadataRow(label: UIStrings.aiProviderAuditPromptStored, value: audit.promptStored ? UIStrings.llmEnabled : UIStrings.llmDisabled)
-                    SettingsMetadataRow(label: UIStrings.aiProviderAuditResponseStored, value: audit.responseStored ? UIStrings.llmEnabled : UIStrings.llmDisabled)
+                    SettingsMetadataRow(label: UIStrings.aiProviderAuditRedaction, value: audit.redactionApplied ? UIStrings.aiProviderAuditApplied : UIStrings.aiProviderAuditNotApplied)
+                    SettingsMetadataRow(label: UIStrings.aiProviderAuditPromptStored, value: audit.promptStored ? UIStrings.aiProviderAuditStored : UIStrings.aiProviderAuditNotStored)
+                    SettingsMetadataRow(label: UIStrings.aiProviderAuditResponseStored, value: audit.responseStored ? UIStrings.aiProviderAuditStored : UIStrings.aiProviderAuditNotStored)
                     if let input = audit.inputTokens, let output = audit.outputTokens {
                         SettingsMetadataRow(label: UIStrings.llmTokens, value: "\(input) in / \(output) out")
                     }
@@ -416,7 +507,7 @@ struct SettingsView: View {
                 .adaptiveMaterialSurface()
                 Spacer(minLength: 0)
             }
-            .padding(4)
+            .padding(20)
         }
     }
 
@@ -427,6 +518,51 @@ struct SettingsView: View {
 
     private func resetProviderEditedState() {
         hasEditedProviderDraft = providerDraft != AIProviderSettingsDraft(status: store.aiProviderStatus)
+    }
+
+    private func handleProviderDraftChange() {
+        resetProviderEditedState()
+        providerAutosaveTask?.cancel()
+
+        let draftSnapshot = providerDraft
+        guard
+            hasEditedProviderDraft,
+            draftSnapshot.validationMessage == nil,
+            !providerActionsDisabled
+        else {
+            return
+        }
+
+        providerAutosaveTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 900_000_000)
+            guard !Task.isCancelled else { return }
+            guard
+                providerDraft == draftSnapshot,
+                draftSnapshot.validationMessage == nil,
+                !providerActionsDisabled
+            else {
+                return
+            }
+
+            let saved = await store.saveAIProviderSettings(draft: draftSnapshot)
+            guard !Task.isCancelled else { return }
+            providerDraft.apiKey = ""
+            if saved {
+                await store.loadAIProviderStatus()
+                resetProviderDraftFromStore()
+            } else {
+                resetProviderEditedState()
+            }
+        }
+    }
+
+    private func testProviderConnection() {
+        Task {
+            providerAutosaveTask?.cancel()
+            _ = await store.testAIProviderConnection(draft: providerDraft)
+            providerDraft.apiKey = ""
+            resetProviderEditedState()
+        }
     }
 }
 
@@ -442,6 +578,48 @@ private struct SettingsMetadataRow: View {
                 .textSelection(.enabled)
                 .lineLimit(2)
         }
+    }
+}
+
+private struct SettingsSidebarItem: View {
+    let tab: SettingsTab
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: tab.systemImage)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                    .frame(width: 18)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(tab.title)
+                        .font(.callout.weight(isSelected ? .semibold : .regular))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
+                    Text(tab.subtitle)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: CGFloat(UIOptimizationPresentation.settings.sectionCornerRadius))
+                        .fill(.thinMaterial)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(tab.title)
     }
 }
 
@@ -473,6 +651,37 @@ private struct SettingsPageHeader: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .adaptiveMaterialSurface()
+    }
+}
+
+private struct SettingsWindowConfigurator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        view.isHidden = true
+        configure(windowFor: view)
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        configure(windowFor: nsView)
+    }
+
+    private func configure(windowFor view: NSView) {
+        DispatchQueue.main.async {
+            guard let window = view.window else { return }
+            window.title = UIStrings.settingsWindowTitle
+            window.minSize = NSSize(
+                width: CGFloat(UIOptimizationPresentation.settings.minimumWidth),
+                height: CGFloat(UIOptimizationPresentation.settings.minimumHeight)
+            )
+            window.titlebarAppearsTransparent = true
+            window.toolbarStyle = .unifiedCompact
+            window.styleMask.remove(.miniaturizable)
+            window.standardWindowButton(.miniaturizeButton)?.isEnabled = false
+            window.standardWindowButton(.miniaturizeButton)?.isHidden = true
+            window.standardWindowButton(.zoomButton)?.isEnabled = false
+            window.standardWindowButton(.zoomButton)?.isHidden = true
+        }
     }
 }
 

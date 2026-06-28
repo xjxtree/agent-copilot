@@ -141,6 +141,7 @@ private struct LocalSessionContentFilterBar: View {
                         title: UIStrings.text("agentCopilot.sessions.filterAll", "All"),
                         count: items.count,
                         systemImage: "line.3.horizontal.decrease.circle",
+                        tint: .accentColor,
                         isSelected: selectedKinds.count == LocalSessionContentKind.allCases.count,
                         isDisabled: false
                     )
@@ -158,6 +159,7 @@ private struct LocalSessionContentFilterBar: View {
                             title: kind.title,
                             count: count,
                             systemImage: kind.systemImage,
+                            tint: kind.semanticTint,
                             isSelected: isSelected,
                             isDisabled: count == 0
                         )
@@ -178,6 +180,7 @@ private struct LocalSessionContentFilterBar: View {
         title: String,
         count: Int,
         systemImage: String,
+        tint: Color,
         isSelected: Bool,
         isDisabled: Bool
     ) -> some View {
@@ -188,30 +191,30 @@ private struct LocalSessionContentFilterBar: View {
                     .lineLimit(1)
                 Text("\(count)")
                     .font(.caption2.monospacedDigit())
-                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                    .foregroundStyle(isSelected ? tint : .secondary)
             }
         } icon: {
             Image(systemName: systemImage)
         }
-        .foregroundStyle(filterForeground(isSelected: isSelected, isDisabled: isDisabled))
+        .foregroundStyle(filterForeground(tint: tint, isSelected: isSelected, isDisabled: isDisabled))
         .padding(.horizontal, 9)
         .padding(.vertical, 5)
         .background(
-            isSelected ? Color.accentColor.opacity(0.16) : Color.secondary.opacity(0.08),
+            isSelected ? tint.opacity(0.16) : Color.secondary.opacity(0.08),
             in: RoundedRectangle(cornerRadius: 6)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(isSelected ? Color.accentColor.opacity(0.45) : Color.secondary.opacity(0.14), lineWidth: 1)
+                .stroke(isSelected ? tint.opacity(0.45) : Color.secondary.opacity(0.14), lineWidth: 1)
         )
     }
 
-    private func filterForeground(isSelected: Bool, isDisabled: Bool) -> Color {
+    private func filterForeground(tint: Color, isSelected: Bool, isDisabled: Bool) -> Color {
         if isDisabled {
             return Color.secondary.opacity(0.55)
         }
         if isSelected {
-            return .accentColor
+            return tint
         }
         return .secondary
     }
@@ -229,9 +232,14 @@ private struct LocalSessionContentItemRow: View {
     let item: LocalSessionContentItem
 
     @State private var isShowingFullText = false
+    @State private var isHoveringActions = false
 
     private var isLongMessage: Bool {
         item.charCount > 600 || item.text.split(whereSeparator: \.isNewline).count > 8
+    }
+
+    private var actionOpacity: Double {
+        isHoveringActions ? 1 : 0
     }
 
     var body: some View {
@@ -240,7 +248,7 @@ private struct LocalSessionContentItemRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Label(item.title.isEmpty ? item.kind.title : item.title, systemImage: item.kind.systemImage)
                         .font(.caption.bold())
-                        .foregroundStyle(item.kind == .skillCall ? Color.accentColor : .secondary)
+                        .foregroundStyle(item.kind.semanticTint)
                         .lineLimit(1)
                     if let timestamp = item.timestamp {
                         Text(DisplayText.timestamp(timestamp))
@@ -253,28 +261,15 @@ private struct LocalSessionContentItemRow: View {
                 Text(UIStrings.localSessionContentCharacters(item.charCount))
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(.secondary)
-                if isLongMessage {
-                    Button {
-                        isShowingFullText = true
-                    } label: {
-                        Label(UIStrings.llmPromptViewDetails, systemImage: "arrow.up.left.and.arrow.down.right")
-                    }
-                    .controlSize(.small)
-                    .buttonStyle(.borderless)
-                    .help(UIStrings.llmPromptViewDetails)
-                }
-                Button {
-                    copyToPasteboard(item.text)
-                } label: {
+                HStack(spacing: 4) {
                     if isLongMessage {
-                        Label(UIStrings.llmPromptCopyFullText, systemImage: "doc.on.doc")
-                    } else {
-                        Image(systemName: "doc.on.doc")
+                        detailButton
                     }
+                    copyButton
                 }
-                .controlSize(.small)
-                .buttonStyle(.borderless)
-                .help(UIStrings.llmPromptCopyFullText)
+                .opacity(actionOpacity)
+                .allowsHitTesting(isHoveringActions)
+                .animation(.easeInOut(duration: 0.12), value: isHoveringActions)
             }
             RenderedLongText(
                 text: item.text,
@@ -289,6 +284,9 @@ private struct LocalSessionContentItemRow: View {
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.16), in: RoundedRectangle(cornerRadius: 8))
+        .onHover { isHovering in
+            isHoveringActions = isHovering
+        }
         .contextMenu {
             Button {
                 copyToPasteboard(item.text)
@@ -310,9 +308,52 @@ private struct LocalSessionContentItemRow: View {
         }
     }
 
+    private var detailButton: some View {
+        Button {
+            isShowingFullText = true
+        } label: {
+            Label(UIStrings.llmPromptViewDetails, systemImage: "arrow.up.left.and.arrow.down.right")
+        }
+        .controlSize(.small)
+        .buttonStyle(.borderless)
+        .help(UIStrings.llmPromptViewDetails)
+    }
+
+    private var copyButton: some View {
+        Button {
+            copyToPasteboard(item.text)
+        } label: {
+            if isLongMessage {
+                Label(UIStrings.llmPromptCopyFullText, systemImage: "doc.on.doc")
+            } else {
+                Image(systemName: "doc.on.doc")
+            }
+        }
+        .controlSize(.small)
+        .buttonStyle(.borderless)
+        .help(UIStrings.llmPromptCopyFullText)
+    }
+
     private func copyToPasteboard(_ value: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(value, forType: .string)
+    }
+}
+
+private extension LocalSessionContentKind {
+    var semanticTint: Color {
+        switch self {
+        case .userMessage:
+            return .blue
+        case .agentReply:
+            return .purple
+        case .thinking:
+            return .indigo
+        case .toolCall:
+            return .orange
+        case .skillCall:
+            return .green
+        }
     }
 }
 
@@ -400,7 +441,7 @@ private struct McpServerPreviewPanel: View {
                             if let command = row.command, !command.isEmpty {
                                 PrivacyEvidenceText(value: command, font: .caption2, lineLimit: 1)
                             }
-                            Text(String(format: UIStrings.text("mcpServerPreview.counts", "Args: %d · Env keys: %d"), row.argsCount, row.envKeyCount))
+                            Text(UIStrings.mcpServerArgEnvSummary(args: row.argsCount, envKeys: row.envKeyCount))
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                             RoutingInlineList(title: UIStrings.crossAgentReadinessEvidence, empty: UIStrings.crossAgentReadinessNoEvidence, values: row.evidenceRefs, systemImage: "checklist")
