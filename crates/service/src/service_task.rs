@@ -3456,6 +3456,7 @@ fn local_session_storage_project_root(
 fn path_or_root_contains_session_marker(path_text: &str, root_text: &str, marker: &str) -> bool {
     [path_text, root_text]
         .into_iter()
+        .map(|value| value.replace('\\', "/"))
         .any(|value| value.ends_with(marker) || value.contains(&format!("{marker}/")))
 }
 
@@ -3513,7 +3514,7 @@ fn json_session_project_candidate(map: &serde_json::Map<String, Value>) -> Optio
         "project_root",
     ] {
         if let Some(value) = map.get(key).and_then(Value::as_str) {
-            if value.starts_with('/') {
+            if Path::new(value).is_absolute() {
                 return Some(value.to_string());
             }
         }
@@ -3562,6 +3563,7 @@ fn local_session_normalized_path(path: &Path) -> String {
     path.canonicalize()
         .unwrap_or_else(|_| path.to_path_buf())
         .to_string_lossy()
+        .replace('\\', "/")
         .trim_end_matches('/')
         .to_string()
 }

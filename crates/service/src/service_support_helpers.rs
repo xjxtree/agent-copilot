@@ -1300,8 +1300,8 @@ pub(crate) fn redact_with_count(value: &str, roots: &[(String, &'static str)]) -
             redacted = redacted.replace(root, placeholder);
         }
     }
-    for placeholder in ["$HOME", "<project-root>", "<project-cwd>", "<app-data-dir>"] {
-        redacted = redacted.replace(&format!("{placeholder}\\"), &format!("{placeholder}/"));
+    if count > 0 {
+        redacted = redacted.replace('\\', "/");
     }
     (redacted, count)
 }

@@ -80,7 +80,7 @@ pub(super) fn spawn_mock_openai_server_with_content(
             .expect("write mock provider response");
         request_text
     });
-    (format!("http://localhost:{port}/v1"), handle)
+    (format!("http://127.0.0.1:{port}/v1"), handle)
 }
 
 pub(super) fn find_header_end(bytes: &[u8]) -> Option<usize> {

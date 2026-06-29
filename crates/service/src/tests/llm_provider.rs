@@ -2253,7 +2253,7 @@ fn adapter_list_diagnostics_reports_roots_config_and_blockers() {
         home.join(".config/opencode/opencode.json"),
         format!(
             "{{\"skills\":{{\"paths\":[\"{}\"],\"urls\":[\"https://example.invalid/skills/\"]}}}}\n",
-            opencode_configured_root.to_string_lossy()
+            json_path_text(&opencode_configured_root)
         ),
     )
     .expect("write opencode config");
