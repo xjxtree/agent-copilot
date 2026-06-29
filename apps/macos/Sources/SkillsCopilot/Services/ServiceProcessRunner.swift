@@ -303,8 +303,6 @@ private final class StdioServiceProcessInvocation {
 
         guard closePipes, let snapshot else { return }
         try? snapshot.stdinWriter?.close()
-        try? snapshot.stdoutReader?.close()
-        try? snapshot.stderrReader?.close()
     }
 
     private func forceTerminate(_ process: Process, after delay: DispatchTimeInterval) {
