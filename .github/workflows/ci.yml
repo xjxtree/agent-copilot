@@ -91,7 +91,7 @@ jobs:
 
   macos-app:
     name: Native macOS app bundle
-    runs-on: macos-latest
+    runs-on: macos-15
     needs:
       - rust
       - rust-audit
