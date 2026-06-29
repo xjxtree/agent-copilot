@@ -58,53 +58,69 @@ func runAsyncTest(_ body: @escaping () async throws -> Void) throws {
     try completed?.get()
 }
 
+func runNamed(_ name: String, _ body: () throws -> Void) throws {
+    fputs("SkillsCopilotTests: \(name) start\n", stderr)
+    fflush(stderr)
+    try body()
+    fputs("SkillsCopilotTests: \(name) ok\n", stderr)
+    fflush(stderr)
+}
+
+func runAsyncNamed(_ name: String, _ body: @escaping () async throws -> Void) throws {
+    try runNamed(name) {
+        try runAsyncTest(body)
+    }
+}
+
 @_cdecl("SkillsCopilotRunNativeModelTests")
 public func runNativeModelTests() {
+    fputs("SkillsCopilotTests: native model runner start\n", stderr)
+    fflush(stderr)
     do {
-        try FindingDisplayModelTests().run()
-        try FindingExplainabilityModelTests().run()
-        try RuleTuningModelTests().run()
-        try CleanupQueueModelTests().run()
-        try CrossAgentComparisonModelTests().run()
-        try CrossAgentReadinessModelTests().run()
-        try StaleDriftDetectionModelTests().run()
-        try LocalKnowledgeIndexModelTests().run()
-        try LocalSkillMapModelTests().run()
-        try SimilarSkillGroupingModelTests().run()
-        try CapabilityTaxonomyModelTests().run()
-        try WorkspaceReadinessModelTests().run()
-        try RemediationPlanModelTests().run()
-        try RemediationPreviewDraftsModelTests().run()
-        try RemediationImpactPreviewModelTests().run()
-        try RemediationBatchReviewModelTests().run()
-        try RemediationHistoryModelTests().run()
-        try AgentSessionSkillReviewModelTests().run()
-        try ProviderObservabilityModelTests().run()
-        try TaskCockpitModelTests().run()
-        try TaskInputModelTests().run()
-        try SkillLifecycleTimelineModelTests().run()
-        try GuidedCleanupFlowModelTests().run()
-        try AIProviderModelTests().run()
-        try LLMModelTests().run()
-        try ScriptExecutionModelTests().run()
-        try ToolGlobalModelTests().run()
-        try SkillManagerModelTests().run()
-        try AgentConfigTimelineModelTests().run()
-        try ConfigContentRedactorTests().run()
-        try LocalizationModelTests().run()
-        try UIOptimizationModelTests().run()
-        try MainWindowModelTests().run()
-        try AgentCopilotDecisionModelTests().run()
-        try LocalSessionPreviewModelTests().run()
-        try McpServerPreviewModelTests().run()
-        try SkillListModelTests().run()
-        try runAsyncTest {
+        try runNamed("FindingDisplayModelTests") { try FindingDisplayModelTests().run() }
+        try runNamed("FindingExplainabilityModelTests") { try FindingExplainabilityModelTests().run() }
+        try runNamed("RuleTuningModelTests") { try RuleTuningModelTests().run() }
+        try runNamed("CleanupQueueModelTests") { try CleanupQueueModelTests().run() }
+        try runNamed("CrossAgentComparisonModelTests") { try CrossAgentComparisonModelTests().run() }
+        try runNamed("CrossAgentReadinessModelTests") { try CrossAgentReadinessModelTests().run() }
+        try runNamed("StaleDriftDetectionModelTests") { try StaleDriftDetectionModelTests().run() }
+        try runNamed("LocalKnowledgeIndexModelTests") { try LocalKnowledgeIndexModelTests().run() }
+        try runNamed("LocalSkillMapModelTests") { try LocalSkillMapModelTests().run() }
+        try runNamed("SimilarSkillGroupingModelTests") { try SimilarSkillGroupingModelTests().run() }
+        try runNamed("CapabilityTaxonomyModelTests") { try CapabilityTaxonomyModelTests().run() }
+        try runNamed("WorkspaceReadinessModelTests") { try WorkspaceReadinessModelTests().run() }
+        try runNamed("RemediationPlanModelTests") { try RemediationPlanModelTests().run() }
+        try runNamed("RemediationPreviewDraftsModelTests") { try RemediationPreviewDraftsModelTests().run() }
+        try runNamed("RemediationImpactPreviewModelTests") { try RemediationImpactPreviewModelTests().run() }
+        try runNamed("RemediationBatchReviewModelTests") { try RemediationBatchReviewModelTests().run() }
+        try runNamed("RemediationHistoryModelTests") { try RemediationHistoryModelTests().run() }
+        try runNamed("AgentSessionSkillReviewModelTests") { try AgentSessionSkillReviewModelTests().run() }
+        try runNamed("ProviderObservabilityModelTests") { try ProviderObservabilityModelTests().run() }
+        try runNamed("TaskCockpitModelTests") { try TaskCockpitModelTests().run() }
+        try runNamed("TaskInputModelTests") { try TaskInputModelTests().run() }
+        try runNamed("SkillLifecycleTimelineModelTests") { try SkillLifecycleTimelineModelTests().run() }
+        try runNamed("GuidedCleanupFlowModelTests") { try GuidedCleanupFlowModelTests().run() }
+        try runNamed("AIProviderModelTests") { try AIProviderModelTests().run() }
+        try runNamed("LLMModelTests") { try LLMModelTests().run() }
+        try runNamed("ScriptExecutionModelTests") { try ScriptExecutionModelTests().run() }
+        try runNamed("ToolGlobalModelTests") { try ToolGlobalModelTests().run() }
+        try runNamed("SkillManagerModelTests") { try SkillManagerModelTests().run() }
+        try runNamed("AgentConfigTimelineModelTests") { try AgentConfigTimelineModelTests().run() }
+        try runNamed("ConfigContentRedactorTests") { try ConfigContentRedactorTests().run() }
+        try runNamed("LocalizationModelTests") { try LocalizationModelTests().run() }
+        try runNamed("UIOptimizationModelTests") { try UIOptimizationModelTests().run() }
+        try runNamed("MainWindowModelTests") { try MainWindowModelTests().run() }
+        try runNamed("AgentCopilotDecisionModelTests") { try AgentCopilotDecisionModelTests().run() }
+        try runNamed("LocalSessionPreviewModelTests") { try LocalSessionPreviewModelTests().run() }
+        try runNamed("McpServerPreviewModelTests") { try McpServerPreviewModelTests().run() }
+        try runNamed("SkillListModelTests") { try SkillListModelTests().run() }
+        try runAsyncNamed("ServiceClientRPCTests") {
             try await ServiceClientRPCTests().run()
         }
-        try runAsyncTest {
+        try runAsyncNamed("ServiceClientProcessTests") {
             try await ServiceClientProcessTests().run()
         }
-        try runAsyncTest {
+        try runAsyncNamed("SkillStoreTests") {
             try await SkillStoreTests().run()
         }
         fputs("SkillsCopilotTests: native list/store model checks passed\n", stderr)
