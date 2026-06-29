@@ -13,7 +13,7 @@ fn all_scope_retains_project_roots_for_supported_agents() {
     ));
     let project_root = app_data_dir.join("project-root");
     let project_root_text = project_root.to_string_lossy().to_string();
-    let encoded_project = project_root_text.replace('/', "-");
+    let encoded_project = encoded_project_session_dir(&project_root);
 
     fs::create_dir_all(&project_root).expect("create project root");
 
@@ -23,7 +23,7 @@ fn all_scope_retains_project_roots_for_supported_agents() {
         claude_root.join("claude-session.jsonl"),
         format!(
             "{{\"type\":\"user\",\"message\":{{\"role\":\"user\",\"content\":\"Claude project task\"}},\"cwd\":\"{}\",\"sessionId\":\"claude-project-session\"}}\n",
-            project_root.display()
+            json_path_text(&project_root)
         ),
     )
     .expect("write claude session");
@@ -34,7 +34,7 @@ fn all_scope_retains_project_roots_for_supported_agents() {
         codex_root.join("rollout-2026-06-28T10-00-00-project.jsonl"),
         format!(
             "{{\"type\":\"session_meta\",\"payload\":{{\"id\":\"codex-project-session\",\"cwd\":\"{}\"}}}}\n{{\"type\":\"response_item\",\"payload\":{{\"type\":\"message\",\"role\":\"user\",\"content\":[{{\"type\":\"input_text\",\"text\":\"Codex project task\"}}]}}}}\n",
-            project_root.display()
+            json_path_text(&project_root)
         ),
     )
     .expect("write codex session");
@@ -45,7 +45,7 @@ fn all_scope_retains_project_roots_for_supported_agents() {
         opencode_root.join("ses_project.json"),
         format!(
             r#"{{"id":"ses_project","title":"opencode project task","directory":"{}","projectID":"global"}}"#,
-            project_root.display()
+            json_path_text(&project_root)
         ),
     )
     .expect("write opencode session");
@@ -56,7 +56,7 @@ fn all_scope_retains_project_roots_for_supported_agents() {
         pi_root.join("pi-session.jsonl"),
         format!(
             "{{\"type\":\"session\",\"id\":\"pi-project-session\",\"cwd\":\"{}\"}}\n{{\"type\":\"message\",\"message\":{{\"role\":\"user\",\"content\":[{{\"type\":\"text\",\"text\":\"Pi project task\"}}]}}}}\n",
-            project_root.display()
+            json_path_text(&project_root)
         ),
     )
     .expect("write pi session");

@@ -861,13 +861,7 @@ pub(crate) fn redact_path_string(path: &Path, roots: &[(String, &'static str)]) 
 }
 
 pub(crate) fn redact_string(value: &str, roots: &[(String, &'static str)]) -> String {
-    let mut redacted = value.to_string();
-    for (root, placeholder) in roots {
-        if !root.is_empty() {
-            redacted = redacted.replace(root, placeholder);
-        }
-    }
-    redacted
+    redact_with_count(value, roots).0
 }
 
 pub(crate) fn render_report_markdown(report: &Value) -> String {
@@ -1305,6 +1299,9 @@ pub(crate) fn redact_with_count(value: &str, roots: &[(String, &'static str)]) -
             count += redacted.matches(root).count();
             redacted = redacted.replace(root, placeholder);
         }
+    }
+    for placeholder in ["$HOME", "<project-root>", "<project-cwd>", "<app-data-dir>"] {
+        redacted = redacted.replace(&format!("{placeholder}\\"), &format!("{placeholder}/"));
     }
     (redacted, count)
 }

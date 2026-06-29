@@ -2737,7 +2737,7 @@ fn local_session_preview_ignores_claude_skill_listing_descriptions_as_calls() {
     let project_root = app_data_dir.join("project-root");
     let session_root = user_home
         .join(".claude/projects")
-        .join(project_root.to_string_lossy().replace('/', "-"));
+        .join(encoded_project_session_dir(&project_root));
     fs::create_dir_all(&session_root).expect("create claude session root");
     let user_line = json!({
         "type": "user",
@@ -2823,17 +2823,17 @@ fn local_session_preview_filters_project_scope_and_uses_agent_titles() {
     let other_root = app_data_dir.join("other-root");
     let project_session_root = user_home
         .join(".claude/projects")
-        .join(project_root.to_string_lossy().replace('/', "-"));
+        .join(encoded_project_session_dir(&project_root));
     let other_session_root = user_home
         .join(".claude/projects")
-        .join(other_root.to_string_lossy().replace('/', "-"));
+        .join(encoded_project_session_dir(&other_root));
     fs::create_dir_all(&project_session_root).expect("create project session root");
     fs::create_dir_all(&other_session_root).expect("create other session root");
     fs::write(
         project_session_root.join("session-project.jsonl"),
         format!(
             "{{\"type\":\"user\",\"message\":{{\"role\":\"user\",\"content\":\"调查蓝盒子价格\"}},\"cwd\":\"{}\",\"sessionId\":\"claude-project-session\"}}\n{{\"type\":\"ai-title\",\"aiTitle\":\"调查蓝盒子Z1 Pro床垫价格\",\"sessionId\":\"claude-project-session\"}}\n",
-            project_root.display()
+            json_path_text(&project_root)
         ),
     )
     .expect("write project session");
@@ -2841,7 +2841,7 @@ fn local_session_preview_filters_project_scope_and_uses_agent_titles() {
         other_session_root.join("session-other.jsonl"),
         format!(
             "{{\"type\":\"user\",\"message\":{{\"role\":\"user\",\"content\":\"其他项目\"}},\"cwd\":\"{}\",\"sessionId\":\"claude-other-session\"}}\n",
-            other_root.display()
+            json_path_text(&other_root)
         ),
     )
     .expect("write other session");
@@ -2924,7 +2924,7 @@ fn local_session_preview_classifies_claude_tool_results_by_payload_not_role() {
     let project_root = app_data_dir.join("project-root");
     let project_session_root = user_home
         .join(".claude/projects")
-        .join(project_root.to_string_lossy().replace('/', "-"));
+        .join(encoded_project_session_dir(&project_root));
     fs::create_dir_all(&project_root).expect("create project root");
     fs::create_dir_all(&project_session_root).expect("create claude project session root");
     let project_root_text = project_root.to_string_lossy().to_string();
@@ -3062,7 +3062,7 @@ fn local_session_preview_separates_agent_replies_from_tool_process_notes() {
     let project_root = app_data_dir.join("project-root");
     let project_session_root = user_home
         .join(".claude/projects")
-        .join(project_root.to_string_lossy().replace('/', "-"));
+        .join(encoded_project_session_dir(&project_root));
     fs::create_dir_all(&project_root).expect("create project root");
     fs::create_dir_all(&project_session_root).expect("create claude project session root");
     let project_root_text = project_root.to_string_lossy().to_string();
@@ -3233,7 +3233,7 @@ fn local_session_preview_splits_inline_think_tags_from_agent_reply() {
     let project_root = app_data_dir.join("project-root");
     let project_session_root = user_home
         .join(".claude/projects")
-        .join(project_root.to_string_lossy().replace('/', "-"));
+        .join(encoded_project_session_dir(&project_root));
     fs::create_dir_all(&project_root).expect("create project root");
     fs::create_dir_all(&project_session_root).expect("create claude project session root");
     let project_root_text = project_root.to_string_lossy().to_string();
@@ -3333,7 +3333,7 @@ fn local_session_preview_classifies_thinking_parts_before_agent_role() {
     let project_root = app_data_dir.join("project-root");
     let claude_session_root = user_home
         .join(".claude/projects")
-        .join(project_root.to_string_lossy().replace('/', "-"));
+        .join(encoded_project_session_dir(&project_root));
     let codex_session_root = user_home.join(".codex/sessions/2026/06/22");
     fs::create_dir_all(&project_root).expect("create project root");
     fs::create_dir_all(&claude_session_root).expect("create claude project session root");
@@ -3509,13 +3509,13 @@ fn local_session_preview_all_scope_dedupes_overlapping_claude_project_roots() {
     fs::create_dir_all(&project_root).expect("create project root");
     let project_session_root = user_home
         .join(".claude/projects")
-        .join(project_root.to_string_lossy().replace('/', "-"));
+        .join(encoded_project_session_dir(&project_root));
     fs::create_dir_all(&project_session_root).expect("create claude project session root");
     fs::write(
         project_session_root.join("session-project.jsonl"),
         format!(
             "{{\"type\":\"user\",\"message\":{{\"role\":\"user\",\"content\":\"需要整理会话列表\"}},\"cwd\":\"{}\",\"sessionId\":\"claude-overlap-session\"}}\n{{\"type\":\"ai-title\",\"aiTitle\":\"整理会话列表\",\"sessionId\":\"claude-overlap-session\"}}\n",
-            project_root.display()
+            json_path_text(&project_root)
         ),
     )
     .expect("write claude project session");
@@ -3580,7 +3580,7 @@ fn local_session_preview_keeps_codex_project_scope_strict_and_uses_user_titles()
         session_root.join("rollout-2026-06-22T10-00-00-project.jsonl"),
         format!(
             "{{\"type\":\"session_meta\",\"payload\":{{\"id\":\"codex-project-session\",\"cwd\":\"{}\",\"cli_version\":\"0.142.0-alpha.6\"}}}}\n{{\"type\":\"response_item\",\"payload\":{{\"type\":\"message\",\"role\":\"user\",\"content\":[{{\"type\":\"input_text\",\"text\":\"# AGENTS.md instructions for fixture\\nInjected project instructions.\"}}]}}}}\n{{\"type\":\"response_item\",\"payload\":{{\"type\":\"message\",\"role\":\"user\",\"content\":[{{\"type\":\"input_text\",\"text\":\"Plan upcoming versions and tasks\"}}]}}}}\n",
-            project_root.display()
+            json_path_text(&project_root)
         ),
     )
     .expect("write project codex session");
@@ -3588,7 +3588,7 @@ fn local_session_preview_keeps_codex_project_scope_strict_and_uses_user_titles()
         session_root.join("rollout-2026-06-22T10-00-01-other.jsonl"),
         format!(
             "{{\"type\":\"session_meta\",\"payload\":{{\"id\":\"codex-other-session\",\"cwd\":\"{}\",\"cli_version\":\"0.142.0-alpha.6\"}}}}\n{{\"type\":\"response_item\",\"payload\":{{\"type\":\"message\",\"role\":\"user\",\"content\":[{{\"type\":\"input_text\",\"text\":\"Review filmcore rendering\"}}]}}}}\n",
-            other_root.display()
+            json_path_text(&other_root)
         ),
     )
     .expect("write other codex session");
@@ -3669,7 +3669,7 @@ fn local_session_preview_uses_pi_user_message_titles_not_cwd() {
         std::process::id(),
     ));
     let project_root = app_data_dir.join("project-root");
-    let encoded_project = project_root.to_string_lossy().replace('/', "-");
+    let encoded_project = encoded_project_session_dir(&project_root);
     let session_root = user_home.join(".pi/agent/sessions").join(encoded_project);
     fs::create_dir_all(&project_root).expect("create project root");
     fs::create_dir_all(&session_root).expect("create pi session root");
@@ -3677,7 +3677,7 @@ fn local_session_preview_uses_pi_user_message_titles_not_cwd() {
         session_root.join("pi-session.jsonl"),
         format!(
             "{{\"type\":\"session\",\"id\":\"pi-session\",\"cwd\":\"{}\"}}\n{{\"type\":\"message\",\"message\":{{\"role\":\"user\",\"content\":[{{\"type\":\"text\",\"text\":\"检查当前项目情况\"}}]}}}}\n",
-            project_root.display()
+            json_path_text(&project_root)
         ),
     )
     .expect("write pi session");
@@ -3745,7 +3745,7 @@ fn local_session_preview_opencode_joins_message_parts() {
         session_root.join("ses_fixture.json"),
         format!(
             r#"{{"id":"ses_fixture","title":"Review project docs","directory":"{}","projectID":"global"}}"#,
-            project_root.display()
+            json_path_text(&project_root)
         ),
     )
     .expect("write opencode session");
@@ -3845,7 +3845,7 @@ fn local_session_preview_opencode_explicit_session_root_does_not_read_sibling_pa
         session_root.join("ses_fixture.json"),
         format!(
             r#"{{"id":"ses_fixture","title":"Review project docs","directory":"{}","projectID":"global"}}"#,
-            project_root.display()
+            json_path_text(&project_root)
         ),
     )
     .expect("write opencode session");
@@ -3926,7 +3926,7 @@ fn local_session_preview_reads_authorized_roots_with_redaction_only() {
         &session_path,
         format!(
             "{{\"role\":\"user\",\"content\":\"Please run skill:llm-skill-id for local task at {}\"}}\n{{\"role\":\"assistant\",\"content\":\"Used /skill llm-skill-id with {key_label}={raw_secret}\",\"tool_calls\":[{{\"name\":\"fixture-tool\"}}]}}\n",
-            project_root.display()
+            json_path_text(&project_root)
         ),
     )
     .expect("write session");
@@ -4118,8 +4118,8 @@ fn mcp_server_preview_reads_authorized_configs_with_redaction_only() {
     }}
   }}
 }}"#,
-            user_home.display(),
-            project_root.display(),
+            json_path_text(&user_home),
+            json_path_text(&project_root),
         ),
     )
     .expect("write mcp config");

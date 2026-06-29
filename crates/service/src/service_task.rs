@@ -2773,11 +2773,11 @@ fn dedupe_local_session_root_requests(roots: &mut Vec<LocalSessionRootRequest>) 
 }
 
 fn encode_claude_project_session_dir(project: &Path) -> String {
-    project.to_string_lossy().replace('/', "-")
+    encode_project_path_session_component(project)
 }
 
 fn encode_pi_project_session_dirs(project: &Path) -> Vec<String> {
-    let dash_path = project.to_string_lossy().replace('/', "-");
+    let dash_path = encode_project_path_session_component(project);
     let trimmed = dash_path.trim_matches('-');
     let mut candidates = vec![
         dash_path.clone(),
@@ -2788,6 +2788,17 @@ fn encode_pi_project_session_dirs(project: &Path) -> Vec<String> {
     candidates.sort();
     candidates.dedup();
     candidates
+}
+
+fn encode_project_path_session_component(project: &Path) -> String {
+    project
+        .to_string_lossy()
+        .chars()
+        .map(|ch| match ch {
+            '/' | '\\' | ':' => '-',
+            other => other,
+        })
+        .collect()
 }
 
 fn collect_local_session_files(

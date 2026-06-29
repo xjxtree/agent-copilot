@@ -5,7 +5,10 @@ impl ServiceHost {
         let user_home = env::var_os("SKILLS_COPILOT_HOME")
             .map(PathBuf::from)
             .or_else(|| env::var_os("HOME").map(PathBuf::from))
-            .ok_or_else(|| ServiceError::InvalidRequest("HOME is not set".to_string()))?;
+            .or_else(|| env::var_os("USERPROFILE").map(PathBuf::from))
+            .ok_or_else(|| {
+                ServiceError::InvalidRequest("HOME or USERPROFILE is not set".to_string())
+            })?;
         let app_data_dir = env::var_os("SKILLS_COPILOT_APP_DATA_DIR")
             .map(PathBuf::from)
             .map(Ok)

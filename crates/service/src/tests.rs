@@ -25,3 +25,18 @@ mod task_routing;
 
 use support_and_status::EnvVarGuard;
 use support_seed::*;
+
+fn encoded_project_session_dir(project: &Path) -> String {
+    project
+        .to_string_lossy()
+        .chars()
+        .map(|ch| match ch {
+            '/' | '\\' | ':' => '-',
+            other => other,
+        })
+        .collect()
+}
+
+fn json_path_text(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "\\\\")
+}
