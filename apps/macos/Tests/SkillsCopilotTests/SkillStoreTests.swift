@@ -479,10 +479,13 @@ struct SkillStoreTests {
 
     private func localSessionProjectScopeUsesProjectRootFromAllScopeCache() async throws {
         let runner = LocalSessionProjectScopeRunner()
-        setenv("SKILLS_COPILOT_SERVICE_PATH", "/bin/cat", 1)
-        defer { unsetenv("SKILLS_COPILOT_SERVICE_PATH") }
 
-        let store = SkillStore(service: ServiceClient(processRunner: runner))
+        let store = SkillStore(
+            service: ServiceClient(
+                processRunner: runner,
+                serviceURL: URL(fileURLWithPath: "/bin/cat")
+            )
+        )
         await store.setProject(rootPath: "/tmp/project", currentCWD: "/tmp/project", name: "Fixture Project")
         store.sidebarContentMode = .sessions
 

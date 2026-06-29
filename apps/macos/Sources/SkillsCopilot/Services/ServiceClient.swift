@@ -1102,9 +1102,27 @@ final class ServiceClient {
     }
 
     let processRunner: ServiceProcessRunning
+    let serviceURLOverride: URL?
 
-    init(processRunner: ServiceProcessRunning = StdioServiceProcessRunner()) {
+    init(
+        processRunner: ServiceProcessRunning = StdioServiceProcessRunner(),
+        serviceURL: URL? = nil
+    ) {
         self.processRunner = processRunner
+        serviceURLOverride = serviceURL ?? Self.configuredServiceURLFromEnvironment()
+    }
+
+    private static func configuredServiceURLFromEnvironment() -> URL? {
+        #if DEBUG
+        if let override = ProcessInfo.processInfo.environment["SKILLS_COPILOT_SERVICE_PATH"],
+           !override.isEmpty {
+            let overrideURL = URL(fileURLWithPath: override)
+            if FileManager.default.isExecutableFile(atPath: overrideURL.path) {
+                return overrideURL
+            }
+        }
+        #endif
+        return nil
     }
 
     func status() async throws -> ServiceStatus {

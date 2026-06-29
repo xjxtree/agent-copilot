@@ -44,23 +44,20 @@ extension ServiceClient {
 
     private func runService(input: Data, timeoutMS: Int?) async throws -> Data {
         let timeoutNanoseconds = timeoutMS.map { UInt64(max($0, 50)) * 1_000_000 }
+        let serviceURL: URL
+        if let serviceURLOverride {
+            serviceURL = serviceURLOverride
+        } else {
+            serviceURL = try resolveServiceURL()
+        }
         return try await processRunner.run(
-            executableURL: resolveServiceURL(),
+            executableURL: serviceURL,
             input: input,
             timeoutNanoseconds: timeoutNanoseconds
         )
     }
 
     private func resolveServiceURL() throws -> URL {
-        #if DEBUG
-        if let override = ProcessInfo.processInfo.environment["SKILLS_COPILOT_SERVICE_PATH"],
-           !override.isEmpty {
-            let overrideURL = URL(fileURLWithPath: override)
-            if FileManager.default.isExecutableFile(atPath: overrideURL.path) {
-                return overrideURL
-            }
-        }
-        #endif
         if let url = Bundle.main.url(forResource: "skills-copilot-service", withExtension: nil) {
             return url
         }
