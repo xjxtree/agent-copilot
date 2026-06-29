@@ -478,19 +478,18 @@ struct SkillStoreTests {
     }
 
     private func localSessionProjectScopeUsesProjectRootFromAllScopeCache() async throws {
-        let fake = try FakeServiceScript()
-        defer { fake.cleanup() }
-        fake.activate(scenario: "project-set")
+        let runner = LocalSessionProjectScopeRunner()
+        setenv("SKILLS_COPILOT_SERVICE_PATH", "/bin/cat", 1)
+        defer { unsetenv("SKILLS_COPILOT_SERVICE_PATH") }
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: ServiceClient(processRunner: runner))
         await store.setProject(rootPath: "/tmp/project", currentCWD: "/tmp/project", name: "Fixture Project")
-        fake.setScenario("sessions-all-scope-project-root")
         store.sidebarContentMode = .sessions
 
         await store.previewLocalSessions()
 
         try expectEqual(store.activeProjectContext?.rootPath, "/tmp/project", "Fixture should expose an active project context.")
-        try expectContains(fake.calls(), "\"scope\":\"all\"", "Session preview should keep requesting the all-scope cache.")
+        try expectContains(runner.calls, "\"scope\":\"all\"", "Session preview should keep requesting the all-scope cache.")
         try expectEqual(
             store.localSessionPreviewResult.sessionRows.map(\.id),
             ["session-project-from-all", "session-global"],
@@ -3606,4 +3605,149 @@ struct SkillStoreTests {
         }
         return marker
     }
+}
+
+private final class LocalSessionProjectScopeRunner: ServiceProcessRunning {
+    private let lock = NSLock()
+    private var recordedCalls: [String] = []
+
+    var calls: String {
+        lock.lock()
+        defer { lock.unlock() }
+        return recordedCalls.joined(separator: "\n")
+    }
+
+    func run(executableURL: URL, input: Data, timeoutNanoseconds: UInt64?) async throws -> Data {
+        let request = String(data: input, encoding: .utf8) ?? ""
+        let method = Self.method(from: input)
+        record(request)
+
+        switch method {
+        case "project.setContext", "project.getContext":
+            return ok(Self.projectContextJSON)
+        case "catalog.scanAll":
+            return ok(#"{"scanned_count":0,"skills":[],"activity":null}"#)
+        case "app.stateSnapshot":
+            return ok(Self.appStateSnapshotJSON)
+        case "snapshot.listAgentConfig", "rules.listTuning":
+            return ok("[]")
+        case "session.previewLocalSessions":
+            return ok(Self.localSessionsJSON)
+        default:
+            return unknown(method)
+        }
+    }
+
+    private func record(_ request: String) {
+        lock.lock()
+        recordedCalls.append(request)
+        lock.unlock()
+    }
+
+    private func ok(_ result: String) -> Data {
+        Data(#"{"id":"test","ok":true,"result":\#(result)}"#.utf8)
+    }
+
+    private func unknown(_ method: String) -> Data {
+        let escapedMethod = method.replacingOccurrences(of: "\"", with: "\\\"")
+        return Data(#"{"id":"test","ok":false,"error":{"code":"unknown_method","message":"unknown method: \#(escapedMethod)"}}"#.utf8)
+    }
+
+    private static func method(from input: Data) -> String {
+        guard
+            let object = try? JSONSerialization.jsonObject(with: input) as? [String: Any],
+            let method = object["method"] as? String
+        else {
+            return ""
+        }
+        return method
+    }
+
+    private static let projectContextJSON = #"""
+    {
+      "active": {
+        "id": "project-1",
+        "name": "Fixture Project",
+        "root_path": "/tmp/project",
+        "current_cwd": "/tmp/project",
+        "last_used_at": "2026-06-08T00:00:00Z",
+        "is_active": true,
+        "validation_error": null
+      },
+      "recent": [
+        {
+          "id": "project-1",
+          "name": "Fixture Project",
+          "root_path": "/tmp/project",
+          "current_cwd": "/tmp/project",
+          "last_used_at": "2026-06-08T00:00:00Z",
+          "is_active": true,
+          "validation_error": null
+        }
+      ]
+    }
+    """#
+
+    private static let appStateSnapshotJSON = #"""
+    {
+      "status": {
+        "protocol_version": 1,
+        "version": "test",
+        "app_data_dir": "/tmp/skills-copilot",
+        "catalog_path": "/tmp/skills-copilot/catalog.sqlite",
+        "user_home": "/tmp/home",
+        "supported_methods": [
+          "app.stateSnapshot",
+          "catalog.scanAll",
+          "project.getContext",
+          "project.setContext",
+          "session.previewLocalSessions"
+        ],
+        "adapter_capabilities": []
+      },
+      "skills": [],
+      "findings": [],
+      "conflicts": [],
+      "snapshots": []
+    }
+    """#
+
+    private static let localSessionsJSON = #"""
+    {
+      "generated_by": "local-v2.98",
+      "authorized": true,
+      "total_candidate_count": 2,
+      "session_rows": [
+        {
+          "id": "session-project-from-all",
+          "title": "Open latest app",
+          "source_kind": "authorized-local-session",
+          "agent": "claude-code",
+          "scope": "all",
+          "project_root": "/tmp/project",
+          "redacted_path": "$HOME/.claude/projects/project/session.jsonl",
+          "excerpt": "Open latest app.",
+          "user_message_count": 2,
+          "total_message_count": 24,
+          "tool_call_count": 24,
+          "skill_call_count": 1,
+          "content_hash": "project-all"
+        },
+        {
+          "id": "session-global",
+          "title": "Review global setup",
+          "source_kind": "authorized-local-session",
+          "agent": "claude-code",
+          "scope": "all",
+          "redacted_path": "$HOME/.claude.jsonl",
+          "excerpt": "Review global setup.",
+          "user_message_count": 1,
+          "total_message_count": 2,
+          "tool_call_count": 0,
+          "skill_call_count": 0,
+          "content_hash": "global"
+        }
+      ]
+    }
+    """#
 }
