@@ -70,6 +70,7 @@ struct SkillStoreTests {
         try await skillLifecycleTimelineUsesReadOnlyServiceContract()
         try await skillLifecycleTimelineFallsBackWhenMethodUnavailable()
         try await providerObservabilityUsesReadOnlyServiceContract()
+        try await providerObservabilityNeedBasedLoadUsesCacheUntilManualRefresh()
         try await providerObservabilityFallsBackWhenMethodUnavailable()
         try await taskCockpitUsesReadOnlyServiceContract()
         try await taskCockpitUsesGlobalScopeOutsideSkillDetail()
@@ -424,8 +425,17 @@ struct SkillStoreTests {
         try expectContains(calls, "session.previewLocalSessions", "Startup should prewarm selected-agent local sessions.")
         try expectContains(calls, "config.readAgentConfig", "Startup should prewarm selected-agent current config documents.")
         try expectContains(calls, "catalog.getSkill", "Startup should prewarm the selected skill detail.")
+        try expectEqual(countMethodCalls("llm.listProviderProfiles", in: calls), 1, "Startup should prewarm the AI provider status once.")
         try expectFalse(calls.contains("\"method\":\"catalog.scanAll\""), "Startup should not scan roots automatically.")
         try expectFalse(calls.contains("\"method\":\"config.toggleSkill\""), "Startup should not write agent config.")
+
+        await store.loadAIProviderStatusIfNeeded()
+
+        try expectEqual(countMethodCalls("llm.listProviderProfiles", in: fake.calls()), 1, "Need-based provider status loading should reuse startup cache.")
+
+        await store.loadAIProviderStatus()
+
+        try expectEqual(countMethodCalls("llm.listProviderProfiles", in: fake.calls()), 2, "Manual provider status refresh should force a fresh service request.")
 
         await store.loadAppStartupDataIfNeeded()
 
@@ -2136,6 +2146,30 @@ struct SkillStoreTests {
         try expectFalse(calls.contains("script.execute"), "Provider observability must not call execution paths.")
         try expectEqual(countOccurrences("snapshot.", in: calls), snapshotCallsBeforeObservability, "Provider observability must not call snapshot paths.")
         try expectFalse(calls.contains("credential"), "Provider observability must not call credential paths.")
+    }
+
+    private func providerObservabilityNeedBasedLoadUsesCacheUntilManualRefresh() async throws {
+        let fake = try FakeServiceScript()
+        defer { fake.cleanup() }
+        fake.activate(scenario: "prompt-ready")
+
+        let store = SkillStore(service: ServiceClient())
+        await store.reload()
+
+        try expectEqual(countMethodCalls("llm.providerObservability", in: fake.calls()), 0, "Startup/reload should not build provider observability automatically.")
+
+        await store.loadProviderObservabilityIfNeeded()
+
+        try expectEqual(countMethodCalls("llm.providerObservability", in: fake.calls()), 1, "Initial need-based observability load should call the local service.")
+        try expectEqual(store.providerObservabilityResult?.summary.callCount, 3, "Need-based observability load should keep the decoded dashboard.")
+
+        await store.loadProviderObservabilityIfNeeded()
+
+        try expectEqual(countMethodCalls("llm.providerObservability", in: fake.calls()), 1, "Need-based observability loading should reuse the cached dashboard.")
+
+        await store.loadProviderObservability()
+
+        try expectEqual(countMethodCalls("llm.providerObservability", in: fake.calls()), 2, "Manual observability refresh should force a fresh local service request.")
     }
 
     private func providerObservabilityFallsBackWhenMethodUnavailable() async throws {

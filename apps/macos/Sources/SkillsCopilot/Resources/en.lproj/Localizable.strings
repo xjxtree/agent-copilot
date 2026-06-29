@@ -452,6 +452,7 @@
 "providerObservability.settings.issuesOnly" = "Issues only";
 "providerObservability.empty.filteredCalls" = "No provider logs match the current filters.";
 "providerObservability.logs.count" = "%d of %d calls";
+"providerObservability.logs.moreRows" = "%d more rows available. Narrow filters or search to inspect them.";
 "providerObservability.calls" = "Calls";
 "providerObservability.successes" = "Succeeded";
 "providerObservability.failures" = "Failed";

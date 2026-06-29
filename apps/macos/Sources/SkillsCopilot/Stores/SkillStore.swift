@@ -452,6 +452,8 @@ final class SkillStore: ObservableObject {
     private var localSessionPreviewGeneration = 0
     private var loadedLocalSessionPreviewRequestKey: String?
     private var activeLocalSessionPreviewRequestKey: String?
+    private var hasLoadedAIProviderStatus = false
+    private var hasLoadedProviderObservability = false
     private var taskCockpitOperationID: UUID?
     private var taskCockpitTimeoutTask: Task<Void, Never>?
     private var taskCockpitServiceTask: Task<TaskCockpitResult, Error>?
@@ -3172,7 +3174,18 @@ final class SkillStore: ObservableObject {
         settingsErrorMessage = nil
     }
 
+    func loadAIProviderStatusIfNeeded() async {
+        guard !hasLoadedAIProviderStatus else { return }
+        await loadAIProviderStatus(force: false)
+    }
+
     func loadAIProviderStatus() async {
+        await loadAIProviderStatus(force: true)
+    }
+
+    private func loadAIProviderStatus(force: Bool) async {
+        guard !isLoadingAIProvider else { return }
+        guard force || !hasLoadedAIProviderStatus else { return }
         isLoadingAIProvider = true
         aiProviderErrorMessage = nil
         defer { isLoadingAIProvider = false }
@@ -3180,9 +3193,11 @@ final class SkillStore: ObservableObject {
         do {
             aiProviderStatus = try await service.aiProviderStatus()
             aiProviderTestResult = aiProviderStatus.lastTest
+            hasLoadedAIProviderStatus = true
         } catch {
             aiProviderStatus = .unavailable(reason: error.localizedDescription)
             aiProviderErrorMessage = error.localizedDescription
+            hasLoadedAIProviderStatus = true
         }
     }
 
@@ -3195,8 +3210,18 @@ final class SkillStore: ObservableObject {
         hydratePromptSendResultsFromRuns(currentSkillIDs: Set(skills.map(\.id)))
     }
 
+    func loadProviderObservabilityIfNeeded() async {
+        guard !hasLoadedProviderObservability else { return }
+        await loadProviderObservability(force: false)
+    }
+
     func loadProviderObservability() async {
+        await loadProviderObservability(force: true)
+    }
+
+    private func loadProviderObservability(force: Bool) async {
         guard !isLoadingProviderObservability else { return }
+        guard force || !hasLoadedProviderObservability else { return }
         guard !isRefreshBusy else {
             providerObservabilityResult = .unavailable(reason: UIStrings.operationUnavailableBusy)
             return
@@ -3214,8 +3239,10 @@ final class SkillStore: ObservableObject {
                 includeRetentionRecommendations: true,
                 includeEvidence: true
             )
+            hasLoadedProviderObservability = true
         } catch {
             providerObservabilityResult = .unavailable(reason: error.localizedDescription)
+            hasLoadedProviderObservability = true
         }
     }
 
@@ -3238,6 +3265,7 @@ final class SkillStore: ObservableObject {
         do {
             aiProviderStatus = try await service.saveAIProviderSettings(draft: draft)
             aiProviderTestResult = aiProviderStatus.lastTest
+            hasLoadedAIProviderStatus = true
             aiProviderMessage = UIStrings.aiProviderSaved
             return true
         } catch ServiceClient.ClientError.service(let error) where error.code == "unknown_method" {
@@ -3269,6 +3297,7 @@ final class SkillStore: ObservableObject {
             let result = try await service.testAIProviderConnection(draft: draft)
             if let refreshedStatus = try? await service.aiProviderStatus() {
                 aiProviderStatus = refreshedStatus
+                hasLoadedAIProviderStatus = true
             }
             aiProviderTestResult = result
             aiProviderMessage = result.success ? UIStrings.aiProviderTestSucceeded : nil
@@ -3428,6 +3457,7 @@ final class SkillStore: ObservableObject {
         self.status = snapshot.status
         self.llmStatus = try await llmStatus
         self.aiProviderStatus = await aiProviderStatus
+        self.hasLoadedAIProviderStatus = true
         self.aiProviderTestResult = self.aiProviderStatus.lastTest ?? aiProviderTestResult
         self.llmPromptRunList = await llmPromptRuns
         self.projectContextState = try await projectContextState

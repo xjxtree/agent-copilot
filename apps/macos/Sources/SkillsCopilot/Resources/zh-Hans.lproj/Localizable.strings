@@ -452,6 +452,7 @@
 "providerObservability.settings.issuesOnly" = "仅问题调用";
 "providerObservability.empty.filteredCalls" = "没有提供方日志匹配当前筛选。";
 "providerObservability.logs.count" = "%d / %d 条调用";
+"providerObservability.logs.moreRows" = "还有 %d 条记录未展示。缩小筛选或搜索后查看。";
 "providerObservability.calls" = "调用";
 "providerObservability.successes" = "成功";
 "providerObservability.failures" = "失败";

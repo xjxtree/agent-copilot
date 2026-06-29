@@ -848,6 +848,12 @@ const customChecks = [
   {
     label: "settings owns Provider Observability with dashboard-first logs",
     passed: /ProviderObservabilitySettingsPanel\(\)/.test(files.settings)
+      && /loadAIProviderStatusIfNeeded\(\)/.test(files.settings)
+      && !/store\.reload\(\)/.test(files.settings)
+      && /case \.providerObservability:\s*break/.test(files.settings)
+      && /func loadAIProviderStatusIfNeeded\(\) async/.test(files.store)
+      && /func loadProviderObservabilityIfNeeded\(\) async/.test(files.store)
+      && !/\.task\s*\{[\s\S]{0,240}?loadProviderObservability\(/.test(files.providerObservabilitySettings)
       && /case \.providerObservability:[\s\S]*?return UIStrings\.providerObservabilityTitle/.test(files.settings)
       && /case \.providerObservability:[\s\S]*?return "waveform\.path\.ecg\.rectangle"/.test(files.settings)
       && /selectedMode:\s*ProviderObservabilitySettingsMode\s*=\s*\.dashboard/.test(files.providerObservabilitySettings)
@@ -861,6 +867,9 @@ const customChecks = [
       && /searchText/.test(files.providerObservabilitySettings)
       && /result\.isDashboardEmpty/.test(files.providerObservabilitySettings)
       && /ProviderObservabilityEmptyDashboard/.test(files.providerObservabilitySettings)
+      && /renderedRowLimit\s*=\s*40/.test(files.providerObservabilitySettings)
+      && /let visibleRows = Array\(rows\.prefix\(Self\.renderedRowLimit\)\)/.test(files.providerObservabilitySettings)
+      && /providerObservability\.logs\.moreRows/.test(files.uiStrings + "\n" + files.localizable + "\n" + files.localizableZh)
       && /providerObservability\.empty\.dashboardTitle/.test(files.providerObservabilitySettings + "\n" + files.localizable),
   },
   {

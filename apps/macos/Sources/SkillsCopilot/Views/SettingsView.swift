@@ -103,19 +103,14 @@ struct SettingsView: View {
         )
         .background(SettingsWindowConfigurator())
         .task(id: selectedSettingsTab) {
-            if store.status == nil {
-                await store.reload()
-            }
             switch selectedSettingsTab {
             case .language, .service:
                 break
             case .provider:
-                await store.loadAIProviderStatus()
+                await store.loadAIProviderStatusIfNeeded()
                 resetProviderDraftFromStore()
             case .providerObservability:
-                if store.providerObservabilityResult == nil {
-                    await store.loadProviderObservability()
-                }
+                break
             }
         }
         .onChange(of: store.aiProviderStatus) { _ in

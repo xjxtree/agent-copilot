@@ -49,11 +49,6 @@ struct ProviderObservabilitySettingsPanel: View {
             Spacer(minLength: 0)
         }
         .padding(4)
-        .task {
-            if store.providerObservabilityResult == nil {
-                await store.loadProviderObservability()
-            }
-        }
     }
 
     private var header: some View {
@@ -216,6 +211,8 @@ private struct ProviderObservabilityEmptyDashboard: View {
 }
 
 private struct ProviderObservabilityLogSettingsView: View {
+    private static let renderedRowLimit = 40
+
     let result: ProviderObservabilityResult
     @Binding var statusFilter: String
     @Binding var providerFilter: String
@@ -237,17 +234,21 @@ private struct ProviderObservabilityLogSettingsView: View {
     }
 
     var body: some View {
+        let rows = filteredRows
+        let visibleRows = Array(rows.prefix(Self.renderedRowLimit))
+        let hiddenRowCount = max(0, rows.count - visibleRows.count)
+
         VStack(alignment: .leading, spacing: 12) {
             filterBar
 
             HStack {
-                Text(UIStrings.providerObservabilityLogCount(filteredRows.count, total: result.callRows.count))
+                Text(UIStrings.providerObservabilityLogCount(rows.count, total: result.callRows.count))
                     .font(.caption.bold())
                     .foregroundStyle(.secondary)
                 Spacer()
             }
 
-            if filteredRows.isEmpty {
+            if rows.isEmpty {
                 Text(UIStrings.providerObservabilityNoFilteredCalls)
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -256,8 +257,19 @@ private struct ProviderObservabilityLogSettingsView: View {
                     .background(.quaternary.opacity(0.22), in: RoundedRectangle(cornerRadius: 8))
             } else {
                 LazyVStack(alignment: .leading, spacing: 8) {
-                    ForEach(filteredRows) { row in
+                    ForEach(visibleRows) { row in
                         ProviderObservabilitySettingsCallRow(row: row)
+                    }
+                    if hiddenRowCount > 0 {
+                        Label(
+                            UIStrings.providerObservabilityMoreRows(hiddenRowCount),
+                            systemImage: "line.3.horizontal.decrease.circle"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.quaternary.opacity(0.22), in: RoundedRectangle(cornerRadius: 8))
                     }
                 }
             }

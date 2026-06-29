@@ -1625,6 +1625,10 @@ enum UIStrings {
         format("providerObservability.logs.count", "%d of %d calls", count, total)
     }
 
+    static func providerObservabilityMoreRows(_ count: Int) -> String {
+        format("providerObservability.logs.moreRows", "%d more rows available. Narrow filters or search to inspect them.", count)
+    }
+
     static func toggledSkill(on: Bool, name: String) -> String {
         format(on ? "message.enabledSkill" : "message.disabledSkill", on ? "Enabled %@." : "Disabled %@.", name)
     }
