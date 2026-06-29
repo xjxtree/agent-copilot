@@ -1830,9 +1830,21 @@ impl ServiceHost {
             path: &Path,
             placeholder: &'static str,
         ) {
-            roots.push((path.to_string_lossy().to_string(), placeholder));
+            fn push_root_text(
+                roots: &mut Vec<(String, &'static str)>,
+                value: String,
+                placeholder: &'static str,
+            ) {
+                roots.push((value.clone(), placeholder));
+                let normalized = normalized_redaction_path_text(&value);
+                if normalized != value {
+                    roots.push((normalized, placeholder));
+                }
+            }
+
+            push_root_text(roots, path.to_string_lossy().to_string(), placeholder);
             if let Ok(canonical) = path.canonicalize() {
-                roots.push((canonical.to_string_lossy().to_string(), placeholder));
+                push_root_text(roots, canonical.to_string_lossy().to_string(), placeholder);
             }
         }
 
@@ -2054,5 +2066,16 @@ impl ServiceHost {
                 .map(|root| root.path.clone()),
         );
         roots
+    }
+}
+
+fn normalized_redaction_path_text(value: &str) -> String {
+    let normalized = value.replace('\\', "/");
+    if let Some(rest) = normalized.strip_prefix("//?/UNC/") {
+        format!("//{rest}")
+    } else if let Some(rest) = normalized.strip_prefix("//?/") {
+        rest.to_string()
+    } else {
+        normalized
     }
 }

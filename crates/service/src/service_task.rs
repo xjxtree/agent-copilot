@@ -3560,10 +3560,14 @@ fn local_session_paths_match(project: &Path, session_path: &Path) -> bool {
 }
 
 fn local_session_normalized_path(path: &Path) -> String {
-    path.canonicalize()
+    let normalized = path
+        .canonicalize()
         .unwrap_or_else(|_| path.to_path_buf())
         .to_string_lossy()
-        .replace('\\', "/")
+        .replace('\\', "/");
+    normalized
+        .strip_prefix("//?/")
+        .unwrap_or(&normalized)
         .trim_end_matches('/')
         .to_string()
 }
