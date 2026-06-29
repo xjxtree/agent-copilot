@@ -19,7 +19,7 @@ struct ServiceClientProcessTests {
         fake.activate()
 
         let call = Task {
-            try await ServiceClient().status()
+            try await fake.serviceClient().status()
         }
 
         let pid = try await fake.waitForPID()
@@ -44,7 +44,7 @@ struct ServiceClientProcessTests {
         fake.activate()
 
         let call = Task {
-            try await ServiceClient().status()
+            try await fake.serviceClient().status()
         }
 
         let pid = try await fake.waitForPID()
@@ -69,9 +69,7 @@ struct ServiceClientProcessTests {
         fake.activate()
 
         let call = Task {
-            try await ServiceClient(
-                processRunner: StdioServiceProcessRunner(timeoutNanoseconds: 1_000_000_000)
-            ).status()
+            try await fake.serviceClient(timeoutNanoseconds: 1_000_000_000).status()
         }
 
         let pid = try await fake.waitForPID()
@@ -94,7 +92,7 @@ struct ServiceClientProcessTests {
         fake.activate()
 
         do {
-            _ = try await ServiceClient().status()
+            _ = try await fake.serviceClient().status()
             throw NativeModelTestFailure(description: "Malformed service output should fail.")
         } catch ServiceClient.ClientError.invalidOutput(let output) {
             try expectContains(output, "decode failed", "Malformed output should include decode context.")
@@ -108,7 +106,7 @@ struct ServiceClientProcessTests {
         fake.activate()
 
         do {
-            _ = try await ServiceClient().status()
+            _ = try await fake.serviceClient().status()
             throw NativeModelTestFailure(description: "Empty service output should fail.")
         } catch ServiceClient.ClientError.invalidOutput(let output) {
             try expectContains(output, "decode failed", "Empty output should include decode context.")
@@ -121,7 +119,7 @@ struct ServiceClientProcessTests {
         fake.activate()
 
         do {
-            _ = try await ServiceClient().status()
+            _ = try await fake.serviceClient().status()
             throw NativeModelTestFailure(description: "Truncated service output should fail.")
         } catch ServiceClient.ClientError.invalidOutput(let output) {
             try expectContains(output, "decode failed", "Truncated output should include decode context.")
@@ -136,7 +134,7 @@ struct ServiceClientProcessTests {
         fake.activate()
 
         do {
-            _ = try await ServiceClient().status()
+            _ = try await fake.serviceClient().status()
             throw NativeModelTestFailure(description: "Nonzero service exit should fail.")
         } catch ServiceClient.ClientError.processFailed(let status, let stderr) {
             try expectEqual(status, 7, "Process failure should preserve exit status.")
@@ -181,14 +179,20 @@ private final class StaticServiceScript {
     }
 
     func activate() {
-        setenv("SKILLS_COPILOT_SERVICE_PATH", executableURL.path, 1)
-        setenv("SKILLS_COPILOT_STATIC_SERVICE_MODE", mode, 1)
+        // Kept for test readability; ServiceClient injection carries the fake sidecar state.
     }
 
     func cleanup() {
-        unsetenv("SKILLS_COPILOT_SERVICE_PATH")
-        unsetenv("SKILLS_COPILOT_STATIC_SERVICE_MODE")
         try? FileManager.default.removeItem(at: directory)
+    }
+
+    func serviceClient() -> ServiceClient {
+        ServiceClient(
+            processRunner: StdioServiceProcessRunner(
+                environmentOverrides: ["SKILLS_COPILOT_STATIC_SERVICE_MODE": mode]
+            ),
+            serviceURL: executableURL
+        )
     }
 
     private var script: String {
@@ -244,21 +248,28 @@ private final class CancellableServiceScript {
     }
 
     func activate() {
-        setenv("SKILLS_COPILOT_SERVICE_PATH", executableURL.path, 1)
-        setenv("SKILLS_COPILOT_CANCELLABLE_SERVICE_CALLS", callsURL.path, 1)
-        setenv("SKILLS_COPILOT_CANCELLABLE_SERVICE_PID", pidURL.path, 1)
-        setenv("SKILLS_COPILOT_CANCELLABLE_SERVICE_IGNORE_TERM", ignoresTermination ? "1" : "0", 1)
+        // Kept for test readability; ServiceClient injection carries the fake sidecar state.
     }
 
     func cleanup() {
         if let pid = try? currentPID(), kill(pid, 0) == 0 {
             kill(pid, SIGKILL)
         }
-        unsetenv("SKILLS_COPILOT_SERVICE_PATH")
-        unsetenv("SKILLS_COPILOT_CANCELLABLE_SERVICE_CALLS")
-        unsetenv("SKILLS_COPILOT_CANCELLABLE_SERVICE_PID")
-        unsetenv("SKILLS_COPILOT_CANCELLABLE_SERVICE_IGNORE_TERM")
         try? FileManager.default.removeItem(at: directory)
+    }
+
+    func serviceClient(timeoutNanoseconds: UInt64 = 30_000_000_000) -> ServiceClient {
+        ServiceClient(
+            processRunner: StdioServiceProcessRunner(
+                timeoutNanoseconds: timeoutNanoseconds,
+                environmentOverrides: [
+                    "SKILLS_COPILOT_CANCELLABLE_SERVICE_CALLS": callsURL.path,
+                    "SKILLS_COPILOT_CANCELLABLE_SERVICE_PID": pidURL.path,
+                    "SKILLS_COPILOT_CANCELLABLE_SERVICE_IGNORE_TERM": ignoresTermination ? "1" : "0"
+                ]
+            ),
+            serviceURL: executableURL
+        )
     }
 
     func calls() -> String {

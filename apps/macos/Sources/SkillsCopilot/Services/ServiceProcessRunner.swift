@@ -7,13 +7,22 @@ protocol ServiceProcessRunning {
 
 final class StdioServiceProcessRunner: ServiceProcessRunning {
     private let timeoutNanoseconds: UInt64
+    private let environmentOverrides: [String: String]
 
-    init(timeoutNanoseconds: UInt64 = StdioServiceProcessRunner.configuredTimeoutNanoseconds()) {
+    init(
+        timeoutNanoseconds: UInt64 = StdioServiceProcessRunner.configuredTimeoutNanoseconds(),
+        environmentOverrides: [String: String] = [:]
+    ) {
         self.timeoutNanoseconds = timeoutNanoseconds
+        self.environmentOverrides = environmentOverrides
     }
 
     func run(executableURL: URL, input: Data, timeoutNanoseconds overrideTimeoutNanoseconds: UInt64? = nil) async throws -> Data {
-        let invocation = StdioServiceProcessInvocation(executableURL: executableURL, input: input)
+        let invocation = StdioServiceProcessInvocation(
+            executableURL: executableURL,
+            input: input,
+            environmentOverrides: environmentOverrides
+        )
         let coordinator = StdioServiceProcessRunCoordinator(invocation: invocation)
         let effectiveTimeoutNanoseconds = overrideTimeoutNanoseconds ?? timeoutNanoseconds
 
@@ -116,6 +125,7 @@ private final class StdioServiceProcessRunCoordinator {
 private final class StdioServiceProcessInvocation {
     private let executableURL: URL
     private let input: Data
+    private let environmentOverrides: [String: String]
     private let lock = NSLock()
 
     private var process: Process?
@@ -126,9 +136,10 @@ private final class StdioServiceProcessInvocation {
     private var terminationRequested = false
     private var cleanedUp = false
 
-    init(executableURL: URL, input: Data) {
+    init(executableURL: URL, input: Data, environmentOverrides: [String: String]) {
         self.executableURL = executableURL
         self.input = input
+        self.environmentOverrides = environmentOverrides
     }
 
     func run() throws -> Data {
@@ -136,6 +147,13 @@ private final class StdioServiceProcessInvocation {
 
         let process = Process()
         process.executableURL = executableURL
+        if !environmentOverrides.isEmpty {
+            var environment = ProcessInfo.processInfo.environment
+            environmentOverrides.forEach { key, value in
+                environment[key] = value
+            }
+            process.environment = environment
+        }
 
         let stdin = Pipe()
         let stdout = Pipe()

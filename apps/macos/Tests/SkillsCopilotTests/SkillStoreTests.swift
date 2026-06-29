@@ -376,7 +376,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "sessions")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.sidebarContentMode = .sessions
         await store.previewLocalSessions()
 
@@ -408,7 +408,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "sessions")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         await store.refreshSelectedAgentLocalSessionsIfNeeded()
 
         try expectEqual(
@@ -439,7 +439,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "sessions-mixed")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.sidebarContentMode = .sessions
         await store.previewLocalSessions()
         guard let globalSession = store.localSessionPreviewResult.sessionRows.first(where: { $0.id == "session-global" }) else {
@@ -482,7 +482,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "sessions-all-scope-project-root")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.setProjectContextForTesting(Self.fixtureProjectContextState)
         store.sidebarContentMode = .sessions
 
@@ -531,7 +531,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "sessions-mixed")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.sidebarContentMode = .sessions
         await store.previewLocalSessions()
         let callsBeforeSortChange = countMethodCalls("session.previewLocalSessions", in: fake.calls())
@@ -556,7 +556,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "batch-mixed")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
 
@@ -572,7 +572,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "batch-mixed")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "missing"
         await store.reload()
 
@@ -586,7 +586,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "empty")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "missing"
         await store.reload()
 
@@ -605,7 +605,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "error")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         await store.reload()
 
         try expectFalse(store.isLoading, "Failed reload should reset loading state.")
@@ -619,7 +619,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "normal")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         await store.reload()
 
         let calls = fake.calls()
@@ -639,7 +639,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "sessions")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         try expectFalse(store.hasCompletedStartupLoad, "Startup should begin behind the progress overlay.")
         try expectFalse(store.startupLoadingState == nil, "Startup should expose an initial progress state.")
 
@@ -679,7 +679,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "stale-before")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
 
@@ -730,7 +730,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "detail-scope")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
 
@@ -756,7 +756,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "normal")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         await store.scanAll()
 
         try expectFalse(store.isScanning, "Scan should reset scanning state.")
@@ -782,7 +782,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "toggle-disabled")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "gamma"
         await store.reload()
 
@@ -807,7 +807,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "scan-slow")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         let task = Task {
             await store.scanAll()
         }
@@ -832,7 +832,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "timeline")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
 
@@ -866,7 +866,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "timeline")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         await store.reload()
 
         let preview = try await store.previewRollback(snapshotID: "snap-claude-new")
@@ -885,7 +885,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "agent-config")
 
-        let prewarmedStore = SkillStore(service: ServiceClient())
+        let prewarmedStore = SkillStore(service: fake.serviceClient())
         await prewarmedStore.loadCurrentAgentConfigDocuments(agent: "claude-code")
         guard let prewarmedProjectClaudeDocument = prewarmedStore.currentAgentConfigDocuments.first(where: { $0.scope == "agent-project" }) else {
             throw NativeModelTestFailure(description: "Prewarmed Claude config preview should include the selected project's current settings file.")
@@ -901,7 +901,7 @@ struct SkillStoreTests {
             "Entering config mode after startup prewarm should select the first visible current config document."
         )
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         await store.reload()
 
         store.sidebarContentMode = .config
@@ -1008,7 +1008,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "agent-config")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         await store.loadCurrentAgentConfigDocumentsIfNeeded(agent: "claude-code")
         await store.loadAgentConfigSnapshotsIfNeeded(agent: "claude-code")
 
@@ -1062,7 +1062,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "normal")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         let saved = await store.saveClaudeSettings(content: "{")
 
         try expectFalse(saved, "Unsupported fake settings save should fail in this scenario.")
@@ -1079,7 +1079,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "timeline")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         await store.reload()
 
         await store.rollbackSnapshot(snapshotID: "snap-codex")
@@ -1093,7 +1093,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "normal")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
 
@@ -1110,7 +1110,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "normal")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.agentFilter = .all
         await store.reload()
 
@@ -1122,7 +1122,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "normal")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
 
@@ -1149,7 +1149,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "normal")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
 
@@ -1172,7 +1172,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "normal")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.agentFilter = .codex
         store.selectedSkillID = "gamma"
         await store.reload()
@@ -1198,7 +1198,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "opencode")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.agentFilter = .opencode
         store.selectedSkillID = "omega"
         await store.reload()
@@ -1226,7 +1226,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "tool-global")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.agentFilter = .all
         store.selectedSkillID = "tool-alpha"
         await store.reload()
@@ -1254,7 +1254,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "batch-mixed")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.agentFilter = .all
         store.batchToggleAction = .disable
         await store.reload()
@@ -1280,7 +1280,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "batch-mixed")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.agentFilter = .all
         store.batchToggleAction = .disable
         await store.reload()
@@ -1311,7 +1311,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "batch-mixed")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.agentFilter = .all
         store.batchToggleAction = .disable
         await store.reload()
@@ -1332,7 +1332,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "batch-mixed")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.agentFilter = .all
         store.batchToggleAction = .disable
         await store.reload()
@@ -1356,7 +1356,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "report-export")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.agentFilter = .all
         store.localReportFormat = .json
         await store.reload()
@@ -1385,7 +1385,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "report-export")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.agentFilter = .claudeCode
         store.localReportFormat = .json
         await store.reload()
@@ -1410,7 +1410,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "report-export")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.agentFilter = .claudeCode
         await store.reload()
         await store.exportLocalReport(includeSelectedSkill: false)
@@ -1429,7 +1429,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "normal")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.localReportFormat = .markdown
         await store.reload()
         await store.exportLocalReport()
@@ -1449,7 +1449,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "project-set")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         await store.reload()
 
         try expectEqual(store.activeProjectContext?.name, "Fixture Project", "Reload should load active project context.")
@@ -1463,7 +1463,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "project-set")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         await store.setProject(rootPath: "/tmp/project", currentCWD: "/tmp/project", name: "Fixture Project")
 
         try expectFalse(store.isProjectUpdating, "Project set should reset updating state.")
@@ -1480,7 +1480,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "project-clear")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         await store.clearProject()
 
         try expectFalse(store.isProjectUpdating, "Project clear should reset updating state.")
@@ -1497,7 +1497,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "project-validation-error")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         await store.setProject(rootPath: "/tmp/missing", currentCWD: "/tmp/missing", name: "Missing Project")
 
         try expectFalse(store.isProjectUpdating, "Invalid project set should reset updating state.")
@@ -1512,7 +1512,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "old-service")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         await store.reload()
 
         try expectNil(store.errorMessage, "Old service LLM fallback should not fail reload.")
@@ -1526,7 +1526,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "llm-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         await store.prepareAnalyzeLLM()
@@ -1553,7 +1553,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "llm-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         await store.prepareSelectedSkillAnalysis(kind: .risk)
@@ -1585,7 +1585,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "old-service")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         await store.prepareSelectedSkillAnalysis(kind: .cleanup)
@@ -1601,7 +1601,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         await store.scoreSelectedSkillQuality()
@@ -1644,7 +1644,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         store.taskReadinessText = "Audit local skills for a release note."
         await store.reload()
@@ -1691,7 +1691,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "llm-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         store.taskReadinessText = "Audit local skills for a release note."
         await store.reload()
@@ -1722,7 +1722,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         store.routingConfidenceText = "Route a local audit release note task."
         await store.reload()
@@ -1780,7 +1780,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "llm-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         store.routingConfidenceText = "Route a local audit release note task."
         await store.reload()
@@ -1811,7 +1811,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         store.routingConfidenceText = "Route a local audit release note task."
         await store.reload()
@@ -1851,7 +1851,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "old-service")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         store.taskBenchmarkText = "Route a local audit release note task."
         await store.reload()
@@ -1878,7 +1878,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         await store.loadTaskBenchmarks()
@@ -1917,7 +1917,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "old-service")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         let snapshotCallsBeforeRegression = countOccurrences("snapshot.", in: fake.calls())
@@ -1944,7 +1944,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         store.traceImportTitle = "Local trace"
         store.traceImportTask = "Route a local audit release note task."
@@ -1991,7 +1991,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "old-service")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         store.traceImportText = "raw local transcript"
         await store.reload()
@@ -2017,7 +2017,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         let snapshotCallsBeforeDashboard = countOccurrences("snapshot.", in: fake.calls())
@@ -2063,7 +2063,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         let snapshotCallsBeforeDetect = countOccurrences("snapshot.", in: fake.calls())
@@ -2112,7 +2112,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         store.knowledgeSearchText = "release audit"
         await store.reload()
@@ -2161,7 +2161,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         let snapshotCallsBeforeMap = countOccurrences("snapshot.", in: fake.calls())
@@ -2220,7 +2220,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "normal")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         await store.buildLocalSkillMap()
@@ -2236,7 +2236,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         let snapshotCallsBeforeTimeline = countOccurrences("snapshot.", in: fake.calls())
@@ -2301,7 +2301,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "normal")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         await store.loadSkillLifecycleTimeline()
@@ -2321,7 +2321,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         let snapshotCallsBeforeObservability = countOccurrences("snapshot.", in: fake.calls())
@@ -2385,7 +2385,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         await store.reload()
 
         try expectEqual(countMethodCalls("llm.providerObservability", in: fake.calls()), 0, "Startup/reload should not build provider observability automatically.")
@@ -2409,7 +2409,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "normal")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         await store.loadProviderObservability()
@@ -2427,7 +2427,7 @@ struct SkillStoreTests {
 
         let historyStore = makeTemporaryTaskCockpitHistoryStore()
         defer { cleanupTaskCockpitHistoryStore(historyStore) }
-        let store = SkillStore(service: ServiceClient(), taskCockpitHistoryStore: historyStore)
+        let store = SkillStore(service: fake.serviceClient(), taskCockpitHistoryStore: historyStore)
         store.selectedSkillID = "beta"
         store.taskCockpitText = "Prepare local release audit work."
         await store.reload()
@@ -2485,7 +2485,7 @@ struct SkillStoreTests {
 
         let historyStore = makeTemporaryTaskCockpitHistoryStore()
         defer { cleanupTaskCockpitHistoryStore(historyStore) }
-        let store = SkillStore(service: ServiceClient(), taskCockpitHistoryStore: historyStore)
+        let store = SkillStore(service: fake.serviceClient(), taskCockpitHistoryStore: historyStore)
         store.agentFilter = .claudeCode
         store.taskCockpitText = "查看阿里云 ALB 报警历史"
         await store.reload()
@@ -2512,7 +2512,7 @@ struct SkillStoreTests {
         let historyStore = makeTemporaryTaskCockpitHistoryStore()
         defer { cleanupTaskCockpitHistoryStore(historyStore) }
         let task = "阿里云 ECS 磁盘负载情况分析"
-        let firstStore = SkillStore(service: ServiceClient(), taskCockpitHistoryStore: historyStore)
+        let firstStore = SkillStore(service: fake.serviceClient(), taskCockpitHistoryStore: historyStore)
         firstStore.taskCockpitText = task
         await firstStore.reload()
         await firstStore.buildTaskCockpit()
@@ -2526,7 +2526,7 @@ struct SkillStoreTests {
         try expectFalse(persisted.contains("prompt_request"), "Persisted history must not keep provider prompt request metadata.")
         try expectFalse(persisted.contains("task_cockpit"), "Persisted history must not keep raw prompt request kind metadata.")
 
-        let secondStore = SkillStore(service: ServiceClient(), taskCockpitHistoryStore: historyStore)
+        let secondStore = SkillStore(service: fake.serviceClient(), taskCockpitHistoryStore: historyStore)
         try expectEqual(secondStore.taskCockpitHistory.count, 1, "A new store should load persisted Preflight history.")
         try expectEqual(secondStore.taskCockpitHistory.first?.displayTask, task, "Reloaded history should show the original task.")
         try expectEqual(secondStore.taskCockpitHistory.first?.result.summary.recommendedSkillName, "Beta", "Reloaded history should retain the recommendation summary.")
@@ -2540,7 +2540,7 @@ struct SkillStoreTests {
         let exactTask = "  修复 Task Cockpit 🧪\n第二行\t带制表  "
         let historyStore = makeTemporaryTaskCockpitHistoryStore()
         defer { cleanupTaskCockpitHistoryStore(historyStore) }
-        let store = SkillStore(service: ServiceClient(), taskCockpitHistoryStore: historyStore)
+        let store = SkillStore(service: fake.serviceClient(), taskCockpitHistoryStore: historyStore)
         store.selectedSkillID = "beta"
         store.taskCockpitText = exactTask
         await store.reload()
@@ -2566,7 +2566,7 @@ struct SkillStoreTests {
 
         let historyStore = makeTemporaryTaskCockpitHistoryStore()
         defer { cleanupTaskCockpitHistoryStore(historyStore) }
-        let store = SkillStore(service: ServiceClient(), taskCockpitHistoryStore: historyStore)
+        let store = SkillStore(service: fake.serviceClient(), taskCockpitHistoryStore: historyStore)
         store.selectedSkillID = "beta"
         store.routingConfidenceText = "Route a local audit release note task."
         store.taskCockpitText = " \n\t "
@@ -2591,7 +2591,7 @@ struct SkillStoreTests {
 
         let historyStore = makeTemporaryTaskCockpitHistoryStore()
         defer { cleanupTaskCockpitHistoryStore(historyStore) }
-        let store = SkillStore(service: ServiceClient(), taskCockpitHistoryStore: historyStore)
+        let store = SkillStore(service: fake.serviceClient(), taskCockpitHistoryStore: historyStore)
         store.selectedSkillID = "beta"
         store.routingConfidenceText = "Route a local audit release note task."
         await store.reload()
@@ -2615,7 +2615,7 @@ struct SkillStoreTests {
 
         let historyStore = makeTemporaryTaskCockpitHistoryStore()
         defer { cleanupTaskCockpitHistoryStore(historyStore) }
-        let store = SkillStore(service: ServiceClient(), taskCockpitTimeoutSeconds: 0.5, taskCockpitHistoryStore: historyStore)
+        let store = SkillStore(service: fake.serviceClient(), taskCockpitTimeoutSeconds: 0.5, taskCockpitHistoryStore: historyStore)
         store.selectedSkillID = "beta"
         store.taskCockpitText = "Prepare local release audit work."
         await store.reload()
@@ -2654,7 +2654,7 @@ struct SkillStoreTests {
 
         let historyStore = makeTemporaryTaskCockpitHistoryStore()
         defer { cleanupTaskCockpitHistoryStore(historyStore) }
-        let store = SkillStore(service: ServiceClient(), taskCockpitTimeoutSeconds: 1, taskCockpitHistoryStore: historyStore)
+        let store = SkillStore(service: fake.serviceClient(), taskCockpitTimeoutSeconds: 1, taskCockpitHistoryStore: historyStore)
         store.selectedSkillID = "beta"
         store.taskCockpitText = "Prepare local release audit work."
         await store.reload()
@@ -2692,7 +2692,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         let snapshotCallsBeforeGrouping = countOccurrences("snapshot.", in: fake.calls())
@@ -2742,7 +2742,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "normal")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         await store.groupSimilarSkills()
@@ -2758,7 +2758,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         let snapshotCallsBeforeBuild = countOccurrences("snapshot.", in: fake.calls())
@@ -2808,7 +2808,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "normal")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         await store.buildCapabilityTaxonomy()
@@ -2824,7 +2824,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         store.routingConfidenceText = "Prepare local release audit work."
         await store.reload()
@@ -2877,7 +2877,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "normal")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         await store.checkWorkspaceReadiness()
@@ -2893,7 +2893,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         store.routingConfidenceText = "Prepare local release audit work."
         await store.reload()
@@ -2946,7 +2946,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "normal")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         await store.planRemediation()
@@ -2962,7 +2962,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         store.routingConfidenceText = "Prepare local release audit work."
         await store.reload()
@@ -3019,7 +3019,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "normal")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         await store.previewRemediationDrafts()
@@ -3035,7 +3035,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         store.routingConfidenceText = "Prepare local release audit work."
         await store.reload()
@@ -3099,7 +3099,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "normal")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         await store.previewRemediationImpact()
@@ -3115,7 +3115,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         store.routingConfidenceText = "Prepare local release audit work."
         await store.reload()
@@ -3187,7 +3187,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "normal")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         await store.reviewRemediationBatch()
@@ -3203,7 +3203,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         store.routingConfidenceText = "Prepare local release audit work."
         await store.reload()
@@ -3271,7 +3271,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "normal")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         await store.loadRemediationHistory()
@@ -3292,7 +3292,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         store.routingConfidenceText = "Prepare local release audit work."
         await store.reload()
@@ -3383,7 +3383,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "normal")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         await store.planGuidedCleanupFlow()
@@ -3407,7 +3407,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         store.routingConfidenceText = "Route a local audit release note task."
         await store.reload()
@@ -3469,7 +3469,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         store.routingConfidenceText = "Route a local audit release note task."
         await store.reload()
@@ -3498,7 +3498,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "llm-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         await store.prepareAnalyzeLLM()
@@ -3528,7 +3528,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         await store.prepareAnalyzeLLM()
@@ -3560,7 +3560,7 @@ struct SkillStoreTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "script-preview")
 
-        let store = SkillStore(service: ServiceClient())
+        let store = SkillStore(service: fake.serviceClient())
         store.selectedSkillID = "beta"
         await store.reload()
         guard let skill = store.selectedSkill else {

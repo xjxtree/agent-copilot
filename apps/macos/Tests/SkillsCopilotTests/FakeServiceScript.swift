@@ -1,9 +1,11 @@
 import Foundation
 
-final class FakeServiceScript {
+final class FakeServiceScript: ServiceProcessRunning {
     private let directory: URL
     let executableURL: URL
     private let callsURL: URL
+    private let scenarioLock = NSLock()
+    private var currentScenario = "normal"
 
     init() throws {
         directory = URL(fileURLWithPath: NSTemporaryDirectory())
@@ -20,24 +22,46 @@ final class FakeServiceScript {
     }
 
     func activate(scenario: String) {
-        setenv("SKILLS_COPILOT_SERVICE_PATH", executableURL.path, 1)
-        setenv("SKILLS_COPILOT_FAKE_SERVICE_CALLS", callsURL.path, 1)
         setScenario(scenario)
     }
 
     func setScenario(_ scenario: String) {
-        setenv("SKILLS_COPILOT_FAKE_SERVICE_SCENARIO", scenario, 1)
+        scenarioLock.lock()
+        currentScenario = scenario
+        scenarioLock.unlock()
     }
 
     func cleanup() {
-        unsetenv("SKILLS_COPILOT_SERVICE_PATH")
-        unsetenv("SKILLS_COPILOT_FAKE_SERVICE_SCENARIO")
-        unsetenv("SKILLS_COPILOT_FAKE_SERVICE_CALLS")
         try? FileManager.default.removeItem(at: directory)
+    }
+
+    func serviceClient() -> ServiceClient {
+        ServiceClient(processRunner: self, serviceURL: executableURL)
+    }
+
+    func run(executableURL: URL, input: Data, timeoutNanoseconds: UInt64?) async throws -> Data {
+        let runner = StdioServiceProcessRunner(
+            environmentOverrides: [
+                "SKILLS_COPILOT_FAKE_SERVICE_SCENARIO": scenario,
+                "SKILLS_COPILOT_FAKE_SERVICE_CALLS": callsURL.path
+            ]
+        )
+        return try await runner.run(
+            executableURL: self.executableURL,
+            input: input,
+            timeoutNanoseconds: timeoutNanoseconds
+        )
     }
 
     func calls() -> String {
         (try? String(contentsOf: callsURL, encoding: .utf8)) ?? ""
+    }
+
+    private var scenario: String {
+        scenarioLock.lock()
+        let value = currentScenario
+        scenarioLock.unlock()
+        return value
     }
 
     private var script: String {

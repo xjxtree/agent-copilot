@@ -7,7 +7,7 @@ struct ServiceClientRPCTests {
         defer { fake.cleanup() }
         fake.activate(scenario: "prompt-ready")
 
-        let client = ServiceClient()
+        let client = fake.serviceClient()
 
         let findings = try await client.listFindings()
         try expectEqual(findings.count, 0, "Catalog/config RPC wrapper should decode listFindings.")
@@ -52,7 +52,7 @@ struct ServiceClientRPCTests {
 
     private func taskCockpitProviderCallsUseFiveMinuteSidecarTimeout() async throws {
         let runner = RecordingServiceProcessRunner()
-        let client = ServiceClient(processRunner: runner)
+        let client = ServiceClient(processRunner: runner, serviceURL: URL(fileURLWithPath: "/tmp/fake-service"))
 
         _ = try await client.previewPromptForTaskCockpit(
             taskText: "查看下阿里云 ALB 指标与错误情况",
