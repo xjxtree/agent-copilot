@@ -267,6 +267,8 @@ private final class StdioServiceProcessInvocation {
         if shouldTerminate {
             terminationRequested = true
         }
+        let stdinWriter = stdinWriter
+        self.stdinWriter = nil
         let snapshot = ProcessSnapshot(
             process: process,
             stdinWriter: stdinWriter,
