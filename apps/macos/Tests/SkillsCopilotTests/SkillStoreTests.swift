@@ -483,7 +483,7 @@ struct SkillStoreTests {
         fake.activate(scenario: "sessions-all-scope-project-root")
 
         let store = SkillStore(service: ServiceClient())
-        await store.setProject(rootPath: "/tmp/project", currentCWD: "/tmp/project", name: "Fixture Project")
+        store.setProjectContextForTesting(Self.fixtureProjectContextState)
         store.sidebarContentMode = .sessions
 
         await store.previewLocalSessions()
@@ -510,6 +510,21 @@ struct SkillStoreTests {
             "All scope should still reveal global rows from the same cache."
         )
     }
+
+    private static let fixtureProjectContext = ProjectContext(
+        id: "project-1",
+        name: "Fixture Project",
+        rootPath: "/tmp/project",
+        currentCWD: "/tmp/project",
+        lastUsedAt: "2026-06-08T00:00:00Z",
+        isActive: true,
+        validationError: nil
+    )
+
+    private static let fixtureProjectContextState = ProjectContextState(
+        active: fixtureProjectContext,
+        recent: [fixtureProjectContext]
+    )
 
     private func localSessionSortChangesVisibleRowsWithoutRefresh() async throws {
         let fake = try FakeServiceScript()

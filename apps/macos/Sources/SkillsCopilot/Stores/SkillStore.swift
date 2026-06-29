@@ -4433,6 +4433,14 @@ final class SkillStore: ObservableObject {
 
 }
 
+#if DEBUG
+extension SkillStore {
+    func setProjectContextForTesting(_ state: ProjectContextState?) {
+        projectContextState = state
+    }
+}
+#endif
+
 private enum RefreshAction {
     case reload
     case scan
