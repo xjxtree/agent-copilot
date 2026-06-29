@@ -3657,26 +3657,34 @@ fn skill_install_root(
     project_path: Option<&Path>,
 ) -> Result<PathBuf, CommandError> {
     match (agent, scope) {
-        (AgentId::ClaudeCode, Scope::AgentGlobal) => Ok(ctx.user_home.join(".claude/skills")),
-        (AgentId::ClaudeCode, Scope::AgentProject) => {
-            Ok(target_project_root(ctx, project_path)?.join(".claude/skills"))
+        (AgentId::ClaudeCode, Scope::AgentGlobal) => {
+            Ok(ctx.user_home.join(".claude").join("skills"))
         }
-        (AgentId::Codex, Scope::AgentGlobal) => Ok(ctx.user_home.join(".agents/skills")),
-        (AgentId::Codex, Scope::AgentProject) => {
-            Ok(target_project_root(ctx, project_path)?.join(".agents/skills"))
+        (AgentId::ClaudeCode, Scope::AgentProject) => Ok(target_project_root(ctx, project_path)?
+            .join(".claude")
+            .join("skills")),
+        (AgentId::Codex, Scope::AgentGlobal) => Ok(ctx.user_home.join(".agents").join("skills")),
+        (AgentId::Codex, Scope::AgentProject) => Ok(target_project_root(ctx, project_path)?
+            .join(".agents")
+            .join("skills")),
+        (AgentId::Opencode, Scope::AgentGlobal) => Ok(ctx
+            .user_home
+            .join(".config")
+            .join("opencode")
+            .join("skills")),
+        (AgentId::Opencode, Scope::AgentProject) => Ok(target_project_root(ctx, project_path)?
+            .join(".opencode")
+            .join("skills")),
+        (AgentId::Pi, Scope::AgentGlobal) => {
+            Ok(ctx.user_home.join(".pi").join("agent").join("skills"))
         }
-        (AgentId::Opencode, Scope::AgentGlobal) => {
-            Ok(ctx.user_home.join(".config/opencode/skills"))
+        (AgentId::Pi, Scope::AgentProject) => Ok(target_project_root(ctx, project_path)?
+            .join(".pi")
+            .join("skills")),
+        (AgentId::Hermes, Scope::AgentGlobal) => Ok(ctx.user_home.join(".hermes").join("skills")),
+        (AgentId::Openclaw, Scope::AgentGlobal) => {
+            Ok(ctx.user_home.join(".openclaw").join("skills"))
         }
-        (AgentId::Opencode, Scope::AgentProject) => {
-            Ok(target_project_root(ctx, project_path)?.join(".opencode/skills"))
-        }
-        (AgentId::Pi, Scope::AgentGlobal) => Ok(ctx.user_home.join(".pi/agent/skills")),
-        (AgentId::Pi, Scope::AgentProject) => {
-            Ok(target_project_root(ctx, project_path)?.join(".pi/skills"))
-        }
-        (AgentId::Hermes, Scope::AgentGlobal) => Ok(ctx.user_home.join(".hermes/skills")),
-        (AgentId::Openclaw, Scope::AgentGlobal) => Ok(ctx.user_home.join(".openclaw/skills")),
         (AgentId::Openclaw, Scope::AgentProject) => {
             Ok(openclaw_install_workspace_root(ctx, project_path)?.join("skills"))
         }

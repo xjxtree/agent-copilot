@@ -544,12 +544,15 @@ fn scan_all_includes_opencode_configured_local_paths_and_preserves_config_on_tog
     )
     .expect("write configured opencode skill");
     let config_path = home.join(".config/opencode/opencode.json");
+    let config = serde_json::json!({
+        "skills": {
+            "paths": [path_text(&configured_root)],
+            "urls": ["https://example.invalid/skills/"]
+        }
+    });
     std::fs::write(
         &config_path,
-        format!(
-            "{{\"skills\":{{\"paths\":[\"{}\"],\"urls\":[\"https://example.invalid/skills/\"]}}}}\n",
-            configured_root.to_string_lossy()
-        ),
+        serde_json::to_string(&config).expect("serialize opencode config"),
     )
     .expect("write opencode config");
 
@@ -590,10 +593,7 @@ fn scan_all_includes_opencode_configured_local_paths_and_preserves_config_on_tog
     let config: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&config_path).expect("opencode config"))
             .expect("config json");
-    assert_eq!(
-        config["skills"]["paths"][0],
-        configured_root.to_string_lossy().to_string()
-    );
+    assert_eq!(config["skills"]["paths"][0], path_text(&configured_root));
     assert_eq!(config["permission"]["skill"]["custom-review"], "deny");
 
     let _ = std::fs::remove_dir_all(&temp_root);
@@ -1953,7 +1953,7 @@ fn toggle_codex_project_skill_writes_only_user_config_toml() {
     assert!(content.contains("[[skills.config]]"));
     assert!(content.contains("enabled = false"));
     assert!(
-        content.contains(&skill_path.to_string_lossy().to_string()),
+        codex_config_contains_path(&content, &skill_path, false),
         "Codex toggle should write the absolute SKILL.md path"
     );
     assert_eq!(
@@ -1973,7 +1973,7 @@ fn toggle_codex_project_skill_writes_only_user_config_toml() {
     assert!(enabled.enabled);
     let content = std::fs::read_to_string(&user_config).expect("read codex config");
     assert!(
-        !content.contains(&skill_path.to_string_lossy().to_string()),
+        !codex_config_contains_path(&content, &skill_path, false),
         "re-enabling removes matching Codex config entries"
     );
     assert_eq!(
@@ -2171,9 +2171,9 @@ fn codex_expanded_roots_are_read_only_except_native_agents_roots() {
         toggle_skill(&catalog, &ctx, &native_record.id, false).expect("native toggle succeeds");
     assert!(!disabled.enabled);
     let content = std::fs::read_to_string(&config_path).expect("read codex config");
-    assert!(content.contains(&native_path.to_string_lossy().to_string()));
-    assert!(!content.contains(&compat_path.to_string_lossy().to_string()));
-    assert!(!content.contains(&plugin_path.to_string_lossy().to_string()));
+    assert!(codex_config_contains_path(&content, &native_path, false));
+    assert!(!codex_config_contains_path(&content, &compat_path, false));
+    assert!(!codex_config_contains_path(&content, &plugin_path, false));
 
     let _ = std::fs::remove_dir_all(&temp_root);
 }
@@ -2206,12 +2206,12 @@ fn codex_diagnostics_include_user_and_project_config_paths() {
         .config
         .paths
         .iter()
-        .any(|path| path.path == home.join(".codex/config.toml").to_string_lossy()));
+        .any(|path| path.path == path_text(&home.join(".codex").join("config.toml"))));
     assert!(codex
         .config
         .paths
         .iter()
-        .any(|path| path.path == project_config.to_string_lossy() && path.detected));
+        .any(|path| path.path == path_text(&project_config) && path.detected));
     assert!(codex.blockers.iter().any(|blocker| {
         blocker.contains(".codex/config.toml") && blocker.contains("unverified")
     }));
@@ -2235,8 +2235,8 @@ fn codex_rescan_reads_disabled_state_with_adapter_toml_semantics() {
             &config_path,
             format!(
                 "[[skills.config]]\npath = '{}' # literal string\nenabled = false # disabled\n\n[[skills.config]]\npath = \"{}\" # basic string\nenabled = false # disabled\n",
-                alpha_path.display(),
-                beta_path.display()
+                path_text(&alpha_path),
+                toml_basic_string(&path_text(&beta_path))
             ),
         )
         .expect("write codex config");
@@ -2892,11 +2892,16 @@ fn install_preview_from_tool_global_does_not_write_disk() {
     .expect("preview install");
 
     assert!(!preview.wrote);
-    assert_eq!(preview.source_path, source_path.to_string_lossy());
+    assert_path_text_eq(&preview.source_path, &source_path);
     assert_eq!(
         preview.target_path,
-        home.join(".agents/skills/portable-alpha/SKILL.md")
-            .to_string_lossy()
+        path_text(
+            &home
+                .join(".agents")
+                .join("skills")
+                .join("portable-alpha")
+                .join("SKILL.md")
+        )
     );
     assert!(
         !home.join(".agents").exists(),
@@ -2950,9 +2955,13 @@ fn confirmed_install_writes_target_verified_path_without_config_snapshot() {
     )
     .expect("confirmed install");
 
-    let target = home.join(".claude/skills/portable-beta/SKILL.md");
+    let target = home
+        .join(".claude")
+        .join("skills")
+        .join("portable-beta")
+        .join("SKILL.md");
     assert!(result.wrote);
-    assert_eq!(result.target_path, target.to_string_lossy());
+    assert_path_text_eq(&result.target_path, &target);
     assert_eq!(
         std::fs::read_to_string(&target).expect("target content"),
         source_content
@@ -3009,9 +3018,14 @@ fn install_to_opencode_writes_native_user_skill_root() {
     )
     .expect("opencode install succeeds");
 
-    let target = home.join(".config/opencode/skills/portable-gamma/SKILL.md");
+    let target = home
+        .join(".config")
+        .join("opencode")
+        .join("skills")
+        .join("portable-gamma")
+        .join("SKILL.md");
     assert!(result.wrote);
-    assert_eq!(result.target_path, target.to_string_lossy());
+    assert_path_text_eq(&result.target_path, &target);
     assert!(target.exists());
     assert!(catalog
         .list_skill_records()
@@ -3056,9 +3070,14 @@ fn install_to_pi_writes_native_user_skill_root() {
     )
     .expect("Pi install succeeds");
 
-    let target = home.join(".pi/agent/skills/portable-pi/SKILL.md");
+    let target = home
+        .join(".pi")
+        .join("agent")
+        .join("skills")
+        .join("portable-pi")
+        .join("SKILL.md");
     assert!(result.wrote);
-    assert_eq!(result.target_path, target.to_string_lossy());
+    assert_path_text_eq(&result.target_path, &target);
     assert!(target.exists());
     assert!(catalog
         .list_skill_records()
@@ -3105,9 +3124,13 @@ fn install_to_hermes_writes_native_user_skill_root() {
     )
     .expect("Hermes install succeeds");
 
-    let target = home.join(".hermes/skills/portable-hermes/SKILL.md");
+    let target = home
+        .join(".hermes")
+        .join("skills")
+        .join("portable-hermes")
+        .join("SKILL.md");
     assert!(result.wrote);
-    assert_eq!(result.target_path, target.to_string_lossy());
+    assert_path_text_eq(&result.target_path, &target);
     assert!(target.exists());
     assert!(result
         .risks
@@ -3204,9 +3227,13 @@ fn install_to_openclaw_writes_native_user_skill_root() {
     )
     .expect("OpenClaw install succeeds");
 
-    let target = home.join(".openclaw/skills/portable-openclaw/SKILL.md");
+    let target = home
+        .join(".openclaw")
+        .join("skills")
+        .join("portable-openclaw")
+        .join("SKILL.md");
     assert!(result.wrote);
-    assert_eq!(result.target_path, target.to_string_lossy());
+    assert_path_text_eq(&result.target_path, &target);
     assert!(target.exists());
     assert!(result
         .risks
@@ -3757,6 +3784,42 @@ fn temp_test_dir(label: &str) -> PathBuf {
             .expect("system clock")
             .as_nanos()
     ))
+}
+
+fn path_text(path: &Path) -> String {
+    path.to_string_lossy().to_string()
+}
+
+fn assert_path_text_eq(actual: &str, expected: &Path) {
+    assert_eq!(PathBuf::from(actual), expected);
+}
+
+fn toml_basic_string(value: &str) -> String {
+    value
+        .chars()
+        .flat_map(|ch| match ch {
+            '\u{0008}' => "\\b".chars().collect::<Vec<_>>(),
+            '\t' => "\\t".chars().collect(),
+            '\n' => "\\n".chars().collect(),
+            '\u{000c}' => "\\f".chars().collect(),
+            '\r' => "\\r".chars().collect(),
+            '"' => "\\\"".chars().collect(),
+            '\\' => "\\\\".chars().collect(),
+            other => vec![other],
+        })
+        .collect()
+}
+
+fn codex_config_contains_path(content: &str, path: &Path, enabled: bool) -> bool {
+    let expected_path = path
+        .canonicalize()
+        .map(|canonical| path_text(&canonical))
+        .unwrap_or_else(|_| path_text(path));
+    parse_codex_skill_config_entries(content)
+        .into_iter()
+        .any(|entry| {
+            entry.path.as_deref() == Some(expected_path.as_str()) && entry.enabled == Some(enabled)
+        })
 }
 
 fn write_codex_skill(root: &Path, name: &str) -> PathBuf {
