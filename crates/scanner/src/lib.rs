@@ -1113,22 +1113,23 @@ mod tests {
             "---\nname: custom-review\ndescription: opencode configured path fixture\n---\nBody.",
         )
         .expect("write configured skill");
+        let config = serde_json::json!({
+            "skills": {
+                "paths": [
+                    configured_root.to_string_lossy().to_string(),
+                    configured_root.to_string_lossy().to_string()
+                ],
+                "urls": ["https://example.invalid/.well-known/skills/"]
+            },
+            "permission": {
+                "skill": {
+                    "custom-review": "deny"
+                }
+            }
+        });
         std::fs::write(
             home.join(".config/opencode/opencode.json"),
-            format!(
-                r#"{{
-                  "skills": {{
-                    "paths": ["{0}", "{0}"],
-                    "urls": ["https://example.invalid/.well-known/skills/"]
-                  }},
-                  "permission": {{
-                    "skill": {{
-                      "custom-review": "deny"
-                    }}
-                  }}
-                }}"#,
-                configured_root.to_string_lossy()
-            ),
+            serde_json::to_string(&config).expect("serialize opencode config"),
         )
         .expect("write opencode config");
 
