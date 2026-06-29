@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 struct NativeModelTestFailure: Error, CustomStringConvertible {
     let description: String
@@ -29,21 +30,32 @@ func expectContains(_ value: String?, _ expected: String, _ label: String) throw
 }
 
 func runAsyncTest(_ body: @escaping () async throws -> Void) throws {
+    let resultQueue = DispatchQueue(label: "com.agent-copilot.native-model-test-result")
     var result: Result<Void, Error>?
+
     Task {
+        let completed: Result<Void, Error>
         do {
             try await body()
-            result = .success(())
+            completed = .success(())
         } catch {
-            result = .failure(error)
+            completed = .failure(error)
+        }
+
+        resultQueue.sync {
+            result = completed
         }
     }
 
-    while result == nil {
-        RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01))
+    var completed: Result<Void, Error>?
+    while completed == nil {
+        completed = resultQueue.sync { result }
+        if completed == nil {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01))
+        }
     }
 
-    try result?.get()
+    try completed?.get()
 }
 
 @_cdecl("SkillsCopilotRunNativeModelTests")
@@ -96,6 +108,8 @@ public func runNativeModelTests() {
             try await SkillStoreTests().run()
         }
         fputs("SkillsCopilotTests: native list/store model checks passed\n", stderr)
+        fflush(stderr)
+        _exit(0)
     } catch {
         fputs("SkillsCopilotTests: \(error)\n", stderr)
         exit(1)

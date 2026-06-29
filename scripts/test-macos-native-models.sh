@@ -32,8 +32,8 @@ rsync -a \
 find "${TARGET_DIR}/Tests" -name '*.swift' -print0 \
   | xargs -0 perl -0pi -e 's/^\@testable import SkillsCopilot\n//mg'
 
-if rg -n '^import (AppKit|SwiftUI)$' "${TARGET_DIR}" >/dev/null; then
-  rg -n '^import (AppKit|SwiftUI)$' "${TARGET_DIR}"
+if grep -R -n -E '^import (AppKit|SwiftUI)$' "${TARGET_DIR}" >/dev/null; then
+  grep -R -n -E '^import (AppKit|SwiftUI)$' "${TARGET_DIR}"
   echo "Native model tests must not link AppKit or SwiftUI." >&2
   exit 1
 fi
