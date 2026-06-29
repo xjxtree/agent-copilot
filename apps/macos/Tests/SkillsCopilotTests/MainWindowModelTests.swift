@@ -1,4 +1,3 @@
-import AppKit
 @testable import SkillsCopilot
 
 struct MainWindowModelTests {
@@ -11,10 +10,10 @@ struct MainWindowModelTests {
     private func mainWindowConfigurationIsStable() throws {
         try expectEqual(AppAccessibilityID.mainWindow, "skills-copilot.main-window", "Main window accessibility identifier should stay stable for Computer Use.")
         try expectEqual(AppAccessibilityID.mainContent, "skills-copilot.main-content", "Main content accessibility identifier should stay stable.")
-        try expectEqual(MainWindowCoordinator.windowIdentifier.rawValue, AppAccessibilityID.mainWindow, "Window identifier should match the AX identifier.")
-        try expectEqual(MainWindowCoordinator.autosaveName, "SkillsCopilot.MainWindow", "Main window autosave name should remain stable.")
-        try expectEqual(Int(MainWindowCoordinator.minimumSize.width), 920, "Main window minimum width should match the launch smoke expectation.")
-        try expectEqual(Int(MainWindowCoordinator.minimumSize.height), 600, "Main window minimum height should match the launch smoke expectation.")
+        try expectEqual(MainWindowModel.windowIdentifierRawValue, AppAccessibilityID.mainWindow, "Window identifier should match the AX identifier.")
+        try expectEqual(MainWindowModel.autosaveName, "SkillsCopilot.MainWindow", "Main window autosave name should remain stable.")
+        try expectEqual(MainWindowModel.minimumWidth, 920, "Main window minimum width should match the launch smoke expectation.")
+        try expectEqual(MainWindowModel.minimumHeight, 600, "Main window minimum height should match the launch smoke expectation.")
     }
 
     private func taskCockpitAccessibilityIdentifiersAreStable() throws {
@@ -29,18 +28,18 @@ struct MainWindowModelTests {
     }
 
     private func configuredMainWindowWinsReopenScoring() throws {
-        let configured = MainWindowCoordinator.mainWindowScore(
-            identifier: MainWindowCoordinator.windowIdentifier,
+        let configured = MainWindowModel.mainWindowScore(
+            identifierRawValue: MainWindowModel.windowIdentifierRawValue,
             title: UIStrings.appWindowTitle,
             canBecomeMain: true
         )
-        let titledOnly = MainWindowCoordinator.mainWindowScore(
-            identifier: nil,
+        let titledOnly = MainWindowModel.mainWindowScore(
+            identifierRawValue: nil,
             title: UIStrings.appWindowTitle,
             canBecomeMain: true
         )
-        let other = MainWindowCoordinator.mainWindowScore(
-            identifier: NSUserInterfaceItemIdentifier("other-window"),
+        let other = MainWindowModel.mainWindowScore(
+            identifierRawValue: "other-window",
             title: "Other",
             canBecomeMain: true
         )

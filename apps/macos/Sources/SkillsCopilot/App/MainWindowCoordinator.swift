@@ -1,23 +1,9 @@
 import AppKit
 
-enum AppAccessibilityID {
-    static let mainWindow = "skills-copilot.main-window"
-    static let mainContent = "skills-copilot.main-content"
-    static let taskCockpitPanel = "skills-copilot.task-cockpit.panel"
-    static let taskCockpitInput = "skills-copilot.task-cockpit.input"
-    static let taskCockpitInputStatus = "skills-copilot.task-cockpit.input.status"
-    static let taskCockpitBuildButton = "skills-copilot.task-cockpit.build"
-    static let taskCockpitStatus = "skills-copilot.task-cockpit.status"
-    static let taskCockpitCancelButton = "skills-copilot.task-cockpit.cancel"
-    static let taskCockpitRetryButton = "skills-copilot.task-cockpit.retry"
-    static let taskCockpitStageProgress = "skills-copilot.task-cockpit.stage-progress"
-    static let taskCockpitResult = "skills-copilot.task-cockpit.result"
-}
-
 enum MainWindowCoordinator {
-    static let windowIdentifier = NSUserInterfaceItemIdentifier(AppAccessibilityID.mainWindow)
-    static let autosaveName = "SkillsCopilot.MainWindow"
-    static let minimumSize = NSSize(width: 920, height: 600)
+    static let windowIdentifier = NSUserInterfaceItemIdentifier(MainWindowModel.windowIdentifierRawValue)
+    static let autosaveName = MainWindowModel.autosaveName
+    static let minimumSize = NSSize(width: MainWindowModel.minimumWidth, height: MainWindowModel.minimumHeight)
 
     static func activateApplication(_ app: NSApplication = .shared) {
         app.setActivationPolicy(.regular)
@@ -57,17 +43,11 @@ enum MainWindowCoordinator {
     }
 
     static func mainWindowScore(identifier: NSUserInterfaceItemIdentifier?, title: String, canBecomeMain: Bool) -> Int {
-        var score = 0
-        if identifier == windowIdentifier {
-            score += 100
-        }
-        if title == UIStrings.appWindowTitle {
-            score += 50
-        }
-        if canBecomeMain {
-            score += 10
-        }
-        return score
+        MainWindowModel.mainWindowScore(
+            identifierRawValue: identifier?.rawValue,
+            title: title,
+            canBecomeMain: canBecomeMain
+        )
     }
 
     private static func isMainWindowCandidate(_ window: NSWindow) -> Bool {
