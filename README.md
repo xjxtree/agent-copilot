@@ -51,6 +51,7 @@ surface.
 ```sh
 cargo test --workspace
 cargo clippy --workspace --all-targets --all-features
+pnpm test:macos-native-models
 swift test --package-path apps/macos
 pnpm check:macos
 pnpm check:privacy

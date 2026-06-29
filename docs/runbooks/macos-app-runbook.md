@@ -15,6 +15,7 @@ Common entrypoints:
 ./script/build_and_run.sh --verify
 pnpm dev:macos
 pnpm build:macos
+pnpm test:macos-native-models
 pnpm check:macos
 ```
 
@@ -27,7 +28,8 @@ pnpm check:macos
 | Local App Run | `./script/build_and_run.sh run` or `pnpm dev:macos` | Real local HOME and app data | Manual behavior and visual checks |
 | Launch Verify | `./script/build_and_run.sh --verify` or `pnpm build:macos` | Real local HOME and app data | Rebuild and confirm launch |
 | Smoke App Run | `pnpm smoke:macos-app -- --fixture-data --capture-window` | Temporary fixture HOME, app data, and project roots | Automated validation without real config |
-| macOS Check | `pnpm check:macos` | Combined local gate | fmt/test/clippy/build/launch/smoke/window screenshot |
+| Native Model Tests | `pnpm test:macos-native-models` | Temporary SwiftPM test package | Explicit native model runner without SwiftPM test-bundle loading |
+| macOS Check | `pnpm check:macos` | Combined local gate | fmt/test/clippy/native model tests/build/launch/smoke/window screenshot |
 
 ## Gate Parity
 

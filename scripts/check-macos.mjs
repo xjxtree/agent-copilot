@@ -29,17 +29,7 @@ const steps = [
   ["pnpm", ["test:macos-list-model"], baseEnv],
   ["pnpm", ["verify:macos-ui-layout"], baseEnv],
   ["pnpm", ["verify:gate-parity"], baseEnv],
-  [
-    "swift",
-    [
-      "test",
-      "--package-path",
-      "apps/macos",
-      "--scratch-path",
-      join(swiftScratchRoot, "test"),
-    ],
-    baseEnv,
-  ],
+  ["pnpm", ["test:macos-native-models"], baseEnv],
   [
     "swift",
     [
