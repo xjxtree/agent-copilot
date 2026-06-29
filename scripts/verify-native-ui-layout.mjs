@@ -14,6 +14,7 @@ const files = {
   agentCopilotOverview: await read("apps/macos/Sources/SkillsCopilot/Views/AgentCopilotOverviewPanel.swift"),
   agentCopilotDecision: await read("apps/macos/Sources/SkillsCopilot/Models/AgentCopilotDecision.swift"),
   mcpServerPreview: await read("apps/macos/Sources/SkillsCopilot/Models/McpServerPreview.swift"),
+  detailSection: await read("apps/macos/Sources/SkillsCopilot/Models/DetailSection.swift"),
   detailOverview: await read("apps/macos/Sources/SkillsCopilot/Views/DetailOverviewSection.swift"),
   detailPrimitives: await read("apps/macos/Sources/SkillsCopilot/Views/DetailPresentationPrimitives.swift"),
   detailReviewCore: await read("apps/macos/Sources/SkillsCopilot/Views/DetailReviewCoreSection.swift"),
@@ -31,6 +32,8 @@ const files = {
   detailTaskBenchmark: await read("apps/macos/Sources/SkillsCopilot/Views/DetailTaskBenchmarkSection.swift"),
   detailAgentSession: await read("apps/macos/Sources/SkillsCopilot/Views/DetailAgentSessionSection.swift"),
   detailLLM: await read("apps/macos/Sources/SkillsCopilot/Views/DetailLLMSection.swift"),
+  markdownRender: await read("apps/macos/Sources/SkillsCopilot/Models/MarkdownRenderDocument.swift"),
+  markdownTableDisplay: await read("apps/macos/Sources/SkillsCopilot/Models/MarkdownTableDisplayModel.swift"),
   agentConfigWorkspace: await read("apps/macos/Sources/SkillsCopilot/Views/AgentConfigWorkspacePanel.swift"),
   detailHeaderOverview: await read("apps/macos/Sources/SkillsCopilot/Views/DetailHeaderOverviewSection.swift"),
   detailFindingsHistory: await read("apps/macos/Sources/SkillsCopilot/Views/DetailFindingsHistorySection.swift"),
@@ -54,6 +57,7 @@ const files = {
   storeWorkflow: await read("apps/macos/Sources/SkillsCopilot/Stores/SkillStoreWorkflowSelectors.swift"),
   taskCockpit: await read("apps/macos/Sources/SkillsCopilot/Views/TaskCockpitPanel.swift"),
   taskInput: await read("apps/macos/Sources/SkillsCopilot/Views/TaskInputTextEditor.swift"),
+  taskInputModel: await read("apps/macos/Sources/SkillsCopilot/Models/TaskInputModel.swift"),
   material: await read("apps/macos/Sources/SkillsCopilot/Views/AdaptiveMaterialSurface.swift"),
   localizable: await read("apps/macos/Sources/SkillsCopilot/Resources/en.lproj/Localizable.strings"),
   localizableZh: await read("apps/macos/Sources/SkillsCopilot/Resources/zh-Hans.lproj/Localizable.strings"),
@@ -67,6 +71,7 @@ const files = {
 files.detailSurface = [
   files.detail,
   files.agentCopilotOverview,
+  files.detailSection,
   files.detailOverview,
   files.detailPrimitives,
   files.detailReviewCore,
@@ -402,12 +407,12 @@ const checks = [
   },
   {
     label: "LLM Markdown output renders wide tables as readable cards",
-    text: files.detailLLM,
+    text: `${files.markdownTableDisplay}\n${files.detailLLM}`,
     pattern: /struct MarkdownTableDisplayModel[\s\S]*?var usesCardLayout:[\s\S]*?columnCount > 3 \|\| \(columnCount > 2 && containsLongBodyCell\)[\s\S]*?struct MarkdownTableView:[\s\S]*?if model\.usesCardLayout[\s\S]*?MarkdownTableCardList\(model:\s*model\)[\s\S]*?struct MarkdownTableCard:/,
   },
   {
     label: "LLM Markdown output normalizes collapsed provider markdown tables",
-    text: files.detailLLM,
+    text: files.markdownRender,
     pattern: /normalizeMarkdownBlocks\(in text:[\s\S]*?normalizeInlineMarkdownBreaks\(in: line\)[\s\S]*?normalizeInlineTableRows\(in text:[\s\S]*?\| \|[\s\S]*?isStandaloneTableLine/,
   },
   {
@@ -417,7 +422,7 @@ const checks = [
   },
   {
     label: "LLM Markdown output unwraps whole-response markdown fences",
-    text: files.detailLLM,
+    text: files.markdownRender,
     pattern: /static func renderableText\(from text: String\)[\s\S]*?hasPrefix\("```"\)[\s\S]*?\["markdown", "md", "gfm"\]\.contains\(language\)[\s\S]*?return body/,
   },
   {
@@ -447,7 +452,7 @@ const checks = [
   },
   {
     label: "task cockpit input model preserves raw text and trims only for submit state",
-    text: files.taskInput,
+    text: files.taskInputModel,
     pattern: /struct TaskInputModel:[\s\S]*?let rawText:[\s\S]*?rawText\.trimmingCharacters\(in:\s*\.whitespacesAndNewlines\)[\s\S]*?var canSubmit:[\s\S]*?!trimmedText\.isEmpty/,
   },
   {
@@ -1055,7 +1060,7 @@ const customChecks = [
   },
   {
     label: "smart analysis copy focuses on quality, task fit, and routing",
-    passed: /Use focused smart analysis panels for quality scoring, task fit, and routing\./.test(files.detailOverview)
+    passed: /Use focused smart analysis panels for quality scoring, task fit, and routing\./.test(files.detailSection)
       && /"detail\.section\.analysis\.summary"\s*=\s*"Use focused smart analysis panels for quality scoring, task fit, and routing\."/.test(files.localizable)
       && !/"detail\.section\.analysis\.summary"\s*=\s*".*cross-agent comparison/.test(files.localizable),
   },

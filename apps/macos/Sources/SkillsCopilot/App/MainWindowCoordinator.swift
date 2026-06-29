@@ -1,5 +1,4 @@
 import AppKit
-import SwiftUI
 
 enum AppAccessibilityID {
     static let mainWindow = "skills-copilot.main-window"
@@ -82,26 +81,5 @@ enum MainWindowCoordinator {
                 mainWindowScore(identifier: $0.identifier, title: $0.title, canBecomeMain: $0.canBecomeMain)
                     < mainWindowScore(identifier: $1.identifier, title: $1.title, canBecomeMain: $1.canBecomeMain)
             }
-    }
-}
-
-struct MainWindowConfigurator: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView(frame: .zero)
-        view.isHidden = true
-        configure(windowFor: view)
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        configure(windowFor: nsView)
-    }
-
-    private func configure(windowFor view: NSView) {
-        DispatchQueue.main.async {
-            if let window = view.window {
-                MainWindowCoordinator.configureWindow(window)
-            }
-        }
     }
 }

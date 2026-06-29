@@ -11,6 +11,7 @@ rm -rf "${PACKAGE_DIR}"
 mkdir -p "${TARGET_DIR}"
 
 rsync -a \
+  --exclude='Views/**' \
   --exclude='App/SkillsCopilotApp.swift' \
   --include='*/' \
   --include='*.swift' \
@@ -59,7 +60,15 @@ runNativeModelTests()
 SWIFT
 
 cd "${REPO_ROOT}"
-swift run \
+export MallocNanoZone=0
+
+swift build \
+  --package-path "${PACKAGE_DIR}" \
+  --scratch-path "${BUILD_ROOT}/swiftpm"
+
+BINARY_DIR="$(swift build \
   --package-path "${PACKAGE_DIR}" \
   --scratch-path "${BUILD_ROOT}/swiftpm" \
-  SkillsCopilotNativeModelTests
+  --show-bin-path)"
+
+"${BINARY_DIR}/SkillsCopilotNativeModelTests"

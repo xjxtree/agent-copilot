@@ -1156,14 +1156,8 @@ struct LLMModelTests {
     }
 
     private func longTextReviewBlockDefaultsToMarkdown() throws {
-        let block = LongTextReviewBlock(
-            title: "Model output",
-            text: "## Result",
-            emptyText: "No output",
-            systemImage: "doc.on.doc"
-        )
         let isMarkdown: Bool
-        if case .markdown = block.renderMode {
+        if case .markdown = LongTextReviewPresentation.defaultRenderMode {
             isMarkdown = true
         } else {
             isMarkdown = false
