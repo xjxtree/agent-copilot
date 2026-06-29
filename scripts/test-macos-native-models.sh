@@ -81,5 +81,15 @@ BINARY_DIR="$(swift build \
 SKILLS_COPILOT_NATIVE_MODEL_TEST_SUITE=service-process \
   "${BINARY_DIR}/SkillsCopilotNativeModelTests"
 
+SKILLS_COPILOT_NATIVE_MODEL_TEST_SUITE=service-rpc \
+  "${BINARY_DIR}/SkillsCopilotNativeModelTests"
+
 SKILLS_COPILOT_NATIVE_MODEL_TEST_SUITE=main \
   "${BINARY_DIR}/SkillsCopilotNativeModelTests"
+
+SKILL_STORE_GROUP_COUNT=64
+for group in $(seq 0 $((SKILL_STORE_GROUP_COUNT - 1))); do
+  SKILLS_COPILOT_NATIVE_MODEL_TEST_SUITE="skill-store-${group}" \
+  SKILLS_COPILOT_SKILL_STORE_GROUP_COUNT="${SKILL_STORE_GROUP_COUNT}" \
+    "${BINARY_DIR}/SkillsCopilotNativeModelTests"
+done

@@ -86,6 +86,27 @@ public func runNativeModelTests() {
             fflush(stderr)
             _exit(0)
         }
+        if suite == "service-rpc" {
+            try runAsyncNamed("ServiceClientRPCTests") {
+                try await ServiceClientRPCTests().run()
+            }
+            fputs("SkillsCopilotTests: native service RPC model checks passed\n", stderr)
+            fflush(stderr)
+            _exit(0)
+        }
+        if suite.hasPrefix("skill-store-") {
+            let rawGroup = String(suite.dropFirst("skill-store-".count))
+            guard let group = Int(rawGroup) else {
+                throw NativeModelTestFailure(description: "Invalid SkillStore native model test group: \(rawGroup)")
+            }
+            let groupCount = Int(ProcessInfo.processInfo.environment["SKILLS_COPILOT_SKILL_STORE_GROUP_COUNT"] ?? "") ?? 64
+            try runAsyncNamed("SkillStoreTests group \(group)") {
+                try await SkillStoreTests(selectedGroup: group, groupCount: groupCount).run()
+            }
+            fputs("SkillsCopilotTests: native SkillStore model group \(group) checks passed\n", stderr)
+            fflush(stderr)
+            _exit(0)
+        }
 
         guard suite == "main" else {
             throw NativeModelTestFailure(description: "Unknown native model test suite: \(suite)")
@@ -128,13 +149,7 @@ public func runNativeModelTests() {
         try runNamed("LocalSessionPreviewModelTests") { try LocalSessionPreviewModelTests().run() }
         try runNamed("McpServerPreviewModelTests") { try McpServerPreviewModelTests().run() }
         try runNamed("SkillListModelTests") { try SkillListModelTests().run() }
-        try runAsyncNamed("ServiceClientRPCTests") {
-            try await ServiceClientRPCTests().run()
-        }
-        try runAsyncNamed("SkillStoreTests") {
-            try await SkillStoreTests().run()
-        }
-        fputs("SkillsCopilotTests: native list/store model checks passed\n", stderr)
+        fputs("SkillsCopilotTests: native non-store model checks passed\n", stderr)
         fflush(stderr)
         _exit(0)
     } catch {

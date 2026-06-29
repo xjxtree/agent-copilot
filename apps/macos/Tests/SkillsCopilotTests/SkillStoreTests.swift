@@ -3,6 +3,14 @@ import Foundation
 
 @MainActor
 struct SkillStoreTests {
+    private let selectedGroup: Int?
+    private let groupCount: Int
+
+    init(selectedGroup: Int? = nil, groupCount: Int = 1) {
+        self.selectedGroup = selectedGroup
+        self.groupCount = max(groupCount, 1)
+    }
+
     func run() async throws {
         try runCase("defaultNavigationStartsAtSessionsWithoutAgentProfile") {
             try defaultNavigationStartsAtSessionsWithoutAgentProfile()
@@ -310,6 +318,7 @@ struct SkillStoreTests {
     }
 
     private func runCase(_ name: String, _ body: () throws -> Void) throws {
+        guard shouldRunCase(name) else { return }
         fputs("SkillsCopilotTests: SkillStoreTests.\(name) start\n", stderr)
         fflush(stderr)
         try body()
@@ -318,11 +327,26 @@ struct SkillStoreTests {
     }
 
     private func runCase(_ name: String, _ body: () async throws -> Void) async throws {
+        guard shouldRunCase(name) else { return }
         fputs("SkillsCopilotTests: SkillStoreTests.\(name) start\n", stderr)
         fflush(stderr)
         try await body()
         fputs("SkillsCopilotTests: SkillStoreTests.\(name) ok\n", stderr)
         fflush(stderr)
+    }
+
+    private func shouldRunCase(_ name: String) -> Bool {
+        guard let selectedGroup else { return true }
+        return groupIndex(for: name) == selectedGroup
+    }
+
+    private func groupIndex(for name: String) -> Int {
+        var hash: UInt64 = 1_469_598_103_934_665_603
+        for byte in name.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 1_099_511_628_211
+        }
+        return Int(hash % UInt64(groupCount))
     }
 
     private func defaultNavigationStartsAtSessionsWithoutAgentProfile() throws {
