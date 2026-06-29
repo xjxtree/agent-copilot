@@ -77,6 +77,20 @@ public func runNativeModelTests() {
     fputs("SkillsCopilotTests: native model runner start\n", stderr)
     fflush(stderr)
     do {
+        let suite = ProcessInfo.processInfo.environment["SKILLS_COPILOT_NATIVE_MODEL_TEST_SUITE"] ?? "main"
+        if suite == "service-process" {
+            try runAsyncNamed("ServiceClientProcessTests") {
+                try await ServiceClientProcessTests().run()
+            }
+            fputs("SkillsCopilotTests: native service process model checks passed\n", stderr)
+            fflush(stderr)
+            _exit(0)
+        }
+
+        guard suite == "main" else {
+            throw NativeModelTestFailure(description: "Unknown native model test suite: \(suite)")
+        }
+
         try runNamed("FindingDisplayModelTests") { try FindingDisplayModelTests().run() }
         try runNamed("FindingExplainabilityModelTests") { try FindingExplainabilityModelTests().run() }
         try runNamed("RuleTuningModelTests") { try RuleTuningModelTests().run() }
@@ -116,9 +130,6 @@ public func runNativeModelTests() {
         try runNamed("SkillListModelTests") { try SkillListModelTests().run() }
         try runAsyncNamed("ServiceClientRPCTests") {
             try await ServiceClientRPCTests().run()
-        }
-        try runAsyncNamed("ServiceClientProcessTests") {
-            try await ServiceClientProcessTests().run()
         }
         try runAsyncNamed("SkillStoreTests") {
             try await SkillStoreTests().run()

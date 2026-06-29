@@ -78,4 +78,8 @@ BINARY_DIR="$(swift build \
   --scratch-path "${BUILD_ROOT}/swiftpm" \
   --show-bin-path)"
 
-"${BINARY_DIR}/SkillsCopilotNativeModelTests"
+SKILLS_COPILOT_NATIVE_MODEL_TEST_SUITE=service-process \
+  "${BINARY_DIR}/SkillsCopilotNativeModelTests"
+
+SKILLS_COPILOT_NATIVE_MODEL_TEST_SUITE=main \
+  "${BINARY_DIR}/SkillsCopilotNativeModelTests"
