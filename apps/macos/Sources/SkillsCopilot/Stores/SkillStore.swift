@@ -3446,27 +3446,27 @@ final class SkillStore: ObservableObject {
     }
 
     private func refreshCollections() async throws {
-        async let appStateSnapshot = service.appStateSnapshot()
-        async let llmStatus = service.llmStatus()
-        async let aiProviderStatus = fetchAIProviderStatus()
-        async let llmPromptRuns = fetchLLMPromptRuns()
-        async let projectContextState = service.getProjectContext()
-        async let agentConfigSnapshots = fetchAgentConfigSnapshots()
-        async let ruleTuning = service.listRuleTuning()
-        let snapshot = try await appStateSnapshot
+        let snapshot = try await service.appStateSnapshot()
+        let fetchedLLMStatus = try await service.llmStatus()
+        let fetchedAIProviderStatus = await fetchAIProviderStatus()
+        let fetchedLLMPromptRuns = await fetchLLMPromptRuns()
+        let fetchedProjectContextState = try await service.getProjectContext()
+        let fetchedAgentConfigSnapshots = try await fetchAgentConfigSnapshots()
+        let fetchedRuleTuning = try await service.listRuleTuning()
+
         self.status = snapshot.status
-        self.llmStatus = try await llmStatus
-        self.aiProviderStatus = await aiProviderStatus
+        self.llmStatus = fetchedLLMStatus
+        self.aiProviderStatus = fetchedAIProviderStatus
         self.hasLoadedAIProviderStatus = true
         self.aiProviderTestResult = self.aiProviderStatus.lastTest ?? aiProviderTestResult
-        self.llmPromptRunList = await llmPromptRuns
-        self.projectContextState = try await projectContextState
+        self.llmPromptRunList = fetchedLLMPromptRuns
+        self.projectContextState = fetchedProjectContextState
         self.skills = snapshot.skills
         self.findings = snapshot.findings
-        self.ruleTuning = try await ruleTuning
+        self.ruleTuning = fetchedRuleTuning
         self.conflicts = snapshot.conflicts
         self.healthSummary = snapshot.health
-        self.agentConfigSnapshots = try await agentConfigSnapshots
+        self.agentConfigSnapshots = fetchedAgentConfigSnapshots
         if let agent = selectedAgentConfigTimelineAgent {
             loadedAgentConfigSnapshotRequestKey = agentConfigRequestKey(agent: agent)
         } else {
