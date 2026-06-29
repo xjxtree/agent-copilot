@@ -4,107 +4,325 @@ import Foundation
 @MainActor
 struct SkillStoreTests {
     func run() async throws {
-        try defaultNavigationStartsAtSessionsWithoutAgentProfile()
-        try selectedAgentSessionRefreshKeyFollowsAgentOutsideSessionMode()
-        try await localSessionSearchNormalizesSelectionAndDetail()
-        try await localSessionRefreshIfNeededSkipsLoadedRequest()
-        try await localSessionScopeChangeFiltersCachedRowsWithoutRefresh()
-        try await localSessionProjectScopeUsesProjectRootFromAllScopeCache()
-        try await localSessionSortChangesVisibleRowsWithoutRefresh()
-        try await reloadKeepsSelectedSkillWhenItStillExists()
-        try await reloadFallsBackToFirstSkillWhenSelectionIsMissing()
-        try await emptyCatalogKeepsFriendlyEmptyModel()
-        try await serviceErrorClearsLoadingAndKeepsReadableError()
-        try await reloadUsesStateSnapshotForCollectionRefresh()
-        try await startupLoadPrewarmsLaunchDataWithoutScanningOrWriting()
-        try await stateSnapshotRefreshesDoNotReuseStaleFindingsOrPermissions()
-        try await selectedDetailDataIsScopedToCurrentAgentAndSkill()
-        try await scanAllUsesGenericCatalogMethod()
-        try await searchAndFilterChangesNormalizeSelectionAndDetail()
-        try await agentConfigTimelineFollowsSelectedAgentFilterOnly()
-        try await readOnlyAgentConfigLoadsCurrentDocuments()
-        try await agentConfigRefreshIfNeededSkipsLoadedRequestAndScopeFiltersLocally()
-        try await settingsFeedbackClearsAfterFailedConfigSave()
-        try await previewRollbackShowsDiffWithoutCallingRollback()
-        try await rollbackSnapshotRequiresVisibleAgentTimelineRecord()
-        try await refreshOperationsIgnoreReentryWhileBusy()
-        try await agentFilterLimitsVisibleSkillsAndSelection()
-        try await allAgentFilterDoesNotFetchMixedConfigHistory()
-        try await toggleSelectedSkillExposesWritingStateAndRefreshesSelection()
-        try await writeOperationsIgnoreReentryWhileBusy()
-        try await codexToggleAddsRestartRequiredNotice()
-        try await opencodeToggleCallsServiceAndRefreshesSelection()
-        try await toolGlobalToggleIsPreviewOnlyAndDoesNotCallService()
-        try await batchTogglePreviewFiltersReadOnlyAndNoopSkills()
-        try await batchTogglePreviewHonorsExplicitSelection()
-        try await batchToggleApplyUsesBatchServiceAndRefreshes()
-        try await batchToggleApplyRequiresCurrentPreviewConfirmation()
-        try await localReportExportUsesUserTriggeredServiceContract()
-        try await localReportExportCanUseAgentWorkspaceScopeWithoutSelectedSkill()
-        try await localReportExportClearsStaleResultWhenScopeChanges()
-        try await localReportExportUnavailableDoesNotPretendFileWasWritten()
-        try await reloadLoadsProjectContext()
-        try await setProjectStoresContextAndScans()
-        try await clearProjectClearsContextAndScans()
-        try await projectValidationErrorSkipsScanAndSurfacesMessage()
-        try await reloadFallsBackToDisabledLLMWhenOldServiceDoesNotSupportMethods()
-        try await prepareLLMActionStoresEstimateWithoutProviderCall()
-        try await prepareSkillAnalysisUsesReadOnlyPrepareContract()
-        try await prepareSkillAnalysisFallsBackWhenMethodUnavailable()
-        try await scoreSkillQualityUsesReadOnlyAnalysisContract()
-        try await taskReadinessUsesReadOnlyCheckContract()
-        try await taskReadinessPromptSendRequiresConfiguredProvider()
-        try await routingConfidenceUsesReadOnlyRankContract()
-        try await routingConfidencePromptSendRequiresConfiguredProvider()
-        try await taskBenchmarkUsesLocalServiceContract()
-        try await taskBenchmarkFallsBackWhenMethodUnavailable()
-        try await routingRegressionUsesLocalBenchmarkServiceContract()
-        try await routingRegressionFallsBackWhenMethodUnavailable()
-        try await agentTraceImportUsesLocalServiceContract()
-        try await agentTraceImportFallsBackWhenMethodUnavailable()
-        try await routingAccuracyDashboardUsesReadOnlyServiceContract()
-        try await staleDriftDetectionUsesReadOnlyServiceContract()
-        try await knowledgeSearchUsesReadOnlyServiceContract()
-        try await localSkillMapUsesReadOnlyServiceContract()
-        try await localSkillMapFallsBackWhenMethodUnavailable()
-        try await skillLifecycleTimelineUsesReadOnlyServiceContract()
-        try await skillLifecycleTimelineFallsBackWhenMethodUnavailable()
-        try await providerObservabilityUsesReadOnlyServiceContract()
-        try await providerObservabilityNeedBasedLoadUsesCacheUntilManualRefresh()
-        try await providerObservabilityFallsBackWhenMethodUnavailable()
-        try await taskCockpitUsesReadOnlyServiceContract()
-        try await taskCockpitUsesGlobalScopeOutsideSkillDetail()
-        try await taskCockpitHistoryPersistsLocally()
-        try await taskCockpitPreservesExactUserInputInServiceContract()
-        try await taskCockpitWhitespaceOnlyInputUsesFallbackTask()
-        try await taskCockpitFallsBackWhenMethodUnavailable()
-        try await taskCockpitTimeoutShowsRecoveryAndIgnoresStaleResponse()
-        try await taskCockpitCancelShowsRecoveryAndAllowsRetry()
-        try await similarSkillGroupingUsesReadOnlyServiceContract()
-        try await similarSkillGroupingFallsBackWhenMethodUnavailable()
-        try await capabilityTaxonomyUsesReadOnlyServiceContract()
-        try await capabilityTaxonomyFallsBackWhenMethodUnavailable()
-        try await workspaceReadinessUsesReadOnlyServiceContract()
-        try await workspaceReadinessFallsBackWhenMethodUnavailable()
-        try await remediationPlanUsesReadOnlyServiceContract()
-        try await remediationPlanFallsBackWhenMethodUnavailable()
-        try await remediationPreviewDraftsUsesCopyOnlyServiceContract()
-        try await remediationPreviewDraftsFallsBackWhenMethodUnavailable()
-        try await remediationImpactPreviewUsesReadOnlyServiceContract()
-        try await remediationImpactPreviewFallsBackWhenMethodUnavailable()
-        try await remediationBatchReviewUsesReadOnlyServiceContract()
-        try await remediationBatchReviewFallsBackWhenMethodUnavailable()
-        try await remediationHistoryUsesLocalServiceContract()
-        try await remediationHistoryFallsBackWhenMethodUnavailable()
-        try await guidedCleanupFlowUsesLocalServiceContract()
-        try await guidedCleanupFlowFallsBackWhenMethodUnavailable()
-        try await crossAgentReadinessUsesReadOnlyServiceContract()
-        try await routingConfidenceClearsStaleSelection()
-        try await llmPreparePreviewIsScopedToSelectedSkillAndReadOnly()
-        try await promptPreviewRequiresConfiguredProviderAndExplicitSend()
-        try await skillManagerValidationFeedbackStaysInManagerSurface()
-        try skillManagerUsesIndependentInstallRemoveAndLocalInputs()
-        try await previewScriptExecutionSafetyStoresBlockedPreviewWithoutExecute()
+        try runCase("defaultNavigationStartsAtSessionsWithoutAgentProfile") {
+            try defaultNavigationStartsAtSessionsWithoutAgentProfile()
+        }
+        try runCase("selectedAgentSessionRefreshKeyFollowsAgentOutsideSessionMode") {
+            try selectedAgentSessionRefreshKeyFollowsAgentOutsideSessionMode()
+        }
+        try await runCase("localSessionSearchNormalizesSelectionAndDetail") {
+            try await localSessionSearchNormalizesSelectionAndDetail()
+        }
+        try await runCase("localSessionRefreshIfNeededSkipsLoadedRequest") {
+            try await localSessionRefreshIfNeededSkipsLoadedRequest()
+        }
+        try await runCase("localSessionScopeChangeFiltersCachedRowsWithoutRefresh") {
+            try await localSessionScopeChangeFiltersCachedRowsWithoutRefresh()
+        }
+        try await runCase("localSessionProjectScopeUsesProjectRootFromAllScopeCache") {
+            try await localSessionProjectScopeUsesProjectRootFromAllScopeCache()
+        }
+        try await runCase("localSessionSortChangesVisibleRowsWithoutRefresh") {
+            try await localSessionSortChangesVisibleRowsWithoutRefresh()
+        }
+        try await runCase("reloadKeepsSelectedSkillWhenItStillExists") {
+            try await reloadKeepsSelectedSkillWhenItStillExists()
+        }
+        try await runCase("reloadFallsBackToFirstSkillWhenSelectionIsMissing") {
+            try await reloadFallsBackToFirstSkillWhenSelectionIsMissing()
+        }
+        try await runCase("emptyCatalogKeepsFriendlyEmptyModel") {
+            try await emptyCatalogKeepsFriendlyEmptyModel()
+        }
+        try await runCase("serviceErrorClearsLoadingAndKeepsReadableError") {
+            try await serviceErrorClearsLoadingAndKeepsReadableError()
+        }
+        try await runCase("reloadUsesStateSnapshotForCollectionRefresh") {
+            try await reloadUsesStateSnapshotForCollectionRefresh()
+        }
+        try await runCase("startupLoadPrewarmsLaunchDataWithoutScanningOrWriting") {
+            try await startupLoadPrewarmsLaunchDataWithoutScanningOrWriting()
+        }
+        try await runCase("stateSnapshotRefreshesDoNotReuseStaleFindingsOrPermissions") {
+            try await stateSnapshotRefreshesDoNotReuseStaleFindingsOrPermissions()
+        }
+        try await runCase("selectedDetailDataIsScopedToCurrentAgentAndSkill") {
+            try await selectedDetailDataIsScopedToCurrentAgentAndSkill()
+        }
+        try await runCase("scanAllUsesGenericCatalogMethod") {
+            try await scanAllUsesGenericCatalogMethod()
+        }
+        try await runCase("searchAndFilterChangesNormalizeSelectionAndDetail") {
+            try await searchAndFilterChangesNormalizeSelectionAndDetail()
+        }
+        try await runCase("agentConfigTimelineFollowsSelectedAgentFilterOnly") {
+            try await agentConfigTimelineFollowsSelectedAgentFilterOnly()
+        }
+        try await runCase("readOnlyAgentConfigLoadsCurrentDocuments") {
+            try await readOnlyAgentConfigLoadsCurrentDocuments()
+        }
+        try await runCase("agentConfigRefreshIfNeededSkipsLoadedRequestAndScopeFiltersLocally") {
+            try await agentConfigRefreshIfNeededSkipsLoadedRequestAndScopeFiltersLocally()
+        }
+        try await runCase("settingsFeedbackClearsAfterFailedConfigSave") {
+            try await settingsFeedbackClearsAfterFailedConfigSave()
+        }
+        try await runCase("previewRollbackShowsDiffWithoutCallingRollback") {
+            try await previewRollbackShowsDiffWithoutCallingRollback()
+        }
+        try await runCase("rollbackSnapshotRequiresVisibleAgentTimelineRecord") {
+            try await rollbackSnapshotRequiresVisibleAgentTimelineRecord()
+        }
+        try await runCase("refreshOperationsIgnoreReentryWhileBusy") {
+            try await refreshOperationsIgnoreReentryWhileBusy()
+        }
+        try await runCase("agentFilterLimitsVisibleSkillsAndSelection") {
+            try await agentFilterLimitsVisibleSkillsAndSelection()
+        }
+        try await runCase("allAgentFilterDoesNotFetchMixedConfigHistory") {
+            try await allAgentFilterDoesNotFetchMixedConfigHistory()
+        }
+        try await runCase("toggleSelectedSkillExposesWritingStateAndRefreshesSelection") {
+            try await toggleSelectedSkillExposesWritingStateAndRefreshesSelection()
+        }
+        try await runCase("writeOperationsIgnoreReentryWhileBusy") {
+            try await writeOperationsIgnoreReentryWhileBusy()
+        }
+        try await runCase("codexToggleAddsRestartRequiredNotice") {
+            try await codexToggleAddsRestartRequiredNotice()
+        }
+        try await runCase("opencodeToggleCallsServiceAndRefreshesSelection") {
+            try await opencodeToggleCallsServiceAndRefreshesSelection()
+        }
+        try await runCase("toolGlobalToggleIsPreviewOnlyAndDoesNotCallService") {
+            try await toolGlobalToggleIsPreviewOnlyAndDoesNotCallService()
+        }
+        try await runCase("batchTogglePreviewFiltersReadOnlyAndNoopSkills") {
+            try await batchTogglePreviewFiltersReadOnlyAndNoopSkills()
+        }
+        try await runCase("batchTogglePreviewHonorsExplicitSelection") {
+            try await batchTogglePreviewHonorsExplicitSelection()
+        }
+        try await runCase("batchToggleApplyUsesBatchServiceAndRefreshes") {
+            try await batchToggleApplyUsesBatchServiceAndRefreshes()
+        }
+        try await runCase("batchToggleApplyRequiresCurrentPreviewConfirmation") {
+            try await batchToggleApplyRequiresCurrentPreviewConfirmation()
+        }
+        try await runCase("localReportExportUsesUserTriggeredServiceContract") {
+            try await localReportExportUsesUserTriggeredServiceContract()
+        }
+        try await runCase("localReportExportCanUseAgentWorkspaceScopeWithoutSelectedSkill") {
+            try await localReportExportCanUseAgentWorkspaceScopeWithoutSelectedSkill()
+        }
+        try await runCase("localReportExportClearsStaleResultWhenScopeChanges") {
+            try await localReportExportClearsStaleResultWhenScopeChanges()
+        }
+        try await runCase("localReportExportUnavailableDoesNotPretendFileWasWritten") {
+            try await localReportExportUnavailableDoesNotPretendFileWasWritten()
+        }
+        try await runCase("reloadLoadsProjectContext") {
+            try await reloadLoadsProjectContext()
+        }
+        try await runCase("setProjectStoresContextAndScans") {
+            try await setProjectStoresContextAndScans()
+        }
+        try await runCase("clearProjectClearsContextAndScans") {
+            try await clearProjectClearsContextAndScans()
+        }
+        try await runCase("projectValidationErrorSkipsScanAndSurfacesMessage") {
+            try await projectValidationErrorSkipsScanAndSurfacesMessage()
+        }
+        try await runCase("reloadFallsBackToDisabledLLMWhenOldServiceDoesNotSupportMethods") {
+            try await reloadFallsBackToDisabledLLMWhenOldServiceDoesNotSupportMethods()
+        }
+        try await runCase("prepareLLMActionStoresEstimateWithoutProviderCall") {
+            try await prepareLLMActionStoresEstimateWithoutProviderCall()
+        }
+        try await runCase("prepareSkillAnalysisUsesReadOnlyPrepareContract") {
+            try await prepareSkillAnalysisUsesReadOnlyPrepareContract()
+        }
+        try await runCase("prepareSkillAnalysisFallsBackWhenMethodUnavailable") {
+            try await prepareSkillAnalysisFallsBackWhenMethodUnavailable()
+        }
+        try await runCase("scoreSkillQualityUsesReadOnlyAnalysisContract") {
+            try await scoreSkillQualityUsesReadOnlyAnalysisContract()
+        }
+        try await runCase("taskReadinessUsesReadOnlyCheckContract") {
+            try await taskReadinessUsesReadOnlyCheckContract()
+        }
+        try await runCase("taskReadinessPromptSendRequiresConfiguredProvider") {
+            try await taskReadinessPromptSendRequiresConfiguredProvider()
+        }
+        try await runCase("routingConfidenceUsesReadOnlyRankContract") {
+            try await routingConfidenceUsesReadOnlyRankContract()
+        }
+        try await runCase("routingConfidencePromptSendRequiresConfiguredProvider") {
+            try await routingConfidencePromptSendRequiresConfiguredProvider()
+        }
+        try await runCase("taskBenchmarkUsesLocalServiceContract") {
+            try await taskBenchmarkUsesLocalServiceContract()
+        }
+        try await runCase("taskBenchmarkFallsBackWhenMethodUnavailable") {
+            try await taskBenchmarkFallsBackWhenMethodUnavailable()
+        }
+        try await runCase("routingRegressionUsesLocalBenchmarkServiceContract") {
+            try await routingRegressionUsesLocalBenchmarkServiceContract()
+        }
+        try await runCase("routingRegressionFallsBackWhenMethodUnavailable") {
+            try await routingRegressionFallsBackWhenMethodUnavailable()
+        }
+        try await runCase("agentTraceImportUsesLocalServiceContract") {
+            try await agentTraceImportUsesLocalServiceContract()
+        }
+        try await runCase("agentTraceImportFallsBackWhenMethodUnavailable") {
+            try await agentTraceImportFallsBackWhenMethodUnavailable()
+        }
+        try await runCase("routingAccuracyDashboardUsesReadOnlyServiceContract") {
+            try await routingAccuracyDashboardUsesReadOnlyServiceContract()
+        }
+        try await runCase("staleDriftDetectionUsesReadOnlyServiceContract") {
+            try await staleDriftDetectionUsesReadOnlyServiceContract()
+        }
+        try await runCase("knowledgeSearchUsesReadOnlyServiceContract") {
+            try await knowledgeSearchUsesReadOnlyServiceContract()
+        }
+        try await runCase("localSkillMapUsesReadOnlyServiceContract") {
+            try await localSkillMapUsesReadOnlyServiceContract()
+        }
+        try await runCase("localSkillMapFallsBackWhenMethodUnavailable") {
+            try await localSkillMapFallsBackWhenMethodUnavailable()
+        }
+        try await runCase("skillLifecycleTimelineUsesReadOnlyServiceContract") {
+            try await skillLifecycleTimelineUsesReadOnlyServiceContract()
+        }
+        try await runCase("skillLifecycleTimelineFallsBackWhenMethodUnavailable") {
+            try await skillLifecycleTimelineFallsBackWhenMethodUnavailable()
+        }
+        try await runCase("providerObservabilityUsesReadOnlyServiceContract") {
+            try await providerObservabilityUsesReadOnlyServiceContract()
+        }
+        try await runCase("providerObservabilityNeedBasedLoadUsesCacheUntilManualRefresh") {
+            try await providerObservabilityNeedBasedLoadUsesCacheUntilManualRefresh()
+        }
+        try await runCase("providerObservabilityFallsBackWhenMethodUnavailable") {
+            try await providerObservabilityFallsBackWhenMethodUnavailable()
+        }
+        try await runCase("taskCockpitUsesReadOnlyServiceContract") {
+            try await taskCockpitUsesReadOnlyServiceContract()
+        }
+        try await runCase("taskCockpitUsesGlobalScopeOutsideSkillDetail") {
+            try await taskCockpitUsesGlobalScopeOutsideSkillDetail()
+        }
+        try await runCase("taskCockpitHistoryPersistsLocally") {
+            try await taskCockpitHistoryPersistsLocally()
+        }
+        try await runCase("taskCockpitPreservesExactUserInputInServiceContract") {
+            try await taskCockpitPreservesExactUserInputInServiceContract()
+        }
+        try await runCase("taskCockpitWhitespaceOnlyInputUsesFallbackTask") {
+            try await taskCockpitWhitespaceOnlyInputUsesFallbackTask()
+        }
+        try await runCase("taskCockpitFallsBackWhenMethodUnavailable") {
+            try await taskCockpitFallsBackWhenMethodUnavailable()
+        }
+        try await runCase("taskCockpitTimeoutShowsRecoveryAndIgnoresStaleResponse") {
+            try await taskCockpitTimeoutShowsRecoveryAndIgnoresStaleResponse()
+        }
+        try await runCase("taskCockpitCancelShowsRecoveryAndAllowsRetry") {
+            try await taskCockpitCancelShowsRecoveryAndAllowsRetry()
+        }
+        try await runCase("similarSkillGroupingUsesReadOnlyServiceContract") {
+            try await similarSkillGroupingUsesReadOnlyServiceContract()
+        }
+        try await runCase("similarSkillGroupingFallsBackWhenMethodUnavailable") {
+            try await similarSkillGroupingFallsBackWhenMethodUnavailable()
+        }
+        try await runCase("capabilityTaxonomyUsesReadOnlyServiceContract") {
+            try await capabilityTaxonomyUsesReadOnlyServiceContract()
+        }
+        try await runCase("capabilityTaxonomyFallsBackWhenMethodUnavailable") {
+            try await capabilityTaxonomyFallsBackWhenMethodUnavailable()
+        }
+        try await runCase("workspaceReadinessUsesReadOnlyServiceContract") {
+            try await workspaceReadinessUsesReadOnlyServiceContract()
+        }
+        try await runCase("workspaceReadinessFallsBackWhenMethodUnavailable") {
+            try await workspaceReadinessFallsBackWhenMethodUnavailable()
+        }
+        try await runCase("remediationPlanUsesReadOnlyServiceContract") {
+            try await remediationPlanUsesReadOnlyServiceContract()
+        }
+        try await runCase("remediationPlanFallsBackWhenMethodUnavailable") {
+            try await remediationPlanFallsBackWhenMethodUnavailable()
+        }
+        try await runCase("remediationPreviewDraftsUsesCopyOnlyServiceContract") {
+            try await remediationPreviewDraftsUsesCopyOnlyServiceContract()
+        }
+        try await runCase("remediationPreviewDraftsFallsBackWhenMethodUnavailable") {
+            try await remediationPreviewDraftsFallsBackWhenMethodUnavailable()
+        }
+        try await runCase("remediationImpactPreviewUsesReadOnlyServiceContract") {
+            try await remediationImpactPreviewUsesReadOnlyServiceContract()
+        }
+        try await runCase("remediationImpactPreviewFallsBackWhenMethodUnavailable") {
+            try await remediationImpactPreviewFallsBackWhenMethodUnavailable()
+        }
+        try await runCase("remediationBatchReviewUsesReadOnlyServiceContract") {
+            try await remediationBatchReviewUsesReadOnlyServiceContract()
+        }
+        try await runCase("remediationBatchReviewFallsBackWhenMethodUnavailable") {
+            try await remediationBatchReviewFallsBackWhenMethodUnavailable()
+        }
+        try await runCase("remediationHistoryUsesLocalServiceContract") {
+            try await remediationHistoryUsesLocalServiceContract()
+        }
+        try await runCase("remediationHistoryFallsBackWhenMethodUnavailable") {
+            try await remediationHistoryFallsBackWhenMethodUnavailable()
+        }
+        try await runCase("guidedCleanupFlowUsesLocalServiceContract") {
+            try await guidedCleanupFlowUsesLocalServiceContract()
+        }
+        try await runCase("guidedCleanupFlowFallsBackWhenMethodUnavailable") {
+            try await guidedCleanupFlowFallsBackWhenMethodUnavailable()
+        }
+        try await runCase("crossAgentReadinessUsesReadOnlyServiceContract") {
+            try await crossAgentReadinessUsesReadOnlyServiceContract()
+        }
+        try await runCase("routingConfidenceClearsStaleSelection") {
+            try await routingConfidenceClearsStaleSelection()
+        }
+        try await runCase("llmPreparePreviewIsScopedToSelectedSkillAndReadOnly") {
+            try await llmPreparePreviewIsScopedToSelectedSkillAndReadOnly()
+        }
+        try await runCase("promptPreviewRequiresConfiguredProviderAndExplicitSend") {
+            try await promptPreviewRequiresConfiguredProviderAndExplicitSend()
+        }
+        try await runCase("skillManagerValidationFeedbackStaysInManagerSurface") {
+            try await skillManagerValidationFeedbackStaysInManagerSurface()
+        }
+        try runCase("skillManagerUsesIndependentInstallRemoveAndLocalInputs") {
+            try skillManagerUsesIndependentInstallRemoveAndLocalInputs()
+        }
+        try await runCase("previewScriptExecutionSafetyStoresBlockedPreviewWithoutExecute") {
+            try await previewScriptExecutionSafetyStoresBlockedPreviewWithoutExecute()
+        }
+    }
+
+    private func runCase(_ name: String, _ body: () throws -> Void) throws {
+        fputs("SkillsCopilotTests: SkillStoreTests.\(name) start\n", stderr)
+        fflush(stderr)
+        try body()
+        fputs("SkillsCopilotTests: SkillStoreTests.\(name) ok\n", stderr)
+        fflush(stderr)
+    }
+
+    private func runCase(_ name: String, _ body: () async throws -> Void) async throws {
+        fputs("SkillsCopilotTests: SkillStoreTests.\(name) start\n", stderr)
+        fflush(stderr)
+        try await body()
+        fputs("SkillsCopilotTests: SkillStoreTests.\(name) ok\n", stderr)
+        fflush(stderr)
     }
 
     private func defaultNavigationStartsAtSessionsWithoutAgentProfile() throws {
