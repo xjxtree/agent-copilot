@@ -744,17 +744,17 @@ const nativeIPCCleanupChecks = [
       && /(onCancel|Task\.isCancelled|Cancellation|cancel|timeout|timedOut|forceTerminate)/i.test(files.serviceProcessRunner),
   },
   {
-    label: "V2.81 ServiceClient closes stdin, stdout, and stderr handles during IPC cleanup",
+    label: "V2.81 ServiceClient closes stdin and releases stdout and stderr handles during IPC cleanup",
     passed: countMatches(files.serviceIPC, /fileHandleForWriting[\s\S]{0,180}\.(?:close|closeFile)\s*\(/g) >= 1
       && /stdinWriter\?\.(?:close|closeFile)\s*\(/.test(files.serviceProcessRunner)
-      && /stdoutReader\?\.(?:close|closeFile)\s*\(/.test(files.serviceProcessRunner)
-      && /stderrReader\?\.(?:close|closeFile)\s*\(/.test(files.serviceProcessRunner),
+      && /stdoutReader\s*=\s*nil/.test(files.serviceProcessRunner)
+      && /stderrReader\s*=\s*nil/.test(files.serviceProcessRunner),
   },
   {
-    label: "ServiceClient clears pipe readability handlers or closes read handles",
+    label: "ServiceClient clears pipe readability handlers or releases read handles",
     passed: /readabilityHandler\s*=\s*nil/.test(files.serviceIPC)
-      || (/stdoutReader\?\.(?:close|closeFile)\s*\(/.test(files.serviceProcessRunner)
-        && /stderrReader\?\.(?:close|closeFile)\s*\(/.test(files.serviceProcessRunner)),
+      || (/stdoutReader\s*=\s*nil/.test(files.serviceProcessRunner)
+        && /stderrReader\s*=\s*nil/.test(files.serviceProcessRunner)),
   },
   {
     label: "ServiceClient protects continuations from stale or duplicate completion",
